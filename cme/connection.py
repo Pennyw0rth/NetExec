@@ -341,6 +341,12 @@ class connection(object):
                     secret.append(aesKey)
                     cred_type.append('aesKey')
 
+        # Allow trying multiple users with a single password
+        if len(username) > 1 and len(secret) == 1:
+            secret = secret * len(username)
+            cred_type = cred_type * len(username)
+            self.args.no_bruteforce = True
+
         return domain, username, owned, secret, cred_type, [None] * len(secret)
 
     def try_credentials(self, domain, username, owned, secret, cred_type, data=None):
