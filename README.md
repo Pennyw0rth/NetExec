@@ -1,24 +1,26 @@
-![Supported Python versions](https://img.shields.io/badge/python-3.7+-blue.svg) [![Twitter](https://img.shields.io/twitter/follow/byt3bl33d3r?label=byt3bl33d3r&style=social)](https://twitter.com/intent/follow?screen_name=byt3bl33d3r) [![Twitter](https://img.shields.io/twitter/follow/mpgn_x64?label=mpgn_x64&style=social)](https://twitter.com/intent/follow?screen_name=mpgn_x64)
+![Supported Python versions](https://img.shields.io/badge/python-3.7+-blue.svg)
+[![Twitter](https://img.shields.io/twitter/follow/byt3bl33d3r?label=byt3bl33d3r&style=social)](https://twitter.com/intent/follow?screen_name=byt3bl33d3r)
+[![Twitter](https://img.shields.io/twitter/follow/mpgn_x64?label=mpgn_x64&style=social)](https://twitter.com/intent/follow?screen_name=mpgn_x64)
+[![Twitter](https://img.shields.io/twitter/follow/al3xn3ff?label=al3x_n3ff&style=social)](https://twitter.com/intent/follow?screen_name=al3x_n3ff)
+[![Twitter](https://img.shields.io/twitter/follow/_zblurx?label=_zblurx&style=social)](https://twitter.com/intent/follow?screen_name=_zblurx)
+[![Twitter](https://img.shields.io/twitter/follow/MJHallenbeck?label=MJHallenbeck&style=social)](https://twitter.com/intent/follow?screen_name=MJHallenbeck)
 
+
+🚩 This is the open source repository of CrackMapExec
 # CrackMapExec
 
 <p align="center">
   <img src="https://cloud.githubusercontent.com/assets/5151193/17577511/d312ceb4-5f3b-11e6-8de5-8822246289fd.jpg" alt="cme"/>
 </p>
 
-This project was initially created in 2015 by **@byt3bl33d3r**, in 2019 I started to invest myself in the project. Five years laters this awesome project is still maintained and up to date ! Lot of new additions have been made to create a tool still relevant to the new Active Directory attacks paths and countermeasures setup by Microsoft ! ⚔️
+
+This project was initially created in 2015 by **@byt3bl33d3r**. In 2019 **@mpgn_x64** started maintaining the project. Five years and a lot of  additions later, he retired from maintaining the project. Like many other contributer we (NeffIsBack, Marshall-Hallenbeck and zblurx) started working on new features, bugfixes and helped maintaining CME. With the end of mpgn's maintainer role, we decided to maintain the project together as an full open source project.
 
 You are on the **latest up-to-date** repository of the project CrackMapExec ! 🎉
 
-- 🚧 If you want to report a problem, open un [Issue](https://github.com/mpgn/CrackMapExec/issues) 
-- 🔀 If you want to contribute, open a [Pull Request](https://github.com/mpgn/CrackMapExec/pulls)
-- 💬 If you want to discuss, open a [Discussion](https://github.com/mpgn/CrackMapExec/discussions)
-
-## Official Discord Channel
-
-If you don't have a Github account, you can ask your question on Discord
-
-[![Porchetta Industries](https://discordapp.com/api/guilds/736724457258745996/widget.png?style=banner3)](https://discord.gg/ycGXUxy)
+- 🚧 If you want to report a problem, open un [Issue](https://github.com/Pennyw0rth/CrackMapExec/issues) 
+- 🔀 If you want to contribute, open a [Pull Request](https://github.com/Pennyw0rth/CrackMapExec/pulls)
+- 💬 If you want to discuss, open a [Discussion](https://github.com/Pennyw0rth/CrackMapExec/discussions)
 
 # Acknowledgments
 **(These are the people who did the hard stuff)**
@@ -44,6 +46,7 @@ Please see the installation instructions on the [official wiki](https://www.crac
 
 Awesome code contributors of CME:
 
+[![](https://github.com/mpgn.png?size=50)](https://github.com/mpgn)
 [![](https://github.com/Marshall-Hallenbeck.png?size=50)](https://github.com/Marshall-Hallenbeck)
 [![](https://github.com/zblurx.png?size=50)](https://github.com/zblurx)
 [![](https://github.com/NeffIsBack.png?size=50)](https://github.com/NeffIsBack)
