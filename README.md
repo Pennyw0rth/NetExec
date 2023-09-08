@@ -6,7 +6,7 @@
 [![Twitter](https://img.shields.io/twitter/follow/MJHallenbeck?label=MJHallenbeck&style=social)](https://twitter.com/intent/follow?screen_name=MJHallenbeck)
 
 
-🚩 This is the open source repository of CrackMapExec
+🚩 This is the open source repository of CrackMapExec maintained by a community of passionate people
 # CrackMapExec
 
 <p align="center">
