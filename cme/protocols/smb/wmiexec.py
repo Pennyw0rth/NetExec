@@ -166,7 +166,7 @@ class WMIEXEC:
                 break
             except Exception as e:
                 if tries >= self.__tries:
-                    self.logger.fail(f'WMIEXEC: Couldn\'t retrieve output-file, maybe got detected by AV. Try the wmi protocol or another exec method')
+                    self.logger.fail(f'WMIEXEC: Couldn\'t retrieve output file, maybe got detected by AV. Try the wmi protocol or another exec method')
                     break
                 if str(e).find("STATUS_BAD_NETWORK_NAME") >0 :
                     self.logger.fail(f'SMB connection: target has blocked {self.__share} access (maybe command executed!)')
