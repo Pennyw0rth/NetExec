@@ -190,7 +190,7 @@ class WMIEXEC_EVENT:
             record = dict(command_ResultObject.getProperties())
             self.__outputBuffer = base64.b64decode(record['ScriptText']['value']).decode(self.__codec, errors='replace')
         except Exception as e:
-            self.logger.fail(f'WMIEXEC-EVENT: Couldn\'t retrieve output file. Either command timed out or got detected by AV. Try increasing the timeout with "--exec-timeout" option. If it\'s still failing, try the smb protocol or another exec method')
+            self.logger.fail(f"WMIEXEC-EVENT: Couldn't retrieve output file. Either command timed out or got detected by AV. Try increasing the timeout with \"--exec-timeout\" option. If it's still failing, try the smb protocol or another exec method")
 
     def remove_Instance(self):
         if self.__retOutput:
