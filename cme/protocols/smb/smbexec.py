@@ -173,7 +173,7 @@ class SMBEXEC:
                     self.logger.fail(f"SMBEXEC: Couldn't retrieve output file, maybe got detected by AV. Please increase the number of tries with the option \"--get-output-tries\". If it's still failing, try the wmi protocol or another exec method")
                     break
                 if str(e).find("STATUS_BAD_NETWORK_NAME") >0 :
-                    self.logger.fail(f"SMBEXEC: Get ouput failed, target has blocked {self.__share} access (maybe command executed!)")
+                    self.logger.fail(f"SMBEXEC: Get output failed, target has blocked {self.__share} access (maybe command executed!)")
                     break
                 if str(e).find("STATUS_SHARING_VIOLATION") >= 0 or str(e).find("STATUS_OBJECT_NAME_NOT_FOUND") >= 0:
                     # Output not finished, let's wait

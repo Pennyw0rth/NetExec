@@ -104,7 +104,7 @@ class WMIEXEC:
             retVal = descriptor.GetStringValue(2147483650, self.__registry_Path, keyName)
             self.__outputBuffer = base64.b64decode(retVal.sValue).decode(self.__codec, errors='replace').rstrip('\r\n')
         except Exception as e:
-            self.logger.fail(f"WMIEXEC: Couldn't retrieve output file. Either command timed out or got detected by AV. Try increasing the timeout with \"--exec-timeout\" option. If it's still failing, try the smb protocol or another exec method")
+            self.logger.fail(f"WMIEXEC: Couldn't retrieve output file. Either command timed out or got detected by AV. Try increasing the timeout with '--exec-timeout' option. If it's still failing, try the smb protocol or another exec method")
         
         try:
             self.logger.debug(f"Removing temporary registry path: HKLM\\{self.__registry_Path}")
