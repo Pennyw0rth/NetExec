@@ -37,7 +37,7 @@ from impacket.dcerpc.v5.dcom.wmi import WBEMSTATUS
 from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, WBEM_FLAG_FORWARD_ONLY, IWbemLevel1Login, WBEMSTATUS
 
 class WMIEXEC_EVENT:
-    def __init__(self, host, username, password, domain, lmhash, nthash, doKerberos, kdcHost, aesKey, logger, interval_time, codec):
+    def __init__(self, host, username, password, domain, lmhash, nthash, doKerberos, kdcHost, aesKey, logger, exec_timeout, codec):
         self.__host = host
         self.__username = username
         self.__password = password
@@ -51,7 +51,7 @@ class WMIEXEC_EVENT:
         self.__retOutput = True
         
         self.logger = logger
-        self.__interval_time = interval_time
+        self.__exec_timeout = exec_timeout
         self.__codec = codec
         self.__instanceID = f"windows-object-{str(uuid.uuid4())}"
         self.__instanceID_StoreResult = f"windows-object-{str(uuid.uuid4())}"
@@ -84,8 +84,8 @@ class WMIEXEC_EVENT:
         self.execute_remote(command)
         
         # Get command results
-        self.logger.info("Waiting {}s for command completely executed.".format(self.__interval_time))
-        time.sleep(self.__interval_time)
+        self.logger.info("Waiting {}s for command completely executed.".format(self.__exec_timeout))
+        time.sleep(self.__exec_timeout)
 
         if self.__retOutput:
             self.get_CommandResult()
@@ -190,7 +190,7 @@ class WMIEXEC_EVENT:
             record = dict(command_ResultObject.getProperties())
             self.__outputBuffer = base64.b64decode(record['ScriptText']['value']).decode(self.__codec, errors='replace')
         except Exception as e:
-            self.logger.fail(f'WMIEXEC-EVENT: Get output file error, maybe command not executed successfully or got detected by AV software, please increase the interval time of command execution with "--interval-time" option. If it\'s still failing maybe something is blocking the schedule job in vbscript, try another exec method')
+            self.logger.fail(f'WMIEXEC-EVENT: Couldn\'t retrieve output-file. Either command timed out or got detected by AV. Try increasing the timeout with "--exec-timeout" option. If it\'s still failing, try the smb protocol or another exec method')
 
     def remove_Instance(self):
         if self.__retOutput:

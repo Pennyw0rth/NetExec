@@ -34,7 +34,7 @@ from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, WBEM_FLAG_FORWARD_ONLY, IWbemLevel1Login
 
 class WMIEXEC:
-    def __init__(self, host, username, password, domain, lmhash, nthash, doKerberos, kdcHost, aesKey, logger, interval_time, codec):
+    def __init__(self, host, username, password, domain, lmhash, nthash, doKerberos, kdcHost, aesKey, logger, exec_timeout, codec):
         self.__host = host
         self.__username = username
         self.__password = password
@@ -45,7 +45,7 @@ class WMIEXEC:
         self.__kdcHost = kdcHost
         self.__aesKey = aesKey
         self.logger = logger
-        self.__interval_time = interval_time
+        self.__exec_timeout = exec_timeout
         self.__registry_Path = ""
         self.__outputBuffer = ""
         self.__retOutput = True
@@ -91,8 +91,8 @@ class WMIEXEC:
         command = fr'''{self.__shell} {command} 1> {result_output} 2>&1 && certutil -encodehex -f {result_output} {result_output_b64} 0x40000001 && for /F "usebackq" %G in ("{result_output_b64}") do reg add HKLM\{self.__registry_Path} /v {keyName} /t REG_SZ /d "%G" /f && del /q /f /s {result_output} {result_output_b64}'''
 
         self.execute_remote(command)
-        self.logger.info("Waiting {}s for command completely executed.".format(self.__interval_time))
-        time.sleep(self.__interval_time)
+        self.logger.info("Waiting {}s for command completely executed.".format(self.__exec_timeout))
+        time.sleep(self.__exec_timeout)
 
         self.queryRegistry(keyName)
 
@@ -104,7 +104,7 @@ class WMIEXEC:
             retVal = descriptor.GetStringValue(2147483650, self.__registry_Path, keyName)
             self.__outputBuffer = base64.b64decode(retVal.sValue).decode(self.__codec, errors='replace').rstrip('\r\n')
         except Exception as e:
-            self.logger.fail(f'WMIEXEC: Get output file error, maybe command not executed successfully or got detected by AV software, please increase the interval time of command execution with "--interval-time" option. If it\'s still failing maybe something is blocking the schedule job in vbscript, try another exec method')
+            self.logger.fail(f'WMIEXEC: Couldn\'t retrieve output-file. Either command timed out or got detected by AV. Try increasing the timeout with "--exec-timeout" option. If it\'s still failing, try the smb protocol or another exec method')
         
         try:
             self.logger.debug(f"Removing temporary registry path: HKLM\\{self.__registry_Path}")
