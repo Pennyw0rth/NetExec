@@ -38,6 +38,8 @@ class TSCH_EXEC:
         self.__doKerberos = doKerberos
         self.__kdcHost = kdcHost
         self.__tries = tries
+        self.__output = None
+        self.__share = share
         self.logger = logger
 
         if hashes is not None:
@@ -73,7 +75,7 @@ class TSCH_EXEC:
     def output_callback(self, data):
         self.__outputBuffer = data
 
-    def gen_xml(self, command, tmpFileName, fileless=False):
+    def gen_xml(self, command, fileless=False):
         xml = """<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <Triggers>
@@ -114,11 +116,12 @@ class TSCH_EXEC:
       <Command>cmd.exe</Command>
 """
         if self.__retOutput:
+            self.__output = "\\Windows\\Temp\\" + gen_random_string(6)
             if fileless:
                 local_ip = self.__rpctransport.get_socket().getsockname()[0]
-                argument_xml = f"      <Arguments>/C {command} &gt; \\\\{local_ip}\\{self.__share_name}\\{tmpFileName} 2&gt;&amp;1</Arguments>"
+                argument_xml = f"      <Arguments>/C {command} &gt; \\\\{local_ip}\\{self.__share_name}\\{self.__output} 2&gt;&amp;1</Arguments>"
             else:
-                argument_xml = f"      <Arguments>/C {command} &gt; %windir%\\Temp\\{tmpFileName} 2&gt;&amp;1</Arguments>"
+                argument_xml = f"      <Arguments>/C {command} &gt; {self.__output} 2&gt;&amp;1</Arguments>"
 
         elif self.__retOutput is False:
             argument_xml = f"      <Arguments>/C {command}</Arguments>"
@@ -143,9 +146,8 @@ class TSCH_EXEC:
         # dce.set_auth_level(ntlm.NTLM_AUTH_PKT_PRIVACY)
         
         tmpName = gen_random_string(8)
-        tmpFileName = tmpName + ".tmp"
 
-        xml = self.gen_xml(command, tmpFileName, fileless)
+        xml = self.gen_xml(command, fileless)
 
         self.logger.info(f"Task XML: {xml}")
         taskCreated = False
@@ -187,7 +189,7 @@ class TSCH_EXEC:
             if fileless:
                 while True:
                     try:
-                        with open(os.path.join("/tmp", "cme_hosted", tmpFileName), "r") as output:
+                        with open(os.path.join("/tmp", "cme_hosted", self.__output), "r") as output:
                             self.output_callback(output.read())
                         break
                     except IOError:
@@ -198,15 +200,15 @@ class TSCH_EXEC:
                 tries = 1
                 while True:
                     try:
-                        self.logger.info(f"Attempting to read ADMIN$\\Temp\\{tmpFileName}")
-                        smbConnection.getFile("ADMIN$", f"Temp\\{tmpFileName}", self.output_callback)
+                        self.logger.info(f"Attempting to read {self.__share}\\{self.__output}")
+                        smbConnection.getFile(self.__share, self.__output, self.output_callback)
                         break
                     except Exception as e:
                         if tries >= self.__tries:
                             self.logger.fail(f"ATEXEC: Couldn't retrieve output file, maybe got detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it's still failing, try the wmi protocol or another exec method")
                             break
                         if str(e).find("STATUS_BAD_NETWORK_NAME") >0 :
-                            self.logger.fail(f"ATEXEC: Get output failed, target has blocked ADMIN$ access (maybe command executed!)")
+                            self.logger.fail(f"ATEXEC: Get output failed, target has blocked {self.__share} access (maybe command executed!)")
                             break
                         if str(e).find("SHARING") > 0 or str(e).find("STATUS_OBJECT_NAME_NOT_FOUND") >= 0:
                             sleep(3)
@@ -215,7 +217,7 @@ class TSCH_EXEC:
                             self.logger.debug(str(e))
 
                 if self.__outputBuffer:
-                    self.logger.debug(f"Deleting file ADMIN$\\Temp\\{tmpFileName}")
-                    smbConnection.deleteFile("ADMIN$", f"Temp\\{tmpFileName}")
+                    self.logger.debug(f"Deleting file {self.__share}\\{self.__output}")
+                    smbConnection.deleteFile(self.__share, self.__output)
 
         dce.disconnect()
