@@ -1,5 +1,4 @@
 ![Supported Python versions](https://img.shields.io/badge/python-3.7+-blue.svg)
-[![Twitter](https://img.shields.io/twitter/follow/mpgn_x64?label=mpgn_x64&style=social)](https://twitter.com/intent/follow?screen_name=mpgn_x64)
 [![Twitter](https://img.shields.io/twitter/follow/al3xn3ff?label=al3x_n3ff&style=social)](https://twitter.com/intent/follow?screen_name=al3x_n3ff)
 [![Twitter](https://img.shields.io/twitter/follow/_zblurx?label=_zblurx&style=social)](https://twitter.com/intent/follow?screen_name=_zblurx)
 [![Twitter](https://img.shields.io/twitter/follow/MJHallenbeck?label=MJHallenbeck&style=social)](https://twitter.com/intent/follow?screen_name=MJHallenbeck)
@@ -31,6 +30,7 @@ Please see the installation instructions on the wiki (in development)
 # Code Contributors
 Awesome code contributors of NetExec:
 
+[![](https://github.com/mpgn.png?size=50)](https://github.com/mpgn)
 [![](https://github.com/Marshall-Hallenbeck.png?size=50)](https://github.com/Marshall-Hallenbeck)
 [![](https://github.com/zblurx.png?size=50)](https://github.com/zblurx)
 [![](https://github.com/NeffIsBack.png?size=50)](https://github.com/NeffIsBack)
