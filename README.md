@@ -5,7 +5,7 @@
 
 
 🚩 This is the open source repository of NetExec maintained by a community of passionate people
-# NetExec
+# NetExec - The Network Execution Tool
 
 <p align="center">
   <!-- placeholder for nxc logo-->
