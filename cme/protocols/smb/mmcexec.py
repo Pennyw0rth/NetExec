@@ -252,10 +252,10 @@ class MMCEXEC:
                 break
             except Exception as e:
                 if tries >= self.__tries:
-                    self.logger.fail(f"MMCEXEC: Couldn't retrieve output file, maybe got detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it's still failing, try the wmi protocol or another exec method")
+                    self.logger.fail(f"MMCEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
                     break
                 if str(e).find("STATUS_BAD_NETWORK_NAME") >0 :
-                    self.logger.fail(f"MMCEXEC: Get output failed, target has blocked {self.__share} access (maybe command executed!)")
+                    self.logger.fail(f"MMCEXEC: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
                     break
                 if str(e).find("STATUS_SHARING_VIOLATION") >= 0 or str(e).find("STATUS_OBJECT_NAME_NOT_FOUND") >= 0:
                     # Output not finished, let's wait
