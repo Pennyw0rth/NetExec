@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
 
-from nxc.nxcdb import delete_workspace, nxcDBMenu
+from nxc.nxcdb import delete_workspace, NXCDBMenu
 from nxc.first_run import first_run_setup
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.logger import NXCAdapter
@@ -30,7 +30,7 @@ def db_setup(db_engine):
     first_run_setup(logger)
     p_loader = ProtocolLoader()
     protocols = p_loader.get_protocols()
-    nxcDBMenu.create_workspace("test", p_loader, protocols)
+    NXCDBMenu.create_workspace("test", p_loader, protocols)
 
     protocol_db_path = p_loader.get_protocols()[proto]["dbpath"]
     protocol_db_object = getattr(p_loader.load_protocol(protocol_db_path), "database")

@@ -1509,7 +1509,7 @@ class smb(connection):
                 results = self.db.get_domain_backupkey(self.domain)
             except:
                 self.logger.fail(
-                    "Your version of nxcDB is not up to date, run nxcdb and create a new workspace: \
+                    "Your version of nxcdb is not up to date, run nxcdb and create a new workspace: \
                     'workspace create dpapi' then re-run the dpapi option"
                 )
                 return False

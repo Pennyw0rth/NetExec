@@ -470,7 +470,7 @@ class DatabaseNavigator(cmd.Cmd):
                 print(f"[-] Unable to connect to Empire's RESTful API server: {e}")
 
 
-class nxcDBMenu(cmd.Cmd):
+class NXCDBMenu(cmd.Cmd):
     def __init__(self, config_path):
         cmd.Cmd.__init__(self)
         self.config_path = config_path
@@ -626,7 +626,7 @@ def main():
         print("[-] Unable to find config file")
         sys.exit(1)
     try:
-        nxcdbnav = nxcDBMenu(CONFIG_PATH)
+        nxcdbnav = NXCDBMenu(CONFIG_PATH)
         nxcdbnav.cmdloop()
     except KeyboardInterrupt:
         pass
