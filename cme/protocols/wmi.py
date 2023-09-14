@@ -170,7 +170,7 @@ class wmi(connection):
             if "dcom" in locals():
                 dcom.disconnect()
 
-            if not str(e).lower().find("access_denied") >=0:
+            if "access_denied" not in str(e).lower():
                 self.logger.fail(str(e))
         else:
             if not flag or not self.stringBinding:
@@ -188,7 +188,7 @@ class wmi(connection):
                 except Exception as e:
                     dcom.disconnect()
 
-                    if not str(e).lower().find("access_denied") >=0:
+                    if "access_denied" not in str(e).lower():
                         self.logger.fail(str(e))
                 else:
                     dcom.disconnect()
