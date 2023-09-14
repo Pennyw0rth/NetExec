@@ -1,12 +1,7 @@
-name: CrackMapExec Tests & Build
+name: CrackMapExec Build Binaries
 
 on:
   workflow_dispatch:
-    branches: [ main ]
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 jobs:
   build:
