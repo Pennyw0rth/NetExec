@@ -84,7 +84,7 @@ class ModuleLoader:
                 try:
                     module_logger = NXCAdapter(extra={"module_name": module.name.upper()})
                 except Exception as e:
-                    self.logger.fail(f"Error loading nxcAdaptor for module {module.name.upper()}: {e}")
+                    self.logger.fail(f"Error loading NXCAdaptor for module {module.name.upper()}: {e}")
                 context = Context(self.db, module_logger, self.args)
                 module_options = {}
 
