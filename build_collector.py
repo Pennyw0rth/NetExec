@@ -70,7 +70,7 @@ def build_nxc():
 
 
 def build_nxcdb():
-    print("building nxcDB")
+    print("building nxcdb")
     env = Environment(
         built_at=datetime.utcfromtimestamp(int(time.time())).strftime("%Y-%m-%d %H:%M:%S"),
         entry_point="nxc.nxcdb:main",
