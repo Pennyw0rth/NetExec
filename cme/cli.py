@@ -24,7 +24,8 @@ def gen_cli_args():
      \______|| _| `._____|/__/     \__\  \______||__|\__\ |__|  |__| /__/     \__\ | _|      |_______|/__/ \__\ |_______| \______|
 
                                                 A swiss army knife for pentesting networks
-                                    Forged by @byt3bl33d3r and @mpgn_x64 using the powah of dank memes
+                                    Forged by @byt3bl33d3r and @mpgn_x64 using the powah of dank memes.
+                                Maintained as an open source project by @NeffIsBack, @MJHallenbeck, @_zblurx
 
                                                             {highlight('Version', 'red')} : {highlight(VERSION)}
                                                             {highlight('Codename', 'red')}: {highlight(CODENAME)}

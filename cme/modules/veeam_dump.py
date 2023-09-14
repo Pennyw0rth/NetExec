@@ -144,7 +144,7 @@ class CMEModule:
         return connection.execute("powershell.exe -e {} -OutputFormat Text".format(psScipt_b64), True)
 
     def printCreds(self, context, output):
-        # Format ouput if returned in some XML Format
+        # Format output if returned in some XML Format
         if "CLIXML" in output:
             output = self.stripXmlOutput(context, output)
 

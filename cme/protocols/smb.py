@@ -734,8 +734,9 @@ class smb(connection):
                         self.kdcHost,
                         self.hash,
                         self.logger,
-                        self.args.get_output_tries
-                    )  # self.args.share)
+                        self.args.get_output_tries,
+                        self.args.share
+                    )
                     self.logger.info("Executed command via atexec")
                     break
                 except:

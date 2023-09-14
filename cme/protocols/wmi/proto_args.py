@@ -23,7 +23,7 @@ def proto_args(parser, std_parser, module_parser):
                             "[wmiexec (win32_process + StdRegProv)]: get command results over registry instead of using smb connection. "
                             "[wmiexec-event (T1546.003)]: this method is not very stable, highly recommend use this method in single host, "
                             "using on multiple hosts may crash (just try again if it crashed).")
-    cgroup.add_argument("--interval-time", default=5 ,metavar='INTERVAL_TIME', dest='interval_time', type=int, help='Set interval time(seconds) when executing command, unrecommend set it lower than 5')
+    cgroup.add_argument("--exec-timeout", default=5, metavar='exec_timeout', dest='exec_timeout', type=int, help='Set timeout (in seconds) when executing a command, minimum 5 seconds is recommended. Default: %(default)s')
     cgroup.add_argument("--codec", default="utf-8",
                             help="Set encoding used (codec) from the target's output (default "
                                  "\"utf-8\"). If errors are detected, run chcp.com at the target, "
