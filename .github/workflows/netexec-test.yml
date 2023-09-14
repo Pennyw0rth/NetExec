@@ -24,7 +24,7 @@ jobs:
         pipx install poetry --python python${{ matrix.python-version }}
         poetry --version
         poetry env info
-    - name: Install librairies with dev group
+    - name: Install libraries with dev group
       run: |
         poetry install --with dev
     - name: Run the e2e test
