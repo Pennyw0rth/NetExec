@@ -164,29 +164,36 @@ class wmi(connection):
     def check_if_admin(self):
         try:
             dcom = DCOMConnection(self.conn.getRemoteName(), self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.doKerberos ,kdcHost=self.kdcHost, aesKey=self.aesKey)
-            dcom.set_connect_timeout(self.args.rpc_timeout)
             iInterface = dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
-            _, self.stringBinding = dcom_FirewallChecker(iInterface)
-            iWbemLevel1Login = IWbemLevel1Login(iInterface)
-            iWbemServices = iWbemLevel1Login.NTLMLogin('//./root/cimv2', NULL, NULL)
+            flag, self.stringBinding = dcom_FirewallChecker(iInterface, self.args.rpc_timeout)
         except Exception as e:
             if "dcom" in locals():
                 dcom.disconnect()
 
-            error_msg = str(e).lower()
-
-            if error_msg.find("access_denied") > 0:
-                pass
-            else:
-                if error_msg.find("timed out") > 0 or error_msg.lower().find("connection refused") > 0:
-                    error_msg = f'Check admin error: dcom initialization failed with stringbinding: "{self.stringBinding}", please try "--rpc-timeout" option. (probably is admin)'
-                elif not self.stringBinding:
+            if not str(e).lower().find("access_denied") >=0:
+                self.logger.fail(str(e))
+        else:
+            if not flag or not self.stringBinding:
+                dcom.disconnect()
+                error_msg = f'Check admin error: dcom initialization failed with stringbinding: "{self.stringBinding}", please try "--rpc-timeout" option. (probably is admin)'
+                
+                if not self.stringBinding:
                     error_msg = "Check admin error: dcom initialization failed: can't get target stringbinding, maybe cause by IPv6 or any other issues, please check your target again"
-                self.logger.fail(error_msg)
-        else:            
-            dcom.disconnect()
-            self.logger.extra['protocol'] = "WMI"
-            self.admin_privs = True
+                
+                self.logger.fail(error_msg) if not flag else self.logger.debug(error_msg)
+            else:
+                try:
+                    iWbemLevel1Login = IWbemLevel1Login(iInterface)
+                    iWbemServices = iWbemLevel1Login.NTLMLogin('//./root/cimv2', NULL, NULL)
+                except Exception as e:
+                    dcom.disconnect()
+
+                    if not str(e).lower().find("access_denied") >=0:
+                        self.logger.fail(str(e))
+                else:
+                    dcom.disconnect()
+                    self.logger.extra['protocol'] = "WMI"
+                    self.admin_privs = True
         return
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):

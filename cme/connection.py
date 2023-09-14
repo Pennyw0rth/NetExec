@@ -42,7 +42,7 @@ def requires_admin(func):
 
     return wraps(func)(_decorator)
 
-def dcom_FirewallChecker(iInterface, timeout=None):
+def dcom_FirewallChecker(iInterface, timeout):
     stringBindings = iInterface.get_cinstance().get_string_bindings()
     for strBinding in stringBindings:
         if strBinding['wTowerId'] == 7:
@@ -60,10 +60,6 @@ def dcom_FirewallChecker(iInterface, timeout=None):
                 stringBinding = 'ncacn_ip_tcp:%s%s' % (iInterface.get_target(), bindingPort)
     if "stringBinding" not in locals():
         return True, None
-    
-    # if not timeout, which means not doing firewall check.
-    if not timeout:
-        return True, stringBinding
     try:
         rpctransport = transport.DCERPCTransportFactory(stringBinding)
         rpctransport.set_connect_timeout(timeout)
