@@ -20,7 +20,6 @@ You are on the **latest up-to-date** repository of the project NetExec (nxc) ! ð
 # Acknowledgments
 All the hard work and development over the years from everyone in the CrackMapExec project.
 
-
 # Documentation, Tutorials, Examples
 See the project's wiki (in development) for documentation and usage examples
 

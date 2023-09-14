@@ -1,4 +1,4 @@
-data/cme.db
+data/nxc.db
 *.bak
 *.log
 .venv
@@ -36,7 +36,7 @@ var/
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
-!crackmapexec.spec
+!netexec.spec
 
 # Installer logs
 pip-log.txt
