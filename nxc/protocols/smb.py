@@ -33,7 +33,7 @@ from nxc.config import process_secret, host_info_colors
 from nxc.connection import *
 from nxc.logger import NXCAdapter
 from nxc.protocols.smb.firefox import FirefoxTriage
-from nxc.servers.smb import nxcSMBServer
+from nxc.servers.smb import NXCSMBServer
 from nxc.protocols.smb.wmiexec import WMIEXEC
 from nxc.protocols.smb.atexec import TSCH_EXEC
 from nxc.protocols.smb.smbexec import SMBEXEC
@@ -134,7 +134,7 @@ def requires_smb_server(func):
         if get_output or (methods and ("smbexec" in methods)):
             if not smb_server:
                 self.logger.debug("Starting SMB server")
-                smb_server = nxcSMBServer(
+                smb_server = NXCSMBServer(
                     self.nxc_logger,
                     smb_share_name,
                     listen_port=self.args.smb_server_port,

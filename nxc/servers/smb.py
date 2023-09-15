@@ -7,7 +7,7 @@ from sys import exit
 from impacket import smbserver
 
 
-class nxcSMBServer(threading.Thread):
+class NXCSMBServer(threading.Thread):
     def __init__(
         self,
         logger,
