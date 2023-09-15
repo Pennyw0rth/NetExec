@@ -56,7 +56,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             pass
 
 
-class nxcServer(threading.Thread):
+class NXCHTTPServer(threading.Thread):
     def __init__(self, module, context, logger, srv_host, port, server_type="https"):
         try:
             threading.Thread.__init__(self)

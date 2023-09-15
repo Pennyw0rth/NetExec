@@ -8,7 +8,7 @@ from nxc.parsers.nessus import parse_nessus_file
 from nxc.cli import gen_cli_args
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.loaders.moduleloader import ModuleLoader
-from nxc.servers.http import nxcServer
+from nxc.servers.http import NXCHTTPServer
 from nxc.first_run import first_run_setup
 from nxc.context import Context
 from nxc.paths import nxc_PATH, DATA_PATH
@@ -231,7 +231,7 @@ def main():
                 # loading a module server multiple times will obviously fail
                 try:
                     context = Context(db, nxc_logger, args)
-                    module_server = nxcServer(
+                    module_server = NXCHTTPServer(
                         module,
                         context,
                         nxc_logger,
