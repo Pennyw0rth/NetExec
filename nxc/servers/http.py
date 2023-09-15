@@ -76,7 +76,7 @@ class NXCHTTPServer(threading.Thread):
         except Exception as e:
             errno, message = e.args
             if errno == 98 and message == "Address already in use":
-                logger.error("Error starting HTTP(S) server: the port is already in use, try specifying a diffrent port using --server-port")
+                logger.error("Error starting HTTP(S) server: the port is already in use, try specifying a different port using --server-port")
             else:
                 logger.error(f"Error starting HTTP(S) server: {message}")
 
