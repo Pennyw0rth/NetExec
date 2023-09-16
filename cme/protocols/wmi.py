@@ -432,7 +432,7 @@ class wmi(connection):
         if not self.args.no_output:
             get_output = True
 
-        if "systeminfo" in command and self.args.interval_time < 10:
+        if "systeminfo" in command and self.args.exec_timeout < 10:
             self.logger.fail("Execute 'systeminfo' must set the interval time higher than 10 seconds")
             return False
         
@@ -441,11 +441,11 @@ class wmi(connection):
             return False
 
         if self.args.exec_method == "wmiexec":
-            exec_method = wmiexec.WMIEXEC(self.conn.getRemoteName(), self.username, self.password, self.domain, self.lmhash, self.nthash, self.doKerberos, self.kdcHost, self.aesKey, self.logger, self.args.interval_time, self.args.codec)
+            exec_method = wmiexec.WMIEXEC(self.conn.getRemoteName(), self.username, self.password, self.domain, self.lmhash, self.nthash, self.doKerberos, self.kdcHost, self.aesKey, self.logger, self.args.exec_timeout, self.args.codec)
             output = exec_method.execute(command, get_output)
             
         elif self.args.exec_method == "wmiexec-event":
-            exec_method = wmiexec_event.WMIEXEC_EVENT(self.conn.getRemoteName(), self.username, self.password, self.domain, self.lmhash, self.nthash, self.doKerberos, self.kdcHost, self.aesKey, self.logger, self.args.interval_time, self.args.codec)
+            exec_method = wmiexec_event.WMIEXEC_EVENT(self.conn.getRemoteName(), self.username, self.password, self.domain, self.lmhash, self.nthash, self.doKerberos, self.kdcHost, self.aesKey, self.logger, self.args.exec_timeout, self.args.codec)
             output = exec_method.execute(command, get_output)
 
         self.conn.disconnect()

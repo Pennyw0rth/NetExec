@@ -91,7 +91,7 @@ def proto_args(parser, std_parser, module_parser):
                             help="force the PowerShell command to run in a 32-bit process")
         cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
         cegroup = cgroup.add_mutually_exclusive_group()
-        cegroup.add_argument("-x", metavar="COMMAND", dest="execute", help="execute the specified command")
+        cegroup.add_argument("-x", metavar="COMMAND", dest="execute", help="execute the specified CMD command")
         cegroup.add_argument("-X", metavar="PS_COMMAND", dest="ps_execute", help="execute the specified PowerShell command")
         psgroup = smb_parser.add_argument_group("Powershell Obfuscation", "Options for PowerShell script obfuscation")
         psgroup.add_argument("--obfs", action="store_true", help="Obfuscate PowerShell scripts")
