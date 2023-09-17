@@ -7,7 +7,7 @@ class nxcModule:
     Module by Shutdown and Podalirius
 
     Initial module:
-      https://github.com/ShutdownRepo/NetExec-MachineAccountQuota
+      https://github.com/ShutdownRepo/CrackMapExec-MachineAccountQuota
 
     Authors:
       Shutdown: @_nwodtuhs

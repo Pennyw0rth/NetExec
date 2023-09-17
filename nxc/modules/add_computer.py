@@ -9,7 +9,7 @@ class nxcModule:
     '''
     Module by CyberCelt: @Cyb3rC3lt
      Initial module:
-        https://github.com/Cyb3rC3lt/NetExec-Modules
+        https://github.com/Cyb3rC3lt/CrackMapExec-Modules
     Thanks to the guys at impacket for the original code
     '''
 

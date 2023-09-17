@@ -420,7 +420,7 @@ class smb(connection):
             if not self.args.local_auth:
                 add_user_bh(self.username, domain, self.logger, self.config)
 
-            # check https://github.com/byt3bl33d3r/NetExec/issues/321
+            # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
             if self.args.continue_on_success and self.signing:
                 try:
                     self.conn.logoff()
@@ -490,7 +490,7 @@ class smb(connection):
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
 
-            # check https://github.com/byt3bl33d3r/NetExec/issues/321
+            # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
             if self.args.continue_on_success and self.signing:
                 try:
                     self.conn.logoff()
@@ -555,7 +555,7 @@ class smb(connection):
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
 
-            # check https://github.com/byt3bl33d3r/NetExec/issues/321
+            # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
             if self.args.continue_on_success and self.signing:
                 try:
                     self.conn.logoff()

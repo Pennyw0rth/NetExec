@@ -7,11 +7,11 @@ from impacket.ldap import ldap as ldap_impacket
 
 class nxcModule:
     """
-    Created as a contributtion from HackTheBox Academy team for NetExec
+    Created as a contributtion from HackTheBox Academy team for CrackMapExec
     Reference: https://academy.hackthebox.com/module/details/84
 
     Module by @juliourena
-    Based on: https://github.com/juliourena/NetExec/blob/master/nxc/modules/get_description.py
+    Based on: https://github.com/juliourena/CrackMapExec/blob/master/cme/modules/get_description.py
     """
 
     name = "groupmembership"

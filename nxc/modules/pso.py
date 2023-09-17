@@ -11,7 +11,7 @@ class nxcModule:
     '''
         Created by fplazar and wanetty
         Module by @gm_eduard and @ferranplaza 
-        Based on: https://github.com/juliourena/NetExec/blob/master/nxc/modules/get_description.py
+        Based on: https://github.com/juliourena/CrackMapExec/blob/master/cme/modules/get_description.py
     '''
 
     name = 'pso'
