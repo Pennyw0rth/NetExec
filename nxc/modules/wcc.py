@@ -84,7 +84,7 @@ class ConfigCheck:
         context.log.highlight(msg)
         context.log.info(info_msg)
 
-class nxcModule:
+class NXCModule:
     '''
     Windows Configuration Checker
 

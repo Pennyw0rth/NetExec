@@ -7,7 +7,7 @@ from math import fabs
 import re
 
 
-class nxcModule:
+class NXCModule:
     '''
         Created by fplazar and wanetty
         Module by @gm_eduard and @ferranplaza 

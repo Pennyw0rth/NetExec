@@ -11,7 +11,7 @@ from base64 import b64encode
 from nxc.helpers.powershell import get_ps_script
 
 
-class nxcModule:
+class NXCModule:
     """
     Module by @NeffIsBack, @Marshall-Hallenbeck
     """

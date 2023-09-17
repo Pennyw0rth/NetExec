@@ -17,7 +17,7 @@ import re
 import configparser
 
 
-class nxcModule:
+class NXCModule:
     """
     Module by @NeffIsBack
     """

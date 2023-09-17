@@ -4,7 +4,7 @@
 from sys import exit
 
 
-class nxcModule:
+class NXCModule:
     """
     Executes the Test-Connection PowerShell cmdlet
     Module by @byt3bl33d3r

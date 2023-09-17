@@ -60,8 +60,8 @@ class ModuleLoader:
         Load a module, initializing it and checking that it has the proper attributes
         """
         try:
-            spec = importlib.util.spec_from_file_location("nxcModule", module_path)
-            module = spec.loader.load_module().nxcModule()
+            spec = importlib.util.spec_from_file_location("NXCModule", module_path)
+            module = spec.loader.load_module().NXCModule()
 
             if self.module_is_sane(module, module_path):
                 return module
@@ -103,8 +103,8 @@ class ModuleLoader:
         Get the path, description, and options from a module
         """
         try:
-            spec = importlib.util.spec_from_file_location("nxcModule", module_path)
-            module_spec = spec.loader.load_module().nxcModule
+            spec = importlib.util.spec_from_file_location("NXCModule", module_path)
+            module_spec = spec.loader.load_module().NXCModule
 
             module = {
                 f"{module_spec.name.lower()}": {

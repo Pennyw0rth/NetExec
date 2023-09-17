@@ -5,7 +5,7 @@ from datetime import datetime
 from nxc.helpers.logger import write_log
 
 
-class nxcModule:
+class NXCModule:
     """
     Uses WMI to dump DNS from an AD DNS Server.
     Module by @fang0654

@@ -3,7 +3,7 @@
 
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 
-class nxcModule:
+class NXCModule:
     '''
       Module by CyberCelt: @Cyb3rC3lt
 

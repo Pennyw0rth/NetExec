@@ -16,7 +16,7 @@ KNOWN_PROTOCOLS = {
 }
 
 
-class nxcModule:
+class NXCModule:
     """
     Check if vulnerable to printnightmare
     Module by @mpgn_x64 based on https://github.com/ly4k/PrintNightmare

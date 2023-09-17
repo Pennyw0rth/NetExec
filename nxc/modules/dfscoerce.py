@@ -10,7 +10,7 @@ from impacket.uuid import uuidtup_to_bin
 from nxc.logger import nxc_logger
 
 
-class nxcModule:
+class NXCModule:
     name = "dfscoerce"
     description = "Module to check if the DC is vulnerable to DFSCocerc, credit to @filip_dragovic/@Wh04m1001 and @topotam"
     supported_protocols = ["smb"]

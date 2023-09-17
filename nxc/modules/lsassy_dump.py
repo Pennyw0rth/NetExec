@@ -14,7 +14,7 @@ from lsassy.session import Session
 from nxc.helpers.bloodhound import add_user_bh
 
 
-class nxcModule:
+class NXCModule:
     name = "lsassy"
     description = "Dump lsass and parse the result remotely with lsassy"
     supported_protocols = ["smb"]

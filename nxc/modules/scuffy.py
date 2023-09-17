@@ -5,7 +5,7 @@ import ntpath
 from sys import exit
 
 
-class nxcModule:
+class NXCModule:
     """
     Original idea and PoC by Mubix "Rob" Fuller
     URL: https://room362.com/post/2016/smb-http-auth-capture-via-scf/

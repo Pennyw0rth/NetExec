@@ -6,7 +6,7 @@ from impacket.examples.secretsdump import RemoteOperations
 from impacket.dcerpc.v5.rrp import DCERPCSessionError
 
 
-class nxcModule:
+class NXCModule:
     """
     Detect if the target's LmCompatibilityLevel will allow NTLMv1 authentication
     Module by @Tw1sm

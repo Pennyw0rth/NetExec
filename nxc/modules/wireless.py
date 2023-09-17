@@ -9,7 +9,7 @@ from dploot.triage.wifi import WifiTriage
 from nxc.helpers.logger import highlight
 
 
-class nxcModule:
+class NXCModule:
     name = "wifi"
     description = "Get key of all wireless interfaces"
     supported_protocols = ["smb"]

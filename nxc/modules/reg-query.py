@@ -6,7 +6,7 @@ from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 
 
-class nxcModule:
+class NXCModule:
     name = "reg-query"
     description = "Performs a registry query on the machine"
     supported_protocols = ["smb"]

@@ -6,7 +6,7 @@ import ntpath
 from sys import exit
 
 
-class nxcModule:
+class NXCModule:
     """
     Original idea and PoC by Justin Angel (@4rch4ngel86)
     Module by @byt3bl33d3r

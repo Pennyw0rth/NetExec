@@ -6,7 +6,7 @@ from os import path
 from nxc.helpers.powershell import get_ps_script
 
 
-class nxcModule:
+class NXCModule:
     name = "msol"
     description = "Dump MSOL cleartext password from the localDB on the Azure AD-Connect Server"
     supported_protocols = ["smb"]

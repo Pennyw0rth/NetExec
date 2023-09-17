@@ -13,7 +13,7 @@ from nxc.helpers.bloodhound import add_user_bh
 from nxc.protocols.mssql.mssqlexec import MSSQLEXEC
 
 
-class nxcModule:
+class NXCModule:
     name = "nanodump"
     description = "Get lsass dump using nanodump and parse the result with pypykatz"
     supported_protocols = ["smb", "mssql"]

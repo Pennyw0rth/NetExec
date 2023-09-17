@@ -1,7 +1,7 @@
 from csv import reader
 
 
-class nxcModule:
+class NXCModule:
     """
     Search for KeePass-related files and process
 

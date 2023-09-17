@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 
-class nxcModule:
+class NXCModule:
     """
     Module by Shutdown and Podalirius
 

@@ -5,7 +5,7 @@ from masky import Masky
 from nxc.helpers.bloodhound import add_user_bh
 
 
-class nxcModule:
+class NXCModule:
     name = "masky"
     description = "Remotely dump domain user credentials via an ADCS and a KDC"
     supported_protocols = ["smb"]

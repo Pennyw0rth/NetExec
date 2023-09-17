@@ -497,7 +497,7 @@ class SMBSpiderPlus:
                 self.logger.success("All files processed successfully.")
 
 
-class nxcModule:
+class NXCModule:
     """
     Spider plus module
     Module by @vincd

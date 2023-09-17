@@ -13,7 +13,7 @@ def searchResEntry_to_dict(results):
     return data
 
 
-class nxcModule:
+class NXCModule:
     """
     Retrieves the different Sites and Subnets of an Active Directory
 

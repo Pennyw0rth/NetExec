@@ -1,4 +1,4 @@
-class nxcModule:
+class NXCModule:
     """
     Basic enumeration of provided user information and privileges
     Module by spyr0 (@spyr0-sec)

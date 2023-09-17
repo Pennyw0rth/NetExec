@@ -3,7 +3,7 @@
 import socket
 import sys
 
-class nxcModule:
+class NXCModule:
     '''
       Module by CyberCelt: @Cyb3rC3lt
 

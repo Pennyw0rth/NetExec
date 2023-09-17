@@ -10,7 +10,7 @@ from impacket.krb5 import constants
 from impacket.krb5.types import Principal
 
 
-class nxcModule:
+class NXCModule:
     name = "nopac"
     description = "Check if the DC is vulnerable to CVE-2021-42278 and CVE-2021-42287 to impersonate DA from standard domain user"
     supported_protocols = ["smb"]

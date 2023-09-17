@@ -21,7 +21,7 @@ class User:
         return f"User({self.username})"
 
 
-class nxcModule:
+class NXCModule:
     """
     Enumerate MSSQL privileges and exploit them
     """

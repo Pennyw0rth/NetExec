@@ -7,7 +7,7 @@ from impacket.smb3structs import FILE_READ_DATA
 from impacket.smbconnection import SessionError
 
 
-class nxcModule:
+class NXCModule:
     """
     Enumerate whether the WebClient service is running on the target by looking for the
     DAV RPC Service pipe. This technique was first suggested by Lee Christensen (@tifkin_)

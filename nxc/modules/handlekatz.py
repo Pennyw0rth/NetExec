@@ -12,7 +12,7 @@ import sys
 from nxc.helpers.bloodhound import add_user_bh
 
 
-class nxcModule:
+class NXCModule:
     name = "handlekatz"
     description = "Get lsass dump using handlekatz64 and parse the result with pypykatz"
     supported_protocols = ["smb"]

@@ -11,7 +11,7 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 
-class nxcModule:
+class NXCModule:
     """
     Uses Empire's RESTful API to generate a launcher for the specified listener and executes it
     Module by @byt3bl33d3r

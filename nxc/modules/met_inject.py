@@ -4,7 +4,7 @@
 from sys import exit
 
 
-class nxcModule:
+class NXCModule:
     """
     Downloads the Meterpreter stager and injects it into memory using PowerSploit's Invoke-Shellcode.ps1 script
     Module by @byt3bl33d3r

@@ -11,7 +11,7 @@ from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_NONE
 from impacket.dcerpc.v5.dcomrt import IObjectExporter
 
 
-class nxcModule:
+class NXCModule:
     name = "ioxidresolver"
     description = "This module helps you to identify hosts that have additional active interfaces"
     supported_protocols = ["smb", "wmi"]

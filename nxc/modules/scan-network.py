@@ -80,7 +80,7 @@ def searchResEntry_to_dict(results):
     return data
 
 
-class nxcModule:
+class NXCModule:
     name = "get-network"
     description = ""
     supported_protocols = ["ldap"]

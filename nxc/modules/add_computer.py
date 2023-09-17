@@ -5,7 +5,7 @@
 import ldap3
 from impacket.dcerpc.v5 import samr, epm, transport
 
-class nxcModule:
+class NXCModule:
     '''
     Module by CyberCelt: @Cyb3rC3lt
      Initial module:

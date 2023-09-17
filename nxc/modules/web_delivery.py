@@ -4,7 +4,7 @@
 from sys import exit
 
 
-class nxcModule:
+class NXCModule:
     """
     Kicks off a Metasploit Payload using the exploit/multi/script/web_delivery module
     Reference: https://github.com/EmpireProject/Empire/blob/2.0_beta/data/module_source/code_execution/Invoke-MetasploitPayload.ps1

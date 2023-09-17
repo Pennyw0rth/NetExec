@@ -17,7 +17,7 @@ KNOWN_PROTOCOLS = {
 }
 
 
-class nxcModule:
+class NXCModule:
     """
     For printnightmare: detect if print spooler is enabled or not. Then use @cube0x0's project https://github.com/cube0x0/CVE-2021-1675 or Mimikatz from Benjamin Delpy
     Module by @mpgn_x64

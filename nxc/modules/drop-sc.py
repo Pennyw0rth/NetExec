@@ -4,7 +4,7 @@
 import ntpath
 
 
-class nxcModule:
+class NXCModule:
     """
     Technique discovered by @DTMSecurity and @domchell to remotely coerce an host to start WebClient service.
     https://dtm.uk/exploring-search-connectors-and-library-files-on-windows/

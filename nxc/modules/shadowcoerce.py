@@ -17,7 +17,7 @@ from impacket.smbconnection import SessionError
 from nxc.logger import nxc_logger
 
 
-class nxcModule:
+class NXCModule:
     name = "shadowcoerce"
     description = "Module to check if the target is vulnerable to ShadowCoerce, credit to @Shutdown and @topotam"
     supported_protocols = ["smb"]

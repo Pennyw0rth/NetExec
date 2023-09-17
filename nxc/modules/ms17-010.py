@@ -9,7 +9,7 @@ import socket
 import struct
 
 
-class nxcModule:
+class NXCModule:
     name = "ms17-010"
     description = "MS17-010, /!\ not tested oustide home lab"
     supported_protocols = ["smb"]

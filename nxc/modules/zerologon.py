@@ -12,7 +12,7 @@ from nxc.logger import nxc_logger
 MAX_ATTEMPTS = 2000  # False negative chance: 0.04%
 
 
-class nxcModule:
+class NXCModule:
     name = "zerologon"
     description = "Module to check if the DC is vulnerable to Zerologon aka CVE-2020-1472"
     supported_protocols = ["smb", "wmi"]

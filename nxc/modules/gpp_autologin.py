@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 from io import BytesIO
 
 
-class nxcModule:
+class NXCModule:
     """
     Reference: https://github.com/PowerShellMafia/PowerSploit/blob/master/Exfiltration/Get-GPPAutologon.ps1
     Module by @byt3bl33d3r

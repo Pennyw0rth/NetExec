@@ -11,7 +11,7 @@ from neo4j import GraphDatabase
 from neo4j.exceptions import AuthError, ServiceUnavailable
 
 
-class nxcModule:
+class NXCModule:
     name = "bh_owned"
     description = "Set pwned computer as owned in Bloodhound"
     supported_protocols = ["smb"]

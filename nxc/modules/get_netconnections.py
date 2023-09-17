@@ -6,7 +6,7 @@ from nxc.helpers.logger import write_log
 import json
 
 
-class nxcModule:
+class NXCModule:
     """
     Uses WMI to extract network connections, used to find multi-homed hosts.
     Module by @fang0654

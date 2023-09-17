@@ -7,7 +7,7 @@ from impacket.ldap import ldap, ldapasn1
 from impacket.ldap.ldap import LDAPSearchError
 
 
-class nxcModule:
+class NXCModule:
     """
     Get user descriptions stored in Active Directory.
 

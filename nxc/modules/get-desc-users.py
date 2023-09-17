@@ -7,7 +7,7 @@ import re
 from nxc.logger import nxc_logger
 
 
-class nxcModule:
+class NXCModule:
     """
     Get description of users
     Module by @nodauf

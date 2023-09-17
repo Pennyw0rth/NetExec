@@ -13,7 +13,7 @@ from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 
 
-class nxcModule:
+class NXCModule:
     name = "rdp"
     description = "Enables/Disables RDP"
     supported_protocols = ["smb" ,"wmi"]

@@ -7,7 +7,7 @@ from base64 import b64decode
 from sys import exit
 from os import path
 
-class nxcModule:
+class NXCModule:
 
     name = "impersonate"
     description = "List and impersonate tokens to run command as locally logged on users"

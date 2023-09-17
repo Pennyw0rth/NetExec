@@ -187,7 +187,7 @@ class ALLOWED_OBJECT_ACE_MASK_FLAGS(Enum):
     Self = ldaptypes.ACCESS_ALLOWED_OBJECT_ACE.ADS_RIGHT_DS_SELF
 
 
-class nxcModule:
+class NXCModule:
     """
     Module to read and backup the Discretionary Access Control List of one or multiple objects.
     This module is essentially inspired from the dacledit.py script of Impacket that we have coauthored, @_nwodtuhs and me.

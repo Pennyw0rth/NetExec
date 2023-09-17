@@ -6,7 +6,7 @@ from impacket.dcerpc.v5 import scmr
 from impacket.examples.secretsdump import RemoteOperations
 
 
-class nxcModule:
+class NXCModule:
     name = "install_elevated"
     description = "Checks for AlwaysInstallElevated"
     supported_protocols = ["smb"]

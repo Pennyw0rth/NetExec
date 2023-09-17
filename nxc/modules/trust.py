@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-class nxcModule:
+class NXCModule:
     '''
         Extract all Trust Relationships, Trusting Direction, and Trust Transitivity
         Module by Brandon Fisher @shad0wcntr0ller

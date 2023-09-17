@@ -3,7 +3,7 @@ from dploot.lib.target import Target
 from nxc.protocols.smb.firefox import FirefoxTriage
 
 
-class nxcModule:
+class NXCModule:
     """
     Firefox by @zblurx
     Inspired by firefox looting from DonPAPI

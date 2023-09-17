@@ -10,7 +10,7 @@ from impacket.dcerpc.v5 import transport
 import pathlib
 
 
-class nxcModule:
+class NXCModule:
     """
     Uses LsarLookupNames and NamedPipes to gather information on all endpoint protection solutions installed on the the remote host(s)
     Module by @mpgn_x64

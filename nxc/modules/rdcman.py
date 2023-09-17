@@ -10,7 +10,7 @@ from dploot.lib.smb import DPLootSMBConnection
 from nxc.helpers.logger import highlight
 
 
-class nxcModule:
+class NXCModule:
     name = "rdcman"
     description = "Remotely dump Remote Desktop Connection Manager (sysinternals) credentials"
     supported_protocols = ["smb"]

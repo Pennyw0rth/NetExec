@@ -9,7 +9,7 @@ from nxc.helpers.logger import highlight
 from nxc.helpers.misc import validate_ntlm
 
 
-class nxcModule:
+class NXCModule:
     """
     Dump NTDS with ntdsutil
     Module by @zblurx

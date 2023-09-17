@@ -19,7 +19,7 @@ from impacket.dcerpc.v5.rpcrt import (
 from impacket.uuid import uuidtup_to_bin
 
 
-class nxcModule:
+class NXCModule:
     name = "petitpotam"
     description = "Module to check if the DC is vulnerable to PetitPotam, credit to @topotam"
     supported_protocols = ["smb"]

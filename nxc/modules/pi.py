@@ -2,7 +2,7 @@ from base64 import b64decode
 from sys import exit
 from os import path
 
-class nxcModule:
+class NXCModule:
 
     name = "pi"
     description = "Run command as logged on users via Process Injection"

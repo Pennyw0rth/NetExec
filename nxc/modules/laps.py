@@ -5,7 +5,7 @@ import json
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from nxc.protocols.ldap.laps import LDAPConnect, LAPSv2Extract
 
-class nxcModule:
+class NXCModule:
     """
     Module by technobro refactored by @mpgn (now compatible with LDAP protocol + filter by computer)
 

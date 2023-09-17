@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 
-class nxcModule:
+class NXCModule:
     name = "runasppl"
     description = "Check if the registry value RunAsPPL is set or not"
     supported_protocols = ["smb"]

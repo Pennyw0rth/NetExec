@@ -6,7 +6,7 @@ from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 
 
-class nxcModule:
+class NXCModule:
     name = "uac"
     description = "Checks UAC status"
     supported_protocols = ["smb"]

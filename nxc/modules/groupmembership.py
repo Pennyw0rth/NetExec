@@ -5,7 +5,7 @@ from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ldap import ldap as ldap_impacket
 
 
-class nxcModule:
+class NXCModule:
     """
     Created as a contributtion from HackTheBox Academy team for CrackMapExec
     Reference: https://academy.hackthebox.com/module/details/84

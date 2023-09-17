@@ -14,7 +14,7 @@ from pypykatz.pypykatz import pypykatz
 from nxc.helpers.bloodhound import add_user_bh
 
 
-class nxcModule:
+class NXCModule:
     name = "procdump"
     description = "Get lsass dump using procdump64 and parse the result with pypykatz"
     supported_protocols = ["smb"]

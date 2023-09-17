@@ -5,7 +5,7 @@ from impacket.ldap import ldap, ldapasn1
 from impacket.ldap.ldap import LDAPSearchError
 
 
-class nxcModule:
+class NXCModule:
     """
     Find PKI Enrollment Services in Active Directory and Certificate Templates Names.
 

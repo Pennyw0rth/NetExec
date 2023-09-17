@@ -10,7 +10,7 @@ from xml.etree import ElementTree
 from nxc.helpers.powershell import get_ps_script
 
 
-class nxcModule:
+class NXCModule:
     """
     Make use of KeePass' trigger system to export the database in cleartext
     References: https://keepass.info/help/v2/triggers.html
