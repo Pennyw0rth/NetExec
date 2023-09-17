@@ -853,9 +853,8 @@ files = [
 
 [[package]]
 name = "impacket"
-version = "0.12.0.dev1+20230816.160145.f6e03b99"
+version = "0.12.0.dev1+20230909.154612.3beeda7c"
 description = "Network protocols Constructors and Dissectors"
-category = "main"
 optional = false
 python-versions = "*"
 files = []
@@ -878,7 +877,7 @@ six = "*"
 type = "git"
 url = "https://github.com/mpgn/impacket.git"
 reference = "gkdi"
-resolved_reference = "f6e03b99ce9da7f502a03488c8d26151236fa679"
+resolved_reference = "3beeda7c3188936ed20f58c2c169430c2cfdfb1a"
 
 [[package]]
 name = "importlib-metadata"
