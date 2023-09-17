@@ -7,6 +7,10 @@
 🚩 This is the open source repository of NetExec maintained by a community of passionate people
 # NetExec - The Network Execution Tool
 
+This project was initially created in 2015 by @byt3bl33d3r, known as CrackMapExec. In 2019 @mpgn_x64 started maintaining the project for the next 4 years, adding a lot of great tools and features. In september 2023 he retired from maintaining the project.
+
+Like many other contributer we (NeffIsBack, Marshall-Hallenbeck and zblurx) started working on new features, bugfixes and helped maintaining The original project CrackMapExec. With the end of mpgn's maintainer role, we decided to maintain the project together as an fully free and open source project under the new name **NetExec** 🚀
+
 <p align="center">
   <!-- placeholder for nxc logo-->
 </p>
@@ -22,10 +26,10 @@ All the hard work and development over the years from everyone in the CrackMapEx
 
 
 # Documentation, Tutorials, Examples
-See the project's wiki (in development) for documentation and usage examples
+See the project's [wiki](https://www.netexec.wiki/) for documentation and usage examples
 
 # Installation
-Please see the installation instructions on the wiki (in development)
+Please see the installation instructions on the [wiki](https://www.netexec.wiki/getting-started/installation)
 
 # Code Contributors
 Awesome code contributors of NetExec:
