@@ -231,31 +231,14 @@ class winrm(connection):
                 self.password = password
                 self.username = username
             self.domain = domain
-            if self.args.ssl and self.args.ignore_ssl_cert:
-                self.conn = Client(
-                    self.host,
-                    auth="ntlm",
-                    username=f"{domain}\\{self.username}",
-                    password=self.password,
-                    ssl=True,
-                    cert_validation=False,
-                )
-            elif self.args.ssl:
-                self.conn = Client(
-                    self.host,
-                    auth="ntlm",
-                    username=f"{domain}\\{self.username}",
-                    password=self.password,
-                    ssl=True,
-                )
-            else:
-                self.conn = Client(
-                    self.host,
-                    auth="ntlm",
-                    username=f"{domain}\\{self.username}",
-                    password=self.password,
-                    ssl=False,
-                )
+            self.conn = Client(
+                self.host,
+                auth="ntlm",
+                username=f"{domain}\\{self.username}",
+                password=self.password,
+                ssl=True if self.args.ssl else False,
+                cert_validation=False if self.args.ignore_ssl_cert else True,
+            )
 
             # TO DO: right now we're just running the hostname command to make the winrm library auth to the server
             # we could just authenticate without running a command :) (probably)
@@ -308,31 +291,14 @@ class winrm(connection):
                 nthash = self.hash
 
             self.domain = domain
-            if self.args.ssl and self.args.ignore_ssl_cert:
-                self.conn = Client(
-                    self.host,
-                    auth="ntlm",
-                    username=f"{self.domain}\\{self.username}",
-                    password=lmhash + nthash,
-                    ssl=True,
-                    cert_validation=False,
-                )
-            elif self.args.ssl:
-                self.conn = Client(
-                    self.host,
-                    auth="ntlm",
-                    username=f"{self.domain}\\{self.username}",
-                    password=lmhash + nthash,
-                    ssl=True,
-                )
-            else:
-                self.conn = Client(
-                    self.host,
-                    auth="ntlm",
-                    username=f"{self.domain}\\{self.username}",
-                    password=lmhash + nthash,
-                    ssl=False,
-                )
+            self.conn = Client(
+                self.host,
+                auth="ntlm",
+                username=f"{self.domain}\\{self.username}",
+                password=lmhash + nthash,
+                ssl=True if self.args.ssl else False,
+                cert_validation=False if self.args.ignore_ssl_cert else True,
+            )
 
             # TO DO: right now we're just running the hostname command to make the winrm library auth to the server
             # we could just authenticate without running a command :) (probably)
