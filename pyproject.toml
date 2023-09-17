@@ -1,13 +1,20 @@
 [tool.poetry]
-name = "crackmapexec"
-version = "6.1.0"
-description = "A swiss army knife for pentesting networks"
-authors = ["Marcello Salvati <byt3bl33d3r@pm.com>", "Martial Puygrenier <mpgn@protonmail.com>"]
+name = "netexec"
+version = "1.0.0"
+description = "The Network Execution tool"
+authors = [
+    "Marshall Hallenbeck <marshall.hallenbeck@gmail.com>",
+    "Alexander Neff <alex99.neff@gmx.de>",
+    "Thomas Seigneuret <seigneuret.thomas@pm.me>"
+]
 readme = "README.md"
-homepage = "https://github.com/mpgn/CrackMapExec"
-repository = "https://github.com/mpgn/CrackMapExec"
+homepage = "https://github.com/Pennyw0rth/NetExec"
+repository = "https://github.com/Pennyw0rth/NetExec"
 exclude = []
-include = ["cme/data/*", "cme/modules/*"]
+include = [
+    "nxc/data/*",
+    "nxc/modules/*"
+]
 license = "BSD-2-Clause"
 classifiers = [
     'Environment :: Console',
@@ -16,13 +23,14 @@ classifiers = [
     'Topic :: Security',
 ]
 packages = [
-    { include = "cme"}
+    { include = "nxc"}
 ]
 
 [tool.poetry.scripts]
-cme = 'cme.crackmapexec:main'
-crackmapexec = 'cme.crackmapexec:main'
-cmedb = 'cme.cmedb:main'
+nxc = 'nxc.netexec:main'
+netexec = 'nxc.netexec:main'
+NetExec = 'nxc.netexec:main'
+nxcdb = 'nxc.nxcdb:main'
 
 [tool.poetry.dependencies]
 python = "^3.7.0"
