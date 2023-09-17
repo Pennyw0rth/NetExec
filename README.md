@@ -22,14 +22,13 @@ You are on the **latest up-to-date** repository of the project NetExec (nxc) ! ð
 - ðŸ’¬ If you want to discuss, open a [Discussion](https://github.com/Pennyw0rth/NetExec/discussions)
 
 # Acknowledgments
-All the hard work and development over the years from everyone in the CrackMapExec project.
-
+All the hard work and development over the years from everyone in the CrackMapExec project
 
 # Documentation, Tutorials, Examples
-See the project's [wiki](https://www.netexec.wiki/) for documentation and usage examples
+See the project's [wiki](https://netexec.wiki/) (in development) for documentation and usage examples
 
 # Installation
-Please see the installation instructions on the [wiki](https://www.netexec.wiki/getting-started/installation)
+Please see the installation instructions on the [wiki](https://netexec.wiki/getting-started/installation) (in development)
 
 # Code Contributors
 Awesome code contributors of NetExec:

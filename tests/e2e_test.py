@@ -5,7 +5,7 @@ from rich.console import Console
 
 
 def get_cli_args():
-    parser = argparse.ArgumentParser(description=f"Script for running end to end tests for CME")
+    parser = argparse.ArgumentParser(description=f"Script for running end to end tests for nxc")
     parser.add_argument("-t", "--target", dest="target", required=True)
     parser.add_argument("-u", "--user", "--username", dest="username", required=True)
     parser.add_argument("-p", "--pass", "--password", dest="password", required=True)
@@ -61,14 +61,14 @@ def run_e2e_tests(args):
     tasks = generate_commands(args)
 
     result = subprocess.Popen(
-        "crackmapexec --version",
+        "netexec --version",
         shell=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
     version = result.communicate()[0].decode().strip()
 
-    with console.status(f"[bold green] :brain: Running {len(tasks)} test commands for cme v{version}...") as status:
+    with console.status(f"[bold green] :brain: Running {len(tasks)} test commands for nxc v{version}...") as status:
         passed = 0
         failed = 0
 

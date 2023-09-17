@@ -6,11 +6,11 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
 
-from cme.cmedb import delete_workspace, CMEDBMenu
-from cme.first_run import first_run_setup
-from cme.loaders.protocolloader import ProtocolLoader
-from cme.logger import CMEAdapter
-from cme.paths import WS_PATH
+from nxc.nxcdb import delete_workspace, NXCDBMenu
+from nxc.first_run import first_run_setup
+from nxc.loaders.protocolloader import ProtocolLoader
+from nxc.logger import NXCAdapter
+from nxc.paths import WS_PATH
 from sqlalchemy.dialects.sqlite import Insert
 
 
@@ -26,11 +26,11 @@ def db_engine():
 def db_setup(db_engine):
     proto = "smb"
     # setup_logger()
-    logger = CMEAdapter()
+    logger = NXCAdapter()
     first_run_setup(logger)
     p_loader = ProtocolLoader()
     protocols = p_loader.get_protocols()
-    CMEDBMenu.create_workspace("test", p_loader, protocols)
+    NXCDBMenu.create_workspace("test", p_loader, protocols)
 
     protocol_db_path = p_loader.get_protocols()[proto]["dbpath"]
     protocol_db_object = getattr(p_loader.load_protocol(protocol_db_path), "database")
