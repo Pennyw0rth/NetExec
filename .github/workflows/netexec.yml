@@ -22,6 +22,9 @@ jobs:
       run: |
         pip install shiv
         python build_collector.py
+        if [ "$RUNNER_OS" == "Windows" ]; then
+              pyinstaller netexec.spec
+        fi
     - name: Upload nxc binary
       uses: actions/upload-artifact@master
       with:
@@ -32,3 +35,8 @@ jobs:
       with:
         name: nxcdb-${{ matrix.os }}-${{ matrix.python-version }}
         path: bin/nxcdb
+    - name: Upload netexec binary (Windows)
+      uses: actions/upload-artifact@master
+      with:
+        name: netexec-${{ matrix.os }}
+        path: dist/netexec.exe
