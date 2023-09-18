@@ -1546,14 +1546,13 @@ files = [
 
 [[package]]
 name = "paramiko"
-version = "2.12.0"
+version = "3.3.1"
 description = "SSH2 protocol library"
-category = "main"
 optional = false
-python-versions = "*"
+python-versions = ">=3.6"
 files = [
-    {file = "paramiko-2.12.0-py2.py3-none-any.whl", hash = "sha256:b2df1a6325f6996ef55a8789d0462f5b502ea83b3c990cbb5bbe57345c6812c4"},
-    {file = "paramiko-2.12.0.tar.gz", hash = "sha256:376885c05c5d6aa6e1f4608aac2a6b5b0548b1add40274477324605903d9cd49"},
+    {file = "paramiko-3.3.1-py3-none-any.whl", hash = "sha256:b7bc5340a43de4287bbe22fe6de728aa2c22468b2a849615498dd944c2f275eb"},
+    {file = "paramiko-3.3.1.tar.gz", hash = "sha256:6a3777a961ac86dbef375c5f5b8d50014a1a96d0fd7f054a43bc880134b0ff77"},
 ]
 
 [package.dependencies]
