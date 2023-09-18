@@ -16,8 +16,8 @@ from shiv.builder import create_archive
 from shiv.cli import __version__ as VERSION
 
 
-def build_cme():
-    print("building CME")
+def build_nxc():
+    print("building nxc")
     try:
         shutil.rmtree("bin")
         shutil.rmtree("build")
@@ -28,7 +28,7 @@ def build_cme():
         print("remove useless files")
         os.mkdir("build")
         os.mkdir("bin")
-        shutil.copytree("cme", "build/cme")
+        shutil.copytree("nxc", "build/nxc")
 
     except Exception as e:
         print(e)
@@ -53,7 +53,7 @@ def build_cme():
 
     env = Environment(
         built_at=datetime.utcfromtimestamp(int(time.time())).strftime("%Y-%m-%d %H:%M:%S"),
-        entry_point="cme.crackmapexec:main",
+        entry_point="nxc.netexec:main",
         script=None,
         compile_pyc=False,
         extend_pythonpath=True,
@@ -61,7 +61,7 @@ def build_cme():
     )
     create_archive(
         [Path("build").absolute()],
-        Path("bin/cme"),
+        Path("bin/nxc"),
         "/usr/bin/env -S python -sE",
         "_bootstrap:bootstrap",
         env,
@@ -69,11 +69,11 @@ def build_cme():
     )
 
 
-def build_cmedb():
-    print("building CMEDB")
+def build_nxcdb():
+    print("building nxcdb")
     env = Environment(
         built_at=datetime.utcfromtimestamp(int(time.time())).strftime("%Y-%m-%d %H:%M:%S"),
-        entry_point="cme.cmedb:main",
+        entry_point="nxc.nxcdb:main",
         script=None,
         compile_pyc=False,
         extend_pythonpath=True,
@@ -81,7 +81,7 @@ def build_cmedb():
     )
     create_archive(
         [Path("build").absolute()],
-        Path("bin/cmedb"),
+        Path("bin/nxcdb"),
         "/usr/bin/env -S python -sE",
         "_bootstrap:bootstrap",
         env,
@@ -91,8 +91,8 @@ def build_cmedb():
 
 if __name__ == "__main__":
     try:
-        build_cme()
-        build_cmedb()
+        build_nxc()
+        build_nxcdb()
     except:
         pass
     finally:
