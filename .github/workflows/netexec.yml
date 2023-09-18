@@ -23,7 +23,7 @@ jobs:
         pip install shiv
         python build_collector.py
     - name: Build Windows binary
-      if: runner.os == "Windows"
+      if: runner.os == "windows"
       run: |
         pip install pyinstaller
         pyinstaller netexec.spec
