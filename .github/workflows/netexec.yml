@@ -8,13 +8,12 @@ jobs:
     name: NetExec Tests on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
-      max-parallel: 4
       matrix:
         os: [ubuntu-latest, macOS-latest, windows-latest]
         python-version: ["3.8", "3.9", "3.10", "3.11"]
     steps:
     - uses: actions/checkout@v3
-    - name: NetExec tests on ${{ matrix.os }}
+    - name: NetExec set up python on ${{ matrix.os }}
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
@@ -22,6 +21,12 @@ jobs:
       run: |
         pip install shiv
         python build_collector.py
+    - name: Build Windows binary
+      if: runner.os == 'windows'
+      run: |
+        pip install pyinstaller
+        pip install .
+        pyinstaller netexec.spec
     - name: Upload nxc binary
       uses: actions/upload-artifact@master
       with:
@@ -32,3 +37,9 @@ jobs:
       with:
         name: nxcdb-${{ matrix.os }}-${{ matrix.python-version }}
         path: bin/nxcdb
+    - name: Upload netexec binary (Windows)
+      if: runner.os == 'windows'
+      uses: actions/upload-artifact@master
+      with:
+        name: netexec-${{ matrix.os }}
+        path: dist/netexec.exe
