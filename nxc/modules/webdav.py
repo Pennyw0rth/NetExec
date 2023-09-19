@@ -46,6 +46,7 @@ class NXCModule:
         except SessionError as e:
             if e.getErrorCode() == nt_errors.STATUS_OBJECT_NAME_NOT_FOUND:
                 pass
-
+            elif e.getErrorCode() in nt_errors.ERROR_MESSAGES:
+                context.log.fail(f"Error enumerating WebDAV: {e.getErrorString()[0]}", color="magenta")
             else:
                 raise e
