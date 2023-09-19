@@ -868,23 +868,23 @@ files = []
 develop = false
 
 [package.dependencies]
-charset-normalizer = "*"
+charset_normalizer = "*"
 dsinternals = "*"
 flask = ">=1.0"
 future = "*"
 ldap3 = ">2.5.0,<2.5.2 || >2.5.2,<2.6 || >2.6"
 ldapdomaindump = ">=0.9.0"
 pyasn1 = ">=0.2.3"
-pyasn1-modules = "*"
+pyasn1_modules = "*"
 pycryptodomex = "*"
 pyOpenSSL = ">=21.0.0"
 six = "*"
 
 [package.source]
 type = "git"
-url = "https://github.com/mpgn/impacket.git"
+url = "https://github.com/Pennyw0rth/impacket.git"
 reference = "gkdi"
-resolved_reference = "3beeda7c3188936ed20f58c2c169430c2cfdfb1a"
+resolved_reference = "cdf867faa6b9db1bd19b44ec7a53d7e40b95e3a5"
 
 [[package]]
 name = "importlib-metadata"
@@ -2835,4 +2835,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.7.0"
-content-hash = "b09235f314431d04900ee580230a53924662e5ca32419c7ce6f778e870487947"
+content-hash = "e9fa6277cccb9cabc63bda6dc799790bcd9781592342dd59b3a6f98630c53566"
