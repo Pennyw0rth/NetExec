@@ -24,6 +24,12 @@ You are on the **latest up-to-date** repository of the project NetExec (nxc) ! �
 - 🔀 If you want to contribute, open a [Pull Request](https://github.com/Pennyw0rth/NetExec/pulls)
 - 💬 If you want to discuss, open a [Discussion](https://github.com/Pennyw0rth/NetExec/discussions)
 
+## Official Discord Channel
+
+If you don't have a Github account, you can ask your question on Discord
+
+[![NetExec](https://discordapp.com/api/guilds/1148685154601160794/widget.png?style=banner3)](https://discord.gg/pjwUTQzg8R)
+
 # Documentation, Tutorials, Examples
 See the project's [wiki](https://netexec.wiki/) (in development) for documentation and usage examples
 
