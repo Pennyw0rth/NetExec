@@ -38,6 +38,7 @@ jobs:
         name: nxcdb-${{ matrix.os }}-${{ matrix.python-version }}
         path: bin/nxcdb
     - name: Upload netexec binary (Windows)
+      if: runner.os == 'windows'
       uses: actions/upload-artifact@master
       with:
         name: netexec-${{ matrix.os }}
