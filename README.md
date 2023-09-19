@@ -26,7 +26,7 @@ You are on the **latest up-to-date** repository of the project NetExec (nxc) ! ð
 
 ## Official Discord Channel
 
-If you don't have a Github account, you can ask your question on Discord
+If you don't have a Github account, you can ask your questions on Discord!
 
 [![NetExec](https://discordapp.com/api/guilds/1148685154601160794/widget.png?style=banner3)](https://discord.gg/pjwUTQzg8R)
 
