@@ -8,13 +8,12 @@ jobs:
     name: NetExec Tests on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
-      max-parallel: 4
       matrix:
         os: [ubuntu-latest, macOS-latest, windows-latest]
         python-version: ["3.8", "3.9", "3.10", "3.11"]
     steps:
     - uses: actions/checkout@v3
-    - name: NetExec tests on ${{ matrix.os }}
+    - name: NetExec set up python on ${{ matrix.os }}
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
