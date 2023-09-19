@@ -26,6 +26,7 @@ jobs:
       if: runner.os == 'windows'
       run: |
         pip install pyinstaller
+        pip install .
         pyinstaller netexec.spec
     - name: Upload nxc binary
       uses: actions/upload-artifact@master
@@ -38,6 +39,7 @@ jobs:
         name: nxcdb-${{ matrix.os }}-${{ matrix.python-version }}
         path: bin/nxcdb
     - name: Upload netexec binary (Windows)
+      if: runner.os == 'windows'
       uses: actions/upload-artifact@master
       with:
         name: netexec-${{ matrix.os }}
