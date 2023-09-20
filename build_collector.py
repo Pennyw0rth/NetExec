@@ -11,7 +11,6 @@ from pathlib import Path
 
 from shiv.bootstrap import Environment
 
-# from distutils.ccompiler import new_compiler
 from shiv.builder import create_archive
 from shiv.cli import __version__ as VERSION
 
@@ -48,7 +47,6 @@ def build_nxc():
         check=True,
     )
 
-    # [shutil.rmtree(p) for p in Path("build").glob("**/__pycache__")]
     [shutil.rmtree(p) for p in Path("build").glob("**/*.dist-info")]
 
     env = Environment(
