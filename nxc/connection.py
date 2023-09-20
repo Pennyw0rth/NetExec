@@ -264,35 +264,37 @@ class connection(object):
             - a range specified with a dash (ex. 1-5)
             - 'all' to select all credentials
 
-        :return: domain[], username[], owned[], secret[], cred_type[]
+        :return: domains[], usernames[], owned[], secrets[], cred_types[]
         """
-        domain = []
-        username = []
+        domains = []
+        usernames = []
         owned = []
-        secret = []
-        cred_type = []
+        secrets = []
+        cred_types = []
         creds = []  # list of tuples (cred_id, domain, username, secret, cred_type, pillaged_from) coming from the database
         data = []  # Arbitrary data needed for the login, e.g. ssh_key
 
         for cred_id in self.args.cred_id:
-            if isinstance(cred_id, str) and cred_id.lower() == 'all':
+            if cred_id.lower() == "all":
                 creds = self.db.get_credentials()
             else:
                 if not self.db.get_credentials(filter_term=int(cred_id)):
-                    self.logger.error('Invalid database credential ID {}!'.format(cred_id))
+                    self.logger.error(f"Invalid database credential ID {cred_id}!")
                     continue
                 creds.extend(self.db.get_credentials(filter_term=int(cred_id)))
 
         for cred in creds:
-            c_id, domain_single, username_single, secret_single, cred_type_single, pillaged_from = cred
-            domain.append(domain_single)
-            username.append(username_single)
+            c_id, domain, username, secret, cred_type, pillaged_from = cred
+            domains.append(domain)
+            usernames.append(username)
             owned.append(False)  # As these are likely valid we still want to test them if they are specified in the command line
-            secret.append(secret_single)
-            cred_type.append(cred_type_single)
+            secrets.append(secret)
+            cred_types.append(cred_type)
 
-        if len(secret) != len(data): data = [None] * len(secret)
-        return domain, username, owned, secret, cred_type, data
+        if len(secrets) != len(data):
+            data = [None] * len(secrets)
+
+        return domains, usernames, owned, secrets, cred_types, data
 
     def parse_credentials(self):
         """
