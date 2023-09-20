@@ -8,7 +8,7 @@ from random import choice, sample
 from subprocess import call
 from nxc.helpers.misc import which
 from nxc.logger import nxc_logger
-from nxc.paths import nxc_PATH, DATA_PATH
+from nxc.paths import NXC_PATH, DATA_PATH
 from base64 import b64encode
 
 obfuscate_ps_scripts = False
@@ -30,7 +30,7 @@ def is_powershell_installed():
 
 def obfs_ps_script(path_to_script):
     ps_script = path_to_script.split("/")[-1]
-    obfs_script_dir = os.path.join(nxc_PATH, "obfuscated_scripts")
+    obfs_script_dir = os.path.join(NXC_PATH, "obfuscated_scripts")
     obfs_ps_script = os.path.join(obfs_script_dir, ps_script)
 
     if is_powershell_installed() and obfuscate_ps_scripts:

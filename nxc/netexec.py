@@ -11,7 +11,7 @@ from nxc.loaders.moduleloader import ModuleLoader
 from nxc.servers.http import NXCHTTPServer
 from nxc.first_run import first_run_setup
 from nxc.context import Context
-from nxc.paths import nxc_PATH, DATA_PATH
+from nxc.paths import NXC_PATH, DATA_PATH
 from nxc.console import nxc_console
 from nxc.logger import nxc_logger
 from nxc.config import nxc_config, nxc_workspace, config_log, ignore_opsec
@@ -157,7 +157,7 @@ def main():
     protocol_db_object = getattr(p_loader.load_protocol(protocol_db_path), "database")
     nxc_logger.debug(f"Protocol DB Object: {protocol_db_object}")
 
-    db_path = path_join(nxc_PATH, "workspaces", nxc_workspace, f"{args.protocol}.db")
+    db_path = path_join(NXC_PATH, "workspaces", nxc_workspace, f"{args.protocol}.db")
     nxc_logger.debug(f"DB Path: {db_path}")
 
     db_engine = create_db_engine(db_path)

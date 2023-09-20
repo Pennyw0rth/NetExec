@@ -2,7 +2,7 @@
 import os
 from os.path import join as path_join
 import configparser
-from nxc.paths import nxc_PATH, DATA_PATH
+from nxc.paths import NXC_PATH, DATA_PATH
 from nxc.first_run import first_run_setup
 from nxc.logger import nxc_logger
 from ast import literal_eval
@@ -11,11 +11,11 @@ nxc_default_config = configparser.ConfigParser()
 nxc_default_config.read(path_join(DATA_PATH, "nxc.conf"))
 
 nxc_config = configparser.ConfigParser()
-nxc_config.read(os.path.join(nxc_PATH, "nxc.conf"))
+nxc_config.read(os.path.join(NXC_PATH, "nxc.conf"))
 
 if "nxc" not in nxc_config.sections():
     first_run_setup()
-    nxc_config.read(os.path.join(nxc_PATH, "nxc.conf"))
+    nxc_config.read(os.path.join(NXC_PATH, "nxc.conf"))
 
 # Check if there are any missing options in the config file
 for section in nxc_default_config.sections():
@@ -24,7 +24,7 @@ for section in nxc_default_config.sections():
             nxc_logger.display(f"Adding missing option '{option}' in config section '{section}' to nxc.conf")
             nxc_config.set(section, option, nxc_default_config.get(section, option))
 
-            with open(path_join(nxc_PATH, "nxc.conf"), "w") as config_file:
+            with open(path_join(NXC_PATH, "nxc.conf"), "w") as config_file:
                 nxc_config.write(config_file)
 
 #!!! THESE OPTIONS HAVE TO EXIST IN THE DEFAULT CONFIG FILE !!!
