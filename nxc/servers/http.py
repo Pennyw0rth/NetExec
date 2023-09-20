@@ -9,7 +9,7 @@ import sys
 from http.server import BaseHTTPRequestHandler
 from time import sleep
 from nxc.helpers.logger import highlight
-from nxc.logger import NXCAdapter
+from nxc.logger import NXCAdapter, nxc_logger
 
 
 class RequestHandler(BaseHTTPRequestHandler):
@@ -91,13 +91,14 @@ class NXCHTTPServer(threading.Thread):
     def run(self):
         try:
             self.server.serve_forever()
-        except:
+        except Exception as e:
+            nxc_logger.debug(f"Error starting HTTP server: {e}")
             pass
 
     def shutdown(self):
         try:
             while len(self.server.hosts) > 0:
-                self.server.log.info(f"Waiting on {highlight(len(self.server.hosts))} host(s)")
+                nxc_logger.info(f"Waiting on {highlight(len(self.server.hosts))} host(s)")
                 sleep(15)
         except KeyboardInterrupt:
             pass
@@ -112,5 +113,6 @@ class NXCHTTPServer(threading.Thread):
             if thread.is_alive():
                 try:
                     thread._stop()
-                except:
+                except Exception as e:
+                    nxc_logger.debug(f"Error stopping HTTP server: {e}")
                     pass
