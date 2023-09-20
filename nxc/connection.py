@@ -309,7 +309,7 @@ class connection(object):
         # Parse passwords
         for password in self.args.password:
             if isfile(password):
-                with open(password, 'r') as password_file:
+                with open(password, 'r', errors='ignore') as password_file:
                     for line in password_file:
                         secret.append(line.strip())
                         cred_type.append('plaintext')
