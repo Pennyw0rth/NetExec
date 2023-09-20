@@ -74,7 +74,7 @@ class database:
         )
 
     def reflect_tables(self):
-        with self.db_engine.connect() as conn:
+        with self.db_engine.connect():
             try:
                 self.HostsTable = Table("hosts", self.metadata, autoload_with=self.db_engine)
                 self.UsersTable = Table("users", self.metadata, autoload_with=self.db_engine)

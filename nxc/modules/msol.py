@@ -64,25 +64,25 @@ class NXCModule:
         with open(file_to_upload, "rb") as msol:
             try:
                 connection.conn.putFile(self.share, f"{self.tmp_share}{self.msol}", msol.read)
-                context.log.success(f"Msol script successfully uploaded")
+                context.log.success("Msol script successfully uploaded")
             except Exception as e:
                 context.log.fail(f"Error writing file to share {self.tmp_share}: {e}")
                 return
         try:
             if self.cmd == "":
-                context.log.display(f"Executing the script")
+                context.log.display("Executing the script")
                 p = self.exec_script(context, connection)
                 for line in p.splitlines():
                     p1, p2 = line.split(" ", 1)
                     context.log.highlight(f"{p1} {p2}")
             else:
-                context.log.fail(f"Script Execution Impossible")
+                context.log.fail("Script Execution Impossible")
 
         except Exception as e:
             context.log.fail(f"Error running command: {e}")
         finally:
             try:
                 connection.conn.deleteFile(self.share, f"{self.tmp_share}{self.msol}")
-                context.log.success(f"Msol script successfully deleted")
+                context.log.success("Msol script successfully deleted")
             except Exception as e:
                 context.log.fail(f"[OPSEC] Error deleting msol script on {self.share}: {e}")

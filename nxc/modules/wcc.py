@@ -4,12 +4,10 @@
 import json
 import logging
 import operator
-import sys
 import time
 from termcolor import colored
 
 from nxc.logger import nxc_logger
-from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5 import rrp, samr, scmr
 from impacket.dcerpc.v5.rrp import DCERPCSessionError
 from impacket.smbconnection import SessionError as SMBSessionError
@@ -305,7 +303,7 @@ class HostChecker:
 
         # Add check to conf_checks table if missing
         db_checks = self.connection.db.get_checks()
-        db_check_names = [ check._asdict()['name'].strip().lower() for check in db_checks ]
+        [ check._asdict()['name'].strip().lower() for check in db_checks ]
         added = []
         for i,check in enumerate(self.checks):
             check.connection = self.connection
@@ -646,7 +644,7 @@ class HostChecker:
                 ans = rrp.hBaseRegEnumKey(dce=dce, hKey=subkey_handle, dwIndex=i)
                 subkeys.append(ans['lpNameOut'][:-1])
                 i += 1
-            except DCERPCSessionError as e:
+            except DCERPCSessionError:
                 break
         return subkeys
 

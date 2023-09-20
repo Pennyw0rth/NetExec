@@ -11,7 +11,8 @@ def add_user_bh(user, domain, logger, config):
     if config.get("BloodHound", "bh_enabled") != "False":
         try:
             from neo4j.v1 import GraphDatabase
-        except:
+        except Exception as e:
+            logger.debug(f"Exception while importing neo4j.v1: {e}")
             from neo4j import GraphDatabase
         from neo4j.exceptions import AuthError, ServiceUnavailable
 
@@ -42,13 +43,13 @@ def add_user_bh(user, domain, logger, config):
                             logger.debug(f'MATCH (c:{account_type} {{name:"{user_owned}"}}) SET c.owned=True RETURN c.name AS name')
                             result = tx.run(f'MATCH (c:{account_type} {{name:"{user_owned}"}}) SET c.owned=True RETURN c.name AS name')
                             logger.highlight(f"Node {user_owned} successfully set as owned in BloodHound")
-        except AuthError as e:
+        except AuthError:
             logger.fail(f"Provided Neo4J credentials ({config.get('BloodHound', 'bh_user')}:{config.get('BloodHound', 'bh_pass')}) are not valid.")
             return
-        except ServiceUnavailable as e:
+        except ServiceUnavailable:
             logger.fail(f"Neo4J does not seem to be available on {uri}.")
             return
-        except Exception as e:
+        except Exception:
             logger.fail("Unexpected error with Neo4J")
             logger.fail("Account not found on the domain")
             return

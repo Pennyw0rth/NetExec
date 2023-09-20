@@ -1,4 +1,3 @@
-from argparse import _StoreTrueAction
 
 def proto_args(parser, std_parser, module_parser):
     wmi_parser = parser.add_parser('wmi', help="own stuff using WMI", parents=[std_parser, module_parser], conflict_handler='resolve')
@@ -8,7 +7,7 @@ def proto_args(parser, std_parser, module_parser):
 
     # For domain options
     dgroup = wmi_parser.add_mutually_exclusive_group()
-    domain_arg = dgroup.add_argument("-d", metavar="DOMAIN", dest='domain', default=None, type=str, help="Domain to authenticate to")
+    dgroup.add_argument("-d", metavar="DOMAIN", dest='domain', default=None, type=str, help="Domain to authenticate to")
     dgroup.add_argument("--local-auth", action='store_true', help='Authenticate locally to each target')
 
     egroup = wmi_parser.add_argument_group("Mapping/Enumeration", "Options for Mapping/Enumerating")

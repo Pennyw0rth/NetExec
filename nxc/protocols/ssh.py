@@ -71,12 +71,12 @@ class ssh(connection):
         # but that might be too much of an opsec concern - maybe add in a flag to do more checks?
         stdin, stdout, stderr = self.conn.exec_command("id")
         if stdout.read().decode("utf-8").find("uid=0(root)") != -1:
-            self.logger.info(f"Determined user is root via `id` command")
+            self.logger.info("Determined user is root via `id` command")
             self.admin_privs = True
             return True
         stdin, stdout, stderr = self.conn.exec_command("sudo -ln | grep 'NOPASSWD: ALL'")
         if stdout.read().decode("utf-8").find("NOPASSWD: ALL") != -1:
-            self.logger.info(f"Determined user is root via `sudo -ln` command")
+            self.logger.info("Determined user is root via `sudo -ln` command")
             self.admin_privs = True
             return True
 
@@ -88,7 +88,7 @@ class ssh(connection):
                 else:
                     pkey = paramiko.RSAKey.from_private_key_file(self.args.key_file)
 
-                self.logger.debug(f"Logging in with key")
+                self.logger.debug("Logging in with key")
                 self.conn.connect(
                     self.host,
                     port=self.args.port,
@@ -115,7 +115,7 @@ class ssh(connection):
                         key=key_data,
                     )
             else:
-                self.logger.debug(f"Logging in with password")
+                self.logger.debug("Logging in with password")
                 self.conn.connect(
                     self.host,
                     port=self.args.port,
@@ -146,7 +146,7 @@ class ssh(connection):
                 stdin, stdout, stderr = self.conn.exec_command("id")
                 output = stdout.read().decode("utf-8")
                 if not output:
-                    self.logger.debug(f"User cannot get a shell")
+                    self.logger.debug("User cannot get a shell")
                     shell_access = False
                 else:
                     shell_access = True
@@ -156,7 +156,7 @@ class ssh(connection):
             if self.args.key_file:
                 password = f"{password} (keyfile: {self.args.key_file})"
 
-            display_shell_access = f" - shell access!" if shell_access else ""
+            display_shell_access = " - shell access!" if shell_access else ""
 
             self.logger.success(f"{username}:{process_secret(password)} {self.mark_pwned()}{highlight(display_shell_access)}")
             return True

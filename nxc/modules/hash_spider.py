@@ -24,9 +24,9 @@ def neo4j_conn(context, connection, driver):
             session = driver.session()
             list(session.run("MATCH (g:Group) return g LIMIT 1"))
             context.log.display("Connection Successful!")
-        except AuthError as e:
+        except AuthError:
             context.log.fail("Invalid credentials")
-        except ServiceUnavailable as e:
+        except ServiceUnavailable:
             context.log.fail("Could not connect to neo4j database")
         except Exception as e:
             context.log.fail("Error querying domain admins")

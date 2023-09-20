@@ -124,7 +124,7 @@ class NXCModule:
             p = p[0]
 
         if not p or p == "None":
-            self.context.log.fail(f"Failed to execute command to get LSASS PID")
+            self.context.log.fail("Failed to execute command to get LSASS PID")
             return
 
         pid = p.split(",")[1][1:-1]
@@ -138,7 +138,7 @@ class NXCModule:
         self.context.log.debug(f"NanoDump Command Result: {p}")
 
         if not p or p == "None":
-            self.context.log.fail(f"Failed to execute command to execute NanoDump")
+            self.context.log.fail("Failed to execute command to execute NanoDump")
             self.delete_nanodump_binary()
             return
 

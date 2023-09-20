@@ -61,7 +61,7 @@ class SamrFunc:
         domains = self.samr_query.get_domains()
 
         if "Builtin" not in domains:
-            logging.error(f"No Builtin group to query locally on")
+            logging.error("No Builtin group to query locally on")
             return
 
         domain_handle = self.samr_query.get_domain_handle("Builtin")
@@ -93,7 +93,7 @@ class SamrFunc:
         if "Administrators" in self.groups:
             self.logger.success(f"Found Local Administrators group: RID {self.groups['Administrators']}")
         domain_handle = self.samr_query.get_domain_handle("Builtin")
-        self.logger.debug(f"Querying group members")
+        self.logger.debug("Querying group members")
         member_sids = self.samr_query.get_alias_members(domain_handle, self.groups["Administrators"])
         member_names = self.lsa_query.lookup_sids(member_sids)
 
@@ -167,7 +167,7 @@ class SAMRQuery:
                 return None
             return resp["ServerHandle"]
         else:
-            nxc_logger.debug(f"Error creating Samr handle")
+            nxc_logger.debug("Error creating Samr handle")
             return
 
     def get_domains(self):

@@ -77,16 +77,16 @@ def doSearch(self,context, connection,searchFilter,attributeName):
         for item in resp:
             if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
                 continue
-            attributeValue = '';
+            attributeValue = ''
             try:
                 for attribute in item['attributes']:
                     if str(attribute['type']) == attributeName:
                         if attributeName == "objectSid":
                              attributeValue = bytes(attribute['vals'][0])
-                             return attributeValue;
+                             return attributeValue
                         elif attributeName == "distinguishedName":
                              attributeValue = bytes(attribute['vals'][0])
-                             return attributeValue;
+                             return attributeValue
                         else:
                              attributeValue = str(attribute['vals'][0])
                     if attributeValue is not None:

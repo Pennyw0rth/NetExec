@@ -24,7 +24,7 @@ class NXCModule:
         PAYLOAD  Payload architecture (choices: 64 or 32) Default: 64
         """
 
-        if not "URL" in module_options:
+        if "URL" not in module_options:
             context.log.fail("URL option is required!")
             exit(1)
 

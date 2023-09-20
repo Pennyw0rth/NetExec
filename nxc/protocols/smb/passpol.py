@@ -46,7 +46,7 @@ def convert(low, high, lockout=False):
         minutes = int(strftime("%M", gmtime(tmp)))
         hours = int(strftime("%H", gmtime(tmp)))
         days = int(strftime("%j", gmtime(tmp))) - 1
-    except ValueError as e:
+    except ValueError:
         return "[-] Invalid TIME"
 
     if days > 1:

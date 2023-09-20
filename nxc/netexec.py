@@ -11,7 +11,7 @@ from nxc.loaders.moduleloader import ModuleLoader
 from nxc.servers.http import NXCHTTPServer
 from nxc.first_run import first_run_setup
 from nxc.context import Context
-from nxc.paths import NXC_PATH, DATA_PATH
+from nxc.paths import NXC_PATH
 from nxc.console import nxc_console
 from nxc.logger import nxc_logger
 from nxc.config import nxc_config, nxc_workspace, config_log, ignore_opsec
@@ -46,7 +46,7 @@ def create_db_engine(db_path):
 
 
 async def start_run(protocol_obj, args, db, targets):
-    nxc_logger.debug(f"Creating ThreadPoolExecutor")
+    nxc_logger.debug("Creating ThreadPoolExecutor")
     if args.no_progress or len(targets) == 1:
         with ThreadPoolExecutor(max_workers=args.threads + 1) as executor:
             nxc_logger.debug(f"Creating thread for {protocol_obj}")
@@ -98,7 +98,7 @@ def main():
     if args.protocol == "ssh":
         if args.key_file:
             if not args.password:
-                nxc_logger.fail(f"Password is required, even if a key file is used - if no passphrase for key, use `-p ''`")
+                nxc_logger.fail("Password is required, even if a key file is used - if no passphrase for key, use `-p ''`")
                 exit(1)
 
     if args.use_kcache and not os.environ.get("KRB5CCNAME"):
@@ -192,8 +192,8 @@ def main():
 
             if not module.opsec_safe:
                 if ignore_opsec:
-                    nxc_logger.debug(f"ignore_opsec is set in the configuration, skipping prompt")
-                    nxc_logger.display(f"Ignore OPSEC in configuration is set and OPSEC unsafe module loaded")
+                    nxc_logger.debug("ignore_opsec is set in the configuration, skipping prompt")
+                    nxc_logger.display("Ignore OPSEC in configuration is set and OPSEC unsafe module loaded")
                 else:
                     ans = input(
                         highlight(

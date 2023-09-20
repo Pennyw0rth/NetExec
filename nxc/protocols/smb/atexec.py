@@ -195,7 +195,7 @@ class TSCH_EXEC:
                     except IOError:
                         sleep(2)
             else:
-                peer = ":".join(map(str, self.__rpctransport.get_socket().getpeername()))
+                ":".join(map(str, self.__rpctransport.get_socket().getpeername()))
                 smbConnection = self.__rpctransport.get_smb_connection()
                 tries = 1
                 while True:
@@ -205,7 +205,7 @@ class TSCH_EXEC:
                         break
                     except Exception as e:
                         if tries >= self.__tries:
-                            self.logger.fail(f"ATEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
+                            self.logger.fail("ATEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
                             break
                         if str(e).find("STATUS_BAD_NETWORK_NAME") >0 :
                             self.logger.fail(f"ATEXEC: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")

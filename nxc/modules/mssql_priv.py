@@ -175,7 +175,7 @@ class NXCModule:
         is_admin = res[0][""]
         self.context.log.debug(f"IsAdmin Result: {is_admin}")
         if is_admin:
-            self.context.log.debug(f"User is admin!")
+            self.context.log.debug("User is admin!")
             self.admin_privs = True
             return True
         else:
@@ -276,7 +276,7 @@ class NXCModule:
         return users
 
     def remove_sysadmin_priv(self) -> bool:
-        res = self.query_and_get_output(f"EXEC sp_dropsrvrolemember '{self.current_username}', 'sysadmin'")
+        self.query_and_get_output(f"EXEC sp_dropsrvrolemember '{self.current_username}', 'sysadmin'")
         return not self.is_admin()
 
     def is_admin_user(self, username) -> bool:

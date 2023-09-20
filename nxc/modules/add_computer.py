@@ -246,7 +246,7 @@ class NXCModule:
                         'Successfully added the machine account "' + self.__computerName + '" with Password: "' + self.__computerPassword + '"'))
                     self.noLDAPRequired = True
 
-        except Exception as e:
+        except Exception:
             if logging.getLogger().level == logging.DEBUG:
                 import traceback
                 traceback.print_exc()
@@ -283,9 +283,9 @@ class NXCModule:
             result = c.delete("cn=" + self.__computerName + ",cn=Computers,dc=" + ldap_domain)
             if result:
                 context.log.highlight(u'{}'.format('Successfully deleted the "' + self.__computerName + '" Computer account'))
-            elif result == False and c.last_error == "noSuchObject":
+            elif result is False and c.last_error == "noSuchObject":
                 context.log.highlight(u'{}'.format('Computer named "' + self.__computerName + '" was not found'))
-            elif result == False and c.last_error == "insufficientAccessRights":
+            elif result is False and c.last_error == "insufficientAccessRights":
                 context.log.highlight(
                     u'{}'.format('Insufficient Access Rights to delete the Computer "' + self.__computerName + '"'))
             else:
@@ -299,7 +299,7 @@ class NXCModule:
                 context.log.highlight(u'{}'.format('You can try to verify this with the nxc command:'))
                 context.log.highlight(u'{}'.format(
                     'nxc ldap ' + connection.host + ' -u ' + connection.username + ' -p ' + connection.password + ' -M group-mem -o GROUP="Domain Computers"'))
-            elif result == False and c.last_error == "entryAlreadyExists":
+            elif result is False and c.last_error == "entryAlreadyExists":
                 context.log.highlight(u'{}'.format('The Computer account "' + self.__computerName + '" already exists'))
             elif not result:
                 context.log.highlight(u'{}'.format(

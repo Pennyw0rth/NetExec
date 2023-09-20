@@ -42,8 +42,8 @@ class NXCModule:
                     host.signing,
                     zerologon=True,
                 )
-            except Exception as e:
-                self.context.log.debug(f"Error updating zerologon status in database")
+            except Exception:
+                self.context.log.debug("Error updating zerologon status in database")
 
     def perform_attack(self, dc_handle, dc_ip, target_computer):
         # Keep authenticating until successful. Expected average number of attempts needed: 256.
@@ -60,8 +60,8 @@ class NXCModule:
                     return True
             else:
                 self.context.log.highlight("Attack failed. Target is probably patched.")
-        except DCERPCException as e:
-            self.context.log.fail(f"Error while connecting to host: DCERPCException, " f"which means this is probably not a DC!")
+        except DCERPCException:
+            self.context.log.fail("Error while connecting to host: DCERPCException, " "which means this is probably not a DC!")
 
 def fail(msg):
     nxc_logger.debug(msg)

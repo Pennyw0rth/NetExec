@@ -147,7 +147,7 @@ class TriggerAuth:
             if self.args.verbose:
                 nxc_logger.debug(request.dump())
             # logger.debug(request.dump())
-            resp = dce.request(request)
+            dce.request(request)
 
         except Exception as e:
             nxc_logger.debug(e)

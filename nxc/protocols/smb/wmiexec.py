@@ -6,7 +6,6 @@ import os
 from time import sleep
 from nxc.connection import dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string
-from impacket.dcerpc.v5 import transport
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.dcom import wmi
 from impacket.dcerpc.v5.dtypes import NULL
@@ -166,7 +165,7 @@ class WMIEXEC:
                 break
             except Exception as e:
                 if tries >= self.__tries:
-                    self.logger.fail(f"WMIEXEC: Could not retrieve output file, it may have been detected by AV. If it is still failing, try the 'wmi' protocol or another exec method")
+                    self.logger.fail("WMIEXEC: Could not retrieve output file, it may have been detected by AV. If it is still failing, try the 'wmi' protocol or another exec method")
                     break
                 if str(e).find("STATUS_BAD_NETWORK_NAME") >0 :
                     self.logger.fail(f"SMB connection: target has blocked {self.__share} access (maybe command executed!)")

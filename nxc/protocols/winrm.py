@@ -52,7 +52,7 @@ class winrm(connection):
             try:
                 smb_conn.login("", "")
             except BrokenPipeError:
-                self.logger.fail(f"Broken Pipe Error while attempting to login")
+                self.logger.fail("Broken Pipe Error while attempting to login")
             except Exception as e:
                 if "STATUS_NOT_SUPPORTED" in str(e):
                     # no ntlm supported
@@ -217,14 +217,13 @@ class winrm(connection):
                 self.logger.info(f"Connection Timed out to WinRM service: {e}")
             except requests.exceptions.ConnectionError as e:
                 if "Max retries exceeded with url" in str(e):
-                    self.logger.info(f"Connection Timeout to WinRM service (max retries exceeded)")
+                    self.logger.info("Connection Timeout to WinRM service (max retries exceeded)")
                 else:
                     self.logger.info(f"Other ConnectionError to WinRM service: {e}")
         return False
 
     def plaintext_login(self, domain, username, password):
         try:
-            from urllib3.connectionpool import log
 
             # log.addFilter(SuppressFilter())
             if not self.args.laps:
@@ -253,7 +252,7 @@ class winrm(connection):
             # self.db.add_loggedin_relation(user_id, host_id)
 
             if self.admin_privs:
-                self.logger.debug(f"Inside admin privs")
+                self.logger.debug("Inside admin privs")
                 self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host)  # , user_id=user_id)
 
             if not self.args.local_auth:

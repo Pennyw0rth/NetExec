@@ -35,7 +35,7 @@ class NXCModule:
         nxc smb 192.168.1.1 -u {user} -p {password} -M rdp -o METHOD=smb ACTION={enable, disable, enable-ram, disable-ram}
         nxc smb 192.168.1.1 -u {user} -p {password} -M rdp -o METHOD=wmi ACTION={enable, disable, enable-ram, disable-ram} {OLD=true} {DCOM-TIMEOUT=5}
         """
-        if not "ACTION" in module_options:
+        if "ACTION" not in module_options:
             context.log.fail("ACTION option not specified!")
             exit(1)
 
@@ -45,7 +45,7 @@ class NXCModule:
 
         self.action = module_options["ACTION"].lower()
         
-        if not "METHOD" in module_options:
+        if "METHOD" not in module_options:
             self.method = "wmi"
         else:
             self.method = module_options['METHOD'].lower()
@@ -54,7 +54,7 @@ class NXCModule:
             context.log.fail(f"Protocol: {context.protocol} not support this method")
             exit(1)
 
-        if not "DCOM-TIMEOUT" in module_options:
+        if "DCOM-TIMEOUT" not in module_options:
             self.dcom_timeout = 10
         else:
             try:
@@ -63,7 +63,7 @@ class NXCModule:
                 context.log.fail("Wrong DCOM timeout value!")
                 exit(1)
         
-        if not "OLD" in module_options:
+        if "OLD" not in module_options:
             self.oldSystem = False
         else:
             self.oldSystem = True
@@ -260,7 +260,7 @@ class rdp_WMI:
                 self.__dcom.disconnect()
 
     def rdp_Wrapper(self, action, old=False):
-        if old == False:
+        if old is False:
             # According to this document: https://learn.microsoft.com/en-us/windows/win32/termserv/win32-tslogonsetting
             # Authentication level must set to RPC_C_AUTHN_LEVEL_PKT_PRIVACY when accessing namespace "//./root/cimv2/TerminalServices"
             iWbemServices = self.__iWbemLevel1Login.NTLMLogin('//./root/cimv2/TerminalServices', NULL, NULL)
@@ -293,7 +293,7 @@ class rdp_WMI:
         # Need to create new iWbemServices interface in order to flush results
         
     def query_RDPResult(self, old=False):
-        if old == False:
+        if old is False:
             iWbemServices = self.__iWbemLevel1Login.NTLMLogin('//./root/cimv2/TerminalServices', NULL, NULL)
             iWbemServices.get_dce_rpc().set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
             self.__iWbemLevel1Login.RemRelease()
@@ -338,5 +338,5 @@ class rdp_WMI:
         out = StdRegProv.GetDWORDValue(2147483650, 'System\\CurrentControlSet\\Control\\Lsa', 'DisableRestrictedAdmin')
         if out.uValue == 0:
             self.logger.success("Enable RDP Restricted Admin Mode via WMI(ncacn_ip_tcp) successfully")
-        elif out.uValue == None:
+        elif out.uValue is None:
             self.logger.success("Disable RDP Restricted Admin Mode via WMI(ncacn_ip_tcp) successfully")

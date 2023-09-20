@@ -43,8 +43,8 @@ class NXCModule:
             return
 
     def execute_appcmd(self, context, connection):
-        command = f'powershell -c "C:\\windows\\system32\\inetsrv\\appcmd.exe list apppool /@t:*"'
-        context.log.info(f'Checking For Hidden Credentials With Appcmd.exe')
+        command = 'powershell -c "C:\\windows\\system32\\inetsrv\\appcmd.exe list apppool /@t:*"'
+        context.log.info('Checking For Hidden Credentials With Appcmd.exe')
         output = connection.execute(command, True)
         
         lines = output.splitlines()

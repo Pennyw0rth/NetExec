@@ -15,7 +15,7 @@ from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5 import transport, epm
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_AUTHN_WINNT, RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_INTEGRITY, MSRPC_BIND, MSRPCBind, CtxItem, MSRPCHeader, SEC_TRAILER, MSRPCBindAck
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
-from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, WBEM_FLAG_FORWARD_ONLY, IWbemLevel1Login
+from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login
 
 MSRPC_UUID_PORTMAP = uuidtup_to_bin(('E1AF8308-5D1F-11C9-91A4-08002B14A0FA', '3.0'))
 
@@ -261,7 +261,7 @@ class wmi(connection):
                 request['vers_option'] = 0x1
                 request['entry_handle'] = entry_handle
                 request['max_ents'] = 1
-                resp = dce.request(request)
+                dce.request(request)
             except Exception as e:
                 dce.disconnect()
                 error_msg = str(e).lower()
@@ -307,7 +307,7 @@ class wmi(connection):
                 request['vers_option'] = 0x1
                 request['entry_handle'] = entry_handle
                 request['max_ents'] = 1
-                resp = dce.request(request)
+                dce.request(request)
             except  Exception as e:
                 dce.disconnect()
                 error_msg = str(e).lower()
@@ -362,7 +362,7 @@ class wmi(connection):
                 request['vers_option'] = 0x1
                 request['entry_handle'] = entry_handle
                 request['max_ents'] = 1
-                resp = dce.request(request)
+                dce.request(request)
             except  Exception as e:
                 dce.disconnect()
                 error_msg = str(e).lower()
@@ -384,7 +384,6 @@ class wmi(connection):
     # It's very complex to use wmi from rpctansport "convert" to dcom, so let we use dcom directly. 
     @requires_admin
     def wmi(self, WQL=None, namespace=None):
-        results_WQL = "\r"
         records = []
         if not WQL:
             WQL = self.args.wmi.strip('\n')

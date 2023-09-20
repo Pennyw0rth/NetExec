@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import logging
 import os
-from io import StringIO
 
 from nxc.config import process_secret
 from nxc.protocols.mssql.mssqlexec import MSSQLEXEC
 from nxc.connection import *
-from nxc.helpers.logger import highlight
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.powershell import create_ps_command
 from impacket import tds
@@ -138,7 +135,7 @@ class mssql(connection):
 
         if is_admin:
             self.admin_privs = True
-            self.logger.debug(f"User is admin")
+            self.logger.debug("User is admin")
         else:
             return False
         return True
@@ -159,16 +156,14 @@ class mssql(connection):
             pass
         self.create_conn_obj()
 
-        nthash = ""
         hashes = None
         if ntlm_hash != "":
             if ntlm_hash.find(":") != -1:
                 hashes = ntlm_hash
-                nthash = ntlm_hash.split(":")[1]
+                ntlm_hash.split(":")[1]
             else:
                 # only nt hash
                 hashes = f":{ntlm_hash}"
-                nthash = ntlm_hash
 
         if not all("" == s for s in [self.nthash, password, aesKey]):
             kerb_pass = next(s for s in [self.nthash, password, aesKey] if s)
@@ -244,8 +239,8 @@ class mssql(connection):
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             return True
-        except BrokenPipeError as e:
-            self.logger.fail(f"Broken Pipe Error while attempting to login")
+        except BrokenPipeError:
+            self.logger.fail("Broken Pipe Error while attempting to login")
             return False
         except Exception as e:
             self.logger.fail(f"{domain}\\{username}:{process_secret(password)}")
@@ -295,8 +290,8 @@ class mssql(connection):
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             return True
-        except BrokenPipeError as e:
-            self.logger.fail(f"Broken Pipe Error while attempting to login")
+        except BrokenPipeError:
+            self.logger.fail("Broken Pipe Error while attempting to login")
             return False
         except Exception as e:
             self.logger.fail(f"{domain}\\{username}:{process_secret(ntlm_hash)} {e}")
@@ -348,7 +343,7 @@ class mssql(connection):
         if self.args.execute or self.args.ps_execute:
             self.logger.success("Executed command via mssqlexec")
             if self.args.no_output:
-                self.logger.debug(f"Output set to disabled")
+                self.logger.debug("Output set to disabled")
             else:
                 for line in raw_output:
                     self.logger.highlight(line)

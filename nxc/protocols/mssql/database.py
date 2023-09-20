@@ -71,7 +71,7 @@ class database:
         )
 
     def reflect_tables(self):
-        with self.db_engine.connect() as conn:
+        with self.db_engine.connect():
             try:
                 self.HostsTable = Table("hosts", self.metadata, autoload_with=self.db_engine)
                 self.UsersTable = Table("users", self.metadata, autoload_with=self.db_engine)
@@ -312,7 +312,7 @@ class database:
             return [results]
         # if we're filtering by domain controllers
         elif filter_term == "dc":
-            q = q.filter(self.HostsTable.c.dc == True)
+            q = q.filter(self.HostsTable.c.dc is True)
             if domain:
                 q = q.filter(func.lower(self.HostsTable.c.domain) == func.lower(domain))
         # if we're filtering by ip/hostname

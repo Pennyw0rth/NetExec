@@ -176,7 +176,7 @@ class ldap(connection):
                 if proto == "ldaps":
                     self.logger.debug(f"LDAPs connection to {ldap_url} failed - {e}")
                     # https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/enable-ldap-over-ssl-3rd-certification-authority
-                    self.logger.debug(f"Even if the port is open, LDAPS may not be configured")
+                    self.logger.debug("Even if the port is open, LDAPS may not be configured")
                 else:
                     self.logger.debug(f"LDAP connection to {ldap_url} failed: {e}")
                 return [None, None, None]
@@ -207,7 +207,7 @@ class ldap(connection):
                 except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.info(f"Skipping item, cannot process due to error {e}")
-        except OSError as e:
+        except OSError:
             return [None, None, None]
         self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
         return [target, target_domain, base_dn]
@@ -634,12 +634,12 @@ class ldap(connection):
             return False
 
     def create_smbv1_conn(self):
-        self.logger.debug(f"Creating smbv1 connection object")
+        self.logger.debug("Creating smbv1 connection object")
         try:
             self.conn = SMBConnection(self.host, self.host, None, 445, preferredDialect=SMB_DIALECT)
             self.smbv1 = True
             if self.conn:
-                self.logger.debug(f"SMBv1 Connection successful")
+                self.logger.debug("SMBv1 Connection successful")
         except socket.error as e:
             if str(e).find("Connection reset by peer") != -1:
                 self.logger.debug(f"SMBv1 might be disabled on {self.host}")
@@ -650,12 +650,12 @@ class ldap(connection):
         return True
 
     def create_smbv3_conn(self):
-        self.logger.debug(f"Creating smbv3 connection object")
+        self.logger.debug("Creating smbv3 connection object")
         try:
             self.conn = SMBConnection(self.host, self.host, None, 445)
             self.smbv1 = False
             if self.conn:
-                self.logger.debug(f"SMBv3 Connection successful")
+                self.logger.debug("SMBv3 Connection successful")
         except socket.error:
             return False
         except Exception as e:
@@ -775,16 +775,12 @@ class ldap(connection):
 
         resp = self.search(search_filter, attributes, sizeLimit=0)
         if resp:
-            answers = []
             self.logger.display(f"Total of records returned {len(resp):d}")
             for item in resp:
                 if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
                     continue
                 sAMAccountName = ""
-                badPasswordTime = ""
-                badPwdCount = 0
                 description = ""
-                pwdLastSet = ""
                 try:
                     if self.username == "":
                         self.logger.highlight(f"{item['objectName']}")
@@ -806,7 +802,6 @@ class ldap(connection):
         attributes = ["name"]
         resp = self.search(search_filter, attributes, 0)
         if resp:
-            answers = []
             self.logger.debug(f"Total of records returned {len(resp):d}")
 
             for item in resp:
@@ -840,7 +835,7 @@ class ldap(connection):
             	        name = str(attribute["vals"][0])
             	try:
             	    ip_address = socket.gethostbyname(name.split(".")[0])
-            	    if ip_address != True and name != "":
+            	    if ip_address is not True and name != "":
             	        self.logger.highlight(f"{name} =", ip_address) 	    
             	except socket.gaierror:
             	    self.logger.fail(f"{name} = Connection timeout")
@@ -1270,7 +1265,6 @@ class ldap(connection):
             searchBase=self.baseDN,
         )
         if gmsa_accounts:
-            answers = []
             self.logger.debug(f"Total of records returned {len(gmsa_accounts):d}")
 
             for item in gmsa_accounts:
@@ -1320,7 +1314,6 @@ class ldap(connection):
                     searchBase=self.baseDN,
                 )
                 if gmsa_accounts:
-                    answers = []
                     self.logger.debug(f"Total of records returned {len(gmsa_accounts):d}")
 
                     for item in gmsa_accounts:
@@ -1351,7 +1344,6 @@ class ldap(connection):
                     searchBase=self.baseDN,
                 )
                 if gmsa_accounts:
-                    answers = []
                     self.logger.debug(f"Total of records returned {len(gmsa_accounts):d}")
 
                     for item in gmsa_accounts:

@@ -34,7 +34,7 @@ from nxc.helpers.powershell import get_ps_script
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.dcom.wmi import WBEMSTATUS
-from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, WBEM_FLAG_FORWARD_ONLY, IWbemLevel1Login, WBEMSTATUS
+from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login, WBEMSTATUS
 
 class WMIEXEC_EVENT:
     def __init__(self, host, username, password, domain, lmhash, nthash, doKerberos, kdcHost, aesKey, logger, exec_timeout, codec):
@@ -189,8 +189,8 @@ class WMIEXEC_EVENT:
             command_ResultObject, _ = self.__iWbemServices.GetObject(f'ActiveScriptEventConsumer.Name="{self.__instanceID_StoreResult}"')
             record = dict(command_ResultObject.getProperties())
             self.__outputBuffer = base64.b64decode(record['ScriptText']['value']).decode(self.__codec, errors='replace')
-        except Exception as e:
-            self.logger.fail(f"WMIEXEC-EVENT: Could not retrieve output file, it may have been detected by AV. Please try increasing the timeout with the '--exec-timeout' option. If it is still failing, try the 'smb' protocol or another exec method")
+        except Exception:
+            self.logger.fail("WMIEXEC-EVENT: Could not retrieve output file, it may have been detected by AV. Please try increasing the timeout with the '--exec-timeout' option. If it is still failing, try the 'smb' protocol or another exec method")
 
     def remove_Instance(self):
         if self.__retOutput:
