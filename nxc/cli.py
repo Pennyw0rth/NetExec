@@ -6,7 +6,6 @@ import sys
 from argparse import RawTextHelpFormatter
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.helpers.logger import highlight
-from termcolor import colored
 from nxc.logger import nxc_logger
 import importlib.metadata
 
@@ -189,8 +188,8 @@ def gen_cli_args():
         try:
             protocol_object = p_loader.load_protocol(protocols[protocol]["argspath"])
             subparsers = protocol_object.proto_args(subparsers, std_parser, module_parser)
-        except:
-            nxc_logger.exception(f"Error loading proto_args from proto_args.py file in protocol folder: {protocol}")
+        except Exception as e:
+            nxc_logger.exception(f"Error loading proto_args from proto_args.py file in protocol folder: {protocol} - {e}")
 
     if len(sys.argv) == 1:
         parser.print_help()
