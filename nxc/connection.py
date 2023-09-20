@@ -65,10 +65,12 @@ def dcom_FirewallChecker(iInterface, timeout):
         rpctransport.set_connect_timeout(timeout)
         rpctransport.connect()
         rpctransport.disconnect()
-    except:
+    except Exception as e:
+        nxc_logger.debug(f"Exception while connecting to {stringBinding}: {e}")
         return False, stringBinding
     else:
         return True, stringBinding
+
 
 class connection(object):
     def __init__(self, args, db, host):
@@ -165,11 +167,24 @@ class connection(object):
                         self.call_cmd_args()
 
     def call_cmd_args(self):
-        for k, v in vars(self.args).items():
-            if hasattr(self, k) and hasattr(getattr(self, k), "__call__"):
-                if v is not False and v is not None:
-                    self.logger.debug(f"Calling {k}()")
-                    r = getattr(self, k)()
+        """
+        Calls all the methods specified by the command line arguments
+        Iterates over the attributes of an object (self.args)
+        For each attribute, it checks if the object (self) has an attribute with the same name and if that attribute is callable (i.e., a function)
+        If both conditions are met and the attribute value is not False or None,
+        it calls the function and logs a debug message
+
+        Parameters:
+            self (object): The instance of the class.
+
+        Returns:
+            None
+        """
+        for attr, value in vars(self.args).items():
+            if hasattr(self, attr) and callable(getattr(self, attr)):
+                if value is not False and value is not None:
+                    self.logger.debug(f"Calling {attr}()")
+                    getattr(self, attr)()
 
     def call_modules(self):
         for module in self.module:
