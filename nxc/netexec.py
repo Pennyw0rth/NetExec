@@ -19,8 +19,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
 import nxc.helpers.powershell as powershell
 import shutil
-import webbrowser
-import random
 import os
 from os.path import exists
 from os.path import join as path_join
@@ -41,11 +39,6 @@ if platform != "win32":
     file_limit = tuple(file_limit)
     resource.setrlimit(resource.RLIMIT_NOFILE, file_limit)
 
-try:
-    import librlers
-except:
-    print("Incompatible python version, try with another python version or another binary 3.8 / 3.9 / 3.10 / 3.11 that match your python version (python -V)")
-    exit(1)
 
 def create_db_engine(db_path):
     db_engine = sqlalchemy.create_engine(f"sqlite:///{db_path}", isolation_level="AUTOCOMMIT", future=True)
