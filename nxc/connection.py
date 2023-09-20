@@ -187,6 +187,16 @@ class connection(object):
                     getattr(self, attr)()
 
     def call_modules(self):
+        """
+        This function calls the modules and performs various actions based on the module's attributes.
+        It iterates over the modules specified in the command line arguments.
+        For each module, it loads the module and creates a context object, then calls functions based on the module's attributes.
+
+        Args:
+            None
+        Returns:
+            None
+        """
         for module in self.module:
             self.logger.debug(f"Loading module {module.name} - {module}")
             module_logger = NXCAdapter(
