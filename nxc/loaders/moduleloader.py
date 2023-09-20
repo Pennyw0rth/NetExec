@@ -12,7 +12,7 @@ from os.path import join as path_join
 
 from nxc.context import Context
 from nxc.logger import NXCAdapter
-from nxc.paths import nxc_PATH
+from nxc.paths import NXC_PATH
 
 
 class ModuleLoader:
@@ -130,7 +130,7 @@ class ModuleLoader:
         modules = {}
         modules_paths = [
             path_join(dirname(nxc.__file__), "modules"),
-            path_join(nxc_PATH, "modules"),
+            path_join(NXC_PATH, "modules"),
         ]
 
         for path in modules_paths:
