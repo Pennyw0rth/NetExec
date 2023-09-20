@@ -251,7 +251,7 @@ class DatabaseNavigator(cmd.Cmd):
                     entry = (
                         share[0],  # shareID
                         share_host,  # hosts
-                        f"{user[1]}\{user[2]}",  # userID
+                        f"{user[1]}\\{user[2]}",  # userID
                         share[3],  # name
                         share[4],  # remark
                         bool(share[5]),  # read
