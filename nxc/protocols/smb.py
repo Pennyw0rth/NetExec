@@ -27,7 +27,7 @@ from impacket.krb5.kerberosv5 import SessionKeyDecryptionError
 from impacket.krb5.types import KerberosException
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
-from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, WBEM_FLAG_FORWARD_ONLY, IWbemLevel1Login
+from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login
 
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import *
@@ -214,7 +214,7 @@ class smb(connection):
         try:
             self.conn.login("", "")
         except BrokenPipeError:
-            self.logger.fail(f"Broken Pipe Error while attempting to login")
+            self.logger.fail("Broken Pipe Error while attempting to login")
         except Exception as e:
             if "STATUS_NOT_SUPPORTED" in str(e):
                 # no ntlm supported
@@ -515,8 +515,8 @@ class smb(connection):
         except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
             self.logger.fail(f"Connection Error: {e}")
             return False
-        except BrokenPipeError as e:
-            self.logger.fail(f"Broken Pipe Error while attempting to login")
+        except BrokenPipeError:
+            self.logger.fail("Broken Pipe Error while attempting to login")
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
@@ -581,8 +581,8 @@ class smb(connection):
         except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
             self.logger.fail(f"Connection Error: {e}")
             return False
-        except BrokenPipeError as e:
-            self.logger.fail(f"Broken Pipe Error while attempting to login")
+        except BrokenPipeError:
+            self.logger.fail("Broken Pipe Error while attempting to login")
             return False
 
     def create_smbv1_conn(self, kdc=""):
@@ -651,7 +651,7 @@ class smb(connection):
             try:
                 # 0xF003F - SC_MANAGER_ALL_ACCESS
                 # http://msdn.microsoft.com/en-us/library/windows/desktop/ms685981(v=vs.85).aspx
-                ans = scmr.hROpenSCManagerW(dce, f"{self.host}\x00", "ServicesActive\x00", 0xF003F)
+                scmr.hROpenSCManagerW(dce, f"{self.host}\x00", "ServicesActive\x00", 0xF003F)
                 self.admin_privs = True
             except scmr.DCERPCException:
                 self.admin_privs = False

@@ -5,7 +5,7 @@ from rich.console import Console
 
 
 def get_cli_args():
-    parser = argparse.ArgumentParser(description=f"Script for running end to end tests for nxc")
+    parser = argparse.ArgumentParser(description="Script for running end to end tests for nxc")
     parser.add_argument("-t", "--target", dest="target", required=True)
     parser.add_argument("-u", "--user", "--username", dest="username", required=True)
     parser.add_argument("-p", "--pass", "--password", dest="password", required=True)
@@ -68,7 +68,7 @@ def run_e2e_tests(args):
     )
     version = result.communicate()[0].decode().strip()
 
-    with console.status(f"[bold green] :brain: Running {len(tasks)} test commands for nxc v{version}...") as status:
+    with console.status(f"[bold green] :brain: Running {len(tasks)} test commands for nxc v{version}..."):
         passed = 0
         failed = 0
 

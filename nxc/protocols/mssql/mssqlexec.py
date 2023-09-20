@@ -27,7 +27,7 @@ class MSSQLEXEC:
             nxc_logger.error(f"Error when attempting to execute command via xp_cmdshell: {e}")
 
         if output:
-            nxc_logger.debug(f"Output is enabled")
+            nxc_logger.debug("Output is enabled")
             for row in command_output:
                 nxc_logger.debug(row)
             # self.mssql_conn.printReplies()

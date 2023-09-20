@@ -73,7 +73,7 @@ class NXCModule:
             p = p[0]
 
         if not p or p == "None":
-            context.log.fail(f"Failed to execute command to get LSASS PID")
+            context.log.fail("Failed to execute command to get LSASS PID")
             return
         # we get a CSV string back from `tasklist`, so we grab the PID from it
         pid = p.split(",")[1][1:-1]

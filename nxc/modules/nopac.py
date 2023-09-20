@@ -49,5 +49,5 @@ class NXCModule:
                 context.log.highlight("")
                 context.log.highlight("VULNERABLE")
                 context.log.highlight("Next step: https://github.com/Ridter/noPac")
-        except OSError as e:
+        except OSError:
             context.log.debug(f"Error connecting to Kerberos (port 88) on {connection.host}")

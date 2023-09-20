@@ -71,7 +71,6 @@ class LDAPConnect:
                 useCache=False,
             )
             # Connect to LDAP
-            out = f"{domain}{username}:{password if password else ntlm_hash}"
             self.logger.extra["protocol"] = "LDAP"
             self.logger.extra["port"] = "389"
             return ldapConnection
@@ -108,7 +107,7 @@ class LDAPConnect:
                 )
             return False
 
-        except OSError as e:
+        except OSError:
             self.logger.debug(f"{domain}\\{username}:{password if password else ntlm_hash} {'Error connecting to the domain, please add option --kdcHost with the FQDN of the domain controller'}")
             return False
         except KerberosError as e:
@@ -141,7 +140,6 @@ class LDAPConnect:
             ldapConnection.login(username, password, domain, lmhash, nthash)
 
             # Connect to LDAP
-            out = "{domain}\\{username}:{password if password else ntlm_hash}"
             self.logger.extra["protocol"] = "LDAP"
             self.logger.extra["port"] = "389"
             # self.logger.success(out)
@@ -172,7 +170,7 @@ class LDAPConnect:
                 )
             return False
 
-        except OSError as e:
+        except OSError:
             self.logger.debug(f"{domain}\\{username}:{password if password else ntlm_hash} {'Error connecting to the domain, please add option --kdcHost with the FQDN of the domain controller'}")
             return False
 

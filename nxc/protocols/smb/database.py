@@ -177,7 +177,7 @@ class database:
         #    )''')
 
     def reflect_tables(self):
-        with self.db_engine.connect() as conn:
+        with self.db_engine.connect():
             try:
                 self.HostsTable = Table("hosts", self.metadata, autoload_with=self.db_engine)
                 self.UsersTable = Table("users", self.metadata, autoload_with=self.db_engine)
@@ -301,7 +301,7 @@ class database:
         groups = []
 
         if (group_id and not self.is_group_valid(group_id)) or (pillaged_from and not self.is_host_valid(pillaged_from)):
-            nxc_logger.debug(f"Invalid group or host")
+            nxc_logger.debug("Invalid group or host")
             return
 
         q = select(self.UsersTable).filter(
@@ -499,18 +499,18 @@ class database:
             return [results]
         # if we're filtering by domain controllers
         elif filter_term == "dc":
-            q = q.filter(self.HostsTable.c.dc == True)
+            q = q.filter(self.HostsTable.c.dc is True)
             if domain:
                 q = q.filter(func.lower(self.HostsTable.c.domain) == func.lower(domain))
         elif filter_term == "signing":
             # generally we want hosts that are vulnerable, so signing disabled
-            q = q.filter(self.HostsTable.c.signing == False)
+            q = q.filter(self.HostsTable.c.signing is False)
         elif filter_term == "spooler":
-            q = q.filter(self.HostsTable.c.spooler == True)
+            q = q.filter(self.HostsTable.c.spooler is True)
         elif filter_term == "zerologon":
-            q = q.filter(self.HostsTable.c.zerologon == True)
+            q = q.filter(self.HostsTable.c.zerologon is True)
         elif filter_term == "petitpotam":
-            q = q.filter(self.HostsTable.c.petitpotam == True)
+            q = q.filter(self.HostsTable.c.petitpotam is True)
         elif filter_term is not None and filter_term.startswith("domain"):
             domain = filter_term.split()[1]
             like_term = func.lower(f"%{domain}%")
@@ -700,7 +700,7 @@ class database:
             "read": read,
             "write": write,
         }
-        share_id = self.conn.execute(
+        self.conn.execute(
             Insert(self.SharesTable).on_conflict_do_nothing(),  # .returning(self.SharesTable.c.id),
             share_data,
         )  # .scalar_one()

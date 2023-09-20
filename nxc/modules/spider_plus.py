@@ -236,7 +236,7 @@ class SMBSpiderPlus:
                     self.spider_folder(share_name, "")
                 except SessionError:
                     traceback.print_exc()
-                    self.logger.fail(f"Got a session error while spidering.")
+                    self.logger.fail("Got a session error while spidering.")
                     self.reconnect()
 
         except Exception as e:

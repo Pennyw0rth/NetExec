@@ -3,7 +3,7 @@
 import json
 
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
-from nxc.protocols.ldap.laps import LDAPConnect, LAPSv2Extract
+from nxc.protocols.ldap.laps import LAPSv2Extract
 
 class NXCModule:
     """

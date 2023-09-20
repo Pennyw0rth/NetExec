@@ -60,14 +60,14 @@ class NXCModule:
         with open(file_to_upload, 'rb') as impersonate:
             try:
                 connection.conn.putFile(self.share, f"{self.tmp_share}{self.impersonate}", impersonate.read)
-                context.log.success(f"Impersonate binary successfully uploaded")
+                context.log.success("Impersonate binary successfully uploaded")
             except Exception as e:
                 context.log.fail(f"Error writing file to share {self.tmp_share}: {e}")
                 return
 
         try:
             if self.cmd == "" or self.token == "":
-                context.log.display(f"Listing available primary tokens")
+                context.log.display("Listing available primary tokens")
                 p = self.list_available_primary_tokens(context, connection)
                 for line in p.splitlines():
                     token, token_integrity, token_owner = line.split(" ", 2)
@@ -87,13 +87,13 @@ class NXCModule:
                     for line in connection.execute(command, True, methods=["smbexec"]).splitlines():
                         context.log.highlight(line)
                 else:
-                    context.log.fail(f"Invalid token ID submitted")
+                    context.log.fail("Invalid token ID submitted")
 
         except Exception as e:
             context.log.fail(f"Error runing command: {e}")
         finally:
             try:
                 connection.conn.deleteFile(self.share, f"{self.tmp_share}{self.impersonate}")
-                context.log.success(f"Impersonate binary successfully deleted")
+                context.log.success("Impersonate binary successfully deleted")
             except Exception as e:
                 context.log.fail(f"Error deleting Impersonate.exe on {self.share}: {e}")

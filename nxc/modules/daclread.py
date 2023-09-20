@@ -227,7 +227,7 @@ class NXCModule:
                 try:
                     self.target_file = open(module_options["TARGET"], "r")
                     self.target_sAMAccountName = None
-                except Exception as e:
+                except Exception:
                     context.log.fail("The file doesn't exist or cannot be openned.")
             else:
                 self.target_sAMAccountName = module_options["TARGET"]
@@ -288,7 +288,7 @@ class NXCModule:
                     ][0]
                 )
                 context.log.highlight("Found principal SID to filter on: %s" % self.principal_sid)
-            except Exception as e:
+            except Exception:
                 context.log.fail("Principal SID not found in LDAP (%s)" % _lookedup_principal)
                 exit(1)
 
@@ -303,7 +303,7 @@ class NXCModule:
                 self.principal_raw_security_descriptor = str(self.target_principal[1][0][1][0]).encode("latin-1")
                 self.principal_security_descriptor = ldaptypes.SR_SECURITY_DESCRIPTOR(data=self.principal_raw_security_descriptor)
                 context.log.highlight("Target principal found in LDAP (%s)" % self.target_principal[0])
-            except Exception as e:
+            except Exception:
                 context.log.fail("Target SID not found in LDAP (%s)" % self.target_sAMAccountName)
                 exit(1)
 
@@ -325,7 +325,7 @@ class NXCModule:
                     self.principal_raw_security_descriptor = str(self.target_principal[1][0][1][0]).encode("latin-1")
                     self.principal_security_descriptor = ldaptypes.SR_SECURITY_DESCRIPTOR(data=self.principal_raw_security_descriptor)
                     context.log.highlight("Target principal found in LDAP (%s)" % self.target_sAMAccountName)
-                except Exception as e:
+                except Exception:
                     context.log.fail("Target SID not found in LDAP (%s)" % self.target_sAMAccountName)
                     continue
 
@@ -380,7 +380,7 @@ class NXCModule:
             )
         try:
             self.target_principal = target[0]
-        except Exception as e:
+        except Exception:
             context.log.fail("Principal not found in LDAP (%s), probably an LDAP session issue." % _lookedup_principal)
             exit(0)
 
@@ -397,7 +397,7 @@ class NXCModule:
             dn = self.ldap_session.entries[0].entry_dn
             sid = format_sid(self.ldap_session.entries[0]["objectSid"].raw_values[0])
             return dn, sid
-        except Exception as e:
+        except Exception:
             context.log.fail("User not found in LDAP: %s" % samname)
             return False
 
@@ -410,7 +410,7 @@ class NXCModule:
         # Tries to resolve the SID from the LDAP domain dump
         else:
             try:
-                dn = self.ldap_session.search(
+                self.ldap_session.search(
                     searchBase=self.baseDN,
                     searchFilter="(objectSid=%s)" % sid,
                     attributes=["sAMAccountName"],
@@ -427,7 +427,7 @@ class NXCModule:
                     1
                 ][0]
                 return samname
-            except Exception as e:
+            except Exception:
                 context.log.debug("SID not found in LDAP: %s" % sid)
                 return ""
 

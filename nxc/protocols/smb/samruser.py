@@ -44,7 +44,7 @@ class UserSamrDump:
             try:
                 protodef = UserSamrDump.KNOWN_PROTOCOLS[protocol]
                 port = protodef[1]
-            except KeyError as e:
+            except KeyError:
                 self.logger.debug(f"Invalid Protocol '{protocol}'")
             self.logger.debug(f"Trying protocol {protocol}")
             rpctransport = transport.SMBTransport(

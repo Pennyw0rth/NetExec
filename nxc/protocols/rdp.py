@@ -175,7 +175,7 @@ class rdp(connection):
                 if str(proto) == "SUPP_PROTOCOLS.RDP" or str(proto) == "SUPP_PROTOCOLS.SSL" or str(proto) == "SUPP_PROTOCOLS.SSL|SUPP_PROTOCOLS.RDP":
                     self.nla = False
                     return
-            except Exception as e:
+            except Exception:
                 pass
 
     async def connect_rdp(self):
@@ -204,7 +204,7 @@ class rdp(connection):
             else:
                 kerb_pass = ""
 
-            fqdn_host = self.hostname + "." + self.domain
+            self.hostname + "." + self.domain
             password = password if password else nthash
 
             if useCache:
@@ -353,7 +353,7 @@ class rdp(connection):
         try:
             self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
             await self.connect_rdp()
-        except Exception as e:
+        except Exception:
             return
 
         await asyncio.sleep(int(5))

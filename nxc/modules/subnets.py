@@ -83,7 +83,7 @@ class NXCModule:
                     if isinstance(subnet, ldapasn1_impacket.SearchResultEntry) is not True:
                         continue
                     subnet = searchResEntry_to_dict(subnet)
-                    subnet_dn = subnet["distinguishedName"]
+                    subnet["distinguishedName"]
                     subnet_name = subnet["name"]
 
                     if self.showservers:

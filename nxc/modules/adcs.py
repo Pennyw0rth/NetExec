@@ -47,16 +47,16 @@ class NXCModule:
             search_filter = "(objectClass=pKIEnrollmentService)"
         else:
             search_filter = f"(distinguishedName=CN={self.server},CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,"
-            self.context.log.highlight("Using PKI CN: {}".format(self.server))
+            self.context.log.highlight(f"Using PKI CN: {self.server}")
 
-        context.log.display("Starting LDAP search with search filter '{}'".format(search_filter))
+        context.log.display(f"Starting LDAP search with search filter '{search_filter}'")
 
         try:
             sc = ldap.SimplePagedResultsControl()
             base_dn_root = connection.ldapConnection._baseDN if self.base_dn is None else self.base_dn
 
             if self.server is None:
-                resp = connection.ldapConnection.search(
+                connection.ldapConnection.search(
                     searchFilter=search_filter,
                     attributes=[],
                     sizeLimit=0,
@@ -65,7 +65,7 @@ class NXCModule:
                     searchBase="CN=Configuration," + base_dn_root,
                 )
             else:
-                resp = connection.ldapConnection.search(
+                connection.ldapConnection.search(
                     searchFilter=search_filter + base_dn_root + ")",
                     attributes=["certificateTemplates"],
                     sizeLimit=0,
@@ -74,7 +74,7 @@ class NXCModule:
                     searchBase="CN=Configuration," + base_dn_root,
                 )
         except LDAPSearchError as e:
-            context.log.fail("Obtained unexpected exception: {}".format(str(e)))
+            context.log.fail(f"Obtained unexpected exception: {e}")
 
     def process_servers(self, item):
         """

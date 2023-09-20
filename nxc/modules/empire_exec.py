@@ -100,7 +100,7 @@ class NXCModule:
                 verify=False,
             )
         except ConnectionError:
-            context.log.fail(f"Unable to request stager from Empire's RESTful API")
+            context.log.fail("Unable to request stager from Empire's RESTful API")
             sys.exit(1)
 
         if stager_response.status_code not in [200, 201]:
@@ -130,7 +130,7 @@ class NXCModule:
         if download_response.status_code == 200:
             context.log.success(f"Successfully generated launcher for listener '{module_options['LISTENER']}'")
         else:
-            context.log.fail(f"Something went wrong when retrieving stager Powershell command")
+            context.log.fail("Something went wrong when retrieving stager Powershell command")
 
     def on_admin_login(self, context, connection):
         if self.empire_launcher:

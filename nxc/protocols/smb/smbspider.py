@@ -47,11 +47,10 @@ class SMBSpider:
 
         if share == "*":
             self.logger.display("Enumerating shares for spidering")
-            permissions = []
             try:
                 for share in self.smbconnection.listShares():
                     share_name = share["shi1_netname"][:-1]
-                    share_remark = share["shi1_remark"][:-1]
+                    share["shi1_remark"][:-1]
                     try:
                         self.smbconnection.listPath(share_name, "*")
                         self.share = share_name

@@ -48,8 +48,8 @@ class NXCModule:
         try:
             if self.cmd == "" or self.pid == "":
                 self.uploadfile = False
-                context.log.highlight(f"Firstly run tasklist.exe /v to find process id for each user")
-                context.log.highlight(f"Usage: -o PID=pid EXEC='Command'")
+                context.log.highlight("Firstly run tasklist.exe /v to find process id for each user")
+                context.log.highlight("Usage: -o PID=pid EXEC='Command'")
                 return
             else:
                 self.uploadfile = True
@@ -57,7 +57,7 @@ class NXCModule:
                 with open(file_to_upload, 'rb') as pi:
                     try:
                         connection.conn.putFile(self.share, f"{self.tmp_share}{self.pi}", pi.read)
-                        context.log.success(f"pi.exe successfully uploaded")
+                        context.log.success("pi.exe successfully uploaded")
                         
                     except Exception as e:
                         context.log.fail(f"Error writing file to share {self.tmp_share}: {e}")
@@ -72,8 +72,8 @@ class NXCModule:
             context.log.fail(f"Error running command: {e}")
         finally:
             try:
-                if self.uploadfile == True:
+                if self.uploadfile is True:
                     connection.conn.deleteFile(self.share, f"{self.tmp_share}{self.pi}")
-                    context.log.success(f"pi.exe successfully deleted")
+                    context.log.success("pi.exe successfully deleted")
             except Exception as e:
                 context.log.fail(f"Error deleting pi.exe on {self.share}: {e}")

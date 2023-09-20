@@ -27,7 +27,7 @@ class NXCModule:
 
     def on_admin_login(self, context, connection):
         data = []
-        cards = connection.wmi(f"select DNSDomainSuffixSearchOrder, IPAddress from win32_networkadapterconfiguration")
+        cards = connection.wmi("select DNSDomainSuffixSearchOrder, IPAddress from win32_networkadapterconfiguration")
         if cards:
             for c in cards:
                 if c["IPAddress"].get("value"):
@@ -35,6 +35,6 @@ class NXCModule:
 
             data.append(cards)
 
-        log_name = "network-connections-{}-{}.log".format(connection.host, datetime.now().strftime("%Y-%m-%d_%H%M%S"))
+        log_name = f"network-connections-{connection.host}-{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log"
         write_log(json.dumps(data), log_name)
         context.log.display(f"Saved raw output to ~/.nxc/logs/{log_name}")

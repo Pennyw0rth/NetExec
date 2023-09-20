@@ -136,8 +136,7 @@ class NXCModule:
                 pass
             else:
                 raise
-        targetentry = None
-        dnsresolver = get_dns_resolver(connection.host, context.log)
+        get_dns_resolver(connection.host, context.log)
 
         outdata = []
 

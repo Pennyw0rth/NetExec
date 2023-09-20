@@ -53,7 +53,7 @@ class NXCModule:
             self.dir_result = module_options["DIR_RESULT"]
 
     def on_admin_login(self, context, connection):
-        if self.useembeded == True:
+        if self.useembeded is True:
             with open(self.procdump_path + self.procdump, "wb") as procdump:
                 procdump.write(self.procdump_embeded)
 
@@ -114,7 +114,6 @@ class NXCModule:
 
             with open(self.dir_result + machine_name, "rb") as dump:
                 try:
-                    credentials = []
                     credz_bh = []
                     try:
                         pypy_parse = pypykatz.parse_minidump_external(dump)

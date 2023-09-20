@@ -162,24 +162,24 @@ class NXCModule:
         target = MSLDAPTarget(connection.host, hostname=connection.hostname, domain=connection.domain, dc_ip=connection.domain)
         ldapIsProtected = asyncio.run(run_ldap(target, credential))
 
-        if ldapIsProtected == False:
+        if ldapIsProtected is False:
             context.log.highlight("LDAP Signing NOT Enforced!")
-        elif ldapIsProtected == True:
+        elif ldapIsProtected is True:
             context.log.fail("LDAP Signing IS Enforced")
         else:
             context.log.fail("Connection fail, exiting now")
             exit()
 
-        if DoesLdapsCompleteHandshake(connection.host) == True:
+        if DoesLdapsCompleteHandshake(connection.host) is True:
             target = MSLDAPTarget(connection.host, 636, UniProto.CLIENT_SSL_TCP, hostname=connection.hostname, domain=connection.domain, dc_ip=connection.domain)
             ldapsChannelBindingAlwaysCheck = asyncio.run(run_ldaps_noEPA(target, credential))
             target = MSLDAPTarget(connection.host, hostname=connection.hostname, domain=connection.domain, dc_ip=connection.domain)
             ldapsChannelBindingWhenSupportedCheck = asyncio.run(run_ldaps_withEPA(target, credential))
-            if ldapsChannelBindingAlwaysCheck == False and ldapsChannelBindingWhenSupportedCheck == True:
+            if ldapsChannelBindingAlwaysCheck is False and ldapsChannelBindingWhenSupportedCheck is True:
                 context.log.highlight('LDAPS Channel Binding is set to "When Supported"')
-            elif ldapsChannelBindingAlwaysCheck == False and ldapsChannelBindingWhenSupportedCheck == False:
+            elif ldapsChannelBindingAlwaysCheck is False and ldapsChannelBindingWhenSupportedCheck is False:
                 context.log.highlight('LDAPS Channel Binding is set to "NEVER"')
-            elif ldapsChannelBindingAlwaysCheck == True:
+            elif ldapsChannelBindingAlwaysCheck is True:
                 context.log.fail('LDAPS Channel Binding is set to "Required"')
             else:
                 context.log.fail("\nSomething went wrong...")

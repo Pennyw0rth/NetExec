@@ -19,7 +19,7 @@ class NXCModule:
         ACTION  Create/Delete the registry key (choices: enable, disable, check)
         """
 
-        if not "ACTION" in module_options:
+        if "ACTION" not in module_options:
             context.log.fail("ACTION option not specified!")
             exit(1)
 

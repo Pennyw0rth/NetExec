@@ -110,18 +110,18 @@ class NXCModule:
                         host.signing,
                         spooler=True,
                     )
-                except Exception as e:
-                    context.log.debug(f"Error updating spooler status in database")
+                except Exception:
+                    context.log.debug("Error updating spooler status in database")
                 break
 
         if entries:
             num = len(entries)
             if 1 == num:
-                context.log.debug(f"[Spooler] Received one endpoint")
+                context.log.debug("[Spooler] Received one endpoint")
             else:
                 context.log.debug(f"[Spooler] Received {num} endpoints")
         else:
-            context.log.debug(f"[Spooler] No endpoints found")
+            context.log.debug("[Spooler] No endpoints found")
 
     def __fetch_list(self, rpctransport):
         dce = rpctransport.get_dce_rpc()

@@ -59,7 +59,7 @@ class NXCModule:
                         if product["name"] not in results:
                             results[product["name"]] = {"services": []}
                         results[product["name"]]["services"].append(service)
-                    except Exception as e:
+                    except Exception:
                         pass
             success += 1
         except Exception as e:
@@ -146,7 +146,7 @@ class LsaLookupNames:
         """
         string_binding = string_binding or self.string_binding
         if not string_binding:
-            raise NotImplemented("String binding must be defined")
+            raise NotImplementedError("String binding must be defined")
 
         rpc_transport = transport.DCERPCTransportFactory(string_binding)
 

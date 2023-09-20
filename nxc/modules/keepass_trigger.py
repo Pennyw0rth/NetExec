@@ -171,9 +171,9 @@ class NXCModule:
 
         # checks if the malicious trigger was effectively added to the specified KeePass configuration file
         if self.trigger_added(context, connection):
-            context.log.success(f"Malicious trigger successfully added, you can now wait for KeePass reload and poll the exported files")
+            context.log.success("Malicious trigger successfully added, you can now wait for KeePass reload and poll the exported files")
         else:
-            context.log.fail(f"Unknown error when adding malicious trigger to file")
+            context.log.fail("Unknown error when adding malicious trigger to file")
             sys.exit(1)
 
     def check_trigger_added(self, context, connection):

