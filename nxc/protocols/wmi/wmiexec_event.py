@@ -22,7 +22,7 @@
 #       Get result from reading wmi object ActiveScriptEventConsumer.Name="{command_ResultInstance}"
 #
 #   Stage 4:
-#       Remove everythings in wmi object
+#       Remove everything in wmi object
 
 import time
 import uuid
@@ -33,8 +33,8 @@ from io import StringIO
 from nxc.helpers.powershell import get_ps_script
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
-from impacket.dcerpc.v5.dcom.wmi import WBEMSTATUS
 from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login, WBEMSTATUS
+
 
 class WMIEXEC_EVENT:
     def __init__(self, host, username, password, domain, lmhash, nthash, doKerberos, kdcHost, aesKey, logger, exec_timeout, codec):
@@ -63,7 +63,8 @@ class WMIEXEC_EVENT:
         iWbemLevel1Login.RemRelease()
 
     def execute(self, command, output=False):
-        if "'" in command: command = command.replace("'",r'"')
+        if "'" in command:
+            command = command.replace("'",r'"')
         self.__retOutput = output
         self.execute_handler(command)
 
@@ -84,14 +85,14 @@ class WMIEXEC_EVENT:
         self.execute_remote(command)
         
         # Get command results
-        self.logger.info("Waiting {}s for command completely executed.".format(self.__exec_timeout))
+        self.logger.info(f"Waiting {self.__exec_timeout}s for command completely executed.")
         time.sleep(self.__exec_timeout)
 
         if self.__retOutput:
-            self.get_CommandResult()
+            self.get_command_result()
 
         # Clean up
-        self.remove_Instance()
+        self.remove_instance()
 
     def process_vbs(self, command):
         schedule_taskname = str(uuid.uuid4())
@@ -117,7 +118,7 @@ class WMIEXEC_EVENT:
             vbs = vbs.replace("REPLACE_ME_TEMP_TASKNAME", schedule_taskname)
         return vbs
 
-    def checkError(self, banner, call_status):
+    def check_error(self, banner, call_status):
         if call_status != 0:
             try:
                 error_name = WBEMSTATUS.enumItems(call_status).name
@@ -130,81 +131,81 @@ class WMIEXEC_EVENT:
     def execute_vbs(self, vbs_content):
         # Copy from wmipersist.py
         # Install ActiveScriptEventConsumer
-        activeScript, _ = self.__iWbemServices.GetObject('ActiveScriptEventConsumer')
-        activeScript = activeScript.SpawnInstance()
-        activeScript.Name = self.__instanceID
-        activeScript.ScriptingEngine = 'VBScript'
-        activeScript.CreatorSID = [1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 32, 2, 0, 0]
-        activeScript.ScriptText = vbs_content
+        active_script, _ = self.__iWbemServices.GetObject('ActiveScriptEventConsumer')
+        active_script = active_script.SpawnInstance()
+        active_script.Name = self.__instanceID
+        active_script.ScriptingEngine = 'VBScript'
+        active_script.CreatorSID = [1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 32, 2, 0, 0]
+        active_script.ScriptText = vbs_content
         # Don't output impacket default verbose
         current=sys.stdout
         sys.stdout = StringIO()
-        resp = self.__iWbemServices.PutInstance(activeScript.marshalMe())
+        resp = self.__iWbemServices.PutInstance(active_script.marshalMe())
         sys.stdout = current
-        self.checkError(f'Adding ActiveScriptEventConsumer.Name="{self.__instanceID}"', resp.GetCallStatus(0) & 0xffffffff)
+        self.check_error(f'Adding ActiveScriptEventConsumer.Name="{self.__instanceID}"', resp.GetCallStatus(0) & 0xffffffff)
 
         # Timer means the amount of milliseconds after the script will be triggered, hard coding to 1 second it in this case.
-        wmiTimer, _ = self.__iWbemServices.GetObject('__IntervalTimerInstruction')
-        wmiTimer = wmiTimer.SpawnInstance()
-        wmiTimer.TimerId = self.__instanceID
-        wmiTimer.IntervalBetweenEvents = 1000
-        #wmiTimer.SkipIfPassed = False
+        wmi_timer, _ = self.__iWbemServices.GetObject('__IntervalTimerInstruction')
+        wmi_timer = wmi_timer.SpawnInstance()
+        wmi_timer.TimerId = self.__instanceID
+        wmi_timer.IntervalBetweenEvents = 1000
+        # wmiTimer.SkipIfPassed = False
         # Don't output verbose
-        current=sys.stdout
+        current = sys.stdout
         sys.stdout = StringIO()
-        resp = self.__iWbemServices.PutInstance(wmiTimer.marshalMe())
+        resp = self.__iWbemServices.PutInstance(wmi_timer.marshalMe())
         sys.stdout = current
-        self.checkError(f'Adding IntervalTimerInstruction.TimerId="{self.__instanceID}"', resp.GetCallStatus(0) & 0xffffffff)
+        self.check_error(f'Adding IntervalTimerInstruction.TimerId="{self.__instanceID}"', resp.GetCallStatus(0) & 0xffffffff)
 
         # EventFilter
-        eventFilter,_ = self.__iWbemServices.GetObject('__EventFilter')
-        eventFilter =  eventFilter.SpawnInstance()
-        eventFilter.Name = self.__instanceID
-        eventFilter.CreatorSID =  [1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 32, 2, 0, 0]
-        eventFilter.Query = f'select * from __TimerEvent where TimerID = "{self.__instanceID}" '
-        eventFilter.QueryLanguage = 'WQL'
-        eventFilter.EventNamespace = r'root\subscription'
+        event_filter, _ = self.__iWbemServices.GetObject('__EventFilter')
+        event_filter = event_filter.SpawnInstance()
+        event_filter.Name = self.__instanceID
+        event_filter.CreatorSID =  [1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 32, 2, 0, 0]
+        event_filter.Query = f'select * from __TimerEvent where TimerID = "{self.__instanceID}" '
+        event_filter.QueryLanguage = 'WQL'
+        event_filter.EventNamespace = r'root\subscription'
         # Don't output verbose
         current=sys.stdout
         sys.stdout = StringIO()
-        resp = self.__iWbemServices.PutInstance(eventFilter.marshalMe())
+        resp = self.__iWbemServices.PutInstance(event_filter.marshalMe())
         sys.stdout = current
-        self.checkError(f'Adding EventFilter.Name={self.__instanceID}"', resp.GetCallStatus(0) & 0xffffffff)
+        self.check_error(f'Adding EventFilter.Name={self.__instanceID}"', resp.GetCallStatus(0) & 0xffffffff)
 
         # Binding EventFilter & EventConsumer
-        filterBinding, _ = self.__iWbemServices.GetObject('__FilterToConsumerBinding')
-        filterBinding = filterBinding.SpawnInstance()
-        filterBinding.Filter = f'__EventFilter.Name="{self.__instanceID}"'
-        filterBinding.Consumer = f'ActiveScriptEventConsumer.Name="{self.__instanceID}"'
-        filterBinding.CreatorSID = [1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 32, 2, 0, 0]
+        filter_binding, _ = self.__iWbemServices.GetObject('__FilterToConsumerBinding')
+        filter_binding = filter_binding.SpawnInstance()
+        filter_binding.Filter = f'__EventFilter.Name="{self.__instanceID}"'
+        filter_binding.Consumer = f'ActiveScriptEventConsumer.Name="{self.__instanceID}"'
+        filter_binding.CreatorSID = [1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 32, 2, 0, 0]
         # Don't output verbose
         current=sys.stdout
         sys.stdout = StringIO()
-        resp = self.__iWbemServices.PutInstance(filterBinding.marshalMe())
+        resp = self.__iWbemServices.PutInstance(filter_binding.marshalMe())
         sys.stdout = current
-        self.checkError(fr'Adding FilterToConsumerBinding.Consumer="ActiveScriptEventConsumer.Name=\"{self.__instanceID}\"", Filter="__EventFilter.Name=\"{self.__instanceID}\""', resp.GetCallStatus(0) & 0xffffffff)
+        self.check_error(fr'Adding FilterToConsumerBinding.Consumer="ActiveScriptEventConsumer.Name=\"{self.__instanceID}\"", Filter="__EventFilter.Name=\"{self.__instanceID}\""', resp.GetCallStatus(0) & 0xffffffff)
 
-    def get_CommandResult(self):
+    def get_command_result(self):
         try:
-            command_ResultObject, _ = self.__iWbemServices.GetObject(f'ActiveScriptEventConsumer.Name="{self.__instanceID_StoreResult}"')
-            record = dict(command_ResultObject.getProperties())
+            command_result_object, _ = self.__iWbemServices.GetObject(f'ActiveScriptEventConsumer.Name="{self.__instanceID_StoreResult}"')
+            record = dict(command_result_object.getProperties())
             self.__outputBuffer = base64.b64decode(record['ScriptText']['value']).decode(self.__codec, errors='replace')
         except Exception:
             self.logger.fail("WMIEXEC-EVENT: Could not retrieve output file, it may have been detected by AV. Please try increasing the timeout with the '--exec-timeout' option. If it is still failing, try the 'smb' protocol or another exec method")
 
-    def remove_Instance(self):
+    def remove_instance(self):
         if self.__retOutput:
             resp = self.__iWbemServices.DeleteInstance(f'ActiveScriptEventConsumer.Name="{self.__instanceID_StoreResult}"')
-            self.checkError(f'Removing ActiveScriptEventConsumer.Name="{self.__instanceID}"', resp.GetCallStatus(0) & 0xffffffff)
+            self.check_error(f'Removing ActiveScriptEventConsumer.Name="{self.__instanceID}"', resp.GetCallStatus(0) & 0xffffffff)
 
         resp = self.__iWbemServices.DeleteInstance(f'ActiveScriptEventConsumer.Name="{self.__instanceID}"')
-        self.checkError(f'Removing ActiveScriptEventConsumer.Name="{self.__instanceID}"', resp.GetCallStatus(0) & 0xffffffff)
+        self.check_error(f'Removing ActiveScriptEventConsumer.Name="{self.__instanceID}"', resp.GetCallStatus(0) & 0xffffffff)
 
         resp = self.__iWbemServices.DeleteInstance(f'__IntervalTimerInstruction.TimerId="{self.__instanceID}"')
-        self.checkError(f'Removing IntervalTimerInstruction.TimerId="{self.__instanceID}"', resp.GetCallStatus(0) & 0xffffffff)
+        self.check_error(f'Removing IntervalTimerInstruction.TimerId="{self.__instanceID}"', resp.GetCallStatus(0) & 0xffffffff)
 
         resp = self.__iWbemServices.DeleteInstance(f'__EventFilter.Name="{self.__instanceID}"')
-        self.checkError(f'Removing EventFilter.Name="{self.__instanceID}"', resp.GetCallStatus(0) & 0xffffffff)
+        self.check_error(f'Removing EventFilter.Name="{self.__instanceID}"', resp.GetCallStatus(0) & 0xffffffff)
 
         resp = self.__iWbemServices.DeleteInstance(fr'__FilterToConsumerBinding.Consumer="ActiveScriptEventConsumer.Name=\"{self.__instanceID}\"",Filter="__EventFilter.Name=\"{self.__instanceID}\""')
-        self.checkError(fr'Removing FilterToConsumerBinding.Consumer="ActiveScriptEventConsumer.Name=\"{self.__instanceID}\"", Filter="__EventFilter.Name=\"{self.__instanceID}\""', resp.GetCallStatus(0) & 0xffffffff)
+        self.check_error(fr'Removing FilterToConsumerBinding.Consumer="ActiveScriptEventConsumer.Name=\"{self.__instanceID}\"", Filter="__EventFilter.Name=\"{self.__instanceID}\""', resp.GetCallStatus(0) & 0xffffffff)
