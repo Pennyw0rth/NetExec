@@ -140,6 +140,7 @@ class ModuleLoader:
                         module_path = path_join(path, module)
                         module_data = self.get_module_info(module_path)
                         modules.update(module_data)
-                    except:
+                    except Exception as e:
+                        self.logger.debug(f"Error loading module {module}: {e}")
                         pass
         return modules
