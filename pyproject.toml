@@ -39,7 +39,7 @@ beautifulsoup4 = ">=4.11,<5"
 lsassy = ">=3.1.8"
 termcolor = "^2.3.0"
 msgpack = "^1.0.0"
-neo4j = "^5.12.0"
+neo4j = "^4.1.1" # do not upgrade this until performance regression issues in 5 are fixed (as of 9/23)
 pylnk3 = "^0.4.2"
 pypsrp = "^0.8.1"
 paramiko = "^3.3.1"
@@ -48,7 +48,7 @@ dsinternals = "^1.2.4"
 xmltodict = "^0.13.0"
 terminaltables = "^3.1.0"
 aioconsole = "^0.6.2"
-pywerview = "^0.5.1"
+pywerview = "^0.3.3" # pywerview 5 requires libkrb5-dev installed which is not default on kali (as of 9/23)
 minikerberos = "^0.4.1"
 pypykatz = "^0.6.8"
 aardwolf = "^0.2.7"
@@ -66,10 +66,9 @@ oscrypto = { git = "https://github.com/NeffIsBack/oscrypto" }
 pyreadline = "^2.1"
 
 [tool.poetry.group.dev.dependencies]
-flake8 = "*"
+ruff = "*"
 pylint = "*"
 shiv = "*"
-black = "^20.8b1"
 pytest = "^7.2.2"
 
 [build-system]
