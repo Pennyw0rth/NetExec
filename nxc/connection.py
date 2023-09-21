@@ -310,13 +310,13 @@ class connection(object):
         for password in self.args.password:
             if isfile(password):
                 try:
-                    with open(password, 'r', errors = ('ignore' if self.args.ignore_decoding_errors else 'strict')) as password_file:
+                    with open(password, 'r', errors = ('ignore' if self.args.ignore_pw_decoding else 'strict')) as password_file:
                         for line in password_file:
                             secret.append(line.strip())
                             cred_type.append('plaintext')
                 except UnicodeDecodeError as e:
                     self.logger.error(f"{type(e).__name__}: Could not decode password file. Make sure the file only contains UTF-8 characters.")
-                    self.logger.error("You can ignore non UTF-8 characters with the option '--ignore-decoding-errors'")
+                    self.logger.error("You can ignore non UTF-8 characters with the option '--ignore-pw-decoding'")
                     exit(1)
 
             else:
