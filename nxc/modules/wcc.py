@@ -505,16 +505,16 @@ class HostChecker:
         if not success:
             reasons.append(f"No match found in {lapsv1_key_name}\\...\\DllName")
 
-        l = self.ls(self.connection, laps_path)
-        if l:
+        file_listing = self.ls(self.connection, laps_path)
+        if file_listing:
             reasons.append("Found LAPS folder at " + laps_path)
         else:
             success = False
             reasons.append("LAPS folder does not exist")
             return success, reasons
 
-        l = self.ls(self.connection, laps_path + "\\AdmPwd.dll")
-        if l:
+        file_listing = self.ls(self.connection, laps_path + "\\AdmPwd.dll")
+        if file_listing:
             reasons.append(f"Found {laps_path}\\AdmPwd.dll")
         else:
             success = False
@@ -795,15 +795,15 @@ class HostChecker:
         return user_info
 
     def ls(self, smb, path="\\", share="C$"):
-        l = []
+        file_listing = []
         try:
-            l = smb.conn.listPath(share, path)
+            file_listing = smb.conn.listPath(share, path)
         except SMBSessionError as e:
             if e.getErrorString()[0] not in ("STATUS_NO_SUCH_FILE", "STATUS_OBJECT_NAME_NOT_FOUND"):
                 self.context.log.error(f"ls(): C:\\{path} {e.getErrorString()}")
         except Exception as e:
             self.context.log.error(f"ls(): C:\\{path} {e}\n")
-        return l
+        return file_listing
 
 
 # Comparison operators #
