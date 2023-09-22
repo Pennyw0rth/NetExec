@@ -4,14 +4,14 @@
 # @d4t4s3c
 # Module by @mpgn_x64
 
-from ctypes import *
+from ctypes import c_uint8, c_uint16, c_uint32, c_uint64, Structure
 import socket
 import struct
 
 
 class NXCModule:
     name = "ms17-010"
-    description = "MS17-010, /!\ not tested oustide home lab"
+    description = "MS17-010 - EternalBlue exploit - NOT TESTED OUTSIDE LAB ENVIRONMENT"
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
@@ -31,20 +31,20 @@ class SmbHeader(Structure):
     _pack_ = 1
 
     _fields_ = [
-        ("server_component", c_uint32),  # noqa: F405
-        ("smb_command", c_uint8),  # noqa: F405
-        ("error_class", c_uint8),  # noqa: F405
-        ("reserved1", c_uint8),  # noqa: F405
-        ("error_code", c_uint16),  # noqa: F405
-        ("flags", c_uint8),  # noqa: F405
-        ("flags2", c_uint16),  # noqa: F405
-        ("process_id_high", c_uint16),  # noqa: F405
-        ("signature", c_uint64),  # noqa: F405
-        ("reserved2", c_uint16),  # noqa: F405
-        ("tree_id", c_uint16),  # noqa: F405
-        ("process_id", c_uint16),  # noqa: F405
-        ("user_id", c_uint16),  # noqa: F405
-        ("multiplex_id", c_uint16),  # noqa: F405
+        ("server_component", c_uint32),
+        ("smb_command", c_uint8),
+        ("error_class", c_uint8),  
+        ("reserved1", c_uint8),  
+        ("error_code", c_uint16),  
+        ("flags", c_uint8),  
+        ("flags2", c_uint16),  
+        ("process_id_high", c_uint16),  
+        ("signature", c_uint64),  
+        ("reserved2", c_uint16),  
+        ("tree_id", c_uint16),  
+        ("process_id", c_uint16),  
+        ("user_id", c_uint16),  
+        ("multiplex_id", c_uint16),  
     ]
 
     def __new__(cls, buffer=None):
