@@ -63,8 +63,8 @@ class NXCModule:
                 if "WORD" in self.type:
                     try:
                         self.value = int(self.value)
-                    except:
-                        context.log.fail(f"Invalid registry value type specified: {self.value}")
+                    except Exception as e:
+                        context.log.fail(f"Invalid registry value type specified: {self.value}: {e}")
                         return
                 if self.type in type_dict:
                     self.type = type_dict[self.type]
@@ -112,8 +112,8 @@ class NXCModule:
                 try:
                     # Check if value exists
                     data_type, reg_value = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, self.key)
-                except:
-                    self.context.log.fail(f"Registry key {self.key} does not exist")
+                except Exception as e:
+                    self.context.log.fail(f"Registry key {self.key} does not exist: {e}")
                     return
                 # Delete value
                 rrp.hBaseRegDeleteValue(remote_ops._RemoteOperations__rrp, key_handle, self.key)
@@ -135,7 +135,7 @@ class NXCModule:
                         self.value,
                     )
                     self.context.log.success(f"Key {self.key} has been modified to {self.value}")
-                except:
+                except Exception:
                     rrp.hBaseRegSetValue(
                         remote_ops._RemoteOperations__rrp,
                         key_handle,
@@ -150,7 +150,7 @@ class NXCModule:
                 try:
                     data_type, reg_value = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, self.key)
                     self.context.log.highlight(f"{self.key}: {reg_value}")
-                except:
+                except Exception:
                     if self.delete:
                         pass
                     else:
