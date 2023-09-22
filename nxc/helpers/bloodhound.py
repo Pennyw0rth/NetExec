@@ -8,6 +8,8 @@ def add_user_bh(user, domain, logger, config):
         users_owned.append({"username": user.upper(), "domain": domain.upper()})
     else:
         users_owned = user
+
+    # TODO: fix this, we shouldn't be doing conditional imports
     if config.get("BloodHound", "bh_enabled") != "False":
         try:
             from neo4j.v1 import GraphDatabase
@@ -49,8 +51,8 @@ def add_user_bh(user, domain, logger, config):
         except ServiceUnavailable:
             logger.fail(f"Neo4J does not seem to be available on {uri}.")
             return
-        except Exception:
-            logger.fail("Unexpected error with Neo4J")
+        except Exception as e:
+            logger.fail(f"Unexpected error with Neo4J: {e}")
             logger.fail("Account not found on the domain")
             return
         driver.close()
