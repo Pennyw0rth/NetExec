@@ -35,7 +35,7 @@ class NXCModule:
             connection.conn.listPath("C$", "\\Windows\\System32\\inetsrv\\appcmd.exe")
             self.execute_appcmd(context, connection)
         except Exception as e:
-            context.log.fail("appcmd.exe not found, this module is not applicable - {e}")
+            context.log.fail(f"appcmd.exe not found, this module is not applicable - {e}")
             return
 
     def execute_appcmd(self, context, connection):
