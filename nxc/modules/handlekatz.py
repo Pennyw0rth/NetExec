@@ -10,6 +10,7 @@ import re
 import sys
 
 from nxc.helpers.bloodhound import add_user_bh
+import pypykatz
 
 
 class NXCModule:
@@ -177,4 +178,4 @@ class NXCModule:
                     if len(credz_bh) > 0:
                         add_user_bh(credz_bh, None, context.log, connection.config)
                 except Exception as e:
-                    context.log.fail("Error opening dump file", str(e))
+                    context.log.fail(f"Error opening dump file: {e}")

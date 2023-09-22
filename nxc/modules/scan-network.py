@@ -1,7 +1,7 @@
 # Credit to https://twitter.com/snovvcrash/status/1550518555438891009
 # Credit to https://github.com/dirkjanm/adidnsdump @_dirkjan
 # module by @mpgn_x64
-
+import re
 from os.path import expanduser
 import codecs
 import socket
@@ -11,7 +11,9 @@ from struct import unpack
 
 import dns.name
 import dns.resolver
+from impacket.ldap import ldap
 from impacket.structure import Structure
+from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from ldap3 import LEVEL
 
 
@@ -43,7 +45,7 @@ def get_dns_resolver(server, context):
 
 
 def ldap2domain(ldap):
-    return re.sub(",DC=", ".", ldap[ldap.lower().find("dc=") :], flags=re.I)[3:]
+    return re.sub(",DC=", ".", ldap[ldap.lower().find("dc="):], flags=re.I)[3:]
 
 
 def new_record(rtype, serial):
@@ -115,14 +117,14 @@ class NXCModule:
 
     def on_login(self, context, connection):
         zone = ldap2domain(connection.baseDN)
-        dnsroot = "CN=MicrosoftDNS,DC=DomainDnsZones,%s" % connection.baseDN
-        searchtarget = "DC=%s,%s" % (zone, dnsroot)
+        dns_root = f"CN=MicrosoftDNS,DC=DomainDnsZones,{connection.baseDN}"
+        search_target = f"DC={zone},{dns_root}"
         context.log.display("Querying zone for records")
         sfilter = "(DC=*)"
 
         try:
             list_sites = connection.ldapConnection.search(
-                searchBase=searchtarget,
+                searchBase=search_target,
                 searchFilter=sfilter,
                 attributes=["dnsRecord", "dNSTombstoned", "name"],
                 sizeLimit=100000,
@@ -160,7 +162,8 @@ class NXCModule:
                                     "value": address.formatCanonical(),
                                 }
                             )
-                    if dr["Type"] in [a for a in RECORD_TYPE_MAPPING if RECORD_TYPE_MAPPING[a] in ["CNAME", "NS", "PTR"]]:
+                    if dr["Type"] in [a for a in RECORD_TYPE_MAPPING if
+                                      RECORD_TYPE_MAPPING[a] in ["CNAME", "NS", "PTR"]]:
                         address = DNS_RPC_RECORD_NODE_NAME(dr["Data"])
                         if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
                             outdata.append(
@@ -182,7 +185,8 @@ class NXCModule:
                             )
 
         context.log.highlight("Found %d records" % len(outdata))
-        path = expanduser("~/.nxc/logs/{}_network_{}.log".format(connection.domain, datetime.now().strftime("%Y-%m-%d_%H%M%S")))
+        path = expanduser(
+            "~/.nxc/logs/{}_network_{}.log".format(connection.domain, datetime.now().strftime("%Y-%m-%d_%H%M%S")))
         with codecs.open(path, "w", "utf-8") as outfile:
             for row in outdata:
                 if self.showhosts:
@@ -193,7 +197,9 @@ class NXCModule:
                     outfile.write("{}\n".format(row["value"]))
         context.log.success("Dumped {} records to {}".format(len(outdata), path))
         if not self.showall and not self.showhosts:
-            context.log.display("To extract CIDR from the {} ip, run  the following command: cat" " your_file | mapcidr -aa -silent | mapcidr -a -silent".format(len(outdata)))
+            context.log.display(
+                "To extract CIDR from the {} ip, run  the following command: cat" " your_file | mapcidr -aa -silent | mapcidr -a -silent".format(
+                    len(outdata)))
 
 
 class DNS_RECORD(Structure):
@@ -250,8 +256,8 @@ class DNS_COUNT_NAME(Structure):
         ind = 0
         labels = []
         for i in range(self["LabelCount"]):
-            nextlen = unpack("B", self["RawName"][ind : ind + 1])[0]
-            labels.append(self["RawName"][ind + 1 : ind + 1 + nextlen].decode("utf-8"))
+            nextlen = unpack("B", self["RawName"][ind: ind + 1])[0]
+            labels.append(self["RawName"][ind + 1: ind + 1 + nextlen].decode("utf-8"))
             ind += nextlen + 1
         # For the final dot
         labels.append("")

@@ -7,15 +7,15 @@ from math import fabs
 
 
 class NXCModule:
-    '''
+    """
         Created by fplazar and wanetty
         Module by @gm_eduard and @ferranplaza 
         Based on: https://github.com/juliourena/CrackMapExec/blob/master/cme/modules/get_description.py
-    '''
+    """
 
-    name = 'pso'
+    name = "pso"
     description = "Query to get PSO from LDAP"
-    supported_protocols = ['ldap']
+    supported_protocols = ["ldap"]
     opsec_safe = True
     multiple_hosts = True
     
@@ -35,9 +35,9 @@ class NXCModule:
     ]
 
     def options(self, context, module_options):
-        '''
+        """
         No options available.
-        '''
+        """
         pass
     
     def convert_time_field(self, field, value):
@@ -54,29 +54,31 @@ class NXCModule:
         return value
     
     def on_login(self, context, connection):
-        '''Concurrent. Required if on_admin_login is not present. This gets called on each authenticated connection'''
+        """Concurrent. Required if on_admin_login is not present. This gets called on each authenticated connection"""
         # Building the search filter
-        searchFilter = "(objectClass=msDS-PasswordSettings)"
+        search_filter = "(objectClass=msDS-PasswordSettings)"
 
         try:
-            context.log.debug('Search Filter=%s' % searchFilter)
-            resp = connection.ldapConnection.search(searchFilter=searchFilter,
-                                                    attributes=self.pso_fields,
-                                                    sizeLimit=0)
+            context.log.debug(f"Search Filter={search_filter}")
+            resp = connection.ldapConnection.search(
+                searchFilter=search_filter,
+                attributes=self.pso_fields,
+                sizeLimit=0
+            )
         except ldap_impacket.LDAPSearchError as e:
-            if e.getErrorString().find('sizeLimitExceeded') >= 0:
-                context.log.debug('sizeLimitExceeded exception caught, giving up and processing the data received')
+            if e.getErrorString().find("sizeLimitExceeded") >= 0:
+                context.log.debug("sizeLimitExceeded exception caught, giving up and processing the data received")
                 # We reached the sizeLimit, process the answers we have already and that's it. Until we implement
                 # paged queries
                 resp = e.getAnswers()
                 pass
             else:
-                logging.debug(e)
+                context.log.debug(e)
                 return False
 
         pso_list = []
 
-        context.log.debug('Total of records returned %d' % len(resp))
+        context.log.debug(f"Total of records returned {len(resp)}")
         for item in resp:
             if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
                 continue
@@ -84,25 +86,25 @@ class NXCModule:
             pso_info = {}
 
             try:
-                for attribute in item['attributes']:
-                    attr_name = str(attribute['type'])
+                for attribute in item["attributes"]:
+                    attr_name = str(attribute["type"])
                     if attr_name in self.pso_fields:
-                        pso_info[attr_name] = attribute['vals'][0]._value.decode('utf-8')
+                        pso_info[attr_name] = attribute["vals"][0]._value.decode("utf-8")
 
                 pso_list.append(pso_info)
 
             except Exception as e:
                 context.log.debug("Exception:", exc_info=True)
-                context.log.debug('Skipping item, cannot process due to error %s' % str(e))
+                context.log.debug(f"Skipping item, cannot process due to error {e}")
                 pass
         if len(pso_list) > 0:
-            context.log.success('Password Settings Objects (PSO) found:')
+            context.log.success("Password Settings Objects (PSO) found:")
             for pso in pso_list:
                 for field in self.pso_fields:
                     if field in pso:
                         value = self.convert_time_field(field, pso[field])
-                        context.log.highlight(u'{}: {}'.format(field, value))
-                context.log.highlight('-----')
+                        context.log.highlight(f"{field}: {value}")
+                context.log.highlight("-----")
 
         else:
-            context.log.info('No Password Settings Objects (PSO) found.')
+            context.log.info("No Password Settings Objects (PSO) found.")
