@@ -59,7 +59,7 @@ class NXCModule:
         else:
             try:
                 self.dcom_timeout = int(module_options['DCOM-TIMEOUT'])
-            except:
+            except Exception:
                 context.log.fail("Wrong DCOM timeout value!")
                 exit(1)
         
@@ -121,11 +121,11 @@ class RdpSmb:
 
         if remote_ops._RemoteOperations__rrp:
             ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
-            regHandle = ans["phKey"]
+            reg_handle = ans["phKey"]
 
             ans = rrp.hBaseRegOpenKey(
                 remote_ops._RemoteOperations__rrp,
-                regHandle,
+                reg_handle,
                 "SYSTEM\\CurrentControlSet\\Control\\Terminal Server",
             )
             key_handle = ans["phkResult"]
@@ -148,7 +148,7 @@ class RdpSmb:
             self.firewall_cmd(action)
 
             if action == "enable":
-                self.query_rdp_port(remote_ops, regHandle)
+                self.query_rdp_port(remote_ops, reg_handle)
         try:
             remote_ops.finish()
         except Exception:
