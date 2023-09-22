@@ -376,7 +376,7 @@ class SMBSpiderPlus:
         download_path = os.path.join(folder, filename)
 
         # Create the subdirectories based on the share name and file path.
-        self.logger.debug(f'Create folder "{folder}"')
+        self.logger.debug(f"Creating folder '{folder}'")
         make_dirs(folder)
 
         try:
@@ -387,7 +387,7 @@ class SMBSpiderPlus:
                         break
                     fd.write(chunk)
         except Exception as e:
-            self.logger.fail(f'Error writing file "{remote_path}" from share "{share_name}": {e}')
+            self.logger.fail(f'Error writing file "{download_path}" from share "{share_name}": {e}')
 
         # Check if the file is empty and should not be.
         if os.path.getsize(download_path) == 0 and remote_file.get_filesize() > 0:
