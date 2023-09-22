@@ -5,7 +5,7 @@ import threading
 from threading import enumerate
 from sys import exit
 from impacket import smbserver
-from nxc.helpers.logger import nxc_logger
+from nxc.logger import nxc_logger
 
 
 class NXCSMBServer(threading.Thread):
@@ -33,7 +33,6 @@ class NXCSMBServer(threading.Thread):
             else:
                 nxc_logger.error(f"Error starting SMB server on port 445: {message}")
                 exit(1)
-
 
     def run(self):
         try:

@@ -1,5 +1,6 @@
 from argparse import _StoreTrueAction
 
+
 def proto_args(parser, std_parser, module_parser):
     ldap_parser = parser.add_parser('ldap', help="own stuff using LDAP", parents=[std_parser, module_parser])
     ldap_parser.add_argument("-H", '--hash', metavar="HASH", dest='hash', nargs='+', default=[], help='NTLM hash(es) or file(s) containing NTLM hashes')
@@ -29,12 +30,13 @@ def proto_args(parser, std_parser, module_parser):
     ggroup.add_argument("--gmsa-convert-id", help="Get the secret name of specific gmsa or all gmsa if no gmsa provided")
     ggroup.add_argument("--gmsa-decrypt-lsa", help="Decrypt the gmsa encrypted value from LSA")
 
-    bgroup = ldap_parser.add_argument_group("Bloodhound scan", "Options to play with bloodhoud")
-    bgroup.add_argument("--bloodhound", action="store_true", help="Perform bloodhound scan")
-    bgroup.add_argument("-ns", '--nameserver', help="Custom DNS IP")
+    bgroup = ldap_parser.add_argument_group("Bloodhound Scan", "Options to play with Bloodhoud")
+    bgroup.add_argument("--bloodhound", action="store_true", help="Perform a Bloodhound scan")
+    bgroup.add_argument("-ns", "--nameserver", help="Custom DNS IP")
     bgroup.add_argument("-c", "--collection", help="Which information to collect. Supported: Group, LocalAdmin, Session, Trusts, Default, DCOnly, DCOM, RDP, PSRemote, LoggedOn, Container, ObjectProps, ACL, All. You can specify more than one by separating them with a comma. (default: Default)'")
 
     return parser
+
 
 def get_conditional_action(baseAction):
     class ConditionalAction(baseAction):
