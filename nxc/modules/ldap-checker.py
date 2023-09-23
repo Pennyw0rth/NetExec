@@ -13,6 +13,7 @@ from asyauth.common.credentials.kerberos import KerberosCredential
 
 from asysocks.unicomm.common.target import UniTarget, UniProto
 
+
 class NXCModule:
     """
     Checks whether LDAP signing and channelbinding are required.
@@ -131,7 +132,7 @@ class NXCModule:
             else:
                 context.log.fail(str(err))
 
-        # Run trough all our code blocks to determine LDAP signing and channel binding settings.   
+        # Run trough all our code blocks to determine LDAP signing and channel binding settings.
         stype = asyauthSecret.PASS if not connection.nthash else asyauthSecret.NT
         secret = connection.password if not connection.nthash else connection.nthash
         if not connection.kerberos:
@@ -142,15 +143,7 @@ class NXCModule:
                 stype=stype,
             )
         else:
-            kerberos_target = UniTarget(
-                connection.hostname + '.' + connection.domain,
-                88,
-                UniProto.CLIENT_TCP,
-                proxies=None,
-                dns=None,
-                dc_ip=connection.domain,
-                domain=connection.domain
-            )
+            kerberos_target = UniTarget(connection.hostname + "." + connection.domain, 88, UniProto.CLIENT_TCP, proxies=None, dns=None, dc_ip=connection.domain, domain=connection.domain)
             credential = KerberosCredential(
                 target=kerberos_target,
                 secret=secret,

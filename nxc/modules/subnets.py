@@ -99,8 +99,7 @@ class NXCModule:
                         )
                         if len([server for server in list_servers if isinstance(server, ldapasn1_impacket.SearchResultEntry)]) == 0:
                             if len(site_description) != 0:
-                                context.log.highlight(
-                                    f'Site "{site_name}" (Subnet:{subnet_name}) (description:"{site_description}")')
+                                context.log.highlight(f'Site "{site_name}" (Subnet:{subnet_name}) (description:"{site_description}")')
                             else:
                                 context.log.highlight(f'Site "{site_name}" (Subnet:{subnet_name})')
                         else:
@@ -109,14 +108,11 @@ class NXCModule:
                                     continue
                                 server = search_res_entry_to_dict(server)["cn"]
                                 if len(site_description) != 0:
-                                    context.log.highlight(
-                                        f"Site: '{site_name}' (Subnet:{subnet_name}) (description:'{site_description}') (Server:'{server}')")
+                                    context.log.highlight(f"Site: '{site_name}' (Subnet:{subnet_name}) (description:'{site_description}') (Server:'{server}')")
                                 else:
-                                    context.log.highlight(
-                                        f'Site "{site_name}" (Subnet:{subnet_name}) (Server:{server})')
+                                    context.log.highlight(f'Site "{site_name}" (Subnet:{subnet_name}) (Server:{server})')
                     else:
                         if len(site_description) != 0:
-                            context.log.highlight(
-                                f'Site "{site_name}" (Subnet:{subnet_name}) (description:"{site_description}")')
+                            context.log.highlight(f'Site "{site_name}" (Subnet:{subnet_name}) (description:"{site_description}")')
                         else:
                             context.log.highlight(f'Site "{site_name}" (Subnet:{subnet_name})')

@@ -25,6 +25,7 @@ from asyauth.common.credentials.kerberos import KerberosCredential
 from asyauth.common.constants import asyauthSecret
 from asysocks.unicomm.common.target import UniTarget, UniProto
 
+
 class rdp(connection):
     def __init__(self, args, db, host):
         self.domain = None
@@ -104,7 +105,7 @@ class rdp(connection):
         )
 
     def print_host_info(self):
-        nla = colored(f"nla:{self.nla}", host_info_colors[3], attrs=['bold']) if self.nla else colored(f"nla:{self.nla}", host_info_colors[2], attrs=['bold'])
+        nla = colored(f"nla:{self.nla}", host_info_colors[3], attrs=["bold"]) if self.nla else colored(f"nla:{self.nla}", host_info_colors[2], attrs=["bold"])
         if self.domain is None:
             self.logger.display("Probably old, doesn't not support HYBRID or HYBRID_EX" f" ({nla})")
         else:
@@ -220,15 +221,7 @@ class rdp(connection):
             else:
                 stype = asyauthSecret.PASS if not nthash else asyauthSecret.NT
 
-            kerberos_target = UniTarget(
-                self.domain,
-                88,
-                UniProto.CLIENT_TCP,
-                proxies=None,
-                dns=None,
-                dc_ip=self.domain,
-                domain=self.domain
-            )
+            kerberos_target = UniTarget(self.domain, 88, UniProto.CLIENT_TCP, proxies=None, dns=None, dc_ip=self.domain, domain=self.domain)
             self.auth = KerberosCredential(
                 target=kerberos_target,
                 secret=password,
@@ -246,9 +239,7 @@ class rdp(connection):
                     username,
                     (
                         # Show what was used between cleartext, nthash, aesKey and ccache
-                        " from ccache"
-                        if useCache
-                        else ":%s" % (process_secret(kerb_pass))
+                        " from ccache" if useCache else ":%s" % (process_secret(kerb_pass))
                     ),
                     self.mark_pwned(),
                 )

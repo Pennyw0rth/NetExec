@@ -252,16 +252,14 @@ class KerberosAttacks:
             return
 
         # Let's output the TGT enc-part/cipher in Hashcat format, in case somebody wants to use it.
-        if asRep['enc-part']['etype'] == 17 or asRep['enc-part']['etype'] == 18:
+        if asRep["enc-part"]["etype"] == 17 or asRep["enc-part"]["etype"] == 18:
             hash_TGT = "$krb5asrep$%d$%s@%s:%s$%s" % (
-                asRep["enc-part"]["etype"], clientName, domain,
+                asRep["enc-part"]["etype"],
+                clientName,
+                domain,
                 hexlify(asRep["enc-part"]["cipher"].asOctets()[:12]).decode(),
                 hexlify(asRep["enc-part"]["cipher"].asOctets()[12:]).decode(),
             )
         else:
-            hash_TGT = '$krb5asrep$%d$%s@%s:%s$%s' % (
-                asRep['enc-part']['etype'], clientName, domain,
-                hexlify(asRep['enc-part']['cipher'].asOctets()[:16]).decode(),
-                hexlify(asRep['enc-part']['cipher'].asOctets()[16:]).decode()
-            )
+            hash_TGT = "$krb5asrep$%d$%s@%s:%s$%s" % (asRep["enc-part"]["etype"], clientName, domain, hexlify(asRep["enc-part"]["cipher"].asOctets()[:16]).decode(), hexlify(asRep["enc-part"]["cipher"].asOctets()[16:]).decode())
         return hash_TGT

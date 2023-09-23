@@ -63,6 +63,7 @@ rich = "^13.3.5"
 python-libnmap = "^0.7.3"
 resource = "^0.2.1"
 oscrypto = { git = "https://github.com/NeffIsBack/oscrypto" }
+ruff = "^0.0.291"
 
 [tool.poetry.group.dev.dependencies]
 flake8 = "*"
@@ -74,3 +75,53 @@ pytest = "^7.2.2"
 [build-system]
 requires = ["poetry-core>=1.2.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+# Ruff doesn't enable pycodestyle warnings (`W`) or
+# McCabe complexity (`C901`) by default.
+select = ["E", "F"]
+ignore = [ "E501", "F405", "F841"]
+
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+]
+per-file-ignores = {}
+
+line-length = 65000
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+target-version = "py37"
+
+[tool.ruff.flake8-quotes]
+docstring-quotes = "double"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

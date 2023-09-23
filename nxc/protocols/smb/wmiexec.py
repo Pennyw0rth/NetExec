@@ -12,23 +12,7 @@ from impacket.dcerpc.v5.dtypes import NULL
 
 
 class WMIEXEC:
-    def __init__(
-        self,
-        target,
-        share_name,
-        username,
-        password,
-        domain,
-        smbconnection,
-        doKerberos=False,
-        aesKey=None,
-        kdcHost=None,
-        hashes=None,
-        share=None,
-        logger=None,
-        timeout=None,
-        tries=None
-    ):
+    def __init__(self, target, share_name, username, password, domain, smbconnection, doKerberos=False, aesKey=None, kdcHost=None, hashes=None, share=None, logger=None, timeout=None, tries=None):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -73,13 +57,13 @@ class WMIEXEC:
             kdcHost=self.__kdcHost,
         )
         iInterface = self.__dcom.CoCreateInstanceEx(wmi.CLSID_WbemLevel1Login, wmi.IID_IWbemLevel1Login)
-        flag, self.__stringBinding =  dcom_FirewallChecker(iInterface, self.__timeout)
+        flag, self.__stringBinding = dcom_FirewallChecker(iInterface, self.__timeout)
         if not flag or not self.__stringBinding:
             error_msg = f'WMIEXEC: Dcom initialization failed on connection with stringbinding: "{self.__stringBinding}", please increase the timeout with the option "--dcom-timeout". If it\'s still failing maybe something is blocking the RPC connection, try another exec method'
-            
+
             if not self.__stringBinding:
                 error_msg = "WMIEXEC: Dcom initialization failed: can't get target stringbinding, maybe cause by IPv6 or any other issues, please check your target again"
-            
+
             self.logger.fail(error_msg) if not flag else self.logger.debug(error_msg)
             # Make it force break function
             self.__dcom.disconnect()
@@ -156,7 +140,7 @@ class WMIEXEC:
         if self.__retOutput is False:
             self.__outputBuffer = ""
             return
-        
+
         tries = 1
         while True:
             try:
@@ -167,7 +151,7 @@ class WMIEXEC:
                 if tries >= self.__tries:
                     self.logger.fail("WMIEXEC: Could not retrieve output file, it may have been detected by AV. If it is still failing, try the 'wmi' protocol or another exec method")
                     break
-                if str(e).find("STATUS_BAD_NETWORK_NAME") >0 :
+                if str(e).find("STATUS_BAD_NETWORK_NAME") > 0:
                     self.logger.fail(f"SMB connection: target has blocked {self.__share} access (maybe command executed!)")
                     break
                 if str(e).find("STATUS_SHARING_VIOLATION") >= 0 or str(e).find("STATUS_OBJECT_NAME_NOT_FOUND") >= 0:

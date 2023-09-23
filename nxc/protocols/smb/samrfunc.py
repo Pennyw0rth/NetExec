@@ -46,16 +46,7 @@ class SamrFunc:
             kerberos=self.doKerberos,
             aesKey=self.aesKey,
         )
-        self.lsa_query = LSAQuery(
-            username=self.username,
-            password=self.password,
-            domain=self.domain,
-            remote_name=self.addr,
-            remote_host=self.addr,
-            kerberos=self.doKerberos,
-            aesKey=self.aesKey,
-            logger=self.logger
-        )
+        self.lsa_query = LSAQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.addr, remote_host=self.addr, kerberos=self.doKerberos, aesKey=self.aesKey, logger=self.logger)
 
     def get_builtin_groups(self):
         domains = self.samr_query.get_domains()
@@ -204,18 +195,7 @@ class SAMRQuery:
 
 
 class LSAQuery:
-    def __init__(
-        self,
-        username="",
-        password="",
-        domain="",
-        port=445,
-        remote_name="",
-        remote_host="",
-        aesKey="",
-        kerberos=None,
-        logger=None
-    ):
+    def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", aesKey="", kerberos=None, logger=None):
         self.__username = username
         self.__password = password
         self.__domain = domain

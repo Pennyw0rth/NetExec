@@ -42,7 +42,7 @@ class NXCModule:
         command = "powershell -c 'C:\\windows\\system32\\inetsrv\\appcmd.exe list apppool /@t:*'"
         context.log.info("Checking For Hidden Credentials With Appcmd.exe")
         output = connection.execute(command, True)
-        
+
         lines = output.splitlines()
         username = None
         password = None
@@ -58,12 +58,12 @@ class NXCModule:
             if "password:" in line:
                 password = line.split("password:")[1].strip().strip('"')
 
-            if apppool_name and username is not None and password is not None:  
+            if apppool_name and username is not None and password is not None:
                 current_credentials = (apppool_name, username, password)
 
                 if current_credentials not in credentials_set:
                     credentials_set.add(current_credentials)
-                    
+
                     if username:
                         context.log.success(f"Credentials Found for APPPOOL: {apppool_name}")
                         if password == "":

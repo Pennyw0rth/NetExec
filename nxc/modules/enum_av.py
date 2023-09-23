@@ -55,7 +55,8 @@ class NXCModule:
                 for service in product["services"]:
                     try:
                         lsa.LsarLookupNames(dce, policyHandle, service["name"])
-                        context.log.info(f"Detected installed service on {connection.host}: {product['name']} {service['description']}")
+                        context.log.info(
+                            f"Detected installed service on {connection.host}: {product['name']} {service['description']}")
                         if product["name"] not in results:
                             results[product["name"]] = {"services": []}
                         results[product["name"]]["services"].append(service)
@@ -72,7 +73,8 @@ class NXCModule:
                 for i, product in enumerate(conf["products"]):
                     for pipe in product["pipes"]:
                         if pathlib.PurePath(fl).match(pipe["name"]):
-                            context.log.debug(f"{product['name']} running claim found on {connection.host} by existing pipe {fl} (likely processes: {pipe['processes']})")
+                            context.log.debug(
+                                f"{product['name']} running claim found on {connection.host} by existing pipe {fl} (likely processes: {pipe['processes']})")
                             if product["name"] not in results:
                                 results[product["name"]] = {}
                             if "pipes" not in results[product["name"]]:
@@ -116,16 +118,16 @@ class LsaLookupNames:
     authn = True
 
     def __init__(
-        self,
-        domain="",
-        username="",
-        password="",
-        remote_name="",
-        k=False,
-        kdcHost="",
-        lmhash="",
-        nthash="",
-        aesKey="",
+            self,
+            domain="",
+            username="",
+            password="",
+            remote_name="",
+            k=False,
+            kdcHost="",
+            lmhash="",
+            nthash="",
+            aesKey="",
     ):
         self.domain = domain
         self.username = username
@@ -157,7 +159,8 @@ class LsaLookupNames:
         # Authenticate if specified
         if self.authn and hasattr(rpc_transport, "set_credentials"):
             # This method exists only for selected protocol sequences.
-            rpc_transport.set_credentials(self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey)
+            rpc_transport.set_credentials(self.username, self.password, self.domain, self.lmhash, self.nthash,
+                                          self.aesKey)
 
         if self.doKerberos:
             rpc_transport.set_kerberos(self.doKerberos, kdcHost=self.dcHost)
@@ -357,17 +360,14 @@ conf = {
                     "name": "kavfsslp",
                     "description": "Kaspersky Security Exploit Prevention Service",
                 },
-                
                 {
                     "name": "KAVFS",
                     "description": "Kaspersky Security Service",
                 },
-
                 {
                     "name": "KAVFSGT",
                     "description": "Kaspersky Security Management Service",
                 },
-                
                 {
                     "name": "klnagent",
                     "description": "Kaspersky Security Center",
@@ -378,9 +378,8 @@ conf = {
                     "name": "Exploit_Blocker",
                     "processes": ["kavfswh.exe"],
                 },
-                
             ],
-        },  
+        },
         {
             "name": "Trend Micro Endpoint Security",
             "services": [
@@ -388,30 +387,26 @@ conf = {
                     "name": "Trend Micro Endpoint Basecamp",
                     "description": "Trend Micro Endpoint Basecamp",
                 },
-                
                 {
                     "name": "TMBMServer",
                     "description": "Trend Micro Unauthorized Change Prevention Service",
                 },
-
                 {
                     "name": "Trend Micro Web Service Communicator",
                     "description": "Trend Micro Web Service Communicator",
                 },
-                
                 {
                     "name": "TMiACAgentSvc",
                     "description": "Trend Micro Application Control Service (Agent)",
                 },
-                {                
+                {
                     "name": "CETASvc",
                     "description": "Trend Micro Cloud Endpoint Telemetry Service",
                 },
                 {
-                                
                     "name": "iVPAgent",
                     "description": "Trend Micro Vulnerability Protection Service (Agent)",
-                }                 
+                },
             ],
             "pipes": [
                 {
@@ -435,7 +430,7 @@ conf = {
                     "processes": ["Ntrtscan.exe"],
                 },
             ],
-        },  
+        },
         {
             "name": "Symantec Endpoint Protection",
             "services": [
@@ -455,40 +450,40 @@ conf = {
             "name": "Sophos Intercept X",
             "services": [
                 {
-                "name": "SntpService",
-                "description": "Sophos Network Threat Protection"
+                    "name": "SntpService",
+                    "description": "Sophos Network Threat Protection"
                 },
                 {
-                "name": "Sophos Endpoint Defense Service",
-                "description": "Sophos Endpoint Defense Service"
+                    "name": "Sophos Endpoint Defense Service",
+                    "description": "Sophos Endpoint Defense Service"
                 },
                 {
-                "name": "Sophos File Scanner Service",
-                "description": "Sophos File Scanner Service"
+                    "name": "Sophos File Scanner Service",
+                    "description": "Sophos File Scanner Service"
                 },
                 {
-                "name": "Sophos Health Service",
-                "description": "Sophos Health Service"
+                    "name": "Sophos Health Service",
+                    "description": "Sophos Health Service"
                 },
                 {
-                "name": "Sophos Live Query",
-                "description": "Sophos Live Query"
+                    "name": "Sophos Live Query",
+                    "description": "Sophos Live Query"
                 },
                 {
-                "name": "Sophos Managed Threat Response",
-                "description": "Sophos Managed Threat Response"
+                    "name": "Sophos Managed Threat Response",
+                    "description": "Sophos Managed Threat Response"
                 },
                 {
-                "name": "Sophos MCS Agent",
-                "description": "Sophos MCS Agent"
+                    "name": "Sophos MCS Agent",
+                    "description": "Sophos MCS Agent"
                 },
                 {
-                "name": "Sophos MCS Client",
-                "description": "Sophos MCS Client"
+                    "name": "Sophos MCS Client",
+                    "description": "Sophos MCS Client"
                 },
                 {
-                "name": "Sophos System Protection Service",
-                "description": "Sophos System Protection Service"
+                    "name": "Sophos System Protection Service",
+                    "description": "Sophos System Protection Service"
                 }
             ],
             "pipes": [
@@ -528,10 +523,7 @@ conf = {
                     "name": "PandaAetherAgent",
                     "description": "Panda Endpoint Agent",
                 },
-                {
-                    "name": "PSUAService", 
-                    "description": "Panda Product Service"
-                },
+                {"name": "PSUAService", "description": "Panda Product Service"},
                 {
                     "name": "NanoServiceMain",
                     "description": "Panda Cloud Antivirus Service",
@@ -547,7 +539,6 @@ conf = {
                     "processes": ["PSUAService.exe"],
                 },
             ],
-        }
-        
+        },
     ]
 }

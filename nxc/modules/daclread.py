@@ -281,11 +281,7 @@ class NXCModule:
                         searchBase=self.baseDN,
                         searchFilter="(sAMAccountName=%s)" % escape_filter_chars(_lookedup_principal),
                         attributes=["objectSid"],
-                    )[0][
-                        1
-                    ][0][
-                        1
-                    ][0]
+                    )[0][1][0][1][0]
                 )
                 context.log.highlight("Found principal SID to filter on: %s" % self.principal_sid)
             except Exception:
@@ -414,18 +410,12 @@ class NXCModule:
                     searchBase=self.baseDN,
                     searchFilter="(objectSid=%s)" % sid,
                     attributes=["sAMAccountName"],
-                )[
-                    0
-                ][0]
+                )[0][0]
                 samname = self.ldap_session.search(
                     searchBase=self.baseDN,
                     searchFilter="(objectSid=%s)" % sid,
                     attributes=["sAMAccountName"],
-                )[0][
-                    1
-                ][0][
-                    1
-                ][0]
+                )[0][1][0][1][0]
                 return samname
             except Exception:
                 context.log.debug("SID not found in LDAP: %s" % sid)

@@ -457,7 +457,6 @@ class database:
         return results
 
     def get_credential(self, cred_type, domain, username, password):
-
         q = select(self.UsersTable).filter(
             self.UsersTable.c.domain == domain,
             self.UsersTable.c.username == username,
@@ -899,11 +898,11 @@ class database:
     def get_checks(self):
         q = select(self.ConfChecksTable)
         return self.conn.execute(q).all()
-        
+
     def get_check_results(self):
         q = select(self.ConfChecksResultsTable)
         return self.conn.execute(q).all()
-        
+
     def insert_data(self, table, select_results=[], **new_row):
         """
         Insert a new row in the given table.
@@ -919,20 +918,20 @@ class database:
         else:
             for row in select_results:
                 row_data = row._asdict()
-                for column,value in new_row.items():
+                for column, value in new_row.items():
                     row_data[column] = value
 
                 # Only add data to be updated if it has changed
                 if row_data not in results:
                     results.append(row_data)
-                    updated_ids.append(row_data['id'])
+                    updated_ids.append(row_data["id"])
 
-        nxc_logger.debug(f'Update data: {results}')
+        nxc_logger.debug(f"Update data: {results}")
         # TODO: find a way to abstract this away to a single Upsert call
-        q = Insert(table) # .returning(table.c.id)
-        update_column = {col.name: col for col in q.excluded if col.name not in 'id'}
+        q = Insert(table)  # .returning(table.c.id)
+        update_column = {col.name: col for col in q.excluded if col.name not in "id"}
         q = q.on_conflict_do_update(index_elements=table.primary_key, set_=update_column)
-        self.conn.execute(q, results) # .scalar()
+        self.conn.execute(q, results)  # .scalar()
         # we only return updated IDs for now - when RETURNING clause is allowed we can return inserted
         return updated_ids
 
@@ -943,7 +942,7 @@ class database:
         q = select(self.ConfChecksTable).filter(self.ConfChecksTable.c.name == name)
         select_results = self.conn.execute(q).all()
         context = locals()
-        new_row = dict(((column, context[column]) for column in ('name', 'description')))
+        new_row = dict(((column, context[column]) for column in ("name", "description")))
         updated_ids = self.insert_data(self.ConfChecksTable, select_results, **new_row)
 
         if updated_ids:
@@ -957,7 +956,7 @@ class database:
         q = select(self.ConfChecksResultsTable).filter(self.ConfChecksResultsTable.c.host_id == host_id, self.ConfChecksResultsTable.c.check_id == check_id)
         select_results = self.conn.execute(q).all()
         context = locals()
-        new_row = dict(((column, context[column]) for column in ('host_id', 'check_id', 'secure', 'reasons')))
+        new_row = dict(((column, context[column]) for column in ("host_id", "check_id", "secure", "reasons")))
         updated_ids = self.insert_data(self.ConfChecksResultsTable, select_results, **new_row)
 
         if updated_ids:

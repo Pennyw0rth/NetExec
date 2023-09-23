@@ -31,6 +31,7 @@ from sys import platform
 # Increase file_limit to prevent error "Too many open files"
 if platform != "win32":
     import resource
+
     file_limit = list(resource.getrlimit(resource.RLIMIT_NOFILE))
     if file_limit[1] > 10000:
         file_limit[0] = 10000

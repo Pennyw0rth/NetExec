@@ -5,9 +5,10 @@ from impacket.ldap import ldapasn1 as ldapasn1_impacket
 
 class NXCModule:
     """
-        Extract all Trust Relationships, Trusting Direction, and Trust Transitivity
-        Module by Brandon Fisher @shad0wcntr0ller
+    Extract all Trust Relationships, Trusting Direction, and Trust Transitivity
+    Module by Brandon Fisher @shad0wcntr0ller
     """
+
     name = "enum_trusts"
     description = "Extract all Trust Relationships, Trusting Direction, and Trust Transitivity"
     supported_protocols = ["ldap"]
@@ -23,22 +24,17 @@ class NXCModule:
         attributes = ["flatName", "trustPartner", "trustDirection", "trustAttributes"]
 
         context.log.debug(f"Search Filter={search_filter}")
-        resp = connection.ldapConnection.search(
-            searchBase=domain_dn,
-            searchFilter=search_filter,
-            attributes=attributes,
-            sizeLimit=0
-        )
+        resp = connection.ldapConnection.search(searchBase=domain_dn, searchFilter=search_filter, attributes=attributes, sizeLimit=0)
 
         trusts = []
         context.log.debug(f"Total of records returned {len(resp)}")
         for item in resp:
             if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
                 continue
-            flat_name = ''
-            trust_partner = ''
-            trust_direction = ''
-            trust_transitive = [] 
+            flat_name = ""
+            trust_partner = ""
+            trust_direction = ""
+            trust_transitive = []
             try:
                 for attribute in item["attributes"]:
                     if str(attribute["type"]) == "flatName":
@@ -92,4 +88,3 @@ class NXCModule:
             context.log.display("No trust relationships found")
 
         return True
-

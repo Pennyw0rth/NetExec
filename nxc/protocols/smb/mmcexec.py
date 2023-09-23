@@ -103,13 +103,13 @@ class MMCEXEC:
         except:
             # Make it force break function
             self.__dcom.disconnect()
-        flag, self.__stringBinding =  dcom_FirewallChecker(iInterface, self.__timeout)
+        flag, self.__stringBinding = dcom_FirewallChecker(iInterface, self.__timeout)
         if not flag or not self.__stringBinding:
             error_msg = f'MMCEXEC: Dcom initialization failed on connection with stringbinding: "{self.__stringBinding}", please increase the timeout with the option "--dcom-timeout". If it\'s still failing maybe something is blocking the RPC connection, try another exec method'
-            
+
             if not self.__stringBinding:
                 error_msg = "MMCEXEC: Dcom initialization failed: can't get target stringbinding, maybe cause by IPv6 or any other issues, please check your target again"
-            
+
             self.logger.fail(error_msg) if not flag else self.logger.debug(error_msg)
             # Make it force break function
             self.__dcom.disconnect()
@@ -254,7 +254,7 @@ class MMCEXEC:
                 if tries >= self.__tries:
                     self.logger.fail("MMCEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
                     break
-                if str(e).find("STATUS_BAD_NETWORK_NAME") >0 :
+                if str(e).find("STATUS_BAD_NETWORK_NAME") > 0:
                     self.logger.fail(f"MMCEXEC: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
                     break
                 if str(e).find("STATUS_SHARING_VIOLATION") >= 0 or str(e).find("STATUS_OBJECT_NAME_NOT_FOUND") >= 0:
@@ -263,7 +263,7 @@ class MMCEXEC:
                     tries += 1
                 else:
                     self.logger.debug(str(e))
-        
+
         if self.__outputBuffer:
             self.logger.debug(f"Deleting file {self.__share}\\{self.__output}")
             self.__smbconnection.deleteFile(self.__share, self.__output)

@@ -526,12 +526,11 @@ class NXCModule:
         if any("STATS" in key for key in module_options.keys()):
             self.stats_flag = False
         self.exclude_exts = get_list_from_option(module_options.get("EXCLUDE_EXTS", "ico,lnk"))
-        self.exclude_exts = [d.lower() for d in self.exclude_exts] # force case-insensitive
+        self.exclude_exts = [d.lower() for d in self.exclude_exts]  # force case-insensitive
         self.exclude_filter = get_list_from_option(module_options.get("EXCLUDE_FILTER", "print$,ipc$"))
-        self.exclude_filter = [d.lower() for d in self.exclude_filter] # force case-insensitive
+        self.exclude_filter = [d.lower() for d in self.exclude_filter]  # force case-insensitive
         self.max_file_size = int(module_options.get("MAX_FILE_SIZE", 50 * 1024))
         self.output_folder = module_options.get("OUTPUT_FOLDER", os.path.join("/tmp", "nxc_spider_plus"))
-
 
     def on_login(self, context, connection):
         context.log.display("Started module spidering_plus with the following options:")

@@ -63,10 +63,12 @@ class NXCModule:
         except DCERPCException:
             self.context.log.fail("Error while connecting to host: DCERPCException, " "which means this is probably not a DC!")
 
+
 def fail(msg):
     nxc_logger.debug(msg)
     nxc_logger.fail("This might have been caused by invalid arguments or network issues.")
     sys.exit(2)
+
 
 def try_zero_authenticate(rpc_con, dc_handle, dc_ip, target_computer):
     # Connect to the DC's Netlogon service.

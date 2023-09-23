@@ -224,13 +224,7 @@ class LAPSv2Extract:
             string_binding = hept_map(destHost=self.domain, remoteIf=MSRPC_UUID_GKDI, protocol="ncacn_ip_tcp")
             rpc_transport = transport.DCERPCTransportFactory(string_binding)
             if hasattr(rpc_transport, "set_credentials"):
-                rpc_transport.set_credentials(
-                    username=self.username,
-                    password=self.password,
-                    domain=self.domain,
-                    lmhash=self.lmhash,
-                    nthash=self.nthash
-                )
+                rpc_transport.set_credentials(username=self.username, password=self.password, domain=self.domain, lmhash=self.lmhash, nthash=self.nthash)
             if self.do_kerberos:
                 self.logger.info("Connecting using kerberos")
                 rpc_transport.set_kerberos(self.do_kerberos, kdcHost=self.kdcHost)
@@ -253,17 +247,10 @@ class LAPSv2Extract:
             self.logger.info("Successfully bound")
             self.logger.info("Calling MS-GKDI GetKey")
 
-            resp = GkdiGetKey(
-                dce,
-                target_sd=target_sd,
-                l0=key_id["L0Index"],
-                l1=key_id["L1Index"],
-                l2=key_id["L2Index"],
-                root_key_id=key_id["RootKeyId"]
-            )
+            resp = GkdiGetKey(dce, target_sd=target_sd, l0=key_id["L0Index"], l1=key_id["L1Index"], l2=key_id["L2Index"], root_key_id=key_id["RootKeyId"])
             self.logger.info("Decrypting password")
             # Unpack GroupKeyEnvelope
-            gke = GroupKeyEnvelope(b''.join(resp["pbbOut"]))
+            gke = GroupKeyEnvelope(b"".join(resp["pbbOut"]))
             kds_cache[gke["RootKeyId"]] = gke
 
         kek = compute_kek(gke, key_id)

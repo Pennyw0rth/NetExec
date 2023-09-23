@@ -129,6 +129,7 @@ def resolve_collection_methods(methods):
             nxc_logger.error("Invalid collection method specified: %s", method)
             return False
 
+
 class ldap(connection):
     def __init__(self, args, db, host):
         self.domain = None
@@ -306,8 +307,8 @@ class ldap(connection):
         else:
             self.logger.extra["protocol"] = "SMB" if not self.no_ntlm else "LDAP"
             self.logger.extra["port"] = "445" if not self.no_ntlm else "389"
-            signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=['bold']) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=['bold'])
-            smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=['bold']) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=['bold'])
+            signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
+            smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
             self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({smbv1})")
             self.logger.extra["protocol"] = "LDAP"
             # self.logger.display(self.endpoint)
@@ -741,7 +742,7 @@ class ldap(connection):
         try:
             if self.ldapConnection:
                 self.logger.debug(f"Search Filter={searchFilter}")
-                
+
                 # Microsoft Active Directory set an hard limit of 1000 entries returned by any search
                 paged_search_control = ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000)
                 resp = self.ldapConnection.search(
@@ -818,18 +819,17 @@ class ldap(connection):
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
                     pass
             return
-    
+
     def dc_list(self):
-        
         # Building the search filter
         search_filter = "(&(objectCategory=computer)(primaryGroupId=516))"
         attributes = ["dNSHostName"]
         resp = self.search(search_filter, attributes, 0)
-        for item in resp:              
+        for item in resp:
             if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
                 continue
             name = ""
-            try:           	    
+            try:
                 for attribute in item["attributes"]:
                     if str(attribute["type"]) == "dNSHostName":
                         name = str(attribute["vals"][0])

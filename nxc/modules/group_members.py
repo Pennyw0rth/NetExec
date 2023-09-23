@@ -5,10 +5,10 @@ from impacket.ldap import ldapasn1 as ldapasn1_impacket
 
 class NXCModule:
     """
-      Module by CyberCelt: @Cyb3rC3lt
+    Module by CyberCelt: @Cyb3rC3lt
 
-      Initial module:
-        https://github.com/Cyb3rC3lt/CrackMapExec-Modules
+    Initial module:
+      https://github.com/Cyb3rC3lt/CrackMapExec-Modules
     """
 
     name = "group-mem"
@@ -26,7 +26,7 @@ class NXCModule:
         Usage: nxc ldap $DC-IP -u Username -p Password -M group-mem -o GROUP="domain admins"
                nxc ldap $DC-IP -u Username -p Password -M group-mem -o GROUP="domain controllers"
         """
-        self.GROUP = ''
+        self.GROUP = ""
 
         if "GROUP" in module_options:
             self.GROUP = module_options["GROUP"]
@@ -39,34 +39,34 @@ class NXCModule:
         search_filter = "(&(objectCategory=group)(cn=" + self.GROUP + "))"
         attribute = "objectSid"
 
-        search_result = doSearch(self, context, connection, search_filter, attribute)
+        search_result = do_search(self, context, connection, search_filter, attribute)
         # If no SID for the Group is returned exit the program
         if search_result is None:
             context.log.success('Unable to find any members of the "' + self.GROUP + '" group')
             return True
 
         # Convert the binary SID to a primaryGroupID string to be used further
-        sidString = connection.sid_to_str(search_result).split("-")
-        self.primaryGroupID = sidString[-1]
+        sid_string = connection.sid_to_str(search_result).split("-")
+        self.primaryGroupID = sid_string[-1]
 
         # Look up the groups DN
         search_filter = "(&(objectCategory=group)(cn=" + self.GROUP + "))"
         attribute = "distinguishedName"
-        distinguished_name = (doSearch(self, context, connection, search_filter, attribute)).decode("utf-8")
+        distinguished_name = (do_search(self, context, connection, search_filter, attribute)).decode("utf-8")
 
         # Carry out the search
-        search_filter = "(|(memberOf="+distinguished_name+")(primaryGroupID="+self.primaryGroupID+"))"
+        search_filter = "(|(memberOf=" + distinguished_name + ")(primaryGroupID=" + self.primaryGroupID + "))"
         attribute = "sAMAccountName"
-        search_result = doSearch(self, context, connection, search_filter, attribute)
+        search_result = do_search(self, context, connection, search_filter, attribute)
 
         if len(self.answers) > 0:
-            context.log.success('Found the following members of the ' + self.GROUP + ' group:')
+            context.log.success("Found the following members of the " + self.GROUP + " group:")
             for answer in self.answers:
-                context.log.highlight(u'{}'.format(answer[0]))
+                context.log.highlight("{}".format(answer[0]))
 
 
 # Carry out an LDAP search for the Group with the supplied Group name
-def doSearch(self,context, connection,searchFilter,attributeName):
+def do_search(self, context, connection, searchFilter, attributeName):
     try:
         context.log.debug(f"Search Filter={searchFilter}")
         resp = connection.ldapConnection.search(
@@ -78,18 +78,18 @@ def doSearch(self,context, connection,searchFilter,attributeName):
         for item in resp:
             if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
                 continue
-            attribute_value = ''
+            attribute_value = ""
             try:
-                for attribute in item['attributes']:
-                    if str(attribute['type']) == attributeName:
+                for attribute in item["attributes"]:
+                    if str(attribute["type"]) == attributeName:
                         if attributeName == "objectSid":
-                             attribute_value = bytes(attribute['vals'][0])
-                             return attribute_value
+                            attribute_value = bytes(attribute["vals"][0])
+                            return attribute_value
                         elif attributeName == "distinguishedName":
-                             attribute_value = bytes(attribute['vals'][0])
-                             return attribute_value
+                            attribute_value = bytes(attribute["vals"][0])
+                            return attribute_value
                         else:
-                             attribute_value = str(attribute['vals'][0])
+                            attribute_value = str(attribute["vals"][0])
                     if attribute_value is not None:
                         self.answers.append([attribute_value])
             except Exception as e:
