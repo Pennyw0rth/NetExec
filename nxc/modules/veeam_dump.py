@@ -102,9 +102,6 @@ class NXCModule:
             except Exception as e:
                 context.log.fail(f"UNEXPECTED ERROR: {e}")
                 context.log.debug(traceback.format_exc())
-
-        except NotImplementedError:
-            pass
         except Exception as e:
             context.log.fail(f"UNEXPECTED ERROR: {e}")
             context.log.debug(traceback.format_exc())
