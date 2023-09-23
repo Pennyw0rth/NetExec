@@ -10,24 +10,7 @@ from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 
 
 class SMBEXEC:
-    def __init__(
-        self,
-        host,
-        share_name,
-        smbconnection,
-        protocol,
-        username="",
-        password="",
-        domain="",
-        doKerberos=False,
-        aesKey=None,
-        kdcHost=None,
-        hashes=None,
-        share=None,
-        port=445,
-        logger=None,
-        tries=None
-    ):
+    def __init__(self, host, share_name, smbconnection, protocol, username="", password="", domain="", doKerberos=False, aesKey=None, kdcHost=None, hashes=None, share=None, port=445, logger=None, tries=None):
         self.__host = host
         self.__share_name = "C$"
         self.__port = port
@@ -127,7 +110,7 @@ class SMBEXEC:
         self.logger.debug("Command to execute: " + command)
 
         self.logger.debug(f"Remote service {self.__serviceName} created.")
-        
+
         try:
             resp = scmr.hRCreateServiceW(
                 self.__scmr,
@@ -143,7 +126,7 @@ class SMBEXEC:
                 self.logger.fail("SMBEXEC: Create services got blocked.")
             else:
                 self.logger.fail(str(e))
-            
+
             return self.__outputBuffer
 
         try:
@@ -181,7 +164,7 @@ class SMBEXEC:
                     tries += 1
                 else:
                     self.logger.debug(str(e))
-        
+
         if self.__outputBuffer:
             self.logger.debug(f"Deleting file {self.__share}\\{self.__output}")
             self.__smbconnection.deleteFile(self.__share, self.__output)

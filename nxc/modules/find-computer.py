@@ -8,12 +8,12 @@ from impacket.ldap.ldapasn1 import SearchResultEntry
 
 class NXCModule:
     """
-      Module by CyberCelt: @Cyb3rC3lt
+    Module by CyberCelt: @Cyb3rC3lt
 
-      Initial module:
-        https://github.com/Cyb3rC3lt/CrackMapExec-Modules
+    Initial module:
+      https://github.com/Cyb3rC3lt/CrackMapExec-Modules
     """
-    
+
     name = "find-computer"
     description = "Finds computers in the domain via the provided text"
     supported_protocols = ["ldap"]
@@ -41,11 +41,7 @@ class NXCModule:
 
         try:
             context.log.debug(f"Search Filter={search_filter}")
-            resp = connection.ldapConnection.search(
-                searchFilter=search_filter,
-                attributes=["dNSHostName", "operatingSystem"],
-                sizeLimit=0
-            )
+            resp = connection.ldapConnection.search(searchFilter=search_filter, attributes=["dNSHostName", "operatingSystem"], sizeLimit=0)
         except LDAPSearchError as e:
             if e.getErrorString().find("sizeLimitExceeded") >= 0:
                 context.log.debug("sizeLimitExceeded exception caught, giving up and processing the data received")
@@ -69,7 +65,7 @@ class NXCModule:
                     elif str(attribute["type"]) == "operatingSystem":
                         operating_system = attribute["vals"][0]
                 if dns_host_name != "" and operating_system != "":
-                    answers.append([dns_host_name,operating_system])
+                    answers.append([dns_host_name, operating_system])
             except Exception as e:
                 context.log.debug("Exception:", exc_info=True)
                 context.log.debug(f"Skipping item, cannot process due to error {e}")
@@ -79,10 +75,10 @@ class NXCModule:
             for answer in answers:
                 try:
                     ip = socket.gethostbyname(answer[0])
-                    context.log.highlight(f'{answer[0]} ({answer[1]}) ({ip})')
+                    context.log.highlight(f"{answer[0]} ({answer[1]}) ({ip})")
                     context.log.debug("IP found")
                 except socket.gaierror:
-                    context.log.debug('Missing IP')
-                    context.log.highlight(f'{answer[0]} ({answer[1]}) (No IP Found)')
+                    context.log.debug("Missing IP")
+                    context.log.highlight(f"{answer[0]} ({answer[1]}) (No IP Found)")
         else:
             context.log.success(f"Unable to find any computers with the text {self.TEXT}")

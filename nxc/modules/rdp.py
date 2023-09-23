@@ -44,12 +44,12 @@ class NXCModule:
             exit(1)
 
         self.action = module_options["ACTION"].lower()
-        
+
         if "METHOD" not in module_options:
             self.method = "wmi"
         else:
-            self.method = module_options['METHOD'].lower()
-        
+            self.method = module_options["METHOD"].lower()
+
         if context.protocol != "smb" and self.method == "smb":
             context.log.fail(f"Protocol: {context.protocol} not support this method")
             exit(1)
@@ -58,11 +58,11 @@ class NXCModule:
             self.dcom_timeout = 10
         else:
             try:
-                self.dcom_timeout = int(module_options['DCOM-TIMEOUT'])
+                self.dcom_timeout = int(module_options["DCOM-TIMEOUT"])
             except Exception:
                 context.log.fail("Wrong DCOM timeout value!")
                 exit(1)
-        
+
         if "OLD" not in module_options:
             self.oldSystem = False
         else:
@@ -85,7 +85,7 @@ class NXCModule:
 
             wmi_rdp = RdpWmi(context, connection, self.dcom_timeout)
 
-            if hasattr(wmi_rdp, '_rdp_WMI__iWbemLevel1Login'):
+            if hasattr(wmi_rdp, "_rdp_WMI__iWbemLevel1Login"):
                 if "ram" in self.action:
                     # Nt version under 6 not support RAM.
                     try:
@@ -144,7 +144,7 @@ class RdpSmb:
                 self.logger.success("Enable RDP via SMB(ncacn_np) successfully")
             elif int(data) == 1:
                 self.logger.success("Disable RDP via SMB(ncacn_np) successfully")
-            
+
             self.firewall_cmd(action)
 
             if action == "enable":
@@ -199,7 +199,7 @@ class RdpSmb:
             key_handle = ans["phkResult"]
 
             rtype, data = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, key_handle, "PortNumber")
-            
+
             self.logger.success(f"RDP Port: {str(data)}")
 
     # https://github.com/rapid7/metasploit-framework/blob/master/modules/post/windows/manage/enable_rdp.rb
@@ -218,15 +218,15 @@ class RdpWmi:
         self.logger = context.log
         self.__currentprotocol = context.protocol
         # From dfscoerce.py
-        self.__username=connection.username
-        self.__password=connection.password
-        self.__domain=connection.domain
-        self.__lmhash=connection.lmhash
-        self.__nthash=connection.nthash
-        self.__target=connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
-        self.__doKerberos=connection.kerberos
-        self.__kdcHost=connection.kdcHost
-        self.__aesKey=connection.aesKey
+        self.__username = connection.username
+        self.__password = connection.password
+        self.__domain = connection.domain
+        self.__lmhash = connection.lmhash
+        self.__nthash = connection.nthash
+        self.__target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
+        self.__doKerberos = connection.kerberos
+        self.__kdcHost = connection.kdcHost
+        self.__aesKey = connection.aesKey
         self.__timeout = timeout
 
         try:
@@ -245,13 +245,13 @@ class RdpWmi:
 
             i_interface = self.__dcom.CoCreateInstanceEx(wmi.CLSID_WbemLevel1Login, wmi.IID_IWbemLevel1Login)
             if self.__currentprotocol == "smb":
-                flag, self.__stringBinding =  dcom_FirewallChecker(i_interface, self.__timeout)
+                flag, self.__stringBinding = dcom_FirewallChecker(i_interface, self.__timeout)
                 if not flag or not self.__stringBinding:
                     error_msg = f'RDP-WMI: Dcom initialization failed on connection with stringbinding: "{self.__stringBinding}", please increase the timeout with the module option "DCOM-TIMEOUT=10". If it\'s still failing maybe something is blocking the RPC connection, please try to use "-o" with "METHOD=smb"'
-                    
+
                     if not self.__stringBinding:
                         error_msg = "RDP-WMI: Dcom initialization failed: can't get target stringbinding, maybe cause by IPv6 or any other issues, please check your target again"
-                    
+
                     self.logger.fail(error_msg) if not flag else self.logger.debug(error_msg)
                     # Make it force break function
                     self.__dcom.disconnect()
@@ -265,15 +265,11 @@ class RdpWmi:
         if old is False:
             # According to this document: https://learn.microsoft.com/en-us/windows/win32/termserv/win32-tslogonsetting
             # Authentication level must set to RPC_C_AUTHN_LEVEL_PKT_PRIVACY when accessing namespace "//./root/cimv2/TerminalServices"
-            i_wbem_services = self.__iWbemLevel1Login.NTLMLogin(
-                "//./root/cimv2/TerminalServices",
-                NULL,
-                NULL
-            )
+            i_wbem_services = self.__iWbemLevel1Login.NTLMLogin("//./root/cimv2/TerminalServices", NULL, NULL)
             i_wbem_services.get_dce_rpc().set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
             self.__iWbemLevel1Login.RemRelease()
             i_enum_wbem_class_object = i_wbem_services.ExecQuery("SELECT * FROM Win32_TerminalServiceSetting")
-            i_wbem_class_object = i_enum_wbem_class_object.Next(0xffffffff, 1)[0]
+            i_wbem_class_object = i_enum_wbem_class_object.Next(0xFFFFFFFF, 1)[0]
             if action == "enable":
                 self.logger.info("Enabled RDP services and setting up firewall.")
                 i_wbem_class_object.SetAllowTSConnections(1, 1)
@@ -281,30 +277,30 @@ class RdpWmi:
                 self.logger.info("Disabled RDP services and setting up firewall.")
                 i_wbem_class_object.SetAllowTSConnections(0, 0)
         else:
-            i_wbem_services = self.__iWbemLevel1Login.NTLMLogin('//./root/cimv2', NULL, NULL)
+            i_wbem_services = self.__iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
             self.__iWbemLevel1Login.RemRelease()
             i_enum_wbem_class_object = i_wbem_services.ExecQuery("SELECT * FROM Win32_TerminalServiceSetting")
-            i_wbem_class_object = i_enum_wbem_class_object.Next(0xffffffff, 1)[0]
+            i_wbem_class_object = i_enum_wbem_class_object.Next(0xFFFFFFFF, 1)[0]
             if action == "enable":
                 self.logger.info("Enabling RDP services (old system not support setting up firewall)")
                 i_wbem_class_object.SetAllowTSConnections(1)
             elif action == "disable":
                 self.logger.info("Disabling RDP services (old system not support setting up firewall)")
                 i_wbem_class_object.SetAllowTSConnections(0)
-        
+
         self.query_rdp_result(old)
 
-        if action == 'enable':
+        if action == "enable":
             self.query_rdp_port()
         # Need to create new iWbemServices interface in order to flush results
-        
+
     def query_rdp_result(self, old=False):
         if old is False:
             i_wbem_services = self.__iWbemLevel1Login.NTLMLogin("//./root/cimv2/TerminalServices", NULL, NULL)
             i_wbem_services.get_dce_rpc().set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
             self.__iWbemLevel1Login.RemRelease()
             i_enum_wbem_class_object = i_wbem_services.ExecQuery("SELECT * FROM Win32_TerminalServiceSetting")
-            i_wbem_class_object = i_enum_wbem_class_object.Next(0xffffffff, 1)[0]
+            i_wbem_class_object = i_enum_wbem_class_object.Next(0xFFFFFFFF, 1)[0]
             result = dict(i_wbem_class_object.getProperties())
             result = result["AllowTSConnections"]["value"]
             if result == 0:
@@ -315,7 +311,7 @@ class RdpWmi:
             i_wbem_services = self.__iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
             self.__iWbemLevel1Login.RemRelease()
             i_enum_wbem_class_object = i_wbem_services.ExecQuery("SELECT * FROM Win32_TerminalServiceSetting")
-            i_wbem_class_object = i_enum_wbem_class_object.Next(0xffffffff, 1)[0]
+            i_wbem_class_object = i_enum_wbem_class_object.Next(0xFFFFFFFF, 1)[0]
             result = dict(i_wbem_class_object.getProperties())
             result = result["AllowTSConnections"]["value"]
             if result == 0:
@@ -327,11 +323,7 @@ class RdpWmi:
         i_wbem_services = self.__iWbemLevel1Login.NTLMLogin("//./root/DEFAULT", NULL, NULL)
         self.__iWbemLevel1Login.RemRelease()
         std_reg_prov, resp = i_wbem_services.GetObject("StdRegProv")
-        out = std_reg_prov.GetDWORDValue(
-            2147483650,
-            "SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp",
-            "PortNumber"
-        )
+        out = std_reg_prov.GetDWORDValue(2147483650, "SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp", "PortNumber")
         self.logger.success(f"RDP Port: {str(out.uValue)}")
 
     # Nt version under 6 not support RAM.
@@ -341,7 +333,7 @@ class RdpWmi:
         std_reg_prov, resp = i_wbem_services.GetObject("StdRegProv")
         if action == "enable-ram":
             self.logger.info("Enabling Restricted Admin Mode.")
-            std_reg_prov.SetDWORDValue(2147483650, 'System\\CurrentControlSet\\Control\\Lsa', "DisableRestrictedAdmin", 0)
+            std_reg_prov.SetDWORDValue(2147483650, "System\\CurrentControlSet\\Control\\Lsa", "DisableRestrictedAdmin", 0)
         elif action == "disable-ram":
             self.logger.info("Disabling Restricted Admin Mode (Clear).")
             std_reg_prov.DeleteValue(2147483650, "System\\CurrentControlSet\\Control\\Lsa", "DisableRestrictedAdmin")

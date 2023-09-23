@@ -162,10 +162,7 @@ class NXCModule:
         try:
             context.log.success("Dumping the NTDS, this could take a while so go grab a redbull...")
             NTDS.dump()
-            context.log.success(
-                f"Dumped {highlight(add_ntds_hash.ntds_hashes)} NTDS hashes to {connection.output_filename}.ntds "
-                f"of which {highlight(add_ntds_hash.added_to_db)} were added to the database"
-            )
+            context.log.success(f"Dumped {highlight(add_ntds_hash.ntds_hashes)} NTDS hashes to {connection.output_filename}.ntds " f"of which {highlight(add_ntds_hash.added_to_db)} were added to the database")
 
             context.log.display("To extract only enabled accounts from the output file, run the following command: ")
             context.log.display(f"grep -iv disabled {connection.output_filename}.ntds | cut -d ':' -f1")
@@ -176,10 +173,6 @@ class NXCModule:
 
         if self.no_delete:
             context.log.display(f"Raw NTDS dump copied to {self.dir_result}, parse it with:")
-            context.log.display(
-                f'secretsdump.py -system {self.dir_result}/registry/SYSTEM '
-                f'-security {self.dir_result}/registry/SECURITY '
-                f'-ntds "{self.dir_result}/Active Directory/ntds.dit" LOCAL'
-            )
+            context.log.display(f"secretsdump.py -system {self.dir_result}/registry/SYSTEM " f"-security {self.dir_result}/registry/SECURITY " f'-ntds "{self.dir_result}/Active Directory/ntds.dit" LOCAL')
         else:
             shutil.rmtree(self.dir_result)

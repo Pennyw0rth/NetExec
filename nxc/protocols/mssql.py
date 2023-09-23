@@ -389,7 +389,7 @@ class mssql(connection):
         remote_path = self.args.get_file[0]
         download_path = self.args.get_file[1]
         self.logger.display(f'Copying "{remote_path}" to "{download_path}"')
-        
+
         try:
             exec_method = MSSQLEXEC(self.conn)
             exec_method.get_file(self.args.get_file[0], self.args.get_file[1])

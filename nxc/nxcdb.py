@@ -172,7 +172,7 @@ class DatabaseNavigator(cmd.Cmd):
                     if cred[4] == "hash":
                         usernames.append(cred[2])
                         passwords.append(cred[3])
-                output_list = [':'.join(combination) for combination in zip(usernames, passwords)]
+                output_list = [":".join(combination) for combination in zip(usernames, passwords)]
                 write_list(filename, output_list)
             else:
                 print(f"[-] No such export option: {line[1]}")
@@ -243,9 +243,9 @@ class DatabaseNavigator(cmd.Cmd):
                 formatted_shares = []
                 for share in shares:
                     user = self.db.get_users(share[2])[0]
-                    if self.db.get_hosts(share[1]): 
-                        share_host = self.db.get_hosts(share[1])[0][2] 
-                    else: 
+                    if self.db.get_hosts(share[1]):
+                        share_host = self.db.get_hosts(share[1])[0][2]
+                    else:
                         share_host = "ERROR"
 
                     entry = (
@@ -352,15 +352,7 @@ class DatabaseNavigator(cmd.Cmd):
                 "check",
                 "status",
             )
-            csv_header_detailed = (
-                "id",
-                "ip",
-                "hostname",
-                "check",
-                "description",
-                "status",
-                "reasons"
-            )
+            csv_header_detailed = ("id", "ip", "hostname", "check", "description", "status", "reasons")
             filename = line[2]
             host_mapping = {}
             check_mapping = {}
@@ -370,12 +362,12 @@ class DatabaseNavigator(cmd.Cmd):
             check_results = self.db.get_check_results()
             rows = []
 
-            for result_id,hostid,checkid,secure,reasons in check_results:
+            for result_id, hostid, checkid, secure, reasons in check_results:
                 row = [result_id]
                 if hostid in host_mapping:
                     row.extend(host_mapping[hostid])
                 else:
-                    for host_id,ip,hostname,_,_,_,_,_,_,_,_ in hosts:
+                    for host_id, ip, hostname, _, _, _, _, _, _, _, _ in hosts:
                         if host_id == hostid:
                             row.extend([ip, hostname])
                             host_mapping[hostid] = [ip, hostname]
@@ -389,7 +381,7 @@ class DatabaseNavigator(cmd.Cmd):
                             row.extend([name, description])
                             check_mapping[checkid] = [name, description]
                             break
-                row.append('OK' if secure else 'KO')
+                row.append("OK" if secure else "KO")
                 row.append(reasons)
                 rows.append(row)
 

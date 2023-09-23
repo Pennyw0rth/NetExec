@@ -152,9 +152,7 @@ else
     IEX "$functions"
     Command-ToExecute
 }}
-""".format(
-                command=amsi_bypass + ps_command
-            )
+""".format(command=amsi_bypass + ps_command)
         )
 
     else:

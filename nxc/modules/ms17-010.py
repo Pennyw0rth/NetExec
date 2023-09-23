@@ -33,18 +33,18 @@ class SmbHeader(Structure):
     _fields_ = [
         ("server_component", c_uint32),
         ("smb_command", c_uint8),
-        ("error_class", c_uint8),  
-        ("reserved1", c_uint8),  
-        ("error_code", c_uint16),  
-        ("flags", c_uint8),  
-        ("flags2", c_uint16),  
-        ("process_id_high", c_uint16),  
-        ("signature", c_uint64),  
-        ("reserved2", c_uint16),  
-        ("tree_id", c_uint16),  
-        ("process_id", c_uint16),  
-        ("user_id", c_uint16),  
-        ("multiplex_id", c_uint16),  
+        ("error_class", c_uint8),
+        ("reserved1", c_uint8),
+        ("error_code", c_uint16),
+        ("flags", c_uint8),
+        ("flags2", c_uint16),
+        ("process_id_high", c_uint16),
+        ("signature", c_uint64),
+        ("reserved2", c_uint16),
+        ("tree_id", c_uint16),
+        ("process_id", c_uint16),
+        ("user_id", c_uint16),
+        ("multiplex_id", c_uint16),
     ]
 
     def __new__(cls, buffer=None):
@@ -99,7 +99,7 @@ def negotiate_proto_request():
     # Define the NetBIOS header
     netbios = [
         "\x00",  # Message Type
-        "\x00\x00\x54"  # Length
+        "\x00\x00\x54",  # Length
     ]
 
     # Define the SMB header
@@ -115,7 +115,7 @@ def negotiate_proto_request():
         "\x00\x00",  # Tree ID
         "\x2F\x4B",  # Process ID
         "\x00\x00",  # User ID
-        "\xC5\x5E"  # Multiplex ID
+        "\xC5\x5E",  # Multiplex ID
     ]
 
     # Define the negotiate_proto_request
@@ -129,7 +129,7 @@ def negotiate_proto_request():
         "\x02",  # Requested Dialects Count
         "\x4E\x54\x20\x4C\x41\x4E\x4D\x41\x4E\x20\x31\x2E\x30\x00",  # Requested Dialects
         "\x02",  # Requested Dialects Count
-        "\x4E\x54\x20\x4C\x4D\x20\x30\x2E\x31\x32\x00"  # Requested Dialects
+        "\x4E\x54\x20\x4C\x4D\x20\x30\x2E\x31\x32\x00",  # Requested Dialects
     ]
 
     # Return the generated SMB protocol payload
@@ -140,45 +140,45 @@ def session_setup_andx_request():
     """Generate session setup andx request."""
     # Define the NetBIOS bytes
     netbios = [
-        "\x00",   # length
-        "\x00\x00\x63"   # session service
+        "\x00",  # length
+        "\x00\x00\x63",  # session service
     ]
 
     # Define the SMB header bytes
     smb_header = [
-        "\xFF\x53\x4D\x42",   # server component
-        "\x73",   # command
-        "\x00\x00\x00\x00",   # NT status
-        "\x18",   # flags
-        "\x01\x20",   # flags2
-        "\x00\x00",   # PID high
-        "\x00\x00\x00\x00\x00\x00\x00\x00",   # signature
-        "\x00\x00",   # reserved
-        "\x00\x00",   # tid
-        "\x2F\x4B",   # pid
-        "\x00\x00",   # uid
-        "\xC5\x5E"   # mid
+        "\xFF\x53\x4D\x42",  # server component
+        "\x73",  # command
+        "\x00\x00\x00\x00",  # NT status
+        "\x18",  # flags
+        "\x01\x20",  # flags2
+        "\x00\x00",  # PID high
+        "\x00\x00\x00\x00\x00\x00\x00\x00",  # signature
+        "\x00\x00",  # reserved
+        "\x00\x00",  # tid
+        "\x2F\x4B",  # pid
+        "\x00\x00",  # uid
+        "\xC5\x5E",  # mid
     ]
 
     # Define the session setup andx request bytes
     session_setup_andx_request = [
-        "\x0D",   # word count
-        "\xFF",   # andx command
-        "\x00",   # reserved
-        "\x00\x00",   # andx offset
-        "\xDF\xFF",   # max buffer
-        "\x02\x00",   # max mpx count
-        "\x01\x00",   # VC number
-        "\x00\x00\x00\x00",   # session key
-        "\x00\x00",   # ANSI password length
-        "\x00\x00",   # Unicode password length
-        "\x00\x00\x00\x00",   # reserved
-        "\x40\x00\x00\x00",   # capabilities
-        "\x26\x00",   # byte count
-        "\x00",   # account name length
-        "\x2e\x00",   # account name offset
-        "\x57\x69\x6e\x64\x6f\x77\x73\x20\x32\x30\x30\x30\x20\x32\x31\x39\x35\x00",   # account name
-        "\x57\x69\x6e\x64\x6f\x77\x73\x20\x32\x30\x30\x30\x20\x35\x2e\x30\x00"   # primary domain
+        "\x0D",  # word count
+        "\xFF",  # andx command
+        "\x00",  # reserved
+        "\x00\x00",  # andx offset
+        "\xDF\xFF",  # max buffer
+        "\x02\x00",  # max mpx count
+        "\x01\x00",  # VC number
+        "\x00\x00\x00\x00",  # session key
+        "\x00\x00",  # ANSI password length
+        "\x00\x00",  # Unicode password length
+        "\x00\x00\x00\x00",  # reserved
+        "\x40\x00\x00\x00",  # capabilities
+        "\x26\x00",  # byte count
+        "\x00",  # account name length
+        "\x2e\x00",  # account name offset
+        "\x57\x69\x6e\x64\x6f\x77\x73\x20\x32\x30\x30\x30\x20\x32\x31\x39\x35\x00",  # account name
+        "\x57\x69\x6e\x64\x6f\x77\x73\x20\x32\x30\x30\x30\x20\x35\x2e\x30\x00",  # primary domain
     ]
 
     # Call the generate_smb_proto_payload function and return the result

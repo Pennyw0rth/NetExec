@@ -86,7 +86,6 @@ class NXCModule:
                     else:
                         context.log.highlight(f"[{wifi_cred.auth.upper()}] {wifi_cred.ssid} - {wifi_cred.eap_type}")
                 except Exception:
-                    context.log.highlight(
-                        f"[{wifi_cred.auth.upper()}] {wifi_cred.ssid} - Passphrase: {wifi_cred.password}")
+                    context.log.highlight(f"[{wifi_cred.auth.upper()}] {wifi_cred.ssid} - Passphrase: {wifi_cred.password}")
             else:
                 context.log.highlight(f"[WPA-EAP] {wifi_cred.ssid} - {wifi_cred.eap_type}")

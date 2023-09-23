@@ -10,21 +10,7 @@ from time import sleep
 
 
 class TSCH_EXEC:
-    def __init__(
-        self,
-        target,
-        share_name,
-        username,
-        password,
-        domain,
-        doKerberos=False,
-        aesKey=None,
-        kdcHost=None,
-        hashes=None,
-        logger=None,
-        tries=None,
-        share=None
-    ):
+    def __init__(self, target, share_name, username, password, domain, doKerberos=False, aesKey=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -144,7 +130,7 @@ class TSCH_EXEC:
         dce.set_credentials(*self.__rpctransport.get_credentials())
         dce.connect()
         # dce.set_auth_level(ntlm.NTLM_AUTH_PKT_PRIVACY)
-        
+
         tmpName = gen_random_string(8)
 
         xml = self.gen_xml(command, fileless)
@@ -207,7 +193,7 @@ class TSCH_EXEC:
                         if tries >= self.__tries:
                             self.logger.fail("ATEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
                             break
-                        if str(e).find("STATUS_BAD_NETWORK_NAME") >0 :
+                        if str(e).find("STATUS_BAD_NETWORK_NAME") > 0:
                             self.logger.fail(f"ATEXEC: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
                             break
                         if str(e).find("SHARING") > 0 or str(e).find("STATUS_OBJECT_NAME_NOT_FOUND") >= 0:

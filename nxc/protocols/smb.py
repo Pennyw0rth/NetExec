@@ -314,15 +314,7 @@ class smb(connection):
                 values = {str(attr["type"]).lower(): attr["vals"][0] for attr in host["attributes"]}
                 if "mslaps-encryptedpassword" in values:
                     msMCSAdmPwd = values["mslaps-encryptedpassword"]
-                    d = LAPSv2Extract(
-                        bytes(msMCSAdmPwd),
-                        username[0] if username else "",
-                        password[0] if password else "",
-                        domain,
-                        ntlm_hash[0] if ntlm_hash else "",
-                        self.args.kerberos,
-                        self.args.kdcHost,
-                        339)
+                    d = LAPSv2Extract(bytes(msMCSAdmPwd), username[0] if username else "", password[0] if password else "", domain, ntlm_hash[0] if ntlm_hash else "", self.args.kerberos, self.args.kdcHost, 339)
                     try:
                         data = d.run()
                     except Exception as e:
@@ -362,8 +354,8 @@ class smb(connection):
         return True
 
     def print_host_info(self):
-        signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=['bold']) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=['bold'])
-        smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=['bold']) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=['bold'])
+        signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
+        smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
         self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({smbv1})")
         if self.args.laps:
             return self.laps_search(self.args.username, self.args.password, self.args.hash, self.domain)
@@ -402,7 +394,7 @@ class smb(connection):
                     kerb_pass = ""
                     self.logger.debug(f"Attempting to do Kerberos Login with useCache: {useCache}")
 
-                self.conn.kerberosLogin( username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache=useCache)
+                self.conn.kerberosLogin(username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache=useCache)
                 self.check_if_admin()
 
                 if username == "":
@@ -677,28 +669,13 @@ class smb(connection):
             payload = self.args.execute
             if not self.args.no_output:
                 get_output = True
-        
+
         current_method = ""
         for method in methods:
             current_method = method
             if method == "wmiexec":
                 try:
-                    exec_method = WMIEXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
-                        self.smb_share_name,
-                        self.username,
-                        self.password,
-                        self.domain,
-                        self.conn,
-                        self.kerberos,
-                        self.aesKey,
-                        self.kdcHost,
-                        self.hash,
-                        self.args.share,
-                        logger=self.logger,
-                        timeout=self.args.dcom_timeout,
-                        tries=self.args.get_output_tries
-                    )
+                    exec_method = WMIEXEC(self.host if not self.kerberos else self.hostname + "." + self.domain, self.smb_share_name, self.username, self.password, self.domain, self.conn, self.kerberos, self.aesKey, self.kdcHost, self.hash, self.args.share, logger=self.logger, timeout=self.args.dcom_timeout, tries=self.args.get_output_tries)
                     self.logger.info("Executed command via wmiexec")
                     break
                 except:
@@ -707,19 +684,7 @@ class smb(connection):
                     continue
             elif method == "mmcexec":
                 try:
-                    exec_method = MMCEXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
-                        self.smb_share_name,
-                        self.username,
-                        self.password,
-                        self.domain,
-                        self.conn,
-                        self.args.share,
-                        self.hash,
-                        self.logger,
-                        self.args.get_output_tries,
-                        self.args.dcom_timeout
-                    )
+                    exec_method = MMCEXEC(self.host if not self.kerberos else self.hostname + "." + self.domain, self.smb_share_name, self.username, self.password, self.domain, self.conn, self.args.share, self.hash, self.logger, self.args.get_output_tries, self.args.dcom_timeout)
                     self.logger.info("Executed command via mmcexec")
                     break
                 except:
@@ -728,20 +693,7 @@ class smb(connection):
                     continue
             elif method == "atexec":
                 try:
-                    exec_method = TSCH_EXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
-                        self.smb_share_name,
-                        self.username,
-                        self.password,
-                        self.domain,
-                        self.kerberos,
-                        self.aesKey,
-                        self.kdcHost,
-                        self.hash,
-                        self.logger,
-                        self.args.get_output_tries,
-                        self.args.share
-                    )
+                    exec_method = TSCH_EXEC(self.host if not self.kerberos else self.hostname + "." + self.domain, self.smb_share_name, self.username, self.password, self.domain, self.kerberos, self.aesKey, self.kdcHost, self.hash, self.logger, self.args.get_output_tries, self.args.share)
                     self.logger.info("Executed command via atexec")
                     break
                 except:
@@ -750,23 +702,7 @@ class smb(connection):
                     continue
             elif method == "smbexec":
                 try:
-                    exec_method = SMBEXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
-                        self.smb_share_name,
-                        self.conn,
-                        self.args.port,
-                        self.username,
-                        self.password,
-                        self.domain,
-                        self.kerberos,
-                        self.aesKey,
-                        self.kdcHost,
-                        self.hash,
-                        self.args.share,
-                        self.args.port,
-                        self.logger,
-                        self.args.get_output_tries
-                    )
+                    exec_method = SMBEXEC(self.host if not self.kerberos else self.hostname + "." + self.domain, self.smb_share_name, self.conn, self.args.port, self.username, self.password, self.domain, self.kerberos, self.aesKey, self.kdcHost, self.hash, self.args.share, self.args.port, self.logger, self.args.get_output_tries)
                     self.logger.info("Executed command via smbexec")
                     break
                 except:
@@ -776,7 +712,7 @@ class smb(connection):
 
         if hasattr(self, "server"):
             self.server.track_host(self.host)
-        
+
         if "exec_method" in locals():
             output = exec_method.execute(payload, get_output)
             try:
@@ -798,7 +734,7 @@ class smb(connection):
         else:
             self.logger.fail(f"Execute command failed with {current_method}")
             return False
- 
+
     @requires_admin
     def ps_execute(
         self,
@@ -1014,9 +950,7 @@ class smb(connection):
                                 group_id = self.db.get_groups(
                                     group_name=self.args.local_groups,
                                     group_domain=domain,
-                                )[
-                                    0
-                                ][0]
+                                )[0][0]
                             except IndexError:
                                 group_id = self.db.add_group(
                                     domain,
@@ -1093,9 +1027,7 @@ class smb(connection):
                             group_id = self.db.get_groups(
                                 group_name=self.args.groups,
                                 group_domain=group.groupdomain,
-                            )[
-                                0
-                            ][0]
+                            )[0][0]
                         except IndexError:
                             group_id = self.db.add_group(
                                 group.groupdomain,
@@ -1219,54 +1151,43 @@ class smb(connection):
     def wmi(self, wmi_query=None, namespace=None):
         records = []
         if not wmi_query:
-            wmi_query = self.args.wmi.strip('\n')
+            wmi_query = self.args.wmi.strip("\n")
 
         if not namespace:
             namespace = self.args.wmi_namespace
 
         try:
-            dcom = DCOMConnection(
-                self.host if not self.kerberos else self.hostname + "." + self.domain,
-                self.username,
-                self.password,
-                self.domain,
-                self.lmhash,
-                self.nthash,
-                oxidResolver=True,
-                doKerberos=self.kerberos,
-                kdcHost=self.kdcHost,
-                aesKey=self.aesKey
-            )
-            iInterface = dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login,IID_IWbemLevel1Login)
-            flag, stringBinding =  dcom_FirewallChecker(iInterface, self.args.dcom_timeout)
+            dcom = DCOMConnection(self.host if not self.kerberos else self.hostname + "." + self.domain, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.kerberos, kdcHost=self.kdcHost, aesKey=self.aesKey)
+            iInterface = dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
+            flag, stringBinding = dcom_FirewallChecker(iInterface, self.args.dcom_timeout)
             if not flag or not stringBinding:
                 error_msg = f'WMI Query: Dcom initialization failed on connection with stringbinding: "{stringBinding}", please increase the timeout with the option "--dcom-timeout". If it\'s still failing maybe something is blocking the RPC connection, try another exec method'
-                
+
                 if not stringBinding:
                     error_msg = "WMI Query: Dcom initialization failed: can't get target stringbinding, maybe cause by IPv6 or any other issues, please check your target again"
-                
+
                 self.logger.fail(error_msg) if not flag else self.logger.debug(error_msg)
                 # Make it force break function
                 dcom.disconnect()
             iWbemLevel1Login = IWbemLevel1Login(iInterface)
-            iWbemServices= iWbemLevel1Login.NTLMLogin(namespace , NULL, NULL)
+            iWbemServices = iWbemLevel1Login.NTLMLogin(namespace, NULL, NULL)
             iWbemLevel1Login.RemRelease()
             iEnumWbemClassObject = iWbemServices.ExecQuery(wmi_query)
         except Exception as e:
-            self.logger.fail('Execute WQL error: {}'.format(e))
+            self.logger.fail("Execute WQL error: {}".format(e))
             if "iWbemLevel1Login" in locals():
                 dcom.disconnect()
         else:
             self.logger.info(f"Executing WQL syntax: {wmi_query}")
             while True:
                 try:
-                    wmi_results = iEnumWbemClassObject.Next(0xffffffff, 1)[0]
+                    wmi_results = iEnumWbemClassObject.Next(0xFFFFFFFF, 1)[0]
                     record = wmi_results.getProperties()
                     records.append(record)
-                    for k,v in record.items():
+                    for k, v in record.items():
                         self.logger.highlight(f"{k} => {v['value']}")
                 except Exception as e:
-                    if str(e).find('S_FALSE') < 0:
+                    if str(e).find("S_FALSE") < 0:
                         raise e
                     else:
                         break
@@ -1486,7 +1407,7 @@ class smb(connection):
                 SAM.finish()
         except SessionError as e:
             if "STATUS_ACCESS_DENIED" in e.getErrorString():
-                self.logger.fail("Error \"STATUS_ACCESS_DENIED\" while dumping SAM. This is likely due to an endpoint protection.")
+                self.logger.fail('Error "STATUS_ACCESS_DENIED" while dumping SAM. This is likely due to an endpoint protection.')
         except Exception as e:
             self.logger.exception(str(e))
 
@@ -1658,7 +1579,7 @@ class smb(connection):
         if dump_cookies:
             self.logger.display("Start Dumping Cookies")
             for cookie in cookies:
-                if cookie.cookie_value != '':
+                if cookie.cookie_value != "":
                     self.logger.highlight(f"[{credential.winuser}][{cookie.browser.upper()}] {cookie.host}{cookie.path} - {cookie.cookie_name}:{cookie.cookie_value}")
             self.logger.display("End Dumping Cookies")
 
@@ -1744,7 +1665,7 @@ class smb(connection):
                 LSA.finish()
         except SessionError as e:
             if "STATUS_ACCESS_DENIED" in e.getErrorString():
-                self.logger.fail("Error \"STATUS_ACCESS_DENIED\" while dumping LSA. This is likely due to an endpoint protection.")
+                self.logger.fail('Error "STATUS_ACCESS_DENIED" while dumping LSA. This is likely due to an endpoint protection.')
         except Exception as e:
             self.logger.exception(str(e))
 

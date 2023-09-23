@@ -8,9 +8,9 @@ from math import fabs
 
 class NXCModule:
     """
-        Created by fplazar and wanetty
-        Module by @gm_eduard and @ferranplaza 
-        Based on: https://github.com/juliourena/CrackMapExec/blob/master/cme/modules/get_description.py
+    Created by fplazar and wanetty
+    Module by @gm_eduard and @ferranplaza
+    Based on: https://github.com/juliourena/CrackMapExec/blob/master/cme/modules/get_description.py
     """
 
     name = "pso"
@@ -18,7 +18,7 @@ class NXCModule:
     supported_protocols = ["ldap"]
     opsec_safe = True
     multiple_hosts = True
-    
+
     pso_fields = [
         "cn",
         "msDS-PasswordReversibleEncryptionEnabled",
@@ -39,20 +39,15 @@ class NXCModule:
         No options available.
         """
         pass
-    
+
     def convert_time_field(self, field, value):
-        time_fields = {
-            "msDS-LockoutObservationWindow": (60, "mins"),
-            "msDS-MinimumPasswordAge": (86400, "days"),
-            "msDS-MaximumPasswordAge": (86400, "days"),
-            "msDS-LockoutDuration": (60, "mins")
-        }
+        time_fields = {"msDS-LockoutObservationWindow": (60, "mins"), "msDS-MinimumPasswordAge": (86400, "days"), "msDS-MaximumPasswordAge": (86400, "days"), "msDS-LockoutDuration": (60, "mins")}
 
         if field in time_fields.keys():
             value = f"{int((fabs(float(value)) / (10000000 * time_fields[field][0])))} {time_fields[field][1]}"
-        
+
         return value
-    
+
     def on_login(self, context, connection):
         """Concurrent. Required if on_admin_login is not present. This gets called on each authenticated connection"""
         # Building the search filter
@@ -60,11 +55,7 @@ class NXCModule:
 
         try:
             context.log.debug(f"Search Filter={search_filter}")
-            resp = connection.ldapConnection.search(
-                searchFilter=search_filter,
-                attributes=self.pso_fields,
-                sizeLimit=0
-            )
+            resp = connection.ldapConnection.search(searchFilter=search_filter, attributes=self.pso_fields, sizeLimit=0)
         except ldap_impacket.LDAPSearchError as e:
             if e.getErrorString().find("sizeLimitExceeded") >= 0:
                 context.log.debug("sizeLimitExceeded exception caught, giving up and processing the data received")

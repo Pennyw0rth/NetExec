@@ -6,17 +6,17 @@
 # Link: https://github.com/XiaoliChan/wmiexec-RegOut/blob/main/wmiexec-regOut.py
 # Note: windows version under NT6 not working with this command execution way
 #       https://github.com/XiaoliChan/wmiexec-RegOut/blob/main/wmiexec-reg-sch-UnderNT6-wip.py -- WIP
-# 
-# Description: 
+#
+# Description:
 #   For more details, please check out my repository.
 #   https://github.com/XiaoliChan/wmiexec-RegOut
 #
 # Workflow:
 #   Stage 1:
 #       cmd.exe /Q /c {command} > C:\windows\temp\{random}.txt (aka command results)
-#       
+#
 #       powershell convert the command results into base64, and save it into C:\windows\temp\{random2}.txt (now the command results was base64 encoded)
-#       
+#
 #       Create registry path: HKLM:\Software\Classes\hello, then add C:\windows\temp\{random2}.txt into HKLM:\Software\Classes\hello\{NewKey}
 #
 #       Remove anythings which in C:\windows\temp\
@@ -32,6 +32,7 @@ from nxc.helpers.misc import gen_random_string
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login
+
 
 class WMIEXEC:
     def __init__(self, host, username, password, domain, lmhash, nthash, doKerberos, kdcHost, aesKey, logger, exec_timeout, codec):
@@ -50,19 +51,19 @@ class WMIEXEC:
         self.__outputBuffer = ""
         self.__retOutput = True
 
-        self.__shell = 'cmd.exe /Q /c '
-        #self.__pwsh = 'powershell.exe -NoP -NoL -sta -NonI -W Hidden -Exec Bypass -Enc '
-        #self.__pwsh = 'powershell.exe -Enc '
-        self.__pwd = str('C:\\')
+        self.__shell = "cmd.exe /Q /c "
+        # self.__pwsh = 'powershell.exe -NoP -NoL -sta -NonI -W Hidden -Exec Bypass -Enc '
+        # self.__pwsh = 'powershell.exe -Enc '
+        self.__pwd = str("C:\\")
         self.__codec = codec
 
-        self.__dcom = DCOMConnection(self.__host, self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, oxidResolver=True, doKerberos=self.__doKerberos ,kdcHost=self.__kdcHost, aesKey=self.__aesKey)
+        self.__dcom = DCOMConnection(self.__host, self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, oxidResolver=True, doKerberos=self.__doKerberos, kdcHost=self.__kdcHost, aesKey=self.__aesKey)
         iInterface = self.__dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
         iWbemLevel1Login = IWbemLevel1Login(iInterface)
-        self.__iWbemServices = iWbemLevel1Login.NTLMLogin('//./root/cimv2', NULL, NULL)
+        self.__iWbemServices = iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
         iWbemLevel1Login.RemRelease()
-        self.__win32Process, _ = self.__iWbemServices.GetObject('Win32_Process')
-        
+        self.__win32Process, _ = self.__iWbemServices.GetObject("Win32_Process")
+
     def execute(self, command, output=False):
         self.__retOutput = output
         if self.__retOutput:
@@ -88,7 +89,7 @@ class WMIEXEC:
         keyName = str(uuid.uuid4())
         self.__registry_Path = f"Software\\Classes\\{gen_random_string(6)}"
 
-        command = fr'''{self.__shell} {command} 1> {result_output} 2>&1 && certutil -encodehex -f {result_output} {result_output_b64} 0x40000001 && for /F "usebackq" %G in ("{result_output_b64}") do reg add HKLM\{self.__registry_Path} /v {keyName} /t REG_SZ /d "%G" /f && del /q /f /s {result_output} {result_output_b64}'''
+        command = rf"""{self.__shell} {command} 1> {result_output} 2>&1 && certutil -encodehex -f {result_output} {result_output_b64} 0x40000001 && for /F "usebackq" %G in ("{result_output_b64}") do reg add HKLM\{self.__registry_Path} /v {keyName} /t REG_SZ /d "%G" /f && del /q /f /s {result_output} {result_output_b64}"""
 
         self.execute_remote(command)
         self.logger.info("Waiting {}s for command completely executed.".format(self.__exec_timeout))
@@ -99,13 +100,13 @@ class WMIEXEC:
     def queryRegistry(self, keyName):
         try:
             self.logger.debug(f"Querying registry key: HKLM\\{self.__registry_Path}")
-            descriptor, _ = self.__iWbemServices.GetObject('StdRegProv')
+            descriptor, _ = self.__iWbemServices.GetObject("StdRegProv")
             descriptor = descriptor.SpawnInstance()
             retVal = descriptor.GetStringValue(2147483650, self.__registry_Path, keyName)
-            self.__outputBuffer = base64.b64decode(retVal.sValue).decode(self.__codec, errors='replace').rstrip('\r\n')
+            self.__outputBuffer = base64.b64decode(retVal.sValue).decode(self.__codec, errors="replace").rstrip("\r\n")
         except Exception:
             self.logger.fail("WMIEXEC: Could not retrieve output file, it may have been detected by AV. Please try increasing the timeout with the '--exec-timeout' option. If it is still failing, try the 'smb' protocol or another exec method")
-        
+
         try:
             self.logger.debug(f"Removing temporary registry path: HKLM\\{self.__registry_Path}")
             retVal = descriptor.DeleteKey(2147483650, self.__registry_Path)

@@ -96,7 +96,6 @@ class ftp(connection):
             return True
         self.conn.close()
 
-
     def list_directory_full(self):
         # in the future we can use mlsd/nlst if we want, but this gives a full output like `ls -la`
         # ftplib's "dir" prints directly to stdout, and "nlst" only returns the folder name, not full details

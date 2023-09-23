@@ -18,6 +18,7 @@ from nxc.helpers.bloodhound import add_user_bh
 from nxc.protocols.ldap.laps import LDAPConnect, LAPSv2Extract
 from nxc.logger import NXCAdapter
 
+
 class winrm(connection):
     def __init__(self, args, db, host):
         self.domain = None
@@ -141,22 +142,16 @@ class winrm(connection):
                 values = {str(attr["type"]).lower(): attr["vals"][0] for attr in host["attributes"]}
                 if "mslaps-encryptedpassword" in values:
                     from json import loads
+
                     msMCSAdmPwd = values["mslaps-encryptedpassword"]
-                    d = LAPSv2Extract(
-                        bytes(msMCSAdmPwd),
-                        username[0] if username else "",
-                        password[0] if password else "",
-                        domain,
-                        ntlm_hash[0] if ntlm_hash else "",
-                        self.args.kerberos,
-                        self.args.kdcHost,
-                        339)
+                    d = LAPSv2Extract(bytes(msMCSAdmPwd), username[0] if username else "", password[0] if password else "", domain, ntlm_hash[0] if ntlm_hash else "", self.args.kerberos, self.args.kdcHost, 339)
                     data = d.run()
                     r = loads(data)
                     msMCSAdmPwd = r["p"]
                     username_laps = r["n"]
                 elif "mslaps-password" in values:
                     from json import loads
+
                     r = loads(str(values["mslaps-password"]))
                     msMCSAdmPwd = r["p"]
                     username_laps = r["n"]
@@ -224,7 +219,6 @@ class winrm(connection):
 
     def plaintext_login(self, domain, username, password):
         try:
-
             # log.addFilter(SuppressFilter())
             if not self.args.laps:
                 self.password = password
@@ -330,7 +324,6 @@ class winrm(connection):
         buf = StringIO(r[0]).readlines()
         for line in buf:
             self.logger.highlight(line.strip())
-
 
     def ps_execute(self, payload=None, get_output=False):
         r = self.conn.execute_ps(self.args.ps_execute)

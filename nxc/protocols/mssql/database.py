@@ -204,7 +204,6 @@ class database:
         self.conn.execute(q)
 
     def add_admin_user(self, credtype, domain, username, password, host, user_id=None):
-
         if user_id:
             q = select(self.UsersTable).filter(self.UsersTable.c.id == user_id)
             users = self.conn.execute(q).all()

@@ -34,7 +34,7 @@ class NXCAdapter(logging.LoggerAdapter):
         logging.getLogger("pypykatz").disabled = True
         logging.getLogger("minidump").disabled = True
         logging.getLogger("lsassy").disabled = True
-        #logging.getLogger("impacket").disabled = True
+        # logging.getLogger("impacket").disabled = True
 
     def format(self, msg, *args, **kwargs):
         """
@@ -88,7 +88,7 @@ class NXCAdapter(logging.LoggerAdapter):
         nxc_console.print(text, *args, **kwargs)
         self.log_console_to_file(text, *args, **kwargs)
 
-    def success(self, msg, color='green', *args, **kwargs):
+    def success(self, msg, color="green", *args, **kwargs):
         """
         Print some sort of success to the user
         """
@@ -118,7 +118,7 @@ class NXCAdapter(logging.LoggerAdapter):
         nxc_console.print(text, *args, **kwargs)
         self.log_console_to_file(text, *args, **kwargs)
 
-    def fail(self, msg, color='red', *args, **kwargs):
+    def fail(self, msg, color="red", *args, **kwargs):
         """
         Prints a failure (may or may not be an error) - e.g. login creds didn't work
         """
@@ -181,13 +181,13 @@ class NXCAdapter(logging.LoggerAdapter):
 
     @staticmethod
     def init_log_file():
-        newpath = os.path.expanduser("~/.nxc") + "/logs/" + datetime.now().strftime('%Y-%m-%d')
+        newpath = os.path.expanduser("~/.nxc") + "/logs/" + datetime.now().strftime("%Y-%m-%d")
         if not os.path.exists(newpath):
             os.makedirs(newpath)
         log_filename = os.path.join(
             os.path.expanduser("~/.nxc"),
             "logs",
-            datetime.now().strftime('%Y-%m-%d'),
+            datetime.now().strftime("%Y-%m-%d"),
             f"log_{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.log",
         )
         return log_filename

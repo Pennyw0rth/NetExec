@@ -14,7 +14,8 @@ def gen_cli_args():
     VERSION = importlib.metadata.version("netexec")
     CODENAME = "A New Beginning"
 
-    parser = argparse.ArgumentParser(description=f"""
+    parser = argparse.ArgumentParser(
+        description=f"""
      _   _          _     _____                      
     | \ | |   ___  | |_  | ____| __  __   ___    ___ 
     |  \| |  / _ \ | __| |  _|   \ \/ /  / _ \  / __|

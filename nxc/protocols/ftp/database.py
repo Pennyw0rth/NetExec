@@ -31,47 +31,47 @@ class database:
 
     @staticmethod
     def db_schema(db_conn):
-        db_conn.execute("""CREATE TABLE "credentials" (
+        db_conn.execute(
+            """CREATE TABLE "credentials" (
             "id" integer PRIMARY KEY,
             "username" text,
             "password" text
-            )""")
+            )"""
+        )
 
-        db_conn.execute("""CREATE TABLE "hosts" (
+        db_conn.execute(
+            """CREATE TABLE "hosts" (
             "id" integer PRIMARY KEY,
             "host" text,
             "port" integer,
             "banner" text
-            )""")
-        db_conn.execute("""CREATE TABLE "loggedin_relations" (
+            )"""
+        )
+        db_conn.execute(
+            """CREATE TABLE "loggedin_relations" (
             "id" integer PRIMARY KEY,
             "credid" integer,
             "hostid" integer,
             FOREIGN KEY(credid) REFERENCES credentials(id),
             FOREIGN KEY(hostid) REFERENCES hosts(id)
-        )""")
-        db_conn.execute("""CREATE TABLE "directory_listings" (
+        )"""
+        )
+        db_conn.execute(
+            """CREATE TABLE "directory_listings" (
             "id" integer PRIMARY KEY,
             "lir_id" integer,
             "data" text,
             FOREIGN KEY(lir_id) REFERENCES loggedin_relations(id)
-        )""")
+        )"""
+        )
 
     def reflect_tables(self):
         with self.db_engine.connect():
             try:
-                self.CredentialsTable = Table(
-                    "credentials", self.metadata, autoload_with=self.db_engine
-                )
-                self.HostsTable = Table(
-                    "hosts", self.metadata, autoload_with=self.db_engine
-                )
-                self.LoggedinRelationsTable = Table(
-                    "loggedin_relations", self.metadata, autoload_with=self.db_engine
-                )
-                self.DirectoryListingsTable = Table(
-                    "directory_listings", self.metadata, autoload_with=self.db_engine
-                )
+                self.CredentialsTable = Table("credentials", self.metadata, autoload_with=self.db_engine)
+                self.HostsTable = Table("hosts", self.metadata, autoload_with=self.db_engine)
+                self.LoggedinRelationsTable = Table("loggedin_relations", self.metadata, autoload_with=self.db_engine)
+                self.DirectoryListingsTable = Table("directory_listings", self.metadata, autoload_with=self.db_engine)
             except (NoInspectionAvailable, NoSuchTableError):
                 print(
                     f"""
@@ -135,10 +135,7 @@ class database:
         # TODO: find a way to abstract this away to a single Upsert call
         q = Insert(self.HostsTable)  # .returning(self.HostsTable.c.id)
         update_columns = {col.name: col for col in q.excluded if col.name not in "id"}
-        q = q.on_conflict_do_update(
-            index_elements=self.HostsTable.primary_key,
-            set_=update_columns
-        )
+        q = q.on_conflict_do_update(index_elements=self.HostsTable.primary_key, set_=update_columns)
 
         self.sess.execute(q, hosts)  # .scalar()
         # we only return updated IDs for now - when RETURNING clause is allowed we can return inserted
@@ -152,10 +149,7 @@ class database:
         """
         credentials = []
 
-        q = select(self.CredentialsTable).filter(
-            func.lower(self.CredentialsTable.c.username) == func.lower(username),
-            func.lower(self.CredentialsTable.c.password) == func.lower(password)
-        )
+        q = select(self.CredentialsTable).filter(func.lower(self.CredentialsTable.c.username) == func.lower(username), func.lower(self.CredentialsTable.c.password) == func.lower(password))
         results = self.sess.execute(q).all()
 
         # add new credential
@@ -182,10 +176,7 @@ class database:
         # TODO: find a way to abstract this away to a single Upsert call
         q_users = Insert(self.CredentialsTable)  # .returning(self.CredentialsTable.c.id)
         update_columns_users = {col.name: col for col in q_users.excluded if col.name not in "id"}
-        q_users = q_users.on_conflict_do_update(
-            index_elements=self.CredentialsTable.primary_key,
-            set_=update_columns_users
-        )
+        q_users = q_users.on_conflict_do_update(index_elements=self.CredentialsTable.primary_key, set_=update_columns_users)
         nxc_logger.debug(f"Adding credentials: {credentials}")
 
         self.sess.execute(q_users, credentials)  # .scalar()
@@ -310,10 +301,7 @@ class database:
 
         # only add one if one doesn't already exist
         if not results:
-            relation = {
-                "credid": cred_id,
-                "hostid": host_id
-            }
+            relation = {"credid": cred_id, "hostid": host_id}
             try:
                 nxc_logger.debug(f"Inserting loggedin_relations: {relation}")
                 # TODO: find a way to abstract this away to a single Upsert call

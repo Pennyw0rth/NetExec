@@ -53,15 +53,7 @@ class NXCModule:
                 values = {str(attr["type"]).lower(): attr["vals"][0] for attr in computer["attributes"]}
                 if "mslaps-encryptedpassword" in values:
                     msMCSAdmPwd = values["mslaps-encryptedpassword"]
-                    d = LAPSv2Extract(
-                        bytes(msMCSAdmPwd),
-                        connection.username if connection.username else "",
-                        connection.password if connection.password else "",
-                        connection.domain,
-                        connection.nthash if connection.nthash else "",
-                        connection.kerberos,
-                        connection.kdcHost,
-                        339)
+                    d = LAPSv2Extract(bytes(msMCSAdmPwd), connection.username if connection.username else "", connection.password if connection.password else "", connection.domain, connection.nthash if connection.nthash else "", connection.kerberos, connection.kdcHost, 339)
                     try:
                         data = d.run()
                     except Exception as e:

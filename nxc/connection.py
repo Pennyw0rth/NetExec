@@ -25,14 +25,15 @@ user_failed_logins = {}
 
 def gethost_addrinfo(hostname):
     try:
-        for res in getaddrinfo( hostname, None, AF_INET6, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
+        for res in getaddrinfo(hostname, None, AF_INET6, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
             af, socktype, proto, canonname, sa = res
         host = canonname if ip_address(sa[0]).is_link_local else sa[0]
     except socket.gaierror:
-        for res in getaddrinfo( hostname, None, AF_INET, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
+        for res in getaddrinfo(hostname, None, AF_INET, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
             af, socktype, proto, canonname, sa = res
         host = sa[0] if sa[0] else canonname
     return host
+
 
 def requires_admin(func):
     def _decorator(self, *args, **kwargs):
@@ -42,22 +43,23 @@ def requires_admin(func):
 
     return wraps(func)(_decorator)
 
+
 def dcom_FirewallChecker(iInterface, timeout):
     stringBindings = iInterface.get_cinstance().get_string_bindings()
     for strBinding in stringBindings:
-        if strBinding['wTowerId'] == 7:
-            if strBinding['aNetworkAddr'].find('[') >= 0:
-                binding, _, bindingPort = strBinding['aNetworkAddr'].partition('[')
-                bindingPort = '[' + bindingPort
+        if strBinding["wTowerId"] == 7:
+            if strBinding["aNetworkAddr"].find("[") >= 0:
+                binding, _, bindingPort = strBinding["aNetworkAddr"].partition("[")
+                bindingPort = "[" + bindingPort
             else:
-                binding = strBinding['aNetworkAddr']
-                bindingPort = ''
+                binding = strBinding["aNetworkAddr"]
+                bindingPort = ""
 
             if binding.upper().find(iInterface.get_target().upper()) >= 0:
-                stringBinding = 'ncacn_ip_tcp:' + strBinding['aNetworkAddr'][:-1]
+                stringBinding = "ncacn_ip_tcp:" + strBinding["aNetworkAddr"][:-1]
                 break
-            elif iInterface.is_fqdn() and binding.upper().find(iInterface.get_target().upper().partition('.')[0]) >= 0:
-                stringBinding = 'ncacn_ip_tcp:%s%s' % (iInterface.get_target(), bindingPort)
+            elif iInterface.is_fqdn() and binding.upper().find(iInterface.get_target().upper().partition(".")[0]) >= 0:
+                stringBinding = "ncacn_ip_tcp:%s%s" % (iInterface.get_target(), bindingPort)
     if "stringBinding" not in locals():
         return True, None
     try:
@@ -308,7 +310,7 @@ class connection(object):
         # Parse usernames
         for user in self.args.username:
             if isfile(user):
-                with open(user, 'r') as user_file:
+                with open(user, "r") as user_file:
                     for line in user_file:
                         if "\\" in line:
                             domain_single, username_single = line.split("\\")
@@ -340,34 +342,33 @@ class connection(object):
                     self.logger.error(f"{type(e).__name__}: Could not decode password file. Make sure the file only contains UTF-8 characters.")
                     self.logger.error("You can ignore non UTF-8 characters with the option '--ignore-pw-decoding'")
                     exit(1)
-
             else:
                 secret.append(password)
-                cred_type.append('plaintext')
+                cred_type.append("plaintext")
 
         # Parse NTLM-hashes
         if hasattr(self.args, "hash") and self.args.hash:
             for ntlm_hash in self.args.hash:
                 if isfile(ntlm_hash):
-                    with open(ntlm_hash, 'r') as ntlm_hash_file:
+                    with open(ntlm_hash, "r") as ntlm_hash_file:
                         for line in ntlm_hash_file:
                             secret.append(line.strip())
-                            cred_type.append('hash')
+                            cred_type.append("hash")
                 else:
                     secret.append(ntlm_hash)
-                    cred_type.append('hash')
+                    cred_type.append("hash")
 
         # Parse AES keys
         if self.args.aesKey:
             for aesKey in self.args.aesKey:
                 if isfile(aesKey):
-                    with open(aesKey, 'r') as aesKey_file:
+                    with open(aesKey, "r") as aesKey_file:
                         for line in aesKey_file:
                             secret.append(line.strip())
-                            cred_type.append('aesKey')
+                            cred_type.append("aesKey")
                 else:
                     secret.append(aesKey)
-                    cred_type.append('aesKey')
+                    cred_type.append("aesKey")
 
         # Allow trying multiple users with a single password
         if len(username) > 1 and len(secret) == 1:
@@ -390,26 +391,26 @@ class connection(object):
         if self.args.continue_on_success and owned:
             return False
         # Enforcing FQDN for SMB if not using local authentication. Related issues/PRs: #26, #28, #24, #38
-        if self.args.protocol == 'smb' and not self.args.local_auth and "." not in domain and not self.args.laps and secret != "" and not (self.domain.upper() == self.hostname.upper()) :
+        if self.args.protocol == "smb" and not self.args.local_auth and "." not in domain and not self.args.laps and secret != "" and not (self.domain.upper() == self.hostname.upper()):
             self.logger.error(f"Domain {domain} for user {username.rstrip()} need to be FQDN ex:domain.local, not domain")
             return False
 
         with sem:
-            if cred_type == 'plaintext':
+            if cred_type == "plaintext":
                 if self.args.kerberos:
-                    return self.kerberos_login(domain, username, secret, '', '', self.kdcHost, False)
+                    return self.kerberos_login(domain, username, secret, "", "", self.kdcHost, False)
                 elif hasattr(self.args, "domain"):  # Some protocolls don't use domain for login
                     return self.plaintext_login(domain, username, secret)
-                elif self.args.protocol == 'ssh':
+                elif self.args.protocol == "ssh":
                     return self.plaintext_login(username, secret, data)
                 else:
                     return self.plaintext_login(username, secret)
-            elif cred_type == 'hash':
+            elif cred_type == "hash":
                 if self.args.kerberos:
-                    return self.kerberos_login(domain, username, '', secret, '', self.kdcHost, False)
+                    return self.kerberos_login(domain, username, "", secret, "", self.kdcHost, False)
                 return self.hash_login(domain, username, secret)
-            elif cred_type == 'aesKey':
-                return self.kerberos_login(domain, username, '', '', secret, self.kdcHost, False)
+            elif cred_type == "aesKey":
+                return self.kerberos_login(domain, username, "", "", secret, self.kdcHost, False)
 
     def login(self):
         """
