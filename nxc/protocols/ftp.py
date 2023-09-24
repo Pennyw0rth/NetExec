@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
 from nxc.config import process_secret
-from nxc.connection import *
+from nxc.connection import connection
+from nxc.helpers.logger import highlight
 from nxc.logger import NXCAdapter
-from ftplib import FTP, error_reply, error_temp, error_perm, error_proto
+from ftplib import FTP
 
 
-class ftp(connection):
+class Ftp(connection):
     def __init__(self, args, db, host):
         self.protocol = "FTP"
         self.remote_version = None
@@ -46,15 +48,8 @@ class ftp(connection):
         self.conn = FTP()
         try:
             self.conn.connect(host=self.host, port=self.args.port)
-        except error_reply:
-            return False
-        except error_temp:
-            return False
-        except error_perm:
-            return False
-        except error_proto:
-            return False
-        except socket.error:
+        except Exception as e:
+            self.logger.debug(f"Error connecting to FTP host: {e}")
             return False
         return True
 

@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import os
+import socket
 
 from nxc.config import process_secret
+from nxc.connection import connection
+from nxc.connection import requires_admin
+from nxc.logger import NXCAdapter
 from nxc.protocols.mssql.mssqlexec import MSSQLEXEC
-from nxc.connection import *
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.powershell import create_ps_command
 from impacket import tds
@@ -61,7 +64,7 @@ class mssql(connection):
         try:
             # Probably a better way of doing this, grab our IP from the socket
             self.local_ip = str(self.conn.socket).split()[2].split("=")[1].split(":")[0]
-        except:
+        except Exception:
             pass
 
         if self.args.no_smb:
@@ -82,7 +85,7 @@ class mssql(connection):
 
                 try:
                     smb_conn.logoff()
-                except:
+                 except Exception:
                     pass
 
                 if self.args.domain:
@@ -104,7 +107,7 @@ class mssql(connection):
 
         try:
             self.conn.disconnect()
-        except:
+        except Exception:
             pass
 
     def print_host_info(self):
@@ -152,7 +155,7 @@ class mssql(connection):
     ):
         try:
             self.conn.disconnect()
-        except:
+        except Exception:
             pass
         self.create_conn_obj()
 
@@ -211,7 +214,7 @@ class mssql(connection):
     def plaintext_login(self, domain, username, password):
         try:
             self.conn.disconnect()
-        except:
+        except Exception:
             pass
         self.create_conn_obj()
 
@@ -259,7 +262,7 @@ class mssql(connection):
 
         try:
             self.conn.disconnect()
-        except:
+        except Exception:
             pass
         self.create_conn_obj()
 

@@ -334,7 +334,7 @@ class HostChecker:
 
         for subkey in subkeys:
             value = self.reg_query_value(self.dce, self.connection, lapsv1_key_name + "\\" + subkey, "DllName")
-            if type(value) == str and "laps\\cse\\admpwd.dll" in value.lower():
+            if isinstance(value, str) and "laps\\cse\\admpwd.dll" in value.lower():
                 reasons.append(f"{lapsv1_key_name}\\...\\DllName matches AdmPwd.dll")
                 success = True
                 laps_path = "\\".join(value.split("\\")[1:-1])
