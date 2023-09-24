@@ -169,6 +169,9 @@ class ftp(connection):
         except error_perm as error_message:
             self.logger.fail(f"Failed to upload file. Response: ({error_message})")
             return False
+        except FileNotFoundError:
+            self.logger.fail(f"Failed to upload file. {local_file} does not exist locally.")
+            return False
         # Check if the file was uploaded
         if self.conn.size(remote_file) > 0:
             self.logger.success(f"Uploaded: {local_file} to {remote_file}")
