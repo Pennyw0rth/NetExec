@@ -6,7 +6,7 @@ from nxc.logger import nxc_logger
 
 # right now we are only referencing the port numbers, not the service name, but this should be sufficient for 99% cases
 protocol_dict = {
-    "ftp": {"ports": [21], "services": ["ftp"]},
+    "Ftp": {"ports": [21], "services": ["Ftp"]},
     "ssh": {"ports": [22, 2222], "services": ["ssh"]},
     "smb": {"ports": [139, 445], "services": ["netbios-ssn", "microsoft-ds"]},
     "ldap": {"ports": [389, 636], "services": ["ldap", "ldaps"]},

@@ -34,7 +34,7 @@ from impacket.smb import SMB_DIALECT
 from impacket.smbconnection import SMBConnection, SessionError
 
 from nxc.config import process_secret, host_info_colors
-from nxc.connection import *
+from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.logger import NXCAdapter, nxc_logger
 from nxc.protocols.ldap.bloodhound import BloodHound
@@ -285,7 +285,7 @@ class ldap(connection):
             try:
                 # DC's seem to want us to logoff first, windows workstations sometimes reset the connection
                 self.conn.logoff()
-            except:
+            except Exception:
                 pass
 
             if self.args.domain:
@@ -347,7 +347,7 @@ class ldap(connection):
             self.nthash = nthash
 
         if self.password == "" and self.args.asreproast:
-            hash_tgt = KerberosAttacks(self).getTGT_asroast(self.username)
+            hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
                 with open(self.args.asreproast, "a+") as hash_asreproast:
@@ -455,7 +455,7 @@ class ldap(connection):
                         color="magenta" if error in ldap_error_status else "red",
                     )
                     return False
-                except:
+                except Exception as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
                         f"{self.domain}\\{self.username}:{self.password if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
@@ -465,7 +465,7 @@ class ldap(connection):
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (kerb_pass if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                    f'{self.domain}\\{self.username}\' from ccache\' if useCache else \':%s\' % (kerb_pass if not self.config.get(\'nxc\', \'audit_mode\') else self.config.get(\'nxc\', \'audit_mode\') * 8)} {ldap_error_status[error_code] if error_code in ldap_error_status else ""}',
                     color="magenta" if error_code in ldap_error_status else "red",
                 )
                 return False
@@ -476,7 +476,7 @@ class ldap(connection):
         self.domain = domain
 
         if self.password == "" and self.args.asreproast:
-            hash_tgt = KerberosAttacks(self).getTGT_asroast(self.username)
+            hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
                 with open(self.args.asreproast, "a+") as hash_asreproast:
@@ -528,7 +528,7 @@ class ldap(connection):
                     if not self.args.local_auth:
                         add_user_bh(self.username, self.domain, self.logger, self.config)
                     return True
-                except:
+                except Exception as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
                         f"{self.domain}\\{self.username}:{self.password if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
@@ -567,7 +567,7 @@ class ldap(connection):
         self.domain = domain
 
         if self.hash == "" and self.args.asreproast:
-            hash_tgt = KerberosAttacks(self).getTGT_asroast(self.username)
+            hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
                 with open(self.args.asreproast, "a+") as hash_asreproast:
@@ -906,7 +906,7 @@ class ldap(connection):
                     pass
             if len(answers) > 0:
                 for user in answers:
-                    hash_TGT = KerberosAttacks(self).getTGT_asroast(user[0])
+                    hash_TGT = KerberosAttacks(self).get_tgt_asroast(user[0])
                     self.logger.highlight(f"{hash_TGT}")
                     with open(self.args.asreproast, "a+") as hash_asreproast:
                         hash_asreproast.write(hash_TGT + "\n")
@@ -993,7 +993,7 @@ class ldap(connection):
 
             if len(answers) > 0:
                 self.logger.display(f"Total of records returned {len(answers):d}")
-                TGT = KerberosAttacks(self).getTGT_kerberoasting()
+                TGT = KerberosAttacks(self).get_tgt_kerberoasting()
                 dejavue = []
                 for (
                     SPN,
@@ -1017,9 +1017,9 @@ class ldap(connection):
                                 self.kdcHost,
                                 TGT["KDC_REP"],
                                 TGT["cipher"],
-                                TGT["sessionKey"],
+                                TGT["session_key"],
                             )
-                            r = KerberosAttacks(self).outputTGS(
+                            r = KerberosAttacks(self).output_tgs(
                                 tgs,
                                 oldSessionKey,
                                 sessionKey,

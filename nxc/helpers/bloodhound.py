@@ -1,23 +1,35 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+from neo4j import GraphDatabase
+from neo4j.exceptions import AuthError, ServiceUnavailable
+
 
 def add_user_bh(user, domain, logger, config):
+    """
+    Adds a user to the BloodHound graph database.
+
+    Args:
+        user (str or list): The username of the user or a list of user dictionaries.
+        domain (str): The domain of the user.
+        logger (Logger): The logger object for logging messages.
+        config (ConfigParser): The configuration object for accessing BloodHound settings.
+
+    Returns:
+        None
+
+    Raises:
+        AuthError: If the provided Neo4J credentials are not valid.
+        ServiceUnavailable: If Neo4J is not available on the specified URI.
+        Exception: If an unexpected error occurs with Neo4J.
+    """
     users_owned = []
     if isinstance(user, str):
         users_owned.append({"username": user.upper(), "domain": domain.upper()})
     else:
         users_owned = user
 
-    # TODO: fix this, we shouldn't be doing conditional imports
     if config.get("BloodHound", "bh_enabled") != "False":
-        try:
-            from neo4j.v1 import GraphDatabase
-        except Exception as e:
-            logger.debug(f"Exception while importing neo4j.v1: {e}")
-            from neo4j import GraphDatabase
-        from neo4j.exceptions import AuthError, ServiceUnavailable
-
         uri = f"bolt://{config.get('BloodHound', 'bh_uri')}:{config.get('BloodHound', 'bh_port')}"
 
         driver = GraphDatabase.driver(
