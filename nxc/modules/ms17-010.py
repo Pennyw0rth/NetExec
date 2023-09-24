@@ -216,7 +216,7 @@ def tree_connect_andx_request(ip: str, userid: str) -> str:
     ]
 
     # Create the IPC string
-    ipc = "\\\\{}\\IPC$\\x00".format(ip)
+    ipc = f"\\\\{ip}\\IPC$\\x00"
 
     # Initialize the tree connect andx request
     tree_connect_andx_request = [

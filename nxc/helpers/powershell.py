@@ -158,7 +158,7 @@ else
     else:
         command = amsi_bypass + ps_command
 
-    nxc_logger.debug("Generated PS command:\n {}\n".format(command))
+    nxc_logger.debug(f"Generated PS command:\n {command}\n")
 
     # We could obfuscate the initial launcher using Invoke-Obfuscation but because this function gets executed
     # concurrently it would spawn a local powershell process per host which isn't ideal, until I figure out a good way

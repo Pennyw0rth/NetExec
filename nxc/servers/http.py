@@ -20,7 +20,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "host": self.client_address[0],
             }
         )
-        server_logger.display("- - %s" % (format % args))
+        server_logger.display(f"- - {format % args}")
 
     def do_GET(self):
         if hasattr(self.server.module, "on_request"):

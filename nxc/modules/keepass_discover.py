@@ -61,8 +61,8 @@ class NXCModule:
 
         # search for keepass-related files
         if self.search_type == "ALL" or self.search_type == "FILES":
-            search_keepass_files_payload = "Get-ChildItem -Path {} -Recurse -Force -Include ('KeePass.config.xml','KeePass.exe','*.kdbx') -ErrorAction SilentlyContinue | Select FullName -ExpandProperty FullName".format(self.search_path)
-            search_keepass_files_cmd = 'powershell.exe "{}"'.format(search_keepass_files_payload)
+            search_keepass_files_payload = f"Get-ChildItem -Path {self.search_path} -Recurse -Force -Include ('KeePass.config.xml','KeePass.exe','*.kdbx') -ErrorAction SilentlyContinue | Select FullName -ExpandProperty FullName"
+            search_keepass_files_cmd = f'powershell.exe "{search_keepass_files_payload}"'
             search_keepass_files_output = connection.execute(search_keepass_files_cmd, True).split("\r\n")
             found = False
             found_xml = False
@@ -71,7 +71,7 @@ class NXCModule:
                     if "xml" in file:
                         found_xml = True
                     found = True
-                    context.log.highlight("Found {}".format(file))
+                    context.log.highlight(f"Found {file}")
             if not found:
                 context.log.display("No KeePass-related file were found")
             elif not found_xml:

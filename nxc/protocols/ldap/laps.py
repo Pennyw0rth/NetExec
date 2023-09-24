@@ -242,7 +242,7 @@ class LAPSv2Extract:
             try:
                 dce.bind(MSRPC_UUID_GKDI)
             except Exception as e:
-                self.logger.error("Something went wrong, check error status => %s" % str(e))
+                self.logger.error(f"Something went wrong, check error status => {str(e)}")
                 return False
             self.logger.info("Successfully bound")
             self.logger.info("Calling MS-GKDI GetKey")
@@ -254,13 +254,13 @@ class LAPSv2Extract:
             kds_cache[gke["RootKeyId"]] = gke
 
         kek = compute_kek(gke, key_id)
-        self.logger.info("KEK:\t%s" % kek)
+        self.logger.info(f"KEK:\t{kek}")
         enc_content_parameter = bytes(parsed_enveloped_data["encryptedContentInfo"]["contentEncryptionAlgorithm"]["parameters"])
         iv, _ = decoder.decode(enc_content_parameter)
         iv = bytes(iv[0])
 
         cek = unwrap_cek(kek, bytes(kek_recipient_info["encryptedKey"]))
-        self.logger.info("CEK:\t%s" % cek)
+        self.logger.info(f"CEK:\t{cek}")
         plaintext = decrypt_plaintext(cek, iv, remaining)
         self.logger.info(plaintext[:-18].decode("utf-16le"))
         return plaintext[:-18].decode("utf-16le")

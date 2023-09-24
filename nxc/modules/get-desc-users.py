@@ -42,7 +42,7 @@ class NXCModule:
         searchFilter = "(objectclass=user)"
 
         try:
-            context.log.debug("Search Filter=%s" % searchFilter)
+            context.log.debug(f"Search Filter={searchFilter}")
             resp = connection.ldapConnection.search(
                 searchFilter=searchFilter,
                 attributes=["sAMAccountName", "description"],
@@ -60,7 +60,7 @@ class NXCModule:
                 return False
 
         answers = []
-        context.log.debug("Total of records returned %d" % len(resp))
+        context.log.debug(f"Total of records returned {len(resp)}")
         for item in resp:
             if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
                 continue
@@ -76,13 +76,13 @@ class NXCModule:
                     answers.append([sAMAccountName, description])
             except Exception as e:
                 context.log.debug("Exception:", exc_info=True)
-                context.log.debug("Skipping item, cannot process due to error %s" % str(e))
+                context.log.debug(f"Skipping item, cannot process due to error {str(e)}")
                 pass
         answers = self.filter_answer(context, answers)
         if len(answers) > 0:
             context.log.success("Found following users: ")
             for answer in answers:
-                context.log.highlight("User: {} description: {}".format(answer[0], answer[1]))
+                context.log.highlight(f"User: {answer[0]} description: {answer[1]}")
 
     def filter_answer(self, context, answers):
         # No option to filter

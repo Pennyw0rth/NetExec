@@ -153,7 +153,7 @@ class NXCModule:
         self.psScriptMssql = self.psScriptMssql.replace("REPLACE_ME_SqlServer", SqlServer)
         psScipt_b64 = b64encode(self.psScriptMssql.encode("UTF-16LE")).decode("utf-8")
 
-        return connection.execute("powershell.exe -e {} -OutputFormat Text".format(psScipt_b64), True)
+        return connection.execute(f"powershell.exe -e {psScipt_b64} -OutputFormat Text", True)
 
     def executePsPostgreSql(self, context, connection, PostgreSqlExec, PostgresUserForWindowsAuth, SqlDatabaseName):
         self.psScriptPostgresql = self.psScriptPostgresql.replace("REPLACE_ME_PostgreSqlExec", PostgreSqlExec)
@@ -161,7 +161,7 @@ class NXCModule:
         self.psScriptPostgresql = self.psScriptPostgresql.replace("REPLACE_ME_SqlDatabaseName", SqlDatabaseName)
         psScipt_b64 = b64encode(self.psScriptPostgresql.encode("UTF-16LE")).decode("utf-8")
 
-        return connection.execute("powershell.exe -e {} -OutputFormat Text".format(psScipt_b64), True)
+        return connection.execute(f"powershell.exe -e {psScipt_b64} -OutputFormat Text", True)
 
     def printCreds(self, context, output):
         # Format output if returned in some XML Format

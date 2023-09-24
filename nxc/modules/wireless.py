@@ -70,7 +70,7 @@ class NXCModule:
             wifi_triage = WifiTriage(target=target, conn=conn, masterkeys=masterkeys)
             wifi_creds = wifi_triage.triage_wifi()
         except Exception as e:
-            context.log.debug("Error while looting wifi: {}".format(e))
+            context.log.debug(f"Error while looting wifi: {e}")
         for wifi_cred in wifi_creds:
             if wifi_cred.auth.upper() == "OPEN":
                 context.log.highlight(f"[OPEN] {wifi_cred.ssid}")

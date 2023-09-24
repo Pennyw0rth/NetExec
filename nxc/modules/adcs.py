@@ -103,14 +103,14 @@ class NXCModule:
                             urls.append(match.group(1))
         except Exception as e:
             entry = host_name or "item"
-            self.context.log.fail("Skipping {}, cannot process LDAP entry due to error: '{}'".format(entry, str(e)))
+            self.context.log.fail(f"Skipping {entry}, cannot process LDAP entry due to error: '{str(e)}'")
 
         if host_name:
-            self.context.log.highlight("Found PKI Enrollment Server: {}".format(host_name))
+            self.context.log.highlight(f"Found PKI Enrollment Server: {host_name}")
         if cn:
-            self.context.log.highlight("Found CN: {}".format(cn))
+            self.context.log.highlight(f"Found CN: {cn}")
         for url in urls:
-            self.context.log.highlight("Found PKI Enrollment WebService: {}".format(url))
+            self.context.log.highlight(f"Found PKI Enrollment WebService: {url}")
 
     def process_templates(self, item):
         """
@@ -134,4 +134,4 @@ class NXCModule:
 
         if templates:
             for t in templates:
-                self.context.log.highlight("Found Certificate Template: {}".format(t))
+                self.context.log.highlight(f"Found Certificate Template: {t}")

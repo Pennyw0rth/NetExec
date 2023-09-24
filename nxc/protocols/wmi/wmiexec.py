@@ -92,7 +92,7 @@ class WMIEXEC:
         command = rf"""{self.__shell} {command} 1> {result_output} 2>&1 && certutil -encodehex -f {result_output} {result_output_b64} 0x40000001 && for /F "usebackq" %G in ("{result_output_b64}") do reg add HKLM\{self.__registry_Path} /v {keyName} /t REG_SZ /d "%G" /f && del /q /f /s {result_output} {result_output_b64}"""
 
         self.execute_remote(command)
-        self.logger.info("Waiting {}s for command completely executed.".format(self.__exec_timeout))
+        self.logger.info(f"Waiting {self.__exec_timeout}s for command completely executed.")
         time.sleep(self.__exec_timeout)
 
         self.queryRegistry(keyName)

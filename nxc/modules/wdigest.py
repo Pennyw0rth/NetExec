@@ -132,7 +132,7 @@ class NXCModule:
                 if int(data) == 1:
                     context.log.success("UseLogonCredential registry key is enabled")
                 else:
-                    context.log.fail("Unexpected registry value for UseLogonCredential: %s" % data)
+                    context.log.fail(f"Unexpected registry value for UseLogonCredential: {data}")
             except DCERPCException as d:
                 if "winreg.HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest" in str(d):
                     context.log.fail("UseLogonCredential registry key is disabled (registry key not found)")

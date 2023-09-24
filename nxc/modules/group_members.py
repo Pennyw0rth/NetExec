@@ -62,7 +62,7 @@ class NXCModule:
         if len(self.answers) > 0:
             context.log.success("Found the following members of the " + self.GROUP + " group:")
             for answer in self.answers:
-                context.log.highlight("{}".format(answer[0]))
+                context.log.highlight(f"{answer[0]}")
 
 
 # Carry out an LDAP search for the Group with the supplied Group name

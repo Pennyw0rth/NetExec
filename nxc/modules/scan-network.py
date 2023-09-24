@@ -183,19 +183,19 @@ class NXCModule:
                                 }
                             )
 
-        context.log.highlight("Found %d records" % len(outdata))
-        path = expanduser("~/.nxc/logs/{}_network_{}.log".format(connection.domain, datetime.now().strftime("%Y-%m-%d_%H%M%S")))
+        context.log.highlight(f"Found {len(outdata)} records")
+        path = expanduser(f"~/.nxc/logs/{connection.domain}_network_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")
         with codecs.open(path, "w", "utf-8") as outfile:
             for row in outdata:
                 if self.showhosts:
-                    outfile.write("{}\n".format(row["name"] + "." + connection.domain))
+                    outfile.write(f"{row['name'] + '.' + connection.domain}\n")
                 elif self.showall:
-                    outfile.write("{} \t {}\n".format(row["name"] + "." + connection.domain, row["value"]))
+                    outfile.write(f"{row['name'] + '.' + connection.domain} \t {row['value']}\n")
                 else:
-                    outfile.write("{}\n".format(row["value"]))
-        context.log.success("Dumped {} records to {}".format(len(outdata), path))
+                    outfile.write(f"{row['value']}\n")
+        context.log.success(f"Dumped {len(outdata)} records to {path}")
         if not self.showall and not self.showhosts:
-            context.log.display("To extract CIDR from the {} ip, run  the following command: cat" " your_file | mapcidr -aa -silent | mapcidr -a -silent".format(len(outdata)))
+            context.log.display(f"To extract CIDR from the {len(outdata)} ip, run  the following command: cat your_file | mapcidr -aa -silent | mapcidr -a -silent")
 
 
 class DNS_RECORD(Structure):

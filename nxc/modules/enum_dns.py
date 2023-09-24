@@ -39,7 +39,7 @@ class NXCModule:
                 for result in output:
                     domains.append(result["Name"]["value"])
 
-                context.log.success("Domains retrieved: {}".format(domains))
+                context.log.success(f"Domains retrieved: {domains}")
         else:
             domains = [self.domains]
         data = ""
@@ -70,6 +70,6 @@ class NXCModule:
                         context.log.highlight("\t" + d)
                         data += "\t" + d + "\n"
 
-        log_name = "DNS-Enum-{}-{}.log".format(connection.host, datetime.now().strftime("%Y-%m-%d_%H%M%S"))
+        log_name = f"DNS-Enum-{connection.host}-{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log"
         write_log(data, log_name)
         context.log.display(f"Saved raw output to ~/.nxc/logs/{log_name}")
