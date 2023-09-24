@@ -279,13 +279,13 @@ class NXCModule:
                 self.principal_sid = format_sid(
                     self.ldap_session.search(
                         searchBase=self.baseDN,
-                        searchFilter="(sAMAccountName=%s)" % escape_filter_chars(_lookedup_principal),
+                        searchFilter=f"(sAMAccountName={escape_filter_chars(_lookedup_principal)})",
                         attributes=["objectSid"],
                     )[0][1][0][1][0]
                 )
-                context.log.highlight("Found principal SID to filter on: %s" % self.principal_sid)
+                context.log.highlight(f"Found principal SID to filter on: {self.principal_sid}")
             except Exception:
-                context.log.fail("Principal SID not found in LDAP (%s)" % _lookedup_principal)
+                context.log.fail(f"Principal SID not found in LDAP ({_lookedup_principal})")
                 exit(1)
 
         # Searching for the targets SID and their Security Decriptors
@@ -298,9 +298,9 @@ class NXCModule:
                 self.target_principal_dn = self.target_principal[0]
                 self.principal_raw_security_descriptor = str(self.target_principal[1][0][1][0]).encode("latin-1")
                 self.principal_security_descriptor = ldaptypes.SR_SECURITY_DESCRIPTOR(data=self.principal_raw_security_descriptor)
-                context.log.highlight("Target principal found in LDAP (%s)" % self.target_principal[0])
+                context.log.highlight(f"Target principal found in LDAP ({self.target_principal[0]})")
             except Exception:
-                context.log.fail("Target SID not found in LDAP (%s)" % self.target_sAMAccountName)
+                context.log.fail(f"Target SID not found in LDAP ({self.target_sAMAccountName})")
                 exit(1)
 
             if self.action == "read":
@@ -320,9 +320,9 @@ class NXCModule:
                     self.target_principal_dn = self.target_principal[0]
                     self.principal_raw_security_descriptor = str(self.target_principal[1][0][1][0]).encode("latin-1")
                     self.principal_security_descriptor = ldaptypes.SR_SECURITY_DESCRIPTOR(data=self.principal_raw_security_descriptor)
-                    context.log.highlight("Target principal found in LDAP (%s)" % self.target_sAMAccountName)
+                    context.log.highlight(f"Target principal found in LDAP ({self.target_sAMAccountName})")
                 except Exception:
-                    context.log.fail("Target SID not found in LDAP (%s)" % self.target_sAMAccountName)
+                    context.log.fail(f"Target SID not found in LDAP ({self.target_sAMAccountName})")
                     continue
 
                 if self.action == "read":
@@ -362,7 +362,7 @@ class NXCModule:
             _lookedup_principal = self.target_sAMAccountName
             target = self.ldap_session.search(
                 searchBase=self.baseDN,
-                searchFilter="(sAMAccountName=%s)" % escape_filter_chars(_lookedup_principal),
+                searchFilter=f"(sAMAccountName={escape_filter_chars(_lookedup_principal)})",
                 attributes=["nTSecurityDescriptor"],
                 searchControls=controls,
             )
@@ -370,14 +370,14 @@ class NXCModule:
             _lookedup_principal = self.target_DN
             target = self.ldap_session.search(
                 searchBase=self.baseDN,
-                searchFilter="(distinguishedName=%s)" % _lookedup_principal,
+                searchFilter=f"(distinguishedName={_lookedup_principal})",
                 attributes=["nTSecurityDescriptor"],
                 searchControls=controls,
             )
         try:
             self.target_principal = target[0]
         except Exception:
-            context.log.fail("Principal not found in LDAP (%s), probably an LDAP session issue." % _lookedup_principal)
+            context.log.fail(f"Principal not found in LDAP ({_lookedup_principal}), probably an LDAP session issue.")
             exit(0)
 
     # Attempts to retieve the SID and Distinguisehd Name from the sAMAccountName
@@ -386,7 +386,7 @@ class NXCModule:
     def get_user_info(self, context, samname):
         self.ldap_session.search(
             searchBase=self.baseDN,
-            searchFilter="(sAMAccountName=%s)" % escape_filter_chars(samname),
+            searchFilter=f"(sAMAccountName={escape_filter_chars(samname)})",
             attributes=["objectSid"],
         )
         try:
@@ -394,7 +394,7 @@ class NXCModule:
             sid = format_sid(self.ldap_session.entries[0]["objectSid"].raw_values[0])
             return dn, sid
         except Exception:
-            context.log.fail("User not found in LDAP: %s" % samname)
+            context.log.fail(f"User not found in LDAP: {samname}")
             return False
 
     # Attempts to resolve a SID and return the corresponding samaccountname
@@ -408,17 +408,17 @@ class NXCModule:
             try:
                 self.ldap_session.search(
                     searchBase=self.baseDN,
-                    searchFilter="(objectSid=%s)" % sid,
+                    searchFilter=f"(objectSid={sid})",
                     attributes=["sAMAccountName"],
                 )[0][0]
                 samname = self.ldap_session.search(
                     searchBase=self.baseDN,
-                    searchFilter="(objectSid=%s)" % sid,
+                    searchFilter=f"(objectSid={sid})",
                     attributes=["sAMAccountName"],
                 )[0][1][0][1][0]
                 return samname
             except Exception:
-                context.log.debug("SID not found in LDAP: %s" % sid)
+                context.log.debug(f"SID not found in LDAP: {sid}")
                 return ""
 
     # Parses a full DACL
@@ -504,7 +504,7 @@ class NXCModule:
                             obj_type,
                         )
                     except KeyError:
-                        parsed_ace["Object type (GUID)"] = "UNKNOWN (%s)" % obj_type
+                        parsed_ace["Object type (GUID)"] = f"UNKNOWN ({obj_type})"
                 # Extracts the InheritedObjectType GUID values
                 if ace["Ace"]["InheritedObjectTypeLen"] != 0:
                     inh_obj_type = bin_to_string(ace["Ace"]["InheritedObjectType"]).lower()
@@ -514,7 +514,7 @@ class NXCModule:
                             inh_obj_type,
                         )
                     except KeyError:
-                        parsed_ace["Inherited type (GUID)"] = "UNKNOWN (%s)" % inh_obj_type
+                        parsed_ace["Inherited type (GUID)"] = f"UNKNOWN ({inh_obj_type})"
                 # Extract the Trustee SID (the object that has the right over the DACL bearer)
                 parsed_ace["Trustee (SID)"] = "%s (%s)" % (
                     self.resolveSID(context, ace["Ace"]["Sid"].formatCanonical()) or "UNKNOWN",
@@ -523,7 +523,7 @@ class NXCModule:
 
         else:
             # If the ACE is not an access allowed
-            context.log.debug("ACE Type (%s) unsupported for parsing yet, feel free to contribute" % ace["TypeName"])
+            context.log.debug(f"ACE Type ({ace['TypeName']}) unsupported for parsing yet, feel free to contribute")
             parsed_ace = {}
             parsed_ace["ACE type"] = ace["TypeName"]
             _ace_flags = []
@@ -556,7 +556,7 @@ class NXCModule:
                     if (self.rights == "ResetPassword") and (("Object type (GUID)" not in parsed_ace) or (RIGHTS_GUID.ResetPassword.value not in parsed_ace["Object type (GUID)"])):
                         print_ace = False
                 except Exception as e:
-                    context.log.fail("Error filtering ACE, probably because of ACE type unsupported for parsing yet (%s)" % e)
+                    context.log.fail(f"Error filtering ACE, probably because of ACE type unsupported for parsing yet ({e})")
 
             # Filter on specific right GUID
             if self.rights_guid is not None:
@@ -564,7 +564,7 @@ class NXCModule:
                     if ("Object type (GUID)" not in parsed_ace) or (self.rights_guid not in parsed_ace["Object type (GUID)"]):
                         print_ace = False
                 except Exception as e:
-                    context.log.fail("Error filtering ACE, probably because of ACE type unsupported for parsing yet (%s)" % e)
+                    context.log.fail(f"Error filtering ACE, probably because of ACE type unsupported for parsing yet ({e})")
 
             # Filter on ACE type
             if self.ace_type == "allowed":
@@ -572,13 +572,13 @@ class NXCModule:
                     if ("ACCESS_ALLOWED_OBJECT_ACE" not in parsed_ace["ACE Type"]) and ("ACCESS_ALLOWED_ACE" not in parsed_ace["ACE Type"]):
                         print_ace = False
                 except Exception as e:
-                    context.log.fail("Error filtering ACE, probably because of ACE type unsupported for parsing yet (%s)" % e)
+                    context.log.fail(f"Error filtering ACE, probably because of ACE type unsupported for parsing yet ({e})")
             else:
                 try:
                     if ("ACCESS_DENIED_OBJECT_ACE" not in parsed_ace["ACE Type"]) and ("ACCESS_DENIED_ACE" not in parsed_ace["ACE Type"]):
                         print_ace = False
                 except Exception as e:
-                    context.log.fail("Error filtering ACE, probably because of ACE type unsupported for parsing yet (%s)" % e)
+                    context.log.fail(f"Error filtering ACE, probably because of ACE type unsupported for parsing yet ({e})")
 
             # Filter on trusted principal
             if self.principal_sid is not None:
@@ -586,7 +586,7 @@ class NXCModule:
                     if self.principal_sid not in parsed_ace["Trustee (SID)"]:
                         print_ace = False
                 except Exception as e:
-                    context.log.fail("Error filtering ACE, probably because of ACE type unsupported for parsing yet (%s)" % e)
+                    context.log.fail(f"Error filtering ACE, probably because of ACE type unsupported for parsing yet ({e})")
             if print_ace:
                 self.context.log.highlight("%-28s" % "ACE[%d] info" % i)
                 self.print_parsed_ace(parsed_ace)

@@ -59,7 +59,7 @@ class NXCModule:
             scfile.write("<folderType>{91475FE5-586B-4EBA-8D75-D17434B8CDF6}</folderType>")
             scfile.write("</templateInfo>")
             scfile.write("<simpleLocation>")
-            scfile.write("<url>{}</url>".format(self.url))
+            scfile.write(f"<url>{self.url}</url>")
             scfile.write("</simpleLocation>")
             scfile.write("</searchConnectorDescription>")
             scfile.close()

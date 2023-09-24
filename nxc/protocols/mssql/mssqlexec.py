@@ -59,7 +59,7 @@ class MSSQLEXEC:
         try:
             self.enable_ole()
             hexdata = data.hex()
-            self.mssql_conn.sql_query("DECLARE @ob INT;" "EXEC sp_OACreate 'ADODB.Stream', @ob OUTPUT;" "EXEC sp_OASetProperty @ob, 'Type', 1;" "EXEC sp_OAMethod @ob, 'Open';" "EXEC sp_OAMethod @ob, 'Write', NULL, 0x{};" "EXEC sp_OAMethod @ob, 'SaveToFile', NULL, '{}', 2;" "EXEC sp_OAMethod @ob, 'Close';" "EXEC sp_OADestroy @ob;".format(hexdata, remote))
+            self.mssql_conn.sql_query(f"DECLARE @ob INT;EXEC sp_OACreate 'ADODB.Stream', @ob OUTPUT;EXEC sp_OASetProperty @ob, 'Type', 1;EXEC sp_OAMethod @ob, 'Open';EXEC sp_OAMethod @ob, 'Write', NULL, 0x{hexdata};EXEC sp_OAMethod @ob, 'SaveToFile', NULL, '{remote}', 2;EXEC sp_OAMethod @ob, 'Close';EXEC sp_OADestroy @ob;")
             self.disable_ole()
         except Exception as e:
             nxc_logger.debug(f"Error uploading via mssqlexec: {e}")

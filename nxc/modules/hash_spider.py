@@ -199,7 +199,7 @@ class NXCModule:
             return False
         dumper = Dumper(session, timeout=10, time_between_commands=7).load(self.method)
         if dumper is None:
-            context.log.fail("Unable to load dump method '{}'".format(self.method))
+            context.log.fail(f"Unable to load dump method '{self.method}'")
             return False
         file = dumper.dump()
         if file is None:

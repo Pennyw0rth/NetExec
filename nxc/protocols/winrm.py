@@ -118,7 +118,7 @@ class winrm(connection):
                 ntlm_hash[0] if ntlm_hash else "",
             )
         if not connection:
-            self.logger.fail("LDAP connection failed with account {}".format(username[0]))
+            self.logger.fail(f"LDAP connection failed with account {username[0]}")
             return False
 
         search_filter = "(&(objectCategory=computer)(|(msLAPS-EncryptedPassword=*)(ms-MCS-AdmPwd=*)(msLAPS-Password=*))(name=" + self.hostname + "))"
@@ -159,16 +159,16 @@ class winrm(connection):
                     msMCSAdmPwd = str(values["ms-mcs-admpwd"])
                 else:
                     self.logger.fail("No result found with attribute ms-MCS-AdmPwd or" " msLAPS-Password")
-            self.logger.debug("Host: {:<20} Password: {} {}".format(sAMAccountName, msMCSAdmPwd, self.hostname))
+            self.logger.debug(f"Host: {sAMAccountName:<20} Password: {msMCSAdmPwd} {self.hostname}")
         else:
-            self.logger.fail("msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS" " property for {}".format(self.hostname))
+            self.logger.fail(f"msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS property for {self.hostname}")
             return False
 
         self.username = self.args.laps if not username_laps else username_laps
         self.password = msMCSAdmPwd
 
         if msMCSAdmPwd == "":
-            self.logger.fail("msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS" " property for {}".format(self.hostname))
+            self.logger.fail(f"msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS property for {self.hostname}")
             return False
         if ntlm_hash:
             hash_ntlm = hashlib.new("md4", msMCSAdmPwd.encode("utf-16le")).digest()

@@ -123,7 +123,7 @@ class NXCModule:
         dce.connect()
         dce.bind(samr.MSRPC_UUID_SAMR)
 
-        samr_connect_response = samr.hSamrConnect5(dce, "\\\\%s\x00" % self.__target, samr.SAM_SERVER_ENUMERATE_DOMAINS | samr.SAM_SERVER_LOOKUP_DOMAIN)
+        samr_connect_response = samr.hSamrConnect5(dce, f"\\\\{self.__target}\x00", samr.SAM_SERVER_ENUMERATE_DOMAINS | samr.SAM_SERVER_LOOKUP_DOMAIN)
         serv_handle = samr_connect_response["ServerHandle"]
 
         samr_enum_response = samr.hSamrEnumerateDomainsInSamServer(dce, serv_handle)
@@ -172,7 +172,7 @@ class NXCModule:
                 user_handle = open_user["UserHandle"]
             except samr.DCERPCSessionError as e:
                 if e.error_code == 0xC0000022:
-                    context.log.highlight("{}".format(self.__username + " does not have the right to " + message + " " + self.__computerName))
+                    context.log.highlight(f"{self.__username + ' does not have the right to ' + message + ' ' + self.__computerName}")
                     self.noLDAPRequired = True
                     raise Exception()
                 else:

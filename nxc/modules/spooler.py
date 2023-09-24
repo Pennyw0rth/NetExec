@@ -49,7 +49,7 @@ class NXCModule:
         nthash = getattr(connection, "nthash", "")
 
         self.__stringbinding = KNOWN_PROTOCOLS[self.port]["bindstr"] % connection.host
-        context.log.debug("StringBinding %s" % self.__stringbinding)
+        context.log.debug(f"StringBinding {self.__stringbinding}")
         rpctransport = transport.DCERPCTransportFactory(self.__stringbinding)
         rpctransport.set_credentials(connection.username, connection.password, connection.domain, lmhash, nthash)
         rpctransport.setRemoteHost(connection.host if not connection.kerberos else connection.hostname + "." + connection.domain)
@@ -61,7 +61,7 @@ class NXCModule:
         try:
             entries = self.__fetch_list(rpctransport)
         except Exception as e:
-            error_text = "Protocol failed: %s" % e
+            error_text = f"Protocol failed: {e}"
             context.log.critical(error_text)
 
             if RPC_PROXY_INVALID_RPC_PORT_ERR in error_text or RPC_PROXY_RPC_OUT_DATA_404_ERR in error_text or RPC_PROXY_CONN_A1_404_ERR in error_text or RPC_PROXY_CONN_A1_0X6BA_ERR in error_text:
@@ -91,12 +91,12 @@ class NXCModule:
 
         for endpoint in list(endpoints.keys()):
             if "MS-RPRN" in endpoints[endpoint]["Protocol"]:
-                context.log.debug("Protocol: %s " % endpoints[endpoint]["Protocol"])
-                context.log.debug("Provider: %s " % endpoints[endpoint]["EXE"])
-                context.log.debug("UUID    : %s %s" % (endpoint, endpoints[endpoint]["annotation"]))
+                context.log.debug(f"Protocol: {endpoints[endpoint]['Protocol']} ")
+                context.log.debug(f"Provider: {endpoints[endpoint]['EXE']} ")
+                context.log.debug(f"UUID    : {endpoint} {endpoints[endpoint]['annotation']}")
                 context.log.debug("Bindings: ")
                 for binding in endpoints[endpoint]["Bindings"]:
-                    context.log.debug("          %s" % binding)
+                    context.log.debug(f"          {binding}")
                 context.log.debug("")
                 context.log.highlight("Spooler service enabled")
                 try:

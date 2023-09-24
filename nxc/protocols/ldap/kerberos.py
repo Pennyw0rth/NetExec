@@ -114,8 +114,8 @@ class KerberosAttacks:
                 domain = ccache.principal.realm["data"]
             else:
                 domain = self.domain
-            nxc_logger.debug("Using Kerberos Cache: %s" % getenv("KRB5CCNAME"))
-            principal = "krbtgt/%s@%s" % (domain.upper(), domain.upper())
+            nxc_logger.debug(f"Using Kerberos Cache: {getenv('KRB5CCNAME')}")
+            principal = f"krbtgt/{domain.upper()}@{domain.upper()}"
             creds = ccache.getCredential(principal)
             if creds is not None:
                 TGT = creds.toTGT()
@@ -146,7 +146,7 @@ class KerberosAttacks:
                     kdcHost=self.kdcHost,
                 )
             except Exception as e:
-                nxc_logger.debug("TGT: %s" % str(e))
+                nxc_logger.debug(f"TGT: {str(e)}")
                 tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(
                     userName,
                     self.password,
@@ -180,7 +180,7 @@ class KerberosAttacks:
         asReq = AS_REQ()
 
         domain = self.targetDomain.upper()
-        serverName = Principal("krbtgt/%s" % domain, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+        serverName = Principal(f"krbtgt/{domain}", type=constants.PrincipalNameType.NT_PRINCIPAL.value)
 
         pacRequest = KERB_PA_PAC_REQUEST()
         pacRequest["include-pac"] = requestPAC
@@ -248,7 +248,7 @@ class KerberosAttacks:
             asRep = decoder.decode(r, asn1Spec=AS_REP())[0]
         else:
             # The user doesn't have UF_DONT_REQUIRE_PREAUTH set
-            nxc_logger.debug("User %s doesn't have UF_DONT_REQUIRE_PREAUTH set" % userName)
+            nxc_logger.debug(f"User {userName} doesn't have UF_DONT_REQUIRE_PREAUTH set")
             return
 
         # Let's output the TGT enc-part/cipher in Hashcat format, in case somebody wants to use it.

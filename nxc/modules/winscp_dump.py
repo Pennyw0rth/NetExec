@@ -357,7 +357,7 @@ class NXCModule:
 
                     data = rrp.hBaseRegQueryInfoKey(remote_ops._RemoteOperations__rrp, key_handle)
                     sessions = data["lpcSubKeys"]
-                    context.log.success('Found {} sessions for user "{}" in registry!'.format(sessions - 1, self.userDict[userObject]))
+                    context.log.success(f'Found {sessions - 1} sessions for user "{self.userDict[userObject]}" in registry!')
 
                     # Get Session Names
                     session_names = []
@@ -377,7 +377,7 @@ class NXCModule:
                         )
                 except DCERPCException as e:
                     if str(e).find("ERROR_FILE_NOT_FOUND"):
-                        context.log.debug("No WinSCP config found in registry for user {}".format(userObject))
+                        context.log.debug(f"No WinSCP config found in registry for user {userObject}")
                 except Exception as e:
                     context.log.fail(f"Unexpected error: {e}")
                     context.log.debug(traceback.format_exc())

@@ -124,7 +124,7 @@ class WMIEXEC_EVENT:
                 error_name = WBEMSTATUS.enumItems(call_status).name
             except ValueError:
                 error_name = "Unknown"
-            self.logger.debug("{} - ERROR: {} (0x{:08x})".format(banner, error_name, call_status))
+            self.logger.debug(f"{banner} - ERROR: {error_name} (0x{call_status:08x})")
         else:
             self.logger.debug(f"{banner} - OK")
 

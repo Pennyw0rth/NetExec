@@ -90,7 +90,7 @@ class NXCModule:
                 elif target_user.dbowner:
                     self.do_dbowner_privesc(target_user.dbowner, exec_as)
             if self.is_admin_user(self.current_username):
-                self.context.log.success(f"{self.current_username} is now a sysadmin! " + highlight("({})".format(self.context.conf.get("nxc", "pwn3d_label"))))
+                self.context.log.success(f"{self.current_username} is now a sysadmin! " + highlight(f"({self.context.conf.get('nxc', 'pwn3d_label')})"))
 
     def build_exec_as_from_path(self, target_user):
         """

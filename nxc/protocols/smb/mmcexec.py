@@ -149,7 +149,7 @@ class MMCEXEC:
         elif objRefType == FLAGS_OBJREF_EXTENDED:
             objRef = OBJREF_EXTENDED(b"".join(resp))
         else:
-            self.logger.fail("Unknown OBJREF Type! 0x%x" % objRefType)
+            self.logger.fail(f"Unknown OBJREF Type! 0x{objRefType:x}")
 
         return IRemUnknown2(
             INTERFACE(

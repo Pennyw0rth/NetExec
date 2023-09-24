@@ -59,4 +59,4 @@ class NXCModule:
                     )
                 )
         except Exception as e:
-            context.log.debug("Error while looting firefox: {}".format(e))
+            context.log.debug(f"Error while looting firefox: {e}")

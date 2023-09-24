@@ -34,7 +34,7 @@ class NXCModule:
         success = 0
         results = {}
         target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
-        context.log.debug("Detecting installed services on {} using LsarLookupNames()...".format(target))
+        context.log.debug(f"Detecting installed services on {target} using LsarLookupNames()...")
 
         try:
             lsa = LsaLookupNames(
@@ -200,7 +200,7 @@ class LsaLookupNames:
         request["PolicyHandle"] = policyHandle
         request["Count"] = 1
         name1 = RPC_UNICODE_STRING()
-        name1["Data"] = "NT Service\{}".format(service)
+        name1["Data"] = f"NT Service\\{service}"
         request["Names"].append(name1)
         request["TranslatedSids"]["Sids"] = NULL
         request["LookupLevel"] = lsat.LSAP_LOOKUP_LEVEL.LsapLookupWksta

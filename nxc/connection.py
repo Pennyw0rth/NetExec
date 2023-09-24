@@ -59,7 +59,7 @@ def dcom_FirewallChecker(iInterface, timeout):
                 stringBinding = "ncacn_ip_tcp:" + strBinding["aNetworkAddr"][:-1]
                 break
             elif iInterface.is_fqdn() and binding.upper().find(iInterface.get_target().upper().partition(".")[0]) >= 0:
-                stringBinding = "ncacn_ip_tcp:%s%s" % (iInterface.get_target(), bindingPort)
+                stringBinding = f"ncacn_ip_tcp:{iInterface.get_target()}{bindingPort}"
     if "stringBinding" not in locals():
         return True, None
     try:

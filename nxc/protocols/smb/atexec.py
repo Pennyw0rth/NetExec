@@ -169,7 +169,7 @@ class TSCH_EXEC:
         taskCreated = False
 
         if taskCreated is True:
-            tsch.hSchRpcDelete(dce, "\\%s" % tmpName)
+            tsch.hSchRpcDelete(dce, f"\\{tmpName}")
 
         if self.__retOutput:
             if fileless:

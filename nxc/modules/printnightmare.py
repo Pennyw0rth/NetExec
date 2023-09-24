@@ -46,7 +46,7 @@ class NXCModule:
         # Connect and bind to MS-RPRN (https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-rprn/848b8334-134a-4d02-aea4-03b673d6c515)
         stringbinding = r"ncacn_np:%s[\PIPE\spoolss]" % connection.host
 
-        context.log.info("Binding to %s" % (repr(stringbinding)))
+        context.log.info(f"Binding to {repr(stringbinding)}")
 
         rpctransport = transport.DCERPCTransportFactory(stringbinding)
 
@@ -71,7 +71,7 @@ class NXCModule:
             # Bind to MSRPC MS-RPRN UUID: 12345678-1234-ABCD-EF00-0123456789AB
             dce.bind(rprn.MSRPC_UUID_RPRN)
         except Exception as e:
-            context.log.fail("Failed to bind: %s" % e)
+            context.log.fail(f"Failed to bind: {e}")
             sys.exit(1)
 
         flags = APD_COPY_ALL_FILES | APD_COPY_FROM_DIRECTORY | APD_INSTALL_WARNED_DRIVER
@@ -125,7 +125,7 @@ class DCERPCSessionError(DCERPCException):
                 error_msg_verbose,
             )
         else:
-            return "RPRN SessionError: unknown error code: 0x%x" % self.error_code
+            return f"RPRN SessionError: unknown error code: 0x{self.error_code:x}"
 
 
 ################################################################################

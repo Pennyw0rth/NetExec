@@ -139,7 +139,7 @@ class wmi(connection):
     def print_host_info(self):
         self.logger.extra["protocol"] = "RPC"
         self.logger.extra["port"] = "135"
-        self.logger.display("{} (name:{}) (domain:{})".format(self.server_os, self.hostname, self.domain))
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
         return True
 
     def check_if_admin(self):
@@ -382,7 +382,7 @@ class wmi(connection):
         except Exception as e:
             dcom.disconnect()
             self.logger.debug(str(e))
-            self.logger.fail("Execute WQL error: {}".format(str(e)))
+            self.logger.fail(f"Execute WQL error: {str(e)}")
             return False
         else:
             self.logger.info(f"Executing WQL syntax: {WQL}")

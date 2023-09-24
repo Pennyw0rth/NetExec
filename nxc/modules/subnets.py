@@ -80,7 +80,7 @@ class NXCModule:
                 sizeLimit=999,
             )
             if len([subnet for subnet in list_subnets if isinstance(subnet, ldapasn1_impacket.SearchResultEntry)]) == 0:
-                context.log.highlight('Site "%s"' % site_name)
+                context.log.highlight(f'Site "{site_name}"')
             else:
                 for subnet in list_subnets:
                     if isinstance(subnet, ldapasn1_impacket.SearchResultEntry) is not True:
