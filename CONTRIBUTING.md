@@ -7,11 +7,11 @@ We love your input! We want to make contributing to this project as easy and tra
 - Proposing new features
 - Becoming a maintainer
 
-## We Develop with Github
+## We Develop with GitHub
 We use github to host code, to track issues and feature requests, as well as accept pull requests.
 
-## We Use [Github Flow](https://guides.github.com/introduction/flow/index.html), So All Code Changes Happen Through Pull Requests
-Pull requests are the best way to propose changes to the codebase (we use [Github Flow](https://guides.github.com/introduction/flow/index.html)). We actively welcome your pull requests:
+## We Use [GitHub Flow](https://guides.github.com/introduction/flow/index.html), So All Code Changes Happen Through Pull Requests
+Pull requests are the best way to propose changes to the codebase (we use [GitHub Flow](https://guides.github.com/introduction/flow/index.html)). We actively welcome your pull requests:
 
 1. Fork the repo and create your branch from `master`.
 2. If you've added code that should be tested, add tests.
@@ -22,8 +22,8 @@ Pull requests are the best way to propose changes to the codebase (we use [Githu
 ## Any contributions you make will be under the BSD-2-Clause Software License
 In short, when you submit code changes, your submissions are understood to be under the same [BSD-2-Clause License](https://choosealicense.com/licenses/bsd-2-clause/) that covers the project. Feel free to contact the maintainers if that's a concern.
 
-## Report bugs using Github's [issues](https://github.com/briandk/transcriptase-atom/issues)
-We use GitHub issues to track public bugs. Report a bug by [opening a new issue](); it's that easy!
+## Report bugs using GitHub's [issues](https://github.com/Pennyw0rth/NetExec/issues)
+We use GitHub issues to track public bugs. Report a bug by [opening a new issue](https://github.com/Pennyw0rth/NetExec/issues/new/choose); it's that easy!
 
 ## Write bug reports with detail, background, and sample code
 
@@ -43,6 +43,7 @@ People *love* thorough bug reports. I'm not even kidding.
 [PEP](https://peps.python.org/pep-0008/) is used in this project
 
 * 4 spaces for indentation rather than tabs
+* Double quotes on outside of strings
 * We use Ruff as linter, there is a VS-Code extension available you can use
 
 ## License
