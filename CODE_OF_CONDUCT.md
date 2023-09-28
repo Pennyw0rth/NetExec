@@ -58,9 +58,8 @@ representative at an online or offline event.
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement at
-.
+Instances of abusive, harassing, or otherwise unacceptable behavior should be
+reported to the community leaders (i.e. official maintainers) responsible for enforcement.
 All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the
@@ -70,6 +69,10 @@ reporter of any incident.
 
 Community leaders will follow these Community Impact Guidelines in determining
 the consequences for any action they deem in violation of this Code of Conduct:
+
+*Note*: egregious rule breaking, such as obvious trolling, death threats, etc may
+lead directly to a permanent ban without warning, i.e. there is no correction or
+warnings attempts.
 
 ### 1. Correction
 
