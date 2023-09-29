@@ -66,8 +66,8 @@ class CMEModule:
             domain = ".".join(hostname_parts[1:])
             
             home = Path.home()
-            cme_path = home / ".cme"
-            logs_path = cme_path / 'logs'
+            nxc_path = home / ".nxc"
+            logs_path = nxc_path / 'logs'
             filename = logs_path / f'{domain}.obsoletehosts.txt'
             
             context.log.display(f'Obsolete hosts will be saved to {filename}')
