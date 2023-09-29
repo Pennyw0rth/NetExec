@@ -79,7 +79,7 @@ class CMEModule:
                 except socket.gaierror:
                     ip_address = "N/A"
 
-                context.log.highlight(f'{answer[0]} -> {ip_address} -> {answer[1]} ')
+                context.log.highlight(f'{answer[0]} ({ip_address}) : {answer[1]} ')
                 with open(filename, 'a') as f:
                     f.write(f'{answer[0]}\n')
         else:
