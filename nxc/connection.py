@@ -371,7 +371,8 @@ class connection(object):
         if self.args.protocol == 'smb' and not self.args.local_auth and "." not in domain and not self.args.laps and secret != "" and not (self.domain.upper() == self.hostname.upper()) :
             self.logger.error(f"Domain {domain} for user {username.rstrip()} need to be FQDN ex:domain.local, not domain")
             return False
-
+        if self.args.delegate:
+            self.args.kerberos = True
         with sem:
             if cred_type == 'plaintext':
                 if self.args.kerberos:
