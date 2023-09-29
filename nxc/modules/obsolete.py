@@ -23,7 +23,7 @@ class CMEModule:
                          "(operatingSystem=*Windows XP*)(operatingSystem=*Windows Vista*)"
                          "(operatingSystem=*Windows 7*)(operatingSystem=*Windows 8*)"
                          "(operatingSystem=*Windows 8.1*)(operatingSystem=*Windows Server 2003*)"
-                         "(operatingSystem=*Windows Server 2008*)))")
+                         "(operatingSystem=*Windows Server 2008*)(operatingSystem=*Windows Server 2012*)))")
         attributes = ['name', 'operatingSystem', 'dNSHostName']
 
         try:
