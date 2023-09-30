@@ -31,8 +31,3 @@ jobs:
       with:
         name: nxcdb-zipapp-${{ matrix.os }}-${{ matrix.python-version }}
         path: bin/nxcdb
-    - name: Upload ZipApps
-      uses: actions/upload-artifact@v3
-      with:
-        name: nxc-${{ matrix.os }}-${{ matrix.python-version }}
-        path: bin/nxc
