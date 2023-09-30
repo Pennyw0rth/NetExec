@@ -2,6 +2,7 @@ name: NetExec Build Binaries
 
 on:
   workflow_dispatch:
+  push:
 
 jobs:
   build:

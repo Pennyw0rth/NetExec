@@ -2,6 +2,7 @@ name: NetExec Build ZippApps
 
 on:
   workflow_dispatch:
+  push:
 
 jobs:
   build:
