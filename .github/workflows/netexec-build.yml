@@ -1,8 +1,7 @@
-name: NetExec Build Binaries
+name: Build Binaries
 
 on:
   workflow_dispatch:
-  push:
 
 jobs:
   build:
@@ -10,7 +9,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [windows-latest]
         python-version: ["3.11"]
         #os: [ubuntu-latest, macOS-latest, windows-latest]
         #python-version: ["3.8", "3.9", "3.10", "3.11"]

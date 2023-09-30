@@ -1,8 +1,7 @@
-name: NetExec Build ZippApps
+name: Build ZippApps
 
 on:
   workflow_dispatch:
-  push:
 
 jobs:
   build:
