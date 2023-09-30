@@ -85,7 +85,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='netexec',
+    name='nxc',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

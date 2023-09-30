@@ -1,0 +1,38 @@
+name: NetExec Build ZippApps
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Building NetExec Python ZipApp on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macOS-latest, windows-latest]
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
+    steps:
+    - uses: actions/checkout@v3
+    - name: NetExec set up python on ${{ matrix.os }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Build Python ZipApp with Shiv
+      run: |
+        pip install shiv
+        python build_collector.py
+    - name: Upload nxc ZipApp
+      uses: actions/upload-artifact@v3
+      with:
+        name: nxc-zipapp-${{ matrix.os }}-${{ matrix.python-version }}
+        path: bin/nxc
+    - name: Upload nxcdb ZipApp
+      uses: actions/upload-artifact@v3
+      with:
+        name: nxcdb-zipapp-${{ matrix.os }}-${{ matrix.python-version }}
+        path: bin/nxcdb
+    - name: Upload ZipApps
+      uses: actions/upload-artifact@v3
+      with:
+        name: nxc-${{ matrix.os }}-${{ matrix.python-version }}
+        path: bin/nxc
