@@ -10,7 +10,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest]
+        os: [ubuntu-latest, windows-latest]
         python-version: ["3.11"]
         #os: [ubuntu-latest, macOS-latest, windows-latest]
         #python-version: ["3.8", "3.9", "3.10", "3.11"]
@@ -36,5 +36,5 @@ jobs:
       if: runner.os != 'windows'
       uses: actions/upload-artifact@v3
       with:
-        name: nxc-${{ matrix.os }}-${{ matrix.python-version }}
+        name: nxc-${{ matrix.os }}
         path: bin/nxc
