@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    name: Building NetExec Python ZipApp on ${{ matrix.os }}
+    name: Building Python ZipApp on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:

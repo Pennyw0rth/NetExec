@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    name: Building NetExec Binary on ${{ matrix.os }}
+    name: Building Binary on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
