@@ -140,6 +140,7 @@ def gen_cli_args():
         default=[],
         help="password(s) or file(s) containing passwords",
     )
+    std_parser.add_argument("--ignore-pw-decoding", action="store_true", help="Ignore non UTF-8 characters when decoding the password file")
     std_parser.add_argument("-k", "--kerberos", action="store_true", help="Use Kerberos authentication")
     std_parser.add_argument("--no-bruteforce", action="store_true", help="No spray when using file for username and password (user1 => password1, user2 => password2")
     std_parser.add_argument("--continue-on-success", action="store_true", help="continues authentication attempts even after successes")
