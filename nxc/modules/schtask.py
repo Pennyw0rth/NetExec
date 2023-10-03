@@ -65,8 +65,7 @@ class NXCModule:
                 if not isinstance(output, str):
                     output = output.decode(connection.args.codec)
             except UnicodeDecodeError:
-                self.logger.debug("Decoding error detected, consider running chcp.com at the target, map the result with https://docs.python.org/3/library/codecs.html#standard-encodings")
-                output = output.decode("cp437")
+                self.logger.fail("Decoding error detected, consider running chcp.com at the target, map the result with https://docs.python.org/3/library/codecs.html#standard-encodings")
             self.logger.highlight(output)
 
         except Exception as e:
