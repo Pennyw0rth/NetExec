@@ -13,6 +13,7 @@ netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS --rid-brute
 netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS --local-groups
 netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS --gen-relay-list /tmp/relaylistOutputFilename.txt
 netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS --local-auth
+netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS --delegate USERNAME
 netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS --sam
 netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS --ntds
 netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS --lsa
