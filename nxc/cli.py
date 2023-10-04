@@ -16,16 +16,19 @@ def gen_cli_args():
     CODENAME = "A New Beginning"
 
     parser = argparse.ArgumentParser(description=f"""
-     _   _          _     _____                      
-    | \ | |   ___  | |_  | ____| __  __   ___    ___ 
-    |  \| |  / _ \ | __| |  _|   \ \/ /  / _ \  / __|
-    | |\  | |  __/ | |_  | |___   >  <  |  __/ | (__ 
-    |_| \_|  \___|  \__| |_____| /_/\_\  \___|  \___|
-
-    The network execution tool
-    Maintained as an open source project by @NeffIsBack, @MJHallenbeck, @_zblurx
+                            .  .                                     
+     _   _          _      .|  |.    _____                     
+    | \ | |   ___  | |_    ||  ||   | ____| __  __   ___    ___ 
+    |..\| |  / : \ |.__|   \\()//   |  _|   \ \/ /  / . \  /  _|
+    | |\  | |  __/ |.|_    .=[]=.   |.|___   /..\  |  ॱ__/ | .|_ 
+    |_| \_|  \___|  \__|  / /ॱ-ॱ\ \  |_ॱ____| /_/\_\  \___|  \_ॱ_| 
+                          ॱ \   / ॱ                                             
+                            ॱ   ॱ                         
+                              
+    the [N]etwork e[X]e[C]ution tool 
+    maintained as an open source project by @NeffIsBack, @MJHallenbeck, @_zblurx
     
-    For documentation and usage examples, visit: https://www.netexec.wiki/
+    for documentation and usage examples, visit: https://www.netexec.wiki/
 
     {highlight('Version', 'red')} : {highlight(VERSION)}
     {highlight('Codename', 'red')}: {highlight(CODENAME)}
