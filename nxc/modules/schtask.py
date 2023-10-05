@@ -7,19 +7,22 @@ from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 from nxc.helpers.misc import gen_random_string
 from time import sleep
+from datetime import datetime
 
 class NXCModule:
     """
     Execute a scheduled task remotely as a already connected user by @Defte_
+    Thanks @Shad0wC0ntr0ller for the idea of removing the hardcoded date that could be used as an IOC
     """
 
     def options(self, context, module_options):
         """
         CMD            Command to execute
-        USER           User to execute the command as
+        USER           User to execute command as
         """
 
         self.cmd = self.user = self.time = None
+
         if "CMD" in module_options:
             self.cmd = module_options["CMD"]
         
@@ -32,16 +35,18 @@ class NXCModule:
     opsec_safe = True
     multiple_hosts = False
     
+    
     def on_admin_login(self, context, connection):
         self.logger = context.log
         if self.cmd is None:
             self.logger.fail("You need to specify a CMD to run")
             return 1
         if self.user is None:
-            self.logger .fail("You need to specify a USER to run the command as") 
+            self.logger .fail("You need to specify a USER to tun the command as") 
             return 1
 
-        self.logger.display("Connecting to the remote atsvc endpoint")
+        
+        self.logger.display("Connecting to the remote Service control endpoint")
         try:
             exec_method = TSCH_EXEC(
                 connection.host if not connection.kerberos else connection.hostname + "." + connection.domain,
@@ -61,11 +66,12 @@ class NXCModule:
             )
 
             output = exec_method.execute(self.cmd, True)
+          
             try:
                 if not isinstance(output, str):
                     output = output.decode(connection.args.codec)
             except UnicodeDecodeError:
-                self.logger.fail("Decoding error detected, consider running chcp.com at the target, map the result with https://docs.python.org/3/library/codecs.html#standard-encodings")
+                self.logger.debug("Decoding error detected, consider running chcp.com at the target, map the result with https://docs.python.org/3/library/codecs.html#standard-encodings")
             self.logger.highlight(output)
 
         except Exception as e:
@@ -125,12 +131,19 @@ class TSCH_EXEC:
     def output_callback(self, data):
         self.__outputBuffer = data
 
+    def get_current_date(self):
+        # Get current date and time
+        now = datetime.now()
+
+        # Format it to match the format in the XML: "YYYY-MM-DDTHH:MM:SS.ssssss"
+        return now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
+
     def gen_xml(self, command, fileless=False):
         xml = f"""<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <Triggers>
     <CalendarTrigger>
-      <StartBoundary>2015-07-15T20:35:13.2757294</StartBoundary>
+      <StartBoundary>{self.get_current_date()}</StartBoundary>
       <Enabled>true</Enabled>
       <ScheduleByDay>
         <DaysInterval>1</DaysInterval>
