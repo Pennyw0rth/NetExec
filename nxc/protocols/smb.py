@@ -348,6 +348,7 @@ class smb(connection):
             hash_ntlm = hashlib.new("md4", msMCSAdmPwd.encode("utf-16le")).digest()
             self.hash = binascii.hexlify(hash_ntlm).decode()
 
+        self.args.local_auth = True
         self.domain = self.hostname
         self.logger.extra["protocol"] = "SMB"
         self.logger.extra["port"] = "445"
