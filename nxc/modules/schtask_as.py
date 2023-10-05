@@ -29,8 +29,8 @@ class NXCModule:
         if "USER" in module_options:
             self.user = module_options["USER"]
        
-    name = "schtask"
-    description = "Execute a scheduled task on the remote system"
+    name = "schtask_as"
+    description = "Remotely execute a scheduled task as a logged on user"
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = False
