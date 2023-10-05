@@ -42,7 +42,7 @@ class NXCModule:
             self.logger.fail("You need to specify a CMD to run")
             return 1
         if self.user is None:
-            self.logger .fail("You need to specify a USER to tun the command as") 
+            self.logger.fail("You need to specify a USER to run the command as") 
             return 1
 
         
