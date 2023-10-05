@@ -829,16 +829,16 @@ class ldap(connection):
             if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
                 continue
             name = ""
-            try:           	    
-            	for attribute in item["attributes"]:     
-            	    if str(attribute["type"]) == "dNSHostName":
-            	        name = str(attribute["vals"][0])
-            	try:
-            	    ip_address = socket.gethostbyname(name.split(".")[0])
-            	    if ip_address != True and name != "":
+            try:
+                for attribute in item["attributes"]:     
+                    if str(attribute["type"]) == "dNSHostName":
+                        name = str(attribute["vals"][0])
+                try:
+                    ip_address = socket.gethostbyname(name.split(".")[0])
+                    if ip_address != True and name != "":
                         self.logger.highlight(f"{name} = {colored(ip_address, host_info_colors[0])}")
-            	except socket.gaierror:
-            	    self.logger.fail(f"{name} = Connection timeout")
+                except socket.gaierror:
+                    self.logger.fail(f"{name} = Connection timeout")
             except Exception as e:
                 self.logger.fail("Exception:", exc_info=True)
                 self.logger.fail(f"Skipping item, cannot process due to error {e}")
