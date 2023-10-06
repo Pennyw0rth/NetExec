@@ -116,7 +116,7 @@ class wmi(connection):
             self.conn.connect()
             self.conn.send(packet.get_packet())
             buffer = self.conn.recv()
-        except:
+        except Exception:
             buffer = 0
 
         if buffer != 0:
@@ -130,17 +130,17 @@ class wmi(connection):
                 if av_pairs[ntlm.NTLMSSP_AV_HOSTNAME][1] is not None:
                     try:
                         self.hostname = av_pairs[ntlm.NTLMSSP_AV_HOSTNAME][1].decode("utf-16le")
-                    except:
+                    except Exception:
                         self.hostname = self.host
                 if av_pairs[ntlm.NTLMSSP_AV_DNS_DOMAINNAME][1] is not None:
                     try:
                         self.domain = av_pairs[ntlm.NTLMSSP_AV_DNS_DOMAINNAME][1].decode("utf-16le")
-                    except:
+                    except Exception:
                         self.domain = self.args.domain
                 if av_pairs[ntlm.NTLMSSP_AV_DNS_HOSTNAME][1] is not None:
                     try:
                         self.fqdn = av_pairs[ntlm.NTLMSSP_AV_DNS_HOSTNAME][1].decode("utf-16le")
-                    except:
+                    except Exception:
                         pass
                 if "Version" in ntlmChallenge.fields:
                     version = ntlmChallenge["Version"]

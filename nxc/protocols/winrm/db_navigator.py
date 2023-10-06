@@ -42,7 +42,7 @@ class navigator(DatabaseNavigator):
 
             try:
                 os = host[5].decode()
-            except:
+            except Exception:
                 os = host[5]
 
             links = self.db.get_admin_relations(host_id=host_id)
@@ -84,7 +84,7 @@ class navigator(DatabaseNavigator):
 
                     try:
                         os = host[5].decode()
-                    except:
+                    except Exception:
                         os = host[5]
 
                     data.append([host_id, ip, port, hostname, domain, os])

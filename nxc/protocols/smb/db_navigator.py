@@ -85,7 +85,7 @@ class navigator(DatabaseNavigator):
 
             try:
                 os = host[4].decode()
-            except:
+            except Exception:
                 os = host[4]
             try:
                 smbv1 = host[6]
@@ -310,7 +310,7 @@ class navigator(DatabaseNavigator):
 
                     try:
                         os = host[4].decode()
-                    except:
+                    except Exception:
                         os = host[4]
                     try:
                         dc = host[5]

@@ -136,7 +136,7 @@ class rdp(connection):
                 if "Reason:" not in str(e):
                     try:
                         info_domain = self.conn.get_extra_info()
-                    except:
+                    except Exception:
                         pass
                     else:
                         self.domain = info_domain["dnsdomainname"]

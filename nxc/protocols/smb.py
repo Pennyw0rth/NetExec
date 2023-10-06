@@ -421,7 +421,7 @@ class smb(connection):
             if self.args.continue_on_success and self.signing:
                 try:
                     self.conn.logoff()
-                except:
+                except Exception:
                     pass
                 self.create_conn_obj()
 
@@ -496,7 +496,7 @@ class smb(connection):
             if self.args.continue_on_success and self.signing:
                 try:
                     self.conn.logoff()
-                except:
+                except Exception:
                     pass
                 self.create_conn_obj()
             return True
@@ -561,7 +561,7 @@ class smb(connection):
             if self.args.continue_on_success and self.signing:
                 try:
                     self.conn.logoff()
-                except:
+                except Exception:
                     pass
                 self.create_conn_obj()
             return True
@@ -638,12 +638,12 @@ class smb(connection):
         dce = rpctransport.get_dce_rpc()
         try:
             dce.connect()
-        except:
+        except Exception:
             pass
         else:
             try:
                 dce.bind(scmr.MSRPC_UUID_SCMR)
-            except:
+            except Exception:
                 pass
             try:
                 # 0xF003F - SC_MANAGER_ALL_ACCESS
@@ -682,7 +682,7 @@ class smb(connection):
                     exec_method = WMIEXEC(self.host if not self.kerberos else self.hostname + "." + self.domain, self.smb_share_name, self.username, self.password, self.domain, self.conn, self.kerberos, self.aesKey, self.kdcHost, self.hash, self.args.share, logger=self.logger, timeout=self.args.dcom_timeout, tries=self.args.get_output_tries)
                     self.logger.info("Executed command via wmiexec")
                     break
-                except:
+                except Exception:
                     self.logger.debug("Error executing command via wmiexec, traceback:")
                     self.logger.debug(format_exc())
                     continue
@@ -691,7 +691,7 @@ class smb(connection):
                     exec_method = MMCEXEC(self.host if not self.kerberos else self.hostname + "." + self.domain, self.smb_share_name, self.username, self.password, self.domain, self.conn, self.args.share, self.hash, self.logger, self.args.get_output_tries, self.args.dcom_timeout)
                     self.logger.info("Executed command via mmcexec")
                     break
-                except:
+                except Exception:
                     self.logger.debug("Error executing command via mmcexec, traceback:")
                     self.logger.debug(format_exc())
                     continue
@@ -700,7 +700,7 @@ class smb(connection):
                     exec_method = TSCH_EXEC(self.host if not self.kerberos else self.hostname + "." + self.domain, self.smb_share_name, self.username, self.password, self.domain, self.kerberos, self.aesKey, self.kdcHost, self.hash, self.logger, self.args.get_output_tries, self.args.share)
                     self.logger.info("Executed command via atexec")
                     break
-                except:
+                except Exception:
                     self.logger.debug("Error executing command via atexec, traceback:")
                     self.logger.debug(format_exc())
                     continue
@@ -709,7 +709,7 @@ class smb(connection):
                     exec_method = SMBEXEC(self.host if not self.kerberos else self.hostname + "." + self.domain, self.smb_share_name, self.conn, self.args.port, self.username, self.password, self.domain, self.kerberos, self.aesKey, self.kdcHost, self.hash, self.args.share, self.args.port, self.logger, self.args.get_output_tries)
                     self.logger.info("Executed command via smbexec")
                     break
-                except:
+                except Exception:
                     self.logger.debug("Error executing command via smbexec, traceback:")
                     self.logger.debug(format_exc())
                     continue
@@ -887,7 +887,7 @@ class smb(connection):
                 if session.sesi10_cname.find(self.local_ip) == -1:
                     self.logger.highlight(f"{session.sesi10_cname:<25} User:{session.sesi10_username}")
             return sessions
-        except:
+        except Exception:
             pass
 
     def disks(self):
@@ -1435,7 +1435,7 @@ class smb(connection):
         if self.pvkbytes is None and self.no_da is None and self.args.local_auth is False:
             try:
                 results = self.db.get_domain_backupkey(self.domain)
-            except:
+            except Exception:
                 self.logger.fail(
                     "Your version of nxcdb is not up to date, run nxcdb and create a new workspace: \
                     'workspace create dpapi' then re-run the dpapi option"
@@ -1701,7 +1701,7 @@ class smb(connection):
                         add_ntds_hash.added_to_db += 1
                         return
                     raise
-                except:
+                except Exception:
                     self.logger.debug("Dumped hash is not NTLM, not adding to db for now ;)")
             else:
                 self.logger.debug("Dumped hash is a computer account, not adding to db")
