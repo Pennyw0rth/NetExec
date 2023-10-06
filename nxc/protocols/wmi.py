@@ -1,10 +1,12 @@
-import os, struct, logging
+import os
+import struct
+import logging
 
 from io import StringIO
 from six import indexbytes
 from datetime import datetime
 from nxc.config import process_secret
-from nxc.connection import *
+from nxc.connection import connection, dcom_FirewallChecker, requires_admin
 from nxc.logger import NXCAdapter
 from nxc.protocols.wmi import wmiexec, wmiexec_event
 

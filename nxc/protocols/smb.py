@@ -4,6 +4,9 @@
 import ntpath
 import hashlib
 import binascii
+import os
+import re
+import socket
 from io import StringIO
 from Cryptodome.Hash import MD4
 
@@ -30,7 +33,8 @@ from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login
 
 from nxc.config import process_secret, host_info_colors
-from nxc.connection import *
+from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
+from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
 from nxc.protocols.smb.firefox import FirefoxTriage
 from nxc.servers.smb import NXCSMBServer
@@ -45,7 +49,6 @@ from nxc.protocols.smb.samrfunc import SamrFunc
 from nxc.protocols.ldap.laps import LDAPConnect, LAPSv2Extract
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.helpers.logger import highlight
-from nxc.helpers.misc import *
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.powershell import create_ps_command
 
@@ -57,7 +60,8 @@ from dploot.triage.backupkey import BackupkeyTriage
 from dploot.lib.target import Target
 from dploot.lib.smb import DPLootSMBConnection
 
-from pywerview.cli.helpers import *
+from pywerview.cli.helpers import get_localdisks, get_netsession, get_netgroupmember, get_netgroup, get_netcomputer, \
+    get_netloggedon, get_netlocalgroup
 
 from time import time
 from datetime import datetime
@@ -659,7 +663,6 @@ class smb(connection):
                         relay_list.write(self.host + "\n")
 
     @requires_admin
-    # @requires_smb_server
     def execute(self, payload=None, get_output=False, methods=None):
         if self.args.exec_method:
             methods = [self.args.exec_method]
@@ -959,9 +962,7 @@ class smb(connection):
                                     member_count_ad=group.membercount,
                                 )[0]
 
-                            # yo dawg, I hear you like groups.
-                            # So I put a domain group as a member of a local group which is also a member of another local group.
-                            # (╯°□°）╯︵ ┻━┻
+                            # domain groups can be part of a local group which is also part of another local group
                             if not group.isgroup:
                                 self.db.add_credential("plaintext", domain, name, "", group_id, "")
                             elif group.isgroup:
@@ -1162,7 +1163,7 @@ class smb(connection):
             iInterface = dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
             flag, stringBinding = dcom_FirewallChecker(iInterface, self.args.dcom_timeout)
             if not flag or not stringBinding:
-                error_msg = f'WMI Query: Dcom initialization failed on connection with stringbinding: "{stringBinding}", please increase the timeout with the option "--dcom-timeout". If it\'s still failing maybe something is blocking the RPC connection, try another exec method'
+                error_msg = f"WMI Query: Dcom initialization failed on connection with stringbinding: '{stringBinding}', please increase the timeout with the option '--dcom-timeout'. If it's still failing maybe something is blocking the RPC connection, try another exec method"
 
                 if not stringBinding:
                     error_msg = "WMI Query: Dcom initialization failed: can't get target stringbinding, maybe cause by IPv6 or any other issues, please check your target again"

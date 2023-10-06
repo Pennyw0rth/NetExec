@@ -13,7 +13,7 @@ from impacket.smbconnection import SMBConnection
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 
 from nxc.config import process_secret
-from nxc.connection import *
+from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.protocols.ldap.laps import LDAPConnect, LAPSv2Extract
 from nxc.logger import NXCAdapter

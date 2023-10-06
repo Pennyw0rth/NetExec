@@ -7,7 +7,7 @@ from datetime import datetime
 
 from aardwolf.commons.target import RDPTarget
 
-from nxc.connection import *
+from nxc.connection import connection
 from nxc.helpers.logger import highlight
 from nxc.logger import NXCAdapter
 from aardwolf.vncconnection import VNCConnection
