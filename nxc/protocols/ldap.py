@@ -835,7 +835,7 @@ class ldap(connection):
                         name = str(attribute["vals"][0])
                 try:
                     ip_address = socket.gethostbyname(name.split(".")[0])
-                    if ip_address != True and name != "":
+                    if ip_address is not True and name != "":
                         self.logger.highlight(f"{name} = {colored(ip_address, host_info_colors[0])}")
                 except socket.gaierror:
                     self.logger.fail(f"{name} = Connection timeout")
