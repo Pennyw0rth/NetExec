@@ -465,7 +465,7 @@ class ldap(connection):
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f'{self.domain}\\{self.username}\' from ccache\' if useCache else \':%s\' % (kerb_pass if not self.config.get(\'nxc\', \'audit_mode\') else self.config.get(\'nxc\', \'audit_mode\') * 8)} {ldap_error_status[error_code] if error_code in ldap_error_status else ""}',
+                    f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (kerb_pass if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8)} {str(error_code)}",
                     color="magenta" if error_code in ldap_error_status else "red",
                 )
                 return False
