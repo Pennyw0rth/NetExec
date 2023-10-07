@@ -6,7 +6,6 @@ import re
 import uuid
 import logging
 import time
-import base64
 
 from io import StringIO
 from nxc.config import process_secret
