@@ -188,7 +188,7 @@ class ssh(connection):
     def plaintext_login(self, username, password, private_key=None):
         self.username = username
         self.password = password
-        pkey = ""
+        private_key = ""
         stdout = None
         stderr = None
         try:
@@ -219,7 +219,9 @@ class ssh(connection):
             stdin, stdout, stderr = self.conn.exec_command("id")
             stdout = stdout.read().decode("utf-8", errors="ignore")
         except Exception as e:
-            self.logger.fail(f"{username}:{process_secret(password) if not pkey else password} {e}")
+            if self.args.key_file:
+                password = f"{process_secret(password)} (keyfile: {self.args.key_file})"
+            self.logger.fail(f"{username}:{password} {e}")
             self.conn.close()
             return False
         else:
@@ -265,7 +267,7 @@ class ssh(connection):
                         )
 
             if self.args.key_file:
-                password = f"{password} (keyfile: {self.args.key_file})"
+                password = f"{process_secret(password)} (keyfile: {self.args.key_file})"
 
             display_shell_access = "- {} {} {}".format(
                 f"({self.user_principal})" if self.admin_privs else f"(non {self.user_principal})",
@@ -274,7 +276,7 @@ class ssh(connection):
             )
             # Force show pwn3d label
             self.admin_privs = True
-            self.logger.success(f"{username}:{process_secret(password)} {self.mark_pwned()} {highlight(display_shell_access)}")
+            self.logger.success(f"{username}:{password} {self.mark_pwned()} {highlight(display_shell_access)}")
             
             return True
     
