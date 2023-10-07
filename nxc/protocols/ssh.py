@@ -6,6 +6,7 @@ import re
 import uuid
 import logging
 import time
+import base64
 
 from io import StringIO
 from nxc.config import process_secret
@@ -193,29 +194,22 @@ class ssh(connection):
         try:
             if self.args.key_file or private_key:
                 self.logger.debug(f"Logging in with key")
-                if private_key:
-                    pkey = paramiko.RSAKey.from_private_key(StringIO(private_key))
-                else:
-                    pkey = paramiko.RSAKey.from_private_key_file(self.args.key_file)
+                
+                if self.args.key_file:
+                    with open(self.args.key_file, 'r') as f:
+                        private_key = f.read()
 
-                password = f"(keydata: {private_key})" if private_key else f"(keyfile: {self.args.key_file})"
-                self.conn._transport.auth_publickey(username, password, pkey)
-                if private_key:
-                    cred_id = self.db.add_credential(
-                        "key",
-                        username,
-                        password if password != "" else "",
-                        key=private_key,
-                    )
-                else:
-                    with open(self.args.key_file, "r") as f:
-                        key_data = f.read()
-                    cred_id = self.db.add_credential(
-                        "key",
-                        username,
-                        password if password != "" else "",
-                        key=key_data,
-                    )
+                pkey = paramiko.RSAKey.from_private_key(StringIO(private_key), password)
+
+                self.conn._transport.auth_publickey(username, pkey)
+
+                cred_id = self.db.add_credential(
+                    "key",
+                    username,
+                    password if password != "" else "",
+                    key=private_key,
+                )
+
             else:
                 self.logger.debug(f"Logging {self.host} with username: {self.username}, password: {self.password}")
                 self.conn._transport.auth_password(username, password, fallback=True)
@@ -271,7 +265,7 @@ class ssh(connection):
                         )
 
             if self.args.key_file:
-                password = f"(keyfile: {self.args.key_file})"
+                password = f"{password} (keyfile: {self.args.key_file})"
 
             display_shell_access = "- {} {} {}".format(
                 f"({self.user_principal})" if self.admin_privs else f"(non {self.user_principal})",
