@@ -8,9 +8,7 @@
 import base64
 import re
 import sys
-
-from pypykatz.pypykatz import pypykatz
-
+import pypykatz
 from nxc.helpers.bloodhound import add_user_bh
 
 
