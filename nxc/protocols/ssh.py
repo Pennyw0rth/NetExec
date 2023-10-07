@@ -269,13 +269,12 @@ class ssh(connection):
             if self.args.key_file:
                 password = f"{process_secret(password)} (keyfile: {self.args.key_file})"
 
-            display_shell_access = "- {} {} {}".format(
+            display_shell_access = "{} {} {}".format(
                 f"({self.user_principal})" if self.admin_privs else f"(non {self.user_principal})",
                 self.server_os_platform,
                 '- Shell access!' if shell_access else ''
             )
-            # Force show pwn3d label
-            self.admin_privs = True
+
             self.logger.success(f"{username}:{password} {self.mark_pwned()} {highlight(display_shell_access)}")
             
             return True
