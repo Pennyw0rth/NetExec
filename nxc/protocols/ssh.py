@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import paramiko, re, uuid, logging, time, sys
+
+import paramiko
+import re
+import uuid
+import logging
+import time
 
 from io import StringIO
 from nxc.config import process_secret
@@ -21,6 +26,7 @@ class ssh(connection):
         super().__init__(args, db, host)
     
     def proto_flow(self):
+        self.logger.debug(f"Kicking off proto_flow")
         self.proto_logger()
         if self.create_conn_obj():
             self.enum_host_info()
@@ -36,6 +42,8 @@ class ssh(connection):
                 self.conn.close()
 
     def proto_logger(self):
+        logging.getLogger("paramiko").disabled = True
+        logging.getLogger("paramiko.transport").disabled = True
         self.logger = NXCAdapter(
             extra={
                 "protocol": "SSH",
@@ -56,8 +64,6 @@ class ssh(connection):
         self.db.add_host(self.host, self.args.port, self.remote_version)
 
     def create_conn_obj(self):
-        logging.getLogger("paramiko").disabled = True
-        logging.getLogger("paramiko.transport").disabled = True
         self.conn = paramiko.SSHClient()
         self.conn.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:
@@ -87,20 +93,18 @@ class ssh(connection):
             "(root)": [True, None], 
             "NOPASSWD: ALL": [True, None],
             "(ALL : ALL) ALL": [True, None],
-            "(sudo)": [False, f'Current user: "{self.username}" was in "sudo" group, please try "--sudo-check" to check if user can run sudo shell'],
+            "(sudo)": [False, f'Current user: "{self.username}" was in "sudo" group, please try "--sudo-check" to check if user can run sudo shell']
         }
         for keyword in admin_flag.keys():
             match = re.findall(re.escape(keyword), stdout)
             if match:
                 self.logger.info(f'User: "{self.username}" matched keyword: {match[0]}')
                 self.admin_privs = admin_flag[match[0]][0]
-                if self.admin_privs:
-                    #break
-                    break
-                else:
-                    # Continue find admin flag
+                if not self.admin_privs:
                     tips = admin_flag[match[0]][1]
                     continue
+                else:
+                    break
         if not self.admin_privs and "tips" in locals():
             self.logger.display(tips)
         return
@@ -186,7 +190,6 @@ class ssh(connection):
         pkey = ""
         stdout = None
         stderr = None
-        cred_id = self.db.add_credential("plaintext", username, password)
         try:
             if self.args.key_file or private_key:
                 self.logger.debug(f"Logging in with key")
@@ -216,6 +219,7 @@ class ssh(connection):
             else:
                 self.logger.debug(f"Logging {self.host} with username: {self.username}, password: {self.password}")
                 self.conn._transport.auth_password(username, password, fallback=True)
+                cred_id = self.db.add_credential("plaintext", username, password)
 
             # Some IOT devices will not raise exception in self.conn._transport.auth_password / self.conn._transport.auth_publickey
             stdin, stdout, stderr = self.conn.exec_command("id")
@@ -249,6 +253,8 @@ class ssh(connection):
             else:
                 shell_access = True
 
+            self.db.add_loggedin_relation(cred_id, host_id, shell=shell_access)
+
             if shell_access and self.server_os_platform == "Linux":
                 self.check_if_admin()
                 if self.admin_privs:
@@ -264,13 +270,17 @@ class ssh(connection):
                             cred_id=cred_id,
                         )
 
-            self.db.add_loggedin_relation(cred_id, host_id, shell=shell_access)
-
             if self.args.key_file:
                 password = f"(keyfile: {self.args.key_file})"
 
-            display_shell_access = f'Shell access! {f"({self.user_principal})" if self.admin_privs else f"(non {self.user_principal})"}' if shell_access else ""
-            self.logger.success(f"{username}:{process_secret(password)} {highlight(display_shell_access)} {highlight(self.server_os_platform)} {self.mark_pwned()}")
+            display_shell_access = "- {} {} {}".format(
+                f"({self.user_principal})" if self.admin_privs else f"(non {self.user_principal})",
+                self.server_os_platform,
+                '- Shell access!' if shell_access else ''
+            )
+            # Force show pwn3d label
+            self.admin_privs = True
+            self.logger.success(f"{username}:{process_secret(password)} {self.mark_pwned()} {highlight(display_shell_access)}")
             
             return True
     
