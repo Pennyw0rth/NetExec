@@ -199,12 +199,12 @@ class ssh(connection):
                     pkey = paramiko.RSAKey.from_private_key_file(self.args.key_file)
 
                 password = f"(keydata: {private_key})" if private_key else f"(keyfile: {self.args.key_file})"
-                self.conn._transport.auth_publickey(username, pkey)
+                self.conn._transport.auth_publickey(username, password, pkey)
                 if private_key:
                     cred_id = self.db.add_credential(
                         "key",
                         username,
-                        "",
+                        password if password != "" else "",
                         key=private_key,
                     )
                 else:
@@ -213,7 +213,7 @@ class ssh(connection):
                     cred_id = self.db.add_credential(
                         "key",
                         username,
-                        "",
+                        password if password != "" else "",
                         key=key_data,
                     )
             else:
