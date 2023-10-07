@@ -202,6 +202,11 @@ netexec ssh TARGET_HOST -u data/test_users.txt -p test_passwords.txt --no-brutef
 netexec ssh TARGET_HOST -u data/test_users.txt -p test_passwords.txt
 netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --key-file data/test_key.priv
 netexec ssh TARGET_HOST -u USERNAME -p '' --key-file data/test_key.priv
+netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --sudo-check
+netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --sudo-check --sudo-check-method sudo-stdin
+netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --sudo-check --sudo-check-method sudo-stdin --get-output-tries 10
+netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --sudo-check --sudo-check-method mkfifo
+netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --sudo-check --sudo-check-method mkfifo --get-output-tries 10
 ##### FTP- Default test passwords and random key; switch these out if you want correct authentication
 netexec ftp TARGET_HOST -u USERNAME -p PASSWORD
 netexec ftp TARGET_HOST -u USERNAME -p PASSWORD --ls

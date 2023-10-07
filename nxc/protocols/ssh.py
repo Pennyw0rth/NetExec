@@ -15,7 +15,7 @@ from paramiko.ssh_exception import (
 class ssh(connection):
     def __init__(self, args, db, host):
         self.protocol = "SSH"
-        self.remote_version = ""
+        self.remote_version = "Unknown SSH Version"
         self.server_os_platform = "Linux"
         self.user_principal = "root"
         super().__init__(args, db, host)
@@ -25,7 +25,7 @@ class ssh(connection):
         if self.create_conn_obj():
             self.enum_host_info()
             self.print_host_info()
-            if not self.remote_version:
+            if self.remote_version == "Unknown SSH Version":
                 self.conn.close()
                 return
             if self.login():
@@ -46,13 +46,14 @@ class ssh(connection):
         )
 
     def print_host_info(self):
-        self.logger.display(self.remote_version if self.remote_version else "Unknown SSH version, skipping...")
+        self.logger.display(self.remote_version if self.remote_version != "Unknown SSH Version" else f"{self.remote_version}, skipping...")
         return True
 
     def enum_host_info(self):
-        self.remote_version = self.conn._transport.remote_version
-        self.logger.debug(f'Remote version: {self.remote_version if self.remote_version else "Unknown SSH Version"}')
-        self.db.add_host(self.host, self.args.port, self.remote_version if self.remote_version else "Unknown SSH Version")
+        if self.conn._transport.remote_version:
+            self.remote_version = self.conn._transport.remote_version
+        self.logger.debug(f'Remote version: {self.remote_version}')
+        self.db.add_host(self.host, self.args.port, self.remote_version)
 
     def create_conn_obj(self):
         logging.getLogger("paramiko").disabled = True
@@ -79,26 +80,26 @@ class ssh(connection):
 
         # we could add in another method to check by piping in the password to sudo
         # but that might be too much of an opsec concern - maybe add in a flag to do more checks?
-        self.logger.info(f"Determined user is root via `id && sudo -ln` command")
-        stdin, stdout, stderr = self.conn.exec_command("id && sudo -ln 2>&1")
+        self.logger.info(f"Determined user is root via `id ; sudo -ln` command")
+        stdin, stdout, stderr = self.conn.exec_command("id ; sudo -ln 2>&1")
         stdout = stdout.read().decode("utf-8", errors="ignore")
-        admin_Flag = {
+        admin_flag = {
             "(root)": [True, None], 
             "NOPASSWD: ALL": [True, None],
             "(ALL : ALL) ALL": [True, None],
             "(sudo)": [False, f'Current user: "{self.username}" was in "sudo" group, please try "--sudo-check" to check if user can run sudo shell'],
         }
-        for keyword in admin_Flag.keys():
+        for keyword in admin_flag.keys():
             match = re.findall(re.escape(keyword), stdout)
             if match:
                 self.logger.info(f'User: "{self.username}" matched keyword: {match[0]}')
-                self.admin_privs = admin_Flag[match[0]][0]
+                self.admin_privs = admin_flag[match[0]][0]
                 if self.admin_privs:
                     #break
                     break
                 else:
                     # Continue find admin flag
-                    tips = admin_Flag[match[0]][1]
+                    tips = admin_flag[match[0]][1]
                     continue
         if not self.admin_privs and "tips" in locals():
             self.logger.display(tips)
