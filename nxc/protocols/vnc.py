@@ -39,11 +39,12 @@ class vnc(connection):
                     self.call_cmd_args()
 
     def proto_logger(self):
+        self.port = self.args.port
         self.logger = NXCAdapter(
             extra={
                 "protocol": "VNC",
                 "host": self.host,
-                "port": self.args.port,
+                "port": self.port,
                 "hostname": self.hostname,
             }
         )
@@ -53,7 +54,7 @@ class vnc(connection):
 
     def create_conn_obj(self):
         try:
-            self.target = RDPTarget(ip=self.host, port=self.args.port)
+            self.target = RDPTarget(ip=self.host, port=self.port)
             credential = UniCredential(protocol=asyauthProtocol.PLAIN, stype=asyauthSecret.NONE)
             self.conn = VNCConnection(target=self.target, credentials=credential, iosettings=self.iosettings)
             asyncio.run(self.connect_vnc(True))

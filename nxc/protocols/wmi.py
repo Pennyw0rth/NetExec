@@ -51,16 +51,17 @@ class wmi(connection):
         connection.__init__(self, args, db, host)
 
     def proto_logger(self):
+        self.port = self.args.port
         self.logger = NXCAdapter(extra={'protocol': 'WMI',
                                         'host': self.host,
-                                        'port': self.args.port,
+                                        'port': self.port,
                                         'hostname': self.hostname})
     
     def create_conn_obj(self):
         if self.remoteName == '':
             self.remoteName = self.host
         try:
-            rpctansport = transport.DCERPCTransportFactory(r'ncacn_ip_tcp:{0}[{1}]'.format(self.remoteName, str(self.args.port)))
+            rpctansport = transport.DCERPCTransportFactory(r'ncacn_ip_tcp:{0}[{1}]'.format(self.remoteName, str(self.port)))
             rpctansport.set_credentials(username="", password="", domain="", lmhash="", nthash="", aesKey="")
             rpctansport.setRemoteHost(self.host)
             rpctansport.set_connect_timeout(self.args.rpc_timeout)

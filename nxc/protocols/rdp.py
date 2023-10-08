@@ -94,11 +94,12 @@ class rdp(connection):
     #                 self.call_cmd_args()
 
     def proto_logger(self):
+        self.port = self.args.port
         self.logger = NXCAdapter(
             extra={
                 "protocol": "RDP",
                 "host": self.host,
-                "port": self.args.port,
+                "port": self.port,
                 "hostname": self.hostname,
             }
         )
@@ -112,7 +113,7 @@ class rdp(connection):
         return True
 
     def create_conn_obj(self):
-        self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.args.port, timeout=self.args.rdp_timeout)
+        self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout)
         self.auth = NTLMCredential(secret="pass", username="user", domain="FAKE", stype=asyauthSecret.PASS)
 
         self.check_nla()
@@ -154,7 +155,7 @@ class rdp(connection):
         self.target = RDPTarget(
             ip=self.host,
             hostname=self.hostname,
-            port=self.args.port,
+            port=self.port,
             domain=self.domain,
             dc_ip=self.domain,
             timeout=self.args.rdp_timeout,

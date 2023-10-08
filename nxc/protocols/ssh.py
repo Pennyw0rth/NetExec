@@ -24,11 +24,12 @@ class ssh(connection):
         super().__init__(args, db, host)
 
     def proto_logger(self):
+        self.port = self.args.port
         self.logger = NXCAdapter(
             extra={
                 "protocol": "SSH",
                 "host": self.host,
-                "port": self.args.port,
+                "port": self.port,
                 "hostname": self.hostname,
             }
         )
@@ -46,14 +47,14 @@ class ssh(connection):
             stdin, stdout, stderr = self.conn.exec_command("uname -r")
             self.server_os = stdout.read().decode("utf-8")
             self.logger.debug(f"OS retrieved: {self.server_os}")
-        self.db.add_host(self.host, self.args.port, self.remote_version, os=self.server_os)
+        self.db.add_host(self.host, self.port, self.remote_version, os=self.server_os)
 
     def create_conn_obj(self):
         self.conn = paramiko.SSHClient()
         self.conn.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
         try:
-            self.conn.connect(self.host, port=self.args.port)
+            self.conn.connect(self.host, port=self.port)
         except AuthenticationException:
             return True
         except SSHException:
@@ -91,7 +92,7 @@ class ssh(connection):
                 self.logger.debug(f"Logging in with key")
                 self.conn.connect(
                     self.host,
-                    port=self.args.port,
+                    port=self.port,
                     username=username,
                     passphrase=password if password != "" else None,
                     pkey=pkey,
@@ -118,7 +119,7 @@ class ssh(connection):
                 self.logger.debug(f"Logging in with password")
                 self.conn.connect(
                     self.host,
-                    port=self.args.port,
+                    port=self.port,
                     username=username,
                     password=password,
                     look_for_keys=False,

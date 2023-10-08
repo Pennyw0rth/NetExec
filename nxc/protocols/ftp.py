@@ -14,11 +14,12 @@ class ftp(connection):
         super().__init__(args, db, host)
 
     def proto_logger(self):
+        self.port = self.args.port
         self.logger = NXCAdapter(
             extra={
                 "protocol": "FTP",
                 "host": self.host,
-                "port": self.args.port,
+                "port": self.port,
                 "hostname": self.hostname,
             }
         )
@@ -45,7 +46,7 @@ class ftp(connection):
     def create_conn_obj(self):
         self.conn = FTP()
         try:
-            self.conn.connect(host=self.host, port=self.args.port)
+            self.conn.connect(host=self.host, port=self.port)
         except error_reply:
             return False
         except error_temp:
@@ -72,8 +73,8 @@ class ftp(connection):
 
         # 230 is "User logged in, proceed" response, ftplib raises an exception on failed login
         if "230" in resp:
-            self.logger.debug(f"Host: {self.host} Port: {self.args.port}")
-            self.db.add_host(self.host, self.args.port, self.remote_version)
+            self.logger.debug(f"Host: {self.host} Port: {self.port}")
+            self.db.add_host(self.host, self.port, self.remote_version)
 
             cred_id = self.db.add_credential(username, password)
 

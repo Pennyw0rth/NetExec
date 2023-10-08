@@ -154,18 +154,19 @@ class ldap(connection):
 
     def proto_logger(self):
         # self.logger = nxc_logger
+        self.port = self.args.port
         self.logger = NXCAdapter(
             extra={
                 "protocol": "LDAP",
                 "host": self.host,
-                "port": self.args.port,
+                "port": self.port,
                 "hostname": self.hostname,
             }
         )
 
     def get_ldap_info(self, host):
         try:
-            proto = "ldaps" if (self.args.gmsa or self.args.port == 636) else "ldap"
+            proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldap_url = f"{proto}://{host}"
             self.logger.info(f"Connecting to {ldap_url} with no baseDN")
             try:
@@ -360,7 +361,7 @@ class ldap(connection):
 
         try:
             # Connect to LDAP
-            proto = "ldaps" if (self.args.gmsa or self.args.port == 636) else "ldap"
+            proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} [1]")
             self.ldapConnection = ldap_impacket.LDAPConnection(ldap_url, self.baseDN)
@@ -386,7 +387,7 @@ class ldap(connection):
             # out = f"{domain}\\{self.username}{' from ccache' if useCache else ':%s' % (kerb_pass if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8)} {highlight('({})'.format(self.config.get('nxc', 'pwn3d_label')) if self.admin_privs else '')}"
 
             self.logger.extra["protocol"] = "LDAP"
-            self.logger.extra["port"] = "636" if (self.args.gmsa or self.args.port == 636) else "389"
+            self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             self.logger.success(out)
 
             if not self.args.local_auth:
@@ -484,7 +485,7 @@ class ldap(connection):
 
         try:
             # Connect to LDAP
-            proto = "ldaps" if (self.args.gmsa or self.args.port == 636) else "ldap"
+            proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.debug(f"Connecting to {ldap_url} - {self.baseDN} [3]")
             self.ldapConnection = ldap_impacket.LDAPConnection(ldap_url, self.baseDN)
@@ -495,7 +496,7 @@ class ldap(connection):
             out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}"
 
             self.logger.extra["protocol"] = "LDAP"
-            self.logger.extra["port"] = "636" if (self.args.gmsa or self.args.port == 636) else "389"
+            self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             self.logger.success(out)
 
             if not self.args.local_auth:
@@ -575,7 +576,7 @@ class ldap(connection):
 
         try:
             # Connect to LDAP
-            proto = "ldaps" if (self.args.gmsa or self.args.port == 636) else "ldap"
+            proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldaps_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN}")
             self.ldapConnection = ldap_impacket.LDAPConnection(ldaps_url, self.baseDN)
@@ -585,7 +586,7 @@ class ldap(connection):
             # Prepare success credential text
             out = f"{domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}"
             self.logger.extra["protocol"] = "LDAP"
-            self.logger.extra["port"] = "636" if (self.args.gmsa or self.args.port == 636) else "389"
+            self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             self.logger.success(out)
 
             if not self.args.local_auth:
@@ -1409,7 +1410,7 @@ class ldap(connection):
             self.logger.highlight("Using kerberos auth from ccache")
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S") + "_"
-        bloodhound = BloodHound(ad, self.hostname, self.host, self.args.port)
+        bloodhound = BloodHound(ad, self.hostname, self.host, self.port)
         bloodhound.connect()
 
         bloodhound.run(
