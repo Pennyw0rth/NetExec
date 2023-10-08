@@ -76,7 +76,7 @@ class NXCModule:
                 self.logger.highlight(output)
 
         except Exception as e:
-            if str(e).find("SCHED_S_TASK_HAS_NOT_RUN") > 0:
+            if "SCHED_S_TASK_HAS_NOT_RUN" in str(e):
                 self.logger.fail("Task was not run, seems like the specified user has no active session on the target")
             
 
@@ -221,11 +221,11 @@ class TSCH_EXEC:
             dce.bind(tsch.MSRPC_UUID_TSCHS)
             tsch.hSchRpcRegisterTask(dce, f"\\{tmpName}", xml, tsch.TASK_CREATE, NULL, tsch.TASK_LOGON_NONE)
         except Exception as e:
-            if str(e).find("ERROR_NONE_MAPPED") > 0:
+            if "ERROR_NONE_MAPPED" in str(e):
                 self.logger.fail(f"User {self.user} is not connected on the target, cannot run the task")
             if e.error_code and hex(e.error_code) == "0x80070005":
                 self.logger.fail("Schtask_as: Create schedule task got blocked.")
-            if str(e).find("ERROR_TRUSTED_DOMAIN_FAILURE"):
+            if "ERROR_TRUSTED_DOMAIN_FAILURE" in str(e):
                 self.logger.fail(f"User {self.user} does not exist in the domain.")
             else:
                 self.logger.fail(f"Schtask_as: Create schedule task failed: {e}")
@@ -273,10 +273,10 @@ class TSCH_EXEC:
                         if tries >= self.__tries:
                             self.logger.fail("Schtask_as: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'.")
                             break
-                        if str(e).find("STATUS_BAD_NETWORK_NAME") >0 :
+                        if "STATUS_BAD_NETWORK_NAME" in str(e):
                             self.logger.fail(f"Schtask_as: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
                             break
-                        if str(e).find("SHARING") > 0 or str(e).find("STATUS_OBJECT_NAME_NOT_FOUND") >= 0:
+                        if "SHARING" in str(e) or "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
                             sleep(3)
                             tries += 1
                         else:
