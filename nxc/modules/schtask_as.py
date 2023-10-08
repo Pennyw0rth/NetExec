@@ -72,11 +72,12 @@ class NXCModule:
             except UnicodeDecodeError:
                 # Required to decode specific french caracters otherwise it'll print b"<result>"
                 output = output.decode("cp437")
-            self.logger.highlight(output)
+            if output:
+                self.logger.highlight(output)
 
         except Exception as e:
             if str(e).find("SCHED_S_TASK_HAS_NOT_RUN") > 0:
-                self.logger.fail(f"Task was not run, check the options")
+                self.logger.fail("Task was not run, seems like the specified user has no active session on the target")
             
 
 class TSCH_EXEC:
@@ -220,10 +221,14 @@ class TSCH_EXEC:
             dce.bind(tsch.MSRPC_UUID_TSCHS)
             tsch.hSchRpcRegisterTask(dce, f"\\{tmpName}", xml, tsch.TASK_CREATE, NULL, tsch.TASK_LOGON_NONE)
         except Exception as e:
-            if str(e).find("ERROR_NONE_MAPPED") > 0 :
+            if str(e).find("ERROR_NONE_MAPPED") > 0:
                 self.logger.fail(f"User {self.user} is not connected on the target, cannot run the task")
             if e.error_code and hex(e.error_code) == "0x80070005":
                 self.logger.fail("Schtask_as: Create schedule task got blocked.")
+            if str(e).find("ERROR_TRUSTED_DOMAIN_FAILURE"):
+                self.logger.fail(f"User {self.user} does not exist in the domain.")
+            else:
+                self.logger.fail(f"Schtask_as: Create schedule task failed: {e}")
             return
         else:
             taskCreated = True
@@ -266,7 +271,7 @@ class TSCH_EXEC:
                         break
                     except Exception as e:
                         if tries >= self.__tries:
-                            self.logger.fail(f"Schtask_as: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
+                            self.logger.fail("Schtask_as: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'.")
                             break
                         if str(e).find("STATUS_BAD_NETWORK_NAME") >0 :
                             self.logger.fail(f"Schtask_as: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
