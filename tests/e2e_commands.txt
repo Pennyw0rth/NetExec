@@ -170,6 +170,8 @@ netexec ldap TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M user-desc
 netexec ldap TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M user-desc --options
 netexec ldap TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M whoami
 netexec ldap TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M whoami --options
+netexec ldap TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M get_fgpp
+netexec ldap TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M get_fgpp --options
 ##### WINRM
 netexec winrm TARGET_HOST -u USERNAME -p PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec winrm TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -X whoami
