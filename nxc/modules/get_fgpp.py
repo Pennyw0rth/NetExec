@@ -82,7 +82,7 @@ class NXCModule:
                 elif (str(attr['type']) == 'msDS-MinimumPasswordLength'):
                     passwordLength = attr['vals'][0]
                 elif (str(attr['type']) == 'msDS-PasswordHistoryLength'):
-                    passwordLength = attr['vals'][0]
+                    passwordHistoryLength = attr['vals'][0]
                 elif (str(attr['type']) == 'msDS-LockoutObservationWindow'):
                     obersationWindow = attr['vals'][0]
                 elif (str(attr['type']) == 'msDS-LockoutDuration'):
