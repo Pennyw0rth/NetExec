@@ -9,12 +9,12 @@ import time
 
 class NXCModule:
     """
-    Initial FGPP script written by @n00py: https://github.com/n00py/GetFGPP
+    Initial FGPP/PSO script written by @n00py: https://github.com/n00py/GetFGPP
 
     Module by @_sandw1ch
     """
-    name = "get_fgpp"
-    description = "Module to get the Fine Grained Password Policy"
+    name = "PSO"
+    description = "Module to get the Fine Grained Password Policy/PSOs"
     supported_protocols = ["ldap"]
     opsec_safe = True
     multiple_hosts = False
@@ -24,7 +24,7 @@ class NXCModule:
         self.module_options = module_options
 
     def options(self, context, module_options):
-        """"""
+        """ """
 
     def on_login(self, context, connection):
 
@@ -38,7 +38,7 @@ class NXCModule:
         context.log.success("Attempting to enumerate policies...")
         resp = connection.ldapConnection.search(searchBase='CN=Password Settings Container,CN=System,'+ base_creator(self.__domain), searchFilter='(objectclass=*)')
         if len(resp) > 1:
-            context.log.highlight(str(len(resp) - 1) + " FGPP Objects found!")
+            context.log.highlight(str(len(resp) - 1) + " PSO Objects found!")
             context.log.highlight("")
             context.log.success("Attempting to enumerate objects with an applied policy...")
 
