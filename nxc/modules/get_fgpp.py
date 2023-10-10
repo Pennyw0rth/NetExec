@@ -11,7 +11,7 @@ class NXCModule:
     """
     Initial FGPP script written by @n00py: https://github.com/n00py/GetFGPP
 
-    Module by @_sandw1chcd 
+    Module by @_sandw1ch
     """
     name = "get_fgpp"
     description = "Module to get the Fine Grained Password Policy"
