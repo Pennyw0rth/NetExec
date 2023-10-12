@@ -58,9 +58,7 @@ ldap_error_status = {
 
 
 def resolve_collection_methods(methods):
-    """
-    Convert methods (string) to list of validated methods to resolve
-    """
+    """Convert methods (string) to list of validated methods to resolve"""
     valid_methods = [
         "group",
         "localadmin",

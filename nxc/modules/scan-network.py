@@ -94,7 +94,6 @@ class NXCModule:
         ALL      Get DNS and IP (default: false)
         ONLY_HOSTS    Get DNS only (no ip) (default: false)
         """
-
         self.showall = False
         self.showhosts = False
         self.showip = True

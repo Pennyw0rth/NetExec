@@ -176,10 +176,12 @@ class connection(object):
         If both conditions are met and the attribute value is not False or None,
         it calls the function and logs a debug message
 
-        Parameters:
+        Parameters
+        ----------
             self (object): The instance of the class.
 
-        Returns:
+        Returns
+        -------
             None
         """
         for attr, value in vars(self.args).items():

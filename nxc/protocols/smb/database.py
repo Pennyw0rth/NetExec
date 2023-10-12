@@ -227,9 +227,7 @@ class database:
         petitpotam=None,
         dc=None,
     ):
-        """
-        Check if this host has already been added to the database, if not, add it in.
-        """
+        """Check if this host has already been added to the database, if not, add it in."""
         hosts = []
         updated_ids = []
 
@@ -294,9 +292,7 @@ class database:
             return updated_ids
 
     def add_credential(self, credtype, domain, username, password, group_id=None, pillaged_from=None):
-        """
-        Check if this credential has already been added to the database, if not add it in.
-        """
+        """Check if this credential has already been added to the database, if not add it in."""
         credentials = []
         groups = []
 
@@ -360,9 +356,7 @@ class database:
         # return user_ids
 
     def remove_credentials(self, creds_id):
-        """
-        Removes a credential ID from the database
-        """
+        """Removes a credential ID from the database"""
         del_hosts = []
         for cred_id in creds_id:
             q = delete(self.UsersTable).filter(self.UsersTable.c.id == cred_id)
@@ -426,9 +420,7 @@ class database:
         self.conn.execute(q)
 
     def is_credential_valid(self, credential_id):
-        """
-        Check if this credential ID is valid.
-        """
+        """Check if this credential ID is valid."""
         q = select(self.UsersTable).filter(
             self.UsersTable.c.id == credential_id,
             self.UsersTable.c.password is not None,
@@ -437,9 +429,7 @@ class database:
         return len(results) > 0
 
     def get_credentials(self, filter_term=None, cred_type=None):
-        """
-        Return credentials from the database.
-        """
+        """Return credentials from the database."""
         # if we're returning a single credential by ID
         if self.is_credential_valid(filter_term):
             q = select(self.UsersTable).filter(self.UsersTable.c.id == filter_term)
@@ -477,17 +467,13 @@ class database:
             return len(results) > 0
 
     def is_host_valid(self, host_id):
-        """
-        Check if this host ID is valid.
-        """
+        """Check if this host ID is valid."""
         q = select(self.HostsTable).filter(self.HostsTable.c.id == host_id)
         results = self.conn.execute(q).all()
         return len(results) > 0
 
     def get_hosts(self, filter_term=None, domain=None):
-        """
-        Return hosts from the database.
-        """
+        """Return hosts from the database."""
         q = select(self.HostsTable)
 
         # if we're returning a single host by ID
@@ -523,9 +509,7 @@ class database:
         return results
 
     def is_group_valid(self, group_id):
-        """
-        Check if this group ID is valid.
-        """
+        """Check if this group ID is valid."""
         q = select(self.GroupsTable).filter(self.GroupsTable.c.id == group_id)
         results = self.conn.execute(q).first()
 
@@ -602,10 +586,7 @@ class database:
         return updated_ids
 
     def get_groups(self, filter_term=None, group_name=None, group_domain=None):
-        """
-        Return groups from the database
-        """
-
+        """Return groups from the database"""
         if filter_term and self.is_group_valid(filter_term):
             q = select(self.GroupsTable).filter(self.GroupsTable.c.id == filter_term)
             results = self.conn.execute(q).first()
@@ -650,9 +631,7 @@ class database:
         self.conn.execute(q)
 
     def is_user_valid(self, user_id):
-        """
-        Check if this User ID is valid.
-        """
+        """Check if this User ID is valid."""
         q = select(self.UsersTable).filter(self.UsersTable.c.id == user_id)
         results = self.conn.execute(q).all()
         return len(results) > 0
@@ -681,9 +660,7 @@ class database:
         return self.get_hosts(filter_term="dc", domain=domain)
 
     def is_share_valid(self, share_id):
-        """
-        Check if this share ID is valid.
-        """
+        """Check if this share ID is valid."""
         q = select(self.SharesTable).filter(self.SharesTable.c.id == share_id)
         results = self.conn.execute(q).all()
 
@@ -797,9 +774,7 @@ class database:
         password: str,
         url: str = "",
     ):
-        """
-        Add dpapi secrets to nxcdb
-        """
+        """Add dpapi secrets to nxcdb"""
         secret = {
             "host": host,
             "dpapi_type": dpapi_type,
@@ -826,9 +801,7 @@ class database:
         username: str = None,
         url: str = None,
     ):
-        """
-        Get dpapi secrets from nxcdb
-        """
+        """Get dpapi secrets from nxcdb"""
         q = select(self.DpapiSecrets)
 
         if self.is_dpapi_secret_valid(filter_term):
@@ -936,9 +909,7 @@ class database:
         return updated_ids
 
     def add_check(self, name, description):
-        """
-        Check if this check item has already been added to the database, if not, add it in.
-        """
+        """Check if this check item has already been added to the database, if not, add it in."""
         q = select(self.ConfChecksTable).filter(self.ConfChecksTable.c.name == name)
         select_results = self.conn.execute(q).all()
         context = locals()
@@ -950,9 +921,7 @@ class database:
             return updated_ids
 
     def add_check_result(self, host_id, check_id, secure, reasons):
-        """
-        Check if this check result has already been added to the database, if not, add it in.
-        """
+        """Check if this check result has already been added to the database, if not, add it in."""
         q = select(self.ConfChecksResultsTable).filter(self.ConfChecksResultsTable.c.host_id == host_id, self.ConfChecksResultsTable.c.check_id == check_id)
         select_results = self.conn.execute(q).all()
         context = locals()

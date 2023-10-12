@@ -160,7 +160,6 @@ class SMBSpiderPlus:
         it retries up to 3 times by reconnecting the SMB connection. If the maximum number
         of retries is exhausted or an unexpected exception occurs, it returns an empty chunk.
         """
-
         chunk = ""
         retry = 3
 
@@ -188,7 +187,6 @@ class SMBSpiderPlus:
         in the remote file path to the appropriate path separator for the local file system.
         The folder path and filename are then obtained separately.
         """
-
         # Remove the backslash before the remote host part and replace slashes with the appropriate path separator
         remote_file_path = str(remote_file)[2:].replace("/", os.path.sep).replace("\\", os.path.sep)
 
@@ -289,7 +287,6 @@ class SMBSpiderPlus:
         """This function checks file attributes against various filters, records file metadata,
         and downloads eligible files if the download flag is set.
         """
-
         # Record the file metadata
         file_size = file_info.get_filesize()
         file_creation_time = file_info.get_ctime_epoch()
@@ -368,7 +365,6 @@ class SMBSpiderPlus:
         Each chunk is then written to the local file until the entire file is saved.
         It handles cases where the file remains empty due to errors.
         """
-
         # Reset the remote_file to point to the beginning of the file.
         remote_file.seek(0, 0)
 
@@ -410,7 +406,6 @@ class SMBSpiderPlus:
 
     def print_stats(self):
         """This function prints the statistics during processing."""
-
         # Share statistics.
         shares = self.stats.get("shares", [])
         if shares:

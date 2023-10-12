@@ -21,10 +21,7 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """
-        USER	Choose a username to query group membership
-        """
-
+        """USER	Choose a username to query group membership"""
         self.user = ""
         if "USER" in module_options:
             if module_options["USER"] == "":

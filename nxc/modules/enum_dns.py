@@ -23,9 +23,7 @@ class NXCModule:
         self.domains = None
 
     def options(self, context, module_options):
-        """
-        DOMAIN  Domain to enumerate DNS for. Defaults to all zones.
-        """
+        """DOMAIN  Domain to enumerate DNS for. Defaults to all zones."""
         self.domains = None
         if module_options and "DOMAIN" in module_options:
             self.domains = module_options["DOMAIN"]

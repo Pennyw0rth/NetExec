@@ -23,7 +23,6 @@ class NXCModule:
         URL  URL for the download cradle
         PAYLOAD  Payload architecture (choices: 64 or 32) Default: 64
         """
-
         if "URL" not in module_options:
             context.log.fail("URL option is required!")
             exit(1)

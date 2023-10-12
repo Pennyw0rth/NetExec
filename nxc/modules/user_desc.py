@@ -92,9 +92,7 @@ class NXCModule:
             self.delete_log_file()
 
     def create_log_file(self, host, time):
-        """
-        Create a log file for dumping user descriptions.
-        """
+        """Create a log file for dumping user descriptions."""
         logfile = f"UserDesc-{host}-{time}.log"
         logfile = Path.home().joinpath(".nxc").joinpath("logs").joinpath(logfile)
 
@@ -103,9 +101,7 @@ class NXCModule:
         self.append_to_log("User:", "Description:")
 
     def delete_log_file(self):
-        """
-        Closes the log file.
-        """
+        """Closes the log file."""
         try:
             self.log_file.close()
             info = f"Saved {self.desc_count} user descriptions to {self.log_file.name}"

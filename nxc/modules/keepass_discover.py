@@ -29,7 +29,6 @@ class NXCModule:
         SEARCH_PATH     Comma-separated remote locations where to search for KeePass-related files (you must add single quotes around the paths if they include spaces)
                         Default: 'C:\\Users\\','$env:PROGRAMFILES','env:ProgramFiles(x86)'
         """
-
         if "SEARCH_PATH" in module_options:
             self.search_path = module_options["SEARCH_PATH"]
 

@@ -45,9 +45,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.server.module.on_response(self.server.context, self)
 
     def stop_tracking_host(self):
-        """
-        This gets called when a module has finshed executing, removes the host from the connection tracker list
-        """
+        """This gets called when a module has finshed executing, removes the host from the connection tracker list"""
         try:
             self.server.hosts.remove(self.client_address[0])
             if hasattr(self.server.module, "on_shutdown"):

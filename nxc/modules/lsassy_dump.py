@@ -27,9 +27,7 @@ class NXCModule:
         self.method = None
 
     def options(self, context, module_options):
-        """
-        METHOD              Method to use to dump lsass.exe with lsassy
-        """
+        """METHOD              Method to use to dump lsass.exe with lsassy"""
         self.method = "comsvcs"
         if "METHOD" in module_options:
             self.method = module_options["METHOD"]

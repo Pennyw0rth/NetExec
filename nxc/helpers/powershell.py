@@ -18,10 +18,12 @@ def get_ps_script(path):
     """
     Generates a full path to a PowerShell script given a relative path.
 
-    Parameters:
+    Parameters
+    ----------
         path (str): The relative path to the PowerShell script.
 
-    Returns:
+    Returns
+    -------
         str: The full path to the PowerShell script.
     """
     return os.path.join(DATA_PATH, path)
@@ -32,9 +34,11 @@ def encode_ps_command(command):
     Encodes a PowerShell command into a base64-encoded string.
 
     Args:
+    ----
         command (str): The PowerShell command to encode.
 
     Returns:
+    -------
         str: The base64-encoded string representation of the encoded command.
     """
     return b64encode(command.encode("UTF-16LE")).decode()
@@ -44,7 +48,8 @@ def is_powershell_installed():
     """
     Check if PowerShell is installed.
 
-    Returns:
+    Returns
+    -------
         bool: True if PowerShell is installed, False otherwise.
     """
     if which("powershell"):
@@ -57,12 +62,15 @@ def obfs_ps_script(path_to_script):
     Obfuscates a PowerShell script.
 
     Args:
+    ----
         path_to_script (str): The path to the PowerShell script.
 
     Returns:
+    -------
         str: The obfuscated PowerShell script.
 
     Raises:
+    ------
         FileNotFoundError: If the script file does not exist.
         OSError: If there is an error during obfuscation.
     """
@@ -108,6 +116,7 @@ def create_ps_command(ps_command, force_ps32=False, dont_obfs=False, custom_amsi
     Generates a PowerShell command based on the provided `ps_command` parameter.
 
     Args:
+    ----
         ps_command (str): The PowerShell command to be executed.
 
         force_ps32 (bool, optional): Whether to force PowerShell to run in 32-bit mode. Defaults to False.
@@ -117,6 +126,7 @@ def create_ps_command(ps_command, force_ps32=False, dont_obfs=False, custom_amsi
         custom_amsi (str, optional): Path to a custom AMSI bypass script. Defaults to None.
 
     Returns:
+    -------
         str: The generated PowerShell command.
     """
     if custom_amsi:
@@ -220,12 +230,14 @@ def gen_ps_inject(command, context=None, procname="explorer.exe", inject_once=Fa
     Generates a PowerShell code block for injecting a command into a specified process.
 
     Args:
+    ----
         command (str): The command to be injected.
         context (str, optional): The context in which the code block will be injected. Defaults to None.
         procname (str, optional): The name of the process into which the command will be injected. Defaults to "explorer.exe".
         inject_once (bool, optional): Specifies whether the command should be injected only once. Defaults to False.
 
     Returns:
+    -------
         str: The generated PowerShell code block.
     """
     # The following code gives us some control over where and how Invoke-PSInject does its thang
@@ -274,12 +286,14 @@ def gen_ps_iex_cradle(context, scripts, command=str(), post_back=True):
     Generates a PowerShell IEX cradle script for executing one or more scripts.
 
     Args:
+    ----
         context (Context): The context object containing server and port information.
         scripts (str or list): The script(s) to be executed.
         command (str, optional): A command to be executed after the scripts are executed. Defaults to an empty string.
         post_back (bool, optional): Whether to send a POST request with the command. Defaults to True.
 
     Returns:
+    -------
         str: The generated PowerShell IEX cradle script.
     """
     if isinstance(scripts, str):
@@ -338,9 +352,11 @@ def invoke_obfuscation(script_string):
     Obfuscates a script string and generates an obfuscated payload for execution.
 
     Args:
+    ----
         script_string (str): The script string to obfuscate.
 
     Returns:
+    -------
         str: The obfuscated payload for execution.
     """
     # Add letters a-z with random case to $RandomDelimiters.

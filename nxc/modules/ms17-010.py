@@ -56,9 +56,11 @@ def generate_smb_proto_payload(*protos):
     Generates an SMB Protocol payload by concatenating a list of packet protos.
 
     Args:
+    ----
         *protos (list): List of packet protos.
 
     Returns:
+    -------
         str: The generated SMB Protocol payload.
     """
     # Initialize an empty list to store the hex data
@@ -78,9 +80,11 @@ def calculate_doublepulsar_xor_key(s):
     Calculate Doublepulsar Xor Key.
 
     Args:
+    ----
         s (int): The input value.
 
     Returns:
+    -------
         int: The calculated xor key.
     """
     # Shift the value 16 bits to the left and combine it with the value shifted 8 bits to the left
@@ -95,7 +99,6 @@ def calculate_doublepulsar_xor_key(s):
 
 def negotiate_proto_request():
     """Generate a negotiate_proto_request packet."""
-
     # Define the NetBIOS header
     netbios = [
         "\x00",  # Message Type
@@ -189,13 +192,14 @@ def tree_connect_andx_request(ip: str, userid: str) -> str:
     """Generate tree connect andx request.
 
     Args:
+    ----
         ip (str): The IP address.
         userid (str): The user ID.
 
     Returns:
+    -------
         bytes: The generated tree connect andx request payload.
     """
-
     # Initialize the netbios header
     netbios = [b"\x00", b"\x00\x00\x47"]
 
@@ -247,15 +251,16 @@ def peeknamedpipe_request(treeid, processid, userid, multiplex_id):
     Generate tran2 request.
 
     Args:
+    ----
         treeid (str): The tree ID.
         processid (str): The process ID.
         userid (str): The user ID.
         multiplex_id (str): The multiplex ID.
 
     Returns:
+    -------
         str: The generated SMB protocol payload.
     """
-
     # Set the necessary values for the netbios header
     netbios = ["\x00", "\x00\x00\x4a"]
 
@@ -307,15 +312,16 @@ def trans2_request(treeid: str, processid: str, userid: str, multiplex_id: str) 
     """Generate trans2 request.
 
     Args:
+    ----
         treeid: The treeid parameter.
         processid: The processid parameter.
         userid: The userid parameter.
         multiplex_id: The multiplex_id parameter.
 
     Returns:
+    -------
         The generated SMB protocol payload.
     """
-
     # Define the netbios section of the SMB request
     netbios = ["\x00", "\x00\x00\x4f"]
 
@@ -366,10 +372,12 @@ def check(ip, port=445):
     """Check if MS17_010 SMB Vulnerability exists.
 
     Args:
+    ----
         ip (str): The IP address of the target machine.
         port (int, optional): The port number to connect to. Defaults to 445.
 
     Returns:
+    -------
         bool: True if the vulnerability exists, False otherwise.
     """
     try:

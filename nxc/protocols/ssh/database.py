@@ -120,9 +120,7 @@ class database:
             self.sess.execute(table.delete())
 
     def add_host(self, host, port, banner, os=None):
-        """
-        Check if this host has already been added to the database, if not, add it in.
-        """
+        """Check if this host has already been added to the database, if not, add it in."""
         hosts = []
         updated_ids = []
 
@@ -172,9 +170,7 @@ class database:
             return updated_ids
 
     def add_credential(self, credtype, username, password, key=None):
-        """
-        Check if this credential has already been added to the database, if not add it in.
-        """
+        """Check if this credential has already been added to the database, if not add it in."""
         credentials = []
 
         # a user can have multiple keys, all with passphrases, and a separate login password
@@ -239,9 +235,7 @@ class database:
             return credentials
 
     def remove_credentials(self, creds_id):
-        """
-        Removes a credential ID from the database
-        """
+        """Removes a credential ID from the database"""
         del_hosts = []
         for cred_id in creds_id:
             q = delete(self.CredentialsTable).filter(self.CredentialsTable.c.id == cred_id)
@@ -327,9 +321,7 @@ class database:
         self.sess.execute(q)
 
     def is_credential_valid(self, credential_id):
-        """
-        Check if this credential ID is valid.
-        """
+        """Check if this credential ID is valid."""
         q = select(self.CredentialsTable).filter(
             self.CredentialsTable.c.id == credential_id,
             self.CredentialsTable.c.password is not None,
@@ -338,9 +330,7 @@ class database:
         return len(results) > 0
 
     def get_credentials(self, filter_term=None, cred_type=None):
-        """
-        Return credentials from the database.
-        """
+        """Return credentials from the database."""
         # if we're returning a single credential by ID
         if self.is_credential_valid(filter_term):
             q = select(self.CredentialsTable).filter(self.CredentialsTable.c.id == filter_term)
@@ -370,17 +360,13 @@ class database:
             return results.id
 
     def is_host_valid(self, host_id):
-        """
-        Check if this host ID is valid.
-        """
+        """Check if this host ID is valid."""
         q = select(self.HostsTable).filter(self.HostsTable.c.id == host_id)
         results = self.sess.execute(q).all()
         return len(results) > 0
 
     def get_hosts(self, filter_term=None):
-        """
-        Return hosts from the database.
-        """
+        """Return hosts from the database."""
         q = select(self.HostsTable)
 
         # if we're returning a single host by ID
@@ -398,9 +384,7 @@ class database:
         return results
 
     def is_user_valid(self, cred_id):
-        """
-        Check if this User ID is valid.
-        """
+        """Check if this User ID is valid."""
         q = select(self.CredentialsTable).filter(self.CredentialsTable.c.id == cred_id)
         results = self.sess.execute(q).all()
         return len(results) > 0

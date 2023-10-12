@@ -10,15 +10,18 @@ def add_user_bh(user, domain, logger, config):
     Adds a user to the BloodHound graph database.
 
     Args:
+    ----
         user (str or list): The username of the user or a list of user dictionaries.
         domain (str): The domain of the user.
         logger (Logger): The logger object for logging messages.
         config (ConfigParser): The configuration object for accessing BloodHound settings.
 
     Returns:
+    -------
         None
 
     Raises:
+    ------
         AuthError: If the provided Neo4J credentials are not valid.
         ServiceUnavailable: If Neo4J is not available on the specified URI.
         Exception: If an unexpected error occurs with Neo4J.

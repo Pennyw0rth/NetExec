@@ -73,7 +73,6 @@ class SMBSpider:
         You're now probably wondering if I was drunk and/or high when writing this.
         Getting this to work took a toll on my sanity. So yes. a lot.
         """
-
         # The following is some funky shit that deals with the way impacket treats file paths
 
         if subfolder in ["", "."]:

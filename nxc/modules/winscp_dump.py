@@ -18,9 +18,7 @@ import configparser
 
 
 class NXCModule:
-    """
-    Module by @NeffIsBack
-    """
+    """Module by @NeffIsBack"""
 
     name = "winscp"
     description = "Looks for WinSCP.ini files in the registry and default locations and tries to extract credentials."
@@ -114,6 +112,7 @@ class NXCModule:
     def dec_next_char(self, pass_bytes) -> "Tuple[int, bytes]":
         """
         Decrypts the first byte of the password and returns the decrypted byte and the remaining bytes.
+
         Parameters
         ----------
         pass_bytes : bytes
@@ -128,9 +127,7 @@ class NXCModule:
 
     # ==================== Handle Registry ====================
     def registry_session_extractor(self, context, connection, userObject, sessionName):
-        """
-        Extract Session information from registry
-        """
+        """Extract Session information from registry"""
         try:
             remote_ops = RemoteOperations(connection.conn, False)
             remote_ops.enableRegistry()
@@ -169,9 +166,7 @@ class NXCModule:
         return "ERROR IN SESSION EXTRACTION"
 
     def find_all_logged_in_users_in_registry(self, context, connection):
-        """
-        Checks whether User already exist in registry and therefore are logged in
-        """
+        """Checks whether User already exist in registry and therefore are logged in"""
         user_objects = []
 
         try:
@@ -206,9 +201,7 @@ class NXCModule:
         return user_objects
 
     def find_all_users(self, context, connection):
-        """
-        Find all User on the System in HKEY_LOCAL_MACHINE
-        """
+        """Find all User on the System in HKEY_LOCAL_MACHINE"""
         user_objects = []
 
         try:
@@ -241,9 +234,7 @@ class NXCModule:
         return user_objects
 
     def load_missing_users(self, context, connection, unloadedUserObjects):
-        """
-        Extract Information for not logged in Users and then loads them into registry.
-        """
+        """Extract Information for not logged in Users and then loads them into registry."""
         try:
             remote_ops = RemoteOperations(connection.conn, False)
             remote_ops.enableRegistry()
@@ -282,9 +273,7 @@ class NXCModule:
             remote_ops.finish()
 
     def unload_missing_users(self, context, connection, unloadedUserObjects):
-        """
-        If some User were not logged in at the beginning we unload them from registry. Don't leave clues behind...
-        """
+        """If some User were not logged in at the beginning we unload them from registry. Don't leave clues behind..."""
         try:
             remote_ops = RemoteOperations(connection.conn, False)
             remote_ops.enableRegistry()

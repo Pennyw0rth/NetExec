@@ -36,9 +36,7 @@ class NXCModule:
         self.port = None
 
     def options(self, context, module_options):
-        """
-        PORT    Port to check (defaults to 135)
-        """
+        """PORT    Port to check (defaults to 135)"""
         self.port = 135
         if "PORT" in module_options:
             self.port = int(module_options["PORT"])

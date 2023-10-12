@@ -86,7 +86,6 @@ class NXCModule:
         Not all variables used by the module are available as options (ex: trigger name, temp folder path, etc.),
         but they can still be easily edited in the module __init__ code if needed
         """
-
         if "ACTION" in module_options:
             if module_options["ACTION"] not in [
                 "ADD",
@@ -141,7 +140,6 @@ class NXCModule:
 
     def add_trigger(self, context, connection):
         """Add a malicious trigger to a remote KeePass config file using the powershell script AddKeePassTrigger.ps1"""
-
         # check if the specified KeePass configuration file exists
         if self.trigger_added(context, connection):
             context.log.display(f"The specified configuration file {self.keepass_config_path} already contains a trigger called '{self.trigger_name}', skipping")
@@ -177,8 +175,7 @@ class NXCModule:
             sys.exit(1)
 
     def check_trigger_added(self, context, connection):
-        """check if the trigger is added to the config file XML tree"""
-
+        """Check if the trigger is added to the config file XML tree"""
         if self.trigger_added(context, connection):
             context.log.display(f"Malicious trigger '{self.trigger_name}' found in '{self.keepass_config_path}'")
         else:
@@ -187,8 +184,8 @@ class NXCModule:
     def restart(self, context, connection):
         """Force the restart of KeePass process using a Windows service defined using the powershell script RestartKeePass.ps1
         If multiple process belonging to different users are running simultaneously,
-        relies on the USER option to choose which one to restart"""
-
+        relies on the USER option to choose which one to restart
+        """
         # search for keepass processes
         search_keepass_process_command_str = 'powershell.exe "Get-Process keepass* -IncludeUserName | Select-Object -Property Id,UserName,ProcessName | ConvertTo-CSV -NoTypeInformation"'
         search_keepass_process_output_csv = connection.execute(search_keepass_process_command_str, True)
@@ -245,7 +242,8 @@ class NXCModule:
 
     def poll(self, context, connection):
         """Search for the cleartext database export file in the specified export folder
-        (until found, or manually exited by the user)"""
+        (until found, or manually exited by the user)
+        """
         found = False
         context.log.display(f"Polling for database export every {self.poll_frequency_seconds} seconds, please be patient")
         context.log.display("we need to wait for the target to enter his master password ! Press CTRL+C to abort and use clean option to cleanup everything")
@@ -352,7 +350,7 @@ class NXCModule:
         self.extract_password(context)
 
     def trigger_added(self, context, connection):
-        """check if the trigger is added to the config file XML tree (returns True/False)"""
+        """Check if the trigger is added to the config file XML tree (returns True/False)"""
         # check if the specified KeePass configuration file exists
         if not self.keepass_config_path:
             context.log.fail("No KeePass configuration file specified, exiting")

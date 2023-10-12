@@ -20,9 +20,7 @@ class User:
 
 
 class NXCModule:
-    """
-    Enumerate MSSQL privileges and exploit them
-    """
+    """Enumerate MSSQL privileges and exploit them"""
 
     name = "mssql_priv"
     description = "Enumerate and exploit MSSQL privileges"
@@ -97,9 +95,11 @@ class NXCModule:
         Builds an 'exec_as' path based on the given target user.
 
         Args:
+        ----
             target_user (User): The target user for building the 'exec_as' path.
 
         Returns:
+        -------
             str: The 'exec_as' path built from the target user's username and its parent usernames.
         """
         path = [target_user.username]
@@ -115,12 +115,14 @@ class NXCModule:
         """
         Browse the path of user impersonation.
 
-        Parameters:
+        Parameters
+        ----------
             context (Context): The context of the function.
             initial_user (User): The initial user.
             user (User): The user to browse the path for.
 
-        Returns:
+        Returns
+        -------
             User: The user that can be impersonated.
         """
         if initial_user.is_sysadmin:
@@ -148,10 +150,12 @@ class NXCModule:
         """
         Generates an SQL statement to execute a command using the specified list of grantors.
 
-        Parameters:
+        Parameters
+        ----------
             grantors (list): A list of grantors, each representing a login.
 
-        Returns:
+        Returns
+        -------
             str: The SQL statement to execute the command using the grantors.
         """
         exec_as = []
@@ -164,10 +168,12 @@ class NXCModule:
         Performs an impersonation check for a given user.
 
         Args:
+        ----
             user (User): The user for whom the impersonation check is being performed.
             grantors (list): A list of grantors. Default is an empty list.
 
         Returns:
+        -------
             None
 
         Description:
@@ -206,10 +212,12 @@ class NXCModule:
         Update the privileges of a user.
 
         Args:
+        ----
             user (User): The user whose privileges need to be updated.
             exec_as (str): The username of the user executing the function.
 
         Returns:
+        -------
             bool: True if the user is an admin user and their privileges are updated successfully, False otherwise.
         """
         if self.is_admin_user(user.username):
@@ -233,9 +241,11 @@ class NXCModule:
         Checks if the user is an admin.
 
         Args:
+        ----
             exec_as (str): The user to execute the query as. Default is an empty string.
 
         Returns:
+        -------
             bool: True if the user is an admin, False otherwise.
         """
         res = self.query_and_get_output(exec_as + "SELECT IS_SRVROLEMEMBER('sysadmin')")
@@ -254,9 +264,11 @@ class NXCModule:
         Retrieves a list of databases from the SQL server.
 
         Args:
+        ----
             exec_as (str, optional): The username to execute the query as. Defaults to "".
 
         Returns:
+        -------
             list: A list of database names.
         """
         res = self.query_and_get_output(exec_as + "SELECT name FROM master..sysdatabases")
@@ -271,10 +283,12 @@ class NXCModule:
         Check if the specified database is owned by the current user.
 
         Args:
+        ----
             database (str): The name of the database to check.
             exec_as (str, optional): The name of the user to execute the query as. Defaults to "".
 
         Returns:
+        -------
             bool: True if the database is owned by the current user, False otherwise.
         """
         query = f"""
@@ -294,10 +308,12 @@ class NXCModule:
         Finds the list of databases for which the specified user is the owner.
 
         Args:
+        ----
             databases (list): A list of database names.
             exec_as (str, optional): The user to execute the check as. Defaults to "".
 
         Returns:
+        -------
             list: A list of database names for which the specified user is the owner.
         """
         return [database for database in databases if self.is_db_owner(database, exec_as)]
@@ -348,10 +364,12 @@ class NXCModule:
         Executes a series of SQL queries to perform a database owner privilege escalation.
 
         Args:
+        ----
             database (str): The name of the database to perform the privilege escalation on.
             exec_as (str, optional): The username to execute the queries as. Defaults to "".
 
         Returns:
+        -------
             None
         """
         self.query_and_get_output(exec_as)
@@ -393,9 +411,11 @@ class NXCModule:
         Retrieves a list of users who have the permission to impersonate other users.
 
         Args:
+        ----
             exec_as (str, optional): The context in which the query will be executed. Defaults to "".
 
         Returns:
+        -------
             list: A list of user names who have the permission to impersonate other users.
         """
         query = """SELECT DISTINCT b.name
@@ -441,10 +461,12 @@ class NXCModule:
         """
         Reverts the context for the specified user.
 
-        Parameters:
+        Parameters
+        ----------
             exec_as (str): The user for whom the context should be reverted.
 
-        Returns:
+        Returns
+        -------
             None
         """
         self.query_and_get_output("REVERT;" * exec_as.count("EXECUTE"))

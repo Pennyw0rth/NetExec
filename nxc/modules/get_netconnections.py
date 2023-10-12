@@ -20,9 +20,7 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """
-        No options
-        """
+        """No options"""
         pass
 
     def on_admin_login(self, context, connection):

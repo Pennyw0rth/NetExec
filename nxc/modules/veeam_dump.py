@@ -12,9 +12,7 @@ from nxc.helpers.powershell import get_ps_script
 
 
 class NXCModule:
-    """
-    Module by @NeffIsBack, @Marshall-Hallenbeck
-    """
+    """Module by @NeffIsBack, @Marshall-Hallenbeck"""
 
     name = "veeam"
     description = "Extracts credentials from local Veeam SQL Database"
@@ -29,9 +27,7 @@ class NXCModule:
             self.psScriptPostgresql = psFile.read()
 
     def options(self, context, module_options):
-        """
-        No options
-        """
+        """No options"""
         pass
 
     def checkVeeamInstalled(self, context, connection):

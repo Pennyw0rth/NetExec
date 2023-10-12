@@ -4,7 +4,8 @@
 
 class NXCModule:
     """
-    Example
+    Example:
+    -------
     Module by @yomama
     """
 

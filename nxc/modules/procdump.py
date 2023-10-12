@@ -26,7 +26,6 @@ class NXCModule:
         PROCDUMP_EXE_NAME   Name of the procdump executable (default: procdump.exe), if changed embeded version will not be used
         DIR_RESULT          Location where the dmp are stored (default: DIR_RESULT = PROCDUMP_PATH)
         """
-
         self.tmp_dir = "C:\\Windows\\Temp\\"
         self.share = "C$"
         self.tmp_share = self.tmp_dir.split(":")[1]

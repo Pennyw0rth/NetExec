@@ -17,9 +17,7 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """
-        HOST      Host to ping
-        """
+        """HOST      Host to ping"""
         self.host = None
 
         if "HOST" not in module_options:

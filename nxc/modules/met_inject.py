@@ -41,7 +41,6 @@ class NXCModule:
             Set payload to what you want (windows/meterpreter/reverse_https, etc)
             after running, copy the end of the URL printed (e.g. M5LemwmDHV) and set RAND to that
         """
-
         self.met_ssl = "https"
 
         if "SRVHOST" not in module_options or "SRVPORT" not in module_options:

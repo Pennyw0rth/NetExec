@@ -40,9 +40,7 @@ class NXCModule:
             self.base_dn = module_options["BASE_DN"]
 
     def on_login(self, context, connection):
-        """
-        On a successful LDAP login we perform a search for all PKI Enrollment Server or Certificate Templates Names.
-        """
+        """On a successful LDAP login we perform a search for all PKI Enrollment Server or Certificate Templates Names."""
         if self.server is None:
             search_filter = "(objectClass=pKIEnrollmentService)"
         else:
@@ -77,9 +75,7 @@ class NXCModule:
             context.log.fail(f"Obtained unexpected exception: {e}")
 
     def process_servers(self, item):
-        """
-        Function that is called to process the items obtain by the LDAP search when listing PKI Enrollment Servers.
-        """
+        """Function that is called to process the items obtain by the LDAP search when listing PKI Enrollment Servers."""
         if not isinstance(item, ldapasn1.SearchResultEntry):
             return
 
@@ -113,9 +109,7 @@ class NXCModule:
             self.context.log.highlight(f"Found PKI Enrollment WebService: {url}")
 
     def process_templates(self, item):
-        """
-        Function that is called to process the items obtain by the LDAP search when listing Certificate Templates Names for a specific PKI Enrollment Server.
-        """
+        """Function that is called to process the items obtain by the LDAP search when listing Certificate Templates Names for a specific PKI Enrollment Server."""
         if not isinstance(item, ldapasn1.SearchResultEntry):
             return
 

@@ -143,18 +143,14 @@ class navigator(DatabaseNavigator):
         print_help(help_string)
 
     def complete_hosts(self, text, line):
-        """
-        Tab-complete 'creds' commands
-        """
+        """Tab-complete 'creds' commands"""
         commands = ("add", "remove")
         mline = line.partition(" ")[2]
         offs = len(mline) - len(text)
         return [s[offs:] for s in commands if s.startswith(mline)]
 
     def complete_creds(self, text, line):
-        """
-        Tab-complete 'creds' commands
-        """
+        """Tab-complete 'creds' commands"""
         commands = ("add", "remove", "hash", "plaintext")
         mline = line.partition(" ")[2]
         offs = len(mline) - len(text)

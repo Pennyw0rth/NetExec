@@ -189,9 +189,7 @@ class FirefoxTriage:
 
     @staticmethod
     def decrypt(key, iv, ciphertext):
-        """
-        Decrypt ciphered data (user / password) using the key previously found
-        """
+        """Decrypt ciphered data (user / password) using the key previously found"""
         cipher = DES3.new(key=key, mode=DES3.MODE_CBC, iv=iv)
         data = cipher.decrypt(ciphertext)
         nb = data[-1]
@@ -202,9 +200,7 @@ class FirefoxTriage:
 
     @staticmethod
     def decrypt_3des(decoded_item, master_password, global_salt):
-        """
-        User master key is also encrypted (if provided, the master_password could be used to encrypt it)
-        """
+        """User master key is also encrypted (if provided, the master_password could be used to encrypt it)"""
         # See http://www.drh-consultancy.demon.co.uk/key3.html
         pbeAlgo = str(decoded_item[0][0][0])
         if pbeAlgo == "1.2.840.113549.1.12.5.1.3":  # pbeWithSha1AndTripleDES-CBC

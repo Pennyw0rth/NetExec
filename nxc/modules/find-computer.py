@@ -27,7 +27,6 @@ class NXCModule:
         Usage: nxc ldap $DC-IP -u Username -p Password -M find-computer -o TEXT="server"
                nxc ldap $DC-IP -u Username -p Password -M find-computer -o TEXT="SQL"
         """
-
         self.TEXT = ""
 
         if "TEXT" in module_options:

@@ -74,9 +74,7 @@ class NXCAdapter(logging.LoggerAdapter):
         )
 
     def display(self, msg, *args, **kwargs):
-        """
-        Display text to console, formatted for nxc
-        """
+        """Display text to console, formatted for nxc"""
         try:
             if "protocol" in self.extra.keys() and not called_from_cmd_args():
                 return
@@ -89,9 +87,7 @@ class NXCAdapter(logging.LoggerAdapter):
         self.log_console_to_file(text, *args, **kwargs)
 
     def success(self, msg, color="green", *args, **kwargs):
-        """
-        Print some sort of success to the user
-        """
+        """Print some sort of success to the user"""
         try:
             if "protocol" in self.extra.keys() and not called_from_cmd_args():
                 return
@@ -104,9 +100,7 @@ class NXCAdapter(logging.LoggerAdapter):
         self.log_console_to_file(text, *args, **kwargs)
 
     def highlight(self, msg, *args, **kwargs):
-        """
-        Prints a completely yellow highlighted message to the user
-        """
+        """Prints a completely yellow highlighted message to the user"""
         try:
             if "protocol" in self.extra.keys() and not called_from_cmd_args():
                 return
@@ -119,9 +113,7 @@ class NXCAdapter(logging.LoggerAdapter):
         self.log_console_to_file(text, *args, **kwargs)
 
     def fail(self, msg, color="red", *args, **kwargs):
-        """
-        Prints a failure (may or may not be an error) - e.g. login creds didn't work
-        """
+        """Prints a failure (may or may not be an error) - e.g. login creds didn't work"""
         try:
             if "protocol" in self.extra.keys() and not called_from_cmd_args():
                 return

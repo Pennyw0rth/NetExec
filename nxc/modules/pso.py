@@ -35,9 +35,7 @@ class NXCModule:
     ]
 
     def options(self, context, module_options):
-        """
-        No options available.
-        """
+        """No options available."""
         pass
 
     def convert_time_field(self, field, value):

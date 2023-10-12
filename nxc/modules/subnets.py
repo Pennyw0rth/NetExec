@@ -23,10 +23,7 @@ class NXCModule:
     """
 
     def options(self, context, module_options):
-        """
-        showservers    Toggle printing of servers (default: true)
-        """
-
+        """Showservers    Toggle printing of servers (default: true)"""
         self.showservers = True
         self.base_dn = None
 

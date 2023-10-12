@@ -11,9 +11,7 @@ class NXCModule:
     multiple_hosts = True  # Does it make sense to run this module on multiple hosts at a time?
 
     def options(self, context, module_options):
-        """
-        USER  Enumerate information about a different SamAccountName
-        """
+        """USER  Enumerate information about a different SamAccountName"""
         self.username = None
         if "USER" in module_options:
             self.username = module_options["USER"]

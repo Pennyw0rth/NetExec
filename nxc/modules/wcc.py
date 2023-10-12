@@ -44,9 +44,7 @@ if "wcc_logger" not in globals():
 
 
 class ConfigCheck:
-    """
-    Class for performing the checks and holding the results
-    """
+    """Class for performing the checks and holding the results"""
 
     module = None
 
@@ -503,9 +501,7 @@ class HostChecker:
         return subkeys
 
     def reg_query_value(self, dce, connection, keyName, valueName=None):
-        """
-        Query remote registry data for a given registry value
-        """
+        """Query remote registry data for a given registry value"""
 
         def subkey_values(subkey_handle):
             dw_index = 0
@@ -574,9 +570,7 @@ class HostChecker:
     ################################################
 
     def get_service(self, service_name, connection):
-        """
-        Get the service status and configuration for specified service
-        """
+        """Get the service status and configuration for specified service"""
         remoteOps = RemoteOperations(smbConnection=connection.conn, doKerberos=False)
         machine_name, _ = remoteOps.getMachineNameAndDomain()
         remoteOps._RemoteOperations__connectSvcCtl()
@@ -590,9 +584,7 @@ class HostChecker:
         return service_config, service_status
 
     def get_user_info(self, connection, rid=501):
-        """
-        Get user information for the user with the specified RID
-        """
+        """Get user information for the user with the specified RID"""
         remote_ops = RemoteOperations(smbConnection=connection.conn, doKerberos=False)
         machine_name, domain_name = remote_ops.getMachineNameAndDomain()
 

@@ -33,7 +33,6 @@ class NXCModule:
         USER           Username for Neo4j database (default: 'neo4j')
         PASS           Password for Neo4j database (default: 'neo4j')
         """
-
         self.neo4j_URI = "127.0.0.1"
         self.neo4j_Port = "7687"
         self.neo4j_user = "neo4j"

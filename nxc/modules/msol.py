@@ -27,9 +27,7 @@ class NXCModule:
         self.module_options = module_options
 
     def options(self, context, module_options):
-        """
-        MSOL_PS1   // Path to the msol binary on your computer
-        """
+        """MSOL_PS1   // Path to the msol binary on your computer"""
         self.tmp_dir = "C:\\Windows\\Temp\\"
         self.share = "C$"
         self.tmp_share = self.tmp_dir.split(":")[1]

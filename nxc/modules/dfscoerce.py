@@ -23,9 +23,7 @@ class NXCModule:
         self.listener = None
 
     def options(self, context, module_options):
-        """
-        LISTENER    Listener Address (defaults to 127.0.0.1)
-        """
+        """LISTENER    Listener Address (defaults to 127.0.0.1)"""
         self.listener = "127.0.0.1"
         if "LISTENER" in module_options:
             self.listener = module_options["LISTENER"]

@@ -22,9 +22,7 @@ class ModuleLoader:
         self.logger = logger
 
     def module_is_sane(self, module, module_path):
-        """
-        Check if a module has the proper attributes
-        """
+        """Check if a module has the proper attributes"""
         module_error = False
         if not hasattr(module, "name"):
             self.logger.fail(f"{module_path} missing the name variable")
@@ -56,9 +54,7 @@ class ModuleLoader:
         return True
 
     def load_module(self, module_path):
-        """
-        Load a module, initializing it and checking that it has the proper attributes
-        """
+        """Load a module, initializing it and checking that it has the proper attributes"""
         try:
             spec = importlib.util.spec_from_file_location("NXCModule", module_path)
             module = spec.loader.load_module().NXCModule()
@@ -71,9 +67,7 @@ class ModuleLoader:
         return None
 
     def init_module(self, module_path):
-        """
-        Initialize a module for execution
-        """
+        """Initialize a module for execution"""
         module = None
         module = self.load_module(module_path)
 
@@ -99,9 +93,7 @@ class ModuleLoader:
                 sys.exit(1)
 
     def get_module_info(self, module_path):
-        """
-        Get the path, description, and options from a module
-        """
+        """Get the path, description, and options from a module"""
         try:
             spec = importlib.util.spec_from_file_location("NXCModule", module_path)
             module_spec = spec.loader.load_module().NXCModule
@@ -124,9 +116,7 @@ class ModuleLoader:
         return None
 
     def list_modules(self):
-        """
-        List modules without initializing them
-        """
+        """List modules without initializing them"""
         modules = {}
         modules_paths = [
             path_join(dirname(nxc.__file__), "modules"),

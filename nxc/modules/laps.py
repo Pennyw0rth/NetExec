@@ -23,10 +23,7 @@ class NXCModule:
     multiple_hosts = False
 
     def options(self, context, module_options):
-        """
-        COMPUTER    Computer name or wildcard ex: WIN-S10, WIN-* etc. Default: *
-        """
-
+        """COMPUTER    Computer name or wildcard ex: WIN-S10, WIN-* etc. Default: *"""
         self.computer = None
         if "COMPUTER" in module_options:
             self.computer = module_options["COMPUTER"]

@@ -40,9 +40,7 @@ def print_table(data, title=None):
 
 
 def write_csv(filename, headers, entries):
-    """
-    Writes a CSV file with the provided parameters.
-    """
+    """Writes a CSV file with the provided parameters."""
     with open(os.path.expanduser(filename), "w") as export_file:
         csv_file = csv.writer(
             export_file,
@@ -57,9 +55,7 @@ def write_csv(filename, headers, entries):
 
 
 def write_list(filename, entries):
-    """
-    Writes a file with a simple list
-    """
+    """Writes a file with a simple list"""
     with open(os.path.expanduser(filename), "w") as export_file:
         for line in entries:
             export_file.write(line + "\n")
@@ -67,9 +63,7 @@ def write_list(filename, entries):
 
 
 def complete_import(text, line):
-    """
-    Tab-complete 'import' commands
-    """
+    """Tab-complete 'import' commands"""
     commands = ("empire", "metasploit")
     mline = line.partition(" ")[2]
     offs = len(mline) - len(text)
@@ -77,9 +71,7 @@ def complete_import(text, line):
 
 
 def complete_export(text, line):
-    """
-    Tab-complete 'creds' commands.
-    """
+    """Tab-complete 'creds' commands."""
     commands = (
         "creds",
         "plaintext",

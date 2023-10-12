@@ -21,7 +21,6 @@ class NXCModule:
         CMD            Command to execute
         USER           User to execute command as
         """
-
         self.cmd = self.user = self.time = None
         if "CMD" in module_options:
             self.cmd = module_options["CMD"]

@@ -264,10 +264,7 @@ class NXCModule:
         self.filename = None
 
     def on_login(self, context, connection):
-        """
-        On a successful LDAP login we perform a search for the targets' SID, their Security Decriptors and the principal's SID if there is one specified
-        """
-
+        """On a successful LDAP login we perform a search for the targets' SID, their Security Decriptors and the principal's SID if there is one specified"""
         context.log.highlight("Be carefull, this module cannot read the DACLS recursively.")
         self.baseDN = connection.ldapConnection._baseDN
         self.ldap_session = connection.ldapConnection

@@ -27,7 +27,6 @@ class NXCModule:
         HANDLEKATZ_EXE_NAME   Name of the handlekatz executable (default: handlekatz.exe)
         DIR_RESULT          Location where the dmp are stored (default: DIR_RESULT = HANDLEKATZ_PATH)
         """
-
         self.tmp_dir = "C:\\Windows\\Temp\\"
         self.share = "C$"
         self.tmp_share = self.tmp_dir.split(":")[1]

@@ -21,7 +21,6 @@ class NXCModule:
         EXEC      // Command to exec
         IMP_EXE   // Path to the Impersonate binary on your local computer
         """
-
         self.tmp_dir = "C:\\Windows\\Temp\\"
         self.share = "C$"
         self.tmp_share = self.tmp_dir.split(":")[1]

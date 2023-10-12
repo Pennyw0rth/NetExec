@@ -15,10 +15,7 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """
-        ACTION  Create/Delete the registry key (choices: enable, disable, check)
-        """
-
+        """ACTION  Create/Delete the registry key (choices: enable, disable, check)"""
         if "ACTION" not in module_options:
             context.log.fail("ACTION option not specified!")
             exit(1)

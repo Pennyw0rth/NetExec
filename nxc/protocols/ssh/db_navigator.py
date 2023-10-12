@@ -300,9 +300,7 @@ class navigator(DatabaseNavigator):
 
     @staticmethod
     def complete_hosts(self, text, line):
-        """
-        Tab-complete 'hosts' commands.
-        """
+        """Tab-complete 'hosts' commands."""
         commands = ["add", "remove"]
 
         mline = line.partition(" ")[2]
@@ -310,9 +308,7 @@ class navigator(DatabaseNavigator):
         return [s[offs:] for s in commands if s.startswith(mline)]
 
     def complete_creds(self, text, line):
-        """
-        Tab-complete 'creds' commands.
-        """
+        """Tab-complete 'creds' commands."""
         commands = ["add", "remove", "key", "plaintext"]
 
         mline = line.partition(" ")[2]

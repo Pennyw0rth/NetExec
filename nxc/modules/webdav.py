@@ -22,9 +22,7 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """
-        MSG     Info message when the WebClient service is running. '{}' is replaced by the target.
-        """
+        """MSG     Info message when the WebClient service is running. '{}' is replaced by the target."""
         self.output = "WebClient Service enabled on: {}"
 
         if "MSG" in module_options:

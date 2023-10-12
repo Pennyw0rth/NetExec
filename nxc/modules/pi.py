@@ -17,7 +17,6 @@ class NXCModule:
 
         This module reads the executed command output under the name C:\windows\temp\output.txt and deletes it. In case of a possible error, it may need to be deleted manually.
         """
-
         self.tmp_dir = "C:\\Windows\\Temp\\"
         self.share = "C$"
         self.tmp_share = self.tmp_dir.split(":")[1]
