@@ -66,6 +66,22 @@ class NXCModule:
         self.method = "smb"
 
     def options(self, context, module_options):
+        '''
+        Name: defender by @byinarie
+        Description: Enables/Disables Windows Defender
+        Supported Protocols: smb
+        
+        Options:
+          ACTION          Enable/Disable Windows Defender (choices: enable, disable)
+        
+        Usage:
+          nxc smb <target> -u <user> -p <password> -M defender -o ACTION=enable
+          nxc smb <target> -u <user> -p <password> -M defender -o ACTION=disable
+          
+          nxc smb <target> -id 1 -M defender -o ACTION=enable
+          nxc smb <target> -id 1 -M defender -o ACTION=disable
+        '''
+        
         if "ACTION" not in module_options:
             context.log.fail("ACTION option not specified!")
             print(NXCModule.help())
