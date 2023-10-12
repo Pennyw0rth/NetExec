@@ -35,7 +35,6 @@ from impacket.smbconnection import SMBConnection, SessionError
 
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
-from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.logger import NXCAdapter, nxc_logger
 from nxc.protocols.ldap.bloodhound import BloodHound
@@ -461,7 +460,7 @@ class ldap(connection):
                         color="magenta" if error in ldap_error_status else "red",
                     )
                     return False
-                except Exception as e Exception as e:
+                except Exception as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
                         f"{self.domain}\\{self.username}:{self.password if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
@@ -535,7 +534,7 @@ class ldap(connection):
                     if not self.args.local_auth:
                         add_user_bh(self.username, self.domain, self.logger, self.config)
                     return True
-                except Exception as e Exception as e:
+                except Exception as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
                         f"{self.domain}\\{self.username}:{self.password if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
@@ -839,7 +838,7 @@ class ldap(connection):
         search_filter = "(&(objectCategory=computer)(primaryGroupId=516))"
         attributes = ["dNSHostName"]
         resp = self.search(search_filter, attributes, 0)
-        for item in resp:
+
         for item in resp:
             if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
                 continue
@@ -995,16 +994,14 @@ class ldap(connection):
                             self.logger.debug(f"Bypassing disabled account {sAMAccountName} ")
                         else:
                             for spn in SPNs:
-                                answers.append(
-                                    [
-                                        spn,
-                                        sAMAccountName,
-                                        memberOf,
-                                        pwdLastSet,
-                                        lastLogon,
-                                        delegation,
-                                    ]
-                                )
+                                answers.append([
+                                    spn,
+                                    sAMAccountName,
+                                    memberOf,
+                                    pwdLastSet,
+                                    lastLogon,
+                                    delegation,
+                                ])
                 except Exception as e:
                     nxc_logger.error(f"Skipping item, cannot process due to error {str(e)}")
                     pass
@@ -1012,16 +1009,8 @@ class ldap(connection):
             if len(answers) > 0:
                 self.logger.display(f"Total of records returned {len(answers):d}")
                 TGT = KerberosAttacks(self).get_tgt_kerberoasting()
-                TGT = KerberosAttacks(self).get_tgt_kerberoasting()
                 dejavue = []
-                for (
-                    SPN,
-                    sAMAccountName,
-                    memberOf,
-                    pwdLastSet,
-                    lastLogon,
-                    delegation,
-                ) in answers:
+                for (SPN, sAMAccountName, memberOf, pwdLastSet, lastLogon, delegation,) in answers:
                     if sAMAccountName not in dejavue:
                         downLevelLogonName = self.targetDomain + "\\" + sAMAccountName
 
@@ -1039,7 +1028,6 @@ class ldap(connection):
                                 TGT["session_key"],
                                 TGT["session_key"],
                             )
-                            r = KerberosAttacks(self).output_tgs(
                             r = KerberosAttacks(self).output_tgs(
                                 tgs,
                                 oldSessionKey,
