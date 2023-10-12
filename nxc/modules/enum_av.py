@@ -93,7 +93,7 @@ class NXCModule:
 
     def dump_results(self, results, remoteName, context):
         if not results:
-            context.log.highlight(f"Found NOTHING!")
+            context.log.highlight("Found NOTHING!")
             return
 
         for item, data in results.items():
