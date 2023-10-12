@@ -73,12 +73,12 @@ class NXCModule:
                     with open(self.scfile_path, "rb") as scfile:
                         try:
                             connection.conn.putFile(share["name"], self.file_path, scfile.read)
-                            context.log.success(f"[OPSEC] Created {self.filename}.searchConnector-ms" f" file on the {share['name']} share")
+                            context.log.success(f"[OPSEC] Created {self.filename}.searchConnector-ms file on the {share['name']} share")
                         except Exception as e:
-                            context.log.fail(f"Error writing {self.filename}.searchConnector-ms file" f" on the {share['name']} share: {e}")
+                            context.log.fail(f"Error writing {self.filename}.searchConnector-ms file on the {share['name']} share: {e}")
                 else:
                     try:
                         connection.conn.deleteFile(share["name"], self.file_path)
-                        context.log.success(f"Deleted {self.filename}.searchConnector-ms file on the" f" {share['name']} share")
+                        context.log.success(f"Deleted {self.filename}.searchConnector-ms file on the {share['name']} share")
                     except Exception as e:
-                        context.log.fail(f"[OPSEC] Error deleting {self.filename}.searchConnector-ms" f" file on share {share['name']}: {e}")
+                        context.log.fail(f"[OPSEC] Error deleting {self.filename}.searchConnector-ms file on share {share['name']}: {e}")
