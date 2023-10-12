@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import ntpath
 import tempfile
@@ -76,7 +75,6 @@ class NXCModule:
                             connection.conn.putFile(share["name"], self.file_path, scfile.read)
                             context.log.success(f"[OPSEC] Created {self.filename}.searchConnector-ms" f" file on the {share['name']} share")
                         except Exception as e:
-                            context.log.exception(e)
                             context.log.fail(f"Error writing {self.filename}.searchConnector-ms file" f" on the {share['name']} share: {e}")
                 else:
                     try:
