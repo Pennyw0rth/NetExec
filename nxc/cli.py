@@ -14,13 +14,15 @@ def gen_cli_args():
     VERSION = importlib.metadata.version("netexec")
     CODENAME = "A New Beginning"
 
-    parser = argparse.ArgumentParser(
-        description=f"""
-     _   _          _     _____                      
-    | \ | |   ___  | |_  | ____| __  __   ___    ___ 
-    |  \| |  / _ \ | __| |  _|   \ \/ /  / _ \  / __|
-    | |\  | |  __/ | |_  | |___   >  <  |  __/ | (__ 
-    |_| \_|  \___|  \__| |_____| /_/\_\  \___|  \___|
+    parser = argparse.ArgumentParser(description=f"""
+     .   .
+    .|   |.     _   _          _     _____
+    ||   ||    | \ | |   ___  | |_  | ____| __  __   ___    ___
+    \\\( )//    |  \| |  / _ \ | __| |  _|   \ \/ /  / _ \  / __|
+    .=[ ]=.    | |\  | |  __/ | |_  | |___   >  <  |  __/ | (__
+   / /ॱ-ॱ\ \   |_| \_|  \___|  \__| |_____| /_/\_\  \___|  \___|
+   ॱ \   / ॱ
+     ॱ   ॱ
 
     The network execution tool
     Maintained as an open source project by @NeffIsBack, @MJHallenbeck, @_zblurx
