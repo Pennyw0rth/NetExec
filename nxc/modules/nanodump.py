@@ -56,9 +56,10 @@ class NXCModule:
 
         if "NANO_PATH" in module_options:
             self.nano_path = module_options["NANO_PATH"]
+            self.nano_path = f"{module_options['NANO_PATH']}/" if not module_options["NANO_PATH"].endswith("/") else module_options["NANO_PATH"]
             self.useembeded = False
         else:
-            self.nano_path = f"{tempfile.gettempdir()}"
+            self.nano_path = f"{tempfile.gettempdir()}/"
 
         self.dir_result = self.nano_path
 
