@@ -2,11 +2,12 @@
 # -*- coding: utf-8 -*-
 
 # All credit to @an0n_r0
-# project : https://github.com/tothi/serviceDetector
+# https://github.com/tothi/serviceDetector
+# Module by @mpgn_x64
+# https://twitter.com/mpgn_x64
 
-from impacket.dcerpc.v5 import lsat, lsad
+from impacket.dcerpc.v5 import lsat, lsad, transport
 from impacket.dcerpc.v5.dtypes import NULL, MAXIMUM_ALLOWED, RPC_UNICODE_STRING
-from impacket.dcerpc.v5 import transport
 import pathlib
 
 
@@ -27,82 +28,83 @@ class NXCModule:
         self.module_options = module_options
 
     def options(self, context, module_options):
-        """ """
+        """
+        """
         pass
 
     def on_login(self, context, connection):
-        success = 0
+        target = self._get_target(connection)
+        context.log.debug(f"Detecting installed services on {target} using LsarLookupNames()...")
+
+        results = self._detect_installed_services(context, connection, target)
+        self.detect_running_processes(context, connection, results)
+
+        self.dump_results(results, connection.hostname, context)
+
+    def _get_target(self, connection):
+        return connection.host if not connection.kerberos else f"{connection.hostname}.{connection.domain}"
+
+    def _detect_installed_services(self, context, connection, target):
         results = {}
-        target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
-        context.log.debug("Detecting installed services on {} using LsarLookupNames()...".format(target))
 
         try:
             lsa = LsaLookupNames(
-                connection.domain,
-                connection.username,
-                connection.password,
-                target,
-                connection.kerberos,
-                connection.domain,
-                connection.lmhash,
-                connection.nthash,
-                connection.aesKey,
+                domain=connection.domain,
+                username=connection.username,
+                password=connection.password,
+                remote_name=target,
+                do_kerberos=connection.kerberos,
+                kdcHost=connection.domain,
+                lmhash=connection.lmhash,
+                nthash=connection.nthash,
+                aesKey=connection.aesKey
             )
-            dce, rpctransport = lsa.connect()
+
+            dce, _ = lsa.connect()
             policyHandle = lsa.open_policy(dce)
 
-            for i, product in enumerate(conf["products"]):
+            for product in conf["products"]:
                 for service in product["services"]:
                     try:
                         lsa.LsarLookupNames(dce, policyHandle, service["name"])
                         context.log.info(f"Detected installed service on {connection.host}: {product['name']} {service['description']}")
-                        if product["name"] not in results:
-                            results[product["name"]] = {"services": []}
-                        results[product["name"]]["services"].append(service)
-                    except Exception as e:
+                        results.setdefault(product["name"], {"services": []})["services"].append(service)
+                    except:
                         pass
-            success += 1
+
         except Exception as e:
             context.log.fail(str(e))
 
+        return results
+
+    def detect_running_processes(self, context, connection, results):
         context.log.info(f"Detecting running processes on {connection.host} by enumerating pipes...")
         try:
             for f in connection.conn.listPath("IPC$", "\\*"):
                 fl = f.get_longname()
-                for i, product in enumerate(conf["products"]):
+                for product in conf["products"]:
                     for pipe in product["pipes"]:
                         if pathlib.PurePath(fl).match(pipe["name"]):
                             context.log.debug(f"{product['name']} running claim found on {connection.host} by existing pipe {fl} (likely processes: {pipe['processes']})")
-                            if product["name"] not in results:
-                                results[product["name"]] = {}
-                            if "pipes" not in results[product["name"]]:
-                                results[product["name"]]["pipes"] = []
-                            results[product["name"]]["pipes"].append(pipe)
-            success += 1
+                            prod_results = results.setdefault(product["name"], {})
+                            prod_results.setdefault("pipes", []).append(pipe)
         except Exception as e:
             context.log.debug(str(e))
 
-        self.dump_results(results, connection.hostname, success, context)
+    def dump_results(self, results, remoteName, context):
+        if not results:
+            context.log.highlight(f"Found NOTHING!")
+            return
 
-    def dump_results(self, results, remoteName, success, context):
-        # out1 = "On host {} found".format(remoteName)
-        out1 = ""
-        for item in results:
-            out = out1
-            if "services" in results[item]:
-                out += f"{item} INSTALLED"
-                if "pipes" in results[item]:
-                    out += " and it seems to be RUNNING"
-                # else:
-                #     for product in conf['products']:
-                #         if (item == product['name']) and (len(product['pipes']) == 0):
-                #             out += " (NamedPipe for this service was not provided in config)"
-            elif "pipes" in results[item]:
-                out += f" {item} RUNNING"
-            context.log.highlight(out)
-        if (len(results) < 1) and (success > 1):
-            out = out1 + " NOTHING!"
-            context.log.highlight(out)
+        for item, data in results.items():
+            message = f"Found {item}"
+            if "services" in data:
+                message += " INSTALLED"
+                if "pipes" in data:
+                    message += " and RUNNING"
+            elif "pipes" in data:
+                message += " RUNNING"
+            context.log.highlight(message)
 
 
 class LsaLookupNames:
@@ -121,7 +123,7 @@ class LsaLookupNames:
         username="",
         password="",
         remote_name="",
-        k=False,
+        do_kerberos=False,
         kdcHost="",
         lmhash="",
         nthash="",
@@ -132,7 +134,7 @@ class LsaLookupNames:
         self.password = password
         self.remoteName = remote_name
         self.string_binding = rf"ncacn_np:{remote_name}[\PIPE\lsarpc]"
-        self.doKerberos = k
+        self.doKerberos = do_kerberos
         self.lmhash = lmhash
         self.nthash = nthash
         self.aesKey = aesKey
@@ -208,70 +210,55 @@ class LsaLookupNames:
 conf = {
     "products": [
         {
+            "name": "Acronis Cyber Protect Active Protection",
+            "services": [{"name": "AcronisActiveProtectionService", "description": "Acronis Active Protection Service"}],
+            "pipes": []
+        },
+        {
             "name": "Bitdefender",
             "services": [
-                {
-                    "name": "bdredline_agent",
-                    "description": "Bitdefender Agent RedLine Service",
-                },
+                {"name": "bdredline_agent", "description": "Bitdefender Agent RedLine Service"},
                 {"name": "BDAuxSrv", "description": "Bitdefender Auxiliary Service"},
-                {
-                    "name": "UPDATESRV",
-                    "description": "Bitdefender Desktop Update Service",
-                },
+                {"name": "UPDATESRV", "description": "Bitdefender Desktop Update Service"},
                 {"name": "VSSERV", "description": "Bitdefender Virus Shield"},
                 {"name": "bdredline", "description": "Bitdefender RedLine Service"},
                 {"name": "EPRedline", "description": "Bitdefender Endpoint Redline Service"},
                 {"name": "EPUpdateService", "description": "Bitdefender Endpoint Update Service"},
                 {"name": "EPSecurityService", "description": "Bitdefender Endpoint Security Service"},
                 {"name": "EPProtectedService", "description": "Bitdefender Endpoint Protected Service"},
-                {"name": "EPIntegrationService", "description": "Bitdefender Endpoint Integration Service"},
+                {"name": "EPIntegrationService", "description": "Bitdefender Endpoint Integration Service"}
             ],
             "pipes": [
-                {
-                    "name": "\\bdConnector\\ServiceControl\\EPSecurityService.exe",
-                    "processes": ["EPConsole.exe"],
-                },
-                {
-                    "name": "etw_sensor_pipe_ppl",
-                    "processes": ["EPProtectedService.exe"],
-                },
-                {
-                    "name": "local\\msgbus\\antitracker.low\\*",
-                    "processes": ["bdagent.exe"],
-                },
-                {
-                    "name": "local\\msgbus\\aspam.actions.low\\*",
-                    "processes": ["bdagent.exe"],
-                },
-                {
-                    "name": "local\\msgbus\\bd.process.broker.pipe",
-                    "processes": ["bdagent.exe", "bdservicehost.exe", "updatesrv.exe"],
-                },
+                {"name": "\\bdConnector\\ServiceControl\\EPSecurityService.exe", "processes": ["EPConsole.exe"]},
+                {"name": "etw_sensor_pipe_ppl", "processes": ["EPProtectedService.exe"]},
+                {"name": "local\\msgbus\\antitracker.low\\*", "processes": ["bdagent.exe"]},
+                {"name": "local\\msgbus\\aspam.actions.low\\*", "processes": ["bdagent.exe"]},
+                {"name": "local\\msgbus\\bd.process.broker.pipe", "processes": ["bdagent.exe", "bdservicehost.exe", "updatesrv.exe"]},
                 {"name": "local\\msgbus\\bdagent*", "processes": ["bdagent.exe"]},
-                {
-                    "name": "local\\msgbus\\bdauxsrv",
-                    "processes": ["bdagent.exe", "bdntwrk.exe"],
-                },
-            ],
+                {"name": "local\\msgbus\\bdauxsrv", "processes": ["bdagent.exe", "bdntwrk.exe"]}
+            ]
         },
         {
-            "name": "Windows Defender",
+            "name": "Carbon Black App Control",
+            "services": [{"name": "Parity", "description": "Carbon Black App Control Agent"}],
+            "pipes": []
+        },
+        {
+            "name": "CrowdStrike",
+            "services": [{"name": "CSFalconService", "description": "CrowdStrike Falcon Sensor Service"}],
+            "pipes": [{"name": "CrowdStrike\\{*", "processes": ["CSFalconContainer.exe", "CSFalconService.exe"]}]
+        },
+        {
+            "name": "Cybereason",
             "services": [
-                {
-                    "name": "WinDefend",
-                    "description": "Windows Defender Antivirus Service",
-                },
-                {
-                    "name": "Sense",
-                    "description": "Windows Defender Advanced Threat Protection Service",
-                },
-                {
-                    "name": "WdNisSvc",
-                    "description": "Windows Defender Antivirus Network Inspection Service",
-                },
+                {"name": "CybereasonActiveProbe", "description": "Cybereason Active Probe"},
+                {"name": "CybereasonCRS", "description": "Cybereason Anti-Ransomware"},
+                {"name": "CybereasonBlocki", "description": "Cybereason Execution Prevention"}
             ],
-            "pipes": [],
+            "pipes": [
+                {"name": "CybereasonAPConsoleMinionHostIpc_*", "processes": ["minionhost.exe"]},
+                {"name": "CybereasonAPServerProxyIpc_*", "processes": ["minionhost.exe"]}
+            ]
         },
         {
             "name": "ESET",
@@ -285,269 +272,108 @@ conf = {
             "pipes": [{"name": "nod_scriptmon_pipe", "processes": [""]}],
         },
         {
-            "name": "CrowdStrike",
+            "name": "G DATA Security Client",
             "services": [
-                {
-                    "name": "CSFalconService",
-                    "description": "CrowdStrike Falcon Sensor Service",
-                }
+                {"name": "AVKWCtl", "description": "Anti-virus Kit Window Control"},
+                {"name": "AVKProxy", "description": "G Data AntiVirus Proxy Service"},
+                {"name": "GDScan", "description": "GDSG Data AntiVirus Scan Service"}
             ],
             "pipes": [
-                {
-                    "name": "CrowdStrike\\{*",
-                    "processes": ["CSFalconContainer.exe", "CSFalconService.exe"],
-                }
-            ],
-        },
-        {
-            "name": "SentinelOne",
-            "services": [
-                {
-                    "name": "SentinelAgent",
-                    "description": "SentinelOne Endpoint Protection Agent",
-                },
-                {
-                    "name": "SentinelStaticEngine",
-                    "description": "Manage static engines for SentinelOne Endpoint Protection",
-                },
-                {
-                    "name": "LogProcessorService",
-                    "description": "Manage logs for SentinelOne Endpoint Protection",
-                },
-            ],
-            "pipes": [
-                {"name": "SentinelAgentWorkerCert.*", "processes": [""]},
-                {"name": "DFIScanner.Etw.*", "processes": ["SentinelStaticEngine.exe"]},
-                {"name": "DFIScanner.Inline.*", "processes": ["SentinelAgent.exe"]},
-            ],
-        },
-        {
-            "name": "Carbon Black App Control",
-            "services": [{"name": "Parity", "description": "Carbon Black App Control Agent"}],
-            "pipes": [],
-        },
-        {
-            "name": "Cybereason",
-            "services": [
-                {
-                    "name": "CybereasonActiveProbe",
-                    "description": "Cybereason Active Probe",
-                },
-                {"name": "CybereasonCRS", "description": "Cybereason Anti-Ransomware"},
-                {
-                    "name": "CybereasonBlocki",
-                    "description": "Cybereason Execution Prevention",
-                },
-            ],
-            "pipes": [
-                {
-                    "name": "CybereasonAPConsoleMinionHostIpc_*",
-                    "processes": ["minionhost.exe"],
-                },
-                {
-                    "name": "CybereasonAPServerProxyIpc_*",
-                    "processes": ["minionhost.exe"],
-                },
-            ],
+                {"name": "exploitProtectionIPC", "processes": ["AVKWCtlx64.exe"]}
+            ]
         },
         {
             "name": "Kaspersky Security for Windows Server",
             "services": [
-                {
-                    "name": "kavfsslp",
-                    "description": "Kaspersky Security Exploit Prevention Service",
-                },
-                
-                {
-                    "name": "KAVFS",
-                    "description": "Kaspersky Security Service",
-                },
-
-                {
-                    "name": "KAVFSGT",
-                    "description": "Kaspersky Security Management Service",
-                },
-                
-                {
-                    "name": "klnagent",
-                    "description": "Kaspersky Security Center",
-                },
+                {"name": "kavfsslp", "description": "Kaspersky Security Exploit Prevention Service"},
+                {"name": "KAVFS", "description": "Kaspersky Security Service"},
+                {"name": "KAVFSGT", "description": "Kaspersky Security Management Service"},
+                {"name": "klnagent", "description": "Kaspersky Security Center"}
             ],
             "pipes": [
-                {
-                    "name": "Exploit_Blocker",
-                    "processes": ["kavfswh.exe"],
-                },
-                
-            ],
-        },  
+                {"name": "Exploit_Blocker", "processes": ["kavfswh.exe"]}
+            ]
+        },
         {
-            "name": "Trend Micro Endpoint Security",
+            "name": "Panda Adaptive Defense 360",
             "services": [
-                {
-                    "name": "Trend Micro Endpoint Basecamp",
-                    "description": "Trend Micro Endpoint Basecamp",
-                },
-                
-                {
-                    "name": "TMBMServer",
-                    "description": "Trend Micro Unauthorized Change Prevention Service",
-                },
-
-                {
-                    "name": "Trend Micro Web Service Communicator",
-                    "description": "Trend Micro Web Service Communicator",
-                },
-                
-                {
-                    "name": "TMiACAgentSvc",
-                    "description": "Trend Micro Application Control Service (Agent)",
-                },
-                {                
-                    "name": "CETASvc",
-                    "description": "Trend Micro Cloud Endpoint Telemetry Service",
-                },
-                {
-                                
-                    "name": "iVPAgent",
-                    "description": "Trend Micro Vulnerability Protection Service (Agent)",
-                }                 
+                {"name": "PandaAetherAgent", "description": "Panda Endpoint Agent"},
+                {"name": "PSUAService", "description": "Panda Product Service"},
+                {"name": "NanoServiceMain", "description": "Panda Cloud Antivirus Service"}
             ],
             "pipes": [
-                {
-                    "name": "IPC_XBC_XBC_AGENT_PIPE_*",
-                    "processes": ["EndpointBasecamp.exe"],
-                },
-                {
-                    "name": "iacagent_*",
-                    "processes": ["TMiACAgentSvc.exe"],
-                },
-                {
-                    "name": "OIPC_LWCS_PIPE_*",
-                    "processes": ["TmListen.exe"],
-                },
-                {
-                    "name": "Log_ServerNamePipe",
-                    "processes": ["LogServer.exe"],
-                },
-                {
-                    "name": "OIPC_NTRTSCAN_PIPE_*",
-                    "processes": ["Ntrtscan.exe"],
-                },
+                {"name": "NNS_API_IPC_SRV_ENDPOINT", "processes": ["PSANHost.exe"]},
+                {"name": "PSANMSrvcPpal", "processes": ["PSUAService.exe"]}
+            ]
+        },
+        {
+            "name": "SentinelOne",
+            "services": [
+                {"name": "SentinelAgent", "description": "SentinelOne Endpoint Protection Agent"},
+                {"name": "SentinelStaticEngine", "description": "Manage static engines for SentinelOne Endpoint Protection"},
+                {"name": "LogProcessorService", "description": "Manage logs for SentinelOne Endpoint Protection"}
             ],
-        },  
+            "pipes": [
+                {"name": "SentinelAgentWorkerCert.*", "processes": [""]},
+                {"name": "DFIScanner.Etw.*", "processes": ["SentinelStaticEngine.exe"]},
+                {"name": "DFIScanner.Inline.*", "processes": ["SentinelAgent.exe"]}
+            ]
+        },
         {
             "name": "Symantec Endpoint Protection",
             "services": [
-                {
-                    "name": "SepMasterService",
-                    "description": "Symantec Endpoint Protection",
-                },
-                {
-                    "name": "SepScanService",
-                    "description": "Symantec Endpoint Protection Scan Services",
-                },
-                {"name": "SNAC", "description": "Symantec Network Access Control"},
+                {"name": "SepMasterService", "description": "Symantec Endpoint Protection"},
+                {"name": "SepScanService", "description": "Symantec Endpoint Protection Scan Services"},
+                {"name": "SNAC", "description": "Symantec Network Access Control"}
             ],
-            "pipes": [],
+            "pipes": []
         },
         {
             "name": "Sophos Intercept X",
             "services": [
-                {
-                "name": "SntpService",
-                "description": "Sophos Network Threat Protection"
-                },
-                {
-                "name": "Sophos Endpoint Defense Service",
-                "description": "Sophos Endpoint Defense Service"
-                },
-                {
-                "name": "Sophos File Scanner Service",
-                "description": "Sophos File Scanner Service"
-                },
-                {
-                "name": "Sophos Health Service",
-                "description": "Sophos Health Service"
-                },
-                {
-                "name": "Sophos Live Query",
-                "description": "Sophos Live Query"
-                },
-                {
-                "name": "Sophos Managed Threat Response",
-                "description": "Sophos Managed Threat Response"
-                },
-                {
-                "name": "Sophos MCS Agent",
-                "description": "Sophos MCS Agent"
-                },
-                {
-                "name": "Sophos MCS Client",
-                "description": "Sophos MCS Client"
-                },
-                {
-                "name": "Sophos System Protection Service",
-                "description": "Sophos System Protection Service"
-                }
+                {"name": "SntpService", "description": "Sophos Network Threat Protection"},
+                {"name": "Sophos Endpoint Defense Service", "description": "Sophos Endpoint Defense Service"},
+                {"name": "Sophos File Scanner Service", "description": "Sophos File Scanner Service"},
+                {"name": "Sophos Health Service", "description": "Sophos Health Service"},
+                {"name": "Sophos Live Query", "description": "Sophos Live Query"},
+                {"name": "Sophos Managed Threat Response", "description": "Sophos Managed Threat Response"},
+                {"name": "Sophos MCS Agent", "description": "Sophos MCS Agent"},
+                {"name": "Sophos MCS Client", "description": "Sophos MCS Client"},
+                {"name": "Sophos System Protection Service", "description": "Sophos System Protection Service"}
             ],
             "pipes": [
                 {"name": "SophosUI", "processes": [""]},
                 {"name": "SophosEventStore", "processes": [""]},
                 {"name": "sophos_deviceencryption", "processes": [""]},
-                {"name": "sophoslivequery_*", "processes": [""]},
-            ],
+                {"name": "sophoslivequery_*", "processes": [""]}
+            ]
         },
         {
-            "name": "G DATA Security Client",
+            "name": "Trend Micro Endpoint Security",
             "services": [
-                {
-                    "name": "AVKWCtl",
-                    "description": "Anti-virus Kit Window Control",
-                },
-                {
-                    "name": "AVKProxy", 
-                    "description": "G Data AntiVirus Proxy Service"
-                },
-                {
-                    "name": "GDScan",
-                    "description": "GDSG Data AntiVirus Scan Service",
-                },
+                {"name": "Trend Micro Endpoint Basecamp", "description": "Trend Micro Endpoint Basecamp"},
+                {"name": "TMBMServer", "description": "Trend Micro Unauthorized Change Prevention Service"},
+                {"name": "Trend Micro Web Service Communicator", "description": "Trend Micro Web Service Communicator"},
+                {"name": "TMiACAgentSvc", "description": "Trend Micro Application Control Service (Agent)"},
+                {"name": "CETASvc", "description": "Trend Micro Cloud Endpoint Telemetry Service"},
+                {"name": "iVPAgent", "description": "Trend Micro Vulnerability Protection Service (Agent)"}
             ],
             "pipes": [
-                {
-                    "name": "exploitProtectionIPC",
-                    "processes": ["AVKWCtlx64.exe"],
-                },
-            ],
+                {"name": "IPC_XBC_XBC_AGENT_PIPE_*", "processes": ["EndpointBasecamp.exe"]},
+                {"name": "iacagent_*", "processes": ["TMiACAgentSvc.exe"]},
+                {"name": "OIPC_LWCS_PIPE_*", "processes": ["TmListen.exe"]},
+                {"name": "Log_ServerNamePipe", "processes": ["LogServer.exe"]},
+                {"name": "OIPC_NTRTSCAN_PIPE_*", "processes": ["Ntrtscan.exe"]}
+            ]
         },
         {
-            "name": "Panda Adaptive Defense 360",
+            "name": "Windows Defender",
             "services": [
-                {
-                    "name": "PandaAetherAgent",
-                    "description": "Panda Endpoint Agent",
-                },
-                {
-                    "name": "PSUAService", 
-                    "description": "Panda Product Service"
-                },
-                {
-                    "name": "NanoServiceMain",
-                    "description": "Panda Cloud Antivirus Service",
-                },
+                {"name": "WinDefend", "description": "Windows Defender Antivirus Service"},
+                {"name": "Sense", "description": "Windows Defender Advanced Threat Protection Service"},
+                {"name": "WdNisSvc", "description": "Windows Defender Antivirus Network Inspection Service"}
             ],
-            "pipes": [
-                {
-                    "name": "NNS_API_IPC_SRV_ENDPOINT",
-                    "processes": ["PSANHost.exe"],
-                },
-                {
-                    "name": "PSANMSrvcPpal",
-                    "processes": ["PSUAService.exe"],
-                },
-            ],
+            "pipes": []
         }
-        
     ]
 }
