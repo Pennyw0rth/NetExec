@@ -169,7 +169,7 @@ class SMBSpider:
                 self.share,
                 access=FILE_READ_DATA,
             )
-            rfile.open()
+            rfile.open_file()
 
             while True:
                 try:

@@ -326,7 +326,7 @@ class SMBSpiderPlus:
         download_success = False
         try:
             self.logger.info(f'Downloading file "{file_path}" => "{download_path}".')
-            remote_file.open()
+            remote_file.open_file()
             self.save_file(remote_file, share_name)
             remote_file.close()
             download_success = True

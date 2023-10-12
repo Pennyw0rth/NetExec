@@ -121,13 +121,13 @@ class NXCModule:
                 context.log.highlight(ntds_hash)
             if ntds_hash.find("$") == -1:
                 if ntds_hash.find("\\") != -1:
-                    domain, hash = ntds_hash.split("\\")
+                    domain, clean_hash = ntds_hash.split("\\")
                 else:
                     domain = connection.domain
-                    hash = ntds_hash
+                    clean_hash = ntds_hash
 
                 try:
-                    username, _, lmhash, nthash, _, _, _ = hash.split(":")
+                    username, _, lmhash, nthash, _, _, _ = clean_hash.split(":")
                     parsed_hash = ":".join((lmhash, nthash))
                     if validate_ntlm(parsed_hash):
                         context.db.add_credential("hash", domain, username, parsed_hash, pillaged_from=host_id)

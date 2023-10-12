@@ -35,7 +35,7 @@ class NXCModule:
         try:
             remote_file = RemoteFile(connection.conn, "DAV RPC Service", "IPC$", access=FILE_READ_DATA)
 
-            remote_file.open()
+            remote_file.open_file()
             remote_file.close()
 
             context.log.highlight(self.output.format(connection.conn.getRemoteHost()))

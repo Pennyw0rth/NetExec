@@ -35,7 +35,7 @@ class NXCAdapter(logging.LoggerAdapter):
         logging.getLogger("lsassy").disabled = True
         # logging.getLogger("impacket").disabled = True
 
-    def format(self, msg, *args, **kwargs):
+    def format(self, msg, *args, **kwargs): # noqa: A003
         """Format msg for output
 
         This is used instead of process() since process() applies to _all_ messages, including debug calls
@@ -191,7 +191,7 @@ class TermEscapeCodeFormatter(logging.Formatter):
     def __init__(self, fmt=None, datefmt=None, style="%", validate=True):
         super().__init__(fmt, datefmt, style, validate)
 
-    def format(self, record):
+    def format(self, record): # noqa: A003
         escape_re = re.compile(r"\x1b\[[0-9;]*m")
         record.msg = re.sub(escape_re, "", str(record.msg))
         return super().format(record)

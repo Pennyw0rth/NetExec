@@ -74,12 +74,12 @@ def which(cmd, mode=os.F_OK | os.X_OK, path=None):
     files = [cmd]
 
     seen = set()
-    for dir in path:
-        normdir = os.path.normcase(dir)
+    for p in path:
+        normdir = os.path.normcase(p)
         if normdir not in seen:
             seen.add(normdir)
             for thefile in files:
-                name = os.path.join(dir, thefile)
+                name = os.path.join(p, thefile)
                 if _access_check(name, mode):
                     return name
     return None

@@ -12,14 +12,14 @@ from nxc.logger import NXCAdapter, nxc_logger
 
 
 class RequestHandler(BaseHTTPRequestHandler):
-    def log_message(self, format, *args):
+    def log_message(self, display_format, *args):
         server_logger = NXCAdapter(
             extra={
                 "module_name": self.server.module.name.upper(),
                 "host": self.client_address[0],
             }
         )
-        server_logger.display(f"- - {format % args}")
+        server_logger.display(f"- - {display_format % args}")
 
     def do_GET(self):
         if hasattr(self.server.module, "on_request"):

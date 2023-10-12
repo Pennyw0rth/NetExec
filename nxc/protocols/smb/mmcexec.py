@@ -165,11 +165,11 @@ class MMCEXEC:
     def execute(self, command, output=False):
         self.__retOutput = output
         self.execute_remote(command)
-        self.exit()
+        self.exit_mmc()
         self.__dcom.disconnect()
         return self.__outputBuffer
 
-    def exit(self):
+    def exit_mmc(self):
         try:
             dispParams = DISPPARAMS(None, False)
             dispParams["rgvarg"] = NULL
@@ -179,7 +179,7 @@ class MMCEXEC:
 
             self.__quit[0].Invoke(self.__quit[1], 0x409, DISPATCH_METHOD, dispParams, 0, [], [])
         except Exception as e:
-            self.logger.fail(f"Unexpect dcom error when doing exit() function in mmcexec: {str(e)}")
+            self.logger.fail(f"Unexpected dcom error: {e}")
         return True
 
     def execute_remote(self, data):
