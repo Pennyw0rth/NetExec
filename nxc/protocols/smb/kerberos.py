@@ -16,7 +16,7 @@ from impacket.krb5.ccache import CCache
 from impacket.krb5.crypto import Key, _enctype_table, _HMACMD5
 from impacket.krb5 import constants
 
-def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash, aesKey, kdcHost, impersonate, spn, useCache):
+def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash, aesKey, kdcHost, impersonate, spn, useCache, no_s4u2proxy = False):
     TGT = None
     if useCache:
         domain, user, tgt, _ = CCache.parseFile(domain, user, 'cifs/%s' % hostname)
@@ -159,6 +159,28 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
     r = sendReceive(message, domain, kdcHost)
 
     tgs = decoder.decode(r, asn1Spec=TGS_REP())[0]
+
+    if no_s4u2proxy:
+        cipherText = tgs['enc-part']['cipher']
+
+        # Key Usage 8
+        # TGS-REP encrypted part (includes application session
+        # key), encrypted with the TGS session key (Section 5.4.2)
+        plainText = cipher.decrypt(sessionKey, 8, cipherText)
+
+        encTGSRepPart = decoder.decode(plainText, asn1Spec=EncTGSRepPart())[0]
+
+        newSessionKey = Key(encTGSRepPart['key']['keytype'], encTGSRepPart['key']['keyvalue'].asOctets())
+
+        # Creating new cipher based on received keytype
+        cipher = _enctype_table[encTGSRepPart['key']['keytype']]
+
+        #return r, cipher, sessionKey, newSessionKey
+        tgs_formated = dict()
+        tgs_formated['KDC_REP'] = r
+        tgs_formated['cipher'] = cipher
+        tgs_formated['sessionKey'] = newSessionKey
+        return tgs_formated
 
     if logging.getLogger().level == logging.DEBUG:
         logging.debug('TGS_REP')
