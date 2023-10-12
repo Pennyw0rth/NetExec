@@ -212,7 +212,6 @@ class ldap(connection):
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.info(f"Skipping item, cannot process due to error {e}")
         except OSError:
-        except OSError:
             return [None, None, None]
         self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
         return [target, target_domain, base_dn]
