@@ -37,8 +37,8 @@ class NXCAdapter(logging.LoggerAdapter):
         # logging.getLogger("impacket").disabled = True
 
     def format(self, msg, *args, **kwargs):
-        """
-        Format msg for output if needed
+        """Format msg for output
+
         This is used instead of process() since process() applies to _all_ messages, including debug calls
         """
         if self.extra is None:
@@ -125,9 +125,10 @@ class NXCAdapter(logging.LoggerAdapter):
         self.log_console_to_file(text, *args, **kwargs)
 
     def log_console_to_file(self, text, *args, **kwargs):
-        """
+        """Log the console output to a file
+
         If debug or info logging is not enabled, we still want display/success/fail logged to the file specified,
-        so we create a custom LogRecord and pass it to all the additional handlers (which will be all the file handlers
+        so we create a custom LogRecord and pass it to all the additional handlers (which will be all the file handlers)
         """
         if self.logger.getEffectiveLevel() >= logging.INFO:
             # will be 0 if it's just the console output, so only do this if we actually have file loggers

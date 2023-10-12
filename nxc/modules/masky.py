@@ -13,7 +13,7 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """
+        r"""
         CA              Certificate Authority Name (CA_SERVER\CA_NAME)
         TEMPLATE        Template name allowing users to authenticate with (default: User)
         DC_IP           IP Address of the domain controller

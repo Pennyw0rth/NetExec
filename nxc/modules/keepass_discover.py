@@ -20,7 +20,7 @@ class NXCModule:
         self.search_path = "'C:\\Users\\','$env:PROGRAMFILES','env:ProgramFiles(x86)'"
 
     def options(self, context, module_options):
-        """
+        r"""
         SEARCH_TYPE     Specify what to search, between:
                           PROCESS     Look for running KeePass.exe process only
                           FILES       Look for KeePass-related files (KeePass.config.xml, .kdbx, KeePass.exe) only, may take some time

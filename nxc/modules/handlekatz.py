@@ -21,7 +21,7 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """
+        r"""
         TMP_DIR             Path where process dump should be saved on target system (default: C:\\Windows\\Temp\\)
         HANDLEKATZ_PATH       Path where handlekatz.exe is on your system (default: /tmp/)
         HANDLEKATZ_EXE_NAME   Name of the handlekatz executable (default: handlekatz.exe)

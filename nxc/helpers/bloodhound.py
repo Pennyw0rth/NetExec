@@ -6,8 +6,7 @@ from neo4j.exceptions import AuthError, ServiceUnavailable
 
 
 def add_user_bh(user, domain, logger, config):
-    """
-    Adds a user to the BloodHound graph database.
+    """Adds a user to the BloodHound graph database.
 
     Args:
     ----

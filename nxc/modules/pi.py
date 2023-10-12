@@ -11,7 +11,7 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """
+        r"""
         PID       // Process ID for Target User, PID=pid
         EXEC      // Command to exec, EXEC='command'  Single quote is better to use
 

@@ -45,12 +45,10 @@ def called_from_cmd_args():
 
 # Stolen from https://github.com/pydanny/whichcraft/
 def which(cmd, mode=os.F_OK | os.X_OK, path=None):
-    """Given a command, mode, and a PATH string, return the path which
-    conforms to the given mode on the PATH, or None if there is no such
-    file.
-    `mode` defaults to os.F_OK | os.X_OK. `path` defaults to the result
-    of os.environ.get("PATH"), or can be overridden with a custom search
-    path.
+    """Find the path which conforms to the given mode on the PATH for a command.
+    
+    Given a command, mode, and a PATH string, return the path which conforms to the given mode on the PATH, or None if there is no such file.
+    `mode` defaults to os.F_OK | os.X_OK. `path` defaults to the result of os.environ.get("PATH"), or can be overridden with a custom search path.
     Note: This function was backported from the Python 3 source code.
     """
 

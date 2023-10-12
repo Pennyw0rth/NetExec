@@ -34,7 +34,7 @@ class NXCModule:
         self.module_options = module_options
 
     def options(self, context, module_options):
-        """
+        r"""
         TMP_DIR             Path where process dump should be saved on target system (default: C:\\Windows\\Temp\\)
         NANO_PATH           Path where nano.exe is on your system (default: OS temp directory)
         NANO_EXE_NAME       Name of the nano executable (default: nano.exe)

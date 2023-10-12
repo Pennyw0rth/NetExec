@@ -15,8 +15,7 @@ obfuscate_ps_scripts = False
 
 
 def get_ps_script(path):
-    """
-    Generates a full path to a PowerShell script given a relative path.
+    """Generates a full path to a PowerShell script given a relative path.
 
     Parameters
     ----------

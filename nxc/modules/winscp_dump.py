@@ -27,7 +27,7 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """
+        r"""
         PATH        Specify the Path if you already found a WinSCP.ini file. (Example: PATH="C:\\Users\\USERNAME\\Documents\\WinSCP_Passwords\\WinSCP.ini")
 
         REQUIRES ADMIN PRIVILEGES:

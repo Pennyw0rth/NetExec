@@ -169,8 +169,8 @@ class connection(object):
                         self.call_cmd_args()
 
     def call_cmd_args(self):
-        """
-        Calls all the methods specified by the command line arguments
+        """Calls all the methods specified by the command line arguments
+
         Iterates over the attributes of an object (self.args)
         For each attribute, it checks if the object (self) has an attribute with the same name and if that attribute is callable (i.e., a function)
         If both conditions are met and the attribute value is not False or None,
@@ -191,8 +191,8 @@ class connection(object):
                     getattr(self, attr)()
 
     def call_modules(self):
-        """
-        This function calls the modules and performs various actions based on the module's attributes.
+        """Calls modules and performs various actions based on the module's attributes.
+
         It iterates over the modules specified in the command line arguments.
         For each module, it loads the module and creates a context object, then calls functions based on the module's attributes.
         """
@@ -256,8 +256,8 @@ class connection(object):
         return False
 
     def query_db_creds(self):
-        """
-        Queries the database for credentials to be used for authentication.
+        """Queries the database for credentials to be used for authentication.
+
         Valid cred_id values are:
             - a single cred_id
             - a range specified with a dash (ex. 1-5)
@@ -296,8 +296,8 @@ class connection(object):
         return domains, usernames, owned, secrets, cred_types, data
 
     def parse_credentials(self):
-        """
-        Parse credentials from the command line or from a file specified.
+        r"""Parse credentials from the command line or from a file specified.
+
         Usernames can be specified with a domain (domain\\username) or without (username).
         If the file contains domain\\username the domain specified will be overwritten by the one in the file.
 
@@ -381,8 +381,8 @@ class connection(object):
         return domain, username, owned, secret, cred_type, [None] * len(secret)
 
     def try_credentials(self, domain, username, owned, secret, cred_type, data=None):
-        """
-        Try to login using the specified credentials and protocol.
+        """Try to login using the specified credentials and protocol.
+
         Possible login methods are:
             - plaintext (/kerberos)
             - NTLM-hash (/kerberos)
@@ -415,8 +415,7 @@ class connection(object):
                 return self.kerberos_login(domain, username, "", "", secret, self.kdcHost, False)
 
     def login(self):
-        """
-        Try to login using the credentials specified in the command line or in the database.
+        """Try to login using the credentials specified in the command line or in the database.
 
         :return: True if the login was successful and "--continue-on-success" was not specified, False otherwise.
         """

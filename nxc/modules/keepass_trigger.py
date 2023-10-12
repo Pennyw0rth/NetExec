@@ -56,7 +56,7 @@ class NXCModule:
             self.restart_keepass_script_str = restart_keepass_script_file.read()
 
     def options(self, context, module_options):
-        """
+        r"""
         ACTION (mandatory)      Performs one of the following actions, specified by the user:
                                   ADD           insert a new malicious trigger into KEEPASS_CONFIG_PATH's specified file
                                   CHECK         check if a malicious trigger is currently set in KEEPASS_CONFIG_PATH's
