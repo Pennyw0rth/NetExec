@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 from masky import Masky
 from nxc.helpers.bloodhound import add_user_bh
@@ -115,7 +114,7 @@ class NXCModule:
 
         if not tracker.files_cleaning_success:
             context.log.fail("Fail to clean files related to Masky")
-            context.log.fail((f"Please remove the files named '{tracker.agent_filename}', '{tracker.error_filename}', " f"'{tracker.output_filename}' & '{tracker.args_filename}' within the folder '\\Windows\\Temp\\'"))
+            context.log.fail(f"Please remove the files named '{tracker.agent_filename}', '{tracker.error_filename}', " f"'{tracker.output_filename}' & '{tracker.args_filename}' within the folder '\\Windows\\Temp\\'")
             ret = False
 
         if not tracker.svc_cleaning_success:

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 from nxc.protocols.smb.remotefile import RemoteFile
 from impacket import nt_errors

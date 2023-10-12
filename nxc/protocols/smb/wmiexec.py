@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import ntpath
 import os
@@ -130,10 +129,10 @@ class WMIEXEC:
     def get_output_fileless(self):
         while True:
             try:
-                with open(os.path.join("/tmp", "nxc_hosted", self.__output), "r") as output:
+                with open(os.path.join("/tmp", "nxc_hosted", self.__output)) as output:
                     self.output_callback(output.read())
                 break
-            except IOError:
+            except OSError:
                 sleep(2)
 
     def get_output_remote(self):

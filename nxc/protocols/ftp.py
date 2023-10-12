@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 from nxc.config import process_secret
 from nxc.connection import connection

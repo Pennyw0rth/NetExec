@@ -50,8 +50,7 @@ class NXCModule:
             firefox_credentials = firefox_triage.run()
             for credential in firefox_credentials:
                 context.log.highlight(
-                    "[%s][FIREFOX] %s %s:%s"
-                    % (
+                    "[{}][FIREFOX] {} {}:{}".format(
                         credential.winuser,
                         credential.url + " -" if credential.url != "" else "-",
                         credential.username,

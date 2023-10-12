@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 import logging
-import socket
 
 from io import StringIO
 
@@ -62,7 +60,7 @@ class ssh(connection):
             return True
         except NoValidConnectionsError:
             return False
-        except socket.error:
+        except OSError:
             return False
 
     def client_close(self):
@@ -108,7 +106,7 @@ class ssh(connection):
                         key=private_key,
                     )
                 else:
-                    with open(self.args.key_file, "r") as f:
+                    with open(self.args.key_file) as f:
                         key_data = f.read()
                     cred_id = self.db.add_credential(
                         "key",

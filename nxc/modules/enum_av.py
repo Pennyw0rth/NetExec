@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 # All credit to @an0n_r0
 # https://github.com/tothi/serviceDetector

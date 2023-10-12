@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 from time import strftime, localtime
 from nxc.protocols.smb.remotefile import RemoteFile

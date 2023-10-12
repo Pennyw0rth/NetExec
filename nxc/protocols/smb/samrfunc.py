@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Majorly stolen from https://gist.github.com/ropnop/7a41da7aabb8455d0898db362335e139
 # Which in turn stole from Impacket :)
 # Code refactored and added to by @mjhallenbeck (Marshall-Hallenbeck on GitHub)

@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import ntpath
 import hashlib
 import binascii
 import os
 import re
-import socket
 from io import StringIO
 from Cryptodome.Hash import MD4
 
@@ -592,7 +590,7 @@ class smb(connection):
                 timeout=self.args.smb_timeout,
             )
             self.smbv1 = True
-        except socket.error as e:
+        except OSError as e:
             if str(e).find("Connection reset by peer") != -1:
                 self.logger.info(f"SMBv1 might be disabled on {self.host if not kdc else kdc}")
             return False
@@ -612,7 +610,7 @@ class smb(connection):
                 timeout=self.args.smb_timeout,
             )
             self.smbv1 = False
-        except socket.error as e:
+        except OSError as e:
             # This should not happen anymore!!!
             if str(e).find("Too many open files") != -1:
                 if not self.logger:
@@ -1011,13 +1009,13 @@ class smb(connection):
                         lmhash=self.lmhash,
                         nthash=self.nthash,
                         queried_groupname=self.args.groups,
-                        queried_sid=str(),
-                        queried_domain=str(),
-                        ads_path=str(),
+                        queried_sid="",
+                        queried_domain="",
+                        ads_path="",
                         recurse=False,
                         use_matching_rule=False,
                         full_data=False,
-                        custom_filter=str(),
+                        custom_filter="",
                     )
 
                     self.logger.success("Enumerated members of domain group")
@@ -1062,14 +1060,14 @@ class smb(connection):
                         password=self.password,
                         lmhash=self.lmhash,
                         nthash=self.nthash,
-                        queried_groupname=str(),
-                        queried_sid=str(),
-                        queried_username=str(),
-                        queried_domain=str(),
-                        ads_path=str(),
+                        queried_groupname="",
+                        queried_sid="",
+                        queried_username="",
+                        queried_domain="",
+                        ads_path="",
                         admin_count=False,
                         full_data=True,
-                        custom_filter=str(),
+                        custom_filter="",
                     )
 
                     self.logger.success("Enumerated domain group(s)")
@@ -1108,8 +1106,8 @@ class smb(connection):
                     lmhash=self.lmhash,
                     nthash=self.nthash,
                     queried_domain="",
-                    ads_path=str(),
-                    custom_filter=str(),
+                    ads_path="",
+                    custom_filter="",
                 )
 
                 self.logger.success("Enumerated domain computer(s)")

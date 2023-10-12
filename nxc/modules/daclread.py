@@ -225,7 +225,7 @@ class NXCModule:
         if module_options and "TARGET" in module_options:
             if re.search(r"^(.+)\/([^\/]+)$", module_options["TARGET"]) is not None:
                 try:
-                    self.target_file = open(module_options["TARGET"], "r")
+                    self.target_file = open(module_options["TARGET"])
                     self.target_sAMAccountName = None
                 except Exception:
                     context.log.fail("The file doesn't exist or cannot be openned.")
@@ -341,7 +341,7 @@ class NXCModule:
         backup["sd"] = binascii.hexlify(self.principal_raw_security_descriptor).decode("latin-1")
         backup["dn"] = str(self.target_principal_dn)
         if not self.filename:
-            self.filename = "dacledit-%s-%s.bak" % (
+            self.filename = "dacledit-{}-{}.bak".format(
                 datetime.datetime.now().strftime("%Y%m%d-%H%M%S"),
                 self.target_sAMAccountName,
             )
@@ -466,11 +466,11 @@ class NXCModule:
             # For standard ACE
             # Extracts the access mask (by parsing the simple permissions) and the principal's SID
             if ace["TypeName"] in ["ACCESS_ALLOWED_ACE", "ACCESS_DENIED_ACE"]:
-                parsed_ace["Access mask"] = "%s (0x%x)" % (
+                parsed_ace["Access mask"] = "{} (0x{:x})".format(
                     ", ".join(self.parse_perms(ace["Ace"]["Mask"]["Mask"])),
                     ace["Ace"]["Mask"]["Mask"],
                 )
-                parsed_ace["Trustee (SID)"] = "%s (%s)" % (
+                parsed_ace["Trustee (SID)"] = "{} ({})".format(
                     self.resolveSID(context, ace["Ace"]["Sid"].formatCanonical()) or "UNKNOWN",
                     ace["Ace"]["Sid"].formatCanonical(),
                 )
@@ -496,24 +496,18 @@ class NXCModule:
                 if ace["Ace"]["ObjectTypeLen"] != 0:
                     obj_type = bin_to_string(ace["Ace"]["ObjectType"]).lower()
                     try:
-                        parsed_ace["Object type (GUID)"] = "%s (%s)" % (
-                            OBJECT_TYPES_GUID[obj_type],
-                            obj_type,
-                        )
+                        parsed_ace["Object type (GUID)"] = f"{OBJECT_TYPES_GUID[obj_type]} ({obj_type})"
                     except KeyError:
                         parsed_ace["Object type (GUID)"] = f"UNKNOWN ({obj_type})"
                 # Extracts the InheritedObjectType GUID values
                 if ace["Ace"]["InheritedObjectTypeLen"] != 0:
                     inh_obj_type = bin_to_string(ace["Ace"]["InheritedObjectType"]).lower()
                     try:
-                        parsed_ace["Inherited type (GUID)"] = "%s (%s)" % (
-                            OBJECT_TYPES_GUID[inh_obj_type],
-                            inh_obj_type,
-                        )
+                        parsed_ace["Inherited type (GUID)"] = f"{OBJECT_TYPES_GUID[inh_obj_type]} ({inh_obj_type})"
                     except KeyError:
                         parsed_ace["Inherited type (GUID)"] = f"UNKNOWN ({inh_obj_type})"
                 # Extract the Trustee SID (the object that has the right over the DACL bearer)
-                parsed_ace["Trustee (SID)"] = "%s (%s)" % (
+                parsed_ace["Trustee (SID)"] = "{} ({})".format(
                     self.resolveSID(context, ace["Ace"]["Sid"].formatCanonical()) or "UNKNOWN",
                     ace["Ace"]["Sid"].formatCanonical(),
                 )

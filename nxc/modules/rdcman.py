@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 from dploot.triage.rdg import RDGTriage
 from dploot.triage.masterkeys import MasterkeysTriage, parse_masterkey_file
@@ -127,8 +126,7 @@ class NXCModule:
                 for rdg_cred in rdcman_file.rdg_creds:
                     if rdg_cred.type == "cred":
                         context.log.highlight(
-                            "[%s][%s] %s:%s"
-                            % (
+                            "[{}][{}] {}:{}".format(
                                 rdcman_file.winuser,
                                 rdg_cred.profile_name,
                                 rdg_cred.username,
@@ -137,8 +135,7 @@ class NXCModule:
                         )
                     elif rdg_cred.type == "logon":
                         context.log.highlight(
-                            "[%s][%s] %s:%s"
-                            % (
+                            "[{}][{}] {}:{}".format(
                                 rdcman_file.winuser,
                                 rdg_cred.profile_name,
                                 rdg_cred.username,
@@ -147,8 +144,7 @@ class NXCModule:
                         )
                     elif rdg_cred.type == "server":
                         context.log.highlight(
-                            "[%s][%s] %s - %s:%s"
-                            % (
+                            "[{}][{}] {} - {}:{}".format(
                                 rdcman_file.winuser,
                                 rdg_cred.profile_name,
                                 rdg_cred.server_name,
@@ -162,8 +158,7 @@ class NXCModule:
                 for rdg_cred in rdgfile.rdg_creds:
                     if rdg_cred.type == "cred":
                         context.log.highlight(
-                            "[%s][%s] %s:%s"
-                            % (
+                            "[{}][{}] {}:{}".format(
                                 rdgfile.winuser,
                                 rdg_cred.profile_name,
                                 rdg_cred.username,
@@ -172,8 +167,7 @@ class NXCModule:
                         )
                     elif rdg_cred.type == "logon":
                         context.log.highlight(
-                            "[%s][%s] %s:%s"
-                            % (
+                            "[{}][{}] {}:{}".format(
                                 rdgfile.winuser,
                                 rdg_cred.profile_name,
                                 rdg_cred.username,
@@ -182,8 +176,7 @@ class NXCModule:
                         )
                     elif rdg_cred.type == "server":
                         context.log.highlight(
-                            "[%s][%s] %s - %s:%s"
-                            % (
+                            "[{}][{}] {} - {}:{}".format(
                                 rdgfile.winuser,
                                 rdg_cred.profile_name,
                                 rdg_cred.server_name,

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import sys
 from impacket import system_errors
@@ -117,11 +116,7 @@ class DCERPCSessionError(DCERPCException):
         if key in system_errors.ERROR_MESSAGES:
             error_msg_short = system_errors.ERROR_MESSAGES[key][0]
             error_msg_verbose = system_errors.ERROR_MESSAGES[key][1]
-            return "RPRN SessionError: code: 0x%x - %s - %s" % (
-                self.error_code,
-                error_msg_short,
-                error_msg_verbose,
-            )
+            return f"RPRN SessionError: code: 0x{self.error_code:x} - {error_msg_short} - {error_msg_verbose}"
         else:
             return f"RPRN SessionError: unknown error code: 0x{self.error_code:x}"
 

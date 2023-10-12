@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 from sqlalchemy.dialects.sqlite import Insert
 from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy import MetaData, Table, select, func, delete

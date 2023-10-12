@@ -160,7 +160,7 @@ class FirefoxTriage:
             item2 = key_data[1]
             decoded_item2 = decoder.decode(item2)
             cleartext_data = self.decrypt_3des(decoded_item2, master_password, global_salt)
-            if cleartext_data != "password-check\x02\x02".encode():
+            if cleartext_data != b"password-check\x02\x02":
                 return "", "", ""
             return global_salt, master_password, entry_salt
         except Exception as e:
@@ -209,7 +209,7 @@ class FirefoxTriage:
 
             # See http://www.drh-consultancy.demon.co.uk/key3.html
             hp = sha1(global_salt + master_password).digest()
-            pes = entry_salt + "\x00".encode() * (20 - len(entry_salt))
+            pes = entry_salt + b"\x00" * (20 - len(entry_salt))
             chp = sha1(hp + entry_salt).digest()
             k1 = hmac.new(chp, pes + entry_salt, sha1).digest()
             tk = hmac.new(chp, pes, sha1).digest()

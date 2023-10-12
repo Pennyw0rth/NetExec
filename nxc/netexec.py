@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import identify_target_file
 from nxc.parsers.ip import parse_targets
@@ -131,7 +130,7 @@ def main():
                 elif target_file_type == "nessus":
                     targets.extend(parse_nessus_file(target, args.protocol))
                 else:
-                    with open(target, "r") as target_file:
+                    with open(target) as target_file:
                         for target_entry in target_file:
                             targets.extend(parse_targets(target_entry.strip()))
             else:

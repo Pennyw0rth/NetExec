@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 from neo4j import GraphDatabase
 from neo4j.exceptions import AuthError, ServiceUnavailable

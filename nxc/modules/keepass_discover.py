@@ -49,11 +49,7 @@ class NXCModule:
                 keepass_process_username = row[1]
                 keepass_process_name = row[2]
                 context.log.highlight(
-                    'Found process "{}" with PID {} (user {})'.format(
-                        keepass_process_name,
-                        keepass_process_id,
-                        keepass_process_username,
-                    )
+                    f'Found process "{keepass_process_name}" with PID {keepass_process_id} (user {keepass_process_username})'
                 )
             if row_number == 0:
                 context.log.display("No KeePass-related process was found")

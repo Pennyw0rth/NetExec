@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 from pyasn1.codec.der import decoder
 from pyasn1_modules import rfc5652

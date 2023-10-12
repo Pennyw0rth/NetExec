@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import time
 from impacket import system_errors
@@ -101,11 +100,7 @@ class DCERPCSessionError(DCERPCException):
         if key in error_messages:
             error_msg_short = error_messages[key][0]
             error_msg_verbose = error_messages[key][1]
-            return "SessionError: code: 0x%x - %s - %s" % (
-                self.error_code,
-                error_msg_short,
-                error_msg_verbose,
-            )
+            return f"SessionError: code: 0x{self.error_code:x} - {error_msg_short} - {error_msg_verbose}"
         else:
             return f"SessionError: unknown error code: 0x{self.error_code:x}"
 

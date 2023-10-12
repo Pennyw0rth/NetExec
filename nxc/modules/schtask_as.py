@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import os
 from time import sleep
@@ -255,10 +254,10 @@ class TSCH_EXEC:
             if fileless:
                 while True:
                     try:
-                        with open(os.path.join("/tmp", "nxc_hosted", self.__output_filename), "r") as output:
+                        with open(os.path.join("/tmp", "nxc_hosted", self.__output_filename)) as output:
                             self.output_callback(output.read())
                         break
-                    except IOError:
+                    except OSError:
                         sleep(2)
             else:
                 smbConnection = self.__rpctransport.get_smb_connection()

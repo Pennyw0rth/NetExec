@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 from libnmap.parser import NmapParser
 from nxc.logger import nxc_logger

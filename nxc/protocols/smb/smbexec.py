@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import os
 from os.path import join as path_join
@@ -217,7 +216,7 @@ class SMBEXEC:
                 with open(path_join("/tmp", "nxc_hosted", self.__output), "rb") as output:
                     self.output_callback(output.read())
                 break
-            except IOError:
+            except OSError:
                 sleep(2)
 
     def finish(self):

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Initially created by @sadshade, all output to him:
 # https://github.com/sadshade/veeam-output
 
@@ -21,9 +20,9 @@ class NXCModule:
     multiple_hosts = True
 
     def __init__(self):
-        with open(get_ps_script("veeam_dump_module/veeam_dump_mssql.ps1"), "r") as psFile:
+        with open(get_ps_script("veeam_dump_module/veeam_dump_mssql.ps1")) as psFile:
             self.psScriptMssql = psFile.read()
-        with open(get_ps_script("veeam_dump_module/veeam_dump_postgresql.ps1"), "r") as psFile:
+        with open(get_ps_script("veeam_dump_module/veeam_dump_postgresql.ps1")) as psFile:
             self.psScriptPostgresql = psFile.read()
 
     def options(self, context, module_options):

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 import base64
 import warnings
 from datetime import datetime
@@ -913,7 +912,7 @@ class database:
         q = select(self.ConfChecksTable).filter(self.ConfChecksTable.c.name == name)
         select_results = self.conn.execute(q).all()
         context = locals()
-        new_row = dict(((column, context[column]) for column in ("name", "description")))
+        new_row = dict((column, context[column]) for column in ("name", "description"))
         updated_ids = self.insert_data(self.ConfChecksTable, select_results, **new_row)
 
         if updated_ids:
@@ -925,7 +924,7 @@ class database:
         q = select(self.ConfChecksResultsTable).filter(self.ConfChecksResultsTable.c.host_id == host_id, self.ConfChecksResultsTable.c.check_id == check_id)
         select_results = self.conn.execute(q).all()
         context = locals()
-        new_row = dict(((column, context[column]) for column in ("host_id", "check_id", "secure", "reasons")))
+        new_row = dict((column, context[column]) for column in ("host_id", "check_id", "secure", "reasons"))
         updated_ids = self.insert_data(self.ConfChecksResultsTable, select_results, **new_row)
 
         if updated_ids:

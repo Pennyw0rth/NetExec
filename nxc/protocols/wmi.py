@@ -66,7 +66,7 @@ class wmi(connection):
         if self.remoteName == "":
             self.remoteName = self.host
         try:
-            rpctansport = transport.DCERPCTransportFactory(r"ncacn_ip_tcp:{0}[{1}]".format(self.remoteName, str(self.args.port)))
+            rpctansport = transport.DCERPCTransportFactory(fr"ncacn_ip_tcp:{self.remoteName}[{str(self.args.port)}]")
             rpctansport.set_credentials(username="", password="", domain="", lmhash="", nthash="", aesKey="")
             rpctansport.setRemoteHost(self.host)
             rpctansport.set_connect_timeout(self.args.rpc_timeout)

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import random
 import string
@@ -9,7 +8,7 @@ import os
 
 
 def identify_target_file(target_file):
-    with open(target_file, "r") as target_file_handle:
+    with open(target_file) as target_file_handle:
         for i, line in enumerate(target_file_handle):
             if i == 1:
                 if line.startswith("<NessusClientData"):

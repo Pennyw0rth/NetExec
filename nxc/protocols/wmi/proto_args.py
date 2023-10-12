@@ -26,12 +26,12 @@ def get_conditional_action(base_action):
     class ConditionalAction(base_action):
         def __init__(self, option_strings, dest, **kwargs):
             x = kwargs.pop("make_required", [])
-            super(ConditionalAction, self).__init__(option_strings, dest, **kwargs)
+            super().__init__(option_strings, dest, **kwargs)
             self.make_required = x
 
         def __call__(self, parser, namespace, values, option_string=None):
             for x in self.make_required:
                 x.required = True
-            super(ConditionalAction, self).__call__(parser, namespace, values, option_string)
+            super().__call__(parser, namespace, values, option_string)
 
     return ConditionalAction

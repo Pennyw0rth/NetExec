@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 #
 #
 # Author: xiaolichan
@@ -54,7 +53,7 @@ class WMIEXEC:
         self.__shell = "cmd.exe /Q /c "
         # self.__pwsh = 'powershell.exe -NoP -NoL -sta -NonI -W Hidden -Exec Bypass -Enc '
         # self.__pwsh = 'powershell.exe -Enc '
-        self.__pwd = str("C:\\")
+        self.__pwd = "C:\\"
         self.__codec = codec
 
         self.__dcom = DCOMConnection(self.__host, self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, oxidResolver=True, doKerberos=self.__doKerberos, kdcHost=self.__kdcHost, aesKey=self.__aesKey)
@@ -81,7 +80,7 @@ class WMIEXEC:
         try:
             self.__win32Process.Create(command, self.__pwd, None)
         except Exception as e:
-            self.logger.error((str(e)))
+            self.logger.error(str(e))
 
     def execute_WithOutput(self, command):
         result_output = f"C:\\windows\\temp\\{str(uuid.uuid4())}.txt"

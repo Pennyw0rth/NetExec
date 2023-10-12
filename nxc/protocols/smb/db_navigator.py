@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 from nxc.helpers.misc import validate_ntlm
 from nxc.nxcdb import DatabaseNavigator, print_table, print_help

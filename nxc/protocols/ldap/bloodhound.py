@@ -8,7 +8,7 @@ from bloodhound.enumeration.memberships import MembershipEnumerator
 from bloodhound.enumeration.domains import DomainEnumerator
 
 
-class BloodHound(object):
+class BloodHound:
     def __init__(self, ad, hostname, host, port):
         self.ad = ad
         self.ldap = None

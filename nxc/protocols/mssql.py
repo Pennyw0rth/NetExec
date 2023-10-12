@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 import os
-import socket
 
 from nxc.config import process_secret
 from nxc.connection import connection
@@ -123,7 +121,7 @@ class mssql(connection):
         try:
             self.conn = tds.MSSQL(self.host, self.args.port)
             self.conn.connect()
-        except socket.error as e:
+        except OSError as e:
             self.logger.debug(f"Error connecting to MSSQL: {e}")
             return False
         return True

@@ -5,7 +5,6 @@ import re
 from os.path import expanduser
 import codecs
 import socket
-from builtins import str
 from datetime import datetime
 from struct import unpack
 
@@ -39,7 +38,7 @@ def get_dns_resolver(server, context):
             server = server[8:]
         socket.inet_aton(server)
         dnsresolver.nameservers = [server]
-    except socket.error:
+    except OSError:
         context.info("Using System DNS to resolve unknown entries. Make sure resolving your" " target domain works here or specify an IP as target host to use that" " server for queries")
     return dnsresolver
 

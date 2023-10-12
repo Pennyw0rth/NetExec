@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 # https://raw.githubusercontent.com/SecureAuthCorp/impacket/master/examples/rpcdump.py
 from impacket import uuid

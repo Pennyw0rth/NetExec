@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # from https://github.com/SecureAuthCorp/impacket/blob/master/examples/GetNPUsers.py
 # https://troopers.de/downloads/troopers19/TROOPERS19_AD_Fun_With_LDAP.pdf
 import hashlib
@@ -647,7 +646,7 @@ class ldap(connection):
             if self.conn:
                 self.logger.debug("SMBv1 Connection successful")
                 self.logger.debug("SMBv1 Connection successful")
-        except socket.error as e:
+        except OSError as e:
             if str(e).find("Connection reset by peer") != -1:
                 self.logger.debug(f"SMBv1 might be disabled on {self.host}")
             return False
@@ -665,7 +664,7 @@ class ldap(connection):
             if self.conn:
                 self.logger.debug("SMBv3 Connection successful")
                 self.logger.debug("SMBv3 Connection successful")
-        except socket.error:
+        except OSError:
             return False
         except Exception as e:
             self.logger.debug(f"Error creating SMBv3 connection to {self.host}: {e}")

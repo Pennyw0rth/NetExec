@@ -46,13 +46,13 @@ class NXCModule:
         self.poll_frequency_seconds = 5
         self.dummy_service_name = "OneDrive Sync KeePass"
 
-        with open(get_ps_script("keepass_trigger_module/RemoveKeePassTrigger.ps1"), "r") as remove_trigger_script_file:
+        with open(get_ps_script("keepass_trigger_module/RemoveKeePassTrigger.ps1")) as remove_trigger_script_file:
             self.remove_trigger_script_str = remove_trigger_script_file.read()
 
-        with open(get_ps_script("keepass_trigger_module/AddKeePassTrigger.ps1"), "r") as add_trigger_script_file:
+        with open(get_ps_script("keepass_trigger_module/AddKeePassTrigger.ps1")) as add_trigger_script_file:
             self.add_trigger_script_str = add_trigger_script_file.read()
 
-        with open(get_ps_script("keepass_trigger_module/RestartKeePass.ps1"), "r") as restart_keepass_script_file:
+        with open(get_ps_script("keepass_trigger_module/RestartKeePass.ps1")) as restart_keepass_script_file:
             self.restart_keepass_script_str = restart_keepass_script_file.read()
 
     def options(self, context, module_options):

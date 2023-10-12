@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import os
 from impacket.dcerpc.v5 import tsch, transport
@@ -175,10 +174,10 @@ class TSCH_EXEC:
             if fileless:
                 while True:
                     try:
-                        with open(os.path.join("/tmp", "nxc_hosted", self.__output_filename), "r") as output:
+                        with open(os.path.join("/tmp", "nxc_hosted", self.__output_filename)) as output:
                             self.output_callback(output.read())
                         break
-                    except IOError:
+                    except OSError:
                         sleep(2)
             else:
                 ":".join(map(str, self.__rpctransport.get_socket().getpeername()))

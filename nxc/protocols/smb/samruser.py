@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Stolen from Impacket
 
 from impacket.dcerpc.v5 import transport, samr

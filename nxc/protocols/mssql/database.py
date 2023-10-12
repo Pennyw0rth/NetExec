@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 from pathlib import Path
 from sqlalchemy import MetaData, func, Table, select, insert, update, delete

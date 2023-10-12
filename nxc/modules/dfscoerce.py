@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 from impacket import system_errors
 from impacket.dcerpc.v5 import transport
@@ -62,11 +61,7 @@ class DCERPCSessionError(DCERPCException):
         if key in system_errors.ERROR_MESSAGES:
             error_msg_short = system_errors.ERROR_MESSAGES[key][0]
             error_msg_verbose = system_errors.ERROR_MESSAGES[key][1]
-            return "DFSNM SessionError: code: 0x%x - %s - %s" % (
-                self.error_code,
-                error_msg_short,
-                error_msg_verbose,
-            )
+            return f"DFSNM SessionError: code: 0x{self.error_code:x} - {error_msg_short} - {error_msg_verbose}"
         else:
             return f"DFSNM SessionError: unknown error code: 0x{self.error_code:x}"
 
@@ -121,7 +116,7 @@ class TriggerAuth:
 
         rpctransport.setRemoteHost(target)
         dce = rpctransport.get_dce_rpc()
-        nxc_logger.debug("[-] Connecting to %s" % r"ncacn_np:%s[\PIPE\netdfs]" % target)
+        nxc_logger.debug("[-] Connecting to {}".format(r"ncacn_np:%s[\PIPE\netdfs]") % target)
         try:
             dce.connect()
         except Exception as e:

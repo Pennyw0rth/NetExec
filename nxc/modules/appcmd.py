@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 class NXCModule:
     """
     Checks for credentials in IIS Application Pool configuration files using appcmd.exe.

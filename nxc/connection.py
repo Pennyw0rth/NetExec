@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import random
 import socket
@@ -74,7 +73,7 @@ def dcom_FirewallChecker(iInterface, timeout):
         return True, stringBinding
 
 
-class connection(object):
+class connection:
     def __init__(self, args, db, host):
         self.domain = None
         self.args = args
@@ -312,7 +311,7 @@ class connection(object):
         # Parse usernames
         for user in self.args.username:
             if isfile(user):
-                with open(user, "r") as user_file:
+                with open(user) as user_file:
                     for line in user_file:
                         if "\\" in line:
                             domain_single, username_single = line.split("\\")
@@ -336,7 +335,7 @@ class connection(object):
         for password in self.args.password:
             if isfile(password):
                 try:
-                    with open(password, "r", errors=("ignore" if self.args.ignore_pw_decoding else "strict")) as password_file:
+                    with open(password, errors=("ignore" if self.args.ignore_pw_decoding else "strict")) as password_file:
                         for line in password_file:
                             secret.append(line.strip())
                             cred_type.append("plaintext")
@@ -352,7 +351,7 @@ class connection(object):
         if hasattr(self.args, "hash") and self.args.hash:
             for ntlm_hash in self.args.hash:
                 if isfile(ntlm_hash):
-                    with open(ntlm_hash, "r") as ntlm_hash_file:
+                    with open(ntlm_hash) as ntlm_hash_file:
                         for line in ntlm_hash_file:
                             secret.append(line.strip())
                             cred_type.append("hash")
@@ -364,7 +363,7 @@ class connection(object):
         if self.args.aesKey:
             for aesKey in self.args.aesKey:
                 if isfile(aesKey):
-                    with open(aesKey, "r") as aesKey_file:
+                    with open(aesKey) as aesKey_file:
                         for line in aesKey_file:
                             secret.append(line.strip())
                             cred_type.append("aesKey")

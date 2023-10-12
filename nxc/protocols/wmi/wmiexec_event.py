@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 #
 #
 # Author: xiaolichan
@@ -77,7 +76,7 @@ class WMIEXEC_EVENT:
         try:
             self.execute_vbs(self.process_vbs(command))
         except Exception as e:
-            self.logger.error((str(e)))
+            self.logger.error(str(e))
 
     def execute_handler(self, command):
         # Generate vbsript and execute it
@@ -103,7 +102,7 @@ class WMIEXEC_EVENT:
         #   but we can base64 encode it and submit the data without spcial charters to avoid it.
         if self.__retOutput:
             output_file = f"{str(uuid.uuid4())}.txt"
-            with open(get_ps_script("wmiexec_event_vbscripts/Exec_Command_WithOutput.vbs"), "r") as vbs_file:
+            with open(get_ps_script("wmiexec_event_vbscripts/Exec_Command_WithOutput.vbs")) as vbs_file:
                 vbs = vbs_file.read()
             vbs = vbs.replace("REPLACE_ME_BASE64_COMMAND", base64.b64encode(command.encode()).decode())
             vbs = vbs.replace("REPLACE_ME_OUTPUT_FILE", output_file)
@@ -112,7 +111,7 @@ class WMIEXEC_EVENT:
         else:
             # From wmihacker
             # Link: https://github.com/rootclay/WMIHACKER/blob/master/WMIHACKER_0.6.vbs
-            with open(get_ps_script("wmiexec_event_vbscripts/Exec_Command_Silent.vbs"), "r") as vbs_file:
+            with open(get_ps_script("wmiexec_event_vbscripts/Exec_Command_Silent.vbs")) as vbs_file:
                 vbs = vbs_file.read()
             vbs = vbs.replace("REPLACE_ME_BASE64_COMMAND", base64.b64encode(command.encode()).decode())
             vbs = vbs.replace("REPLACE_ME_TEMP_TASKNAME", schedule_taskname)
