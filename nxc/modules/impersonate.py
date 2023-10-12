@@ -6,6 +6,7 @@
 from base64 import b64decode
 from sys import exit
 from os import path
+import sys
 
 
 class NXCModule:
@@ -47,8 +48,13 @@ class NXCModule:
     def on_admin_login(self, context, connection):
         if self.useembeded:
             file_to_upload = "/tmp/Impersonate.exe"
-            with open(file_to_upload, "wb") as impersonate:
-                impersonate.write(self.impersonate_embedded)
+
+            try:
+                with open(file_to_upload, "wb") as impersonate:
+                    impersonate.write(self.impersonate_embedded)
+            except FileNotFoundError as e:
+                context.log.fail(f"Impersonate file specified '{file_to_upload}' does not exist!")
+                sys.exit(1)
         else:
             if path.isfile(self.imp_exe):
                 file_to_upload = self.imp_exe
