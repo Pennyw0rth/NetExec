@@ -162,7 +162,7 @@ class NXCModule:
             exec_as.append(f"EXECUTE AS LOGIN = '{grantor}';")
         return "".join(exec_as)
 
-    def perform_impersonation_check(self, user: User, grantors=[]):
+    def perform_impersonation_check(self, user: User, grantors=None):
         """
         Performs an impersonation check for a given user.
 
@@ -187,6 +187,8 @@ class NXCModule:
 
         """
         # build EXECUTE AS if any grantors is specified
+        if grantors is None:
+            grantors = []
         exec_as = self.sql_exec_as(grantors)
         # do we have any privilege ?
         if self.update_priv(user, exec_as):

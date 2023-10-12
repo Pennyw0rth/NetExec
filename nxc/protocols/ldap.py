@@ -1004,7 +1004,7 @@ class ldap(connection):
                 self.logger.display(f"Total of records returned {len(answers):d}")
                 TGT = KerberosAttacks(self).get_tgt_kerberoasting()
                 dejavue = []
-                for (SPN, sAMAccountName, memberOf, pwdLastSet, lastLogon, delegation,) in answers:
+                for (_SPN, sAMAccountName, memberOf, pwdLastSet, lastLogon, delegation,) in answers:
                     if sAMAccountName not in dejavue:
                         downLevelLogonName = self.targetDomain + "\\" + sAMAccountName
 

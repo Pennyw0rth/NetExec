@@ -32,7 +32,7 @@ def db_setup(db_engine):
     NXCDBMenu.create_workspace("test", p_loader, protocols)
 
     protocol_db_path = p_loader.get_protocols()[proto]["dbpath"]
-    protocol_db_object = getattr(p_loader.load_protocol(protocol_db_path), "database")
+    protocol_db_object = p_loader.load_protocol(protocol_db_path).database
 
     database_obj = protocol_db_object(db_engine)
     database_obj.reflect_tables()

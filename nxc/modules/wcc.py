@@ -47,7 +47,13 @@ class ConfigCheck:
 
     module = None
 
-    def __init__(self, name, description="", checkers=[None], checker_args=[[]], checker_kwargs=[{}]):
+    def __init__(self, name, description="", checkers=None, checker_args=None, checker_kwargs=None):
+        if checker_kwargs is None:
+            checker_kwargs = [{}]
+        if checker_args is None:
+            checker_args = [[]]
+        if checkers is None:
+            checkers = [None]
         self.check_id = None
         self.name = name
         self.description = description
@@ -214,11 +220,13 @@ class HostChecker:
             if host_id is not None:
                 self.connection.db.add_check_result(host_id, check.check_id, check.ok, ", ".join(check.reasons).replace("\x00", ""))
 
-    def check_registry(self, *specs, options={}):
+    def check_registry(self, *specs, options=None):
         """
         Perform checks that only require to compare values in the registry with expected values, according to the specs
         a spec may be either a 3-tuple: (key name, value name, expected value), or a 4-tuple (key name, value name, expected value, operation), where operation is a function that implements a comparison operator
         """
+        if options is None:
+            options = {}
         default_options = {"lastWins": False, "stopOnOK": False, "stopOnKO": False, "KOIfMissing": True}
         default_options.update(options)
         options = default_options

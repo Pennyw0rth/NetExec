@@ -15,7 +15,7 @@ def d2b(a):
 
     t2bin = tbin[::-1]
     if len(t2bin) != 8:
-        for x in range(6 - len(t2bin)):
+        for _x in range(6 - len(t2bin)):
             t2bin.insert(0, 0)
     return "".join([str(g) for g in t2bin])
 

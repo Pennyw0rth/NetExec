@@ -492,7 +492,7 @@ class NXCDBMenu(cmd.Cmd):
             self.config.set("nxc", "last_used_db", proto)
             self.write_configfile()
             try:
-                proto_menu = getattr(db_nav_object, "navigator")(self, getattr(db_object, "database")(self.conn), proto)
+                proto_menu = db_nav_object.navigator(self, db_object.database(self.conn), proto)
                 proto_menu.cmdloop()
             except UserExitedProto:
                 pass
@@ -567,7 +567,7 @@ class NXCDBMenu(cmd.Cmd):
                 c.execute("PRAGMA journal_mode = OFF")
                 c.execute("PRAGMA foreign_keys = 1")
 
-                getattr(protocol_object, "database").db_schema(c)
+                protocol_object.database.db_schema(c)
 
                 # commit the changes and close everything off
                 conn.commit()
@@ -598,7 +598,7 @@ def initialize_db(logger):
             c.execute("PRAGMA foreign_keys = 1")
             # set a small timeout (5s) so if another thread is writing to the database, the entire program doesn't crash
             c.execute("PRAGMA busy_timeout = 5000")
-            getattr(protocol_object, "database").db_schema(c)
+            protocol_object.database.db_schema(c)
             # commit the changes and close everything off
             conn.commit()
             conn.close()

@@ -154,7 +154,7 @@ def main():
 
     protocol_object = getattr(p_loader.load_protocol(protocol_path), args.protocol)
     nxc_logger.debug(f"Protocol Object: {protocol_object}")
-    protocol_db_object = getattr(p_loader.load_protocol(protocol_db_path), "database")
+    protocol_db_object = p_loader.load_protocol(protocol_db_path).database
     nxc_logger.debug(f"Protocol DB Object: {protocol_db_object}")
 
     db_path = path_join(NXC_PATH, "workspaces", nxc_workspace, f"{args.protocol}.db")
@@ -165,7 +165,7 @@ def main():
     db = protocol_db_object(db_engine)
 
     # with the new nxc/config.py this can be eventually removed, as it can be imported anywhere
-    setattr(protocol_object, "config", nxc_config)
+    protocol_object.config = nxc_config
 
     if args.module or args.list_modules:
         loader = ModuleLoader(args, db, nxc_logger)
@@ -242,7 +242,7 @@ def main():
             # get currently set modules, otherwise default to empty list
             current_modules = getattr(protocol_object, "module", [])
             current_modules.append(module)
-            setattr(protocol_object, "module", current_modules)
+            protocol_object.module = current_modules
             nxc_logger.debug(f"proto object module after adding: {protocol_object.module}")
 
     if hasattr(args, "ntds") and args.ntds and not args.userntds:

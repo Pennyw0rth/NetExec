@@ -25,13 +25,19 @@ class SMBSpider:
         self,
         share,
         folder=".",
-        pattern=[],
-        regex=[],
-        exclude_dirs=[],
+        pattern=None,
+        regex=None,
+        exclude_dirs=None,
         depth=None,
         content=False,
         onlyfiles=True,
     ):
+        if exclude_dirs is None:
+            exclude_dirs = []
+        if regex is None:
+            regex = []
+        if pattern is None:
+            pattern = []
         if regex:
             try:
                 self.regex = [re.compile(bytes(rx, "utf8")) for rx in regex]

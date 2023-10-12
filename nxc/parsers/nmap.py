@@ -21,7 +21,7 @@ def parse_nmap_xml(nmap_output_file, protocol):
     targets = []
 
     for host in nmap_report.hosts:
-        for port, proto in host.get_open_ports():
+        for port, _proto in host.get_open_ports():
             if port in protocol_dict[protocol]["ports"]:
                 targets.append(host.ipv4)
                 break

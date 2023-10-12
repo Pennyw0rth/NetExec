@@ -404,7 +404,7 @@ class mssql(connection):
     # The whole tds library in impacket needs a good overhaul to preserve my sanity
     def handle_mssql_reply(self):
         for keys in self.conn.replies.keys():
-            for i, key in enumerate(self.conn.replies[keys]):
+            for _i, key in enumerate(self.conn.replies[keys]):
                 if key["TokenType"] == TDS_ERROR_TOKEN:
                     error = f"ERROR({key['ServerName'].decode('utf-16le')}): Line {key['LineNumber']:d}: {key['MsgText'].decode('utf-16le')}"
                     self.conn.lastError = SQLErrorException(f"ERROR: Line {key['LineNumber']:d}: {key['MsgText'].decode('utf-16le')}")

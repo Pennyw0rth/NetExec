@@ -249,7 +249,7 @@ class DNS_COUNT_NAME(Structure):
     def toFqdn(self):
         ind = 0
         labels = []
-        for i in range(self["LabelCount"]):
+        for _i in range(self["LabelCount"]):
             nextlen = unpack("B", self["RawName"][ind : ind + 1])[0]
             labels.append(self["RawName"][ind + 1 : ind + 1 + nextlen].decode("utf-8"))
             ind += nextlen + 1

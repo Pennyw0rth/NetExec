@@ -109,7 +109,7 @@ def process_creds(context, connection, credentials_data, dbconnection, cursor, d
 
             for path in paths:
                 if path:
-                    for key, value in path.items():
+                    for _key, value in path.items():
                         for item in value:
                             if isinstance(item, dict):
                                 if {item["name"]} not in reported_da:
@@ -173,7 +173,7 @@ class NXCModule:
         # lsassy also removes all other handlers and overwrites the formatter which is bad (we want ours)
         # so what we do is define "success" as a logging level, then do nothing with the output
         logging.addLevelName(25, "SUCCESS")
-        setattr(logging, "success", lambda message, *args: ())
+        logging.success = lambda message, *args: ()
 
         host = connection.host
         domain_name = connection.domain
@@ -247,10 +247,10 @@ class NXCModule:
                     if len(more_to_dump) > 0:
                         context.log.display(f"User {user[0]} has more access to {pc[0]}. Attempting to dump.")
                         connection.domain = user[0].split("@")[1]
-                        setattr(connection, "host", pc[0].split(".")[0])
-                        setattr(connection, "username", user[0].split("@")[0])
-                        setattr(connection, "nthash", user[1])
-                        setattr(connection, "nthash", user[1])
+                        connection.host = pc[0].split(".")[0]
+                        connection.username = user[0].split("@")[0]
+                        connection.nthash = user[1]
+                        connection.nthash = user[1]
                         try:
                             self.run_lsassy(context, connection, cursor)
                             cursor.execute("UPDATE pc_and_admins SET dumped = 'TRUE' WHERE pc_name LIKE '" + pc[0] + "%'")

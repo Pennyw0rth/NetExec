@@ -1197,13 +1197,19 @@ class smb(connection):
         self,
         share=None,
         folder=".",
-        pattern=[],
-        regex=[],
-        exclude_dirs=[],
+        pattern=None,
+        regex=None,
+        exclude_dirs=None,
         depth=None,
         content=False,
         only_files=True,
     ):
+        if exclude_dirs is None:
+            exclude_dirs = []
+        if regex is None:
+            regex = []
+        if pattern is None:
+            pattern = []
         spider = SMBSpider(self.conn, self.logger)
 
         self.logger.display("Started spidering")
@@ -1288,7 +1294,7 @@ class smb(connection):
 
         so_far = 0
         simultaneous = 1000
-        for j in range(max_rid // simultaneous + 1):
+        for _j in range(max_rid // simultaneous + 1):
             if (max_rid - so_far) // simultaneous == 0:
                 sids_to_check = (max_rid - so_far) % simultaneous
             else:

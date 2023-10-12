@@ -385,7 +385,7 @@ class navigator(DatabaseNavigator):
             check = check._asdict()
             checks_dict[check["id"]] = check
 
-        for result_id, host_id, check_id, secure, reasons in results:
+        for _result_id, host_id, check_id, secure, reasons in results:
             status = "OK" if secure else "KO"
             host = self.db.get_hosts(host_id)[0]._asdict()
             check = checks_dict[check_id]

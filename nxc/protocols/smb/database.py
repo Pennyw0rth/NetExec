@@ -875,11 +875,13 @@ class database:
         q = select(self.ConfChecksResultsTable)
         return self.conn.execute(q).all()
 
-    def insert_data(self, table, select_results=[], **new_row):
+    def insert_data(self, table, select_results=None, **new_row):
         """
         Insert a new row in the given table.
         Basically it's just a more generic version of add_host
         """
+        if select_results is None:
+            select_results = []
         results = []
         updated_ids = []
 
