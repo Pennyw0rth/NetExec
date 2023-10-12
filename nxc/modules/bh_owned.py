@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Author:
 #  Romain Bentz (pixis - @hackanddo)
 # Website:
@@ -72,13 +71,19 @@ class NXCModule:
             sys.exit()
 
         with driver.session() as session:
-            with session.begin_transaction() as tx:
-                result = tx.run(f'MATCH (c:Computer {{name:"{host_fqdn}"}}) SET c.owned=True RETURN' " c.name AS name")
-                record = result.single()
-                try:
-                    value = record.value()
-                except AttributeError:
-                    value = []
+            try:
+                with session.begin_transaction() as tx:
+                    result = tx.run(f'MATCH (c:Computer {{name:"{host_fqdn}"}}) SET c.owned=True RETURN' " c.name AS name")
+                    record = result.single()
+                    try:
+                        value = record.value()
+                    except AttributeError:
+                        value = []
+            except ServiceUnavailable as e:
+                context.log.fail(f"Neo4J does not seem to be available on {uri}. See --options")
+                context.log.debug(f"Error {e}: ")
+                driver.close()
+                sys.exit()
         if len(value) > 0:
             context.log.success(f"Node {host_fqdn} successfully set as owned in BloodHound")
         else:
