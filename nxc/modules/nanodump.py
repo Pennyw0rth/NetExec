@@ -8,7 +8,6 @@ import os
 import base64
 import sys
 from pypykatz.pypykatz import pypykatz
-import os
 import tempfile
 from datetime import datetime
 from nxc.helpers.bloodhound import add_user_bh
