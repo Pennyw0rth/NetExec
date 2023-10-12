@@ -3,6 +3,7 @@
 # Based on the article : https://blog.xpnsec.com/azuread-connect-for-redteam/
 from sys import exit
 from os import path
+import sys
 from nxc.helpers.powershell import get_ps_script
 
 
@@ -35,7 +36,7 @@ class NXCModule:
         self.use_embedded = True
         self.msolmdl = self.cmd = ""
 
-        with open(get_ps_script("msol_dump/msol_dump.ps1"), "r") as msolsc:
+        with open(get_ps_script("msol_dump/msol_dump.ps1")) as msolsc:
             self.msol_embedded = msolsc.read()
 
         if "MSOL_PS1" in module_options:
@@ -49,8 +50,14 @@ class NXCModule:
     def on_admin_login(self, context, connection):
         if self.use_embedded:
             file_to_upload = "/tmp/msol.ps1"
-            with open(file_to_upload, "w") as msol:
-                msol.write(self.msol_embedded)
+
+            try:
+                with open(file_to_upload, "w") as msol:
+                    msol.write(self.msol_embedded)
+            except FileNotFoundError as e:
+                context.log.fail(f"Impersonate file specified '{file_to_upload}' does not exist!")
+                sys.exit(1)
+            
         else:
             if path.isfile(self.MSOL_PS1):
                 file_to_upload = self.MSOL_PS1
