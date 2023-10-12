@@ -60,8 +60,7 @@ from dploot.triage.backupkey import BackupkeyTriage
 from dploot.lib.target import Target
 from dploot.lib.smb import DPLootSMBConnection
 
-from pywerview.cli.helpers import get_localdisks, get_netsession, get_netgroupmember, get_netgroup, get_netcomputer, \
-    get_netloggedon, get_netlocalgroup
+from pywerview.cli.helpers import get_localdisks, get_netsession, get_netgroupmember, get_netgroup, get_netcomputer, get_netloggedon, get_netlocalgroup
 
 from time import time
 from datetime import datetime
@@ -465,7 +464,7 @@ class smb(connection):
             except UnicodeEncodeError:
                 self.logger.error(f"UnicodeEncodeError on: '{self.username}:{self.password}'. Trying again with a different encoding...")
                 self.create_conn_obj()
-                self.conn.login(self.username, self.password.encode().decode('latin-1'), domain)
+                self.conn.login(self.username, self.password.encode().decode("latin-1"), domain)
 
             self.check_if_admin()
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")

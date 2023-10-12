@@ -130,7 +130,6 @@ def resolve_collection_methods(methods):
             return False
 
 
-
 class ldap(connection):
     def __init__(self, args, db, host):
         self.domain = None
@@ -754,7 +753,6 @@ class ldap(connection):
             if self.ldapConnection:
                 self.logger.debug(f"Search Filter={searchFilter}")
 
-
                 # Microsoft Active Directory set an hard limit of 1000 entries returned by any search
                 paged_search_control = ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000)
                 resp = self.ldapConnection.search(
@@ -831,7 +829,6 @@ class ldap(connection):
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
                     pass
             return
-
 
     def dc_list(self):
         # Building the search filter

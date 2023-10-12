@@ -60,7 +60,7 @@ class NXCModule:
                 connection.hash,
                 self.logger,
                 connection.args.get_output_tries,
-                "C$"  # This one shouldn't be hardcoded but I don't know where to retrive the info
+                "C$",  # This one shouldn't be hardcoded but I don't know where to retrive the info
             )
 
             self.logger.display(f"Executing {self.cmd} as {self.user}")

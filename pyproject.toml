@@ -121,3 +121,5 @@ target-version = "py37"
 
 [tool.ruff.flake8-quotes]
 docstring-quotes = "double"
+inline-quotes = "double"
+multiline-quotes = "double"
