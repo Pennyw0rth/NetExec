@@ -1,10 +1,50 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from sys import exit
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 
+# Registry keys for enabling Windows Defender
+ENABLE_REGISTRY_KEYS = {
+    "SOFTWARE\\Policies\\Microsoft\\Windows Defender": {
+        "PUAProtection": 1,
+        "ServiceKeepAlive": 1,
+        "DisableRoutinelyTakingAction": 0,
+        "DisableAntiSpyware": 0,
+        "DisableAntiVirus": 0
+    },
+    "SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection": {
+        "RealtimeScanDirection": 0,
+        "IOAVMaxSize": 0,
+        "DisableScanOnRealtimeEnable": 0,
+        "DisableRealtimeMonitoring": 0,
+        "DisableOnAccessProtection": 0,
+        "DisableIOAVProtection": 0,
+        "DisableBehaviorMonitoring": 0,
+        "DisableScriptScanning": 0,
+        "DisableIntrusionPreventionSystem": 0,
+    }
+}
+
+# Registry keys for disabling Windows Defender
+DISABLE_REGISTRY_KEYS = {
+    "SOFTWARE\\Policies\\Microsoft\\Windows Defender": {
+        "PUAProtection": 0,
+        "ServiceKeepAlive": 0,
+        "DisableRoutinelyTakingAction": 1,
+        "DisableAntiSpyware": 1,
+        "DisableAntiVirus": 1
+    },
+    "SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection": {
+        "RealtimeScanDirection": 1,
+        "IOAVMaxSize": 1,
+        "DisableScanOnRealtimeEnable": 1,
+        "DisableRealtimeMonitoring": 1,
+        "DisableOnAccessProtection": 1,
+        "DisableIOAVProtection": 1,
+        "DisableBehaviorMonitoring": 1,
+        "DisableScriptScanning": 1,
+        "DisableIntrusionPreventionSystem": 1,
+    }
+}
 
 class NXCModule:
     """Defender by @byinarie"""
@@ -57,31 +97,6 @@ class NXCModule:
         """
         return help_text
 
-
-# Reference
-# https://admx.help/HKLM/Software/Policies/Microsoft/Windows%20Defender
-REGISTRY_KEYS_TO_SET = {
-    "SOFTWARE\\Policies\\Microsoft\\Windows Defender": [
-        "PUAProtection",
-        "ServiceKeepAlive",
-        "DisableRoutinelyTakingAction",
-        "DisableAntiSpyware",
-        "DisableAntiVirus"
-    ],
-    "SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection": [
-        "RealtimeScanDirection",
-        "IOAVMaxSize",
-        "DisableScanOnRealtimeEnable",
-        "DisableRealtimeMonitoring",
-        "DisableOnAccessProtection",
-        "DisableIOAVProtection",
-        "DisableBehaviorMonitoring",
-        "DisableScriptScanning",
-        "DisableIntrusionPreventionSystem",
-    ]
-}
-
-
 class Defender_SMB:
     def __init__(self, context, connection):
         self.context = context
@@ -95,13 +110,13 @@ class Defender_SMB:
         if remoteOps._RemoteOperations__rrp:
             ans = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)
             regHandle = ans["phKey"]
-
-            self.set_registry_values(action, remoteOps, regHandle)
+            registry_keys_to_set = ENABLE_REGISTRY_KEYS if action == "enable" else DISABLE_REGISTRY_KEYS
+            self.set_registry_values(registry_keys_to_set, remoteOps, regHandle)
 
             remoteOps.finish()
 
-    def set_registry_values(self, action, remoteOps, regHandle):
-        for full_key_path, keys in REGISTRY_KEYS_TO_SET.items():
+    def set_registry_values(self, registry_keys_to_set, remoteOps, regHandle):
+        for full_key_path, keys in registry_keys_to_set.items():
             try:
                 ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, full_key_path)
                 keyHandle = ans["phkResult"]
@@ -113,10 +128,9 @@ class Defender_SMB:
                     self.logger.success(f"Created registry key {full_key_path} via SMB")
                 except Exception as e:
                     self.logger.error(f"Error creating registry key {full_key_path}: {str(e)}")
-                    continue  
+                    continue
 
-            for key_name in keys:
-                value = 0 if action == "enable" else 1
+            for key_name, value in keys.items():
                 try:
                     rrp.hBaseRegSetValue(remoteOps._RemoteOperations__rrp, keyHandle, key_name, rrp.REG_DWORD, value)
                     self.logger.success(f"Modified {key_name} to {value} via SMB")
