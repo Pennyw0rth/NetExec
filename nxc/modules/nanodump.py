@@ -4,6 +4,7 @@
 # author of the module : github.com/mpgn
 # nanodump: https://github.com/helpsystems/nanodump
 
+import os
 import base64
 import sys
 from pypykatz.pypykatz import pypykatz
