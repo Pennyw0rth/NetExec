@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import logging
+import socket
 
 from io import StringIO
 
 import paramiko
 
 from nxc.config import process_secret
-from nxc.connection import *
+from nxc.connection import connection
+from nxc.helpers.logger import highlight
 from nxc.logger import NXCAdapter
 from paramiko.ssh_exception import (
     AuthenticationException,

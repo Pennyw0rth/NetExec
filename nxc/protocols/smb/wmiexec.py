@@ -102,7 +102,7 @@ class WMIEXEC:
         try:
             self.logger.debug("Executing remote")
             self.execute_remote(data)
-        except:
+        except Exception:
             self.cd("\\")
             self.execute_remote(data)
 

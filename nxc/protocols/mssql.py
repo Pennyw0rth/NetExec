@@ -85,7 +85,7 @@ class mssql(connection):
 
                 try:
                     smb_conn.logoff()
-                 except Exception:
+                except Exception:
                     pass
 
                 if self.args.domain:

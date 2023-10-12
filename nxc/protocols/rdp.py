@@ -9,7 +9,7 @@ from termcolor import colored
 
 from impacket.krb5.ccache import CCache
 
-from nxc.connection import *
+from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.logger import NXCAdapter
 from nxc.config import host_info_colors
@@ -136,7 +136,7 @@ class rdp(connection):
                 if "Reason:" not in str(e):
                     try:
                         info_domain = self.conn.get_extra_info()
-                    except:
+                    except Exception:
                         pass
                     else:
                         self.domain = info_domain["dnsdomainname"]

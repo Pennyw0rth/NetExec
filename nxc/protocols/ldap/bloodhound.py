@@ -1,4 +1,5 @@
-import sys, time
+import sys
+import time
 
 from nxc.logger import NXCAdapter
 from bloodhound.ad.domain import ADDC

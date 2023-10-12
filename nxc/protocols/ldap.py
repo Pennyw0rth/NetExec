@@ -35,6 +35,7 @@ from impacket.smbconnection import SMBConnection, SessionError
 
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
+from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.logger import NXCAdapter, nxc_logger
 from nxc.protocols.ldap.bloodhound import BloodHound
@@ -130,6 +131,7 @@ def resolve_collection_methods(methods):
             return False
 
 
+
 class ldap(connection):
     def __init__(self, args, db, host):
         self.domain = None
@@ -178,6 +180,7 @@ class ldap(connection):
                     self.logger.debug(f"LDAPs connection to {ldap_url} failed - {e}")
                     # https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/enable-ldap-over-ssl-3rd-certification-authority
                     self.logger.debug("Even if the port is open, LDAPS may not be configured")
+                    self.logger.debug("Even if the port is open, LDAPS may not be configured")
                 else:
                     self.logger.debug(f"LDAP connection to {ldap_url} failed: {e}")
                 return [None, None, None]
@@ -208,6 +211,7 @@ class ldap(connection):
                 except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.info(f"Skipping item, cannot process due to error {e}")
+        except OSError:
         except OSError:
             return [None, None, None]
         self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
@@ -285,7 +289,7 @@ class ldap(connection):
             try:
                 # DC's seem to want us to logoff first, windows workstations sometimes reset the connection
                 self.conn.logoff()
-            except Exception:
+            except Exception Exception:
                 pass
 
             if self.args.domain:
@@ -307,6 +311,8 @@ class ldap(connection):
         else:
             self.logger.extra["protocol"] = "SMB" if not self.no_ntlm else "LDAP"
             self.logger.extra["port"] = "445" if not self.no_ntlm else "389"
+            signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
+            smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
             signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
             smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
             self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({smbv1})")
@@ -347,6 +353,7 @@ class ldap(connection):
             self.nthash = nthash
 
         if self.password == "" and self.args.asreproast:
+            hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
@@ -455,7 +462,7 @@ class ldap(connection):
                         color="magenta" if error in ldap_error_status else "red",
                     )
                     return False
-                except Exception as e:
+                except Exception as e Exception as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
                         f"{self.domain}\\{self.username}:{self.password if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
@@ -465,7 +472,7 @@ class ldap(connection):
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f'{self.domain}\\{self.username}\' from ccache\' if useCache else \':%s\' % (kerb_pass if not self.config.get(\'nxc\', \'audit_mode\') else self.config.get(\'nxc\', \'audit_mode\') * 8)} {ldap_error_status[error_code] if error_code in ldap_error_status else ""}',
+                    f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (kerb_pass if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8)} {str(error_code)}",
                     color="magenta" if error_code in ldap_error_status else "red",
                 )
                 return False
@@ -476,6 +483,7 @@ class ldap(connection):
         self.domain = domain
 
         if self.password == "" and self.args.asreproast:
+            hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
@@ -528,7 +536,7 @@ class ldap(connection):
                     if not self.args.local_auth:
                         add_user_bh(self.username, self.domain, self.logger, self.config)
                     return True
-                except Exception as e:
+                except Exception as e Exception as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
                         f"{self.domain}\\{self.username}:{self.password if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
@@ -567,6 +575,7 @@ class ldap(connection):
         self.domain = domain
 
         if self.hash == "" and self.args.asreproast:
+            hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
@@ -636,10 +645,12 @@ class ldap(connection):
 
     def create_smbv1_conn(self):
         self.logger.debug("Creating smbv1 connection object")
+        self.logger.debug("Creating smbv1 connection object")
         try:
             self.conn = SMBConnection(self.host, self.host, None, 445, preferredDialect=SMB_DIALECT)
             self.smbv1 = True
             if self.conn:
+                self.logger.debug("SMBv1 Connection successful")
                 self.logger.debug("SMBv1 Connection successful")
         except socket.error as e:
             if str(e).find("Connection reset by peer") != -1:
@@ -652,10 +663,12 @@ class ldap(connection):
 
     def create_smbv3_conn(self):
         self.logger.debug("Creating smbv3 connection object")
+        self.logger.debug("Creating smbv3 connection object")
         try:
             self.conn = SMBConnection(self.host, self.host, None, 445)
             self.smbv1 = False
             if self.conn:
+                self.logger.debug("SMBv3 Connection successful")
                 self.logger.debug("SMBv3 Connection successful")
         except socket.error:
             return False
@@ -743,6 +756,7 @@ class ldap(connection):
             if self.ldapConnection:
                 self.logger.debug(f"Search Filter={searchFilter}")
 
+
                 # Microsoft Active Directory set an hard limit of 1000 entries returned by any search
                 paged_search_control = ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000)
                 resp = self.ldapConnection.search(
@@ -820,23 +834,27 @@ class ldap(connection):
                     pass
             return
 
+
     def dc_list(self):
         # Building the search filter
         search_filter = "(&(objectCategory=computer)(primaryGroupId=516))"
         attributes = ["dNSHostName"]
         resp = self.search(search_filter, attributes, 0)
         for item in resp:
+        for item in resp:
             if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
                 continue
             name = ""
             try:
-                for attribute in item["attributes"]:     
+                for attribute in item["attributes"]:
                     if str(attribute["type"]) == "dNSHostName":
                         name = str(attribute["vals"][0])
                 try:
                     ip_address = socket.gethostbyname(name.split(".")[0])
-                    if ip_address != True and name != "":
+                    if ip_address is not True and name != "":
                         self.logger.highlight(f"{name} = {colored(ip_address, host_info_colors[0])}")
+                except socket.gaierror:
+                    self.logger.fail(f"{name} = Connection timeout")
                 except socket.gaierror:
                     self.logger.fail(f"{name} = Connection timeout")
             except Exception as e:
@@ -906,6 +924,7 @@ class ldap(connection):
                     pass
             if len(answers) > 0:
                 for user in answers:
+                    hash_TGT = KerberosAttacks(self).get_tgt_asroast(user[0])
                     hash_TGT = KerberosAttacks(self).get_tgt_asroast(user[0])
                     self.logger.highlight(f"{hash_TGT}")
                     with open(self.args.asreproast, "a+") as hash_asreproast:
@@ -994,6 +1013,7 @@ class ldap(connection):
             if len(answers) > 0:
                 self.logger.display(f"Total of records returned {len(answers):d}")
                 TGT = KerberosAttacks(self).get_tgt_kerberoasting()
+                TGT = KerberosAttacks(self).get_tgt_kerberoasting()
                 dejavue = []
                 for (
                     SPN,
@@ -1018,7 +1038,9 @@ class ldap(connection):
                                 TGT["KDC_REP"],
                                 TGT["cipher"],
                                 TGT["session_key"],
+                                TGT["session_key"],
                             )
+                            r = KerberosAttacks(self).output_tgs(
                             r = KerberosAttacks(self).output_tgs(
                                 tgs,
                                 oldSessionKey,

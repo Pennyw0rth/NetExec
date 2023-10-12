@@ -68,7 +68,7 @@ class MSSQLEXEC:
         try:
             res = self.mssql_conn.batch(f"DECLARE @r INT; EXEC master.dbo.xp_fileexist '{remote}', @r OUTPUT; SELECT @r as n")[0]["n"]
             return res == 1
-        except:
+        except Exception:
             return False
 
     def get_file(self, remote, local):

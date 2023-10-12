@@ -13,7 +13,7 @@ from impacket.smbconnection import SMBConnection
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 
 from nxc.config import process_secret
-from nxc.connection import *
+from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.protocols.ldap.laps import LDAPConnect, LAPSv2Extract
 from nxc.logger import NXCAdapter
@@ -72,12 +72,8 @@ class winrm(connection):
 
             try:
                 smb_conn.logoff()
-            except:
+            except Exception:
                 pass
-            # except Exception as e:
-            #     self.logger.fail(
-            #         f"Error retrieving host domain: {e} specify one manually with the '-d' flag"
-            #     )
 
             if self.args.domain:
                 self.domain = self.args.domain
@@ -317,7 +313,7 @@ class winrm(connection):
     def execute(self, payload=None, get_output=False):
         try:
             r = self.conn.execute_cmd(self.args.execute, encoding=self.args.codec)
-        except:
+        except Exception:
             self.logger.info("Cannot execute command, probably because user is not local admin, but" " powershell command should be ok!")
             r = self.conn.execute_ps(self.args.execute)
         self.logger.success("Executed command")

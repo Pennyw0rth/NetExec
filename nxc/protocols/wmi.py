@@ -1,10 +1,12 @@
-import os, struct, logging
+import os
+import struct
+import logging
 
 from io import StringIO
 from six import indexbytes
 from datetime import datetime
 from nxc.config import process_secret
-from nxc.connection import *
+from nxc.connection import connection, dcom_FirewallChecker, requires_admin
 from nxc.logger import NXCAdapter
 from nxc.protocols.wmi import wmiexec, wmiexec_event
 
@@ -31,13 +33,34 @@ class wmi(connection):
         self.server_os = None
         self.doKerberos = False
         self.stringBinding = None
-        # From: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/18d8fbe8-a967-4f1c-ae50-99ca8e491d2d
-        self.rpc_error_status = {"0000052F": "STATUS_ACCOUNT_RESTRICTION", "00000533": "STATUS_ACCOUNT_DISABLED", "00000775": "STATUS_ACCOUNT_LOCKED_OUT", "00000701": "STATUS_ACCOUNT_EXPIRED", "00000532": "STATUS_PASSWORD_EXPIRED", "00000530": "STATUS_INVALID_LOGON_HOURS", "00000531": "STATUS_INVALID_WORKSTATION", "00000569": "STATUS_LOGON_TYPE_NOT_GRANTED", "00000773": "STATUS_PASSWORD_MUST_CHANGE", "00000005": "STATUS_ACCESS_DENIED", "0000052E": "STATUS_LOGON_FAILURE", "0000052B": "STATUS_WRONG_PASSWORD", "00000721": "RPC_S_SEC_PKG_ERROR"}
+        # from: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/18d8fbe8-a967-4f1c-ae50-99ca8e491d2d
+        self.rpc_error_status = {
+            "0000052F": "STATUS_ACCOUNT_RESTRICTION",
+            "00000533": "STATUS_ACCOUNT_DISABLED",
+            "00000775": "STATUS_ACCOUNT_LOCKED_OUT",
+            "00000701": "STATUS_ACCOUNT_EXPIRED",
+            "00000532": "STATUS_PASSWORD_EXPIRED",
+            "00000530": "STATUS_INVALID_LOGON_HOURS",
+            "00000531": "STATUS_INVALID_WORKSTATION",
+            "00000569": "STATUS_LOGON_TYPE_NOT_GRANTED",
+            "00000773": "STATUS_PASSWORD_MUST_CHANGE",
+            "00000005": "STATUS_ACCESS_DENIED",
+            "0000052E": "STATUS_LOGON_FAILURE",
+            "0000052B": "STATUS_WRONG_PASSWORD",
+            "00000721": "RPC_S_SEC_PKG_ERROR"
+        }
 
         connection.__init__(self, args, db, host)
 
     def proto_logger(self):
-        self.logger = NXCAdapter(extra={"protocol": "WMI", "host": self.host, "port": self.args.port, "hostname": self.hostname})
+        self.logger = NXCAdapter(
+            extra={
+                "protocol": "WMI",
+                "host": self.host,
+                "port": self.args.port,
+                "hostname": self.hostname
+            }
+        )
 
     def create_conn_obj(self):
         if self.remoteName == "":
@@ -93,7 +116,7 @@ class wmi(connection):
             self.conn.connect()
             self.conn.send(packet.get_packet())
             buffer = self.conn.recv()
-        except:
+        except Exception:
             buffer = 0
 
         if buffer != 0:
@@ -107,17 +130,17 @@ class wmi(connection):
                 if av_pairs[ntlm.NTLMSSP_AV_HOSTNAME][1] is not None:
                     try:
                         self.hostname = av_pairs[ntlm.NTLMSSP_AV_HOSTNAME][1].decode("utf-16le")
-                    except:
+                    except Exception:
                         self.hostname = self.host
                 if av_pairs[ntlm.NTLMSSP_AV_DNS_DOMAINNAME][1] is not None:
                     try:
                         self.domain = av_pairs[ntlm.NTLMSSP_AV_DNS_DOMAINNAME][1].decode("utf-16le")
-                    except:
+                    except Exception:
                         self.domain = self.args.domain
                 if av_pairs[ntlm.NTLMSSP_AV_DNS_HOSTNAME][1] is not None:
                     try:
                         self.fqdn = av_pairs[ntlm.NTLMSSP_AV_DNS_HOSTNAME][1].decode("utf-16le")
-                    except:
+                    except Exception:
                         pass
                 if "Version" in ntlmChallenge.fields:
                     version = ntlmChallenge["Version"]
