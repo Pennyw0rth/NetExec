@@ -23,7 +23,7 @@ ENABLE_REGISTRY_KEYS = {
         "DisableIOAVProtection": 0,
         "DisableBehaviorMonitoring": 0,
         "DisableScriptScanning": 0,
-        "DisableIntrusionPreventionSystem": 0,
+        "DisableIntrusionPreventionSystem": 0
     }
 }
 
@@ -45,9 +45,11 @@ DISABLE_REGISTRY_KEYS = {
         "DisableIOAVProtection": 1,
         "DisableBehaviorMonitoring": 1,
         "DisableScriptScanning": 1,
-        "DisableIntrusionPreventionSystem": 1,
+        "DisableIntrusionPreventionSystem": 1
     }
 }
+# Reference
+# https://admx.help/HKLM/Software/Policies/Microsoft/Windows%20Defender
 
 class NXCModule:
     """Defender by @byinarie"""
@@ -68,7 +70,7 @@ class NXCModule:
             context.log.fail("ACTION option not specified!")
             print(NXCModule.help())
             exit(1)
-        
+
         if module_options["ACTION"].lower() not in ["enable", "disable"]:
             context.log.fail("Invalid value for ACTION option!")
             print(NXCModule.help())
@@ -77,7 +79,7 @@ class NXCModule:
         self.action = module_options["ACTION"].lower()
 
         if context.protocol != "smb":
-            context.log.fail(f"Protocol: {context.protocol} not support this method")
+            context.log.fail(f"Protocol: {context.protocol} not supported by this method")
             exit(1)
 
     def on_admin_login(self, context, connection):
@@ -93,7 +95,7 @@ class NXCModule:
         
         Options:
           ACTION          Enable/Disable Windows Defender (choices: enable, disable)
-          
+        
         Usage:
           nxc smb <target> -u <user> -p <password> -M defender -o ACTION=enable
           nxc smb <target> -u <user> -p <password> -M defender -o ACTION=disable
