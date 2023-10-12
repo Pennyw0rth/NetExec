@@ -288,7 +288,7 @@ class ldap(connection):
             try:
                 # DC's seem to want us to logoff first, windows workstations sometimes reset the connection
                 self.conn.logoff()
-            except Exception Exception:
+            except Exception:
                 pass
 
             if self.args.domain:
