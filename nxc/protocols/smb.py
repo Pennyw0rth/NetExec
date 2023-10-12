@@ -1111,8 +1111,8 @@ class smb(connection):
                 )
 
                 self.logger.success("Enumerated domain computer(s)")
-                for hosts in hosts:
-                    domain, host_clean = self.domainfromdnshostname(hosts.dnshostname)
+                for host in hosts:
+                    domain, host_clean = self.domainfromdnshostname(host.dnshostname)
                     self.logger.highlight(f"{domain}\\{host_clean:<30}")
                 break
             except Exception as e:

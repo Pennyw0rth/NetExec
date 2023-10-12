@@ -847,8 +847,6 @@ class ldap(connection):
                         self.logger.highlight(f"{name} = {colored(ip_address, host_info_colors[0])}")
                 except socket.gaierror:
                     self.logger.fail(f"{name} = Connection timeout")
-                except socket.gaierror:
-                    self.logger.fail(f"{name} = Connection timeout")
             except Exception as e:
                 self.logger.fail("Exception:", exc_info=True)
                 self.logger.fail(f"Skipping item, cannot process due to error {e}")
@@ -1004,7 +1002,7 @@ class ldap(connection):
                 self.logger.display(f"Total of records returned {len(answers):d}")
                 TGT = KerberosAttacks(self).get_tgt_kerberoasting()
                 dejavue = []
-                for (_SPN, sAMAccountName, memberOf, pwdLastSet, lastLogon, delegation,) in answers:
+                for (_SPN, sAMAccountName, memberOf, pwdLastSet, lastLogon, _delegation) in answers:
                     if sAMAccountName not in dejavue:
                         downLevelLogonName = self.targetDomain + "\\" + sAMAccountName
 

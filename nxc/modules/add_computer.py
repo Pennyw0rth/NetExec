@@ -156,9 +156,7 @@ class NXCModule:
                 if e.error_code == 0xC0000073:
                     context.log.highlight(f"{self.__computerName} not found in domain {selected_domain}")
                     self.noLDAPRequired = True
-                    raise Exception()
-                else:
-                    raise
+                context.log.exception(e)
 
             user_rid = check_for_user["RelativeIds"]["Element"][0]
             if self.__delete:
@@ -174,9 +172,7 @@ class NXCModule:
                 if e.error_code == 0xC0000022:
                     context.log.highlight(f"{self.__username + ' does not have the right to ' + message + ' ' + self.__computerName}")
                     self.noLDAPRequired = True
-                    raise Exception()
-                else:
-                    raise
+                context.log.exception(e)
         else:
             if self.__computerName is not None:
                 try:
@@ -211,12 +207,9 @@ class NXCModule:
             except samr.DCERPCSessionError as e:
                 if e.error_code == 0xC0000022:
                     context.log.highlight("{}".format('The following user does not have the right to create a computer account: "' + self.__username + '"'))
-                    raise Exception()
                 elif e.error_code == 0xC00002E7:
                     context.log.highlight("{}".format('The following user exceeded their machine account quota: "' + self.__username + '"'))
-                    raise Exception()
-                else:
-                    raise
+                context.log.exception(e)
             user_handle = create_user["UserHandle"]
 
         if self.__delete:

@@ -101,7 +101,7 @@ class NXCModule:
 
         # decrypt the password
         clearpass = ""
-        for i in range(pw_length):
+        for _i in range(pw_length):
             val, pass_bytes = self.dec_next_char(pass_bytes)
             clearpass += chr(val)
         if pw_flag == self.PW_FLAG:

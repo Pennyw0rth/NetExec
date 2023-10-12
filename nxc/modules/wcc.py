@@ -565,7 +565,7 @@ class HostChecker:
             _, _, data = get_value(subkey_handle)
         else:
             found = False
-            for _, name, data in subkey_values(subkey_handle):
+            for _, name, _data in subkey_values(subkey_handle):
                 if name.upper() == valueName.upper():
                     found = True
                     break
