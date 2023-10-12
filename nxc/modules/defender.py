@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 from sys import exit
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
