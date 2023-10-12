@@ -63,6 +63,7 @@ rich = "^13.3.5"
 python-libnmap = "^0.7.3"
 resource = "^0.2.1"
 oscrypto = { git = "https://github.com/NeffIsBack/oscrypto" }
+python-dateutil = ">=2.8.2"
 
 [tool.poetry.group.dev.dependencies]
 flake8 = "*"
