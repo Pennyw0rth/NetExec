@@ -29,7 +29,6 @@ class NXCModule:
     def options(self, context, module_options):
         """
         """
-        pass
 
     def on_login(self, context, connection):
         target = self._get_target(connection)

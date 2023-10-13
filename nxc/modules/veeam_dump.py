@@ -27,7 +27,6 @@ class NXCModule:
 
     def options(self, context, module_options):
         """No options"""
-        pass
 
     def checkVeeamInstalled(self, context, connection):
         context.log.display("Looking for Veeam installation...")

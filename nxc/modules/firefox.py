@@ -18,7 +18,6 @@ class NXCModule:
 
     def options(self, context, module_options):
         """Dump credentials from Firefox"""
-        pass
 
     def on_admin_login(self, context, connection):
         host = connection.hostname + "." + connection.domain

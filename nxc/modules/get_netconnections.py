@@ -20,7 +20,6 @@ class NXCModule:
 
     def options(self, context, module_options):
         """No options"""
-        pass
 
     def on_admin_login(self, context, connection):
         data = []

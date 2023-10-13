@@ -53,7 +53,7 @@ class NXCModule:
             rpc_con = transport.DCERPCTransportFactory(binding).get_dce_rpc()
             rpc_con.connect()
             rpc_con.bind(nrpc.MSRPC_UUID_NRPC)
-            for _attempt in range(0, MAX_ATTEMPTS):
+            for _attempt in range(MAX_ATTEMPTS):
                 result = try_zero_authenticate(rpc_con, dc_handle, dc_ip, target_computer)
                 if result:
                     return True

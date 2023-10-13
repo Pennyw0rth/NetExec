@@ -35,7 +35,6 @@ class NXCModule:
 
     def options(self, context, module_options):
         """No options available."""
-        pass
 
     def convert_time_field(self, field, value):
         time_fields = {"msDS-LockoutObservationWindow": (60, "mins"), "msDS-MinimumPasswordAge": (86400, "days"), "msDS-MaximumPasswordAge": (86400, "days"), "msDS-LockoutDuration": (60, "mins")}

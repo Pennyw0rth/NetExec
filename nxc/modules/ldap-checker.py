@@ -29,7 +29,6 @@ class NXCModule:
 
     def options(self, context, module_options):
         """No options available."""
-        pass
 
     def on_login(self, context, connection):
         # Conduct a bind to LDAPS and determine if channel
