@@ -136,7 +136,7 @@ class NXCModule:
                 context.log.highlight("Available domain(s):")
                 for domain in domains:
                     context.log.highlight(f" * {domain['Name']}")
-                raise Exception()
+                raise Exception
             else:
                 selected_domain = domain[0]["Name"]
         else:
@@ -179,7 +179,7 @@ class NXCModule:
                     samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
                     self.noLDAPRequired = True
                     context.log.highlight("{}".format('Computer account already exists with the name: "' + self.__computerName + '"'))
-                    raise Exception()
+                    raise Exception
                 except samr.DCERPCSessionError as e:
                     if e.error_code != 0xC0000073:
                         raise
