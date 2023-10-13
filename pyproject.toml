@@ -79,8 +79,8 @@ build-backend = "poetry.core.masonry.api"
 [tool.ruff]
 # Ruff doesn't enable pycodestyle warnings (`W`) or
 # McCabe complexity (`C901`) by default.
-# Other options: pep8-naming (N), flake8-annotations (ANN), flake8-blind-except (BLE), flake8-commas (COM)
-select = ["E", "F", "D", "UP", "YTT", "ASYNC", "B", "A", "C4", "ISC", "ICN", "PIE"]
+# Other options: pep8-naming (N), flake8-annotations (ANN), flake8-blind-except (BLE), flake8-commas (COM), flake8-pyi (PYI), flake8-pytest-style (PT), etc
+select = ["E", "F", "D", "UP", "YTT", "ASYNC", "B", "A", "C4", "ISC", "ICN", "PIE", "PT"]
 ignore = [ "E501", "F405", "F841", "D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107", "D203", "D204", "D205", "D212", "D213", "D400", "D401", "D415", "D417", "D419"]
 
 # Allow autofix for all enabled rules (when `--fix`) is provided.

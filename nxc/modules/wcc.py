@@ -57,7 +57,8 @@ class ConfigCheck:
         self.check_id = None
         self.name = name
         self.description = description
-        assert len(checkers) == len(checker_args) and len(checkers) == len(checker_kwargs)
+        assert len(checkers) == len(checker_args)
+        assert len(checkers) == len(checker_kwargs)
         self.checkers = checkers
         self.checker_args = checker_args
         self.checker_kwargs = checker_kwargs
