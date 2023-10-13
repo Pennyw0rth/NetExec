@@ -272,7 +272,7 @@ class NXCModule:
             "userAccountControl": 0x1000,
             "servicePrincipalName": spns,
             "sAMAccountName": self.__computerName,
-            "unicodePwd": f'"{self.__computerPassword}"'.encode('utf-16-le')
+            "unicodePwd": f"{self.__computerPassword}".encode("utf-16-le")
         }
         tls = ldap3.Tls(validate=ssl.CERT_NONE, version=ssl.PROTOCOL_TLSv1_2, ciphers="ALL:@SECLEVEL=0")
         ldap_server = ldap3.Server(connection.host, use_ssl=True, port=636, get_info=ldap3.ALL, tls=tls)
@@ -292,7 +292,7 @@ class NXCModule:
         else:
             result = c.add(
                 f"cn={self.__computerName},cn=Computers,dc={ldap_domain}",
-                ['top', 'person', 'organizationalPerson', 'user', 'computer'],
+                ["top", "person", "organizationalPerson", "user", "computer"],
                 ucd
             )
             if result:
