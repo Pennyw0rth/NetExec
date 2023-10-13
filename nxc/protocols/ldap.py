@@ -855,7 +855,7 @@ class ldap(connection):
         if self.password == "" and self.nthash == "" and self.kerberos is False:
             return False
         # Building the search filter
-        search_filter = "(&(UserAccountControl:1.2.840.113556.1.4.803:=%d)" "(!(UserAccountControl:1.2.840.113556.1.4.803:=%d))(!(objectCategory=computer)))" % (UF_DONT_REQUIRE_PREAUTH, UF_ACCOUNTDISABLE)
+        search_filter = "(&(UserAccountControl:1.2.840.113556.1.4.803:=%d)(!(UserAccountControl:1.2.840.113556.1.4.803:=%d))(!(objectCategory=computer)))" % (UF_DONT_REQUIRE_PREAUTH, UF_ACCOUNTDISABLE)
         attributes = [
             "sAMAccountName",
             "pwdLastSet",
@@ -928,7 +928,7 @@ class ldap(connection):
 
     def kerberoasting(self):
         # Building the search filter
-        searchFilter = "(&(servicePrincipalName=*)(UserAccountControl:1.2.840.113556.1.4.803:=512)" "(!(UserAccountControl:1.2.840.113556.1.4.803:=2))(!(objectCategory=computer)))"
+        searchFilter = "(&(servicePrincipalName=*)(UserAccountControl:1.2.840.113556.1.4.803:=512)(!(UserAccountControl:1.2.840.113556.1.4.803:=2))(!(objectCategory=computer)))"
         attributes = [
             "servicePrincipalName",
             "sAMAccountName",

@@ -60,7 +60,7 @@ class NXCModule:
             else:
                 self.context.log.highlight("Attack failed. Target is probably patched.")
         except DCERPCException:
-            self.context.log.fail("Error while connecting to host: DCERPCException, " "which means this is probably not a DC!")
+            self.context.log.fail("Error while connecting to host: DCERPCException, which means this is probably not a DC!")
 
 
 def fail(msg):

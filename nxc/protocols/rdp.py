@@ -108,7 +108,7 @@ class rdp(connection):
         if self.domain is None:
             self.logger.display("Probably old, doesn't not support HYBRID or HYBRID_EX" f" ({nla})")
         else:
-            self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})" f" ({nla})")
+            self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({nla})")
         return True
 
     def create_conn_obj(self):

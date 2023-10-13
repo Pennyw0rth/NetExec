@@ -132,7 +132,7 @@ class NXCModule:
             return initial_user
         for grantor in user.grantors:
             if grantor.is_sysadmin:
-                self.context.log.success(f"{user.username} can impersonate: " f"{grantor.username} (sysadmin)")
+                self.context.log.success(f"{user.username} can impersonate: {grantor.username} (sysadmin)")
                 return grantor
             elif grantor.dbowner:
                 self.context.log.success(f"{user.username} can impersonate: {grantor.username} (which can privesc via dbowner)")

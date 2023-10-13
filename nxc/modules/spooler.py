@@ -62,7 +62,7 @@ class NXCModule:
             context.log.critical(error_text)
 
             if RPC_PROXY_INVALID_RPC_PORT_ERR in error_text or RPC_PROXY_RPC_OUT_DATA_404_ERR in error_text or RPC_PROXY_CONN_A1_404_ERR in error_text or RPC_PROXY_CONN_A1_0X6BA_ERR in error_text:
-                context.log.critical("This usually means the target does not allow " "to connect to its epmapper using RpcProxy.")
+                context.log.critical("This usually means the target does not allow to connect to its epmapper using RpcProxy.")
                 return
 
         # Display results.

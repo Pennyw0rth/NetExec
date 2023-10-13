@@ -101,7 +101,7 @@ class KerberosAttacks:
                 hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][16:].asOctets()).decode(),
             )
         else:
-            nxc_logger.error("Skipping" f" {decoded_tgs['ticket']['sname']['name-string'][0]}/{decoded_tgs['ticket']['sname']['name-string'][1]} due" f" to incompatible e-type {decoded_tgs['ticket']['enc-part']['etype']:d}")
+            nxc_logger.error("Skipping" f" {decoded_tgs['ticket']['sname']['name-string'][0]}/{decoded_tgs['ticket']['sname']['name-string'][1]} due to incompatible e-type {decoded_tgs['ticket']['enc-part']['etype']:d}")
 
         return entry
 

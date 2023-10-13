@@ -39,7 +39,7 @@ def get_dns_resolver(server, context):
         socket.inet_aton(server)
         dnsresolver.nameservers = [server]
     except OSError:
-        context.info("Using System DNS to resolve unknown entries. Make sure resolving your" " target domain works here or specify an IP as target host to use that" " server for queries")
+        context.info("Using System DNS to resolve unknown entries. Make sure resolving your target domain works here or specify an IP as target host to use that server for queries")
     return dnsresolver
 
 
@@ -129,7 +129,7 @@ class NXCModule:
             )
         except ldap.LDAPSearchError as e:
             if e.getErrorString().find("sizeLimitExceeded") >= 0:
-                context.log.debug("sizeLimitExceeded exception caught, giving up and processing the" " data received")
+                context.log.debug("sizeLimitExceeded exception caught, giving up and processing the data received")
                 # We reached the sizeLimit, process the answers we have already and that's it. Until we implement
                 # paged queries
                 list_sites = e.getAnswers()

