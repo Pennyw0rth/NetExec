@@ -196,7 +196,7 @@ class winrm(connection):
             try:
                 self.logger.debug(f"winrm create_conn_obj() - Requesting URL: {url}")
                 res = requests.post(url, verify=False, timeout=self.args.http_timeout)
-                self.logger.debug("winrm create_conn_obj() - Received response code:" f" {res.status_code}")
+                self.logger.debug("winrm create_conn_obj() - Received response code: {res.status_code}")
                 self.endpoint = url
                 if self.endpoint.startswith("https://"):
                     self.logger.extra["port"] = self.args.port if self.args.port else 5986

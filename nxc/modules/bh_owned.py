@@ -60,7 +60,7 @@ class NXCModule:
         try:
             driver = GraphDatabase.driver(uri, auth=(self.neo4j_user, self.neo4j_pass), encrypted=False)
         except AuthError:
-            context.log.fail(f"Provided Neo4J credentials ({self.neo4j_user}:{self.neo4j_pass}) are" " not valid. See --options")
+            context.log.fail(f"Provided Neo4J credentials ({self.neo4j_user}:{self.neo4j_pass}) are not valid. See --options")
             sys.exit()
         except ServiceUnavailable:
             context.log.fail(f"Neo4J does not seem to be available on {uri}. See --options")
@@ -73,7 +73,7 @@ class NXCModule:
         with driver.session() as session:
             try:
                 with session.begin_transaction() as tx:
-                    result = tx.run(f'MATCH (c:Computer {{name:"{host_fqdn}"}}) SET c.owned=True RETURN' " c.name AS name")
+                    result = tx.run(f"MATCH (c:Computer {{name:{host_fqdn}}}) SET c.owned=True RETURN c.name AS name")
                     record = result.single()
                     try:
                         value = record.value()
@@ -87,5 +87,5 @@ class NXCModule:
         if len(value) > 0:
             context.log.success(f"Node {host_fqdn} successfully set as owned in BloodHound")
         else:
-            context.log.fail(f"Node {host_fqdn} does not appear to be in Neo4J database. Have you" " imported the correct data?")
+            context.log.fail(f"Node {host_fqdn} does not appear to be in Neo4J database. Have you imported the correct data?")
         driver.close()

@@ -63,7 +63,7 @@ def proto_args(parser, std_parser, module_parser):
     cgroup.add_argument("--exec-method", choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default=None, help="method to execute the command. Ignored if in MSSQL mode (default: wmiexec)")
     cgroup.add_argument("--dcom-timeout", help="DCOM connection timeout, default is 5 secondes", type=int, default=5)
     cgroup.add_argument("--get-output-tries", help="Number of times atexec/smbexec/mmcexec tries to get results, default is 5", type=int, default=5)
-    cgroup.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output (default " '"utf-8"). If errors are detected, run chcp.com at the target, ' "map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
+    cgroup.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output (default: utf-8). If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
     cgroup.add_argument("--force-ps32", action="store_true", help="force the PowerShell command to run in a 32-bit process")
     cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
     cegroup = cgroup.add_mutually_exclusive_group()

@@ -49,7 +49,7 @@ class NXCModule:
             scfile = open(self.scfile_path, "w")
             scfile.truncate(0)
             scfile.write('<?xml version="1.0" encoding="UTF-8"?>')
-            scfile.write("<searchConnectorDescription" ' xmlns="http://schemas.microsoft.com/windows/2009/searchConnector">')
+            scfile.write("<searchConnectorDescription" ' xmlns="http://schemas.microsoft.com/windows/2009/searchConnector">') # noqa ISC001
             scfile.write("<description>Microsoft Outlook</description>")
             scfile.write("<isSearchOnlyItem>false</isSearchOnlyItem>")
             scfile.write("<includeInStartMenuScope>true</includeInStartMenuScope>")
