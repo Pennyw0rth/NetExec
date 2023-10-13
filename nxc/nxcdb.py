@@ -377,7 +377,7 @@ class DatabaseNavigator(cmd.Cmd):
                 rows.append(row)
 
             if line[1].lower() == "simple":
-                simple_rows = list((row[0], row[1], row[2], row[3], row[5]) for row in rows)
+                simple_rows = [(row[0], row[1], row[2], row[3], row[5]) for row in rows]
                 write_csv(filename, csv_header_simple, simple_rows)
             elif line[1].lower() == "detailed":
                 write_csv(filename, csv_header_detailed, rows)

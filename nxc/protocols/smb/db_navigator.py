@@ -369,7 +369,7 @@ class navigator(DatabaseNavigator):
             columns_to_display = list(valid_columns.values())
         else:
             requested_columns = line.split(" ")
-            columns_to_display = list(valid_columns[column.lower()] for column in requested_columns if column.lower() in valid_columns)
+            columns_to_display = [valid_columns[column.lower()] for column in requested_columns if column.lower() in valid_columns]
 
         results = self.db.get_check_results()
         self.display_wcc_results(results, columns_to_display)

@@ -42,7 +42,7 @@ def neo4j_local_admins(context, driver):
     except Exception as e:
         context.log.fail(f"Could not pull admins: {e}")
         return None
-    results = [record for record in admins.data()]
+    results = list(admins.data())
     return results
 
 
@@ -105,7 +105,7 @@ def process_creds(context, connection, credentials_data, dbconnection, cursor, d
             session = driver.session()
             session.run('MATCH (u) WHERE (u.name = "' + username + '") SET u.owned=True RETURN u,u.name,u.owned')
             path_to_da = session.run("MATCH p=shortestPath((n)-[*1..]->(m)) WHERE n.owned=true AND m.name=~ '.*DOMAIN ADMINS.*' RETURN p")
-            paths = [record for record in path_to_da.data()]
+            paths = list(path_to_da.data())
 
             for path in paths:
                 if path:

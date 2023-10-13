@@ -73,7 +73,7 @@ class NXCModule:
             tmp_uuid = str(entry["tower"]["Floors"][0])
             if (tmp_uuid in endpoints) is not True:
                 endpoints[tmp_uuid] = {}
-                endpoints[tmp_uuid]["Bindings"] = list()
+                endpoints[tmp_uuid]["Bindings"] = []
             if uuid.uuidtup_to_bin(uuid.string_to_uuidtup(tmp_uuid))[:18] in epm.KNOWN_UUIDS:
                 endpoints[tmp_uuid]["EXE"] = epm.KNOWN_UUIDS[uuid.uuidtup_to_bin(uuid.string_to_uuidtup(tmp_uuid))[:18]]
             else:

@@ -194,7 +194,7 @@ class KerberosAttacks:
 
         req_body = seq_set(as_req, "req-body")
 
-        opts = list()
+        opts = []
         opts.append(constants.KDCOptions.forwardable.value)
         opts.append(constants.KDCOptions.renewable.value)
         opts.append(constants.KDCOptions.proxiable.value)

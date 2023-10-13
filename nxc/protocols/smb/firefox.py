@@ -168,7 +168,7 @@ class FirefoxTriage:
             return "", "", ""
 
     def get_users(self):
-        users = list()
+        users = []
 
         users_dir_path = "Users\\*"
         directories = self.conn.listPath(shareName=self.share, path=ntpath.normpath(users_dir_path))

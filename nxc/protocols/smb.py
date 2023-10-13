@@ -1303,7 +1303,7 @@ class smb(connection):
             if sids_to_check == 0:
                 break
 
-            sids = list()
+            sids = []
             for i in range(so_far, so_far + sids_to_check):
                 sids.append(f"{domain_sid}-{i:d}")
             try:

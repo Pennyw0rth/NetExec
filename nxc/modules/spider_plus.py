@@ -49,7 +49,7 @@ def get_list_from_option(opt):
     """Takes a comma-separated string and converts it to a list of lowercase strings.
     It filters out empty strings from the input before converting.
     """
-    return list(map(lambda o: o.lower(), filter(bool, opt.split(","))))
+    return [o.lower() for o in filter(bool, opt.split(","))]
 
 
 class SMBSpiderPlus:
@@ -70,14 +70,14 @@ class SMBSpiderPlus:
         self.logger = logger
         self.results = {}
         self.stats = {
-            "shares": list(),
-            "shares_readable": list(),
-            "shares_writable": list(),
+            "shares": [],
+            "shares_readable": [],
+            "shares_writable": [],
             "num_shares_filtered": 0,
             "num_folders": 0,
             "num_folders_filtered": 0,
             "num_files": 0,
-            "file_sizes": list(),
+            "file_sizes": [],
             "file_exts": set(),
             "num_get_success": 0,
             "num_get_fail": 0,
