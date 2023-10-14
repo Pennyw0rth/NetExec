@@ -134,9 +134,9 @@ netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M zerologon --options
 netexec smb TARGET_HOST -u '' -p '' -M zerologon
 netexec smb TARGET_HOST -u '' -p '' -M petitpotam
 ##### SMB Auth File
-netexec smb TARGET_HOST -u data/test_users.txt -p test_passwords.txt --no-bruteforce
-netexec smb TARGET_HOST -u data/test_users.txt -p test_passwords.txt --no-bruteforce --continue-on-success
-netexec smb TARGET_HOST -u data/test_users.txt -p test_passwords.txt
+netexec smb TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt --no-bruteforce
+netexec smb TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt --no-bruteforce --continue-on-success
+netexec smb TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt
 ##### LDAP
 netexec ldap TARGET_HOST -u USERNAME -p PASSWORD KERBEROS --users
 netexec ldap TARGET_HOST -u USERNAME -p PASSWORD KERBEROS --groups
@@ -197,14 +197,14 @@ netexec rdp TARGET_HOST -u USERNAME -p PASSWORD KERBEROS # need an extra space a
 netexec rdp TARGET_HOST -u USERNAME -p PASSWORD KERBEROS --nla-screenshot
 ##### SSH - Default test passwords and random key; switch these out if you want correct authentication
 netexec ssh TARGET_HOST -u USERNAME -p PASSWORD
-netexec ssh TARGET_HOST -u data/test_users.txt -p test_passwords.txt --no-bruteforce
-netexec ssh TARGET_HOST -u data/test_users.txt -p test_passwords.txt --no-bruteforce --continue-on-success
-netexec ssh TARGET_HOST -u data/test_users.txt -p test_passwords.txt
+netexec ssh TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt --no-bruteforce
+netexec ssh TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt --no-bruteforce --continue-on-success
+netexec ssh TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt
 netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --key-file data/test_key.priv
 netexec ssh TARGET_HOST -u USERNAME -p '' --key-file data/test_key.priv
 ##### FTP- Default test passwords and random key; switch these out if you want correct authentication
 netexec ftp TARGET_HOST -u USERNAME -p PASSWORD
 netexec ftp TARGET_HOST -u USERNAME -p PASSWORD --ls
-netexec ftp TARGET_HOST -u data/test_users.txt -p test_passwords.txt --no-bruteforce
-netexec ftp TARGET_HOST -u data/test_users.txt -p test_passwords.txt --no-bruteforce --continue-on-success
-netexec ftp TARGET_HOST -u data/test_users.txt -p test_passwords.txt
+netexec ftp TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt --no-bruteforce
+netexec ftp TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt --no-bruteforce --continue-on-success
+netexec ftp TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt
