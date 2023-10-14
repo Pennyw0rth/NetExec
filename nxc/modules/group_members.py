@@ -83,9 +83,7 @@ def do_search(self, context, connection, searchFilter, attributeName):
             try:
                 for attribute in item["attributes"]:
                     if str(attribute["type"]) == attributeName:
-                        if attributeName == "objectSid":
-                            return bytes(attribute["vals"][0])
-                        elif attributeName == "distinguishedName":
+                        if attributeName in ["objectSid", "distinguishedName"]:
                             return bytes(attribute["vals"][0])
                         else:
                             attribute_value = str(attribute["vals"][0])
