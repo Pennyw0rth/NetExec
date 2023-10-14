@@ -240,8 +240,7 @@ class database:
         else:
             q = select(self.AdminRelationsTable)
 
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def remove_admin_relation(self, user_ids=None, host_ids=None):
         q = delete(self.AdminRelationsTable)
@@ -277,8 +276,7 @@ class database:
         else:
             q = select(self.UsersTable)
 
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def is_host_valid(self, host_id):
         """Check if this host ID is valid."""
@@ -306,5 +304,4 @@ class database:
             like_term = func.lower(f"%{filter_term}%")
             q = select(self.HostsTable).filter(self.HostsTable.c.ip.like(like_term) | func.lower(self.HostsTable.c.hostname).like(like_term))
 
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()

@@ -82,6 +82,8 @@ class NXCModule:
             context.log.success("Found following users: ")
             for answer in answers:
                 context.log.highlight(f"User: {answer[0]} description: {answer[1]}")
+            return None
+        return None
 
     def filter_answer(self, context, answers):
         # No option to filter

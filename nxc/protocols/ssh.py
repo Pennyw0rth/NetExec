@@ -79,6 +79,7 @@ class ssh(connection):
             self.logger.info("Determined user is root via `sudo -ln` command")
             self.admin_privs = True
             return True
+        return None
 
     def plaintext_login(self, username, password, private_key=None):
         try:
@@ -184,3 +185,4 @@ class ssh(connection):
             for line in stdout:
                 self.logger.highlight(line.strip())
             return stdout
+        return None

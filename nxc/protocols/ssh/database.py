@@ -167,6 +167,7 @@ class database:
         if updated_ids:
             nxc_logger.debug(f"add_host() - Host IDs Updated: {updated_ids}")
             return updated_ids
+        return None
 
     def add_credential(self, credtype, username, password, key=None):
         """Check if this credential has already been added to the database, if not add it in."""
@@ -247,7 +248,7 @@ class database:
         nxc_logger.debug(f"check_q: {check_q}")
         if check_q:
             nxc_logger.debug(f"Key already exists for cred_id {cred_id}")
-            return
+            return None
 
         key_data = {"credid": cred_id, "data": key}
         self.sess.execute(Insert(self.KeysTable), key_data)
@@ -261,8 +262,7 @@ class database:
             q = q.filter(self.KeysTable.c.id == key_id)
         elif cred_id is not None:
             q = q.filter(self.KeysTable.c.credid == cred_id)
-        results = self.sess.execute(q).all()
-        return results
+        return self.sess.execute(q).all()
 
     def add_admin_user(self, credtype, username, secret, host_id=None, cred_id=None):
         add_links = []
@@ -306,8 +306,7 @@ class database:
         else:
             q = select(self.AdminRelationsTable)
 
-        results = self.sess.execute(q).all()
-        return results
+        return self.sess.execute(q).all()
 
     def remove_admin_relation(self, cred_ids=None, host_ids=None):
         q = delete(self.AdminRelationsTable)
@@ -343,8 +342,7 @@ class database:
         else:
             q = select(self.CredentialsTable)
 
-        results = self.sess.execute(q).all()
-        return results
+        return self.sess.execute(q).all()
 
     def get_credential(self, cred_type, username, password):
         q = select(self.CredentialsTable).filter(
@@ -397,13 +395,11 @@ class database:
         elif filter_term and filter_term != "":
             like_term = func.lower(f"%{filter_term}%")
             q = q.filter(func.lower(self.CredentialsTable.c.username).like(like_term))
-        results = self.sess.execute(q).all()
-        return results
+        return self.sess.execute(q).all()
 
     def get_user(self, domain, username):
         q = select(self.CredentialsTable).filter(func.lower(self.CredentialsTable.c.username) == func.lower(username))
-        results = self.sess.execute(q).all()
-        return results
+        return self.sess.execute(q).all()
 
     def add_loggedin_relation(self, cred_id, host_id, shell=False):
         relation_query = select(self.LoggedinRelationsTable).filter(
@@ -426,6 +422,7 @@ class database:
                 return inserted_id_results[0].id
             except Exception as e:
                 nxc_logger.debug(f"Error inserting LoggedinRelation: {e}")
+        return None
 
     def get_loggedin_relations(self, cred_id=None, host_id=None, shell=None):
         q = select(self.LoggedinRelationsTable)  # .returning(self.LoggedinRelationsTable.c.id)
@@ -435,8 +432,7 @@ class database:
             q = q.filter(self.LoggedinRelationsTable.c.hostid == host_id)
         if shell:
             q = q.filter(self.LoggedinRelationsTable.c.shell == shell)
-        results = self.sess.execute(q).all()
-        return results
+        return self.sess.execute(q).all()
 
     def remove_loggedin_relations(self, cred_id=None, host_id=None):
         q = delete(self.LoggedinRelationsTable)

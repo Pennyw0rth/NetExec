@@ -89,6 +89,7 @@ class Ftp(connection):
             self.conn.close()
             return True
         self.conn.close()
+        return None
 
     def list_directory_full(self):
         # in the future we can use mlsd/nlst if we want, but this gives a full output like `ls -la`

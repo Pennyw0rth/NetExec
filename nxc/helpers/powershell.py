@@ -104,9 +104,8 @@ def obfs_ps_script(path_to_script):
             # strip block comments
             stripped_code = re.sub(re.compile("<#.*?#>", re.DOTALL), "", script.read())
             # strip blank lines, lines starting with #, and verbose/debug statements
-            stripped_code = "\n".join([line for line in stripped_code.split("\n") if ((line.strip() != "") and (not line.strip().startswith("#")) and (not line.strip().lower().startswith("write-verbose ")) and (not line.strip().lower().startswith("write-debug ")))])
+            return "\n".join([line for line in stripped_code.split("\n") if ((line.strip() != "") and (not line.strip().startswith("#")) and (not line.strip().lower().startswith("write-verbose ")) and (not line.strip().lower().startswith("write-debug ")))])
 
-            return stripped_code
 
 
 def create_ps_command(ps_command, force_ps32=False, dont_obfs=False, custom_amsi=None):
@@ -490,6 +489,5 @@ def invoke_obfuscation(script_string):
         choice(["", " "]) + new_script + choice(["", " "]) + "|" + choice(["", " "]) + invoke_expression,
     ]
 
-    obfuscated_payload = choice(invoke_options)
+    return choice(invoke_options)
 
-    return obfuscated_payload

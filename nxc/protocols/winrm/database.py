@@ -262,8 +262,7 @@ class database:
         else:
             q = select(self.AdminRelationsTable)
 
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def remove_admin_relation(self, user_ids=None, host_ids=None):
         q = delete(self.AdminRelationsTable)
@@ -299,8 +298,7 @@ class database:
         else:
             q = select(self.UsersTable)
 
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def is_credential_local(self, credential_id):
         q = select(self.UsersTable.c.domain).filter(self.UsersTable.c.id == credential_id)
@@ -311,6 +309,7 @@ class database:
             results = self.conn.execute(q).all()
 
             return len(results) > 0
+        return None
 
     def is_host_valid(self, host_id):
         """Check if this host ID is valid."""
@@ -356,16 +355,14 @@ class database:
         elif filter_term and filter_term != "":
             like_term = func.lower(f"%{filter_term}%")
             q = q.filter(func.lower(self.UsersTable.c.username).like(like_term))
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def get_user(self, domain, username):
         q = select(self.UsersTable).filter(
             func.lower(self.UsersTable.c.domain) == func.lower(domain),
             func.lower(self.UsersTable.c.username) == func.lower(username),
         )
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def add_loggedin_relation(self, user_id, host_id):
         relation_query = select(self.LoggedinRelationsTable).filter(
@@ -392,8 +389,7 @@ class database:
             q = q.filter(self.LoggedinRelationsTable.c.userid == user_id)
         if host_id:
             q = q.filter(self.LoggedinRelationsTable.c.hostid == host_id)
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def remove_loggedin_relations(self, user_id=None, host_id=None):
         q = delete(self.LoggedinRelationsTable)

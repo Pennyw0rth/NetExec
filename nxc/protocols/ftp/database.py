@@ -139,6 +139,7 @@ class database:
         if updated_ids:
             nxc_logger.debug(f"add_host() - Host IDs Updated: {updated_ids}")
             return updated_ids
+        return None
 
     def add_credential(self, username, password):
         """Check if this credential has already been added to the database, if not add it in."""
@@ -179,8 +180,7 @@ class database:
 
         # hacky way to get cred_id since we can't use returning() yet
         if len(credentials) == 1:
-            cred_id = self.get_credential(username, password)
-            return cred_id
+            return self.get_credential(username, password)
         else:
             return credentials
 
@@ -225,8 +225,7 @@ class database:
         else:
             q = select(self.CredentialsTable)
 
-        results = self.sess.execute(q).all()
-        return results
+        return self.sess.execute(q).all()
 
     def is_host_valid(self, host_id):
         """Check if this host ID is valid."""
@@ -260,8 +259,7 @@ class database:
 
     def get_user(self, username):
         q = select(self.CredentialsTable).filter(func.lower(self.CredentialsTable.c.username) == func.lower(username))
-        results = self.sess.execute(q).all()
-        return results
+        return self.sess.execute(q).all()
 
     def get_users(self, filter_term=None):
         q = select(self.CredentialsTable)
@@ -272,8 +270,7 @@ class database:
         elif filter_term and filter_term != "":
             like_term = func.lower(f"%{filter_term}%")
             q = q.filter(func.lower(self.CredentialsTable.c.username).like(like_term))
-        results = self.sess.execute(q).all()
-        return results
+        return self.sess.execute(q).all()
 
     def add_loggedin_relation(self, cred_id, host_id):
         relation_query = select(self.LoggedinRelationsTable).filter(
@@ -296,6 +293,7 @@ class database:
                 return inserted_id_results[0].id
             except Exception as e:
                 nxc_logger.debug(f"Error inserting LoggedinRelation: {e}")
+        return None
 
     def get_loggedin_relations(self, cred_id=None, host_id=None):
         q = select(self.LoggedinRelationsTable)  # .returning(self.LoggedinRelationsTable.c.id)
@@ -303,8 +301,7 @@ class database:
             q = q.filter(self.LoggedinRelationsTable.c.credid == cred_id)
         if host_id:
             q = q.filter(self.LoggedinRelationsTable.c.hostid == host_id)
-        results = self.sess.execute(q).all()
-        return results
+        return self.sess.execute(q).all()
 
     def remove_loggedin_relations(self, cred_id=None, host_id=None):
         q = delete(self.LoggedinRelationsTable)

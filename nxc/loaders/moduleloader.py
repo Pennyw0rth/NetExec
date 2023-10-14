@@ -90,6 +90,7 @@ class ModuleLoader:
             else:
                 self.logger.fail(f"Module {module.name.upper()} is not supported for protocol {self.args.protocol}")
                 sys.exit(1)
+        return None
 
     def get_module_info(self, module_path):
         """Get the path, description, and options from a module"""

@@ -91,3 +91,5 @@ class NXCModule:
 
                 # print("Group name: %s" % group_name)
                 context.log.highlight(f"{group_name}")
+            return None
+        return None

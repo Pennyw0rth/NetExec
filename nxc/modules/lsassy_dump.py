@@ -118,6 +118,7 @@ class NXCModule:
 
         context.log.debug("Calling process_credentials")
         self.process_credentials(context, connection, credentials_output)
+        return None
 
     def process_credentials(self, context, connection, credentials):
         if len(credentials) == 0:

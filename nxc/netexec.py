@@ -41,8 +41,7 @@ if platform != "win32":
 
 
 def create_db_engine(db_path):
-    db_engine = sqlalchemy.create_engine(f"sqlite:///{db_path}", isolation_level="AUTOCOMMIT", future=True)
-    return db_engine
+    return sqlalchemy.create_engine(f"sqlite:///{db_path}", isolation_level="AUTOCOMMIT", future=True)
 
 
 async def start_run(protocol_obj, args, db, targets):

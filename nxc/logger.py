@@ -176,13 +176,12 @@ class NXCAdapter(logging.LoggerAdapter):
         newpath = os.path.expanduser("~/.nxc") + "/logs/" + datetime.now().strftime("%Y-%m-%d")
         if not os.path.exists(newpath):
             os.makedirs(newpath)
-        log_filename = os.path.join(
+        return os.path.join(
             os.path.expanduser("~/.nxc"),
             "logs",
             datetime.now().strftime("%Y-%m-%d"),
             f"log_{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.log",
         )
-        return log_filename
 
 
 class TermEscapeCodeFormatter(logging.Formatter):

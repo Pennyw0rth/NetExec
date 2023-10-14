@@ -135,8 +135,7 @@ class SMBSpiderPlus:
     def get_remote_file(self, share, path):
         """Checks if a path is readable in a SMB share."""
         try:
-            remote_file = RemoteFile(self.smb.conn, path, share, access=FILE_READ_DATA)
-            return remote_file
+            return RemoteFile(self.smb.conn, path, share, access=FILE_READ_DATA)
         except SessionError:
             if self.reconnect():
                 return self.get_remote_file(share, path)

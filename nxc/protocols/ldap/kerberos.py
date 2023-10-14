@@ -205,7 +205,7 @@ class KerberosAttacks:
 
         if domain == "":
             nxc_logger.error("Empty Domain not allowed in Kerberos")
-            return
+            return None
 
         req_body["realm"] = domain
         now = datetime.utcnow() + timedelta(days=1)
@@ -247,7 +247,7 @@ class KerberosAttacks:
         else:
             # The user doesn't have UF_DONT_REQUIRE_PREAUTH set
             nxc_logger.debug(f"User {userName} doesn't have UF_DONT_REQUIRE_PREAUTH set")
-            return
+            return None
 
         # Let's output the TGT enc-part/cipher in Hashcat format, in case somebody wants to use it.
         if as_rep["enc-part"]["etype"] == 17 or as_rep["enc-part"]["etype"] == 18:

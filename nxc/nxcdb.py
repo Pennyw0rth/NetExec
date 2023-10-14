@@ -25,8 +25,7 @@ class UserExitedProto(Exception):
 
 
 def create_db_engine(db_path):
-    db_engine = create_engine(f"sqlite:///{db_path}", isolation_level="AUTOCOMMIT", future=True)
-    return db_engine
+    return create_engine(f"sqlite:///{db_path}", isolation_level="AUTOCOMMIT", future=True)
 
 
 def print_table(data, title=None):

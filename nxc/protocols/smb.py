@@ -320,7 +320,7 @@ class smb(connection):
                         data = d.run()
                     except Exception as e:
                         self.logger.fail(str(e))
-                        return
+                        return None
                     r = loads(data)
                     msMCSAdmPwd = r["p"]
                     username_laps = r["n"]
@@ -1091,8 +1091,7 @@ class smb(connection):
 
     def users(self):
         self.logger.display("Trying to dump local users with SAMRPC protocol")
-        users = UserSamrDump(self).dump()
-        return users
+        return UserSamrDump(self).dump()
 
     def hosts(self):
         hosts = []
@@ -1493,7 +1492,7 @@ class smb(connection):
             conn.smb_session = self.conn
         except Exception as e:
             self.logger.debug(f"Could not upgrade connection: {e}")
-            return
+            return None
 
         plaintexts = {username: password for _, _, username, password, _, _ in self.db.get_credentials(cred_type="plaintext")}
         nthashes = {username: nt.split(":")[1] if ":" in nt else nt for _, _, username, nt, _, _ in self.db.get_credentials(cred_type="hash")}
@@ -1521,7 +1520,7 @@ class smb(connection):
 
         if len(masterkeys) == 0:
             self.logger.fail("No masterkeys looted")
-            return
+            return None
 
         self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting secrets...")
 
@@ -1626,6 +1625,7 @@ class smb(connection):
                 credential.password,
                 credential.url,
             )
+        return None
 
     @requires_admin
     def lsa(self):

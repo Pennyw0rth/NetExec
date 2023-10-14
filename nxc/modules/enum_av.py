@@ -202,8 +202,7 @@ class LsaLookupNames:
         request["Names"].append(name1)
         request["TranslatedSids"]["Sids"] = NULL
         request["LookupLevel"] = lsat.LSAP_LOOKUP_LEVEL.LsapLookupWksta
-        resp = dce.request(request)
-        return resp
+        return dce.request(request)
 
 
 conf = {

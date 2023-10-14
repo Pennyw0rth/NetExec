@@ -289,6 +289,7 @@ class database:
         if updated_ids:
             nxc_logger.debug(f"add_host() - Host IDs Updated: {updated_ids}")
             return updated_ids
+        return None
 
     def add_credential(self, credtype, domain, username, password, group_id=None, pillaged_from=None):
         """Check if this credential has already been added to the database, if not add it in."""
@@ -405,8 +406,7 @@ class database:
         else:
             q = select(self.AdminRelationsTable)
 
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def remove_admin_relation(self, user_ids=None, host_ids=None):
         q = delete(self.AdminRelationsTable)
@@ -442,8 +442,7 @@ class database:
         else:
             q = select(self.UsersTable)
 
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def get_credential(self, cred_type, domain, username, password):
         q = select(self.UsersTable).filter(
@@ -464,6 +463,7 @@ class database:
             results = self.conn.execute(q).all()
 
             return len(results) > 0
+        return None
 
     def is_host_valid(self, host_id):
         """Check if this host ID is valid."""
@@ -618,8 +618,7 @@ class database:
         elif group_id:
             q = select(self.GroupRelationsTable).filter(self.GroupRelationsTable.c.groupid == group_id)
 
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def remove_group_relations(self, user_id=None, group_id=None):
         q = delete(self.GroupRelationsTable)
@@ -644,16 +643,14 @@ class database:
         elif filter_term and filter_term != "":
             like_term = func.lower(f"%{filter_term}%")
             q = q.filter(func.lower(self.UsersTable.c.username).like(like_term))
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def get_user(self, domain, username):
         q = select(self.UsersTable).filter(
             func.lower(self.UsersTable.c.domain) == func.lower(domain),
             func.lower(self.UsersTable.c.username) == func.lower(username),
         )
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def get_domain_controllers(self, domain=None):
         return self.get_hosts(filter_term="dc", domain=domain)
@@ -689,8 +686,7 @@ class database:
             q = select(self.SharesTable).filter(self.SharesTable.c.name.like(like_term))
         else:
             q = select(self.SharesTable)
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def get_shares_by_access(self, permissions, share_id=None):
         permissions = permissions.lower()
@@ -701,8 +697,7 @@ class database:
             q = q.filter(self.SharesTable.c.read == 1)
         if "w" in permissions:
             q = q.filter(self.SharesTable.c.write == 1)
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def get_users_with_share_access(self, host_id, share_name, permissions):
         permissions = permissions.lower()
@@ -711,9 +706,8 @@ class database:
             q = q.filter(self.SharesTable.c.read == 1)
         if "w" in permissions:
             q = q.filter(self.SharesTable.c.write == 1)
-        results = self.conn.execute(q).all()
+        return self.conn.execute(q).all()
 
-        return results
 
     def add_domain_backupkey(self, domain: str, pvk: bytes):
         """
@@ -849,6 +843,7 @@ class database:
                 return inserted_id_results[0].id
             except Exception as e:
                 nxc_logger.debug(f"Error inserting LoggedinRelation: {e}")
+        return None
 
     def get_loggedin_relations(self, user_id=None, host_id=None):
         q = select(self.LoggedinRelationsTable)  # .returning(self.LoggedinRelationsTable.c.id)
@@ -856,8 +851,7 @@ class database:
             q = q.filter(self.LoggedinRelationsTable.c.userid == user_id)
         if host_id:
             q = q.filter(self.LoggedinRelationsTable.c.hostid == host_id)
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def remove_loggedin_relations(self, user_id=None, host_id=None):
         q = delete(self.LoggedinRelationsTable)
@@ -920,6 +914,7 @@ class database:
         if updated_ids:
             nxc_logger.debug(f"add_check() - Checks IDs Updated: {updated_ids}")
             return updated_ids
+        return None
 
     def add_check_result(self, host_id, check_id, secure, reasons):
         """Check if this check result has already been added to the database, if not, add it in."""
@@ -932,3 +927,4 @@ class database:
         if updated_ids:
             nxc_logger.debug(f"add_check_result() - Check Results IDs Updated: {updated_ids}")
             return updated_ids
+        return None

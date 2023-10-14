@@ -42,8 +42,7 @@ def neo4j_local_admins(context, driver):
     except Exception as e:
         context.log.fail(f"Could not pull admins: {e}")
         return None
-    results = list(admins.data())
-    return results
+    return list(admins.data())
 
 
 def create_db(local_admins, dbconnection, cursor):
@@ -233,6 +232,7 @@ class NXCModule:
                 self.save_credentials(context, connection, cred["domain"], cred["username"], cred["password"], cred["lmhash"], cred["nthash"])
         global credentials_data
         credentials_data = credentials_output
+        return None
 
     def spider_pcs(self, context, connection, cursor, dbconnection, driver):
         cursor.execute("SELECT * from admin_users WHERE hash is not NULL")

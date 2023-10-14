@@ -547,7 +547,7 @@ class HostChecker:
             root_key, subkey = keyName.split("\\", 1)
         except ValueError:
             self.context.log.error(f"HostChecker.reg_query_value(): Could not split keyname {keyName}")
-            return
+            return None
 
         ans = self._open_root_key(dce, connection, root_key)
         if ans is None:

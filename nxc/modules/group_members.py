@@ -62,6 +62,8 @@ class NXCModule:
             context.log.success("Found the following members of the " + self.GROUP + " group:")
             for answer in self.answers:
                 context.log.highlight(f"{answer[0]}")
+            return None
+        return None
 
 
 # Carry out an LDAP search for the Group with the supplied Group name
@@ -82,11 +84,9 @@ def do_search(self, context, connection, searchFilter, attributeName):
                 for attribute in item["attributes"]:
                     if str(attribute["type"]) == attributeName:
                         if attributeName == "objectSid":
-                            attribute_value = bytes(attribute["vals"][0])
-                            return attribute_value
+                            return bytes(attribute["vals"][0])
                         elif attributeName == "distinguishedName":
-                            attribute_value = bytes(attribute["vals"][0])
-                            return attribute_value
+                            return bytes(attribute["vals"][0])
                         else:
                             attribute_value = str(attribute["vals"][0])
                     if attribute_value is not None:

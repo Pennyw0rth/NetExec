@@ -112,7 +112,7 @@ class FirefoxTriage:
         json_logins = json.loads(logins_data)
         if "logins" not in json_logins:
             return []  # No logins key in logins.json file
-        logins = [
+        return [
             (
                 self.decode_login_data(row["encryptedUsername"]),
                 self.decode_login_data(row["encryptedPassword"]),
@@ -120,7 +120,6 @@ class FirefoxTriage:
             )
             for row in json_logins["logins"]
         ]
-        return logins
 
     def get_key(self, key4_data, master_password=b""):
         fh = tempfile.NamedTemporaryFile()
@@ -152,6 +151,7 @@ class FirefoxTriage:
                     fh.close()
                     return b""
         fh.close()
+        return None
 
     def is_master_password_correct(self, key_data, master_password=b""):
         try:
@@ -242,3 +242,4 @@ class FirefoxTriage:
                 return decrypted
             else:
                 return None
+        return None

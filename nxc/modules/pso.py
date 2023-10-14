@@ -92,6 +92,8 @@ class NXCModule:
                         value = self.convert_time_field(field, pso[field])
                         context.log.highlight(f"{field}: {value}")
                 context.log.highlight("-----")
+            return None
 
         else:
             context.log.info("No Password Settings Objects (PSO) found.")
+            return None

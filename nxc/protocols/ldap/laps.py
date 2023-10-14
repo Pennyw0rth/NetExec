@@ -212,7 +212,7 @@ class LAPSv2Extract:
             target_sd = create_sd(sid)
         except Exception as e:
             self.logger.error(f"Cannot unpack msLAPS-EncryptedPassword blob due to error {e}")
-            return
+            return None
 
         # Check if item is in cache
         if key_id["RootKeyId"] in kds_cache:

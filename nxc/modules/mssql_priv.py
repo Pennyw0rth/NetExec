@@ -140,10 +140,10 @@ class NXCModule:
             else:
                 self.context.log.display(f"{user.username} can impersonate: {grantor.username}")
             return self.browse_path(context, initial_user, grantor)
+        return None
 
     def query_and_get_output(self, query):
-        results = self.mssql_conn.sql_query(query)
-        return results
+        return self.mssql_conn.sql_query(query)
 
     def sql_exec_as(self, grantors: list) -> str:
         """
@@ -276,8 +276,7 @@ class NXCModule:
         self.revert_context(exec_as)
         self.context.log.debug(f"Response: {res}")
         self.context.log.debug(f"Response Type: {type(res)}")
-        tables = [table["name"] for table in res]
-        return tables
+        return [table["name"] for table in res]
 
     def is_db_owner(self, database, exec_as="") -> bool:
         """
@@ -426,8 +425,7 @@ class NXCModule:
                    WHERE a.permission_name like 'IMPERSONATE%'"""
         res = self.query_and_get_output(exec_as + query)
         self.revert_context(exec_as)
-        users = [user["name"] for user in res]
-        return users
+        return [user["name"] for user in res]
 
     def remove_sysadmin_priv(self) -> bool:
         """

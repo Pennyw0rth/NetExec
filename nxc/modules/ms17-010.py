@@ -91,9 +91,8 @@ def calculate_doublepulsar_xor_key(s):
     temp = ((s & 0xFF00) | (s << 16)) << 8 | (((s >> 16) | s & 0xFF0000) >> 8)
 
     # Multiply the temp value by 2 and perform a bitwise XOR with 0xFFFFFFFF
-    x = 2 * temp ^ 0xFFFFFFFF
+    return 2 * temp ^ 0xFFFFFFFF
 
-    return x
 
 
 def negotiate_proto_request():

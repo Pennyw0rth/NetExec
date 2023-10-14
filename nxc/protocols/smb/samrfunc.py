@@ -52,12 +52,11 @@ class SamrFunc:
 
         if "Builtin" not in domains:
             logging.error("No Builtin group to query locally on")
-            return
+            return None
 
         domain_handle = self.samr_query.get_domain_handle("Builtin")
-        groups = self.samr_query.get_domain_aliases(domain_handle)
+        return self.samr_query.get_domain_aliases(domain_handle)
 
-        return groups
 
     def get_custom_groups(self):
         domains = self.samr_query.get_domains()
@@ -120,7 +119,7 @@ class SAMRQuery:
         string_binding = f"ncacn_np:{self.__port}[\pipe\samr]"
         nxc_logger.debug(f"Binding to {string_binding}")
         # using a direct SMBTransport instead of DCERPCTransportFactory since we need the filename to be '\samr'
-        rpc_transport = transport.SMBTransport(
+        return transport.SMBTransport(
             self.__remote_host,
             self.__port,
             r"\samr",
@@ -132,7 +131,6 @@ class SAMRQuery:
             self.__aesKey,
             doKerberos=self.__kerberos,
         )
-        return rpc_transport
 
     def get_dce(self):
         rpc_transport = self.get_transport()
@@ -142,10 +140,10 @@ class SAMRQuery:
             dce.bind(samr.MSRPC_UUID_SAMR)
         except NetBIOSError as e:
             logging.error(f"NetBIOSError on Connection: {e}")
-            return
+            return None
         except SessionError as e:
             logging.error(f"SessionError on Connection: {e}")
-            return
+            return None
         return dce
 
     def get_server_handle(self):
@@ -158,7 +156,7 @@ class SAMRQuery:
             return resp["ServerHandle"]
         else:
             nxc_logger.debug("Error creating Samr handle")
-            return
+            return None
 
     def get_domains(self):
         resp = samr.hSamrEnumerateDomainsInSamServer(self.dce, self.server_handle)

@@ -408,12 +408,11 @@ class NXCModule:
                     searchFilter=f"(objectSid={sid})",
                     attributes=["sAMAccountName"],
                 )[0][0]
-                samname = self.ldap_session.search(
+                return self.ldap_session.search(
                     searchBase=self.baseDN,
                     searchFilter=f"(objectSid={sid})",
                     attributes=["sAMAccountName"],
                 )[0][1][0][1][0]
-                return samname
             except Exception:
                 context.log.debug(f"SID not found in LDAP: {sid}")
                 return ""

@@ -699,8 +699,7 @@ class ldap(connection):
 
             # loop over the count of small endians
             sub_authority = "-" + "-".join([str(int.from_bytes(sid[8 + (i * 4) : 12 + (i * 4)], byteorder="little")) for i in range(sub_authorities)])
-            object_sid = "S-" + str(revision) + "-" + str(identifier_authority) + sub_authority
-            return object_sid
+            return "S-" + str(revision) + "-" + str(identifier_authority) + sub_authority
         except Exception:
             pass
         return sid
@@ -752,13 +751,12 @@ class ldap(connection):
 
                 # Microsoft Active Directory set an hard limit of 1000 entries returned by any search
                 paged_search_control = ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000)
-                resp = self.ldapConnection.search(
+                return self.ldapConnection.search(
                     searchFilter=searchFilter,
                     attributes=attributes,
                     sizeLimit=sizeLimit,
                     searchControls=[paged_search_control],
                 )
-                return resp
         except ldap_impacket.LDAPSearchError as e:
             if e.getErrorString().find("sizeLimitExceeded") >= 0:
                 # We should never reach this code as we use paged search now
@@ -866,6 +864,7 @@ class ldap(connection):
         resp = self.search(search_filter, attributes, 0)
         if resp == []:
             self.logger.highlight("No entries found!")
+            return None
         elif resp:
             answers = []
             self.logger.display(f"Total of records returned {len(resp):d}")
@@ -922,9 +921,10 @@ class ldap(connection):
                 return True
             else:
                 self.logger.highlight("No entries found!")
-                return
+                return None
         else:
             self.logger.fail("Error with the LDAP account used")
+            return None
 
     def kerberoasting(self):
         # Building the search filter
@@ -1038,8 +1038,9 @@ class ldap(connection):
                 return True
             else:
                 self.logger.highlight("No entries found!")
-                return
+                return None
         self.logger.fail("Error with the LDAP account used")
+        return None
 
     def trusted_for_delegation(self):
         # Building the search filter
@@ -1186,7 +1187,7 @@ class ldap(connection):
                 self.logger.highlight(f"User: {value[0]} Status: {value[5]}")
         else:
             self.logger.fail("No entries found!")
-        return
+        return None
 
     def admin_count(self):
         # Building the search filter

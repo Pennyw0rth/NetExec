@@ -31,8 +31,7 @@ def get_cli_args():
         help="Display errors from commands",
     )
 
-    parsed_args = parser.parse_args()
-    return parsed_args
+    return parser.parse_args()
 
 
 def generate_commands(args):
