@@ -1003,7 +1003,6 @@ class ldap(connection):
                                 TGT["KDC_REP"],
                                 TGT["cipher"],
                                 TGT["session_key"],
-                                TGT["session_key"],
                             )
                             r = KerberosAttacks(self).output_tgs(
                                 tgs,
