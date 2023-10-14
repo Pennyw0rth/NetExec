@@ -107,11 +107,8 @@ class NXCModule:
                     conditionPasswordPolicy = False
                     if self.regex.search(description):
                         conditionPasswordPolicy = True
-
-                if self.FILTER and conditionFilter and self.PASSWORDPOLICY and conditionPasswordPolicy:
-                    answersFiltered.append([answer[0], description])
-                elif not self.FILTER and self.PASSWORDPOLICY and conditionPasswordPolicy:
-                    answersFiltered.append([answer[0], description])
-                elif not self.PASSWORDPOLICY and self.FILTER and conditionFilter:
-                    answersFiltered.append([answer[0], description])
+                
+                if (self.FILTER and conditionFilter) or (not self.FILTER and not conditionFilter):
+                    if (self.PASSWORDPOLICY and conditionPasswordPolicy) or (not self.PASSWORDPOLICY and not conditionPasswordPolicy):
+                        answersFiltered.append([answer[0], description])
         return answersFiltered
