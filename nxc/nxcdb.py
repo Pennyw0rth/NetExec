@@ -57,7 +57,6 @@ def write_list(filename, entries):
     with open(os.path.expanduser(filename), "w") as export_file:
         for line in entries:
             export_file.write(line + "\n")
-    return
 
 
 def complete_import(text, line):

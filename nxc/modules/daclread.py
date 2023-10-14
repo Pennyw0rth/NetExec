@@ -10,6 +10,7 @@ from nxc.helpers.msada_guids import SCHEMA_OBJECTS, EXTENDED_RIGHTS
 from ldap3.protocol.formatters.formatters import format_sid
 from ldap3.utils.conv import escape_filter_chars
 from ldap3.protocol.microsoft import security_descriptor_control
+import sys
 
 OBJECT_TYPES_GUID = {}
 OBJECT_TYPES_GUID.update(SCHEMA_OBJECTS)
@@ -220,7 +221,7 @@ class NXCModule:
 
         if not module_options:
             context.log.fail("Select an option, example: -M daclread -o TARGET=Administrator ACTION=read")
-            exit(1)
+            sys.exit(1)
 
         if module_options and "TARGET" in module_options:
             if re.search(r"^(.+)\/([^\/]+)$", module_options["TARGET"]) is not None:
@@ -283,7 +284,7 @@ class NXCModule:
                 context.log.highlight(f"Found principal SID to filter on: {self.principal_sid}")
             except Exception:
                 context.log.fail(f"Principal SID not found in LDAP ({_lookedup_principal})")
-                exit(1)
+                sys.exit(1)
 
         # Searching for the targets SID and their Security Decriptors
         # If there is only one target
@@ -298,7 +299,7 @@ class NXCModule:
                 context.log.highlight(f"Target principal found in LDAP ({self.target_principal[0]})")
             except Exception:
                 context.log.fail(f"Target SID not found in LDAP ({self.target_sAMAccountName})")
-                exit(1)
+                sys.exit(1)
 
             if self.action == "read":
                 self.read(context)
@@ -332,7 +333,6 @@ class NXCModule:
     def read(self, context):
         parsed_dacl = self.parse_dacl(context, self.principal_security_descriptor["Dacl"])
         self.print_parsed_dacl(context, parsed_dacl)
-        return
 
     # Permits to export the DACL of the targets
     # This function is called before any writing action (write, remove or restore)
@@ -375,7 +375,7 @@ class NXCModule:
             self.target_principal = target[0]
         except Exception:
             context.log.fail(f"Principal not found in LDAP ({_lookedup_principal}), probably an LDAP session issue.")
-            exit(0)
+            sys.exit(0)
 
     # Attempts to retieve the SID and Distinguisehd Name from the sAMAccountName
     # Not used for the moment

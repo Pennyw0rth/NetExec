@@ -1,25 +1,17 @@
 #!/usr/bin/env python3
-#
-#
 # Author: xiaolichan
 # Link: https://github.com/XiaoliChan/wmiexec-RegOut/blob/main/wmiexec-regOut.py
 # Note: windows version under NT6 not working with this command execution way
 #       https://github.com/XiaoliChan/wmiexec-RegOut/blob/main/wmiexec-reg-sch-UnderNT6-wip.py -- WIP
-#
 # Description:
 #   For more details, please check out my repository.
 #   https://github.com/XiaoliChan/wmiexec-RegOut
-#
 # Workflow:
 #   Stage 1:
 #       cmd.exe /Q /c {command} > C:\windows\temp\{random}.txt (aka command results)
-#
 #       powershell convert the command results into base64, and save it into C:\windows\temp\{random2}.txt (now the command results was base64 encoded)
-#
 #       Create registry path: HKLM:\Software\Classes\hello, then add C:\windows\temp\{random2}.txt into HKLM:\Software\Classes\hello\{NewKey}
-#
 #       Remove anythings which in C:\windows\temp\
-#
 #   Stage 2:
 #       WQL query the HKLM:\Software\Classes\hello\{NewKey} and get results, after the results(base64 strings) retrieved, removed
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
+import sys
 
 
 class NXCModule:
@@ -31,7 +32,7 @@ class NXCModule:
             self.GROUP = module_options["GROUP"]
         else:
             context.log.error("GROUP option is required!")
-            exit(1)
+            sys.exit(1)
 
     def on_login(self, context, connection):
         # First look up the SID of the group passed in

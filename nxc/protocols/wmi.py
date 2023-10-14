@@ -197,7 +197,6 @@ class wmi(connection):
                     dcom.disconnect()
                     self.logger.extra["protocol"] = "WMI"
                     self.admin_privs = True
-        return
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         logging.getLogger("impacket").disabled = True

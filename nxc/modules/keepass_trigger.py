@@ -97,12 +97,12 @@ class NXCModule:
                 "ALL",
             ]:
                 context.log.fail("Unrecognized action, use --options to list available parameters")
-                exit(1)
+                sys.exit(1)
             else:
                 self.action = module_options["ACTION"]
         else:
             context.log.fail("Missing ACTION option, use --options to list available parameters")
-            exit(1)
+            sys.exit(1)
 
         if "KEEPASS_CONFIG_PATH" in module_options:
             self.keepass_config_path = module_options["KEEPASS_CONFIG_PATH"]
@@ -119,7 +119,7 @@ class NXCModule:
         if "PSH_EXEC_METHOD" in module_options:
             if module_options["PSH_EXEC_METHOD"] not in ["ENCODE", "PS1"]:
                 context.log.fail("Unrecognized powershell execution method, use --options to list available parameters")
-                exit(1)
+                sys.exit(1)
             else:
                 self.powershell_exec_method = module_options["PSH_EXEC_METHOD"]
 

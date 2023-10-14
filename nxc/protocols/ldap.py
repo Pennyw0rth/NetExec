@@ -1071,7 +1071,6 @@ class ldap(connection):
                 self.logger.highlight(value[0])
         else:
             self.logger.fail("No entries found!")
-        return
 
     def password_not_required(self):
         # Building the search filter
@@ -1205,7 +1204,6 @@ class ldap(connection):
                 self.logger.highlight(value[0])
         else:
             self.logger.fail("No entries found!")
-        return
 
     def gmsa(self):
         self.logger.display("Getting GMSA Passwords")

@@ -14,6 +14,7 @@ import configparser
 
 from nxc.logger import nxc_logger
 from nxc.paths import NXC_PATH
+import sys
 
 # we can't import config.py due to a circular dependency, so we have to create redundant code unfortunately
 nxc_config = configparser.ConfigParser()
@@ -103,7 +104,7 @@ class database:
                     [-] Optionally save the old DB data (`cp {self.db_path} ~/nxc_{self.protocol.lower()}.bak`)
                     [-] Then remove the nxc {self.protocol} DB (`rm -f {self.db_path}`) and run nxc to initialize the new DB"""
                 )
-                exit()
+                sys.exit()
 
     def shutdown_db(self):
         try:

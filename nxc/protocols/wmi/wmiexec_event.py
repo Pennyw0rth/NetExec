@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
-#
-#
 # Author: xiaolichan
 # Link: https://github.com/XiaoliChan/wmiexec-Pro
 # Note: windows version under NT6 not working with this command execution way, it need Win32_ScheduledJob.
 #       https://github.com/XiaoliChan/wmiexec-Pro/blob/main/lib/modules/exec_command.py
-#
 # Description:
 #   For more details, please check out my repository.
 #   https://github.com/XiaoliChan/wmiexec-Pro/blob/main/lib/modules/exec_command.py
-#
 # Workflow:
 #   Stage 1:
 #       Generate vbs with command.

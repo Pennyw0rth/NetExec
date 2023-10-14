@@ -2,6 +2,7 @@
 
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ldap.ldap import LDAPSearchError
+import sys
 
 
 def search_res_entry_to_dict(results):
@@ -56,7 +57,7 @@ class NXCModule:
             )
         except LDAPSearchError as e:
             context.log.fail(str(e))
-            exit()
+            sys.exit()
 
         for site in list_sites:
             if isinstance(site, ldapasn1_impacket.SearchResultEntry) is not True:

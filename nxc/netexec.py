@@ -16,7 +16,7 @@ from nxc.logger import nxc_logger
 from nxc.config import nxc_config, nxc_workspace, config_log, ignore_opsec
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
-import nxc.helpers.powershell as powershell
+from nxc.helpers import powershell
 import shutil
 import os
 from os.path import exists

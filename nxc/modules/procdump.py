@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # prdocdump module for nxc python3
-# author: github.com/mpgn
 # thanks to pixis (@HackAndDo) for making it pretty l33t :)
 # v0.4
 

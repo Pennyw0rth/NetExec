@@ -159,7 +159,6 @@ class SMBSpider:
             if self.content and not result.is_directory():
                 self.search_content(path, result)
 
-        return
 
     def search_content(self, path, result):
         path = path.replace("*", "")

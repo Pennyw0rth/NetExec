@@ -3,6 +3,7 @@
 import ssl
 import ldap3
 from impacket.dcerpc.v5 import samr, epm, transport
+import sys
 
 
 class NXCModule:
@@ -51,13 +52,13 @@ class NXCModule:
                 self.__computerName += "$"
         else:
             context.log.error("NAME option is required!")
-            exit(1)
+            sys.exit(1)
 
         if "PASSWORD" in module_options:
             self.__computerPassword = module_options["PASSWORD"]
         elif "PASSWORD" not in module_options and not self.__delete:
             context.log.error("PASSWORD option is required!")
-            exit(1)
+            sys.exit(1)
 
     def on_login(self, context, connection):
         self.__domain = connection.domain
@@ -89,7 +90,7 @@ class NXCModule:
         if not self.noLDAPRequired:
             self.do_ldaps_add(connection, context)
         else:
-            exit(1)
+            sys.exit(1)
 
     def do_samr_add(self, context):
         """

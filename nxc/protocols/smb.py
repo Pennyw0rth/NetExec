@@ -628,7 +628,6 @@ class smb(connection):
             except scmr.DCERPCException:
                 self.admin_privs = False
                 pass
-        return
 
     def gen_relay_list(self):
         if self.server_os.lower().find("windows") != -1 and self.signing is False:

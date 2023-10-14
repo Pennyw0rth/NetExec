@@ -16,6 +16,7 @@ from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
 
 from impacket.dcerpc.v5 import transport
+import sys
 
 sem = BoundedSemaphore(1)
 global_failed_logins = 0
@@ -341,7 +342,7 @@ class connection:
                 except UnicodeDecodeError as e:
                     self.logger.error(f"{type(e).__name__}: Could not decode password file. Make sure the file only contains UTF-8 characters.")
                     self.logger.error("You can ignore non UTF-8 characters with the option '--ignore-pw-decoding'")
-                    exit(1)
+                    sys.exit(1)
             else:
                 secret.append(password)
                 cred_type.append("plaintext")

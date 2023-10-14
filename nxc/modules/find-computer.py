@@ -3,6 +3,7 @@ import socket
 from nxc.logger import nxc_logger
 from impacket.ldap.ldap import LDAPSearchError
 from impacket.ldap.ldapasn1 import SearchResultEntry
+import sys
 
 
 class NXCModule:
@@ -32,7 +33,7 @@ class NXCModule:
             self.TEXT = module_options["TEXT"]
         else:
             context.log.error("TEXT option is required!")
-            exit(1)
+            sys.exit(1)
 
     def on_login(self, context, connection):
         search_filter = f"(&(objectCategory=computer)(&(|(operatingSystem=*{self.TEXT}*))(name=*{self.TEXT}*)))"

@@ -2,6 +2,7 @@
 
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ldap import ldap as ldap_impacket
+import sys
 
 
 class NXCModule:
@@ -25,11 +26,11 @@ class NXCModule:
         if "USER" in module_options:
             if module_options["USER"] == "":
                 context.log.fail("Invalid value for USER option!")
-                exit(1)
+                sys.exit(1)
             self.user = module_options["USER"]
         else:
             context.log.fail("Missing USER option, use --options to list available parameters")
-            exit(1)
+            sys.exit(1)
 
     def on_login(self, context, connection):
         """Concurrent. Required if on_admin_login is not present. This gets called on each authenticated connection"""

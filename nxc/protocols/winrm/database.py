@@ -10,6 +10,7 @@ from sqlalchemy.exc import (
     NoSuchTableError,
 )
 from nxc.logger import nxc_logger
+import sys
 
 
 class database:
@@ -87,7 +88,7 @@ class database:
                     [-] Optionally save the old DB data (`cp {self.db_path} ~/nxc_{self.protocol.lower()}.bak`)
                     [-] Then remove the {self.protocol} DB (`rm -f {self.db_path}`) and run nxc to initialize the new DB"""
                 )
-                exit()
+                sys.exit()
 
     def shutdown_db(self):
         try:
