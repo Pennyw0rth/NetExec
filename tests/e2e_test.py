@@ -6,9 +6,26 @@ from rich.console import Console
 
 def get_cli_args():
     parser = argparse.ArgumentParser(description="Script for running end to end tests for nxc")
-    parser.add_argument("-t", "--target", dest="target", required=True)
-    parser.add_argument("-u", "--user", "--username", dest="username", required=True)
-    parser.add_argument("-p", "--pass", "--password", dest="password", required=True)
+    parser.add_argument(
+        "-t",
+        "--target",
+        dest="target",
+        required=True
+    )
+    parser.add_argument(
+        "-u",
+        "--user",
+        "--username",
+        dest="username",
+        required=True
+    )
+    parser.add_argument(
+        "-p",
+        "--pass",
+        "--password",
+        dest="password",
+        required=True
+    )
     parser.add_argument(
         "-k",
         "--kerberos",
@@ -30,6 +47,12 @@ def get_cli_args():
         required=False,
         help="Display errors from commands",
     )
+    parser.add_argument(
+        "--poetry",
+        action="store_true",
+        required=False,
+        help="Use poetry to run commands",
+    )
 
     return parser.parse_args()
 
@@ -37,10 +60,7 @@ def get_cli_args():
 def generate_commands(args):
     lines = []
 
-    if args.kerberos:
-        kerberos = "-k"
-    else:
-        kerberos = ""
+    kerberos = "-k" if args.kerberos else ""
 
     file_loc = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
     commands_file = os.path.join(file_loc, "e2e_commands.txt")
@@ -51,6 +71,8 @@ def generate_commands(args):
                 continue
             line = line.strip()
             line = line.replace("TARGET_HOST", args.target).replace("USERNAME", f'"{args.username}"').replace("PASSWORD", f'"{args.password}"').replace("KERBEROS ", kerberos)
+            if args.poetry:
+                line = f"poetry run {line}"
             lines.append(line)
     return lines
 
