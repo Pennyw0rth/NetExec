@@ -125,43 +125,16 @@ class NXCModule:
                     continue
                 for rdg_cred in rdcman_file.rdg_creds:
                     if rdg_cred.type in ["cred", "logon", "server"]:
-                        if rdg_cred.type == "server":
-                            log_text = "{} - {}:{}".format(rdg_cred.server_name, rdg_cred.username, rdg_cred.password.decode("latin-1"))
-                        else:
-                            log_text = "{}:{}".format(rdg_cred.username, rdg_cred.password.decode("latin-1"))
-                        context.log.highlight("[{}][{}] {}".format(rdcman_file.winuser, rdg_cred.profile_name, log_text))
+                        log_text = "{} - {}:{}".format(rdg_cred.server_name, rdg_cred.username, rdg_cred.password.decode("latin-1")) if rdg_cred.type == "server" else "{}:{}".format(rdg_cred.username, rdg_cred.password.decode("latin-1"))
+                        context.log.highlight(f"[{rdcman_file.winuser}][{rdg_cred.profile_name}] {log_text}")
                         
             for rdgfile in rdgfiles:
                 if rdgfile is None:
                     continue
                 for rdg_cred in rdgfile.rdg_creds:
-                    if rdg_cred.type == "cred":
-                        context.log.highlight(
-                            "[{}][{}] {}:{}".format(
-                                rdgfile.winuser,
-                                rdg_cred.profile_name,
-                                rdg_cred.username,
-                                rdg_cred.password.decode("latin-1"),
-                            )
-                        )
-                    elif rdg_cred.type == "logon":
-                        context.log.highlight(
-                            "[{}][{}] {}:{}".format(
-                                rdgfile.winuser,
-                                rdg_cred.profile_name,
-                                rdg_cred.username,
-                                rdg_cred.password.decode("latin-1"),
-                            )
-                        )
-                    elif rdg_cred.type == "server":
-                        context.log.highlight(
-                            "[{}][{}] {} - {}:{}".format(
-                                rdgfile.winuser,
-                                rdg_cred.profile_name,
-                                rdg_cred.server_name,
-                                rdg_cred.username,
-                                rdg_cred.password.decode("latin-1"),
-                            )
-                        )
+                    log_text = "{}:{}".format(rdg_cred.username, rdg_cred.password.decode("latin-1"))
+                    if rdg_cred.type == "server":
+                        log_text = f"{rdg_cred.server_name} - {log_text}"
+                    context.log.highlight(f"[{rdgfile.winuser}][{rdg_cred.profile_name}] {log_text}")
         except Exception as e:
             context.log.debug(f"Could not loot RDCMan secrets: {e}")

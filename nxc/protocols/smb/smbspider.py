@@ -104,8 +104,9 @@ class SMBSpider:
                 return
 
         for result in filelist:
+            # this can potentially be refactored
             if result.is_directory() and result.get_longname() not in [".", ".."]:
-                if subfolder == "*":
+                if subfolder == "*": # noqa: SIM114
                     self._spider(
                         subfolder.replace("*", "") + result.get_longname(),
                         depth - 1 if depth else None,

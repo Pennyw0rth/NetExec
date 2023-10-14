@@ -280,7 +280,7 @@ class ldap(connection):
             if not self.domain:
                 self.domain = self.hostname
 
-            try:
+            try: # noqa: SIM105
                 # DC's seem to want us to logoff first, windows workstations sometimes reset the connection
                 self.conn.logoff()
             except Exception:
@@ -670,14 +670,7 @@ class ldap(connection):
         return True
 
     def create_conn_obj(self):
-        if not self.args.no_smb:
-            if self.create_smbv1_conn():
-                return True
-            elif self.create_smbv3_conn():
-                return True
-            return False
-        else:
-            return True
+        return bool(self.args.no_smb or self.create_smbv1_conn() or self.create_smbv3_conn())
 
     def get_sid(self):
         self.logger.highlight(f"Domain SID {self.sid_domain}")

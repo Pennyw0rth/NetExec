@@ -108,6 +108,6 @@ class NXCModule:
                     if self.regex.search(description):
                         conditionPasswordPolicy = True
                 
-                if (self.FILTER == conditionFilter) and (self.PASSWORDPOLICY == conditionPasswordPolicy):
+                if (conditionFilter == self.FILTER) and (conditionPasswordPolicy == self.PASSWORDPOLICY):
                     answersFiltered.append([answer[0], description])
         return answersFiltered

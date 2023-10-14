@@ -607,12 +607,8 @@ class smb(connection):
             return False
         return True
 
-    def create_conn_obj(self, kdc=""):
-        if self.create_smbv1_conn(kdc):
-            return True
-        elif self.create_smbv3_conn(kdc):
-            return True
-        return False
+    def create_conn_obj(self):
+        return bool(self.create_smbv1_conn() or self.create_smbv3_conn())
 
     def check_if_admin(self):
         rpctransport = SMBTransport(self.conn.getRemoteHost(), 445, r"\svcctl", smb_connection=self.conn)
@@ -1397,7 +1393,7 @@ class smb(connection):
 
         if self.args.pvk is not None:
             try:
-                self.pvkbytes = open(self.args.pvk, "rb").read()
+                self.pvkbytes = open(self.args.pvk, "rb").read() # noqa: SIM115
                 self.logger.success(f"Loading domain backupkey from {self.args.pvk}")
             except Exception as e:
                 self.logger.fail(str(e))

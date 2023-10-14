@@ -60,7 +60,7 @@ class mssql(connection):
 
     def enum_host_info(self):
         # this try pass breaks module http server, more info https://github.com/byt3bl33d3r/CrackMapExec/issues/363
-        try:
+        try: # noqa: SIM105
             # Probably a better way of doing this, grab our IP from the socket
             self.local_ip = str(self.conn.socket).split()[2].split("=")[1].split(":")[0]
         except Exception:
