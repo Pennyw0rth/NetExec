@@ -224,15 +224,7 @@ class database:
         add_links = []
 
         creds_q = select(self.UsersTable)
-        if user_id:
-            creds_q = creds_q.filter(self.UsersTable.c.id == user_id)
-        else:
-            creds_q = creds_q.filter(
-                func.lower(self.UsersTable.c.credtype) == func.lower(credtype),
-                func.lower(self.UsersTable.c.domain) == func.lower(domain),
-                func.lower(self.UsersTable.c.username) == func.lower(username),
-                self.UsersTable.c.password == password,
-            )
+        creds_q = creds_q.filter(self.UsersTable.c.id == user_id) if user_id else creds_q.filter(func.lower(self.UsersTable.c.credtype) == func.lower(credtype), func.lower(self.UsersTable.c.domain) == func.lower(domain), func.lower(self.UsersTable.c.username) == func.lower(username), self.UsersTable.c.password == password)
         users = self.conn.execute(creds_q)
         hosts = self.get_hosts(host)
 

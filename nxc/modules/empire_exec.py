@@ -32,7 +32,7 @@ class NXCModule:
 
         api_proto = "https" if "SSL" in module_options else "http"
 
-        obfuscate = True if "OBFUSCATE" in module_options else False
+        obfuscate = "OBFUSCATE" in module_options
         # we can use commands instead of backslashes - this is because Linux and OSX treat them differently
         default_obfuscation = "Token,All,1"
         obfuscate_cmd = module_options["OBFUSCATE_CMD"] if "OBFUSCATE_CMD" in module_options else default_obfuscation

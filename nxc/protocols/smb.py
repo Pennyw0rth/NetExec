@@ -67,6 +67,7 @@ from traceback import format_exc
 import logging
 from json import loads
 from termcolor import colored
+import contextlib
 
 smb_share_name = gen_random_string(5).upper()
 smb_server = None
@@ -110,18 +111,12 @@ def requires_smb_server(func):
         payload = None
         methods = []
 
-        try:
+        with contextlib.suppress(IndexError):
             payload = args[0]
-        except IndexError:
-            pass
-        try:
+        with contextlib.suppress(IndexError):
             get_output = args[1]
-        except IndexError:
-            pass
-        try:
+        with contextlib.suppress(IndexError):
             methods = args[2]
-        except IndexError:
-            pass
 
         if "payload" in kwargs:
             payload = kwargs["payload"]
@@ -129,19 +124,17 @@ def requires_smb_server(func):
             get_output = kwargs["get_output"]
         if "methods" in kwargs:
             methods = kwargs["methods"]
-        if not payload and self.args.execute:
-            if not self.args.no_output:
-                get_output = True
-        if get_output or (methods and ("smbexec" in methods)):
-            if not smb_server:
-                self.logger.debug("Starting SMB server")
-                smb_server = NXCSMBServer(
-                    self.nxc_logger,
-                    smb_share_name,
-                    listen_port=self.args.smb_server_port,
-                    verbose=self.args.verbose,
-                )
-                smb_server.start()
+        if not payload and self.args.execute and not self.args.no_output:
+            get_output = True
+        if (get_output or (methods and ("smbexec" in methods))) and not smb_server:
+            self.logger.debug("Starting SMB server")
+            smb_server = NXCSMBServer(
+                self.nxc_logger,
+                smb_share_name,
+                listen_port=self.args.smb_server_port,
+                verbose=self.args.verbose,
+            )
+            smb_server.start()
 
         output = func(self, *args, **kwargs)
         if smb_server is not None:
@@ -338,7 +331,7 @@ class smb(connection):
 
             return False
 
-        self.username = self.args.laps if not username_laps else username_laps
+        self.username = username_laps if username_laps else self.args.laps
         self.password = msMCSAdmPwd
 
         if msMCSAdmPwd == "":
@@ -366,10 +359,7 @@ class smb(connection):
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         logging.getLogger("impacket").disabled = True
         # Re-connect since we logged off
-        if not self.no_ntlm:
-            fqdn_host = f"{self.hostname}.{self.domain}"
-        else:
-            fqdn_host = f"{self.host}"
+        fqdn_host = f"{self.hostname}.{self.domain}" if not self.no_ntlm else f"{self.host}"
         self.create_conn_obj(fqdn_host)
         lmhash = ""
         nthash = ""
@@ -390,7 +380,7 @@ class smb(connection):
                 if nthash:
                     self.nthash = nthash
 
-                if not all("" == s for s in [self.nthash, password, aesKey]):
+                if not all(s == "" for s in [self.nthash, password, aesKey]):
                     kerb_pass = next(s for s in [self.nthash, password, aesKey] if s)
                 else:
                     kerb_pass = ""
@@ -416,10 +406,8 @@ class smb(connection):
 
             # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
             if self.args.continue_on_success and self.signing:
-                try:
+                with contextlib.suppress(Exception):
                     self.conn.logoff()
-                except Exception:
-                    pass
                 self.create_conn_obj()
 
             return True
@@ -491,10 +479,8 @@ class smb(connection):
 
             # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
             if self.args.continue_on_success and self.signing:
-                try:
+                with contextlib.suppress(Exception):
                     self.conn.logoff()
-                except Exception:
-                    pass
                 self.create_conn_obj()
             return True
         except SessionError as e:
@@ -556,10 +542,8 @@ class smb(connection):
 
             # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
             if self.args.continue_on_success and self.signing:
-                try:
+                with contextlib.suppress(Exception):
                     self.conn.logoff()
-                except Exception:
-                    pass
                 self.create_conn_obj()
             return True
         except SessionError as e:
@@ -582,8 +566,8 @@ class smb(connection):
     def create_smbv1_conn(self, kdc=""):
         try:
             self.conn = SMBConnection(
-                self.host if not kdc else kdc,
-                self.host if not kdc else kdc,
+                kdc if kdc else self.host,
+                kdc if kdc else self.host,
                 None,
                 self.args.port,
                 preferredDialect=SMB_DIALECT,
@@ -592,10 +576,10 @@ class smb(connection):
             self.smbv1 = True
         except OSError as e:
             if str(e).find("Connection reset by peer") != -1:
-                self.logger.info(f"SMBv1 might be disabled on {self.host if not kdc else kdc}")
+                self.logger.info(f"SMBv1 might be disabled on {kdc if kdc else self.host}")
             return False
         except (Exception, NetBIOSTimeout) as e:
-            self.logger.info(f"Error creating SMBv1 connection to {self.host if not kdc else kdc}: {e}")
+            self.logger.info(f"Error creating SMBv1 connection to {kdc if kdc else self.host}: {e}")
             return False
 
         return True
@@ -603,8 +587,8 @@ class smb(connection):
     def create_smbv3_conn(self, kdc=""):
         try:
             self.conn = SMBConnection(
-                self.host if not kdc else kdc,
-                self.host if not kdc else kdc,
+                kdc if kdc else self.host,
+                kdc if kdc else self.host,
                 None,
                 self.args.port,
                 timeout=self.args.smb_timeout,
@@ -616,10 +600,10 @@ class smb(connection):
                 if not self.logger:
                     print("DEBUG ERROR: logger not set, please open an issue on github: " + str(self) + str(self.logger))
                     self.proto_logger()
-                self.logger.fail(f"SMBv3 connection error on {self.host if not kdc else kdc}: {e}")
+                self.logger.fail(f"SMBv3 connection error on {kdc if kdc else self.host}: {e}")
             return False
         except (Exception, NetBIOSTimeout) as e:
-            self.logger.info(f"Error creating SMBv3 connection to {self.host if not kdc else kdc}: {e}")
+            self.logger.info(f"Error creating SMBv3 connection to {kdc if kdc else self.host}: {e}")
             return False
         return True
 
@@ -638,10 +622,8 @@ class smb(connection):
         except Exception:
             pass
         else:
-            try:
+            with contextlib.suppress(Exception):
                 dce.bind(scmr.MSRPC_UUID_SCMR)
-            except Exception:
-                pass
             try:
                 # 0xF003F - SC_MANAGER_ALL_ACCESS
                 # http://msdn.microsoft.com/en-us/library/windows/desktop/ms685981(v=vs.85).aspx
@@ -654,10 +636,9 @@ class smb(connection):
 
     def gen_relay_list(self):
         if self.server_os.lower().find("windows") != -1 and self.signing is False:
-            with sem:
-                with open(self.args.gen_relay_list, "a+") as relay_list:
-                    if self.host not in relay_list.read():
-                        relay_list.write(self.host + "\n")
+            with sem, open(self.args.gen_relay_list, "a+") as relay_list:
+                if self.host not in relay_list.read():
+                    relay_list.write(self.host + "\n")
 
     @requires_admin
     def execute(self, payload=None, get_output=False, methods=None):
@@ -925,7 +906,7 @@ class smb(connection):
                     self.lmhash,
                     self.nthash,
                     queried_groupname=self.args.local_groups,
-                    list_groups=True if not self.args.local_groups else False,
+                    list_groups=bool(not self.args.local_groups),
                     recurse=False,
                 )
 
@@ -985,10 +966,7 @@ class smb(connection):
         for part in dsnparts:
             k, v = part.split("=")
             if k == "DC":
-                if domain == "":
-                    domain = v
-                else:
-                    domain = domain + "." + v
+                domain = v if domain == "" else domain + "." + v
         return domain
 
     def domainfromdnshostname(self, dns):
@@ -1294,10 +1272,7 @@ class smb(connection):
         so_far = 0
         simultaneous = 1000
         for _j in range(max_rid // simultaneous + 1):
-            if (max_rid - so_far) // simultaneous == 0:
-                sids_to_check = (max_rid - so_far) % simultaneous
-            else:
-                sids_to_check = simultaneous
+            sids_to_check = (max_rid - so_far) % simultaneous if (max_rid - so_far) // simultaneous == 0 else simultaneous
 
             if sids_to_check == 0:
                 break
@@ -1417,7 +1392,7 @@ class smb(connection):
 
     @requires_admin
     def dpapi(self):
-        dump_system = False if "nosystem" in self.args.dpapi else True
+        dump_system = "nosystem" not in self.args.dpapi
         logging.getLogger("dploot").disabled = True
 
         if self.args.pvk is not None:
@@ -1563,7 +1538,7 @@ class smb(connection):
         cookies = []
         try:
             # Collect Chrome Based Browser stored secrets
-            dump_cookies = True if "cookies" in self.args.dpapi else False
+            dump_cookies = "cookies" in self.args.dpapi
             browser_triage = BrowserTriage(target=target, conn=conn, masterkeys=masterkeys)
             browser_credentials, cookies = browser_triage.triage_browsers(gather_cookies=dump_cookies)
         except Exception as e:

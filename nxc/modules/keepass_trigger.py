@@ -272,10 +272,7 @@ class NXCModule:
                     connection.conn.getFile(self.share, export_path.split(":")[1], buffer.write)
 
                     # if multiple exports found, add a number at the end of local path to prevent override
-                    if count > 0:
-                        local_full_path = self.local_export_path + "/" + self.export_name.split(".")[0] + "_" + str(count) + "." + self.export_name.split(".")[1]
-                    else:
-                        local_full_path = self.local_export_path + "/" + self.export_name
+                    local_full_path = self.local_export_path + "/" + self.export_name.split(".")[0] + "_" + str(count) + "." + self.export_name.split(".")[1] if count > 0 else self.local_export_path + "/" + self.export_name
 
                     # downloads the exported database
                     with open(local_full_path, "wb") as f:
@@ -370,11 +367,7 @@ class NXCModule:
             sys.exit(1)
 
         # check if the specified KeePass configuration file does not already contain the malicious trigger
-        for trigger in keepass_config_xml_root.findall(".//Application/TriggerSystem/Triggers/Trigger"):
-            if trigger.find("Name").text == self.trigger_name:
-                return True
-
-        return False
+        return any(trigger.find("Name").text == self.trigger_name for trigger in keepass_config_xml_root.findall(".//Application/TriggerSystem/Triggers/Trigger"))
 
     def put_file_execute_delete(self, context, connection, psh_script_str):
         """Helper to upload script to a temporary folder, run then deletes it"""

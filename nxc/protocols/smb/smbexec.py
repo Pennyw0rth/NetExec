@@ -95,10 +95,7 @@ class SMBEXEC:
         self.__output = gen_random_string(6)
         self.__batchFile = gen_random_string(6) + ".bat"
 
-        if self.__retOutput:
-            command = self.__shell + "echo " + data + f" ^> \\\\127.0.0.1\\{self.__share_name}\\{self.__output} 2^>^&1 > %TEMP%\\{self.__batchFile} & %COMSPEC% /Q /c %TEMP%\\{self.__batchFile} & %COMSPEC% /Q /c del %TEMP%\\{self.__batchFile}"
-        else:
-            command = self.__shell + data
+        command = self.__shell + "echo " + data + f" ^> \\\\127.0.0.1\\{self.__share_name}\\{self.__output} 2^>^&1 > %TEMP%\\{self.__batchFile} & %COMSPEC% /Q /c %TEMP%\\{self.__batchFile} & %COMSPEC% /Q /c del %TEMP%\\{self.__batchFile}" if self.__retOutput else self.__shell + data
 
         with open(path_join("/tmp", "nxc_hosted", self.__batchFile), "w") as batch_file:
             batch_file.write(command)
@@ -174,10 +171,7 @@ class SMBEXEC:
         self.__batchFile = gen_random_string(6) + ".bat"
         local_ip = self.__rpctransport.get_socket().getsockname()[0]
 
-        if self.__retOutput:
-            command = self.__shell + data + f" ^> \\\\{local_ip}\\{self.__share_name}\\{self.__output}"
-        else:
-            command = self.__shell + data
+        command = self.__shell + data + f" ^> \\\\{local_ip}\\{self.__share_name}\\{self.__output}" if self.__retOutput else self.__shell + data
 
         with open(path_join("/tmp", "nxc_hosted", self.__batchFile), "w") as batch_file:
             batch_file.write(command)

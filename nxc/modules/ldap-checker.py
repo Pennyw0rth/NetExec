@@ -123,7 +123,7 @@ class NXCModule:
                 _, err = await ldapsClientConn.bind()
                 if "stronger" in str(err):
                     return True  # because LDAP server signing requirements ARE enforced
-                elif ("data 52e" or "data 532") in str(err):
+                elif ("data 52e") in str(err):
                     context.log.fail("Not connected... exiting")
                     exit()
                 elif err is None:

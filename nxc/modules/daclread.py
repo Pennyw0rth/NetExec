@@ -398,7 +398,7 @@ class NXCModule:
     #   - sid : the SID to resolve
     def resolveSID(self, context, sid):
         # Tries to resolve the SID from the well known SIDs
-        if sid in WELL_KNOWN_SIDS.keys():
+        if sid in WELL_KNOWN_SIDS:
             return WELL_KNOWN_SIDS[sid]
         # Tries to resolve the SID from the LDAP domain dump
         else:

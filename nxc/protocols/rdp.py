@@ -199,10 +199,7 @@ class rdp(connection):
             if nthash:
                 self.nthash = nthash
 
-            if not all("" == s for s in [nthash, password, aesKey]):
-                kerb_pass = next(s for s in [nthash, password, aesKey] if s)
-            else:
-                kerb_pass = ""
+            kerb_pass = next(s for s in [nthash, password, aesKey] if s) if not all(s == "" for s in [nthash, password, aesKey]) else ""
 
             self.hostname + "." + self.domain
             password = password if password else nthash
@@ -210,7 +207,7 @@ class rdp(connection):
             if useCache:
                 stype = asyauthSecret.CCACHE
                 if not password:
-                    password = getenv("KRB5CCNAME") if not password else password
+                    password = password if password else getenv("KRB5CCNAME")
                     if "/" in password:
                         self.logger.fail("Kerberos ticket need to be on the local directory")
                         return False
@@ -250,7 +247,7 @@ class rdp(connection):
         except Exception as e:
             if "KDC_ERR" in str(e):
                 reason = None
-                for word in self.rdp_error_status.keys():
+                for word in self.rdp_error_status:
                     if word in str(e):
                         reason = self.rdp_error_status[word]
                 self.logger.fail(
@@ -263,10 +260,10 @@ class rdp(connection):
                 self.logger.fail(e)
             else:
                 reason = None
-                for word in self.rdp_error_status.keys():
+                for word in self.rdp_error_status:
                     if word in str(e):
                         reason = self.rdp_error_status[word]
-                if "cannot unpack non-iterable NoneType object" == str(e):
+                if str(e) == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
                 self.logger.fail(
                     (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {f'({reason})' if reason else ''}"),
@@ -295,10 +292,10 @@ class rdp(connection):
                 self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
             else:
                 reason = None
-                for word in self.rdp_error_status.keys():
+                for word in self.rdp_error_status:
                     if word in str(e):
                         reason = self.rdp_error_status[word]
-                if "cannot unpack non-iterable NoneType object" == str(e):
+                if str(e) == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
                 self.logger.fail(
                     (f"{domain}\\{username}:{process_secret(password)} {f'({reason})' if reason else ''}"),
@@ -327,10 +324,10 @@ class rdp(connection):
                 self.logger.success(f"{domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
             else:
                 reason = None
-                for word in self.rdp_error_status.keys():
+                for word in self.rdp_error_status:
                     if word in str(e):
                         reason = self.rdp_error_status[word]
-                if "cannot unpack non-iterable NoneType object" == str(e):
+                if str(e) == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
 
                 self.logger.fail(

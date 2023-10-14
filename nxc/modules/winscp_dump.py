@@ -35,10 +35,7 @@ class NXCModule:
             \"C:\\Users\\{USERNAME}\\AppData\\Roaming\\WinSCP.ini\",
             for every user found on the System.
         """
-        if "PATH" in module_options:
-            self.filepath = module_options["PATH"]
-        else:
-            self.filepath = ""
+        self.filepath = module_options.get("PATH", "")
 
         self.PW_MAGIC = 0xA3
         self.PW_FLAG = 0xFF
@@ -151,10 +148,7 @@ class NXCModule:
 
             rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
 
-            if password:
-                dec_password = self.decrypt_passwd(host_name, user_name, password)
-            else:
-                dec_password = "NO_PASSWORD_FOUND"
+            dec_password = self.decrypt_passwd(host_name, user_name, password) if password else "NO_PASSWORD_FOUND"
             section_name = unquote(sessionName)
             return [section_name, host_name, user_name, dec_password]
         except Exception as e:

@@ -23,10 +23,7 @@ class MSDS_MANAGEDPASSWORD_BLOB(Structure):
     def fromString(self, data):
         Structure.fromString(self, data)
 
-        if self["PreviousPasswordOffset"] == 0:
-            endData = self["QueryPasswordIntervalOffset"]
-        else:
-            endData = self["PreviousPasswordOffset"]
+        endData = self["QueryPasswordIntervalOffset"] if self["PreviousPasswordOffset"] == 0 else self["PreviousPasswordOffset"]
 
         self["CurrentPassword"] = self.rawData[self["CurrentPasswordOffset"] :][: endData - self["CurrentPasswordOffset"]]
         if self["PreviousPasswordOffset"] != 0:

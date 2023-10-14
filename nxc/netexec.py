@@ -51,19 +51,18 @@ async def start_run(protocol_obj, args, db, targets):
             nxc_logger.debug(f"Creating thread for {protocol_obj}")
             _ = [executor.submit(protocol_obj, args, db, target) for target in targets]
     else:
-        with Progress(console=nxc_console) as progress:
-            with ThreadPoolExecutor(max_workers=args.threads + 1) as executor:
-                current = 0
-                total = len(targets)
-                tasks = progress.add_task(
-                    f"[green]Running nxc against {total} {'target' if total == 1 else 'targets'}",
-                    total=total,
-                )
-                nxc_logger.debug(f"Creating thread for {protocol_obj}")
-                futures = [executor.submit(protocol_obj, args, db, target) for target in targets]
-                for _ in as_completed(futures):
-                    current += 1
-                    progress.update(tasks, completed=current)
+        with Progress(console=nxc_console) as progress, ThreadPoolExecutor(max_workers=args.threads + 1) as executor:
+            current = 0
+            total = len(targets)
+            tasks = progress.add_task(
+                f"[green]Running nxc against {total} {'target' if total == 1 else 'targets'}",
+                total=total,
+            )
+            nxc_logger.debug(f"Creating thread for {protocol_obj}")
+            futures = [executor.submit(protocol_obj, args, db, target) for target in targets]
+            for _ in as_completed(futures):
+                current += 1
+                progress.update(tasks, completed=current)
 
 
 def main():
@@ -94,11 +93,9 @@ def main():
     if not args.protocol:
         exit(1)
 
-    if args.protocol == "ssh":
-        if args.key_file:
-            if not args.password:
-                nxc_logger.fail("Password is required, even if a key file is used - if no passphrase for key, use `-p ''`")
-                exit(1)
+    if args.protocol == "ssh" and args.key_file and not args.password:
+        nxc_logger.fail("Password is required, even if a key file is used - if no passphrase for key, use `-p ''`")
+        exit(1)
 
     if args.use_kcache and not os.environ.get("KRB5CCNAME"):
         nxc_logger.error("KRB5CCNAME environment variable is not set")

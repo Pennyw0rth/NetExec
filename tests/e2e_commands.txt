@@ -61,9 +61,9 @@ netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M ntlmv1
 netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M petitpotam
 netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M procdump
 netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M rdcman
-netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M rdp --options
-netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M rdp -o ACTION=enable
-netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M rdp -o ACTION=disable
+#netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M rdp --options
+#netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M rdp -o ACTION=enable
+#netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M rdp -o ACTION=disable
 netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M reg-query -o PATH=HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion KEY=DevicePath
 netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M runasppl
 netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M scuffy -o SERVER=127.0.0.1 NAME=test
@@ -191,7 +191,7 @@ netexec mssql TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M test_connection -o
 netexec mssql TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M web_delivery --options
 netexec mssql TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M web_delivery -o URL=localhost/dl_cradle
 # a bit janky, but we try to enable RDP before testing RDP
-netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M rdp -o ACTION=enable
+#netexec smb TARGET_HOST -u USERNAME -p PASSWORD KERBEROS -M rdp -o ACTION=enable
 ##### RDP
 netexec rdp TARGET_HOST -u USERNAME -p PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec rdp TARGET_HOST -u USERNAME -p PASSWORD KERBEROS --nla-screenshot

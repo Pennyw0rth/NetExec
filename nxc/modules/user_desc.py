@@ -165,7 +165,4 @@ class NXCModule:
         More dedicated searches for sensitive information should be done using the logfile.
         This allows you to refine your search query at any time without having to pull data from AD again.
         """
-        for keyword in self.keywords:
-            if keyword.lower() in description.lower():
-                return True
-        return False
+        return any(keyword.lower() in description.lower() for keyword in self.keywords)

@@ -399,18 +399,12 @@ class SMBSpiderPlus:
         shares_readable = self.stats.get("shares_readable", [])
         if shares_readable:
             num_readable_shares = len(shares_readable)
-            if len(shares_readable) > 10:
-                shares_readable_str = ", ".join(shares_readable[:10]) + "..."
-            else:
-                shares_readable_str = ", ".join(shares_readable)
+            shares_readable_str = ", ".join(shares_readable[:10]) + "..." if len(shares_readable) > 10 else ", ".join(shares_readable)
             self.logger.display(f"SMB Readable Shares:  {num_readable_shares} ({shares_readable_str})")
         shares_writable = self.stats.get("shares_writable", [])
         if shares_writable:
             num_writable_shares = len(shares_writable)
-            if len(shares_writable) > 10:
-                shares_writable_str = ", ".join(shares_writable[:10]) + "..."
-            else:
-                shares_writable_str = ", ".join(shares_writable)
+            shares_writable_str = ", ".join(shares_writable[:10]) + "..." if len(shares_writable) > 10 else ", ".join(shares_writable)
             self.logger.display(f"SMB Writable Shares:  {num_writable_shares} ({shares_writable_str})")
         num_shares_filtered = self.stats.get("num_shares_filtered", 0)
         if num_shares_filtered:
@@ -448,10 +442,7 @@ class SMBSpiderPlus:
         file_exts = list(self.stats.get("file_exts", []))
         if file_exts:
             num_unique_file_exts = len(file_exts)
-            if len(file_exts) > 10:
-                unique_exts_str = ", ".join(file_exts[:10]) + "..."
-            else:
-                unique_exts_str = ", ".join(file_exts)
+            unique_exts_str = ", ".join(file_exts[:10]) + "..." if len(file_exts) > 10 else ", ".join(file_exts)
             self.logger.display(f"File unique exts:     {num_unique_file_exts} ({unique_exts_str})")
 
         # Download statistics.
@@ -499,10 +490,10 @@ class NXCModule:
         OUTPUT_FOLDER     Path of the local folder to save files (Default: /tmp/nxc_spider_plus)
         """
         self.download_flag = False
-        if any("DOWNLOAD" in key for key in module_options.keys()):
+        if any("DOWNLOAD" in key for key in module_options):
             self.download_flag = True
         self.stats_flag = True
-        if any("STATS" in key for key in module_options.keys()):
+        if any("STATS" in key for key in module_options):
             self.stats_flag = False
         self.exclude_exts = get_list_from_option(module_options.get("EXCLUDE_EXTS", "ico,lnk"))
         self.exclude_exts = [d.lower() for d in self.exclude_exts]  # force case-insensitive

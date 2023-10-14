@@ -10,6 +10,7 @@ from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.dcom import wmi
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
+import contextlib
 
 
 class NXCModule:
@@ -148,10 +149,8 @@ class RdpSmb:
 
             if action == "enable":
                 self.query_rdp_port(remote_ops, reg_handle)
-        try:
+        with contextlib.suppress(Exception):
             remote_ops.finish()
-        except Exception:
-            pass
 
     def rdp_ram_wrapper(self, action):
         remote_ops = RemoteOperations(self.__smbconnection, False)
@@ -183,10 +182,8 @@ class RdpSmb:
             elif int(data) == 1:
                 self.logger.success("Disable RDP Restricted Admin Mode via SMB(ncacn_np) succeed")
 
-        try:
+        with contextlib.suppress(Exception):
             remote_ops.finish()
-        except Exception:
-            pass
 
     def query_rdp_port(self, remoteOps, regHandle):
         if remoteOps:

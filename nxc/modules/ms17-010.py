@@ -432,10 +432,7 @@ def check(ip, port=445):
         nt_status = struct.pack("BBH", smb.error_class, smb.reserved1, smb.error_code)
 
         # Check the NT status to determine if the vulnerability exists
-        if nt_status == "\x05\x02\x00\xc0":
-            return True
-        else:
-            return False
+        return nt_status == "\x05\x02\x00À"
 
     except Exception:
         return False

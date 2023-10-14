@@ -43,29 +43,25 @@ class NXCAdapter(logging.LoggerAdapter):
         if self.extra is None:
             return f"{msg}", kwargs
 
-        if "module_name" in self.extra.keys():
-            if len(self.extra["module_name"]) > 8:
-                self.extra["module_name"] = self.extra["module_name"][:8] + "..."
+        if "module_name" in self.extra and len(self.extra["module_name"]) > 8:
+            self.extra["module_name"] = self.extra["module_name"][:8] + "..."
 
         # If the logger is being called when hooking the 'options' module function
-        if len(self.extra) == 1 and ("module_name" in self.extra.keys()):
+        if len(self.extra) == 1 and ("module_name" in self.extra):
             return (
                 f"{colored(self.extra['module_name'], 'cyan', attrs=['bold']):<64} {msg}",
                 kwargs,
             )
 
         # If the logger is being called from nxcServer
-        if len(self.extra) == 2 and ("module_name" in self.extra.keys()) and ("host" in self.extra.keys()):
+        if len(self.extra) == 2 and ("module_name" in self.extra) and ("host" in self.extra):
             return (
                 f"{colored(self.extra['module_name'], 'cyan', attrs=['bold']):<24} {self.extra['host']:<39} {msg}",
                 kwargs,
             )
 
         # If the logger is being called from a protocol
-        if "module_name" in self.extra.keys():
-            module_name = colored(self.extra["module_name"], "cyan", attrs=["bold"])
-        else:
-            module_name = colored(self.extra["protocol"], "blue", attrs=["bold"])
+        module_name = colored(self.extra["module_name"], "cyan", attrs=["bold"]) if "module_name" in self.extra else colored(self.extra["protocol"], "blue", attrs=["bold"])
 
         return (
             f"{module_name:<24} {self.extra['host']:<15} {self.extra['port']:<6} {self.extra['hostname'] if self.extra['hostname'] else 'NONE':<16} {msg}",
@@ -75,7 +71,7 @@ class NXCAdapter(logging.LoggerAdapter):
     def display(self, msg, *args, **kwargs):
         """Display text to console, formatted for nxc"""
         try:
-            if "protocol" in self.extra.keys() and not called_from_cmd_args():
+            if self.extra and "protocol" in self.extra and not called_from_cmd_args():
                 return
         except AttributeError:
             pass
@@ -88,7 +84,7 @@ class NXCAdapter(logging.LoggerAdapter):
     def success(self, msg, color="green", *args, **kwargs):
         """Print some sort of success to the user"""
         try:
-            if "protocol" in self.extra.keys() and not called_from_cmd_args():
+            if self.extra and "protocol" in self.extra and not called_from_cmd_args():
                 return
         except AttributeError:
             pass
@@ -101,7 +97,7 @@ class NXCAdapter(logging.LoggerAdapter):
     def highlight(self, msg, *args, **kwargs):
         """Prints a completely yellow highlighted message to the user"""
         try:
-            if "protocol" in self.extra.keys() and not called_from_cmd_args():
+            if self.extra and "protocol" in self.extra and not called_from_cmd_args():
                 return
         except AttributeError:
             pass
@@ -114,7 +110,7 @@ class NXCAdapter(logging.LoggerAdapter):
     def fail(self, msg, color="red", *args, **kwargs):
         """Prints a failure (may or may not be an error) - e.g. login creds didn't work"""
         try:
-            if "protocol" in self.extra.keys() and not called_from_cmd_args():
+            if self.extra and "protocol" in self.extra and not called_from_cmd_args():
                 return
         except AttributeError:
             pass

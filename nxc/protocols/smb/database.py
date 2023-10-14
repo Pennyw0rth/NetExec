@@ -367,15 +367,7 @@ class database:
         add_links = []
 
         creds_q = select(self.UsersTable)
-        if user_id:
-            creds_q = creds_q.filter(self.UsersTable.c.id == user_id)
-        else:
-            creds_q = creds_q.filter(
-                func.lower(self.UsersTable.c.credtype) == func.lower(credtype),
-                func.lower(self.UsersTable.c.domain) == func.lower(domain),
-                func.lower(self.UsersTable.c.username) == func.lower(username),
-                self.UsersTable.c.password == password,
-            )
+        creds_q = creds_q.filter(self.UsersTable.c.id == user_id) if user_id else creds_q.filter(func.lower(self.UsersTable.c.credtype) == func.lower(credtype), func.lower(self.UsersTable.c.domain) == func.lower(domain), func.lower(self.UsersTable.c.username) == func.lower(username), self.UsersTable.c.password == password)
         users = self.conn.execute(creds_q)
         hosts = self.get_hosts(host)
 
@@ -512,7 +504,7 @@ class database:
         q = select(self.GroupsTable).filter(self.GroupsTable.c.id == group_id)
         results = self.conn.execute(q).first()
 
-        valid = True if results else False
+        valid = bool(results)
         nxc_logger.debug(f"is_group_valid(groupID={group_id}) => {valid}")
 
         return valid
@@ -754,7 +746,7 @@ class database:
         """
         q = select(self.DpapiSecrets).filter(func.lower(self.DpapiSecrets.c.id) == dpapi_secret_id)
         results = self.conn.execute(q).first()
-        valid = True if results is not None else False
+        valid = results is not None
         nxc_logger.debug(f"is_dpapi_secret_valid(groupID={dpapi_secret_id}) => {valid}")
         return valid
 

@@ -74,17 +74,11 @@ class NXCModule:
             if (tmp_uuid in endpoints) is not True:
                 endpoints[tmp_uuid] = {}
                 endpoints[tmp_uuid]["Bindings"] = []
-            if uuid.uuidtup_to_bin(uuid.string_to_uuidtup(tmp_uuid))[:18] in epm.KNOWN_UUIDS:
-                endpoints[tmp_uuid]["EXE"] = epm.KNOWN_UUIDS[uuid.uuidtup_to_bin(uuid.string_to_uuidtup(tmp_uuid))[:18]]
-            else:
-                endpoints[tmp_uuid]["EXE"] = "N/A"
+            endpoints[tmp_uuid]["EXE"] = epm.KNOWN_UUIDS.get(uuid.uuidtup_to_bin(uuid.string_to_uuidtup(tmp_uuid))[:18], "N/A")
             endpoints[tmp_uuid]["annotation"] = entry["annotation"][:-1].decode("utf-8")
             endpoints[tmp_uuid]["Bindings"].append(binding)
 
-            if tmp_uuid[:36] in epm.KNOWN_PROTOCOLS:
-                endpoints[tmp_uuid]["Protocol"] = epm.KNOWN_PROTOCOLS[tmp_uuid[:36]]
-            else:
-                endpoints[tmp_uuid]["Protocol"] = "N/A"
+            endpoints[tmp_uuid]["Protocol"] = epm.KNOWN_PROTOCOLS.get(tmp_uuid[:36], "N/A")
 
         for endpoint in list(endpoints.keys()):
             if "MS-RPRN" in endpoints[endpoint]["Protocol"]:
@@ -113,7 +107,7 @@ class NXCModule:
 
         if entries:
             num = len(entries)
-            if 1 == num:
+            if num == 1:
                 context.log.debug("[Spooler] Received one endpoint")
             else:
                 context.log.debug(f"[Spooler] Received {num} endpoints")

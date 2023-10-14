@@ -84,10 +84,7 @@ class ssh(connection):
     def plaintext_login(self, username, password, private_key=None):
         try:
             if self.args.key_file or private_key:
-                if private_key:
-                    pkey = paramiko.RSAKey.from_private_key(StringIO(private_key))
-                else:
-                    pkey = paramiko.RSAKey.from_private_key_file(self.args.key_file)
+                pkey = paramiko.RSAKey.from_private_key(StringIO(private_key)) if private_key else paramiko.RSAKey.from_private_key_file(self.args.key_file)
 
                 self.logger.debug("Logging in with key")
                 self.conn.connect(

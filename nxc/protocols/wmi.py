@@ -18,6 +18,7 @@ from impacket.dcerpc.v5 import transport, epm
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_AUTHN_WINNT, RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_INTEGRITY, MSRPC_BIND, MSRPCBind, CtxItem, MSRPCHeader, SEC_TRAILER, MSRPCBindAck
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login
+import contextlib
 
 MSRPC_UUID_PORTMAP = uuidtup_to_bin(("E1AF8308-5D1F-11C9-91A4-08002B14A0FA", "3.0"))
 
@@ -138,10 +139,8 @@ class wmi(connection):
                     except Exception:
                         self.domain = self.args.domain
                 if av_pairs[ntlm.NTLMSSP_AV_DNS_HOSTNAME][1] is not None:
-                    try:
+                    with contextlib.suppress(Exception):
                         self.fqdn = av_pairs[ntlm.NTLMSSP_AV_DNS_HOSTNAME][1].decode("utf-16le")
-                    except Exception:
-                        pass
                 if "Version" in ntlmChallenge.fields:
                     version = ntlmChallenge["Version"]
                     if len(version) >= 4:
@@ -218,16 +217,12 @@ class wmi(connection):
             self.nthash = nthash
             self.lmhash = lmhash
 
-        if not all("" == s for s in [nthash, password, aesKey]):
-            kerb_pass = next(s for s in [nthash, password, aesKey] if s)
-        else:
-            kerb_pass = ""
+        kerb_pass = next(s for s in [nthash, password, aesKey] if s) if not all(s == "" for s in [nthash, password, aesKey]) else ""
 
-        if useCache:
-            if kerb_pass == "":
-                ccache = CCache.loadFile(os.getenv("KRB5CCNAME"))
-                username = ccache.credentials[0].header["client"].prettyPrint().decode().split("@")[0]
-                self.username = username
+        if useCache and kerb_pass == "":
+            ccache = CCache.loadFile(os.getenv("KRB5CCNAME"))
+            username = ccache.credentials[0].header["client"].prettyPrint().decode().split("@")[0]
+            self.username = username
 
         used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
         try:
@@ -270,7 +265,7 @@ class wmi(connection):
                 dce.disconnect()
                 error_msg = str(e).lower()
                 self.logger.debug(error_msg)
-                for code in self.rpc_error_status.keys():
+                for code in self.rpc_error_status:
                     if code in error_msg:
                         error_msg = self.rpc_error_status[code]
                 out = f"{self.domain}\\{self.username}{used_ccache} {error_msg.upper()}"
@@ -316,7 +311,7 @@ class wmi(connection):
                 dce.disconnect()
                 error_msg = str(e).lower()
                 self.logger.debug(error_msg)
-                for code in self.rpc_error_status.keys():
+                for code in self.rpc_error_status:
                     if code in error_msg:
                         error_msg = self.rpc_error_status[code]
                 self.logger.fail((f"{self.domain}\\{self.username}:{process_secret(self.password)} ({error_msg.upper()})"), color=("red" if "access_denied" in error_msg else "magenta"))
@@ -371,7 +366,7 @@ class wmi(connection):
                 dce.disconnect()
                 error_msg = str(e).lower()
                 self.logger.debug(error_msg)
-                for code in self.rpc_error_status.keys():
+                for code in self.rpc_error_status:
                     if code in error_msg:
                         error_msg = self.rpc_error_status[code]
                 self.logger.fail((f"{self.domain}\\{self.username}:{process_secret(self.nthash)} ({error_msg.upper()})"), color=("red" if "access_denied" in error_msg else "magenta"))

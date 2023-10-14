@@ -47,10 +47,7 @@ class NXCModule:
             self.neo4j_pass = module_options["PASS"]
 
     def on_admin_login(self, context, connection):
-        if context.local_auth:
-            domain = connection.conn.getServerDNSDomainName()
-        else:
-            domain = connection.domain
+        domain = connection.conn.getServerDNSDomainName() if context.local_auth else connection.domain
 
         host_fqdn = f"{connection.hostname}.{domain}".upper()
         uri = f"bolt://{self.neo4j_URI}:{self.neo4j_Port}"

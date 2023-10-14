@@ -4,6 +4,7 @@ from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 from sys import exit
+import contextlib
 
 
 class NXCModule:
@@ -61,10 +62,8 @@ class NXCModule:
             if int(data) == 1:
                 context.log.success("UseLogonCredential registry key created successfully")
 
-        try:
+        with contextlib.suppress(Exception):
             remote_ops.finish()
-        except Exception:
-            pass
 
     def wdigest_disable(self, context, smbconnection):
         remote_ops = RemoteOperations(smbconnection, False)
@@ -90,10 +89,8 @@ class NXCModule:
             except Exception:
                 context.log.success("UseLogonCredential registry key not present")
 
-                try:
+                with contextlib.suppress(Exception):
                     remote_ops.finish()
-                except Exception:
-                    pass
 
                 return
 
@@ -107,10 +104,8 @@ class NXCModule:
             except DCERPCException:
                 context.log.success("UseLogonCredential registry key deleted successfully")
 
-                try:
+                with contextlib.suppress(Exception):
                     remote_ops.finish()
-                except Exception:
-                    pass
 
     def wdigest_check(self, context, smbconnection):
         remote_ops = RemoteOperations(smbconnection, False)
@@ -134,7 +129,5 @@ class NXCModule:
                     context.log.fail("UseLogonCredential registry key is disabled (registry key not found)")
                 else:
                     context.log.fail("UseLogonCredential registry key not present")
-            try:
+            with contextlib.suppress(Exception):
                 remote_ops.finish()
-            except Exception:
-                pass

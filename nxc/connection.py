@@ -83,7 +83,7 @@ class connection:
         self.admin_privs = False
         self.password = ""
         self.username = ""
-        self.kerberos = True if self.args.kerberos or self.args.use_kcache or self.args.aesKey else False
+        self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey)
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.kdcHost = None if not self.args.kdcHost else self.args.kdcHost
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
@@ -184,10 +184,9 @@ class connection:
             None
         """
         for attr, value in vars(self.args).items():
-            if hasattr(self, attr) and callable(getattr(self, attr)):
-                if value is not False and value is not None:
-                    self.logger.debug(f"Calling {attr}()")
-                    getattr(self, attr)()
+            if hasattr(self, attr) and callable(getattr(self, attr)) and value is not False and value is not None:
+                self.logger.debug(f"Calling {attr}()")
+                getattr(self, attr)()
 
     def call_modules(self):
         """Calls modules and performs various actions based on the module's attributes.
@@ -231,7 +230,7 @@ class connection:
         global global_failed_logins
         global user_failed_logins
 
-        if username not in user_failed_logins.keys():
+        if username not in user_failed_logins:
             user_failed_logins[username] = 0
 
         user_failed_logins[username] += 1
@@ -248,9 +247,8 @@ class connection:
         if self.failed_logins == self.args.fail_limit:
             return True
 
-        if username in user_failed_logins.keys():
-            if self.args.ufail_limit == user_failed_logins[username]:
-                return True
+        if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:
+            return True
 
         return False
 
@@ -392,7 +390,7 @@ class connection:
         if self.args.continue_on_success and owned:
             return False
         # Enforcing FQDN for SMB if not using local authentication. Related issues/PRs: #26, #28, #24, #38
-        if self.args.protocol == "smb" and not self.args.local_auth and "." not in domain and not self.args.laps and secret != "" and not (self.domain.upper() == self.hostname.upper()):
+        if self.args.protocol == "smb" and not self.args.local_auth and "." not in domain and not self.args.laps and secret != "" and self.domain.upper() != self.hostname.upper():
             self.logger.error(f"Domain {domain} for user {username.rstrip()} need to be FQDN ex:domain.local, not domain")
             return False
 

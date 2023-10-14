@@ -29,10 +29,7 @@ class NXCModule:
 
     def on_login(self, context, connection):
         context.log.display("Getting LAPS Passwords")
-        if self.computer is not None:
-            searchFilter = "(&(objectCategory=computer)(|(msLAPS-EncryptedPassword=*)(ms-MCS-AdmPwd=*)(msLAPS-Password=*))(name=" + self.computer + "))"
-        else:
-            searchFilter = "(&(objectCategory=computer)(|(msLAPS-EncryptedPassword=*)(ms-MCS-AdmPwd=*)(msLAPS-Password=*)))"
+        searchFilter = "(&(objectCategory=computer)(|(msLAPS-EncryptedPassword=*)(ms-MCS-AdmPwd=*)(msLAPS-Password=*))(name=" + self.computer + "))" if self.computer is not None else "(&(objectCategory=computer)(|(msLAPS-EncryptedPassword=*)(ms-MCS-AdmPwd=*)(msLAPS-Password=*)))"
         attributes = [
             "msLAPS-EncryptedPassword",
             "msLAPS-Password",

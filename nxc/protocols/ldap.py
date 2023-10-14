@@ -355,10 +355,7 @@ class ldap(connection):
                     hash_asreproast.write(hash_tgt + "\n")
             return False
 
-        if not all("" == s for s in [self.nthash, password, aesKey]):
-            kerb_pass = next(s for s in [self.nthash, password, aesKey] if s)
-        else:
-            kerb_pass = ""
+        kerb_pass = next(s for s in [self.nthash, password, aesKey] if s) if not all(s == "" for s in [self.nthash, password, aesKey]) else ""
 
         try:
             # Connect to LDAP
@@ -888,15 +885,9 @@ class ldap(connection):
                         elif str(attribute["type"]) == "memberOf":
                             memberOf = str(attribute["vals"][0])
                         elif str(attribute["type"]) == "pwdLastSet":
-                            if str(attribute["vals"][0]) == "0":
-                                pwdLastSet = "<never>"
-                            else:
-                                pwdLastSet = str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
+                            pwdLastSet = "<never>" if str(attribute["vals"][0]) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
                         elif str(attribute["type"]) == "lastLogon":
-                            if str(attribute["vals"][0]) == "0":
-                                lastLogon = "<never>"
-                            else:
-                                lastLogon = str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
+                            lastLogon = "<never>" if str(attribute["vals"][0]) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
                     if mustCommit is True:
                         answers.append(
                             [
@@ -968,15 +959,9 @@ class ldap(connection):
                         elif str(attribute["type"]) == "memberOf":
                             memberOf = str(attribute["vals"][0])
                         elif str(attribute["type"]) == "pwdLastSet":
-                            if str(attribute["vals"][0]) == "0":
-                                pwdLastSet = "<never>"
-                            else:
-                                pwdLastSet = str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
+                            pwdLastSet = "<never>" if str(attribute["vals"][0]) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
                         elif str(attribute["type"]) == "lastLogon":
-                            if str(attribute["vals"][0]) == "0":
-                                lastLogon = "<never>"
-                            else:
-                                lastLogon = str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
+                            lastLogon = "<never>" if str(attribute["vals"][0]) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
                         elif str(attribute["type"]) == "servicePrincipalName":
                             for spn in attribute["vals"]:
                                 SPNs.append(str(spn))
@@ -1076,15 +1061,9 @@ class ldap(connection):
                     elif str(attribute["type"]) == "memberOf":
                         memberOf = str(attribute["vals"][0])
                     elif str(attribute["type"]) == "pwdLastSet":
-                        if str(attribute["vals"][0]) == "0":
-                            pwdLastSet = "<never>"
-                        else:
-                            pwdLastSet = str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
+                        pwdLastSet = "<never>" if str(attribute["vals"][0]) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
                     elif str(attribute["type"]) == "lastLogon":
-                        if str(attribute["vals"][0]) == "0":
-                            lastLogon = "<never>"
-                        else:
-                            lastLogon = str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
+                        lastLogon = "<never>" if str(attribute["vals"][0]) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
                 if mustCommit is True:
                     answers.append(
                         [
@@ -1157,15 +1136,9 @@ class ldap(connection):
                     elif str(attribute["type"]) == "memberOf":
                         memberOf = str(attribute["vals"][0])
                     elif str(attribute["type"]) == "pwdLastSet":
-                        if str(attribute["vals"][0]) == "0":
-                            pwdLastSet = "<never>"
-                        else:
-                            pwdLastSet = str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
+                        pwdLastSet = "<never>" if str(attribute["vals"][0]) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
                     elif str(attribute["type"]) == "lastLogon":
-                        if str(attribute["vals"][0]) == "0":
-                            lastLogon = "<never>"
-                        else:
-                            lastLogon = str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
+                        lastLogon = "<never>" if str(attribute["vals"][0]) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
                 if mustCommit is True:
                     answers.append(
                         [
@@ -1222,15 +1195,9 @@ class ldap(connection):
                     elif str(attribute["type"]) == "memberOf":
                         memberOf = str(attribute["vals"][0])
                     elif str(attribute["type"]) == "pwdLastSet":
-                        if str(attribute["vals"][0]) == "0":
-                            pwdLastSet = "<never>"
-                        else:
-                            pwdLastSet = str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
+                        pwdLastSet = "<never>" if str(attribute["vals"][0]) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
                     elif str(attribute["type"]) == "lastLogon":
-                        if str(attribute["vals"][0]) == "0":
-                            lastLogon = "<never>"
-                        else:
-                            lastLogon = str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
+                        lastLogon = "<never>" if str(attribute["vals"][0]) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
                 if mustCommit is True:
                     answers.append(
                         [

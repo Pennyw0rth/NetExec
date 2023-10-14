@@ -65,7 +65,7 @@ class NXCModule:
             site_dn = site["distinguishedName"]
             site_name = site["name"]
             site_description = ""
-            if "description" in site.keys():
+            if "description" in site:
                 site_description = site["description"]
 
             # Getting subnets of this site

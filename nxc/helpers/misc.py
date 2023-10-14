@@ -25,10 +25,7 @@ def gen_random_string(length=10):
 
 def validate_ntlm(data):
     allowed = re.compile("^[0-9a-f]{32}", re.IGNORECASE)
-    if allowed.match(data):
-        return True
-    else:
-        return False
+    return bool(allowed.match(data))
 
 
 def called_from_cmd_args():

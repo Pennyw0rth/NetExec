@@ -112,7 +112,7 @@ class NXCModule:
         # apparently SMB exec methods treat the output parameter differently than MSSQL (we use it to display())
         # if we don't do this, then SMB doesn't actually return the results of commands, so it appears that the
         # execution fails, which it doesn't
-        display_output = True if self.context.protocol == "smb" else False
+        display_output = self.context.protocol == "smb"
         self.context.log.debug(f"Display Output: {display_output}")
         # get LSASS PID via `tasklist`
         command = 'tasklist /v /fo csv | findstr /i "lsass"'

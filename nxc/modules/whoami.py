@@ -18,10 +18,7 @@ class NXCModule:
 
     def on_login(self, context, connection):
         searchBase = connection.ldapConnection._baseDN
-        if self.username is None:
-            searchFilter = f"(sAMAccountName={connection.username})"
-        else:
-            searchFilter = f"(sAMAccountName={format(self.username)})"
+        searchFilter = f"(sAMAccountName={connection.username})" if self.username is None else f"(sAMAccountName={format(self.username)})"
 
         context.log.debug(f"Using naming context: {searchBase} and {searchFilter} as search filter")
 

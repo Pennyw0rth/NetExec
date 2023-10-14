@@ -233,10 +233,7 @@ class DatabaseNavigator(cmd.Cmd):
                 formatted_shares = []
                 for share in shares:
                     user = self.db.get_users(share[2])[0]
-                    if self.db.get_hosts(share[1]):
-                        share_host = self.db.get_hosts(share[1])[0][2]
-                    else:
-                        share_host = "ERROR"
+                    share_host = self.db.get_hosts(share[1])[0][2] if self.db.get_hosts(share[1]) else "ERROR"
 
                     entry = (
                         share[0],  # shareID
@@ -323,10 +320,7 @@ class DatabaseNavigator(cmd.Cmd):
                 return
             print("[+] DPAPI secrets exported")
         elif command == "keys":
-            if line[1].lower() == "all":
-                keys = self.db.get_keys()
-            else:
-                keys = self.db.get_keys(key_id=int(line[1]))
+            keys = self.db.get_keys() if line[1].lower() == "all" else self.db.get_keys(key_id=int(line[1]))
             writable_keys = [key[2] for key in keys]
             filename = line[2]
             write_list(filename, writable_keys)
@@ -553,7 +547,7 @@ class NXCDBMenu(cmd.Cmd):
     def create_workspace(workspace_name, p_loader, protocols):
         os.mkdir(path_join(WORKSPACE_DIR, workspace_name))
 
-        for protocol in protocols.keys():
+        for protocol in protocols:
             protocol_object = p_loader.load_protocol(protocols[protocol]["dbpath"])
             proto_db_path = path_join(WORKSPACE_DIR, workspace_name, f"{protocol}.db")
 
@@ -584,7 +578,7 @@ def initialize_db(logger):
 
     p_loader = ProtocolLoader()
     protocols = p_loader.get_protocols()
-    for protocol in protocols.keys():
+    for protocol in protocols:
         protocol_object = p_loader.load_protocol(protocols[protocol]["dbpath"])
         proto_db_path = path_join(WS_PATH, "default", f"{protocol}.db")
 

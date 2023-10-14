@@ -186,7 +186,7 @@ def gen_cli_args():
     p_loader = ProtocolLoader()
     protocols = p_loader.get_protocols()
 
-    for protocol in protocols.keys():
+    for protocol in protocols:
         try:
             protocol_object = p_loader.load_protocol(protocols[protocol]["argspath"])
             subparsers = protocol_object.proto_args(subparsers, std_parser, module_parser)

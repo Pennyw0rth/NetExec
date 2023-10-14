@@ -39,7 +39,7 @@ class NXCModule:
     def convert_time_field(self, field, value):
         time_fields = {"msDS-LockoutObservationWindow": (60, "mins"), "msDS-MinimumPasswordAge": (86400, "days"), "msDS-MaximumPasswordAge": (86400, "days"), "msDS-LockoutDuration": (60, "mins")}
 
-        if field in time_fields.keys():
+        if field in time_fields:
             value = f"{int(fabs(float(value)) / (10000000 * time_fields[field][0]))} {time_fields[field][1]}"
 
         return value

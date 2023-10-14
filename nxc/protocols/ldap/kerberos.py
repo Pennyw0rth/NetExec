@@ -109,10 +109,7 @@ class KerberosAttacks:
         try:
             ccache = CCache.loadFile(getenv("KRB5CCNAME"))
             # retrieve user and domain information from CCache file if needed
-            if self.domain == "":
-                domain = ccache.principal.realm["data"]
-            else:
-                domain = self.domain
+            domain = ccache.principal.realm["data"] if self.domain == "" else self.domain
             nxc_logger.debug(f"Using Kerberos Cache: {getenv('KRB5CCNAME')}")
             principal = f"krbtgt/{domain.upper()}@{domain.upper()}"
             creds = ccache.getCredential(principal)
@@ -250,14 +247,4 @@ class KerberosAttacks:
             return None
 
         # Let's output the TGT enc-part/cipher in Hashcat format, in case somebody wants to use it.
-        if as_rep["enc-part"]["etype"] == 17 or as_rep["enc-part"]["etype"] == 18:
-            hash_tgt = "$krb5asrep$%d$%s@%s:%s$%s" % (
-                as_rep["enc-part"]["etype"],
-                client_name,
-                domain,
-                hexlify(as_rep["enc-part"]["cipher"].asOctets()[:12]).decode(),
-                hexlify(as_rep["enc-part"]["cipher"].asOctets()[12:]).decode(),
-            )
-        else:
-            hash_tgt = "$krb5asrep$%d$%s@%s:%s$%s" % (as_rep["enc-part"]["etype"], client_name, domain, hexlify(as_rep["enc-part"]["cipher"].asOctets()[:16]).decode(), hexlify(as_rep["enc-part"]["cipher"].asOctets()[16:]).decode())
-        return hash_tgt
+        return "$krb5asrep$%d$%s@%s:%s$%s" % (as_rep["enc-part"]["etype"], client_name, domain, hexlify(as_rep["enc-part"]["cipher"].asOctets()[:12]).decode(), hexlify(as_rep["enc-part"]["cipher"].asOctets()[12:]).decode()) if as_rep["enc-part"]["etype"] == 17 or as_rep["enc-part"]["etype"] == 18 else "$krb5asrep$%d$%s@%s:%s$%s" % (as_rep["enc-part"]["etype"], client_name, domain, hexlify(as_rep["enc-part"]["cipher"].asOctets()[:16]).decode(), hexlify(as_rep["enc-part"]["cipher"].asOctets()[16:]).decode())

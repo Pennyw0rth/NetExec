@@ -139,31 +139,7 @@ try{
 }catch{}
 """
 
-    if force_ps32:
-        command = (
-            amsi_bypass
-            + f"""
-$functions = {{
-    function Command-ToExecute
-    {{
-{amsi_bypass + ps_command}
-    }}
-}}
-if ($Env:PROCESSOR_ARCHITECTURE -eq 'AMD64')
-{{
-    $job = Start-Job -InitializationScript $functions -ScriptBlock {{Command-ToExecute}} -RunAs32
-    $job | Wait-Job
-}}
-else
-{{
-    IEX "$functions"
-    Command-ToExecute
-}}
-"""
-        )
-
-    else:
-        command = amsi_bypass + ps_command
+    command = amsi_bypass + f"\n$functions = {{\n    function Command-ToExecute\n    {{\n{amsi_bypass + ps_command}\n    }}\n}}\nif ($Env:PROCESSOR_ARCHITECTURE -eq 'AMD64')\n{{\n    $job = Start-Job -InitializationScript $functions -ScriptBlock {{Command-ToExecute}} -RunAs32\n    $job | Wait-Job\n}}\nelse\n{{\n    IEX \"$functions\"\n    Command-ToExecute\n}}\n" if force_ps32 else amsi_bypass + ps_command
 
     nxc_logger.debug(f"Generated PS command:\n {command}\n")
 

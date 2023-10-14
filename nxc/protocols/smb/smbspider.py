@@ -6,6 +6,7 @@ from impacket.smb3structs import FILE_READ_DATA
 from impacket.smbconnection import SessionError
 import re
 import traceback
+import contextlib
 
 
 class SMBSpider:
@@ -154,9 +155,8 @@ class SMBSpider:
                             )
                         self.results.append(f"{path}{result.get_longname()}")
 
-            if self.content:
-                if not result.is_directory():
-                    self.search_content(path, result)
+            if self.content and not result.is_directory():
+                self.search_content(path, result)
 
         return
 
@@ -228,9 +228,6 @@ class SMBSpider:
 
     def get_lastm_time(self, result_obj):
         lastm_time = None
-        try:
-            lastm_time = strftime("%Y-%m-%d %H:%M", localtime(result_obj.get_mtime_epoch()))
-        except Exception:
-            pass
+        with contextlib.suppress(Exception):
+            return strftime("%Y-%m-%d %H:%M", localtime(result_obj.get_mtime_epoch()))
 
-        return lastm_time

@@ -16,6 +16,7 @@ from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.protocols.ldap.laps import LDAPConnect, LAPSv2Extract
 from nxc.logger import NXCAdapter
+import contextlib
 
 
 class winrm(connection):
@@ -69,10 +70,8 @@ class winrm(connection):
 
             self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}")
 
-            try:
+            with contextlib.suppress(Exception):
                 smb_conn.logoff()
-            except Exception:
-                pass
 
             if self.args.domain:
                 self.domain = self.args.domain
@@ -159,7 +158,7 @@ class winrm(connection):
             self.logger.fail(f"msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS property for {self.hostname}")
             return False
 
-        self.username = self.args.laps if not username_laps else username_laps
+        self.username = username_laps if username_laps else self.args.laps
         self.password = msMCSAdmPwd
 
         if msMCSAdmPwd == "":
@@ -224,8 +223,8 @@ class winrm(connection):
                 auth="ntlm",
                 username=f"{domain}\\{self.username}",
                 password=self.password,
-                ssl=True if self.args.ssl else False,
-                cert_validation=False if self.args.ignore_ssl_cert else True,
+                ssl=bool(self.args.ssl),
+                cert_validation=not self.args.ignore_ssl_cert,
             )
 
             # TO DO: right now we're just running the hostname command to make the winrm library auth to the server
@@ -284,8 +283,8 @@ class winrm(connection):
                 auth="ntlm",
                 username=f"{self.domain}\\{self.username}",
                 password=lmhash + nthash,
-                ssl=True if self.args.ssl else False,
-                cert_validation=False if self.args.ignore_ssl_cert else True,
+                ssl=bool(self.args.ssl),
+                cert_validation=not self.args.ignore_ssl_cert,
             )
 
             # TO DO: right now we're just running the hostname command to make the winrm library auth to the server

@@ -23,6 +23,7 @@ from impacket.tds import (
     TDS_ENVCHANGE_CHARSET,
     TDS_ENVCHANGE_PACKETSIZE,
 )
+import contextlib
 
 
 class mssql(connection):
@@ -81,10 +82,8 @@ class mssql(connection):
                 self.server_os = smb_conn.getServerOS()
                 self.logger.extra["hostname"] = self.hostname
 
-                try:
+                with contextlib.suppress(Exception):
                     smb_conn.logoff()
-                except Exception:
-                    pass
 
                 if self.args.domain:
                     self.domain = self.args.domain
@@ -103,10 +102,8 @@ class mssql(connection):
             len(self.mssql_instances),
         )
 
-        try:
+        with contextlib.suppress(Exception):
             self.conn.disconnect()
-        except Exception:
-            pass
 
     def print_host_info(self):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
@@ -151,10 +148,8 @@ class mssql(connection):
         kdcHost="",
         useCache=False,
     ):
-        try:
+        with contextlib.suppress(Exception):
             self.conn.disconnect()
-        except Exception:
-            pass
         self.create_conn_obj()
 
         hashes = None
@@ -166,10 +161,7 @@ class mssql(connection):
                 # only nt hash
                 hashes = f":{ntlm_hash}"
 
-        if not all("" == s for s in [self.nthash, password, aesKey]):
-            kerb_pass = next(s for s in [self.nthash, password, aesKey] if s)
-        else:
-            kerb_pass = ""
+        kerb_pass = next(s for s in [self.nthash, password, aesKey] if s) if not all(s == "" for s in [self.nthash, password, aesKey]) else ""
         try:
             res = self.conn.kerberosLogin(
                 None,
@@ -210,10 +202,8 @@ class mssql(connection):
             return False
 
     def plaintext_login(self, domain, username, password):
-        try:
+        with contextlib.suppress(Exception):
             self.conn.disconnect()
-        except Exception:
-            pass
         self.create_conn_obj()
 
         try:
@@ -258,10 +248,8 @@ class mssql(connection):
         else:
             nthash = ntlm_hash
 
-        try:
+        with contextlib.suppress(Exception):
             self.conn.disconnect()
-        except Exception:
-            pass
         self.create_conn_obj()
 
         try:
@@ -403,7 +391,7 @@ class mssql(connection):
     # We hook these functions in the tds library to use nxc's logger instead of printing the output to stdout
     # The whole tds library in impacket needs a good overhaul to preserve my sanity
     def handle_mssql_reply(self):
-        for keys in self.conn.replies.keys():
+        for keys in self.conn.replies:
             for _i, key in enumerate(self.conn.replies[keys]):
                 if key["TokenType"] == TDS_ERROR_TOKEN:
                     error = f"ERROR({key['ServerName'].decode('utf-16le')}): Line {key['LineNumber']:d}: {key['MsgText'].decode('utf-16le')}"
@@ -413,26 +401,25 @@ class mssql(connection):
                     self.logger.display(f"INFO({key['ServerName'].decode('utf-16le')}): Line {key['LineNumber']:d}: {key['MsgText'].decode('utf-16le')}")
                 elif key["TokenType"] == TDS_LOGINACK_TOKEN:
                     self.logger.display(f"ACK: Result: {key['Interface']} - {key['ProgName'].decode('utf-16le')} ({key['MajorVer']:d}{key['MinorVer']:d} {key['BuildNumHi']:d}{key['BuildNumLow']:d}) ")
-                elif key["TokenType"] == TDS_ENVCHANGE_TOKEN:
-                    if key["Type"] in (
-                        TDS_ENVCHANGE_DATABASE,
-                        TDS_ENVCHANGE_LANGUAGE,
-                        TDS_ENVCHANGE_CHARSET,
-                        TDS_ENVCHANGE_PACKETSIZE,
-                    ):
-                        record = TDS_ENVCHANGE_VARCHAR(key["Data"])
-                        if record["OldValue"] == "":
-                            record["OldValue"] = "None".encode("utf-16le")
-                        elif record["NewValue"] == "":
-                            record["NewValue"] = "None".encode("utf-16le")
-                        if key["Type"] == TDS_ENVCHANGE_DATABASE:
-                            _type = "DATABASE"
-                        elif key["Type"] == TDS_ENVCHANGE_LANGUAGE:
-                            _type = "LANGUAGE"
-                        elif key["Type"] == TDS_ENVCHANGE_CHARSET:
-                            _type = "CHARSET"
-                        elif key["Type"] == TDS_ENVCHANGE_PACKETSIZE:
-                            _type = "PACKETSIZE"
-                        else:
-                            _type = f"{key['Type']:d}"
-                        self.logger.display(f"ENVCHANGE({_type}): Old Value: {record['OldValue'].decode('utf-16le')}, New Value: {record['NewValue'].decode('utf-16le')}")
+                elif key["TokenType"] == TDS_ENVCHANGE_TOKEN and key["Type"] in (
+                    TDS_ENVCHANGE_DATABASE,
+                    TDS_ENVCHANGE_LANGUAGE,
+                    TDS_ENVCHANGE_CHARSET,
+                    TDS_ENVCHANGE_PACKETSIZE,
+                ):
+                    record = TDS_ENVCHANGE_VARCHAR(key["Data"])
+                    if record["OldValue"] == "":
+                        record["OldValue"] = "None".encode("utf-16le")
+                    elif record["NewValue"] == "":
+                        record["NewValue"] = "None".encode("utf-16le")
+                    if key["Type"] == TDS_ENVCHANGE_DATABASE:
+                        _type = "DATABASE"
+                    elif key["Type"] == TDS_ENVCHANGE_LANGUAGE:
+                        _type = "LANGUAGE"
+                    elif key["Type"] == TDS_ENVCHANGE_CHARSET:
+                        _type = "CHARSET"
+                    elif key["Type"] == TDS_ENVCHANGE_PACKETSIZE:
+                        _type = "PACKETSIZE"
+                    else:
+                        _type = f"{key['Type']:d}"
+                    self.logger.display(f"ENVCHANGE({_type}): Old Value: {record['OldValue'].decode('utf-16le')}, New Value: {record['NewValue'].decode('utf-16le')}")
