@@ -223,7 +223,6 @@ class database:
         nxc_logger.debug(f"Adding credentials: {credentials}")
 
         self.sess.execute(q_users, credentials)  # .scalar()
-        # return cred_ids
 
         # hacky way to get cred_id since we can't use returning() yet
         if len(credentials) == 1:

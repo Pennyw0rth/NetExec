@@ -85,13 +85,8 @@ class rdp(connection):
 
     # def proto_flow(self):
     #     if self.create_conn_obj():
-    #         self.proto_logger()
-    #         self.print_host_info()
     #         if self.login() or (self.username == '' and self.password == ''):
     #             if hasattr(self.args, 'module') and self.args.module:
-    #                 self.call_modules()
-    #             else:
-    #                 self.call_cmd_args()
 
     def proto_logger(self):
         self.logger = NXCAdapter(

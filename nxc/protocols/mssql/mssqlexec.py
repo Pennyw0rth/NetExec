@@ -29,18 +29,12 @@ class MSSQLEXEC:
             nxc_logger.debug("Output is enabled")
             for row in command_output:
                 nxc_logger.debug(row)
-            # self.mssql_conn.printReplies()
-            # self.mssql_conn.colMeta[0]["TypeData"] = 80 * 2
-            # self.mssql_conn.printRows()
-            # self.outputBuffer = self.mssql_conn._MSSQL__rowsPrinter.getMessage()
             # if len(self.outputBuffer):
-            #     self.outputBuffer = self.outputBuffer.split('\n', 2)[2]
         try:
             self.disable_xp_cmdshell()
         except Exception as e:
             nxc_logger.error(f"[OPSEC] Error when attempting to disable xp_cmdshell: {e}")
         return command_output
-        # return self.outputBuffer
 
     def enable_xp_cmdshell(self):
         self.mssql_conn.sql_query("exec master.dbo.sp_configure 'show advanced options',1;RECONFIGURE;exec master.dbo.sp_configure 'xp_cmdshell', 1;RECONFIGURE;")

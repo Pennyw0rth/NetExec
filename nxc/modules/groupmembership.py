@@ -89,7 +89,6 @@ class NXCModule:
                 # and splitting it on the "=" character to get a list of the group name and its prefix (e.g., "CN")
                 group_name = group_parts[0].split("=")[1]
 
-                # print("Group name: %s" % group_name)
                 context.log.highlight(f"{group_name}")
             return None
         return None

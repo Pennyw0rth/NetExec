@@ -39,18 +39,5 @@ def first_run_setup(logger=nxc_logger):
         shutil.copy(default_path, NXC_PATH)
 
     # if not exists(CERT_PATH):
-    #     logger.display('Generating SSL certificate')
-    #     try:
-    #         check_output(['openssl', 'help'], stderr=PIPE)
     #         if os.name != 'nt':
-    #             os.system('openssl req -new -x509 -keyout {path} -out {path} -days 365 -nodes -subj "/C=US" > /dev/null 2>&1'.format(path=CERT_PATH))
-    #         else:
-    #             os.system('openssl req -new -x509 -keyout {path} -out {path} -days 365 -nodes -subj "/C=US"'.format(path=CERT_PATH))
-    #     except OSError as e:
     #         if e.errno == errno.ENOENT:
-    #             logger.error('OpenSSL command line utility is not installed, could not generate certificate, using default certificate')
-    #             default_path = path_join(DATA_PATH, 'default.pem')
-    #             shutil.copy(default_path, CERT_PATH)
-    #         else:
-    #             logger.error('Error while generating SSL certificate: {}'.format(e))
-    #             sys.exit(1)

@@ -35,7 +35,6 @@ class NXCModule:
 
         context.log.debug("[*] Retrieving network interface of " + connection.host)
 
-        # NetworkAddr = bindings[0]['aNetworkAddr']
         for binding in bindings:
             NetworkAddr = binding["aNetworkAddr"]
             try:

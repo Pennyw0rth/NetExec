@@ -12,7 +12,6 @@ class MSDS_MANAGEDPASSWORD_BLOB(Structure):
         ("UnchangedPasswordIntervalOffset", "<H"),
         ("CurrentPassword", ":"),
         ("PreviousPassword", ":"),
-        # ('AlignmentPadding',':'),
         ("QueryPasswordInterval", ":"),
         ("UnchangedPasswordInterval", ":"),
     )

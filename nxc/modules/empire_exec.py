@@ -105,7 +105,6 @@ class NXCModule:
             sys.exit(1)
 
         context.log.debug(f"Response Code: {stager_response.status_code}")
-        # context.log.debug(f"Response Content: {stager_response.text}")
 
         stager_create_data = stager_response.json()
         context.log.debug(f"Stager data: {stager_create_data}")
@@ -117,7 +116,6 @@ class NXCModule:
             verify=False,
         )
         context.log.debug(f"Response Code: {download_response.status_code}")
-        # context.log.debug(f"Response Content: {download_response.text}")
 
         self.empire_launcher = download_response.text
 

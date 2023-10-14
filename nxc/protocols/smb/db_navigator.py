@@ -19,7 +19,6 @@ class navigator(DatabaseNavigator):
             username = cred[2]
             password = cred[3]
             credtype = cred[4]
-            # pillaged_from = cred[5]
 
             links = self.db.get_admin_relations(user_id=cred_id)
             data.append(

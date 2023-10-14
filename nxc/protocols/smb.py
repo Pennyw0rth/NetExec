@@ -1244,10 +1244,8 @@ class smb(connection):
 
         # Want encryption? Uncomment next line
         # But make simultaneous variable <= 100
-        # dce.set_auth_level(ntlm.NTLM_AUTH_PKT_PRIVACY)
 
         # Want fragmentation? Uncomment next line
-        # dce.set_max_fragment_size(32)
 
         dce.bind(lsat.MSRPC_UUID_LSAT)
         try:
@@ -1693,9 +1691,7 @@ class smb(connection):
                 # if str(e).find('ERROR_DS_DRA_BAD_DN') >= 0:
                 # We don't store the resume file if this error happened, since this error is related to lack
                 # of enough privileges to access DRSUAPI.
-                #    resumeFile = NTDS.getResumeSessionFile()
                 #    if resumeFile is not None:
-                #        os.unlink(resumeFile)
                 self.logger.fail(e)
 
         NTDS = NTDSHashes(
@@ -1727,9 +1723,7 @@ class smb(connection):
             # if str(e).find('ERROR_DS_DRA_BAD_DN') >= 0:
             # We don't store the resume file if this error happened, since this error is related to lack
             # of enough privileges to access DRSUAPI.
-            #    resumeFile = NTDS.getResumeSessionFile()
             #    if resumeFile is not None:
-            #        os.unlink(resumeFile)
             self.logger.fail(e)
         try:
             self.remote_ops.finish()

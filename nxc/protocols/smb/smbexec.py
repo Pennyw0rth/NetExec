@@ -29,7 +29,6 @@ class SMBEXEC:
         self.__rpctransport = None
         self.__scmr = None
         self.__conn = None
-        # self.__mode  = mode
         self.__aesKey = aesKey
         self.__doKerberos = doKerberos
         self.__kdcHost = kdcHost
@@ -102,7 +101,6 @@ class SMBEXEC:
 
         self.logger.debug("Hosting batch file with command: " + command)
 
-        # command = self.__shell + '\\\\{}\\{}\\{}'.format(local_ip,self.__share_name, self.__batchFile)
         self.logger.debug("Command to execute: " + command)
 
         self.logger.debug(f"Remote service {self.__serviceName} created.")

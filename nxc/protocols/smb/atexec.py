@@ -128,7 +128,6 @@ class TSCH_EXEC:
 
         dce.set_credentials(*self.__rpctransport.get_credentials())
         dce.connect()
-        # dce.set_auth_level(ntlm.NTLM_AUTH_PKT_PRIVACY)
 
         tmpName = gen_random_string(8)
 

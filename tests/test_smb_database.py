@@ -24,7 +24,6 @@ def db_engine():
 @pytest.fixture(scope="session")
 def db_setup(db_engine):
     proto = "smb"
-    # setup_logger()
     logger = NXCAdapter()
     first_run_setup(logger)
     p_loader = ProtocolLoader()

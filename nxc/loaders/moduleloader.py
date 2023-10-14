@@ -44,9 +44,6 @@ class ModuleLoader:
         elif not hasattr(module, "on_login") and not (module, "on_admin_login"):
             self.logger.fail(f"{module_path} missing the on_login/on_admin_login function(s)")
             module_error = True
-        # elif not hasattr(module, 'chain_support'):
-        #    self.logger.fail('{} missing the chain_support variable'.format(module_path))
-        #    module_error = True
 
         if module_error:
             return False

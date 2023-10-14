@@ -112,7 +112,6 @@ class TriggerAuth:
         if doKerberos:
             rpctransport.set_kerberos(doKerberos, kdcHost=dcHost)
         # if target:
-        #    rpctransport.setRemoteHost(target)
 
         rpctransport.setRemoteHost(target)
         dce = rpctransport.get_dce_rpc()
@@ -139,7 +138,6 @@ class TriggerAuth:
             request["ApiFlags"] = 1
             if self.args.verbose:
                 nxc_logger.debug(request.dump())
-            # logger.debug(request.dump())
             dce.request(request)
 
         except Exception as e:

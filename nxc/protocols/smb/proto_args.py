@@ -16,8 +16,6 @@ def proto_args(parser, std_parser, module_parser):
     cgroup.add_argument("--lsa", action="store_true", help="dump LSA secrets from target systems")
     cgroup.add_argument("--ntds", choices={"vss", "drsuapi"}, nargs="?", const="drsuapi", help="dump the NTDS.dit from target DCs using the specifed method\n(default: drsuapi)")
     cgroup.add_argument("--dpapi", choices={"cookies", "nosystem"}, nargs="*", help='dump DPAPI secrets from target systems, can dump cookies if you add "cookies", will not dump SYSTEM dpapi if you add nosystem\n')
-    # cgroup.add_argument("--ntds-history", action='store_true', help='Dump NTDS.dit password history')
-    # cgroup.add_argument("--ntds-pwdLastSet", action='store_true', help='Shows the pwdLastSet attribute for each NTDS.dit account')
 
     ngroup = smb_parser.add_argument_group("Credential Gathering", "Options for gathering credentials")
     ngroup.add_argument("--mkfile", action="store", help="DPAPI option. File with masterkeys in form of {GUID}:SHA1")

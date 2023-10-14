@@ -83,7 +83,6 @@ class database:
             """
         )
 
-        # type = hash, plaintext
         db_conn.execute(
             """CREATE TABLE "users" (
             "id" integer PRIMARY KEY,
@@ -353,7 +352,6 @@ class database:
             q_groups = Insert(self.GroupRelationsTable)
 
             self.conn.execute(q_groups, groups)
-        # return user_ids
 
     def remove_credentials(self, creds_id):
         """Removes a credential ID from the database"""
@@ -567,11 +565,7 @@ class database:
 
         self.conn.execute(q, groups)
         # TODO: always return a list and fix code references to not expect a single integer
-        # inserted_result = res_inserted_result.first()
-        # gid = inserted_result.id
         #
-        # logger.debug(f"inserted_results: {inserted_result}\ntype: {type(inserted_result)}")
-        # logger.debug('add_group(domain={}, name={}) => {}'.format(domain, name, gid))
         if updated_ids:
             nxc_logger.debug(f"Updated groups with IDs: {updated_ids}")
         return updated_ids
@@ -668,7 +662,6 @@ class database:
             Insert(self.SharesTable).on_conflict_do_nothing(),  # .returning(self.SharesTable.c.id),
             share_data,
         )  # .scalar_one()
-        # return share_id
 
     def get_shares(self, filter_term=None):
         if self.is_share_valid(filter_term):
@@ -719,7 +712,6 @@ class database:
 
                 self.conn.execute(q, [backup_key])  # .scalar()
                 nxc_logger.debug(f"add_domain_backupkey(domain={domain}, pvk={pvk_encoded})")
-                # return inserted_id
             except Exception as e:
                 nxc_logger.debug(f"Issue while inserting DPAPI Backup Key: {e}")
 
@@ -772,8 +764,6 @@ class database:
 
         self.conn.execute(q, [secret])  # .scalar()
 
-        # inserted_result = res_inserted_result.first()
-        # inserted_id = inserted_result.id
 
         nxc_logger.debug(f"add_dpapi_secrets(host={host}, dpapi_type={dpapi_type}, windows_user={windows_user}, username={username}, password={password}, url={url})")
 

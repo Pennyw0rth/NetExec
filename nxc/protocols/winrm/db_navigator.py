@@ -14,7 +14,6 @@ class navigator(DatabaseNavigator):
             username = cred[2]
             password = cred[3]
             credtype = cred[4]
-            # pillaged_from = cred[5]
 
             links = self.db.get_admin_relations(user_id=cred_id)
             data.append(
@@ -103,7 +102,6 @@ class navigator(DatabaseNavigator):
                             username = cred[2]
                             password = cred[3]
                             credtype = cred[4]
-                            # pillaged_from = cred[5]
                             data.append([cred_id, credtype, domain, username, password])
                 print_table(data, title="Credential(s) with Admin Access")
 

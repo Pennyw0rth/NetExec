@@ -90,7 +90,6 @@ class LDAPConnect:
                     )
                     self.logger.extra["protocol"] = "LDAPS"
                     self.logger.extra["port"] = "636"
-                    # self.logger.success(out)
                     return ldap_connection
                 except ldap_impacket.LDAPSessionError as e:
                     error_code = str(e).split()[-2][:-1]
@@ -141,7 +140,6 @@ class LDAPConnect:
             # Connect to LDAP
             self.logger.extra["protocol"] = "LDAP"
             self.logger.extra["port"] = "389"
-            # self.logger.success(out)
 
             return ldap_connection
 
@@ -153,7 +151,6 @@ class LDAPConnect:
                     ldap_connection.login(username, password, domain, lmhash, nthash)
                     self.logger.extra["protocol"] = "LDAPS"
                     self.logger.extra["port"] = "636"
-                    # self.logger.success(out)
                     return ldap_connection
                 except ldap_impacket.LDAPSessionError as e:
                     error_code = str(e).split()[-2][:-1]

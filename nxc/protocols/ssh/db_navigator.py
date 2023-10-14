@@ -152,19 +152,10 @@ class navigator(DatabaseNavigator):
             creds = self.db.get_credentials()
             self.display_creds(creds)
         # TODO
-        # elif filter_term.split()[0].lower() == "add":
         #     # add format: "domain username password <notes> <credType> <sid>
-        #     args = filter_term.split()[1:]
         #
         #     if len(args) == 3:
-        #         domain, username, password = args
         #         if validate_ntlm(password):
-        #             self.db.add_credential("hash", domain, username, password)
-        #         else:
-        #             self.db.add_credential("plaintext", domain, username, password)
-        #     else:
-        #         print("[!] Format is 'add username password")
-        #         return
         elif filter_term.split()[0].lower() == "remove":
             args = filter_term.split()[1:]
             if len(args) != 1:

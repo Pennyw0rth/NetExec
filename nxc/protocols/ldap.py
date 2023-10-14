@@ -151,7 +151,6 @@ class ldap(connection):
         connection.__init__(self, args, db, host)
 
     def proto_logger(self):
-        # self.logger = nxc_logger
         self.logger = NXCAdapter(
             extra={
                 "protocol": "LDAP",
@@ -301,7 +300,6 @@ class ldap(connection):
             self.logger.extra["protocol"] = "LDAP"
             self.logger.extra["port"] = "389"
             self.logger.display(f"Connecting to LDAP {self.hostname}")
-            # self.logger.display(self.endpoint)
         else:
             self.logger.extra["protocol"] = "SMB" if not self.no_ntlm else "LDAP"
             self.logger.extra["port"] = "445" if not self.no_ntlm else "389"
@@ -311,7 +309,6 @@ class ldap(connection):
             smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
             self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({smbv1})")
             self.logger.extra["protocol"] = "LDAP"
-            # self.logger.display(self.endpoint)
         return True
 
     def kerberos_login(
@@ -324,7 +321,6 @@ class ldap(connection):
         kdcHost="",
         useCache=False,
     ):
-        # nxc_logger.getLogger("impacket").disabled = True
         self.username = username
         self.password = password
         self.domain = domain
@@ -382,7 +378,6 @@ class ldap(connection):
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             out = f"{domain}\\{self.username}{used_ccache} {self.mark_pwned()}"
 
-            # out = f"{domain}\\{self.username}{' from ccache' if useCache else ':%s' % (kerb_pass if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8)} {highlight('({})'.format(self.config.get('nxc', 'pwn3d_label')) if self.admin_privs else '')}"
 
             self.logger.extra["protocol"] = "LDAP"
             self.logger.extra["port"] = "636" if (self.args.gmsa or self.args.port == 636) else "389"

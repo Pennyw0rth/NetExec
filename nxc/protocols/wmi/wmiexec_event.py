@@ -148,7 +148,6 @@ class WMIEXEC_EVENT:
         wmi_timer = wmi_timer.SpawnInstance()
         wmi_timer.TimerId = self.__instanceID
         wmi_timer.IntervalBetweenEvents = 1000
-        # wmiTimer.SkipIfPassed = False
         # Don't output verbose
         current = sys.stdout
         sys.stdout = StringIO()

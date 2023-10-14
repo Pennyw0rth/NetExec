@@ -108,11 +108,8 @@ class mssql(connection):
     def print_host_info(self):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
         # if len(self.mssql_instances) > 0:
-        #     self.logger.display("MSSQL DB Instances: {}".format(len(self.mssql_instances)))
         #     for i, instance in enumerate(self.mssql_instances):
-        #         self.logger.debug("Instance {}".format(i))
         #         for key in instance.keys():
-        #             self.logger.debug(key + ":" + instance[key])
 
     def create_conn_obj(self):
         try:

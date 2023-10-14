@@ -209,7 +209,6 @@ class database:
         update_columns_users = {col.name: col for col in q_users.excluded if col.name not in "id"}
         q_users = q_users.on_conflict_do_update(index_elements=self.UsersTable.primary_key, set_=update_columns_users)
         self.conn.execute(q_users, credentials)  # .scalar()
-        # return user_ids
 
     def remove_credentials(self, creds_id):
         """Removes a credential ID from the database"""
@@ -371,7 +370,6 @@ class database:
                 q = Insert(self.LoggedinRelationsTable)  # .returning(self.LoggedinRelationsTable.c.id)
 
                 self.conn.execute(q, [relation])  # .scalar()
-                # return inserted_ids
             except Exception as e:
                 nxc_logger.debug(f"Error inserting LoggedinRelation: {e}")
 

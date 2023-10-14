@@ -47,7 +47,6 @@ class winrm(connection):
         if self.args.no_smb:
             self.domain = self.args.domain
         else:
-            # try:
             smb_conn = SMBConnection(self.host, self.host, None, timeout=5)
             no_ntlm = False
             try:
@@ -213,7 +212,6 @@ class winrm(connection):
 
     def plaintext_login(self, domain, username, password):
         try:
-            # log.addFilter(SuppressFilter())
             if not self.args.laps:
                 self.password = password
                 self.username = username
@@ -236,8 +234,6 @@ class winrm(connection):
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
             self.db.add_credential("plaintext", domain, self.username, self.password)
             # TODO: when we can easily get the host_id via RETURNING statements, readd this in
-            # host_id = self.db.get_hosts(self.host)[0].id
-            # self.db.add_loggedin_relation(user_id, host_id)
 
             if self.admin_privs:
                 self.logger.debug("Inside admin privs")
@@ -256,9 +252,7 @@ class winrm(connection):
 
     def hash_login(self, domain, username, ntlm_hash):
         try:
-            # from urllib3.connectionpool import log
 
-            # log.addFilter(SuppressFilter())
             lmhash = "00000000000000000000000000000000:"
             nthash = ""
 

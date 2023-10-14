@@ -17,4 +17,3 @@ class Context:
         self.conf.read(os.path.expanduser("~/.nxc/nxc.conf"))
 
         self.log = logger
-        # self.log.debug = logging.debug

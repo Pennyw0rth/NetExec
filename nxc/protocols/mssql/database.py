@@ -56,7 +56,6 @@ class database:
             FOREIGN KEY(hostid) REFERENCES hosts(id)
             )"""
         )
-        # type = hash, plaintext
         db_conn.execute(
             """CREATE TABLE "users" (
             "id" integer PRIMARY KEY,
@@ -185,7 +184,6 @@ class database:
                 if not user[3] and not user[4] and not user[5]:
                     q = update(self.UsersTable).values(credential_data)  # .returning(self.UsersTable.c.id)
                     results = self.conn.execute(q)  # .first()
-                    # user_rowid = results.id
 
         nxc_logger.debug(f"add_credential(credtype={credtype}, domain={domain}, username={username}, password={password}, pillaged_from={pillaged_from})")
         return user_rowid

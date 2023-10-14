@@ -51,8 +51,6 @@ class WMIEXEC:
         self.__retOutput = True
 
         self.__shell = "cmd.exe /Q /c "
-        # self.__pwsh = 'powershell.exe -NoP -NoL -sta -NonI -W Hidden -Exec Bypass -Enc '
-        # self.__pwsh = 'powershell.exe -Enc '
         self.__pwd = "C:\\"
         self.__codec = codec
 

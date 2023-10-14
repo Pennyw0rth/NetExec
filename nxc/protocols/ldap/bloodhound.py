@@ -44,7 +44,6 @@ class BloodHound:
         # Create an object resolver
         self.ad.create_objectresolver(self.pdc)
 
-    #        self.pdc.ldap_connect(self.ad.auth.username, self.ad.auth.password, kdc)
 
     def run(
         self,
