@@ -7,7 +7,7 @@ from nxc.logger import NXCAdapter
 from ftplib import FTP
 
 
-class Ftp(connection):
+class ftp(connection):
     def __init__(self, args, db, host):
         self.protocol = "FTP"
         self.remote_version = None
@@ -26,11 +26,8 @@ class Ftp(connection):
 
     def proto_flow(self):
         self.proto_logger()
-        if self.create_conn_obj():
-            if self.enum_host_info():
-                if self.print_host_info():
-                    if self.login():
-                        pass
+        if self.create_conn_obj() and self.enum_host_info() and self.print_host_info() and self.login():
+            pass
 
     def enum_host_info(self):
         welcome = self.conn.getwelcome()
