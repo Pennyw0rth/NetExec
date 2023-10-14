@@ -25,11 +25,11 @@ class NXCModule:
         self.masterkeys = None
 
         if "PVK" in module_options:
-            self.pvkbytes = open(module_options["PVK"], "rb").read()
+            self.pvkbytes = open(module_options["PVK"], "rb").read() # noqa: SIM115
 
         if "MKFILE" in module_options:
             self.masterkeys = parse_masterkey_file(module_options["MKFILE"])
-            self.pvkbytes = open(module_options["MKFILE"], "rb").read()
+            self.pvkbytes = open(module_options["MKFILE"], "rb").read() # noqa: SIM115
 
     def on_admin_login(self, context, connection):
         host = connection.hostname + "." + connection.domain
@@ -124,34 +124,13 @@ class NXCModule:
                 if rdcman_file is None:
                     continue
                 for rdg_cred in rdcman_file.rdg_creds:
-                    if rdg_cred.type == "cred":
-                        context.log.highlight(
-                            "[{}][{}] {}:{}".format(
-                                rdcman_file.winuser,
-                                rdg_cred.profile_name,
-                                rdg_cred.username,
-                                rdg_cred.password.decode("latin-1"),
-                            )
-                        )
-                    elif rdg_cred.type == "logon":
-                        context.log.highlight(
-                            "[{}][{}] {}:{}".format(
-                                rdcman_file.winuser,
-                                rdg_cred.profile_name,
-                                rdg_cred.username,
-                                rdg_cred.password.decode("latin-1"),
-                            )
-                        )
-                    elif rdg_cred.type == "server":
-                        context.log.highlight(
-                            "[{}][{}] {} - {}:{}".format(
-                                rdcman_file.winuser,
-                                rdg_cred.profile_name,
-                                rdg_cred.server_name,
-                                rdg_cred.username,
-                                rdg_cred.password.decode("latin-1"),
-                            )
-                        )
+                    if rdg_cred.type in ["cred", "logon", "server"]:
+                        if rdg_cred.type == "server":
+                            log_text = "{} - {}:{}".format(rdg_cred.server_name, rdg_cred.username, rdg_cred.password.decode("latin-1"))
+                        else:
+                            log_text = "{}:{}".format(rdg_cred.username, rdg_cred.password.decode("latin-1"))
+                        context.log.highlight("[{}][{}] {}".format(rdcman_file.winuser, rdg_cred.profile_name, log_text))
+                        
             for rdgfile in rdgfiles:
                 if rdgfile is None:
                     continue
