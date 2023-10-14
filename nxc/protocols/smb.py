@@ -1352,7 +1352,7 @@ class smb(connection):
                     "hash",
                     self.hostname,
                     username,
-                    ":".join((lmhash, nthash)),
+                    f"{lmhash}:{nthash}",
                     pillaged_from=host_id,
                 )
 
@@ -1666,7 +1666,7 @@ class smb(connection):
 
                 try:
                     username, _, lmhash, nthash, _, _, _ = clean_hash.split(":")
-                    parsed_hash = ":".join((lmhash, nthash))
+                    parsed_hash = f"{lmhash}:{nthash}"
                     if validate_ntlm(parsed_hash):
                         self.db.add_credential("hash", domain, username, parsed_hash, pillaged_from=host_id)
                         add_ntds_hash.added_to_db += 1
