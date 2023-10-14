@@ -494,7 +494,7 @@ class NXCDBMenu(cmd.Cmd):
     def help_proto():
         help_string = """
         proto [smb|mssql|winrm]
-            *unimplemented protocols: Ftp, rdp, ldap, ssh
+            *unimplemented protocols: ftp, rdp, ldap, ssh
         Changes nxcdb to the specified protocol
         """
         print_help(help_string)
