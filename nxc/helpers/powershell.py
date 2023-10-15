@@ -9,6 +9,8 @@ from nxc.helpers.misc import which
 from nxc.logger import nxc_logger
 from nxc.paths import NXC_PATH, DATA_PATH
 from base64 import b64encode
+import string
+import random
 
 obfuscate_ps_scripts = False
 
@@ -320,11 +322,8 @@ def invoke_obfuscation(script_string):
     -------
         str: The obfuscated payload for execution.
     """
-    # Add letters a-z with random case to $RandomDelimiters.
-    alphabet = "".join(choice([i.upper(), i]) for i in ascii_lowercase)
-
-    # Create list of random delimiters called random_delimiters.
-    # Avoid using . * ' " [ ] ( ) etc. as delimiters as these will cause problems in the -Split command syntax.
+    alphabet = string.ascii_lowercase
+    random_alphabet = "".join(random.choice([i.upper(), i]) for i in alphabet)
     random_delimiters = [
         "_",
         "-",
@@ -340,10 +339,7 @@ def invoke_obfuscation(script_string):
         ">",
         ";",
         ":",
-    ]
-
-    for i in alphabet:
-        random_delimiters.append(i)
+    ] + list(random_alphabet)
 
     # Only use a subset of current delimiters to randomize what you see in every iteration of this script's output.
     random_delimiters = [choice(random_delimiters) for _ in range(int(len(random_delimiters) / 4))]
