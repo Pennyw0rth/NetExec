@@ -186,12 +186,12 @@ def gen_cli_args():
     p_loader = ProtocolLoader()
     protocols = p_loader.get_protocols()
 
-    for protocol in protocols:
-        try:
+    try:
+        for protocol in protocols:
             protocol_object = p_loader.load_protocol(protocols[protocol]["argspath"])
             subparsers = protocol_object.proto_args(subparsers, std_parser, module_parser)
-        except Exception as e:
-            nxc_logger.exception(f"Error loading proto_args from proto_args.py file in protocol folder: {protocol} - {e}")
+    except Exception as e:
+        nxc_logger.exception(f"Error loading proto_args from proto_args.py file in protocol folder: {protocol} - {e}")
 
     if len(sys.argv) == 1:
         parser.print_help()
