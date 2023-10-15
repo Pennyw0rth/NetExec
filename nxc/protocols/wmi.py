@@ -381,10 +381,14 @@ class wmi(connection):
 
     # It's very complex to use wmi from rpctansport "convert" to dcom, so let we use dcom directly.
     @requires_admin
-    def wmi(self, WQL=None, namespace=None):
+    def wmi(self, wql=None, namespace=None):
+        """Execute WQL syntax via WMI
+        
+        This is done via the --wmi flag
+        """
         records = []
-        if not WQL:
-            WQL = self.args.wmi.strip("\n")
+        if not wql:
+            wql = self.args.wmi.strip("\n")
 
         if not namespace:
             namespace = self.args.wmi_namespace
@@ -395,26 +399,24 @@ class wmi(connection):
             iWbemLevel1Login = IWbemLevel1Login(iInterface)
             iWbemServices = iWbemLevel1Login.NTLMLogin(namespace, NULL, NULL)
             iWbemLevel1Login.RemRelease()
-            iEnumWbemClassObject = iWbemServices.ExecQuery(WQL)
+            iEnumWbemClassObject = iWbemServices.ExecQuery(wql)
         except Exception as e:
             dcom.disconnect()
             self.logger.debug(str(e))
-            self.logger.fail(f"Execute WQL error: {str(e)}")
+            self.logger.fail(f"Execute WQL error: {e}")
             return False
         else:
-            self.logger.info(f"Executing WQL syntax: {WQL}")
-            while True:
-                try:
+            self.logger.info(f"Executing WQL syntax: {wql}")
+            try:
+                while True:
                     wmi_results = iEnumWbemClassObject.Next(0xFFFFFFFF, 1)[0]
                     record = wmi_results.getProperties()
                     records.append(record)
                     for k, v in record.items():
                         self.logger.highlight(f"{k} => {v['value']}")
-                except Exception as e:
-                    if str(e).find("S_FALSE") < 0:
-                        self.logger.debug(str(e))
-                    else:
-                        break
+            except Exception as e:
+                if str(e).find("S_FALSE") < 0:
+                    self.logger.debug(e)
 
             dcom.disconnect()
 
