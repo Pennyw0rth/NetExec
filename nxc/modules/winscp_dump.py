@@ -177,9 +177,7 @@ class NXCModule:
             users = data["lpcSubKeys"]
 
             # Get User Names
-            user_names = []
-            for i in range(users):
-                user_names.append(rrp.hBaseRegEnumKey(remote_ops._RemoteOperations__rrp, key_handle, i)["lpNameOut"].split("\x00")[:-1][0])
+            user_names = [rrp.hBaseRegEnumKey(remote_ops._RemoteOperations__rrp, key_handle, i)["lpNameOut"].split("\x00")[:-1][0] for i in range(users)]
             rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
 
             # Filter legit users in regex
@@ -216,8 +214,7 @@ class NXCModule:
             users = data["lpcSubKeys"]
 
             # Get User Names
-            for i in range(users):
-                user_objects.append(rrp.hBaseRegEnumKey(remote_ops._RemoteOperations__rrp, key_handle, i)["lpNameOut"].split("\x00")[:-1][0])
+            user_objects = [rrp.hBaseRegEnumKey(remote_ops._RemoteOperations__rrp, key_handle, i)["lpNameOut"].split("\x00")[:-1][0] for i in range(users)]
             rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
         except Exception as e:
             context.log.fail(f"Error handling Users in registry: {e}")
@@ -342,9 +339,7 @@ class NXCModule:
                     context.log.success(f'Found {sessions - 1} sessions for user "{self.userDict[userObject]}" in registry!')
 
                     # Get Session Names
-                    session_names = []
-                    for i in range(sessions):
-                        session_names.append(rrp.hBaseRegEnumKey(remote_ops._RemoteOperations__rrp, key_handle, i)["lpNameOut"].split("\x00")[:-1][0])
+                    session_names = [rrp.hBaseRegEnumKey(remote_ops._RemoteOperations__rrp, key_handle, i)["lpNameOut"].split("\x00")[:-1][0] for i in range(sessions)]
                     rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
                     session_names.remove("Default%20Settings")
 
@@ -413,10 +408,7 @@ class NXCModule:
         else:
             context.log.display("Looking for WinSCP creds in User documents and AppData...")
             output = connection.execute('powershell.exe "Get-LocalUser | Select name"', True)
-            users = []
-            for row in output.split("\r\n"):
-                users.append(row.strip())
-            users = users[2:]
+            users = [row.strip() for row in output.split("\r\n")[2:]]
 
             # Iterate over found users and default paths to look for WinSCP.ini files
             for user in users:
