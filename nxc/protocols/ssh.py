@@ -17,6 +17,7 @@ from paramiko.ssh_exception import (
     SSHException,
 )
 
+
 class ssh(connection):
     def __init__(self, args, db, host):
         self.protocol = "SSH"
@@ -24,7 +25,7 @@ class ssh(connection):
         self.server_os_platform = "Linux"
         self.user_principal = "root"
         super().__init__(args, db, host)
-    
+
     def proto_flow(self):
         self.logger.debug(f"Kicking off proto_flow")
         self.proto_logger()
@@ -86,11 +87,11 @@ class ssh(connection):
 
         # we could add in another method to check by piping in the password to sudo
         # but that might be too much of an opsec concern - maybe add in a flag to do more checks?
-        self.logger.info(f"Determined user is root via `id ; sudo -ln` command")
-        stdin, stdout, stderr = self.conn.exec_command("id ; sudo -ln 2>&1")
+        self.logger.info(f"Determined user is root via `id; sudo -ln` command")
+        stdin, stdout, stderr = self.conn.exec_command("id; sudo -ln 2>&1")
         stdout = stdout.read().decode("utf-8", errors="ignore")
         admin_flag = {
-            "(root)": [True, None], 
+            "(root)": [True, None],
             "NOPASSWD: ALL": [True, None],
             "(ALL : ALL) ALL": [True, None],
             "(sudo)": [False, f'Current user: "{self.username}" was in "sudo" group, please try "--sudo-check" to check if user can run sudo shell']
@@ -113,11 +114,11 @@ class ssh(connection):
         if not self.password:
             self.logger.error("Check admin with sudo not support private key.")
             return
-        
+
         if self.args.sudo_check_method:
             method = self.args.sudo_check_method
             self.logger.info(f"Doing sudo check with method: {method}")
-           
+
         if method == "sudo-stdin":
             stdin, stdout, stderr = self.conn.exec_command("sudo --help")
             stdout = stdout.read().decode("utf-8", errors="ignore")
@@ -135,7 +136,7 @@ class ssh(connection):
                         break
                     if stderr.read().decode('utf-8'):
                         time.sleep(2)
-                        tries +=1
+                        tries += 1
                     else:
                         self.logger.info(f"{shadow_Backup} existed")
                         self.admin_privs = True
@@ -193,7 +194,7 @@ class ssh(connection):
         try:
             if self.args.key_file or private_key:
                 self.logger.debug(f"Logging in with key")
-                
+
                 if self.args.key_file:
                     with open(self.args.key_file, 'r') as f:
                         private_key = f.read()
@@ -275,9 +276,9 @@ class ssh(connection):
             )
 
             self.logger.success(f"{username}:{password} {self.mark_pwned()} {highlight(display_shell_access)}")
-            
+
             return True
-    
+
     def execute(self, payload=None, get_output=False):
         if not payload and self.args.execute:
             payload = self.args.execute
