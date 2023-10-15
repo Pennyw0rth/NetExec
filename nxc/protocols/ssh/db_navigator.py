@@ -249,9 +249,8 @@ class navigator(DatabaseNavigator):
         print_help(help_string)
 
     def display_keys(self, keys):
-        data = [["Key ID", "Cred ID", "Key Data"]]
-        for key in keys:
-            data.append([key[0], key[1], key[2]])
+        data = [[key[0], key[1], key[2]] for key in keys]
+        data.insert(0, ["Key ID", "Cred ID", "Key Data"])
         print_table(data, "Keys")
 
     def do_keys(self, line):
