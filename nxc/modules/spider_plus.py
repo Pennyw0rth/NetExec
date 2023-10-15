@@ -42,7 +42,6 @@ def make_dirs(path):
     except OSError as e:
         if e.errno != errno.EEXIST:
             raise
-        pass
 
 
 def get_list_from_option(opt):

@@ -67,7 +67,6 @@ class NXCModule:
                     self.pvkbytes = backupkey.backupkey_v2
             except Exception as e:
                 context.log.debug(f"Could not get domain backupkey: {e}")
-                pass
 
         target = Target.create(
             domain=domain,

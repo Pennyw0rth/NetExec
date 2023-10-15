@@ -95,7 +95,6 @@ class NXCModule:
                             context.log.fail("System version under NT6 not support restricted admin mode")
                         else:
                             context.log.fail(str(e))
-                        pass
                 else:
                     try:
                         wmi_rdp.rdp_wrapper(self.action, self.oldSystem)
@@ -104,7 +103,6 @@ class NXCModule:
                             context.log.fail("Looks like target system version is under NT6, please add 'OLD=true' in module options.")
                         else:
                             context.log.fail(str(e))
-                        pass
                 wmi_rdp._rdp_WMI__dcom.disconnect()
 
 

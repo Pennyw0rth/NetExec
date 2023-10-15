@@ -156,7 +156,6 @@ class WMIEXEC:
                 if str(e).find("STATUS_SHARING_VIOLATION") >= 0 or str(e).find("STATUS_OBJECT_NAME_NOT_FOUND") >= 0:
                     sleep(2)
                     tries += 1
-                    pass
                 else:
                     self.logger.debug(str(e))
 

@@ -53,7 +53,6 @@ class NXCModule:
                 # We reached the sizeLimit, process the answers we have already and that's it. Until we implement
                 # paged queries
                 resp = e.getAnswers()
-                pass
             else:
                 nxc_logger.debug(e)
                 return False
@@ -76,7 +75,6 @@ class NXCModule:
             except Exception as e:
                 context.log.debug("Exception:", exc_info=True)
                 context.log.debug(f"Skipping item, cannot process due to error {str(e)}")
-                pass
         answers = self.filter_answer(context, answers)
         if len(answers) > 0:
             context.log.success("Found following users: ")

@@ -57,7 +57,6 @@ class winrm(connection):
                 if "STATUS_NOT_SUPPORTED" in str(e):
                     # no ntlm supported
                     no_ntlm = True
-                pass
 
             self.domain = smb_conn.getServerDNSDomainName() if not no_ntlm else self.args.domain
             self.hostname = smb_conn.getServerName() if not no_ntlm else self.host

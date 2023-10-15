@@ -50,7 +50,6 @@ class NXCModule:
                 # We reached the sizeLimit, process the answers we have already and that's it. Until we implement
                 # paged queries
                 resp = e.getAnswers()
-                pass
             else:
                 context.log.debug(e)
                 return False
@@ -79,7 +78,6 @@ class NXCModule:
             except Exception as e:
                 context.log.debug("Exception:", exc_info=True)
                 context.log.debug(f"Skipping item, cannot process due to error {str(e)}")
-                pass
         if len(memberOf) > 0:
             context.log.success(f"User: {self.user} is member of following groups: ")
             for group in memberOf:

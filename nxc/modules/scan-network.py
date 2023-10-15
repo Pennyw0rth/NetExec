@@ -133,7 +133,6 @@ class NXCModule:
                 # We reached the sizeLimit, process the answers we have already and that's it. Until we implement
                 # paged queries
                 list_sites = e.getAnswers()
-                pass
             else:
                 raise
         get_dns_resolver(connection.host, context.log)

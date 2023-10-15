@@ -90,7 +90,6 @@ class NXCHTTPServer(threading.Thread):
             self.server.serve_forever()
         except Exception as e:
             nxc_logger.debug(f"Error starting HTTP server: {e}")
-            pass
 
     def shutdown(self):
         try:
@@ -112,4 +111,3 @@ class NXCHTTPServer(threading.Thread):
                     thread._stop()
                 except Exception as e:
                     nxc_logger.debug(f"Error stopping HTTP server: {e}")
-                    pass

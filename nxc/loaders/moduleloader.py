@@ -129,5 +129,4 @@ class ModuleLoader:
                         modules.update(module_data)
                     except Exception as e:
                         self.logger.debug(f"Error loading module {module}: {e}")
-                        pass
         return modules

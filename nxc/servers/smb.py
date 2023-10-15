@@ -38,7 +38,6 @@ class NXCSMBServer(threading.Thread):
             self.server.start()
         except Exception as e:
             nxc_logger.debug(f"Error starting SMB server: {e}")
-            pass
 
     def shutdown(self):
         # TODO: should fine the proper way
@@ -49,4 +48,3 @@ class NXCSMBServer(threading.Thread):
                     self._stop()
                 except Exception as e:
                     nxc_logger.debug(f"Error stopping SMB server: {e}")
-                    pass

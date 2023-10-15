@@ -45,7 +45,6 @@ class NXCModule:
             if e.getErrorString().find("sizeLimitExceeded") >= 0:
                 context.log.debug("sizeLimitExceeded exception caught, giving up and processing the data received")
                 resp = e.getAnswers()
-                pass
             else:
                 nxc_logger.debug(e)
                 return False
@@ -68,7 +67,6 @@ class NXCModule:
             except Exception as e:
                 context.log.debug("Exception:", exc_info=True)
                 context.log.debug(f"Skipping item, cannot process due to error {e}")
-                pass
         if len(answers) > 0:
             context.log.success("Found the following computers: ")
             for answer in answers:

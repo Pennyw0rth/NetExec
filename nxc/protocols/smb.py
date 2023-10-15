@@ -213,7 +213,6 @@ class smb(connection):
             if "STATUS_NOT_SUPPORTED" in str(e):
                 # no ntlm supported
                 self.no_ntlm = True
-            pass
 
         self.domain = self.conn.getServerDNSDomainName() if not self.no_ntlm else self.args.domain
         self.hostname = self.conn.getServerName() if not self.no_ntlm else self.host
@@ -227,7 +226,6 @@ class smb(connection):
             self.signing = self.conn.isSigningRequired() if self.smbv1 else self.conn._SMBConnection._Connection["RequireSigning"]
         except Exception as e:
             self.logger.debug(e)
-            pass
 
         self.os_arch = self.get_os_arch()
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
@@ -249,7 +247,6 @@ class smb(connection):
             self.conn.logoff()
         except Exception as e:
             self.logger.debug(f"Error logging off system: {e}")
-            pass
 
         if self.args.domain:
             self.domain = self.args.domain
@@ -627,7 +624,6 @@ class smb(connection):
                 self.admin_privs = True
             except scmr.DCERPCException:
                 self.admin_privs = False
-                pass
 
     def gen_relay_list(self):
         if self.server_os.lower().find("windows") != -1 and self.signing is False:
@@ -768,7 +764,6 @@ class smb(connection):
         except Exception as e:
             error = get_error_string(e)
             self.logger.fail(f"Error getting user: {error}")
-            pass
 
         try:
             shares = self.conn.listShares()
@@ -801,7 +796,6 @@ class smb(connection):
             except SessionError as e:
                 error = get_error_string(e)
                 self.logger.debug(f"Error checking READ access on share: {error}")
-                pass
 
             if not self.args.no_write_check:
                 try:
@@ -812,7 +806,6 @@ class smb(connection):
                 except SessionError as e:
                     error = get_error_string(e)
                     self.logger.debug(f"Error checking WRITE access on share: {error}")
-                    pass
 
             permissions.append(share_info)
 
@@ -823,7 +816,6 @@ class smb(connection):
                 except Exception as e:
                     error = get_error_string(e)
                     self.logger.debug(f"Error adding share: {error}")
-                    pass
 
         self.logger.display("Enumerated shares")
         self.logger.highlight(f"{'Share':<15} {'Permissions':<15} {'Remark'}")
@@ -1440,7 +1432,6 @@ class smb(connection):
                         self.no_da = False
                 except Exception as e:
                     self.logger.fail(f"Could not get domain backupkey: {e}")
-                    pass
 
         target = Target.create(
             domain=self.domain,

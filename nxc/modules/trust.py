@@ -77,7 +77,6 @@ class NXCModule:
                     trusts.append((flat_name, trust_partner, trust_direction, trust_transitive))
             except Exception as e:
                 context.log.debug(f"Cannot process trust relationship due to error {e}")
-                pass
 
         if trusts:
             context.log.success("Found the following trust relationships:")

@@ -93,7 +93,6 @@ def do_search(self, context, connection, searchFilter, attributeName):
             except Exception as e:
                 context.log.debug("Exception:", exc_info=True)
                 context.log.debug(f"Skipping item, cannot process due to error {e}")
-                pass
     except Exception as e:
         context.log.debug(f"Exception: {e}")
         return False

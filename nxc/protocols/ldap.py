@@ -267,7 +267,6 @@ class ldap(connection):
             except Exception as e:
                 if "STATUS_NOT_SUPPORTED" in str(e):
                     self.no_ntlm = True
-                pass
             if not self.no_ntlm:
                 self.domain = self.conn.getServerDNSDomainName()
                 self.hostname = self.conn.getServerName()
@@ -747,7 +746,6 @@ class ldap(connection):
                 # We should never reach this code as we use paged search now
                 self.logger.fail("sizeLimitExceeded exception caught, giving up and processing the data received")
                 resp = e.getAnswers()
-                pass
             else:
                 self.logger.fail(e)
                 return False
@@ -784,7 +782,6 @@ class ldap(connection):
                         self.logger.highlight(f"{sAMAccountName:<30} {description}")
                 except Exception as e:
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
-                    pass
             return
 
     def groups(self):
@@ -807,7 +804,6 @@ class ldap(connection):
                 except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
-                    pass
             return
 
     def dc_list(self):
@@ -889,7 +885,6 @@ class ldap(connection):
                 except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
-                    pass
             if len(answers) > 0:
                 for user in answers:
                     hash_TGT = KerberosAttacks(self).get_tgt_asroast(user[0])
@@ -969,7 +964,6 @@ class ldap(connection):
                                 ])
                 except Exception as e:
                     nxc_logger.error(f"Skipping item, cannot process due to error {str(e)}")
-                    pass
 
             if len(answers) > 0:
                 self.logger.display(f"Total of records returned {len(answers):d}")
@@ -1064,7 +1058,6 @@ class ldap(connection):
             except Exception as e:
                 self.logger.debug("Exception:", exc_info=True)
                 self.logger.debug(f"Skipping item, cannot process due to error {e}")
-                pass
         if len(answers) > 0:
             self.logger.debug(answers)
             for value in answers:
@@ -1094,7 +1087,6 @@ class ldap(connection):
                 # We reached the sizeLimit, process the answers we have already and that's it. Until we implement
                 # paged queries
                 resp = e.getAnswers()
-                pass
             else:
                 return False
         answers = []
@@ -1139,7 +1131,6 @@ class ldap(connection):
             except Exception as e:
                 self.logger.debug("Exception:", exc_info=True)
                 self.logger.debug(f"Skipping item, cannot process due to error {str(e)}")
-                pass
         if len(answers) > 0:
             self.logger.debug(answers)
             for value in answers:
@@ -1197,7 +1188,6 @@ class ldap(connection):
             except Exception as e:
                 self.logger.debug("Exception:", exc_info=True)
                 self.logger.debug(f"Skipping item, cannot process due to error {str(e)}")
-                pass
         if len(answers) > 0:
             self.logger.debug(answers)
             for value in answers:

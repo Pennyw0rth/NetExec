@@ -128,9 +128,7 @@ def create_ps_command(ps_command, force_ps32=False, dont_obfs=False, custom_amsi
     """
     if custom_amsi:
         with open(custom_amsi) as file_in:
-            lines = []
-            for line in file_in:
-                lines.append(line)
+            lines = list(file_in)
             amsi_bypass = "".join(lines)
     else:
         amsi_bypass = """[Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}

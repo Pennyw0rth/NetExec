@@ -108,7 +108,7 @@ def process_creds(context, connection, credentials_data, dbconnection, cursor, d
 
             for path in paths:
                 if path:
-                    for _key, value in path.items():
+                    for value in path.values():
                         for item in value:
                             if isinstance(item, dict):
                                 if {item["name"]} not in reported_da:
