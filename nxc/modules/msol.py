@@ -54,7 +54,7 @@ class NXCModule:
             try:
                 with open(file_to_upload, "w") as msol:
                     msol.write(self.msol_embedded)
-            except FileNotFoundError as e:
+            except FileNotFoundError:
                 context.log.fail(f"Impersonate file specified '{file_to_upload}' does not exist!")
                 sys.exit(1)
             

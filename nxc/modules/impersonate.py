@@ -52,7 +52,7 @@ class NXCModule:
             try:
                 with open(file_to_upload, "wb") as impersonate:
                     impersonate.write(self.impersonate_embedded)
-            except FileNotFoundError as e:
+            except FileNotFoundError:
                 context.log.fail(f"Impersonate file specified '{file_to_upload}' does not exist!")
                 sys.exit(1)
         else:

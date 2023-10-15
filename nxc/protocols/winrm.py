@@ -192,7 +192,7 @@ class winrm(connection):
         for url in endpoints:
             try:
                 self.logger.debug(f"Requesting URL: {url}")
-                res = requests.post(url, verify=False, timeout=self.args.http_timeout)
+                requests.post(url, verify=False, timeout=self.args.http_timeout)
                 self.logger.debug("Received response code: {res.status_code}")
                 self.endpoint = url
                 if self.endpoint.startswith("https://"):

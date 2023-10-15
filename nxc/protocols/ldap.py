@@ -745,7 +745,7 @@ class ldap(connection):
             if e.getErrorString().find("sizeLimitExceeded") >= 0:
                 # We should never reach this code as we use paged search now
                 self.logger.fail("sizeLimitExceeded exception caught, giving up and processing the data received")
-                resp = e.getAnswers()
+                e.getAnswers()
             else:
                 self.logger.fail(e)
                 return False

@@ -130,7 +130,7 @@ class SMBEXEC:
             self.logger.debug(f"Remote service {self.__serviceName} deleted.")
             scmr.hRDeleteService(self.__scmr, service)
             scmr.hRCloseServiceHandle(self.__scmr, service)
-        except Exception as e:
+        except Exception:
             pass
 
         self.get_output_remote()
