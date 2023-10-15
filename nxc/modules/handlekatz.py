@@ -57,7 +57,7 @@ class NXCModule:
             try:
                 with open(handlekatz_loc, "wb") as handlekatz:
                     handlekatz.write(self.handlekatz_embeded)
-            except FileNotFoundError as e:
+            except FileNotFoundError:
                 context.log.fail(f"Handlekatz file specified '{handlekatz_loc}' does not exist!")
                 sys.exit(1)
 

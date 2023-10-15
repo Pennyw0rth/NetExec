@@ -183,18 +183,19 @@ class NXCModule:
 
     def restart(self, context, connection):
         """Force the restart of KeePass process using a Windows service defined using the powershell script RestartKeePass.ps1
-        If multiple process belonging to different users are running simultaneously,
-        relies on the USER option to choose which one to restart
+
+        If multiple process belonging to different users are running simultaneously, relies on the USER option to choose which one to restart
         """
         # search for keepass processes
         search_keepass_process_command_str = 'powershell.exe "Get-Process keepass* -IncludeUserName | Select-Object -Property Id,UserName,ProcessName | ConvertTo-CSV -NoTypeInformation"'
         search_keepass_process_output_csv = connection.execute(search_keepass_process_command_str, True)
-        # we return the powershell command as a CSV for easier column parsing
-        csv_reader = reader(search_keepass_process_output_csv.split("\n"), delimiter=",")
-        next(csv_reader)  # to skip the header line
-        keepass_process_list = list(csv_reader)
+
+        # we return the powershell command as a CSV for easier column parsing, skipping the header line
+        csv_reader = reader(search_keepass_process_output_csv.split("\n")[1:], delimiter=",")
+
         # check if multiple processes belonging to different users are running (in order to choose which one to restart)
-        keepass_users = [process[1] for process in keepass_process_list]
+        keepass_users = [process[1] for process in list(csv_reader)]
+
         if len(keepass_users) == 0:
             context.log.fail("No running KeePass process found, aborting restart")
             return

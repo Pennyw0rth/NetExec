@@ -227,7 +227,6 @@ class SMBSpider:
             traceback.print_exc()
 
     def get_lastm_time(self, result_obj):
-        lastm_time = None
         with contextlib.suppress(Exception):
             return strftime("%Y-%m-%d %H:%M", localtime(result_obj.get_mtime_epoch()))
 

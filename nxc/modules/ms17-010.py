@@ -396,7 +396,7 @@ def check(ip, port=445):
         raw_proto = session_setup_andx_request()
         client.send(raw_proto)
         tcp_response = client.recv(buffersize)
-        netbios = tcp_response[:4]
+        tcp_response[:4]
         smb_header = tcp_response[4:36]
         smb = SmbHeader(smb_header)
 
@@ -404,14 +404,14 @@ def check(ip, port=445):
 
         # Extract native OS from session setup response
         session_setup_andx_response = tcp_response[36:]
-        native_os = session_setup_andx_response[9:].split("\x00")[0]
+        session_setup_andx_response[9:].split("\x00")[0]
 
         # Send tree connect request and receive response
         raw_proto = tree_connect_andx_request(ip, user_id)
         client.send(raw_proto)
         tcp_response = client.recv(buffersize)
 
-        netbios = tcp_response[:4]
+        tcp_response[:4]
         smb_header = tcp_response[4:36]
         smb = SmbHeader(smb_header)
 
@@ -425,7 +425,7 @@ def check(ip, port=445):
         client.send(raw_proto)
         tcp_response = client.recv(buffersize)
 
-        netbios = tcp_response[:4]
+        tcp_response[:4]
         smb_header = tcp_response[4:36]
         smb = SmbHeader(smb_header)
 
