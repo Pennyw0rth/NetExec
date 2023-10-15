@@ -322,8 +322,7 @@ def invoke_obfuscation(script_string):
     -------
         str: The obfuscated payload for execution.
     """
-    alphabet = string.ascii_lowercase
-    random_alphabet = "".join(random.choice([i.upper(), i]) for i in alphabet)
+    random_alphabet = "".join(random.choice([i.upper(), i]) for i in ascii_lowercase)
     random_delimiters = [
         "_",
         "-",
