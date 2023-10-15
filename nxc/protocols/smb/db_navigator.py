@@ -227,18 +227,7 @@ class navigator(DatabaseNavigator):
                     ]
                 ]
 
-                for group in groups:
-                    data.append(
-                        [
-                            group[0],
-                            group[1],
-                            group[2],
-                            group[3],
-                            len(self.db.get_group_relations(group_id=group[0])),
-                            group[4],
-                            group[5],
-                        ]
-                    )
+                data += [[group[0], group[1], group[2], group[3], len(self.db.get_group_relations(group_id=group[0])), group[4], group[5]] for group in groups]
                 print_table(data, title="Group")
                 data = [
                     [

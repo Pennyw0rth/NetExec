@@ -946,22 +946,13 @@ class ldap(connection):
                         elif str(attribute["type"]) == "lastLogon":
                             lastLogon = "<never>" if str(attribute["vals"][0]) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
                         elif str(attribute["type"]) == "servicePrincipalName":
-                            for spn in attribute["vals"]:
-                                SPNs.append(str(spn))
+                            SPNs = [str(spn) for spn in attribute["vals"]]
 
                     if mustCommit is True:
                         if int(userAccountControl) & UF_ACCOUNTDISABLE:
                             self.logger.debug(f"Bypassing disabled account {sAMAccountName} ")
                         else:
-                            for spn in SPNs:
-                                answers.append([
-                                    spn,
-                                    sAMAccountName,
-                                    memberOf,
-                                    pwdLastSet,
-                                    lastLogon,
-                                    delegation,
-                                ])
+                            answers += [[spn, sAMAccountName, memberOf, pwdLastSet, lastLogon, delegation] for spn in SPNs]
                 except Exception as e:
                     nxc_logger.error(f"Skipping item, cannot process due to error {str(e)}")
 

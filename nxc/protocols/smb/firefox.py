@@ -175,7 +175,7 @@ class FirefoxTriage:
 
         for d in directories:
             if d.get_longname() not in self.false_positive and d.is_directory() > 0:
-                users.append(d.get_longname())
+                users.append(d.get_longname())  # noqa: PERF401, ignoring for readability
         return users
 
     @staticmethod

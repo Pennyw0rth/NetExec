@@ -157,9 +157,7 @@ class NXCModule:
         -------
             str: The SQL statement to execute the command using the grantors.
         """
-        exec_as = []
-        for grantor in grantors:
-            exec_as.append(f"EXECUTE AS LOGIN = '{grantor}';")
+        exec_as = [f"EXECUTE AS LOGIN = '{grantor}';" for grantor in grantors]
         return "".join(exec_as)
 
     def perform_impersonation_check(self, user: User, grantors=None):

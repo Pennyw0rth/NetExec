@@ -726,32 +726,9 @@ class smb(connection):
         amsi_bypass = self.args.amsi_bypass[0] if self.args.amsi_bypass else None
         if os.path.isfile(payload):
             with open(payload) as commands:
-                for c in commands:
-                    response.append(
-                        self.execute(
-                            create_ps_command(
-                                c,
-                                force_ps32=force_ps32,
-                                dont_obfs=dont_obfs,
-                                custom_amsi=amsi_bypass,
-                            ),
-                            get_output,
-                            methods,
-                        )
-                    )
+                response = [self.execute(create_ps_command(c.strip(), force_ps32=force_ps32, dont_obfs=dont_obfs, custom_amsi=amsi_bypass), get_output, methods) for c in commands]
         else:
-            response = [
-                self.execute(
-                    create_ps_command(
-                        payload,
-                        force_ps32=force_ps32,
-                        dont_obfs=dont_obfs,
-                        custom_amsi=amsi_bypass,
-                    ),
-                    get_output,
-                    methods,
-                )
-            ]
+            response = [self.execute(create_ps_command(payload, force_ps32=force_ps32, dont_obfs=dont_obfs, custom_amsi=amsi_bypass), get_output, methods)]
         return response
 
     def shares(self):
@@ -830,9 +807,7 @@ class smb(connection):
         return permissions
 
     def get_dc_ips(self):
-        dc_ips = []
-        for dc in self.db.get_domain_controllers(domain=self.domain):
-            dc_ips.append(dc[1])
+        dc_ips = [dc[1] for dc in self.db.get_domain_controllers(domain=self.domain)]
         if not dc_ips:
             dc_ips.append(self.host)
         return dc_ips
@@ -1262,9 +1237,7 @@ class smb(connection):
             if sids_to_check == 0:
                 break
 
-            sids = []
-            for i in range(so_far, so_far + sids_to_check):
-                sids.append(f"{domain_sid}-{i:d}")
+            sids = [f"{domain_sid}-{i:d}" for i in range(so_far, so_far + sids_to_check)]
             try:
                 lsat.hLsarLookupSids(dce, policy_handle, sids, lsat.LSAP_LOOKUP_LEVEL.LsapLookupWksta)
             except DCERPCException as e:

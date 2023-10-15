@@ -65,8 +65,7 @@ class navigator(DatabaseNavigator):
                 data = [["HostID", "Host", "Port", "Banner"]]
                 host_id_list = [h[0] for h in hosts]
 
-                for h in hosts:
-                    data.append([h[0], h[1], h[2], h[3], h[4]])
+                data += [[h[0], h[1], h[2], h[3], h[4]] for h in hosts]
 
                 print_table(data, title="Host")
 
@@ -147,8 +146,7 @@ class navigator(DatabaseNavigator):
                     for link in logins:
                         link_id, cred_id, host_id = link
                         hosts = self.db.get_hosts(host_id)
-                        for h in hosts:
-                            access_data.append([h[0], h[1], h[2], h[3]])
+                        access_data += [[h[0], h[1], h[2], h[3]] for h in hosts]
 
                 # we look if it's greater than one because the header row always exists
                 if len(access_data) > 1:

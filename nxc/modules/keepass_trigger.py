@@ -194,9 +194,7 @@ class NXCModule:
         next(csv_reader)  # to skip the header line
         keepass_process_list = list(csv_reader)
         # check if multiple processes belonging to different users are running (in order to choose which one to restart)
-        keepass_users = []
-        for process in keepass_process_list:
-            keepass_users.append(process[1])
+        keepass_users = [process[1] for process in keepass_process_list]
         if len(keepass_users) == 0:
             context.log.fail("No running KeePass process found, aborting restart")
             return
