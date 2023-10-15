@@ -71,10 +71,7 @@ class NXCModule:
                         if str(primaryGroupID) == "513":
                             memberOf.append("CN=Domain Users,CN=Users,DC=XXXXX,DC=XXX")
                     elif str(attribute["type"]) == "memberOf":
-                        for group in attribute["vals"]:
-                            if isinstance(group._value, bytes):
-                                memberOf.append(str(group))
-
+                        memberOf = [str(group) for group in attribute["vals"] if isinstance(group._value, bytes)]
             except Exception as e:
                 context.log.debug("Exception:", exc_info=True)
                 context.log.debug(f"Skipping item, cannot process due to error {str(e)}")
