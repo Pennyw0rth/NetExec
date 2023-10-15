@@ -9,7 +9,6 @@ from nxc.helpers.misc import which
 from nxc.logger import nxc_logger
 from nxc.paths import NXC_PATH, DATA_PATH
 from base64 import b64encode
-import string
 import random
 
 obfuscate_ps_scripts = False
