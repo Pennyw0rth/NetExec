@@ -85,7 +85,7 @@ class ftp(connection):
                 self.logger.success(f"{username}:{process_secret(password)} {highlight('- Anonymous Login!')}")
             else:
                 self.logger.success(f"{username}:{process_secret(password)}")
- 
+
         if self.args.ls:
             # If the default directory is specified, then we will list the current directory
             if self.args.ls == ".":
