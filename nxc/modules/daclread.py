@@ -189,8 +189,8 @@ class ALLOWED_OBJECT_ACE_MASK_FLAGS(Enum):
 
 
 class NXCModule:
-    """
-    Module to read and backup the Discretionary Access Control List of one or multiple objects.
+    """Module to read and backup the Discretionary Access Control List of one or multiple objects.
+
     This module is essentially inspired from the dacledit.py script of Impacket that we have coauthored, @_nwodtuhs and me.
     It has been converted to an LDAPConnection session, and improvements on the filtering and the ability to specify multiple targets have been added.
     It could be interesting to implement the write/remove functions here, but a ldap3 session instead of a LDAPConnection one is required to write.
@@ -208,7 +208,9 @@ class NXCModule:
 
     def options(self, context, module_options):
         """
-        Be carefull, this module cannot read the DACLS recursively. For example, if an object has particular rights because it belongs to a group, the module will not be able to see it directly, you have to check the group rights manually.
+        Be carefull, this module cannot read the DACLS recursively. 
+        For example, if an object has particular rights because it belongs to a group, the module will not be able to see it directly, you have to check the group rights manually.
+
         TARGET          The objects that we want to read or backup the DACLs, sepcified by its SamAccountName
         TARGET_DN       The object that we want to read or backup the DACL, specified by its DN (usefull to target the domain itself)
         PRINCIPAL       The trustee that we want to filter on
@@ -219,11 +221,14 @@ class NXCModule:
         """
         self.context = context
 
+        context.log.debug(f"module_options: {module_options}")
+
         if not module_options:
             context.log.fail("Select an option, example: -M daclread -o TARGET=Administrator ACTION=read")
             sys.exit(1)
 
         if module_options and "TARGET" in module_options:
+            context.log.debug("There is a target specified!")
             if re.search(r"^(.+)\/([^\/]+)$", module_options["TARGET"]) is not None:
                 try:
                     self.target_file = open(module_options["TARGET"]) # noqa: SIM115
@@ -231,6 +236,7 @@ class NXCModule:
                 except Exception:
                     context.log.fail("The file doesn't exist or cannot be openned.")
             else:
+                context.log.debug(f"Setting target_sAMAccountName to {module_options['TARGET']}")
                 self.target_sAMAccountName = module_options["TARGET"]
                 self.target_file = None
             self.target_DN = None
@@ -448,44 +454,25 @@ class NXCModule:
             "ACCESS_DENIED_ACE",
             "ACCESS_DENIED_OBJECT_ACE",
         ]:
-            parsed_ace = {}
-            parsed_ace["ACE Type"] = ace["TypeName"]
-            # Retrieves ACE's flags
-            _ace_flags = []
-            for FLAG in ACE_FLAGS:
-                if ace.hasFlag(FLAG.value):
-                    _ace_flags.append(FLAG.name)
-            parsed_ace["ACE flags"] = ", ".join(_ace_flags) or "None"
+            _ace_flags = [FLAG.name for FLAG in ACE_FLAGS if ace.hasFlag(FLAG.value)]
+            parsed_ace = {"ACE Type": ace["TypeName"], "ACE flags": ", ".join(_ace_flags) or "None"}
 
             # For standard ACE
             # Extracts the access mask (by parsing the simple permissions) and the principal's SID
             if ace["TypeName"] in ["ACCESS_ALLOWED_ACE", "ACCESS_DENIED_ACE"]:
-                parsed_ace["Access mask"] = "{} (0x{:x})".format(
-                    ", ".join(self.parse_perms(ace["Ace"]["Mask"]["Mask"])),
-                    ace["Ace"]["Mask"]["Mask"],
-                )
-                parsed_ace["Trustee (SID)"] = "{} ({})".format(
-                    self.resolveSID(context, ace["Ace"]["Sid"].formatCanonical()) or "UNKNOWN",
-                    ace["Ace"]["Sid"].formatCanonical(),
-                )
-
-            # For object-specific ACE
-            elif ace["TypeName"] in [
-                "ACCESS_ALLOWED_OBJECT_ACE",
-                "ACCESS_DENIED_OBJECT_ACE",
-            ]:
+                access_mask = f"{', '.join(self.parse_perms(ace['Ace']['Mask']['Mask']))} (0x{ace['Ace']['Mask']['Mask']:x})"
+                trustee_sid = f"{self.resolveSID(context, ace['Ace']['Sid'].formatCanonical()) or 'UNKNOWN'} ({ace['Ace']['Sid'].formatCanonical()})"
+                parsed_ace = {
+                    "Access mask": access_mask,
+                    "Trustee (SID)": trustee_sid
+                }
+            elif ace["TypeName"] in ["ACCESS_ALLOWED_OBJECT_ACE", "ACCESS_DENIED_OBJECT_ACE"]: # for object-specific ACE
                 # Extracts the mask values. These values will indicate the ObjectType purpose
-                _access_mask_flags = []
-                for FLAG in ALLOWED_OBJECT_ACE_MASK_FLAGS:
-                    if ace["Ace"]["Mask"].hasPriv(FLAG.value):
-                        _access_mask_flags.append(FLAG.name)
-                parsed_ace["Access mask"] = ", ".join(_access_mask_flags)
+                access_mask_flags = [FLAG.name for FLAG in ALLOWED_OBJECT_ACE_MASK_FLAGS if ace["Ace"]["Mask"].hasPriv(FLAG.value)]
+                parsed_ace["Access mask"] = ", ".join(access_mask_flags)
                 # Extracts the ACE flag values and the trusted SID
-                _object_flags = []
-                for FLAG in OBJECT_ACE_FLAGS:
-                    if ace["Ace"].hasFlag(FLAG.value):
-                        _object_flags.append(FLAG.name)
-                parsed_ace["Flags"] = ", ".join(_object_flags) or "None"
+                object_flags = [FLAG.name for FLAG in OBJECT_ACE_FLAGS if ace["Ace"].hasFlag(FLAG.value)]
+                parsed_ace["Flags"] = ", ".join(object_flags) or "None"
                 # Extracts the ObjectType GUID values
                 if ace["Ace"]["ObjectTypeLen"] != 0:
                     obj_type = bin_to_string(ace["Ace"]["ObjectType"]).lower()
@@ -505,23 +492,21 @@ class NXCModule:
                     self.resolveSID(context, ace["Ace"]["Sid"].formatCanonical()) or "UNKNOWN",
                     ace["Ace"]["Sid"].formatCanonical(),
                 )
-
-        else:
-            # If the ACE is not an access allowed
+        else: # if the ACE is not an access allowed
             context.log.debug(f"ACE Type ({ace['TypeName']}) unsupported for parsing yet, feel free to contribute")
-            parsed_ace = {}
-            parsed_ace["ACE type"] = ace["TypeName"]
-            _ace_flags = []
-            for FLAG in ACE_FLAGS:
-                if ace.hasFlag(FLAG.value):
-                    _ace_flags.append(FLAG.name)
-            parsed_ace["ACE flags"] = ", ".join(_ace_flags) or "None"
-            parsed_ace["DEBUG"] = "ACE type not supported for parsing by dacleditor.py, feel free to contribute"
+            _ace_flags = [FLAG.name for FLAG in ACE_FLAGS if ace.hasFlag(FLAG.value)]
+            parsed_ace = {
+                "ACE type": ace["TypeName"],
+                "ACE flags": ", ".join(_ace_flags) or "None",
+                "DEBUG": "ACE type not supported for parsing by dacleditor.py, feel free to contribute",
+            }
         return parsed_ace
 
-    # Prints a full DACL by printing each parsed ACE
-    #   - parsed_dacl : a parsed DACL from parse_dacl()
     def print_parsed_dacl(self, context, parsed_dacl):
+        """Prints a full DACL by printing each parsed ACE
+        
+        parsed_dacl : a parsed DACL from parse_dacl()
+        """
         context.log.debug("Printing parsed DACL")
         i = 0
         # If a specific right or a specific GUID has been specified, only the ACE with this right will be printed
