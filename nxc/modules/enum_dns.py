@@ -31,15 +31,12 @@ class NXCModule:
         if not self.domains:
             domains = []
             output = connection.wmi("Select Name FROM MicrosoftDNS_Zone", "root\\microsoftdns")
-
-            if output:
-                for result in output:
-                    domains.append(result["Name"]["value"])
-
-                context.log.success(f"Domains retrieved: {domains}")
+            domains = [result["Name"]["value"] for result in output] if output else []
+            context.log.success(f"Domains retrieved: {domains}")
         else:
             domains = [self.domains]
         data = ""
+        
         for domain in domains:
             output = connection.wmi(
                 f"Select TextRepresentation FROM MicrosoftDNS_ResourceRecord WHERE DomainName = {domain}",
