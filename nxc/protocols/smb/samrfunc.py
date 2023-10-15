@@ -159,12 +159,9 @@ class SAMRQuery:
             return None
 
     def get_domains(self):
-        resp = samr.hSamrEnumerateDomainsInSamServer(self.dce, self.server_handle)
-        domains = resp["Buffer"]["Buffer"]
-        domain_names = []
-        for domain in domains:
-            domain_names.append(domain["Name"])
-        return domain_names
+        """Calls the hSamrEnumerateDomainsInSamServer() method directly with list comprehension and extracts the "Name" value from each element in the "Buffer" list."""
+        domains = samr.hSamrEnumerateDomainsInSamServer(self.dce, self.server_handle)["Buffer"]["Buffer"]
+        return [domain["Name"] for domain in domains]
 
     def get_domain_handle(self, domain_name):
         resp = samr.hSamrLookupDomainInSamServer(self.dce, self.server_handle, domain_name)
@@ -172,23 +169,20 @@ class SAMRQuery:
         return resp["DomainHandle"]
 
     def get_domain_aliases(self, domain_handle):
-        resp = samr.hSamrEnumerateAliasesInDomain(self.dce, domain_handle)
-        aliases = {}
-        for alias in resp["Buffer"]["Buffer"]:
-            aliases[alias["Name"]] = alias["RelativeId"]
-        return aliases
+        """Use a dictionary comprehension to generate the aliases dictionary.
+        
+        Calls the hSamrEnumerateAliasesInDomain() method directly in the dictionary comprehension and extracts the "Name" and "RelativeId" values from each element in the "Buffer" list
+        """
+        return {alias["Name"]: alias["RelativeId"] for alias in samr.hSamrEnumerateAliasesInDomain(self.dce, domain_handle)["Buffer"]["Buffer"]}
 
     def get_alias_handle(self, domain_handle, alias_id):
         resp = samr.hSamrOpenAlias(self.dce, domain_handle, desiredAccess=MAXIMUM_ALLOWED, aliasId=alias_id)
         return resp["AliasHandle"]
 
     def get_alias_members(self, domain_handle, alias_id):
+        """Calls the hSamrGetMembersInAlias() method directly with list comprehension and extracts the "SidPointer" value from each element in the "Sids" list."""
         alias_handle = self.get_alias_handle(domain_handle, alias_id)
-        resp = samr.hSamrGetMembersInAlias(self.dce, alias_handle)
-        member_sids = []
-        for member in resp["Members"]["Sids"]:
-            member_sids.append(member["SidPointer"].formatCanonical())
-        return member_sids
+        return [member["SidPointer"].formatCanonical() for member in samr.hSamrGetMembersInAlias(self.dce, alias_handle)["Members"]["Sids"]]
 
 
 class LSAQuery:
@@ -244,8 +238,8 @@ class LSAQuery:
         return resp["PolicyHandle"]
 
     def lookup_sids(self, sids):
-        resp = lsat.hLsarLookupSids(self.dce, self.policy_handle, sids, lsat.LSAP_LOOKUP_LEVEL.LsapLookupWksta)
-        names = []
-        for translated_names in resp["TranslatedNames"]["Names"]:
-            names.append(translated_names["Name"])
-        return names
+        """Use a list comprehension to generate the names list.
+        
+        It calls the hLsarLookupSids() method directly in the list comprehension and extracts the "Name" value from each element in the "Names" list.
+        """
+        return [translated_names["Name"] for translated_names in lsat.hLsarLookupSids(self.dce, self.policy_handle, sids, lsat.LSAP_LOOKUP_LEVEL.LsapLookupWksta)["TranslatedNames"]["Names"]]
