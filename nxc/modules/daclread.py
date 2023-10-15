@@ -431,17 +431,12 @@ class NXCModule:
 
     # Parses an access mask to extract the different values from a simple permission
     # https://stackoverflow.com/questions/28029872/retrieving-security-descriptor-and-getting-number-for-filesystemrights
-    #   - fsr : the access mask to parse
-    def parse_perms(self, fsr):
-        _perms = []
-        for PERM in SIMPLE_PERMISSIONS:
-            if (fsr & PERM.value) == PERM.value:
-                _perms.append(PERM.name)
-                fsr = fsr & (not PERM.value)
-        for PERM in ACCESS_MASK:
-            if fsr & PERM.value:
-                _perms.append(PERM.name)
-        return _perms
+    def parse_perms(self, access_mask):
+        perms = [PERM.name for PERM in SIMPLE_PERMISSIONS if (access_mask & PERM.value) == PERM.value]
+        # use bitwise NOT operator (~) and sum() function to clear the bits that have been processed
+        access_mask &= ~sum(PERM.value for PERM in SIMPLE_PERMISSIONS if (access_mask & PERM.value) == PERM.value)
+        perms += [PERM.name for PERM in ACCESS_MASK if access_mask & PERM.value]
+        return perms
 
     # Parses a specified ACE and extract the different values (Flags, Access Mask, Trustee, ObjectType, InheritedObjectType)
     #   - ace : the ACE to parse
