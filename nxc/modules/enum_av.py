@@ -60,15 +60,14 @@ class NXCModule:
 
             dce, _ = lsa.connect()
             policyHandle = lsa.open_policy(dce)
-
-            for product in conf["products"]:
-                for service in product["services"]:
-                    try:
+            try:
+                for product in conf["products"]:
+                    for service in product["services"]:
                         lsa.LsarLookupNames(dce, policyHandle, service["name"])
                         context.log.info(f"Detected installed service on {connection.host}: {product['name']} {service['description']}")
                         results.setdefault(product["name"], {"services": []})["services"].append(service)
-                    except Exception:
-                        pass
+            except Exception:
+                pass
 
         except Exception as e:
             context.log.fail(str(e))
