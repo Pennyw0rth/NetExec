@@ -234,14 +234,14 @@ class CoerceAuth:
                 dce.disconnect()
                 return 1
 
-            nxc_logger.debug(f"Something went wrong, check error status => {str(e)}")
+            nxc_logger.debug(f"Something went wrong, check error status => {e!s}")
 
         nxc_logger.info("Connected!")
         nxc_logger.info(f"Binding to {binding_params[pipe]['UUID'][0]}")
         try:
             dce.bind(uuidtup_to_bin(binding_params[pipe]["UUID"]))
         except Exception as e:
-            nxc_logger.debug(f"Something went wrong, check error status => {str(e)}")
+            nxc_logger.debug(f"Something went wrong, check error status => {e!s}")
 
         nxc_logger.info("Successfully bound!")
         return dce

@@ -232,7 +232,7 @@ class ldap(connection):
                 dce.disconnect()
                 return 64
         except Exception as e:
-            self.logger.fail(f"Error retrieving os arch of {self.host}: {str(e)}")
+            self.logger.fail(f"Error retrieving os arch of {self.host}: {e!s}")
 
         return 0
 
@@ -396,13 +396,13 @@ class ldap(connection):
             error, desc = e.getErrorString()
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             self.logger.fail(
-                f"{self.domain}\\{self.username}{used_ccache} {str(error)}",
+                f"{self.domain}\\{self.username}{used_ccache} {error!s}",
                 color="magenta" if error in ldap_error_status else "red",
             )
             return False
         except (KeyError, KerberosException, OSError) as e:
             self.logger.fail(
-                f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (kerb_pass if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8)} {str(e)}",
+                f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (kerb_pass if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8)} {e!s}",
                 color="red",
             )
             return False
@@ -443,7 +443,7 @@ class ldap(connection):
                 except SessionError as e:
                     error, desc = e.getErrorString()
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (kerb_pass if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8)} {str(error)}",
+                        f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (kerb_pass if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8)} {error!s}",
                         color="magenta" if error in ldap_error_status else "red",
                     )
                     return False
@@ -457,7 +457,7 @@ class ldap(connection):
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (kerb_pass if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8)} {str(error_code)}",
+                    f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (kerb_pass if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8)} {error_code!s}",
                     color="magenta" if error_code in ldap_error_status else "red",
                 )
                 return False
@@ -954,7 +954,7 @@ class ldap(connection):
                         else:
                             answers += [[spn, sAMAccountName, memberOf, pwdLastSet, lastLogon, delegation] for spn in SPNs]
                 except Exception as e:
-                    nxc_logger.error(f"Skipping item, cannot process due to error {str(e)}")
+                    nxc_logger.error(f"Skipping item, cannot process due to error {e!s}")
 
             if len(answers) > 0:
                 self.logger.display(f"Total of records returned {len(answers):d}")
@@ -1121,7 +1121,7 @@ class ldap(connection):
                     )
             except Exception as e:
                 self.logger.debug("Exception:", exc_info=True)
-                self.logger.debug(f"Skipping item, cannot process due to error {str(e)}")
+                self.logger.debug(f"Skipping item, cannot process due to error {e!s}")
         if len(answers) > 0:
             self.logger.debug(answers)
             for value in answers:
@@ -1178,7 +1178,7 @@ class ldap(connection):
                     )
             except Exception as e:
                 self.logger.debug("Exception:", exc_info=True)
-                self.logger.debug(f"Skipping item, cannot process due to error {str(e)}")
+                self.logger.debug(f"Skipping item, cannot process due to error {e!s}")
         if len(answers) > 0:
             self.logger.debug(answers)
             for value in answers:

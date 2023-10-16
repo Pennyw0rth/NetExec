@@ -247,14 +247,14 @@ def coerce(
     try:
         dce.connect()
     except Exception as e:
-        context.log.debug(f"Something went wrong, check error status => {str(e)}")
+        context.log.debug(f"Something went wrong, check error status => {e!s}")
         sys.exit()
     context.log.info("[+] Connected!")
     context.log.info(f"[+] Binding to {binding_params[pipe]['MSRPC_UUID_EFSR'][0]}")
     try:
         dce.bind(uuidtup_to_bin(binding_params[pipe]["MSRPC_UUID_EFSR"]))
     except Exception as e:
-        context.log.debug(f"Something went wrong, check error status => {str(e)}")
+        context.log.debug(f"Something went wrong, check error status => {e!s}")
         sys.exit()
     context.log.info("[+] Successfully bound!")
     return dce
@@ -286,6 +286,6 @@ def efs_rpc_open_file_raw(dce, listener, context=None):
                     context.log.info("[+] Attack worked!")
                     return True
                 else:
-                    context.log.debug(f"Something went wrong, check error status => {str(e)}")
+                    context.log.debug(f"Something went wrong, check error status => {e!s}")
         else:
-            context.log.debug(f"Something went wrong, check error status => {str(e)}")
+            context.log.debug(f"Something went wrong, check error status => {e!s}")

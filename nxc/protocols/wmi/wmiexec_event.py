@@ -48,8 +48,8 @@ class WMIEXEC_EVENT:
         self.logger = logger
         self.__exec_timeout = exec_timeout
         self.__codec = codec
-        self.__instanceID = f"windows-object-{str(uuid.uuid4())}"
-        self.__instanceID_StoreResult = f"windows-object-{str(uuid.uuid4())}"
+        self.__instanceID = f"windows-object-{uuid.uuid4()!s}"
+        self.__instanceID_StoreResult = f"windows-object-{uuid.uuid4()!s}"
 
         self.__dcom = DCOMConnection(self.__host, self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, oxidResolver=True, doKerberos=self.__doKerberos, kdcHost=self.__kdcHost, aesKey=self.__aesKey)
         iInterface = self.__dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
@@ -97,7 +97,7 @@ class WMIEXEC_EVENT:
         #   when wmi doing put instance, it will throwing a exception about data type error (lantin-1),
         #   but we can base64 encode it and submit the data without spcial charters to avoid it.
         if self.__retOutput:
-            output_file = f"{str(uuid.uuid4())}.txt"
+            output_file = f"{uuid.uuid4()!s}.txt"
             with open(get_ps_script("wmiexec_event_vbscripts/Exec_Command_WithOutput.vbs")) as vbs_file:
                 vbs = vbs_file.read()
             vbs = vbs.replace("REPLACE_ME_BASE64_COMMAND", base64.b64encode(command.encode()).decode())

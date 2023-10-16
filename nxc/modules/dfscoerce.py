@@ -119,12 +119,12 @@ class TriggerAuth:
         try:
             dce.connect()
         except Exception as e:
-            nxc_logger.debug(f"Something went wrong, check error status => {str(e)}")
+            nxc_logger.debug(f"Something went wrong, check error status => {e!s}")
             return None
         try:
             dce.bind(uuidtup_to_bin(("4FC742E0-4A10-11CF-8273-00AA004AE673", "3.0")))
         except Exception as e:
-            nxc_logger.debug(f"Something went wrong, check error status => {str(e)}")
+            nxc_logger.debug(f"Something went wrong, check error status => {e!s}")
             return None
         nxc_logger.debug("[+] Successfully bound!")
         return dce

@@ -86,7 +86,7 @@ class NXCModule:
                 perRecordCallback=self.process_record,
             )
         except LDAPSearchError as e:
-            context.log.fail(f"Obtained unexpected exception: {str(e)}")
+            context.log.fail(f"Obtained unexpected exception: {e!s}")
         finally:
             self.delete_log_file()
 
@@ -140,7 +140,7 @@ class NXCModule:
                     description = attribute["vals"][0].asOctets().decode("utf-8")
         except Exception as e:
             entry = sAMAccountName or "item"
-            self.context.error(f"Skipping {entry}, cannot process LDAP entry due to error: '{str(e)}'")
+            self.context.error(f"Skipping {entry}, cannot process LDAP entry due to error: '{e!s}'")
 
         if description and sAMAccountName not in self.account_names:
             self.desc_count += 1

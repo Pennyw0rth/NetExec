@@ -98,7 +98,7 @@ class NXCModule:
                             urls.append(match.group(1))
         except Exception as e:
             entry = host_name or "item"
-            self.context.log.fail(f"Skipping {entry}, cannot process LDAP entry due to error: '{str(e)}'")
+            self.context.log.fail(f"Skipping {entry}, cannot process LDAP entry due to error: '{e!s}'")
 
         if host_name:
             self.context.log.highlight(f"Found PKI Enrollment Server: {host_name}")

@@ -110,7 +110,7 @@ class LDAPConnect:
             return False
         except KerberosError as e:
             self.logger.fail(
-                f"{domain}\\{username}:{password if password else ntlm_hash} {str(e)}",
+                f"{domain}\\{username}:{password if password else ntlm_hash} {e!s}",
                 color="red",
             )
             return False
@@ -238,7 +238,7 @@ class LAPSv2Extract:
             try:
                 dce.bind(MSRPC_UUID_GKDI)
             except Exception as e:
-                self.logger.error(f"Something went wrong, check error status => {str(e)}")
+                self.logger.error(f"Something went wrong, check error status => {e!s}")
                 return False
             self.logger.info("Successfully bound")
             self.logger.info("Calling MS-GKDI GetKey")

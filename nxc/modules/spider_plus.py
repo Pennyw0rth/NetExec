@@ -223,7 +223,7 @@ class SMBSpiderPlus:
 
         except Exception as e:
             traceback.print_exc()
-            self.logger.fail(f"Error enumerating shares: {str(e)}")
+            self.logger.fail(f"Error enumerating shares: {e!s}")
 
         # Save the metadata.
         self.dump_folder_metadata(self.results)
@@ -332,7 +332,7 @@ class SMBSpiderPlus:
             if "STATUS_SHARING_VIOLATION" in str(e):
                 pass
         except Exception as e:
-            self.logger.fail(f'Failed to download file "{file_path}". Error: {str(e)}')
+            self.logger.fail(f'Failed to download file "{file_path}". Error: {e!s}')
 
         # Increment stats counters
         if download_success:
@@ -385,7 +385,7 @@ class SMBSpiderPlus:
                 fd.write(json.dumps(results, indent=4, sort_keys=True))
             self.logger.success(f'Saved share-file metadata to "{metadata_path}".')
         except Exception as e:
-            self.logger.fail(f"Failed to save share metadata: {str(e)}")
+            self.logger.fail(f"Failed to save share metadata: {e!s}")
 
     def print_stats(self):
         """Prints the statistics during processing"""

@@ -198,7 +198,7 @@ class smb(connection):
                 dce.disconnect()
                 return 64
         except Exception as e:
-            self.logger.debug(f"Error retrieving os arch of {self.host}: {str(e)}")
+            self.logger.debug(f"Error retrieving os arch of {self.host}: {e!s}")
 
         return 0
 

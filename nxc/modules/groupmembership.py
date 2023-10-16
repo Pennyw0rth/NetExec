@@ -74,7 +74,7 @@ class NXCModule:
                         memberOf += [str(group) for group in attribute["vals"] if isinstance(group._value, bytes)]
             except Exception as e:
                 context.log.debug("Exception:", exc_info=True)
-                context.log.debug(f"Skipping item, cannot process due to error {str(e)}")
+                context.log.debug(f"Skipping item, cannot process due to error {e!s}")
         if len(memberOf) > 0:
             context.log.success(f"User: {self.user} is member of following groups: ")
             for group in memberOf:

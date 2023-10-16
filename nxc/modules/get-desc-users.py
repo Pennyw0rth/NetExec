@@ -74,7 +74,7 @@ class NXCModule:
                     answers.append([sAMAccountName, description])
             except Exception as e:
                 context.log.debug("Exception:", exc_info=True)
-                context.log.debug(f"Skipping item, cannot process due to error {str(e)}")
+                context.log.debug(f"Skipping item, cannot process due to error {e!s}")
         answers = self.filter_answer(context, answers)
         if len(answers) > 0:
             context.log.success("Found following users: ")

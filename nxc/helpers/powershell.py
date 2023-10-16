@@ -322,22 +322,7 @@ def invoke_obfuscation(script_string):
         str: The obfuscated payload for execution.
     """
     random_alphabet = "".join(random.choice([i.upper(), i]) for i in ascii_lowercase)
-    random_delimiters = [
-        "_",
-        "-",
-        ",",
-        "{",
-        "}",
-        "~",
-        "!",
-        "@",
-        "%",
-        "&",
-        "<",
-        ">",
-        ";",
-        ":",
-    ] + list(random_alphabet)
+    random_delimiters = ["_", "-", ",", "{", "}", "~", "!", "@", "%", "&", "<", ">", ";", ":", *list(random_alphabet)]
 
     # Only use a subset of current delimiters to randomize what you see in every iteration of this script's output.
     random_delimiters = [choice(random_delimiters) for _ in range(int(len(random_delimiters) / 4))]

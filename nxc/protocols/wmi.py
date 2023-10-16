@@ -67,7 +67,7 @@ class wmi(connection):
         if self.remoteName == "":
             self.remoteName = self.host
         try:
-            rpctansport = transport.DCERPCTransportFactory(fr"ncacn_ip_tcp:{self.remoteName}[{str(self.args.port)}]")
+            rpctansport = transport.DCERPCTransportFactory(fr"ncacn_ip_tcp:{self.remoteName}[{self.args.port!s}]")
             rpctansport.set_credentials(username="", password="", domain="", lmhash="", nthash="", aesKey="")
             rpctansport.setRemoteHost(self.host)
             rpctansport.set_connect_timeout(self.args.rpc_timeout)
@@ -241,11 +241,11 @@ class wmi(connection):
                 out = f"{self.domain}\\{self.username}{used_ccache} {error_msg}"
                 self.logger.fail(out)
             elif "kerberos sessionerror" in str(e).lower():
-                out = f"{self.domain}\\{self.username}{used_ccache} {list(e.getErrorString())[0]}"
+                out = f"{self.domain}\\{self.username}{used_ccache} {next(iter(e.getErrorString()))}"
                 self.logger.fail(out, color="magenta")
                 return False
             else:
-                out = f"{self.domain}\\{self.username}{used_ccache} {str(e)}"
+                out = f"{self.domain}\\{self.username}{used_ccache} {e!s}"
                 self.logger.fail(out, color="red")
                 return False
         else:
@@ -292,7 +292,7 @@ class wmi(connection):
         except Exception as e:
             dce.disconnect()
             self.logger.debug(str(e))
-            out = f"{self.domain}\\{self.username}:{process_secret(self.password)} {str(e)}"
+            out = f"{self.domain}\\{self.username}:{process_secret(self.password)} {e!s}"
             self.logger.fail(out, color="red")
         else:
             try:
@@ -347,7 +347,7 @@ class wmi(connection):
         except Exception as e:
             dce.disconnect()
             self.logger.debug(str(e))
-            out = f"{domain}\\{self.username}:{process_secret(self.nthash)} {str(e)}"
+            out = f"{domain}\\{self.username}:{process_secret(self.nthash)} {e!s}"
             self.logger.fail(out, color="red")
         else:
             try:

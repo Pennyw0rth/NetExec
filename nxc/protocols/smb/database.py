@@ -16,6 +16,7 @@ from sqlalchemy.orm import sessionmaker, scoped_session
 
 from nxc.logger import nxc_logger
 import sys
+from typing import Optional
 
 # if there is an issue with SQLAlchemy and a connection cannot be cleaned up properly it spews out annoying warnings
 warnings.filterwarnings("ignore", category=SAWarning)
@@ -716,7 +717,7 @@ class database:
             except Exception as e:
                 nxc_logger.debug(f"Issue while inserting DPAPI Backup Key: {e}")
 
-    def get_domain_backupkey(self, domain: str = None):
+    def get_domain_backupkey(self, domain: Optional[str] = None):
         """
         Get domain backupkey
         :domain is the domain fqdn
@@ -771,11 +772,11 @@ class database:
     def get_dpapi_secrets(
         self,
         filter_term=None,
-        host: str = None,
-        dpapi_type: str = None,
-        windows_user: str = None,
-        username: str = None,
-        url: str = None,
+        host: Optional[str] = None,
+        dpapi_type: Optional[str] = None,
+        windows_user: Optional[str] = None,
+        username: Optional[str] = None,
+        url: Optional[str] = None,
     ):
         """Get dpapi secrets from nxcdb"""
         q = select(self.DpapiSecrets)

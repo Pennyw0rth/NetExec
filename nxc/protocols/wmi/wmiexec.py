@@ -11,7 +11,6 @@
 #       cmd.exe /Q /c {command} > C:\windows\temp\{random}.txt (aka command results)
 #       powershell convert the command results into base64, and save it into C:\windows\temp\{random2}.txt (now the command results was base64 encoded)
 #       Create registry path: HKLM:\Software\Classes\hello, then add C:\windows\temp\{random2}.txt into HKLM:\Software\Classes\hello\{NewKey}
-#       Remove anythings which in C:\windows\temp\ # noqa: ERA001
 #   Stage 2:
 #       WQL query the HKLM:\Software\Classes\hello\{NewKey} and get results, after the results(base64 strings) retrieved, removed
 
@@ -73,8 +72,8 @@ class WMIEXEC:
             self.logger.error(str(e))
 
     def execute_WithOutput(self, command):
-        result_output = f"C:\\windows\\temp\\{str(uuid.uuid4())}.txt"
-        result_output_b64 = f"C:\\windows\\temp\\{str(uuid.uuid4())}.txt"
+        result_output = f"C:\\windows\\temp\\{uuid.uuid4()!s}.txt"
+        result_output_b64 = f"C:\\windows\\temp\\{uuid.uuid4()!s}.txt"
         keyName = str(uuid.uuid4())
         self.__registry_Path = f"Software\\Classes\\{gen_random_string(6)}"
 
@@ -100,4 +99,4 @@ class WMIEXEC:
             self.logger.debug(f"Removing temporary registry path: HKLM\\{self.__registry_Path}")
             retVal = descriptor.DeleteKey(2147483650, self.__registry_Path)
         except Exception as e:
-            self.logger.debug(f"Target: {self.__host} removing temporary registry path error: {str(e)}")
+            self.logger.debug(f"Target: {self.__host} removing temporary registry path error: {e!s}")

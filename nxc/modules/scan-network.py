@@ -166,7 +166,7 @@ class NXCModule:
                                 {
                                     "name": recordname,
                                     "type": RECORD_TYPE_MAPPING[dr["Type"]],
-                                    "value": address[list(address.fields)[0]].toFqdn(),
+                                    "value": address[next(iter(address.fields))].toFqdn(),
                                 }
                             )
                     elif dr["Type"] == 28:

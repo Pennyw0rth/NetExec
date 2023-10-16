@@ -79,7 +79,7 @@ class NXCModule:
                 else:
                     smb_rdp.rdp_wrapper(self.action)
             except Exception as e:
-                context.log.fail(f"Enable RDP via smb error: {str(e)}")
+                context.log.fail(f"Enable RDP via smb error: {e!s}")
         elif self.method == "wmi":
             context.log.info("Executing over WMI(ncacn_ip_tcp)")
 
@@ -194,7 +194,7 @@ class RdpSmb:
 
             rtype, data = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, key_handle, "PortNumber")
 
-            self.logger.success(f"RDP Port: {str(data)}")
+            self.logger.success(f"RDP Port: {data!s}")
 
     # https://github.com/rapid7/metasploit-framework/blob/master/modules/post/windows/manage/enable_rdp.rb
     def firewall_cmd(self, action):
@@ -318,7 +318,7 @@ class RdpWmi:
         self.__iWbemLevel1Login.RemRelease()
         std_reg_prov, resp = i_wbem_services.GetObject("StdRegProv")
         out = std_reg_prov.GetDWORDValue(2147483650, "SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp", "PortNumber")
-        self.logger.success(f"RDP Port: {str(out.uValue)}")
+        self.logger.success(f"RDP Port: {out.uValue!s}")
 
     # Nt version under 6 not support RAM.
     def rdp_ram_wrapper(self, action):

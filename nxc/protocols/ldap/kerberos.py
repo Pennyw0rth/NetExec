@@ -141,7 +141,7 @@ class KerberosAttacks:
                     kdcHost=self.kdcHost,
                 )
             except Exception as e:
-                nxc_logger.debug(f"TGT: {str(e)}")
+                nxc_logger.debug(f"TGT: {e!s}")
                 tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(
                     user_name,
                     self.password,

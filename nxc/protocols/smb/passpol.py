@@ -238,7 +238,7 @@ class PassPolDump:
         self.logger.highlight(f"Password Complexity Flags: {self.__pass_prop or 'None'}")
 
         for i, a in enumerate(self.__pass_prop):
-            self.logger.highlight(f"\t{PASSCOMPLEX[i]} {str(a)}")
+            self.logger.highlight(f"\t{PASSCOMPLEX[i]} {a!s}")
 
         self.logger.highlight("")
         self.logger.highlight(f"Minimum password age: {self.__min_pass_age}")

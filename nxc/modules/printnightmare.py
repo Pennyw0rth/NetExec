@@ -43,7 +43,7 @@ class NXCModule:
         # Connect and bind to MS-RPRN (https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-rprn/848b8334-134a-4d02-aea4-03b673d6c515)
         stringbinding = r"ncacn_np:%s[\PIPE\spoolss]" % connection.host
 
-        context.log.info(f"Binding to {repr(stringbinding)}")
+        context.log.info(f"Binding to {stringbinding!r}")
 
         rpctransport = transport.DCERPCTransportFactory(stringbinding)
 
