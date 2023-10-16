@@ -56,10 +56,7 @@ class NXCModule:
                         sections.append("./NTService/Properties")
 
                     elif "ScheduledTasks.xml" in path:
-                        sections.append("./Task/Properties")
-                        sections.append("./ImmediateTask/Properties")
-                        sections.append("./ImmediateTaskV2/Properties")
-                        sections.append("./TaskV2/Properties")
+                        sections.extend(("./Task/Properties", "./ImmediateTask/Properties", "./ImmediateTaskV2/Properties", "./TaskV2/Properties"))
 
                     elif "DataSources.xml" in path:
                         sections.append("./DataSource/Properties")

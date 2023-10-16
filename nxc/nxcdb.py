@@ -29,12 +29,12 @@ def create_db_engine(db_path):
 
 
 def print_table(data, title=None):
-    print("")
+    print()
     table = AsciiTable(data)
     if title:
         table.title = title
     print(table.table)
-    print("")
+    print()
 
 
 def write_csv(filename, headers, entries):
@@ -364,8 +364,7 @@ class DatabaseNavigator(cmd.Cmd):
                             row.extend([name, description])
                             check_mapping[checkid] = [name, description]
                             break
-                row.append("OK" if secure else "KO")
-                row.append(reasons)
+                row.extend(("OK" if secure else "KO", reasons))
                 rows.append(row)
 
             if line[1].lower() == "simple":

@@ -192,9 +192,7 @@ class KerberosAttacks:
         req_body = seq_set(as_req, "req-body")
 
         opts = []
-        opts.append(constants.KDCOptions.forwardable.value)
-        opts.append(constants.KDCOptions.renewable.value)
-        opts.append(constants.KDCOptions.proxiable.value)
+        opts.extend((constants.KDCOptions.forwardable.value, constants.KDCOptions.renewable.value, constants.KDCOptions.proxiable.value))
         req_body["kdc-options"] = constants.encodeFlags(opts)
 
         seq_set(req_body, "sname", server_name.components_to_asn1)

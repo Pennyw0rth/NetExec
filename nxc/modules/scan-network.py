@@ -44,7 +44,7 @@ def get_dns_resolver(server, context):
 
 
 def ldap2domain(ldap):
-    return re.sub(",DC=", ".", ldap[ldap.lower().find("dc=") :], flags=re.I)[3:]
+    return re.sub(",DC=", ".", ldap[ldap.lower().find("dc="):], flags=re.I)[3:]
 
 
 def new_record(rtype, serial):
@@ -249,8 +249,8 @@ class DNS_COUNT_NAME(Structure):
         ind = 0
         labels = []
         for _i in range(self["LabelCount"]):
-            nextlen = unpack("B", self["RawName"][ind : ind + 1])[0]
-            labels.append(self["RawName"][ind + 1 : ind + 1 + nextlen].decode("utf-8"))
+            nextlen = unpack("B", self["RawName"][ind: ind + 1])[0]
+            labels.append(self["RawName"][ind + 1: ind + 1 + nextlen].decode("utf-8"))
             ind += nextlen + 1
         # For the final dot
         labels.append("")

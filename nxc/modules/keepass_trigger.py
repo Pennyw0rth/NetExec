@@ -260,7 +260,7 @@ class NXCModule:
                 print(".", end="", flush=True)
                 sleep(self.poll_frequency_seconds)
                 continue
-            print("")
+            print()
 
             # once a database is found, downloads it to the attackers machine
             context.log.success("Found database export !")

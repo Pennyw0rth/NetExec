@@ -483,7 +483,7 @@ class smb(connection):
         except SessionError as e:
             error, desc = e.getErrorString()
             self.logger.fail(
-                f'{domain}\\{self.username}:{process_secret(self.password )} {error} {f"({desc})" if self.args.verbose else ""}',
+                f'{domain}\\{self.username}:{process_secret(self.password)} {error} {f"({desc})" if self.args.verbose else ""}',
                 color="magenta" if error in smb_error_status else "red",
             )
             if error not in smb_error_status:

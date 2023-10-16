@@ -438,12 +438,7 @@ def invoke_obfuscation(script_string):
     # These methods draw on common environment variable values and PowerShell Automatic Variable
     # values/methods/members/properties/etc.
     invocation_operator = choice([".", "&"]) + choice(["", " "])
-    invoke_expression_syntax.append(invocation_operator + "( $ShellId[1]+$ShellId[13]+'x')")
-    invoke_expression_syntax.append(invocation_operator + "( $PSHome[" + choice(["4", "21"]) + "]+$PSHOME[" + choice(["30", "34"]) + "]+'x')")
-    invoke_expression_syntax.append(invocation_operator + "( $env:Public[13]+$env:Public[5]+'x')")
-    invoke_expression_syntax.append(invocation_operator + "( $env:ComSpec[4," + choice(["15", "24", "26"]) + ",25]-Join'')")
-    invoke_expression_syntax.append(invocation_operator + "((" + choice(["Get-Variable", "GV", "Variable"]) + " '*mdr*').Name[3,11,2]-Join'')")
-    invoke_expression_syntax.append(invocation_operator + "( " + choice(["$VerbosePreference.ToString()", "([String]$VerbosePreference)"]) + "[1,3]+'x'-Join'')")
+    invoke_expression_syntax.extend((invocation_operator + "( $ShellId[1]+$ShellId[13]+'x')", invocation_operator + "( $PSHome[" + choice(["4", "21"]) + "]+$PSHOME[" + choice(["30", "34"]) + "]+'x')", invocation_operator + "( $env:Public[13]+$env:Public[5]+'x')", invocation_operator + "( $env:ComSpec[4," + choice(["15", "24", "26"]) + ",25]-Join'')", invocation_operator + "((" + choice(["Get-Variable", "GV", "Variable"]) + " '*mdr*').Name[3,11,2]-Join'')", invocation_operator + "( " + choice(["$VerbosePreference.ToString()", "([String]$VerbosePreference)"]) + "[1,3]+'x'-Join'')"))
 
     # Randomly choose from above invoke operation syntaxes.
     invoke_expression = choice(invoke_expression_syntax)

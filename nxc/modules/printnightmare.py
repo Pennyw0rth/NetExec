@@ -184,14 +184,14 @@ class DRIVER_INFO_2_BLOB(Structure):
     def fromString(self, data, offset=0):
         Structure.fromString(self, data)
 
-        name = data[self["NameOffset"] + offset :].decode("utf-16-le")
+        name = data[self["NameOffset"] + offset:].decode("utf-16-le")
         name_len = name.find("\0")
         self["Name"] = checkNullString(name[:name_len])
 
-        self["ConfigFile"] = data[self["ConfigFileOffset"] + offset : self["DataFileOffset"] + offset].decode("utf-16-le")
-        self["DataFile"] = data[self["DataFileOffset"] + offset : self["DriverPathOffset"] + offset].decode("utf-16-le")
-        self["DriverPath"] = data[self["DriverPathOffset"] + offset : self["EnvironmentOffset"] + offset].decode("utf-16-le")
-        self["Environment"] = data[self["EnvironmentOffset"] + offset : self["NameOffset"] + offset].decode("utf-16-le")
+        self["ConfigFile"] = data[self["ConfigFileOffset"] + offset: self["DataFileOffset"] + offset].decode("utf-16-le")
+        self["DataFile"] = data[self["DataFileOffset"] + offset: self["DriverPathOffset"] + offset].decode("utf-16-le")
+        self["DriverPath"] = data[self["DriverPathOffset"] + offset: self["EnvironmentOffset"] + offset].decode("utf-16-le")
+        self["Environment"] = data[self["EnvironmentOffset"] + offset: self["NameOffset"] + offset].decode("utf-16-le")
 
 
 class DRIVER_INFO_2_ARRAY(Structure):
@@ -203,7 +203,7 @@ class DRIVER_INFO_2_ARRAY(Structure):
             for _ in range(pcReturned):
                 attr = DRIVER_INFO_2_BLOB(remaining)
                 self["drivers"].append(attr)
-                remaining = remaining[len(attr) :]
+                remaining = remaining[len(attr):]
 
 
 class DRIVER_INFO_UNION(NDRUNION):
