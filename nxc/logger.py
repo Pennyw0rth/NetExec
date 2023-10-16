@@ -34,7 +34,7 @@ class NXCAdapter(logging.LoggerAdapter):
         logging.getLogger("minidump").disabled = True
         logging.getLogger("lsassy").disabled = True
 
-    def format(self, msg, *args, **kwargs): # noqa: A003
+    def format(self, msg, *args, **kwargs):  # noqa: A003
         """Format msg for output
 
         This is used instead of process() since process() applies to _all_ messages, including debug calls
@@ -151,7 +151,7 @@ class NXCAdapter(logging.LoggerAdapter):
         file_creation = False
 
         if not os.path.isfile(output_file):
-            open(output_file, "x") # noqa: SIM115
+            open(output_file, "x")  # noqa: SIM115
             file_creation = True
 
         file_handler = RotatingFileHandler(output_file, maxBytes=100000)
@@ -185,7 +185,7 @@ class TermEscapeCodeFormatter(logging.Formatter):
     def __init__(self, fmt=None, datefmt=None, style="%", validate=True):
         super().__init__(fmt, datefmt, style, validate)
 
-    def format(self, record): # noqa: A003
+    def format(self, record):  # noqa: A003
         escape_re = re.compile(r"\x1b\[[0-9;]*m")
         record.msg = re.sub(escape_re, "", str(record.msg))
         return super().format(record)

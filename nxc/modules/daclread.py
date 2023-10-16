@@ -231,7 +231,7 @@ class NXCModule:
             context.log.debug("There is a target specified!")
             if re.search(r"^(.+)\/([^\/]+)$", module_options["TARGET"]) is not None:
                 try:
-                    self.target_file = open(module_options["TARGET"]) # noqa: SIM115
+                    self.target_file = open(module_options["TARGET"])  # noqa: SIM115
                     self.target_sAMAccountName = None
                 except Exception:
                     context.log.fail("The file doesn't exist or cannot be openned.")
@@ -466,7 +466,7 @@ class NXCModule:
                     "Access mask": access_mask,
                     "Trustee (SID)": trustee_sid
                 }
-            elif ace["TypeName"] in ["ACCESS_ALLOWED_OBJECT_ACE", "ACCESS_DENIED_OBJECT_ACE"]: # for object-specific ACE
+            elif ace["TypeName"] in ["ACCESS_ALLOWED_OBJECT_ACE", "ACCESS_DENIED_OBJECT_ACE"]:  # for object-specific ACE
                 # Extracts the mask values. These values will indicate the ObjectType purpose
                 access_mask_flags = [FLAG.name for FLAG in ALLOWED_OBJECT_ACE_MASK_FLAGS if ace["Ace"]["Mask"].hasPriv(FLAG.value)]
                 parsed_ace["Access mask"] = ", ".join(access_mask_flags)
@@ -492,7 +492,7 @@ class NXCModule:
                     self.resolveSID(context, ace["Ace"]["Sid"].formatCanonical()) or "UNKNOWN",
                     ace["Ace"]["Sid"].formatCanonical(),
                 )
-        else: # if the ACE is not an access allowed
+        else:  # if the ACE is not an access allowed
             context.log.debug(f"ACE Type ({ace['TypeName']}) unsupported for parsing yet, feel free to contribute")
             _ace_flags = [FLAG.name for FLAG in ACE_FLAGS if ace.hasFlag(FLAG.value)]
             parsed_ace = {

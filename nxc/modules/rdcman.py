@@ -25,11 +25,11 @@ class NXCModule:
         self.masterkeys = None
 
         if "PVK" in module_options:
-            self.pvkbytes = open(module_options["PVK"], "rb").read() # noqa: SIM115
+            self.pvkbytes = open(module_options["PVK"], "rb").read()  # noqa: SIM115
 
         if "MKFILE" in module_options:
             self.masterkeys = parse_masterkey_file(module_options["MKFILE"])
-            self.pvkbytes = open(module_options["MKFILE"], "rb").read() # noqa: SIM115
+            self.pvkbytes = open(module_options["MKFILE"], "rb").read()  # noqa: SIM115
 
     def on_admin_login(self, context, connection):
         host = connection.hostname + "." + connection.domain

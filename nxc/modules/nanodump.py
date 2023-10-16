@@ -189,7 +189,7 @@ class NXCModule:
                 except Exception as e:
                     self.context.log.fail(f"[OPSEC] Error deleting lsass.dmp file on dir {self.remote_tmp_dir}: {e}")
 
-            with open(filename, "r+b") as fh: # needs the "r+b", not "rb" like below
+            with open(filename, "r+b") as fh:  # needs the "r+b", not "rb" like below
                 fh.seek(0)
                 fh.write(b"\x4d\x44\x4d\x50")
                 fh.seek(4)

@@ -74,13 +74,7 @@ class SMBSpider:
         return self.results
 
     def _spider(self, subfolder, depth):
-        """
-        Abandon all hope ye who enter here.
-        You're now probably wondering if I was drunk and/or high when writing this.
-        Getting this to work took a toll on my sanity. So yes. a lot.
-        """
-        # The following is some funky shit that deals with the way impacket treats file paths
-
+        """"""
         if subfolder in ["", "."]:
             subfolder = "*"
 
@@ -88,8 +82,6 @@ class SMBSpider:
             subfolder = subfolder[2:] + "/*"
         else:
             subfolder = subfolder.replace("/*/", "/") + "/*"
-
-        # End of the funky shit... or is it? Surprise! This whole thing is funky
 
         filelist = None
         try:
@@ -106,7 +98,7 @@ class SMBSpider:
         for result in filelist:
             # this can potentially be refactored
             if result.is_directory() and result.get_longname() not in [".", ".."]:
-                if subfolder == "*": # noqa: SIM114
+                if subfolder == "*":  # noqa: SIM114
                     self._spider(
                         subfolder.replace("*", "") + result.get_longname(),
                         depth - 1 if depth else None,

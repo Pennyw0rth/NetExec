@@ -278,7 +278,7 @@ class ldap(connection):
             if not self.domain:
                 self.domain = self.hostname
 
-            try: # noqa: SIM105
+            try:  # noqa: SIM105
                 # DC's seem to want us to logoff first, windows workstations sometimes reset the connection
                 self.conn.logoff()
             except Exception:

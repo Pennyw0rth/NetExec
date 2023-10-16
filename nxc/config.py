@@ -26,7 +26,7 @@ for section in nxc_default_config.sections():
             with open(path_join(NXC_PATH, "nxc.conf"), "w") as config_file:
                 nxc_config.write(config_file)
 
-#!!! THESE OPTIONS HAVE TO EXIST IN THE DEFAULT CONFIG FILE !!!
+# THESE OPTIONS HAVE TO EXIST IN THE DEFAULT CONFIG FILE
 nxc_workspace = nxc_config.get("nxc", "workspace", fallback="default")
 pwned_label = nxc_config.get("nxc", "pwn3d_label", fallback="Pwn3d!")
 audit_mode = nxc_config.get("nxc", "audit_mode", fallback=False)

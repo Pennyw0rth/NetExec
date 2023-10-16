@@ -96,7 +96,7 @@ class NXCModule:
         logfile = Path.home().joinpath(".nxc").joinpath("logs").joinpath(logfile)
 
         self.context.log.info(f"Creating log file '{logfile}'")
-        self.log_file = open(logfile, "w") # noqa: SIM115
+        self.log_file = open(logfile, "w")  # noqa: SIM115
         self.append_to_log("User:", "Description:")
 
     def delete_log_file(self):
