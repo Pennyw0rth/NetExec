@@ -1,4 +1,5 @@
 name: Lint Python code with ruff
+
 on: [push, pull_request]
 
 jobs:
@@ -10,5 +11,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - run: pip install --user ruff
-      - run: python -m ruff check .
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+      - name: Install libraries with dev group
+        run: |
+          poetry install --with dev
+      - name: Run ruff
+        run: poetry run ruff check .
