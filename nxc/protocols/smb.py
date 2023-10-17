@@ -356,8 +356,9 @@ class smb(connection):
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         logging.getLogger("impacket").disabled = True
         # Re-connect since we logged off
-        fqdn_host = f"{self.hostname}.{self.domain}" if not self.no_ntlm else f"{self.host}"
-        self.create_conn_obj(fqdn_host)
+        kdc_host = f"{self.hostname}.{self.domain}" if not self.no_ntlm else f"{self.host}"
+        self.logger.debug(f"KDC set to: {kdc_host}")
+        self.create_conn_obj(kdc_host)
         lmhash = ""
         nthash = ""
 
@@ -604,8 +605,8 @@ class smb(connection):
             return False
         return True
 
-    def create_conn_obj(self):
-        return bool(self.create_smbv1_conn() or self.create_smbv3_conn())
+    def create_conn_obj(self, kdc_host=None):
+        return bool(self.create_smbv1_conn(kdc_host) or self.create_smbv3_conn(kdc_host))
 
     def check_if_admin(self):
         rpctransport = SMBTransport(self.conn.getRemoteHost(), 445, r"\svcctl", smb_connection=self.conn)
