@@ -23,4 +23,6 @@ jobs:
         run: |
           poetry install --with dev
       - name: Run ruff
-        run: poetry run ruff check .
+        run: |
+          poetry run ruff --version
+          poetry run ruff check .
