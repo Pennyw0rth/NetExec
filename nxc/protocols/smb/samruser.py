@@ -5,10 +5,11 @@ from impacket.dcerpc.v5 import transport, samr
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5.rpcrt import DCERPC_v5
 from impacket.nt_errors import STATUS_MORE_ENTRIES
+from typing import ClassVar
 
 
 class UserSamrDump:
-    KNOWN_PROTOCOLS = {
+    KNOWN_PROTOCOLS: ClassVar[dict[str, tuple(str, int)]] = {
         "139/SMB": (r"ncacn_np:%s[\pipe\samr]", 139),
         "445/SMB": (r"ncacn_np:%s[\pipe\samr]", 445),
     }
