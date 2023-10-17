@@ -48,12 +48,13 @@ unicrypto = ">=0.0.9"
 
 [[package]]
 name = "aioconsole"
-version = "0.3.3"
+version = "0.6.2"
 description = "Asynchronous console and interfaces for asyncio"
 optional = false
-python-versions = ">=3.6"
+python-versions = ">=3.7"
 files = [
-    {file = "aioconsole-0.3.3.tar.gz", hash = "sha256:47df42d9f8cc3995bbe032dd5f01d32cc5b06639e9078bb9b4e3c55b237f5e32"},
+    {file = "aioconsole-0.6.2-py3-none-any.whl", hash = "sha256:1968021eb03b88fcdf5f5398154b21585e941a7b98c9fcef51c4bb0158156619"},
+    {file = "aioconsole-0.6.2.tar.gz", hash = "sha256:bac11286f1062613d2523ceee1ba81c676cd269812b865b66b907448a7b5f63e"},
 ]
 
 [[package]]
@@ -82,17 +83,21 @@ winacl = ">=0.1.7"
 
 [[package]]
 name = "aiosqlite"
-version = "0.18.0"
+version = "0.19.0"
 description = "asyncio bridge to the standard sqlite3 module"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "aiosqlite-0.18.0-py3-none-any.whl", hash = "sha256:c3511b841e3a2c5614900ba1d179f366826857586f78abd75e7cbeb88e75a557"},
-    {file = "aiosqlite-0.18.0.tar.gz", hash = "sha256:faa843ef5fb08bafe9a9b3859012d3d9d6f77ce3637899de20606b7fc39aa213"},
+    {file = "aiosqlite-0.19.0-py3-none-any.whl", hash = "sha256:edba222e03453e094a3ce605db1b970c4b3376264e56f32e2a4959f948d66a96"},
+    {file = "aiosqlite-0.19.0.tar.gz", hash = "sha256:95ee77b91c8d2808bd08a59fbebf66270e9090c3d92ffbf260dc0db0b979577d"},
 ]
 
 [package.dependencies]
 typing_extensions = {version = ">=4.0", markers = "python_version < \"3.8\""}
+
+[package.extras]
+dev = ["aiounittest (==1.4.1)", "attribution (==1.6.2)", "black (==23.3.0)", "coverage[toml] (==7.2.3)", "flake8 (==5.0.4)", "flake8-bugbear (==23.3.12)", "flit (==3.7.1)", "mypy (==1.2.0)", "ufmt (==2.1.0)", "usort (==1.0.6)"]
+docs = ["sphinx (==6.1.3)", "sphinx-mdinclude (==0.5.3)"]
 
 [[package]]
 name = "aiowinreg"
@@ -783,7 +788,7 @@ files = [
 
 [[package]]
 name = "impacket"
-version = "0.12.0.dev1+20230909.154612.3beeda7c"
+version = "0.12.0.dev1+20230919.145657.cdf867fa"
 description = "Network protocols Constructors and Dissectors"
 optional = false
 python-versions = "*"
@@ -794,20 +799,19 @@ develop = false
 charset-normalizer = "*"
 dsinternals = "*"
 flask = ">=1.0"
-future = "*"
 ldap3 = ">2.5.0,<2.5.2 || >2.5.2,<2.6 || >2.6"
 ldapdomaindump = ">=0.9.0"
 pyasn1 = ">=0.2.3"
-pyasn1-modules = "*"
 pycryptodomex = "*"
 pyOpenSSL = ">=21.0.0"
+setuptools = "*"
 six = "*"
 
 [package.source]
 type = "git"
-url = "https://github.com/mpgn/impacket.git"
+url = "https://github.com/Pennyw0rth/impacket.git"
 reference = "gkdi"
-resolved_reference = "3beeda7c3188936ed20f58c2c169430c2cfdfb1a"
+resolved_reference = "cdf867faa6b9db1bd19b44ec7a53d7e40b95e3a5"
 
 [[package]]
 name = "importlib-metadata"
@@ -1369,9 +1373,9 @@ asn1crypto = ">=1.5.1"
 
 [package.source]
 type = "git"
-url = "https://github.com/NeffIsBack/oscrypto"
+url = "https://github.com/Pennyw0rth/oscrypto"
 reference = "HEAD"
-resolved_reference = "d5f3437ed24257895ae1edd9e503cfb352e635a8"
+resolved_reference = "dc418d54c4ab9149db2153f3942e1684a44e94ff"
 
 [[package]]
 name = "packaging"
@@ -1386,26 +1390,24 @@ files = [
 
 [[package]]
 name = "paramiko"
-version = "2.12.0"
+version = "3.3.1"
 description = "SSH2 protocol library"
 optional = false
-python-versions = "*"
+python-versions = ">=3.6"
 files = [
-    {file = "paramiko-2.12.0-py2.py3-none-any.whl", hash = "sha256:b2df1a6325f6996ef55a8789d0462f5b502ea83b3c990cbb5bbe57345c6812c4"},
-    {file = "paramiko-2.12.0.tar.gz", hash = "sha256:376885c05c5d6aa6e1f4608aac2a6b5b0548b1add40274477324605903d9cd49"},
+    {file = "paramiko-3.3.1-py3-none-any.whl", hash = "sha256:b7bc5340a43de4287bbe22fe6de728aa2c22468b2a849615498dd944c2f275eb"},
+    {file = "paramiko-3.3.1.tar.gz", hash = "sha256:6a3777a961ac86dbef375c5f5b8d50014a1a96d0fd7f054a43bc880134b0ff77"},
 ]
 
 [package.dependencies]
-bcrypt = ">=3.1.3"
-cryptography = ">=2.5"
-pynacl = ">=1.0.1"
-six = "*"
+bcrypt = ">=3.2"
+cryptography = ">=3.3"
+pynacl = ">=1.5"
 
 [package.extras]
-all = ["bcrypt (>=3.1.3)", "gssapi (>=1.4.1)", "invoke (>=1.3)", "pyasn1 (>=0.1.7)", "pynacl (>=1.0.1)", "pywin32 (>=2.1.8)"]
-ed25519 = ["bcrypt (>=3.1.3)", "pynacl (>=1.0.1)"]
+all = ["gssapi (>=1.4.1)", "invoke (>=2.0)", "pyasn1 (>=0.1.7)", "pywin32 (>=2.1.8)"]
 gssapi = ["gssapi (>=1.4.1)", "pyasn1 (>=0.1.7)", "pywin32 (>=2.1.8)"]
-invoke = ["invoke (>=1.3)"]
+invoke = ["invoke (>=2.0)"]
 
 [[package]]
 name = "pillow"
@@ -1734,23 +1736,23 @@ files = [
 
 [[package]]
 name = "pypsrp"
-version = "0.7.0"
+version = "0.8.1"
 description = "PowerShell Remoting Protocol and WinRM for Python"
 optional = false
-python-versions = ">=3.6,<4.0"
+python-versions = "*"
 files = [
-    {file = "pypsrp-0.7.0-py3-none-any.whl", hash = "sha256:c0912096858ff8c53a3cf22cc46c3ce20e6ec5e2deade342088e87a81dbadac8"},
-    {file = "pypsrp-0.7.0.tar.gz", hash = "sha256:d7144ad7c798a4dcded20a71c712d63eb4bfb32debe62f3a98f01481384a5558"},
+    {file = "pypsrp-0.8.1-py3-none-any.whl", hash = "sha256:0101345ceb415896fed9b056e7b77d65312089ddc73c4286247ccf1859d4bc4d"},
+    {file = "pypsrp-0.8.1.tar.gz", hash = "sha256:f5500acd11dfe742d51b7fbb61321ba721038a300d67763dc52babe709db65e7"},
 ]
 
 [package.dependencies]
 cryptography = "*"
 pyspnego = "<1.0.0"
-requests = ">=2.9.1,<3.0.0"
+requests = ">=2.9.1"
 
 [package.extras]
-credssp = ["requests-credssp (>=1.0.0,<2.0.0)"]
-kerberos = ["gssapi (>=1.5.0,<2.0.0)", "krb5 (<1.0.0)"]
+credssp = ["requests-credssp (>=2.0.0)"]
+kerberos = ["pyspnego[kerberos]"]
 
 [[package]]
 name = "pypykatz"
@@ -2216,13 +2218,17 @@ widechars = ["wcwidth"]
 
 [[package]]
 name = "termcolor"
-version = "1.1.0"
-description = "ANSII Color formatting for output in terminal."
+version = "2.3.0"
+description = "ANSI color formatting for output in terminal"
 optional = false
-python-versions = "*"
+python-versions = ">=3.7"
 files = [
-    {file = "termcolor-1.1.0.tar.gz", hash = "sha256:1d6d69ce66211143803fbc56652b41d73b4a400a2891d7bf7a1cdf4c02de613b"},
+    {file = "termcolor-2.3.0-py3-none-any.whl", hash = "sha256:3afb05607b89aed0ffe25202399ee0867ad4d3cb4180d98aaf8eefa6a5f7d475"},
+    {file = "termcolor-2.3.0.tar.gz", hash = "sha256:b5b08f68937f138fe92f6c089b99f1e2da0ae56c52b78bf7075fd95420fd9a5a"},
 ]
+
+[package.extras]
+tests = ["pytest", "pytest-cov"]
 
 [[package]]
 name = "terminaltables"
@@ -2351,13 +2357,13 @@ cryptography = ">=38.0.1"
 
 [[package]]
 name = "xmltodict"
-version = "0.12.0"
+version = "0.13.0"
 description = "Makes working with XML feel like you are working with JSON"
 optional = false
-python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
+python-versions = ">=3.4"
 files = [
-    {file = "xmltodict-0.12.0-py2.py3-none-any.whl", hash = "sha256:8bbcb45cc982f48b2ca8fe7e7827c5d792f217ecf1792626f808bf41c3b86051"},
-    {file = "xmltodict-0.12.0.tar.gz", hash = "sha256:50d8c638ed7ecb88d90561beedbf720c9b4e851a9fa6c47ebd64e99d166d8a21"},
+    {file = "xmltodict-0.13.0-py2.py3-none-any.whl", hash = "sha256:aa89e8fd76320154a40d19a0df04a4695fb9dc5ba977cbb68ab3e4eb225e7852"},
+    {file = "xmltodict-0.13.0.tar.gz", hash = "sha256:341595a488e3e01a85a9d8911d8912fd922ede5fecc4dce437eb4b6c8d037e56"},
 ]
 
 [[package]]
@@ -2378,4 +2384,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.7.0"
-content-hash = "db98214ec476a1c89f5d0be0507a35f578646b3095f4d9170816c3e8bdc7a8b4"
+content-hash = "97e57f05fadf905356205302c5404c4cab8dc3be9649674b54920af3869f9b4a"
