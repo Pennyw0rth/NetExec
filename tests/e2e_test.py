@@ -60,7 +60,7 @@ def get_cli_args():
 def generate_commands(args):
     lines = []
 
-    kerberos = "-k" if args.kerberos else ""
+    kerberos = "-k " if args.kerberos else ""
 
     file_loc = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
     commands_file = os.path.join(file_loc, "e2e_commands.txt")
