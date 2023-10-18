@@ -180,7 +180,7 @@ class NXCModule:
                     samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
                     self.noLDAPRequired = True
                     context.log.highlight("{}".format('Computer account already exists with the name: "' + self.__computerName + '"'))
-                    raise Exception
+                    sys.exit(1)
                 except samr.DCERPCSessionError as e:
                     if e.error_code != 0xC0000073:
                         raise
@@ -226,7 +226,7 @@ class NXCModule:
             else:
                 check_for_user = samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
                 user_rid = check_for_user["RelativeIds"]["Element"][0]
-                open_user = samr.hSamrOpenUser(dce, domain_handle, access, user_rid)
+                open_user = samr.hSamrOpenUser(dce, domain_handle, samr.MAXIMUM_ALLOWED, user_rid)
                 user_handle = open_user["UserHandle"]
                 req = samr.SAMPR_USER_INFO_BUFFER()
                 req["tag"] = samr.USER_INFORMATION_CLASS.UserControlInformation
