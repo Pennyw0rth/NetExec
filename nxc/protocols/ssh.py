@@ -88,8 +88,8 @@ class ssh(connection):
         # we could add in another method to check by piping in the password to sudo
         # but that might be too much of an opsec concern - maybe add in a flag to do more checks?
         self.logger.info(f"Determined user is root via `id; sudo -ln` command")
-        stdin, stdout, stderr = self.conn.exec_command("id; sudo -ln 2>&1")
-        stdout = stdout.read().decode("utf-8", errors="ignore")
+        _, stdout, _ = self.conn.exec_command("id; sudo -ln 2>&1")
+        stdout = stdout.read().decode(self.args.codec, errors="ignore")
         admin_flag = {
             "(root)": [True, None],
             "NOPASSWD: ALL": [True, None],
@@ -120,17 +120,18 @@ class ssh(connection):
             self.logger.info(f"Doing sudo check with method: {method}")
 
         if method == "sudo-stdin":
-            stdin, stdout, stderr = self.conn.exec_command("sudo --help")
-            stdout = stdout.read().decode("utf-8", errors="ignore")
+            _, stdout, _ = self.conn.exec_command("sudo --help")
+            stdout = stdout.read().decode(self.args.codec, errors="ignore")
+            # Read sudo help docs and find "stdin"
             if "stdin" in stdout:
                 shadow_Backup = f'/tmp/{uuid.uuid4()}'
                 # sudo support stdin password
-                stdin, stdout, stderr = self.conn.exec_command(f"echo {self.password} | sudo -S cp /etc/shadow {shadow_Backup} >/dev/null 2>&1 &")
-                stdin, stdout, stderr = self.conn.exec_command(f"echo {self.password} | sudo -S chmod 777 {shadow_Backup} >/dev/null 2>&1 &")
+                _, _, _ = self.conn.exec_command(f"echo {self.password} | sudo -S cp /etc/shadow {shadow_Backup} >/dev/null 2>&1 &")
+                _, _, _ = self.conn.exec_command(f"echo {self.password} | sudo -S chmod 777 {shadow_Backup} >/dev/null 2>&1 &")
                 tries = 1
                 while True:
                     self.logger.info(f"Checking {shadow_Backup} if it existed")
-                    stdin, stdout, stderr = self.conn.exec_command(f'ls {shadow_Backup}')
+                    _, _, stderr = self.conn.exec_command(f'ls {shadow_Backup}')
                     if tries >= self.args.get_output_tries:
                         self.logger.info(f'{shadow_Backup} not existed, maybe the pipe has been hanged over, please increase the number of tries with the option "--get-output-tries" or change other method with "--sudo-check-method". If it\'s still failing maybe sudo shell is not working with current user')
                         break
@@ -142,23 +143,23 @@ class ssh(connection):
                         self.admin_privs = True
                         break
                 self.logger.info(f"Remove up temporary files")
-                stdin, stdout, stderr = self.conn.exec_command(f"rm -rf {shadow_Backup}")
+                _, _, _ = self.conn.exec_command(f"echo '' > {shadow_Backup}")
             else:
                 self.logger.error("Command: 'sudo' not support stdin mode, running command with 'sudo' failed")
                 return
         else:
-            stdin, stdout, stderr = self.conn.exec_command("mkfifo --help")
-            stdout = stdout.read().decode("utf-8", errors="ignore")
+            _, stdout, _ = self.conn.exec_command("mkfifo --help")
+            stdout = stdout.read().decode(self.args.codec, errors="ignore")
             # check if user can execute mkfifo
             if "Create named pipes" in stdout:
                 self.logger.info("Command: 'mkfifo' available")
                 pipe_stdin = f'/tmp/systemd-{uuid.uuid4()}'
                 pipe_stdout = f'/tmp/systemd-{uuid.uuid4()}'
                 shadow_Backup = f'/tmp/{uuid.uuid4()}'
-                stdin, stdout, stderr = self.conn.exec_command(f"mkfifo {pipe_stdin}; tail -f {pipe_stdin} | /bin/sh 2>&1 > {pipe_stdout} >/dev/null 2>&1 &")
+                _, _, _ = self.conn.exec_command(f"mkfifo {pipe_stdin}; tail -f {pipe_stdin} | /bin/sh 2>&1 > {pipe_stdout} >/dev/null 2>&1 &")
                 # 'script -qc /bin/sh /dev/null' means "upgrade" the shell, like reverse shell from netcat
-                stdin, stdout, stderr = self.conn.exec_command(f"echo 'script -qc /bin/sh /dev/null' > {pipe_stdin}")
-                stdin, stdout, stderr = self.conn.exec_command(f"echo 'sudo -s' > {pipe_stdin} && echo '{self.password}' > {pipe_stdin}")
+                _, _, _ = self.conn.exec_command(f"echo 'script -qc /bin/sh /dev/null' > {pipe_stdin}")
+                _, _, _ = self.conn.exec_command(f"echo 'sudo -s' > {pipe_stdin} && echo '{self.password}' > {pipe_stdin}")
                 # Sometime the pipe will hanging(only happen with paramiko)
                 # Can't get "whoami" or "id" result in pipe_stdout, maybe something wrong using pipe with paramiko
                 # But one thing I can confirm, is the command was executed even can't get result from pipe_stdout
@@ -166,21 +167,21 @@ class ssh(connection):
                 self.logger.info(f"Copy /etc/shadow to {shadow_Backup} if pass the sudo auth")
                 while True:
                     self.logger.info(f"Checking {shadow_Backup} if it existed")
-                    stdin, stdout, stderr = self.conn.exec_command(f'ls {shadow_Backup}')
+                    _, _, stderr = self.conn.exec_command(f'ls {shadow_Backup}')
                     if tries >= self.args.get_output_tries:
                         self.logger.info(f'{shadow_Backup} not existed, maybe the pipe has been hanged over, please increase the number of tries with the option "--get-output-tries" or change other method with "--sudo-check-method". If it\'s still failing maybe sudo shell is not working with current user')
                         break
 
                     if stderr.read().decode('utf-8'):
                         time.sleep(2)
-                        stdin, stdout, stderr = self.conn.exec_command(f"echo 'cp /etc/shadow {shadow_Backup} && chmod 777 {shadow_Backup}' > {pipe_stdin}")
+                        _, _, _ = self.conn.exec_command(f"echo 'cp /etc/shadow {shadow_Backup} && chmod 777 {shadow_Backup}' > {pipe_stdin}")
                         tries += 1
                     else:
                         self.logger.info(f"{shadow_Backup} existed")
                         self.admin_privs = True
                         break
                 self.logger.info(f"Remove up temporary files")
-                stdin, stdout, stderr = self.conn.exec_command(f"rm -rf {shadow_Backup} {pipe_stdin} {pipe_stdout}")
+                _, _, _ = self.conn.exec_command(f"echo '' > {shadow_Backup} && rm -rf {pipe_stdin} {pipe_stdout}")
             else:
                 self.logger.error("Command: 'mkfifo' unavailable, running command with 'sudo' failed")
                 return
@@ -196,7 +197,7 @@ class ssh(connection):
                 self.logger.debug(f"Logging in with key")
 
                 if self.args.key_file:
-                    with open(self.args.key_file, 'r') as f:
+                    with open(self.args.key_file, "r") as f:
                         private_key = f.read()
 
                 pkey = paramiko.RSAKey.from_private_key(StringIO(private_key), password)
@@ -216,8 +217,8 @@ class ssh(connection):
                 cred_id = self.db.add_credential("plaintext", username, password)
 
             # Some IOT devices will not raise exception in self.conn._transport.auth_password / self.conn._transport.auth_publickey
-            stdin, stdout, stderr = self.conn.exec_command("id")
-            stdout = stdout.read().decode("utf-8", errors="ignore")
+            _, stdout, _ = self.conn.exec_command("id")
+            stdout = stdout.read().decode(self.args.codec, errors="ignore")
         except Exception as e:
             if self.args.key_file:
                 password = f"{process_secret(password)} (keyfile: {self.args.key_file})"
@@ -229,8 +230,8 @@ class ssh(connection):
             host_id = self.db.get_hosts(self.host)[0].id
 
             if not stdout:
-                stdin, stdout, stderr = self.conn.exec_command("whoami /priv")
-                stdout = stdout.read().decode("utf-8", errors="ignore")
+                _, stdout, _ = self.conn.exec_command("whoami /priv")
+                stdout = stdout.read().decode(self.args.codec, errors="ignore")
                 self.server_os_platform = "Windows"
                 self.user_principal = "admin"
                 if "SeDebugPrivilege" in stdout:
@@ -285,12 +286,14 @@ class ssh(connection):
             if not self.args.no_output:
                 get_output = True
         try:
-            stdin, stdout, stderr = self.conn.exec_command(f"{payload} 2>&1")
-        except AttributeError:
-            return ""
-        if get_output:
+            _, stdout, _ = self.conn.exec_command(f"{payload} 2>&1")
+            stdout = stdout.read().decode(self.args.codec, errors="ignore")
+        except Exception as e:
+            self.logger.fail(f"Execute command failed, error: {str(e)}")
+            return False
+        else:
             self.logger.success("Executed command")
             if get_output:
-                for line in stdout:
+                for line in stdout.split('\n'):
                     self.logger.highlight(line.strip())
-                return stdout
+            return stdout

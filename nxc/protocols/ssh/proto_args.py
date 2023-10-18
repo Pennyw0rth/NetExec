@@ -8,6 +8,12 @@ def proto_args(parser, std_parser, module_parser):
     ssh_parser.add_argument("--get-output-tries", help="Number of times with sudo command tries to get results, default is %(default)s", type=int, default=5)
 
     cgroup = ssh_parser.add_argument_group("Command Execution", "Options for executing commands")
+    cgroup.add_argument("--codec", default="utf-8",
+                            help="Set encoding used (codec) from the target's output (default "
+                                 "\"utf-8\"). If errors are detected, run chcp.com at the target, "
+                                 "map the result with "
+                                 "https://docs.python.org/3/library/codecs.html#standard-encodings and then execute "
+                                 "again with --codec and the corresponding codec")
     cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
     cgroup.add_argument("-x", metavar="COMMAND", dest="execute", help="execute the specified command")
 
