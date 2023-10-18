@@ -41,7 +41,7 @@ termcolor = "^2.3.0"
 msgpack = "^1.0.0"
 neo4j = "^4.1.1" # do not upgrade this until performance regression issues in 5 are fixed (as of 9/23)
 pylnk3 = "^0.4.2"
-pypsrp = "^0.7.0"
+pypsrp = "^0.8.1"
 paramiko = "^3.3.1"
 impacket =  { git = "https://github.com/Pennyw0rth/impacket.git", branch = "gkdi" }
 dsinternals = "^1.2.4"
