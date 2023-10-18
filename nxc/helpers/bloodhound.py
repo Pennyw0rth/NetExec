@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 
-from neo4j import GraphDatabase
-from neo4j.exceptions import AuthError, ServiceUnavailable
-
 
 def add_user_bh(user, domain, logger, config):
     """Adds a user to the BloodHound graph database.
@@ -31,6 +28,10 @@ def add_user_bh(user, domain, logger, config):
         users_owned = user
 
     if config.get("BloodHound", "bh_enabled") != "False":
+        # we do a conditional import here to avoid loading these if BH isn't enabled
+        from neo4j import GraphDatabase
+        from neo4j.exceptions import AuthError, ServiceUnavailable
+
         uri = f"bolt://{config.get('BloodHound', 'bh_uri')}:{config.get('BloodHound', 'bh_port')}"
 
         driver = GraphDatabase.driver(
