@@ -70,7 +70,7 @@ def generate_commands(args):
             if line.startswith("#"):
                 continue
             line = line.strip()
-            line = line.replace("TARGET_HOST", args.target).replace("USERNAME", f'"{args.username}"').replace("PASSWORD", f'"{args.password}"').replace("KERBEROS ", kerberos)
+            line = line.replace("TARGET_HOST", args.target).replace("LOGIN_USERNAME", f'"{args.username}"').replace("LOGIN_PASSWORD", f'"{args.password}"').replace("KERBEROS ", kerberos)
             if args.poetry:
                 line = f"poetry run {line}"
             lines.append(line)
