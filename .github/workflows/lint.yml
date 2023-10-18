@@ -25,4 +25,4 @@ jobs:
       - name: Run ruff
         run: |
           poetry run ruff --version
-          poetry run ruff check .
+          poetry run ruff check . --preview
