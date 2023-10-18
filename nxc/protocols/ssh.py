@@ -6,10 +6,11 @@ import re
 import uuid
 import logging
 import time
+import socket
 
 from io import StringIO
 from nxc.config import process_secret
-from nxc.connection import *
+from nxc.connection import connection, highlight
 from nxc.logger import NXCAdapter
 from paramiko.ssh_exception import (
     AuthenticationException,
@@ -27,7 +28,7 @@ class ssh(connection):
         super().__init__(args, db, host)
 
     def proto_flow(self):
-        self.logger.debug(f"Kicking off proto_flow")
+        self.logger.debug("Kicking off proto_flow")
         self.proto_logger()
         if self.create_conn_obj():
             self.enum_host_info()
@@ -87,7 +88,7 @@ class ssh(connection):
 
         # we could add in another method to check by piping in the password to sudo
         # but that might be too much of an opsec concern - maybe add in a flag to do more checks?
-        self.logger.info(f"Determined user is root via `id; sudo -ln` command")
+        self.logger.info("Determined user is root via `id; sudo -ln` command")
         _, stdout, _ = self.conn.exec_command("id; sudo -ln 2>&1")
         stdout = stdout.read().decode(self.args.codec, errors="ignore")
         admin_flag = {
@@ -103,7 +104,6 @@ class ssh(connection):
                 self.admin_privs = admin_flag[match[0]][0]
                 if not self.admin_privs:
                     tips = admin_flag[match[0]][1]
-                    continue
                 else:
                     break
         if not self.admin_privs and "tips" in locals():
@@ -126,8 +126,8 @@ class ssh(connection):
             if "stdin" in stdout:
                 shadow_Backup = f'/tmp/{uuid.uuid4()}'
                 # sudo support stdin password
-                _, _, _ = self.conn.exec_command(f"echo {self.password} | sudo -S cp /etc/shadow {shadow_Backup} >/dev/null 2>&1 &")
-                _, _, _ = self.conn.exec_command(f"echo {self.password} | sudo -S chmod 777 {shadow_Backup} >/dev/null 2>&1 &")
+                self.conn.exec_command(f"echo {self.password} | sudo -S cp /etc/shadow {shadow_Backup} >/dev/null 2>&1 &")
+                self.conn.exec_command(f"echo {self.password} | sudo -S chmod 777 {shadow_Backup} >/dev/null 2>&1 &")
                 tries = 1
                 while True:
                     self.logger.info(f"Checking {shadow_Backup} if it existed")
@@ -142,8 +142,8 @@ class ssh(connection):
                         self.logger.info(f"{shadow_Backup} existed")
                         self.admin_privs = True
                         break
-                self.logger.info(f"Remove up temporary files")
-                _, _, _ = self.conn.exec_command(f"echo '' > {shadow_Backup}")
+                self.logger.info("Remove up temporary files")
+                self.conn.exec_command(f"echo '' > {shadow_Backup}")
             else:
                 self.logger.error("Command: 'sudo' not support stdin mode, running command with 'sudo' failed")
                 return
@@ -156,10 +156,10 @@ class ssh(connection):
                 pipe_stdin = f'/tmp/systemd-{uuid.uuid4()}'
                 pipe_stdout = f'/tmp/systemd-{uuid.uuid4()}'
                 shadow_Backup = f'/tmp/{uuid.uuid4()}'
-                _, _, _ = self.conn.exec_command(f"mkfifo {pipe_stdin}; tail -f {pipe_stdin} | /bin/sh 2>&1 > {pipe_stdout} >/dev/null 2>&1 &")
+                self.conn.exec_command(f"mkfifo {pipe_stdin}; tail -f {pipe_stdin} | /bin/sh 2>&1 > {pipe_stdout} >/dev/null 2>&1 &")
                 # 'script -qc /bin/sh /dev/null' means "upgrade" the shell, like reverse shell from netcat
-                _, _, _ = self.conn.exec_command(f"echo 'script -qc /bin/sh /dev/null' > {pipe_stdin}")
-                _, _, _ = self.conn.exec_command(f"echo 'sudo -s' > {pipe_stdin} && echo '{self.password}' > {pipe_stdin}")
+                self.conn.exec_command(f"echo 'script -qc /bin/sh /dev/null' > {pipe_stdin}")
+                self.conn.exec_command(f"echo 'sudo -s' > {pipe_stdin} && echo '{self.password}' > {pipe_stdin}")
                 # Sometime the pipe will hanging(only happen with paramiko)
                 # Can't get "whoami" or "id" result in pipe_stdout, maybe something wrong using pipe with paramiko
                 # But one thing I can confirm, is the command was executed even can't get result from pipe_stdout
@@ -174,14 +174,14 @@ class ssh(connection):
 
                     if stderr.read().decode('utf-8'):
                         time.sleep(2)
-                        _, _, _ = self.conn.exec_command(f"echo 'cp /etc/shadow {shadow_Backup} && chmod 777 {shadow_Backup}' > {pipe_stdin}")
+                        self.conn.exec_command(f"echo 'cp /etc/shadow {shadow_Backup} && chmod 777 {shadow_Backup}' > {pipe_stdin}")
                         tries += 1
                     else:
                         self.logger.info(f"{shadow_Backup} existed")
                         self.admin_privs = True
                         break
-                self.logger.info(f"Remove up temporary files")
-                _, _, _ = self.conn.exec_command(f"echo '' > {shadow_Backup} && rm -rf {pipe_stdin} {pipe_stdout}")
+                self.logger.info("Remove up temporary files")
+                self.conn.exec_command(f"echo '' > {shadow_Backup} && rm -rf {pipe_stdin} {pipe_stdout}")
             else:
                 self.logger.error("Command: 'mkfifo' unavailable, running command with 'sudo' failed")
                 return
@@ -191,10 +191,9 @@ class ssh(connection):
         self.password = password
         private_key = ""
         stdout = None
-        stderr = None
         try:
             if self.args.key_file or private_key:
-                self.logger.debug(f"Logging in with key")
+                self.logger.debug("Logging in with key")
 
                 if self.args.key_file:
                     with open(self.args.key_file, "r") as f:
