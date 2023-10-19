@@ -24,7 +24,7 @@ user_failed_logins = {}
 def gethost_addrinfo(hostname):
     is_ipv6 = False
     is_link_local_ipv6 = False
-    for res in getaddrinfo( hostname, None, AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
+    for res in getaddrinfo(hostname, None, AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
         af, socktype, proto, canonname, sa = res
     if ip_address(sa[0]).version == 6:
         is_ipv6 = True
