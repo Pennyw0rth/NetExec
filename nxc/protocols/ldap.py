@@ -1115,7 +1115,7 @@ class ldap(connection):
         searchFilter = "(userAccountControl:1.2.840.113556.1.4.803:=32)"
         try:
             self.logger.debug(f"Search Filter={searchFilter}")
-            resp = self.ldapConnection.search(
+            resp = self.search(
                 searchFilter=searchFilter,
                 attributes=[
                     "sAMAccountName",
@@ -1259,15 +1259,14 @@ class ldap(connection):
     def gmsa(self):
         self.logger.display("Getting GMSA Passwords")
         search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
-        gmsa_accounts = self.ldapConnection.search(
+        gmsa_accounts = self.search(
             searchFilter=search_filter,
             attributes=[
                 "sAMAccountName",
                 "msDS-ManagedPassword",
                 "msDS-GroupMSAMembership",
             ],
-            sizeLimit=0,
-            searchBase=self.baseDN,
+            sizeLimit=0
         )
         if gmsa_accounts:
             answers = []
@@ -1313,11 +1312,10 @@ class ldap(connection):
             else:
                 # getting the gmsa account
                 search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
-                gmsa_accounts = self.ldapConnection.search(
+                gmsa_accounts = self.search(
                     searchFilter=search_filter,
                     attributes=["sAMAccountName"],
-                    sizeLimit=0,
-                    searchBase=self.baseDN,
+                    sizeLimit=0
                 )
                 if gmsa_accounts:
                     answers = []
@@ -1344,11 +1342,10 @@ class ldap(connection):
                 gmsa_pass = gmsa[1]
                 # getting the gmsa account
                 search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
-                gmsa_accounts = self.ldapConnection.search(
+                gmsa_accounts = self.search(
                     searchFilter=search_filter,
                     attributes=["sAMAccountName"],
-                    sizeLimit=0,
-                    searchBase=self.baseDN,
+                    sizeLimit=0
                 )
                 if gmsa_accounts:
                     answers = []
