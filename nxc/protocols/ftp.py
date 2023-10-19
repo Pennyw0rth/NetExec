@@ -14,7 +14,6 @@ class ftp(connection):
         super().__init__(args, db, host)
 
     def proto_logger(self):
-        self.port = self.args.port
         self.logger = NXCAdapter(
             extra={
                 "protocol": "FTP",

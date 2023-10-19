@@ -39,7 +39,6 @@ class vnc(connection):
                     self.call_cmd_args()
 
     def proto_logger(self):
-        self.port = self.args.port
         self.logger = NXCAdapter(
             extra={
                 "protocol": "VNC",

@@ -75,7 +75,7 @@ class connection(object):
         self.args = args
         self.db = db
         self.hostname = host
-        self.port = None
+        self.port = self.args.port
         self.conn = None
         self.admin_privs = False
         self.password = ""

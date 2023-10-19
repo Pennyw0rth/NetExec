@@ -51,7 +51,6 @@ class wmi(connection):
         connection.__init__(self, args, db, host)
 
     def proto_logger(self):
-        self.port = self.args.port
         self.logger = NXCAdapter(extra={'protocol': 'WMI',
                                         'host': self.host,
                                         'port': self.port,

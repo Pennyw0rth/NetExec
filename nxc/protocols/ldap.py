@@ -153,8 +153,6 @@ class ldap(connection):
         connection.__init__(self, args, db, host)
 
     def proto_logger(self):
-        # self.logger = nxc_logger
-        self.port = self.args.port
         self.logger = NXCAdapter(
             extra={
                 "protocol": "LDAP",
