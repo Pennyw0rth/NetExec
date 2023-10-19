@@ -43,7 +43,7 @@ class NXCModule:
             context.log.success("Attempting to enumerate objects with an applied policy...")
 
         # Who do they apply to?
-        resp=connection.ldapConnection.search(searchBase=base_creator(self.__domain), searchFilter="(objectclass=*)",attributes=["DistinguishedName","msDS-PSOApplied"])
+        resp=connection.search(searchFilter="(objectclass=*)",attributes=["DistinguishedName","msDS-PSOApplied"])
         for i in resp:
             if isinstance(i, ldapasn1_impacket.SearchResultEntry) is not True:
                 continue
@@ -65,7 +65,7 @@ class NXCModule:
 
         # Let"s find out even more details!
         context.log.success("Attempting to enumerate details...\n")
-        resp=connection.ldapConnection.search(searchBase=base_creator(self.__domain), searchFilter="(objectclass=msDS-PasswordSettings)",
+        resp=connection.search(searchFilter="(objectclass=msDS-PasswordSettings)",
                      attributes=["name", "msds-lockoutthreshold", "msds-psoappliesto", "msds-minimumpasswordlength",
                                  "msds-passwordhistorylength", "msds-lockoutobservationwindow", "msds-lockoutduration",
                                  "msds-passwordsettingsprecedence", "msds-passwordcomplexityenabled", "Description",
