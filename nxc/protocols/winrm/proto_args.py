@@ -23,7 +23,7 @@ def proto_args(parser, std_parser, module_parser):
     cgroup = winrm_parser.add_argument_group("Command Execution", "Options for executing commands")
     cgroup.add_argument("--codec", default="utf-8",
                             help="Set encoding used (codec) from the target's output (default "
-                                 "'utf-8'). If errors are detected, run chcp.com at the target, "
+                                 "\"utf-8\"). If errors are detected, run chcp.com at the target, "
                                  "map the result with "
                                  "https://docs.python.org/3/library/codecs.html#standard-encodings and then execute "
                                  "again with --codec and the corresponding codec")
