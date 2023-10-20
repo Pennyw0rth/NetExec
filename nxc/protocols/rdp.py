@@ -104,7 +104,7 @@ class rdp(connection):
         )
 
     def print_host_info(self):
-        nla = colored(f"nla:{self.nla}", host_info_colors[3], attrs=['bold']) if self.nla else colored(f"nla:{self.nla}", host_info_colors[2], attrs=['bold'])
+        nla = colored(f"nla:{self.nla}", host_info_colors[3], attrs=['bold'], force_color=True) if self.nla else colored(f"nla:{self.nla}", host_info_colors[2], attrs=['bold'], force_color=True)
         if self.domain is None:
             self.logger.display("Probably old, doesn't not support HYBRID or HYBRID_EX" f" ({nla})")
         else:

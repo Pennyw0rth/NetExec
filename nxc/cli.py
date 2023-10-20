@@ -6,7 +6,6 @@ import sys
 from argparse import RawTextHelpFormatter
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.helpers.logger import highlight
-from termcolor import colored
 from nxc.logger import nxc_logger
 import importlib.metadata
 

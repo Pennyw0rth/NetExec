@@ -51,22 +51,22 @@ class NXCAdapter(logging.LoggerAdapter):
         # If the logger is being called when hooking the 'options' module function
         if len(self.extra) == 1 and ("module_name" in self.extra.keys()):
             return (
-                f"{colored(self.extra['module_name'], 'cyan', attrs=['bold']):<64} {msg}",
+                f"{colored(self.extra['module_name'], 'cyan', attrs=['bold'], force_color=True):<64} {msg}",
                 kwargs,
             )
 
         # If the logger is being called from nxcServer
         if len(self.extra) == 2 and ("module_name" in self.extra.keys()) and ("host" in self.extra.keys()):
             return (
-                f"{colored(self.extra['module_name'], 'cyan', attrs=['bold']):<24} {self.extra['host']:<39} {msg}",
+                f"{colored(self.extra['module_name'], 'cyan', attrs=['bold'], force_color=True):<24} {self.extra['host']:<39} {msg}",
                 kwargs,
             )
 
         # If the logger is being called from a protocol
         if "module_name" in self.extra.keys():
-            module_name = colored(self.extra["module_name"], "cyan", attrs=["bold"])
+            module_name = colored(self.extra["module_name"], "cyan", attrs=["bold"], force_color=True)
         else:
-            module_name = colored(self.extra["protocol"], "blue", attrs=["bold"])
+            module_name = colored(self.extra["protocol"], "blue", attrs=["bold"], force_color=True)
 
         return (
             f"{module_name:<24} {self.extra['host']:<15} {self.extra['port']:<6} {self.extra['hostname'] if self.extra['hostname'] else 'NONE':<16} {msg}",
@@ -83,7 +83,7 @@ class NXCAdapter(logging.LoggerAdapter):
         except AttributeError:
             pass
 
-        msg, kwargs = self.format(f"{colored('[*]', 'blue', attrs=['bold'])} {msg}", kwargs)
+        msg, kwargs = self.format(f"{colored('[*]', 'blue', attrs=['bold'], force_color=True)} {msg}", kwargs)
         text = Text.from_ansi(msg)
         nxc_console.print(text, *args, **kwargs)
         self.log_console_to_file(text, *args, **kwargs)
@@ -98,7 +98,7 @@ class NXCAdapter(logging.LoggerAdapter):
         except AttributeError:
             pass
 
-        msg, kwargs = self.format(f"{colored('[+]', color, attrs=['bold'])} {msg}", kwargs)
+        msg, kwargs = self.format(f"{colored('[+]', color, attrs=['bold'], force_color=True)} {msg}", kwargs)
         text = Text.from_ansi(msg)
         nxc_console.print(text, *args, **kwargs)
         self.log_console_to_file(text, *args, **kwargs)
@@ -113,7 +113,7 @@ class NXCAdapter(logging.LoggerAdapter):
         except AttributeError:
             pass
 
-        msg, kwargs = self.format(f"{colored(msg, 'yellow', attrs=['bold'])}", kwargs)
+        msg, kwargs = self.format(f"{colored(msg, 'yellow', attrs=['bold'], force_color=True)}", kwargs)
         text = Text.from_ansi(msg)
         nxc_console.print(text, *args, **kwargs)
         self.log_console_to_file(text, *args, **kwargs)
@@ -127,7 +127,7 @@ class NXCAdapter(logging.LoggerAdapter):
                 return
         except AttributeError:
             pass
-        msg, kwargs = self.format(f"{colored('[-]', color, attrs=['bold'])} {msg}", kwargs)
+        msg, kwargs = self.format(f"{colored('[-]', color, attrs=['bold'], force_color=True)} {msg}", kwargs)
         text = Text.from_ansi(msg)
         nxc_console.print(text, *args, **kwargs)
         self.log_console_to_file(text, *args, **kwargs)

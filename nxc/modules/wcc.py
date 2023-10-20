@@ -77,7 +77,7 @@ class ConfigCheck:
         if self.module.quiet:
             return
 
-        status = colored('OK', 'green', attrs=['bold']) if self.ok else colored('KO', 'red', attrs=['bold'])
+        status = colored('OK', 'green', attrs=['bold'], force_color=True) if self.ok else colored('KO', 'red', attrs=['bold'], force_color=True)
         reasons = ": " + ', '.join(self.reasons)
         msg = f'{status} {self.name}'
         info_msg = f'{status} {self.name}{reasons}'

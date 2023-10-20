@@ -6,8 +6,8 @@ from nxc.nxcdb import DatabaseNavigator, print_table, print_help
 from termcolor import colored
 import functools
 
-help_header = functools.partial(colored, color='cyan', attrs=['bold'])
-help_kw = functools.partial(colored, color='green', attrs=['bold'])
+help_header = functools.partial(colored, color='cyan', attrs=['bold'], force_color=True)
+help_kw = functools.partial(colored, color='green', attrs=['bold'], force_color=True)
 
 class navigator(DatabaseNavigator):
     def display_creds(self, creds):

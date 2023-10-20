@@ -306,8 +306,8 @@ class ldap(connection):
         else:
             self.logger.extra["protocol"] = "SMB" if not self.no_ntlm else "LDAP"
             self.logger.extra["port"] = "445" if not self.no_ntlm else "389"
-            signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=['bold']) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=['bold'])
-            smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=['bold']) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=['bold'])
+            signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=['bold'], force_color=True) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=['bold'], force_color=True)
+            smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=['bold'], force_color=True) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=['bold'], force_color=True)
             self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({smbv1})")
             self.logger.extra["protocol"] = "LDAP"
             # self.logger.display(self.endpoint)
@@ -834,16 +834,16 @@ class ldap(connection):
             if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
                 continue
             name = ""
-            try:           	    
-            	for attribute in item["attributes"]:     
-            	    if str(attribute["type"]) == "dNSHostName":
-            	        name = str(attribute["vals"][0])
-            	try:
-            	    ip_address = socket.gethostbyname(name.split(".")[0])
-            	    if ip_address != True and name != "":
-                        self.logger.highlight(f"{name} = {colored(ip_address, host_info_colors[0])}")
-            	except socket.gaierror:
-            	    self.logger.fail(f"{name} = Connection timeout")
+            try:
+                for attribute in item["attributes"]:     
+                    if str(attribute["type"]) == "dNSHostName":
+                        name = str(attribute["vals"][0])
+                try:
+                    ip_address = socket.gethostbyname(name.split(".")[0])
+                    if ip_address != True and name != "":
+                        self.logger.highlight(f"{name} = {colored(ip_address, host_info_colors[0], force_color=True)}")
+                except socket.gaierror:
+                    self.logger.fail(f"{name} = Connection timeout")
             except Exception as e:
                 self.logger.fail("Exception:", exc_info=True)
                 self.logger.fail(f"Skipping item, cannot process due to error {e}")
