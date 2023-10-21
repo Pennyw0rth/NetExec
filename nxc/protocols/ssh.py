@@ -69,7 +69,7 @@ class ssh(connection):
         self.conn = paramiko.SSHClient()
         self.conn.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:
-            self.conn.connect(self.host, port=self.args.port, timeout=self.args.ssh_timeout)
+            self.conn.connect(self.host, port=self.args.port, timeout=self.args.ssh_timeout, look_for_keys=False)
         except AuthenticationException:
             return True
         except SSHException:
