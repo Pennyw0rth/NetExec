@@ -71,11 +71,7 @@ class NXCModule:
 def do_search(self, context, connection, searchFilter, attributeName):
     try:
         context.log.debug(f"Search Filter={searchFilter}")
-        resp = connection.ldapConnection.search(
-            searchFilter=searchFilter,
-            attributes=[attributeName],
-            sizeLimit=0
-        )
+        resp = connection.ldapConnection.search(searchFilter=searchFilter, attributes=[attributeName], sizeLimit=0)
         context.log.debug(f"Total number of records returned {len(resp)}")
         for item in resp:
             if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
