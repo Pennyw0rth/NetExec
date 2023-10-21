@@ -303,8 +303,6 @@ class ldap(connection):
             self.logger.extra["port"] = "445" if not self.no_ntlm else "389"
             signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
             smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
-            signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
-            smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
             self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({smbv1})")
             self.logger.extra["protocol"] = "LDAP"
         return True
@@ -341,7 +339,6 @@ class ldap(connection):
             self.nthash = nthash
 
         if self.password == "" and self.args.asreproast:
-            hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
@@ -468,7 +465,6 @@ class ldap(connection):
 
         if self.password == "" and self.args.asreproast:
             hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
-            hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
                 with open(self.args.asreproast, "a+") as hash_asreproast:
@@ -560,7 +556,6 @@ class ldap(connection):
 
         if self.hash == "" and self.args.asreproast:
             hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
-            hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
                 with open(self.args.asreproast, "a+") as hash_asreproast:
@@ -629,12 +624,10 @@ class ldap(connection):
 
     def create_smbv1_conn(self):
         self.logger.debug("Creating smbv1 connection object")
-        self.logger.debug("Creating smbv1 connection object")
         try:
             self.conn = SMBConnection(self.host, self.host, None, 445, preferredDialect=SMB_DIALECT)
             self.smbv1 = True
             if self.conn:
-                self.logger.debug("SMBv1 Connection successful")
                 self.logger.debug("SMBv1 Connection successful")
         except OSError as e:
             if str(e).find("Connection reset by peer") != -1:
@@ -647,12 +640,10 @@ class ldap(connection):
 
     def create_smbv3_conn(self):
         self.logger.debug("Creating smbv3 connection object")
-        self.logger.debug("Creating smbv3 connection object")
         try:
             self.conn = SMBConnection(self.host, self.host, None, 445)
             self.smbv1 = False
             if self.conn:
-                self.logger.debug("SMBv3 Connection successful")
                 self.logger.debug("SMBv3 Connection successful")
         except OSError:
             return False
