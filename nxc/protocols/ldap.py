@@ -174,7 +174,6 @@ class ldap(connection):
                     self.logger.debug(f"LDAPs connection to {ldap_url} failed - {e}")
                     # https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/enable-ldap-over-ssl-3rd-certification-authority
                     self.logger.debug("Even if the port is open, LDAPS may not be configured")
-                    self.logger.debug("Even if the port is open, LDAPS may not be configured")
                 else:
                     self.logger.debug(f"LDAP connection to {ldap_url} failed: {e}")
                 return [None, None, None]
