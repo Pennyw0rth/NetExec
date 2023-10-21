@@ -50,11 +50,7 @@ class NXCModule:
 
             # Veeam v12 check
             try:
-                ans = rrp.hBaseRegOpenKey(
-                    remoteOps._RemoteOperations__rrp,
-                    regHandle,
-                    "SOFTWARE\\Veeam\\Veeam Backup and Replication\\DatabaseConfigurations",
-                )
+                ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication\\DatabaseConfigurations")
                 keyHandle = ans["phkResult"]
 
                 database_config = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlActiveConfiguration")[1].split("\x00")[:-1][0]
@@ -62,28 +58,16 @@ class NXCModule:
                 context.log.success("Veeam v12 installation found!")
                 if database_config == "PostgreSql":
                     # Find the PostgreSql installation path containing "psql.exe"
-                    ans = rrp.hBaseRegOpenKey(
-                        remoteOps._RemoteOperations__rrp,
-                        regHandle,
-                        "SOFTWARE\\PostgreSQL Global Development Group\\PostgreSQL",
-                    )
+                    ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\PostgreSQL Global Development Group\\PostgreSQL")
                     keyHandle = ans["phkResult"]
                     PostgreSqlExec = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "Location")[1].split("\x00")[:-1][0] + "\\bin\\psql.exe"
 
-                    ans = rrp.hBaseRegOpenKey(
-                        remoteOps._RemoteOperations__rrp,
-                        regHandle,
-                        "SOFTWARE\\Veeam\\Veeam Backup and Replication\\DatabaseConfigurations\\PostgreSQL",
-                    )
+                    ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication\\DatabaseConfigurations\\PostgreSQL")
                     keyHandle = ans["phkResult"]
                     PostgresUserForWindowsAuth = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "PostgresUserForWindowsAuth")[1].split("\x00")[:-1][0]
                     SqlDatabaseName = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlDatabaseName")[1].split("\x00")[:-1][0]
                 elif database_config == "MsSql":
-                    ans = rrp.hBaseRegOpenKey(
-                        remoteOps._RemoteOperations__rrp,
-                        regHandle,
-                        "SOFTWARE\\Veeam\\Veeam Backup and Replication\\DatabaseConfigurations\\MsSql",
-                    )
+                    ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication\\DatabaseConfigurations\\MsSql")
                     keyHandle = ans["phkResult"]
 
                     SqlDatabase = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlDatabaseName")[1].split("\x00")[:-1][0]
@@ -98,11 +82,7 @@ class NXCModule:
 
             # Veeam v11 check
             try:
-                ans = rrp.hBaseRegOpenKey(
-                    remoteOps._RemoteOperations__rrp,
-                    regHandle,
-                    "SOFTWARE\\Veeam\\Veeam Backup and Replication",
-                )
+                ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication")
                 keyHandle = ans["phkResult"]
 
                 SqlDatabase = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlDatabaseName")[1].split("\x00")[:-1][0]
