@@ -271,7 +271,7 @@ class NXCModule:
                     connection.conn.getFile(self.share, export_path.split(":")[1], buffer.write)
 
                     # if multiple exports found, add a number at the end of local path to prevent override
-                    local_full_path = self.local_export_path + "/" + self.export_name.split(".")[0] + "_" + str(count) + "." + self.export_name.split(".")[1] if count > 0 else self.local_export_path + "/" + self.export_name
+                    local_full_path = f"{self.local_export_path}/{self.export_name.split('.'[0])}_{count!s}.{self.export_name.split('.'[1])}" if count > 0 else f"{self.local_export_path}/{self.export_name}"
 
                     # downloads the exported database
                     with open(local_full_path, "wb") as f:
