@@ -142,8 +142,8 @@ class ssh(connection):
                         self.logger.info(f"{shadow_backup} existed")
                         self.admin_privs = True
                         break
-                self.logger.info("Remove up temporary files")
-                self.conn.exec_command(f"echo '' > {shadow_backup}")
+                self.logger.info(f"Remove up temporary files {shadow_backup}")
+                self.conn.exec_command(f"echo {self.password} | sudo -S rm -rf {shadow_backup}")
             else:
                 self.logger.error("Command: 'sudo' not support stdin mode, running command with 'sudo' failed")
                 return
@@ -180,8 +180,8 @@ class ssh(connection):
                         self.logger.info(f"{shadow_backup} existed")
                         self.admin_privs = True
                         break
-                self.logger.info("Remove up temporary files")
-                self.conn.exec_command(f"echo '' > {shadow_backup} && rm -rf {pipe_stdin} {pipe_stdout}")
+                self.logger.info(f"Remove up temporary files {shadow_backup} {pipe_stdin} {pipe_stdout}")
+                self.conn.exec_command(f"echo 'rm -rf  {shadow_backup}' > {pipe_stdin} && rm -rf {pipe_stdin} {pipe_stdout}")
             else:
                 self.logger.error("Command: 'mkfifo' unavailable, running command with 'sudo' failed")
                 return
