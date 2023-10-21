@@ -10,7 +10,7 @@ import struct
 
 class NXCModule:
     name = "ms17-010"
-    description = "MS17-010 - EternalBlue exploit - NOT TESTED OUTSIDE LAB ENVIRONMENT"
+    description = "MS17-010 - EternalBlue - NOT TESTED OUTSIDE LAB ENVIRONMENT"
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
