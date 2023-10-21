@@ -156,8 +156,7 @@ class LsaLookupNames:
         # Authenticate if specified
         if self.authn and hasattr(rpc_transport, "set_credentials"):
             # This method exists only for selected protocol sequences.
-            rpc_transport.set_credentials(self.username, self.password, self.domain, self.lmhash, self.nthash,
-                                          self.aesKey)
+            rpc_transport.set_credentials(self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey)
 
         if self.doKerberos:
             rpc_transport.set_kerberos(self.doKerberos, kdcHost=self.dcHost)
