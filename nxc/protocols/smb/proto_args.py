@@ -6,7 +6,7 @@ def proto_args(parser, std_parser, module_parser):
         smb_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[],
                                 help="NTLM hash(es) or file(s) containing NTLM hashes")
         delegate_arg = smb_parser.add_argument("--delegate", action="store", help="Impersonate user with S4U2Self + S4U2Proxy")
-        self_delegate_arg = smb_parser.add_argument("--self", dest='no_s4u2proxy', action=get_conditional_action(_StoreTrueAction), make_required=[], help="Only do S4U2Self, no S4U2Proxy (use with delegate)")
+        self_delegate_arg = smb_parser.add_argument("--self", dest="no_s4u2proxy", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Only do S4U2Self, no S4U2Proxy (use with delegate)")
         dgroup = smb_parser.add_mutually_exclusive_group()
         dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, help="domain to authenticate to")
         dgroup.add_argument("--local-auth", action="store_true", help="authenticate locally to each target")
