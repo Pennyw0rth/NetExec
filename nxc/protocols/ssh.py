@@ -62,7 +62,7 @@ class ssh(connection):
     def enum_host_info(self):
         if self.conn._transport.remote_version:
             self.remote_version = self.conn._transport.remote_version
-        self.logger.debug(f'Remote version: {self.remote_version}')
+        self.logger.debug(f"Remote version: {self.remote_version}")
         self.db.add_host(self.host, self.args.port, self.remote_version)
 
     def create_conn_obj(self):
@@ -95,12 +95,12 @@ class ssh(connection):
             "(root)": [True, None],
             "NOPASSWD: ALL": [True, None],
             "(ALL : ALL) ALL": [True, None],
-            "(sudo)": [False, f'Current user: "{self.username}" was in "sudo" group, please try "--sudo-check" to check if user can run sudo shell']
+            "(sudo)": [False, f"Current user: '{self.username}' was in 'sudo' group, please try '--sudo-check' to check if user can run sudo shell"]
         }
         for keyword in admin_flag.keys():
             match = re.findall(re.escape(keyword), stdout)
             if match:
-                self.logger.info(f'User: "{self.username}" matched keyword: {match[0]}')
+                self.logger.info(f"User: '{self.username}' matched keyword: {match[0]}")
                 self.admin_privs = admin_flag[match[0]][0]
                 if not self.admin_privs:
                     tips = admin_flag[match[0]][1]
@@ -124,14 +124,14 @@ class ssh(connection):
             stdout = stdout.read().decode(self.args.codec, errors="ignore")
             # Read sudo help docs and find "stdin"
             if "stdin" in stdout:
-                shadow_backup = f'/tmp/{uuid.uuid4()}'
+                shadow_backup = f"/tmp/{uuid.uuid4()}"
                 # sudo support stdin password
                 self.conn.exec_command(f"echo {self.password} | sudo -S cp /etc/shadow {shadow_backup} >/dev/null 2>&1 &")
                 self.conn.exec_command(f"echo {self.password} | sudo -S chmod 777 {shadow_backup} >/dev/null 2>&1 &")
                 tries = 1
                 while True:
                     self.logger.info(f"Checking {shadow_backup} if it existed")
-                    _, _, stderr = self.conn.exec_command(f'ls {shadow_backup}')
+                    _, _, stderr = self.conn.exec_command(f"ls {shadow_backup}")
                     if tries >= self.args.get_output_tries:
                         self.logger.info(f"The file {shadow_backup} does not exist, the pipe may be hanging. Increase the number of tries with the option '--get-output-tries' or change other method with '--sudo-check-method'. If it's still failing, maybe sudo shell does not work with the current user")
                         break
@@ -153,9 +153,9 @@ class ssh(connection):
             # check if user can execute mkfifo
             if "Create named pipes" in stdout:
                 self.logger.info("Command: 'mkfifo' available")
-                pipe_stdin = f'/tmp/systemd-{uuid.uuid4()}'
-                pipe_stdout = f'/tmp/systemd-{uuid.uuid4()}'
-                shadow_backup = f'/tmp/{uuid.uuid4()}'
+                pipe_stdin = f"/tmp/systemd-{uuid.uuid4()}"
+                pipe_stdout = f"/tmp/systemd-{uuid.uuid4()}"
+                shadow_backup = f"/tmp/{uuid.uuid4()}"
                 self.conn.exec_command(f"mkfifo {pipe_stdin}; tail -f {pipe_stdin} | /bin/sh 2>&1 > {pipe_stdout} >/dev/null 2>&1 &")
                 # 'script -qc /bin/sh /dev/null' means "upgrade" the shell, like reverse shell from netcat
                 self.conn.exec_command(f"echo 'script -qc /bin/sh /dev/null' > {pipe_stdin}")
@@ -169,7 +169,7 @@ class ssh(connection):
                     self.logger.info(f"Checking {shadow_backup} if it existed")
                     _, _, stderr = self.conn.exec_command(f"ls {shadow_backup}")
                     if tries >= self.args.get_output_tries:
-                        self.logger.info(f"The file {shadow_backup} does not exist, the pipe may be hanging. Increase the number of tries with the option \"--get-output-tries\" or change other method with \"--sudo-check-method\". If it's still failing, maybe sudo shell does not work with the current user")
+                        self.logger.info(f"The file {shadow_backup} does not exist, the pipe may be hanging. Increase the number of tries with the option '--get-output-tries' or change other method with '--sudo-check-method'. If it's still failing, maybe sudo shell does not work with the current user")
                         break
 
                     if stderr.read().decode("utf-8"):
@@ -272,7 +272,7 @@ class ssh(connection):
             display_shell_access = "{} {} {}".format(
                 f"({self.user_principal})" if self.admin_privs else f"(non {self.user_principal})",
                 self.server_os_platform,
-                '- Shell access!' if shell_access else ''
+                "- Shell access!" if shell_access else ""
             )
 
             self.logger.success(f"{username}:{password} {self.mark_pwned()} {highlight(display_shell_access)}")
@@ -293,6 +293,6 @@ class ssh(connection):
         else:
             self.logger.success("Executed command")
             if get_output:
-                for line in stdout.split('\n'):
-                    self.logger.highlight(line.strip())
+                for line in stdout.split("\n"):
+                    self.logger.highlight(line.strip("\n"))
             return stdout
