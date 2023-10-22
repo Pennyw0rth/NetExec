@@ -221,7 +221,10 @@ class ssh(connection):
         except Exception as e:
             if self.args.key_file:
                 password = f"{process_secret(password)} (keyfile: {self.args.key_file})"
-            self.logger.fail(f"{username}:{password} {e}")
+            if "OpenSSH private key file checkints do not match" in str(e):
+                self.logger.fail(f"{username}:{password} - Could not decrypt key file, wrong password")
+            else:
+                self.logger.fail(f"{username}:{password} {e}")
             self.conn.close()
             return False
         else:
