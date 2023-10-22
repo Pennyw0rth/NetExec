@@ -7,7 +7,6 @@ from nxc.cli import gen_cli_args
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.loaders.moduleloader import ModuleLoader
 from nxc.first_run import first_run_setup
-from nxc.context import Context
 from nxc.paths import NXC_PATH
 from nxc.console import nxc_console
 from nxc.logger import nxc_logger
