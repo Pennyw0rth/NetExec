@@ -210,6 +210,8 @@ netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --sudo-check --sudo-check-method
 ##### FTP- Default test passwords and random key; switch these out if you want correct authentication
 netexec ftp TARGET_HOST -u USERNAME -p PASSWORD
 netexec ftp TARGET_HOST -u USERNAME -p PASSWORD --ls
+netexec ftp TARGET_HOST -u USERNAME -p PASSWORD --put data/test_file.txt
+netexec ftp TARGET_HOST -u USERNAME -p PASSWORD --get test_file.txt
 netexec ftp TARGET_HOST -u data/test_users.txt -p test_passwords.txt --no-bruteforce
 netexec ftp TARGET_HOST -u data/test_users.txt -p test_passwords.txt --no-bruteforce --continue-on-success
 netexec ftp TARGET_HOST -u data/test_users.txt -p test_passwords.txt
