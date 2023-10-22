@@ -43,12 +43,20 @@ def add_user_bh(user, domain, logger, config):
         try:
             with driver.session() as session, session.begin_transaction() as tx:
                 for info in users_owned:
+                    distinguished_name = "".join(["DC=" + dc + "," for dc in info["domain"].split(".")]).rstrip(",")
+                    domain_query = tx.run(f'MATCH (d:Domain) WHERE d.distinguishedname STARTS WITH "{distinguished_name}" RETURN d').data()
+                    if not domain_query:
+                        raise Exception("Domain not found in bloodhound")
+                    else:
+                        domain = domain_query[0]["d"].get("name")
+
                     if info["username"][-1] == "$":
-                        user_owned = info["username"][:-1] + "." + info["domain"]
+                        user_owned = info["username"][:-1] + "." + domain
                         account_type = "Computer"
                     else:
-                        user_owned = info["username"] + "@" + info["domain"]
+                        user_owned = info["username"] + "@" + domain
                         account_type = "User"
+
 
                     result = tx.run(f'MATCH (c:{account_type} {{name:"{user_owned}"}}) RETURN c')
 
@@ -63,7 +71,10 @@ def add_user_bh(user, domain, logger, config):
             logger.fail(f"Neo4J does not seem to be available on {uri}.")
             return
         except Exception as e:
-            logger.fail(f"Unexpected error with Neo4J: {e}")
-            logger.fail("Account not found on the domain")
+            if "Domain not found in bloodhound" in str(e):
+                logger.fail("Neo4J Error: Domain not found in BloodHound. Please specify the FQDN ex:domain.local.")
+            else:
+                logger.fail(f"Unexpected error with Neo4J: {e}")
+                logger.fail("Account not found on the domain")
             return
         driver.close()
