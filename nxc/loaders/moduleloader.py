@@ -114,6 +114,7 @@ class ModuleLoader:
                     "supported_protocols": module_spec.supported_protocols,
                     "opsec_safe": module_spec.opsec_safe,
                     "multiple_hosts": module_spec.multiple_hosts,
+                    "requires_admin": True if hasattr(module_spec, 'on_admin_login') and callable(module_spec.on_admin_login) else False,
                 }
             }
             if self.module_is_sane(module_spec, module_path):
