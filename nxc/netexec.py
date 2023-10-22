@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import identify_target_file
 from nxc.parsers.ip import parse_targets
@@ -7,7 +6,6 @@ from nxc.parsers.nessus import parse_nessus_file
 from nxc.cli import gen_cli_args
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.loaders.moduleloader import ModuleLoader
-from nxc.servers.http import NXCHTTPServer
 from nxc.first_run import first_run_setup
 from nxc.context import Context
 from nxc.paths import NXC_PATH
@@ -216,22 +214,6 @@ def main():
 
                 if not args.server_port:
                     args.server_port = server_port_dict[args.server]
-
-                # loading a module server multiple times will obviously fail
-                try:
-                    context = Context(db, nxc_logger, args)
-                    module_server = NXCHTTPServer(
-                        module,
-                        context,
-                        nxc_logger,
-                        args.server_host,
-                        args.server_port,
-                        args.server,
-                    )
-                    module_server.start()
-                    protocol_object.server = module_server.server
-                except Exception as e:
-                    nxc_logger.error(f"Error loading module server for {module}: {e}")
 
             nxc_logger.debug(f"proto_object: {protocol_object}, type: {type(protocol_object)}")
             nxc_logger.debug(f"proto object dir: {dir(protocol_object)}")
