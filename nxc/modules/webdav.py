@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from nxc.protocols.smb.remotefile import RemoteFile
 from impacket import nt_errors
 from impacket.smb3structs import FILE_READ_DATA

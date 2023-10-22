@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # All credits to https://github.com/d4t4s3c/Win7Blue
 # @d4t4s3c
 # Module by @mpgn_x64

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # From https://github.com/topotam/PetitPotam
 # All credit to @topotam
 # Module by @mpgn_x64

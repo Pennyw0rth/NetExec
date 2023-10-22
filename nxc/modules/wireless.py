@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from dploot.triage.masterkeys import MasterkeysTriage
 from dploot.lib.target import Target
 from dploot.lib.smb import DPLootSMBConnection

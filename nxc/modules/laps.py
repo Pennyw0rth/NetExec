@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import json
 
 from impacket.ldap import ldapasn1 as ldapasn1_impacket

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import ntpath
 from sys import exit
 

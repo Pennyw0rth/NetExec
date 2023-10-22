@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ldap import ldap as ldap_impacket
 from math import fabs

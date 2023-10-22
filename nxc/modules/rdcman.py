@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from dploot.triage.rdg import RDGTriage
 from dploot.triage.masterkeys import MasterkeysTriage, parse_masterkey_file
 from dploot.triage.backupkey import BackupkeyTriage

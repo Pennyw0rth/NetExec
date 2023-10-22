@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from ipaddress import ip_address, ip_network, summarize_address_range, ip_interface
 
 

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 from impacket.dcerpc.v5.rrp import DCERPCSessionError

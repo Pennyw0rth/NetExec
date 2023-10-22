@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import random
 from binascii import hexlify, unhexlify
 from datetime import datetime, timedelta

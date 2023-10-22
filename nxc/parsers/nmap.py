@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from libnmap.parser import NmapParser
 from nxc.logger import nxc_logger
 

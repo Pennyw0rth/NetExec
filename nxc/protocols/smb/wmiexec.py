@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import ntpath
 import os
 from time import sleep

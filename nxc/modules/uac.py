@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import logging
 
 from impacket.dcerpc.v5 import rrp

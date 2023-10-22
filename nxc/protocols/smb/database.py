@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import base64
 import warnings
 from datetime import datetime

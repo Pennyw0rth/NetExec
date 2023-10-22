@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from pyasn1.codec.der import decoder
 from pyasn1_modules import rfc5652
 

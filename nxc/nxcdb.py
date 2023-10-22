@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import cmd
 import configparser
 import csv

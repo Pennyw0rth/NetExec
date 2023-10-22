@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # nanodump module for nxc python3
 # author of the module : github.com/mpgn
 # nanodump: https://github.com/helpsystems/nanodump

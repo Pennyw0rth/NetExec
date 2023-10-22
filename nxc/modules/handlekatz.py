@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # handlekatz module for nxc python3
 # author of the module : github.com/mpgn
 # HandleKatz: https://github.com/codewhitesec/HandleKatz

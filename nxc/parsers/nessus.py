@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import xmltodict
 
 # Ideally i'd like to be able to pull this info out dynamically from each protocol object but i'm a lazy bastard

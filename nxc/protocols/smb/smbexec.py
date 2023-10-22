@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import os
 from os.path import join as path_join
 from time import sleep

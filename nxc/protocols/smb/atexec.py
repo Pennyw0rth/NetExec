@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import os
 from impacket.dcerpc.v5 import tsch, transport
 from impacket.dcerpc.v5.dtypes import NULL

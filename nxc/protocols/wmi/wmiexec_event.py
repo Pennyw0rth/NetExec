@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Author: xiaolichan # noqa: ERA001
 # Link: https://github.com/XiaoliChan/wmiexec-Pro
 # Note: windows version under NT6 not working with this command execution way, it need Win32_ScheduledJob.

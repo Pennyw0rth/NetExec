@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Author:
 #  Romain de Reydellet (@pentest_soka)
 from nxc.helpers.logger import highlight

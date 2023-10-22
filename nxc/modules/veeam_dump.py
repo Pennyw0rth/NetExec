@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Initially created by @sadshade, all output to him:
 # https://github.com/sadshade/veeam-output
 

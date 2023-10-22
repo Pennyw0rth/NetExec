@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from pathlib import Path
 
 from sqlalchemy.orm import sessionmaker, scoped_session

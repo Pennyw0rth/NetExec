@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # All credit to @an0n_r0
 # https://github.com/tothi/serviceDetector
 # Module by @mpgn_x64

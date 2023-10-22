@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from nxc.helpers.misc import validate_ntlm
 from nxc.nxcdb import DatabaseNavigator, print_table, print_help
 from termcolor import colored

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from pathlib import Path
 from sqlalchemy import MetaData, Table
 from sqlalchemy.exc import (

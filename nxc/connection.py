@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import random
 import socket
 from socket import AF_INET, AF_INET6, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME

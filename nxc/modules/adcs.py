@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import re
 from impacket.ldap import ldap, ldapasn1
 from impacket.ldap.ldap import LDAPSearchError

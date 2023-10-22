@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from masky import Masky
 from nxc.helpers.bloodhound import add_user_bh
 

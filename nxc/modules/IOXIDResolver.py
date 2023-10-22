@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # Credit to https://airbus-cyber-security.com/fr/the-oxid-resolver-part-1-remote-enumeration-of-network-interfaces-without-any-authentication/
 # Airbus CERT
 # module by @mpgn_x64

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from impacket.smb3structs import FILE_READ_DATA, FILE_WRITE_DATA
 
 

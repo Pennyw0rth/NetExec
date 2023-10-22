@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import sys
 from impacket import system_errors
 from impacket.dcerpc.v5.rpcrt import DCERPCException

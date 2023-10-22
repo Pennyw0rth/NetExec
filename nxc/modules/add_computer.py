@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import ssl
 import ldap3
 from impacket.dcerpc.v5 import samr, epm, transport

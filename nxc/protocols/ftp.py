@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from nxc.config import process_secret
 from nxc.connection import connection
 from nxc.helpers.logger import highlight

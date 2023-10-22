@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import os
 import pytest
 from sqlalchemy import create_engine

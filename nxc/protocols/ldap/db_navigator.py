@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from nxc.nxcdb import DatabaseNavigator, print_help
 
 

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Author: Peter Gormington (@hackerm00n on Twitter)
 import logging
 from sqlite3 import connect

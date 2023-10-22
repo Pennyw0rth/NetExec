@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from impacket import system_errors
 from impacket.dcerpc.v5 import transport
 from impacket.dcerpc.v5.ndr import NDRCALL

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import time
 from impacket import system_errors
 from impacket.dcerpc.v5 import transport

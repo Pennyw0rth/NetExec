@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from base64 import b64decode
 from binascii import unhexlify
 from hashlib import pbkdf2_hmac, sha1

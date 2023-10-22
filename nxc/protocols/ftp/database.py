@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from pathlib import Path
 from sqlalchemy.dialects.sqlite import Insert
 from sqlalchemy.orm import sessionmaker, scoped_session

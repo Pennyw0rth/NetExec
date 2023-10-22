@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import binascii
 from nxc.logger import nxc_logger
 

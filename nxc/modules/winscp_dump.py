@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # If you are looking for a local Version, the baseline code is from https://github.com/NeffIsBack/WinSCPPasswdExtractor
 # References and inspiration:
 # - https://github.com/anoopengineer/winscppasswd

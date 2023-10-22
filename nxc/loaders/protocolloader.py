@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from types import ModuleType
 from importlib.machinery import SourceFileLoader
 from os import listdir

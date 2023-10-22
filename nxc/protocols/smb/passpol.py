@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Stolen from https://github.com/Wh1t3Fox/polenum
 
 from impacket.dcerpc.v5.rpcrt import DCERPC_v5

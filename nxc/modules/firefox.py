@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from dploot.lib.target import Target
 from nxc.protocols.smb.firefox import FirefoxTriage
 

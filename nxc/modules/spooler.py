@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # https://raw.githubusercontent.com/SecureAuthCorp/impacket/master/examples/rpcdump.py
 from impacket import uuid
 from impacket.dcerpc.v5 import transport, epm

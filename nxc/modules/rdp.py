@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from sys import exit
 
 from nxc.connection import dcom_FirewallChecker

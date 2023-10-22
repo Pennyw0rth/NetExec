@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from os import mkdir
 from os.path import exists
 from os.path import join as path_join
