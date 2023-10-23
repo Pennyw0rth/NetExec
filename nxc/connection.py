@@ -24,11 +24,7 @@ user_failed_logins = {}
 def gethost_addrinfo(hostname):
     is_ipv6 = False
     is_link_local_ipv6 = False
-
-    address_info = {
-        "AF_INET6":"",
-        "AF_INET":""
-    }
+    address_info = {"AF_INET6":"", "AF_INET":""}
 
     for res in getaddrinfo(hostname, None, AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
         af, _, _, canonname, sa = res
