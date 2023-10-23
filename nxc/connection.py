@@ -31,11 +31,8 @@ def gethost_addrinfo(hostname):
     }
 
     for res in getaddrinfo(hostname, None, AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
-        af, socktype, proto, canonname, sa = res
-        if af.name == "AF_INET6":
-            address_info["AF_INET6"] = sa[0]
-        else:
-            address_info["AF_INET"] = sa[0]
+        af, _, _, canonname, sa = res
+        address_info[af.name] = sa[0]
 
     # IPv4 preferred
     if address_info["AF_INET"]:
