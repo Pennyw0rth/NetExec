@@ -24,13 +24,26 @@ user_failed_logins = {}
 def gethost_addrinfo(hostname):
     is_ipv6 = False
     is_link_local_ipv6 = False
+
+    address_info = {
+        "AF_INET6":"",
+        "AF_INET":""
+    }
+
     for res in getaddrinfo(hostname, None, AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
         af, socktype, proto, canonname, sa = res
-    if ip_address(sa[0]).version == 6:
-        is_ipv6 = True
-        host, is_link_local_ipv6 = (canonname, True) if ip_address(sa[0]).is_link_local else (sa[0], False)
+        if af.name == "AF_INET6":
+            address_info["AF_INET6"] = sa[0]
+        else:
+            address_info["AF_INET"] = sa[0]
+
+    # IPv4 preferred
+    if address_info["AF_INET"]:
+        host = address_info["AF_INET"]
     else:
-        host = sa[0]
+        is_ipv6 = True
+        host, is_link_local_ipv6 = (canonname, True) if ip_address(address_info["AF_INET6"]).is_link_local else (address_info["AF_INET6"], False)
+
     return host, is_ipv6, is_link_local_ipv6
 
 def requires_admin(func):
