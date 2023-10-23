@@ -15,8 +15,6 @@ jobs:
       - name: Install poetry
         run: |
           pipx install poetry
-          poetry --version
-          poetry env info
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
