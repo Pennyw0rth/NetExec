@@ -1,4 +1,3 @@
-
 def add_user_bh(user, domain, logger, config):
     """Adds a user to the BloodHound graph database.
 
@@ -41,7 +40,7 @@ def add_user_bh(user, domain, logger, config):
             encrypted=False,
         )
         try:
-            with driver.session() as session, session.begin_transaction() as tx:
+            with driver.session().begin_transaction() as tx:
                 for info in users_owned:
                     distinguished_name = "".join(["DC=" + dc + "," for dc in info["domain"].split(".")]).rstrip(",")
                     domain_query = tx.run(f'MATCH (d:Domain) WHERE d.distinguishedname STARTS WITH "{distinguished_name}" RETURN d').data()
@@ -56,7 +55,6 @@ def add_user_bh(user, domain, logger, config):
                     else:
                         user_owned = info["username"] + "@" + domain
                         account_type = "User"
-
 
                     result = tx.run(f'MATCH (c:{account_type} {{name:"{user_owned}"}}) RETURN c')
 

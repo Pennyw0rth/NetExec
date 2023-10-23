@@ -236,6 +236,7 @@ class winrm(connection):
             if self.admin_privs:
                 self.logger.debug("Inside admin privs")
                 self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host)  # , user_id=user_id)
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
@@ -288,6 +289,7 @@ class winrm(connection):
 
             if self.admin_privs:
                 self.db.add_admin_user("hash", domain, self.username, nthash, self.host)
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
