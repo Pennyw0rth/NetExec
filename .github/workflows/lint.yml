@@ -1,4 +1,5 @@
 name: Lint Python code with ruff
+# Caching source: https://gist.github.com/gh640/233a6daf68e9e937115371c0ecd39c61?permalink_comment_id=4529233#gistcomment-4529233
 
 on: [push, pull_request]
 
@@ -11,15 +12,18 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with:
-          python-version: 3.11
       - name: Install poetry
         run: |
           pipx install poetry
           poetry --version
           poetry env info
-      - name: Install libraries with dev group
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+          cache: poetry
+          cache-dependency-path: poetry.lock
+      - name: Install dependencies with dev group
         run: |
           poetry install --with dev
       - name: Run ruff
