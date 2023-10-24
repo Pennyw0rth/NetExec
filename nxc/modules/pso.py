@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# Toss this in /root/NetExec/nxc/modules
 
 from ldap3 import ALL, Server, Connection, NTLM, extend, SUBTREE
 from dateutil.relativedelta import relativedelta as rd
@@ -30,7 +29,7 @@ class NXCModule:
 
         # Set some variables
         self.__domain = connection.domain
-        self.__kdcHost = connection.hostname + "." + connection.domain
+        self.__kdcHost = (f'{connection.hostname}.{connection.domain}')
         self.__username = connection.username
         self.__password = connection.password
 
@@ -125,7 +124,7 @@ def base_creator(domain):
     search_base = ""
     base = domain.split(".")
     for b in base:
-        search_base += "DC=" + b + ","
+        search_base += (f'DC={b},')
     return search_base[:-1]
 
 def clock(nano):
