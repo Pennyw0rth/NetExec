@@ -397,12 +397,16 @@ class connection:
         with sem:
             if cred_type == "plaintext":
                 if self.args.kerberos:
+                    self.logger.debug("Trying to authenticate using Kerberos")
                     return self.kerberos_login(domain, username, secret, "", "", self.kdcHost, False)
-                elif hasattr(self.args, "domain"):  # Some protocolls don't use domain for login
+                elif hasattr(self.args, "domain"):  # Some protocols don't use domain for login
+                    self.logger.debug("Trying to authenticate using plaintext with domain")
                     return self.plaintext_login(domain, username, secret)
                 elif self.args.protocol == "ssh":
+                    self.logger.debug("Trying to authenticate using plaintext over SSH")
                     return self.plaintext_login(username, secret, data)
                 else:
+                    self.logger.debug("Trying to authenticate using plaintext")
                     return self.plaintext_login(username, secret)
             elif cred_type == "hash":
                 if self.args.kerberos:
@@ -445,6 +449,7 @@ class connection:
             data.extend(parsed_data)
 
         if self.args.use_kcache:
+            self.logger.debug("Trying to authenticate using Kerberos cache")
             with sem:
                 username = self.args.username[0] if len(self.args.username) else ""
                 password = self.args.password[0] if len(self.args.password) else ""
