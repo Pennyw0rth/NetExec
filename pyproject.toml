@@ -37,7 +37,7 @@ python = "^3.7.0"
 requests = ">=2.27.1"
 beautifulsoup4 = ">=4.11,<5"
 lsassy = ">=3.1.8"
-termcolor = "^2.3.0"
+termcolor = "2.0.1"
 msgpack = "^1.0.0"
 neo4j = "^4.1.1" # do not upgrade this until performance regression issues in 5 are fixed (as of 9/23)
 pylnk3 = "^0.4.2"
@@ -63,6 +63,7 @@ rich = "^13.3.5"
 python-libnmap = "^0.7.3"
 resource = "^0.2.1"
 oscrypto = { git = "https://github.com/Pennyw0rth/oscrypto" } # Pypi version currently broken, see: https://github.com/wbond/oscrypto/issues/78 (as of 9/23)
+pyreadline = "^2.1" # for the build - impacket imports its hidden from the builder so an error occurs
 ruff = "=0.0.292"
 
 [tool.poetry.group.dev.dependencies]

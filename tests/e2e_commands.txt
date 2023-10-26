@@ -207,15 +207,22 @@ netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M web_de
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --nla-screenshot
 ##### SSH - Default test passwords and random key; switch these out if you want correct authentication
-netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
+netexec ssh TARGET_HOST -u USERNAME -p PASSWORD
 netexec ssh TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt --no-bruteforce
 netexec ssh TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt --no-bruteforce --continue-on-success
 netexec ssh TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt
-netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --key-file data/test_key.priv
-netexec ssh TARGET_HOST -u LOGIN_USERNAME -p '' --key-file data/test_key.priv
+netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --key-file data/test_key.priv
+netexec ssh TARGET_HOST -u USERNAME -p '' --key-file data/test_key.priv
+netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --sudo-check
+netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --sudo-check --sudo-check-method sudo-stdin
+netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --sudo-check --sudo-check-method sudo-stdin --get-output-tries 10
+netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --sudo-check --sudo-check-method mkfifo
+netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --sudo-check --sudo-check-method mkfifo --get-output-tries 10
 ##### FTP- Default test passwords and random key; switch these out if you want correct authentication
-netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
-netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --ls
+netexec ftp TARGET_HOST -u USERNAME -p PASSWORD
+netexec ftp TARGET_HOST -u USERNAME -p PASSWORD --ls
+netexec ftp TARGET_HOST -u USERNAME -p PASSWORD --put data/test_file.txt
+netexec ftp TARGET_HOST -u USERNAME -p PASSWORD --get test_file.txt
 netexec ftp TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt --no-bruteforce
 netexec ftp TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt --no-bruteforce --continue-on-success
 netexec ftp TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt
