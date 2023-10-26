@@ -82,7 +82,7 @@ class ftp(connection):
                 if not files:
                     return False
                 # If there are files, then we can list the files
-                self.logger.display(f"Directory Listing")
+                self.logger.display("Directory Listing")
                 for file in files:
                     self.logger.highlight(file)
             else:
@@ -141,14 +141,16 @@ class ftp(connection):
             self.conn.close()
             return False
         except FileNotFoundError:
-            self.logger.fail(f"Failed to download the file. Response: (No such file or directory.)")
+            self.logger.fail("Failed to download the file. Response: (No such file or directory.)")
             self.conn.close()
             return False
         # Check if the file was downloaded
         if os.path.isfile(downloaded_file):
             self.logger.success(f"Downloaded: {filename}")
+            return None
         else:
             self.logger.fail(f"Failed to download: {filename}")
+            return None
 
     def put_file(self, local_file, remote_file):
         try:
@@ -163,8 +165,10 @@ class ftp(connection):
         # Check if the file was uploaded
         if self.conn.size(remote_file) > 0:
             self.logger.success(f"Uploaded: {local_file} to {remote_file}")
+            return None
         else:
             self.logger.fail(f"Failed to upload: {local_file} to {remote_file}")
+            return None
 
     def supported_commands(self):
         raw_supported_commands = self.conn.sendcmd("HELP")

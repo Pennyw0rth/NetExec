@@ -6,7 +6,6 @@ import re
 import uuid
 import logging
 import time
-import socket
 
 from io import StringIO
 from nxc.config import process_secret
@@ -97,7 +96,7 @@ class ssh(connection):
             "(ALL : ALL) ALL": [True, None],
             "(sudo)": [False, f"Current user: '{self.username}' was in 'sudo' group, please try '--sudo-check' to check if user can run sudo shell"]
         }
-        for keyword in admin_flag.keys():
+        for keyword in admin_flag:
             match = re.findall(re.escape(keyword), stdout)
             if match:
                 self.logger.info(f"User: '{self.username}' matched keyword: {match[0]}")
@@ -196,7 +195,7 @@ class ssh(connection):
                 self.logger.debug("Logging in with key")
 
                 if self.args.key_file:
-                    with open(self.args.key_file, "r") as f:
+                    with open(self.args.key_file) as f:
                         private_key = f.read()
 
                 pkey = paramiko.RSAKey.from_private_key(StringIO(private_key), password)
@@ -290,7 +289,7 @@ class ssh(connection):
             _, stdout, _ = self.conn.exec_command(f"{payload} 2>&1")
             stdout = stdout.read().decode(self.args.codec, errors="ignore")
         except Exception as e:
-            self.logger.fail(f"Execute command failed, error: {str(e)}")
+            self.logger.fail(f"Execute command failed, error: {e!s}")
             return False
         else:
             self.logger.success("Executed command")
