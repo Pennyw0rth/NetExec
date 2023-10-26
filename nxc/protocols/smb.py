@@ -647,7 +647,22 @@ class smb(connection):
             current_method = method
             if method == "wmiexec":
                 try:
-                    exec_method = WMIEXEC(self.host if not self.kerberos else self.hostname + "." + self.domain, self.smb_share_name, self.username, self.password, self.domain, self.conn, self.kerberos, self.aesKey, self.kdcHost, self.hash, self.args.share, logger=self.logger, timeout=self.args.dcom_timeout, tries=self.args.get_output_tries)
+                    exec_method = WMIEXEC(
+                        self.host if not self.kerberos else self.hostname + "." + self.domain,
+                        self.smb_share_name,
+                        self.username,
+                        self.password,
+                        self.domain,
+                        self.conn,
+                        self.kerberos,
+                        self.aesKey,
+                        self.kdcHost,
+                        self.hash,
+                        self.args.share,
+                        logger=self.logger,
+                        timeout=self.args.dcom_timeout,
+                        tries=self.args.get_output_tries
+                    )
                     self.logger.info("Executed command via wmiexec")
                     break
                 except Exception:
@@ -656,7 +671,19 @@ class smb(connection):
                     continue
             elif method == "mmcexec":
                 try:
-                    exec_method = MMCEXEC(self.host if not self.kerberos else self.hostname + "." + self.domain, self.smb_share_name, self.username, self.password, self.domain, self.conn, self.args.share, self.hash, self.logger, self.args.get_output_tries, self.args.dcom_timeout)
+                    exec_method = MMCEXEC(
+                        self.host if not self.kerberos else self.hostname + "." + self.domain,
+                        self.smb_share_name,
+                        self.username,
+                        self.password,
+                        self.domain,
+                        self.conn,
+                        self.args.share,
+                        self.hash,
+                        self.logger,
+                        self.args.get_output_tries,
+                        self.args.dcom_timeout
+                    )
                     self.logger.info("Executed command via mmcexec")
                     break
                 except Exception:
@@ -665,7 +692,20 @@ class smb(connection):
                     continue
             elif method == "atexec":
                 try:
-                    exec_method = TSCH_EXEC(self.host if not self.kerberos else self.hostname + "." + self.domain, self.smb_share_name, self.username, self.password, self.domain, self.kerberos, self.aesKey, self.kdcHost, self.hash, self.logger, self.args.get_output_tries, self.args.share)
+                    exec_method = TSCH_EXEC(
+                        self.host if not self.kerberos else self.hostname + "." + self.domain,
+                        self.smb_share_name,
+                        self.username,
+                        self.password,
+                        self.domain,
+                        self.kerberos,
+                        self.aesKey,
+                        self.kdcHost,
+                        self.hash,
+                        self.logger,
+                        self.args.get_output_tries,
+                        self.args.share
+                    )
                     self.logger.info("Executed command via atexec")
                     break
                 except Exception:
@@ -674,7 +714,23 @@ class smb(connection):
                     continue
             elif method == "smbexec":
                 try:
-                    exec_method = SMBEXEC(self.host if not self.kerberos else self.hostname + "." + self.domain, self.smb_share_name, self.conn, self.args.port, self.username, self.password, self.domain, self.kerberos, self.aesKey, self.kdcHost, self.hash, self.args.share, self.args.port, self.logger, self.args.get_output_tries)
+                    exec_method = SMBEXEC(
+                        self.host if not self.kerberos else self.hostname + "." + self.domain,
+                        self.smb_share_name,
+                        self.conn,
+                        self.args.port,
+                        self.username,
+                        self.password,
+                        self.domain,
+                        self.kerberos,
+                        self.aesKey,
+                        self.kdcHost,
+                        self.hash,
+                        self.args.share,
+                        self.args.port,
+                        self.logger,
+                        self.args.get_output_tries
+                    )
                     self.logger.info("Executed command via smbexec")
                     break
                 except Exception:
