@@ -267,7 +267,14 @@ class database:
         add_links = []
 
         creds_q = select(self.CredentialsTable)
-        creds_q = creds_q.filter(self.CredentialsTable.c.id == cred_id) if cred_id else creds_q.filter(func.lower(self.CredentialsTable.c.credtype) == func.lower(credtype), func.lower(self.CredentialsTable.c.username) == func.lower(username), self.CredentialsTable.c.password == secret)
+        if cred_id:  # noqa: SIM108
+            creds_q = creds_q.filter(self.CredentialsTable.c.id == cred_id)
+        else:
+            creds_q = creds_q.filter(
+                func.lower(self.CredentialsTable.c.credtype) == func.lower(credtype),
+                func.lower(self.CredentialsTable.c.username) == func.lower(username),
+                self.CredentialsTable.c.password == secret,
+            )
         creds = self.sess.execute(creds_q)
         hosts = self.get_hosts(host_id)
 
