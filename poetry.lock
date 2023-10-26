@@ -1777,6 +1777,16 @@ unicrypto = ">=0.0.10,<=0.1.0"
 winacl = ">=0.1.7,<=0.2.0"
 
 [[package]]
+name = "pyreadline"
+version = "2.1"
+description = "A python implmementation of GNU readline."
+optional = false
+python-versions = "*"
+files = [
+    {file = "pyreadline-2.1.zip", hash = "sha256:4530592fc2e85b25b1a9f79664433da09237c1a270e4d78ea5aa3a2c7229e2d1"},
+]
+
+[[package]]
 name = "pyrsistent"
 version = "0.19.3"
 description = "Persistent/Functional/Immutable data structures"
@@ -2384,4 +2394,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.7.0"
-content-hash = "97e57f05fadf905356205302c5404c4cab8dc3be9649674b54920af3869f9b4a"
+content-hash = "1ff7892bac10d1469e83c63d338eeca5964a19f39704651cb71a90e045ebb16b"
