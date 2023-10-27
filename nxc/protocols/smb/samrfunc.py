@@ -155,7 +155,6 @@ class SAMRQuery:
             return resp["ServerHandle"]
         else:
             nxc_logger.debug("Error creating Samr handle")
-            return None
 
     def get_domains(self):
         """Calls the hSamrEnumerateDomainsInSamServer() method directly with list comprehension and extracts the "Name" value from each element in the "Buffer" list."""

@@ -1612,7 +1612,6 @@ class smb(connection):
                 credential.password,
                 credential.url,
             )
-        return None
 
     @requires_admin
     def lsa(self):

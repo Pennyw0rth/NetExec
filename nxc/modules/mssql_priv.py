@@ -139,7 +139,6 @@ class NXCModule:
             else:
                 self.context.log.display(f"{user.username} can impersonate: {grantor.username}")
             return self.browse_path(context, initial_user, grantor)
-        return None
 
     def query_and_get_output(self, query):
         return self.mssql_conn.sql_query(query)
@@ -353,8 +352,6 @@ class NXCModule:
         for db in dbowner_privileged_databases:
             if db in trusted_databases:
                 return db
-
-        return None
 
     def do_dbowner_privesc(self, database, exec_as=""):
         """

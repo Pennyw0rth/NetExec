@@ -110,7 +110,6 @@ class ftp(connection):
             self.conn.close()
             return True
         self.conn.close()
-        return None
 
     def list_directory_full(self):
         # in the future we can use mlsd/nlst if we want, but this gives a full output like `ls -la`
@@ -147,10 +146,8 @@ class ftp(connection):
         # Check if the file was downloaded
         if os.path.isfile(downloaded_file):
             self.logger.success(f"Downloaded: {filename}")
-            return None
         else:
             self.logger.fail(f"Failed to download: {filename}")
-            return None
 
     def put_file(self, local_file, remote_file):
         try:
@@ -165,10 +162,8 @@ class ftp(connection):
         # Check if the file was uploaded
         if self.conn.size(remote_file) > 0:
             self.logger.success(f"Uploaded: {local_file} to {remote_file}")
-            return None
         else:
             self.logger.fail(f"Failed to upload: {local_file} to {remote_file}")
-            return None
 
     def supported_commands(self):
         raw_supported_commands = self.conn.sendcmd("HELP")

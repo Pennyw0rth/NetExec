@@ -138,7 +138,6 @@ class database:
         if updated_ids:
             nxc_logger.debug(f"add_host() - Host IDs Updated: {updated_ids}")
             return updated_ids
-        return None
 
     def add_credential(self, username, password):
         """Check if this credential has already been added to the database, if not add it in."""
@@ -205,9 +204,7 @@ class database:
             self.CredentialsTable.c.password == password,
         )
         results = self.sess.execute(q).first()
-        if results is None:
-            return None
-        else:
+        if results is not None:
             return results.id
 
     def get_credentials(self, filter_term=None):
@@ -291,7 +288,6 @@ class database:
                 return inserted_id_results[0].id
             except Exception as e:
                 nxc_logger.debug(f"Error inserting LoggedinRelation: {e}")
-        return None
 
     def get_loggedin_relations(self, cred_id=None, host_id=None):
         q = select(self.LoggedinRelationsTable)  # .returning(self.LoggedinRelationsTable.c.id)

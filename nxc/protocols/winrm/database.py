@@ -307,7 +307,6 @@ class database:
             results = self.conn.execute(q).all()
 
             return len(results) > 0
-        return None
 
     def is_host_valid(self, host_id):
         """Check if this host ID is valid."""

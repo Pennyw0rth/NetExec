@@ -414,7 +414,6 @@ class connection:
                 return self.hash_login(domain, username, secret)
             elif cred_type == "aesKey":
                 return self.kerberos_login(domain, username, "", "", secret, self.kdcHost, False)
-            return None
 
     def login(self):
         """Try to login using the credentials specified in the command line or in the database.
@@ -464,7 +463,6 @@ class connection:
                         owned[user_index] = True
                         if not self.args.continue_on_success:
                             return True
-            return None
         else:
             if len(username) != len(secret):
                 self.logger.error("Number provided of usernames and passwords/hashes do not match!")
@@ -474,7 +472,6 @@ class connection:
                     owned[user_index] = True
                     if not self.args.continue_on_success:
                         return True
-            return None
 
     def mark_pwned(self):
         return highlight(f"({pwned_label})" if self.admin_privs else "")
