@@ -58,7 +58,6 @@ class ModuleLoader:
         except Exception as e:
             self.logger.fail(f"Failed loading module at {module_path}: {e}")
             self.logger.debug(traceback.format_exc())
-        return None
 
     def init_module(self, module_path):
         """Initialize a module for execution"""
@@ -85,7 +84,6 @@ class ModuleLoader:
             else:
                 self.logger.fail(f"Module {module.name.upper()} is not supported for protocol {self.args.protocol}")
                 sys.exit(1)
-        return None
 
     def get_module_info(self, module_path):
         """Get the path, description, and options from a module"""
@@ -101,6 +99,7 @@ class ModuleLoader:
                     "supported_protocols": module_spec.supported_protocols,
                     "opsec_safe": module_spec.opsec_safe,
                     "multiple_hosts": module_spec.multiple_hosts,
+                    "requires_admin": bool(hasattr(module_spec, "on_admin_login") and callable(module_spec.on_admin_login)),
                 }
             }
             if self.module_is_sane(module_spec, module_path):
@@ -108,7 +107,6 @@ class ModuleLoader:
         except Exception as e:
             self.logger.fail(f"Failed loading module at {module_path}: {e}")
             self.logger.debug(traceback.format_exc())
-        return None
 
     def list_modules(self):
         """List modules without initializing them"""

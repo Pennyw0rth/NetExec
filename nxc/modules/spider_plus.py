@@ -137,8 +137,6 @@ class SMBSpiderPlus:
             if self.reconnect():
                 return self.get_remote_file(share, path)
 
-            return None
-
     def read_chunk(self, remote_file, chunk_size=CHUNK_SIZE):
         """Reads the next chunk of data from the provided remote file using the specified chunk size.
         If a `SessionError` is encountered, it retries up to 3 times by reconnecting the SMB connection.

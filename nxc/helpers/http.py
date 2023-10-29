@@ -19,4 +19,3 @@ def get_desktop_uagent(uagent=None):
         return desktop_uagents[random.choice(desktop_uagents.keys())]
     elif uagent:
         return desktop_uagents[uagent]
-    return None

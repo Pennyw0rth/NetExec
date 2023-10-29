@@ -150,7 +150,6 @@ class FirefoxTriage:
                     fh.close()
                     return b""
         fh.close()
-        return None
 
     def is_master_password_correct(self, key_data, master_password=b""):
         try:
@@ -236,9 +235,4 @@ class FirefoxTriage:
             # 04 is OCTETSTRING, 0x0e is length == 14
             encrypted_value = decoded_item[0][1].asOctets()
             cipher = AES.new(key, AES.MODE_CBC, iv)
-            decrypted = cipher.decrypt(encrypted_value)
-            if decrypted is not None:
-                return decrypted
-            else:
-                return None
-        return None
+            return cipher.decrypt(encrypted_value)

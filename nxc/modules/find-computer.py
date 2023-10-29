@@ -76,7 +76,5 @@ class NXCModule:
                 except socket.gaierror:
                     context.log.debug("Missing IP")
                     context.log.highlight(f"{answer[0]} ({answer[1]}) (No IP Found)")
-            return None
         else:
             context.log.success(f"Unable to find any computers with the text {self.TEXT}")
-            return None

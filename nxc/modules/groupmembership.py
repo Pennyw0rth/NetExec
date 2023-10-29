@@ -84,5 +84,3 @@ class NXCModule:
                 group_name = group_parts[0].split("=")[1]
 
                 context.log.highlight(f"{group_name}")
-            return None
-        return None
