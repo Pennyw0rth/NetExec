@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from masky import Masky
 from nxc.helpers.bloodhound import add_user_bh
 
@@ -13,7 +10,7 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """
+        r"""
         CA              Certificate Authority Name (CA_SERVER\CA_NAME)
         TEMPLATE        Template name allowing users to authenticate with (default: User)
         DC_IP           IP Address of the domain controller
@@ -85,7 +82,7 @@ class NXCModule:
         pwned_users = 0
         for user in rslts.users:
             if user.nthash:
-                context.log.highlight(f"{user.domain}\{user.name} {user.nthash}")
+                context.log.highlight(f"{user.domain}\\{user.name} {user.nthash}")
                 self.process_credentials(connection, context, user)
                 pwned_users += 1
 
@@ -115,7 +112,7 @@ class NXCModule:
 
         if not tracker.files_cleaning_success:
             context.log.fail("Fail to clean files related to Masky")
-            context.log.fail((f"Please remove the files named '{tracker.agent_filename}', '{tracker.error_filename}', " f"'{tracker.output_filename}' & '{tracker.args_filename}' within the folder '\\Windows\\Temp\\'"))
+            context.log.fail(f"Please remove the files named '{tracker.agent_filename}', '{tracker.error_filename}', '{tracker.output_filename}' & '{tracker.args_filename}' within the folder '\\Windows\\Temp\\'")
             ret = False
 
         if not tracker.svc_cleaning_success:

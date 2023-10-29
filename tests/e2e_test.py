@@ -5,10 +5,27 @@ from rich.console import Console
 
 
 def get_cli_args():
-    parser = argparse.ArgumentParser(description=f"Script for running end to end tests for nxc")
-    parser.add_argument("-t", "--target", dest="target", required=True)
-    parser.add_argument("-u", "--user", "--username", dest="username", required=True)
-    parser.add_argument("-p", "--pass", "--password", dest="password", required=True)
+    parser = argparse.ArgumentParser(description="Script for running end to end tests for nxc")
+    parser.add_argument(
+        "-t",
+        "--target",
+        dest="target",
+        required=True
+    )
+    parser.add_argument(
+        "-u",
+        "--user",
+        "--username",
+        dest="username",
+        required=True
+    )
+    parser.add_argument(
+        "-p",
+        "--pass",
+        "--password",
+        dest="password",
+        required=True
+    )
     parser.add_argument(
         "-k",
         "--kerberos",
@@ -30,19 +47,25 @@ def get_cli_args():
         required=False,
         help="Display errors from commands",
     )
+    parser.add_argument(
+        "--poetry",
+        action="store_true",
+        required=False,
+        help="Use poetry to run commands",
+    )
+    parser.add_argument(
+        "--protocols",
+        nargs="+",
+        default=[],
+        required=False,
+        help="Protocols to test",
+    )
 
-    parsed_args = parser.parse_args()
-    return parsed_args
+    return parser.parse_args()
 
 
 def generate_commands(args):
     lines = []
-
-    if args.kerberos:
-        kerberos = "-k"
-    else:
-        kerberos = ""
-
     file_loc = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
     commands_file = os.path.join(file_loc, "e2e_commands.txt")
 
@@ -51,9 +74,20 @@ def generate_commands(args):
             if line.startswith("#"):
                 continue
             line = line.strip()
-            line = line.replace("TARGET_HOST", args.target).replace("USERNAME", f'"{args.username}"').replace("PASSWORD", f'"{args.password}"').replace("KERBEROS ", kerberos)
-            lines.append(line)
+            if args.protocols:
+                if line.split()[1] in args.protocols:
+                    lines.append(replace_command(args, line))
+            else:
+                lines.append(replace_command(args, line))
     return lines
+
+def replace_command(args, line):
+    kerberos = "-k " if args.kerberos else ""
+
+    line = line.replace("TARGET_HOST", args.target).replace("LOGIN_USERNAME", f'"{args.username}"').replace("LOGIN_PASSWORD", f'"{args.password}"').replace("KERBEROS ", kerberos)
+    if args.poetry:
+        line = f"poetry run {line}"
+    return line
 
 
 def run_e2e_tests(args):
@@ -68,7 +102,7 @@ def run_e2e_tests(args):
     )
     version = result.communicate()[0].decode().strip()
 
-    with console.status(f"[bold green] :brain: Running {len(tasks)} test commands for nxc v{version}...") as status:
+    with console.status(f"[bold green] :brain: Running {len(tasks)} test commands for nxc v{version}..."):
         passed = 0
         failed = 0
 

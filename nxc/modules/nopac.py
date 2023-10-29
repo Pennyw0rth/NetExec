@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Credit to https://exploit.ph/cve-2021-42287-cve-2021-42278-weaponisation.html
 # @exploitph @Evi1cg
 # module by @mpgn_x64
@@ -49,5 +47,5 @@ class NXCModule:
                 context.log.highlight("")
                 context.log.highlight("VULNERABLE")
                 context.log.highlight("Next step: https://github.com/Ridter/noPac")
-        except OSError as e:
+        except OSError:
             context.log.debug(f"Error connecting to Kerberos (port 88) on {connection.host}")

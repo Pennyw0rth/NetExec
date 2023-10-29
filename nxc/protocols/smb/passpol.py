@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Stolen from https://github.com/Wh1t3Fox/polenum
 
 from impacket.dcerpc.v5.rpcrt import DCERPC_v5
@@ -16,7 +14,7 @@ def d2b(a):
 
     t2bin = tbin[::-1]
     if len(t2bin) != 8:
-        for x in range(6 - len(t2bin)):
+        for _x in range(6 - len(t2bin)):
             t2bin.insert(0, 0)
     return "".join([str(g) for g in t2bin])
 
@@ -46,7 +44,7 @@ def convert(low, high, lockout=False):
         minutes = int(strftime("%M", gmtime(tmp)))
         hours = int(strftime("%H", gmtime(tmp)))
         days = int(strftime("%j", gmtime(tmp))) - 1
-    except ValueError as e:
+    except ValueError:
         return "[-] Invalid TIME"
 
     if days > 1:
@@ -239,7 +237,7 @@ class PassPolDump:
         self.logger.highlight(f"Password Complexity Flags: {self.__pass_prop or 'None'}")
 
         for i, a in enumerate(self.__pass_prop):
-            self.logger.highlight(f"\t{PASSCOMPLEX[i]} {str(a)}")
+            self.logger.highlight(f"\t{PASSCOMPLEX[i]} {a!s}")
 
         self.logger.highlight("")
         self.logger.highlight(f"Minimum password age: {self.__min_pass_age}")
