@@ -846,7 +846,6 @@ class ldap(connection):
         resp = self.search(search_filter, attributes, 0)
         if resp == []:
             self.logger.highlight("No entries found!")
-            return None
         elif resp:
             answers = []
             self.logger.display(f"Total of records returned {len(resp):d}")
@@ -896,10 +895,8 @@ class ldap(connection):
                 return True
             else:
                 self.logger.highlight("No entries found!")
-                return None
         else:
             self.logger.fail("Error with the LDAP account used")
-            return None
 
     def kerberoasting(self):
         # Building the search filter
@@ -996,9 +993,7 @@ class ldap(connection):
                 return True
             else:
                 self.logger.highlight("No entries found!")
-                return None
         self.logger.fail("Error with the LDAP account used")
-        return None
 
     def trusted_for_delegation(self):
         # Building the search filter
@@ -1129,7 +1124,6 @@ class ldap(connection):
                 self.logger.highlight(f"User: {value[0]} Status: {value[5]}")
         else:
             self.logger.fail("No entries found!")
-        return None
 
     def admin_count(self):
         # Building the search filter

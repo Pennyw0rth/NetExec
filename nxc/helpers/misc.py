@@ -77,4 +77,3 @@ def which(cmd, mode=os.F_OK | os.X_OK, path=None):
                 name = os.path.join(p, thefile)
                 if _access_check(name, mode):
                     return name
-    return None

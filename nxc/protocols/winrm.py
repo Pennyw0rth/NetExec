@@ -191,8 +191,8 @@ class winrm(connection):
         for url in endpoints:
             try:
                 self.logger.debug(f"Requesting URL: {url}")
-                res = requests.post(url, verify=False, timeout=self.args.http_timeout)  # noqa: F841
-                self.logger.debug("Received response code: {res.status_code}")
+                res = requests.post(url, verify=False, timeout=self.args.http_timeout) 
+                self.logger.debug(f"Received response code: {res.status_code}")
                 self.endpoint = url
                 if self.endpoint.startswith("https://"):
                     self.logger.extra["port"] = self.args.port if self.args.port else 5986
@@ -251,7 +251,6 @@ class winrm(connection):
 
     def hash_login(self, domain, username, ntlm_hash):
         try:
-
             lmhash = "00000000000000000000000000000000:"
             nthash = ""
 
@@ -304,21 +303,26 @@ class winrm(connection):
 
     def execute(self, payload=None, get_output=False):
         try:
+            self.logger.debug(f"Connection: {self.conn}, and type: {type(self.conn)}")
             r = self.conn.execute_cmd(self.args.execute, encoding=self.args.codec)
-        except Exception:
-            self.logger.info("Cannot execute command, probably because user is not local admin, but powershell command should be ok!")
-            r = self.conn.execute_ps(self.args.execute)
-        self.logger.success("Executed command")
-        buf = StringIO(r[0]).readlines()
-        for line in buf:
-            self.logger.highlight(line.strip())
+            self.logger.success("Executed command")
+            buf = StringIO(r[0]).readlines()
+            for line in buf:
+                self.logger.highlight(line.strip())
+        except Exception as e:
+            self.logger.debug(f"Error executing command: {e}")
+            self.logger.fail("Cannot execute command, probably because user is not local admin, but running via powershell (-X) may work")
 
     def ps_execute(self, payload=None, get_output=False):
-        r = self.conn.execute_ps(self.args.ps_execute)
-        self.logger.success("Executed command")
-        buf = StringIO(r[0]).readlines()
-        for line in buf:
-            self.logger.highlight(line.strip())
+        try:
+            r = self.conn.execute_ps(self.args.ps_execute)
+            self.logger.success("Executed command")
+            buf = StringIO(r[0]).readlines()
+            for line in buf:
+                self.logger.highlight(line.strip())
+        except Exception as e:
+            self.logger.debug(f"Error executing command: {e}")
+            self.logger.fail("Command execution failed")
 
     def sam(self):
         self.conn.execute_cmd("reg save HKLM\SAM C:\\windows\\temp\\SAM && reg save HKLM\SYSTEM C:\\windows\\temp\\SYSTEM")

@@ -51,7 +51,6 @@ class NXCModule:
                 # LDAPS bind successful
                 # because channel binding is not enforced
                 return False
-            return None
 
         # Conduct a bind to LDAPS with channel binding supported
         # but intentionally miscalculated. In the case that and
@@ -74,10 +73,8 @@ class NXCModule:
                 return False
             elif err is not None:
                 context.log.fail("ERROR while connecting to " + str(connection.domain) + ": " + str(err))
-                return None
             elif err is None:
                 return False
-            return None
 
         # Domain Controllers do not have a certificate setup for
         # LDAPS on port 636 by default. If this has not been setup,
@@ -128,10 +125,8 @@ class NXCModule:
                     sys.exit()
                 elif err is None:
                     return False
-                return None
             else:
                 context.log.fail(str(err))
-                return None
 
         # Run trough all our code blocks to determine LDAP signing and channel binding settings.
         stype = asyauthSecret.PASS if not connection.nthash else asyauthSecret.NT
