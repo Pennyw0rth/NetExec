@@ -192,17 +192,17 @@ class winrm(connection):
     def create_conn_obj(self):
         if self.is_link_local_ipv6:
             self.logger.info("winrm not support link-local ipv6, exitting...")
-            return
+            return False
         endpoints = {
-            "HTTP":{
-                "protocol":"http", 
-                "port":self.port[0],
-                "ssl":False
+            "HTTP": {
+                "protocol": "http", 
+                "port": self.port[0],
+                "ssl": False
             },
-            "HTTPS":{
-                "protocol":"https", 
-                "port":self.port[1] if len(self.port) != 1 else self.port[0],
-                "ssl":True
+            "HTTPS": {
+                "protocol": "https", 
+                "port": self.port[1] if len(self.port) != 1 else self.port[0],
+                "ssl": True
             }
         }
 
@@ -211,7 +211,7 @@ class winrm(connection):
         elif self.args.check_proto == "http":
             endpoints.pop("HTTPS")
 
-        for protocol in endpoints.keys():
+        for protocol in endpoints:
             self.port = endpoints[protocol]["port"]
             url = "{}://{}:{}/wsman".format(
                 endpoints[protocol]["protocol"],
@@ -244,8 +244,7 @@ class winrm(connection):
         ET.SubElement(enum_msg, f"{{{wsmn}}}OptimizeEnumeration")
         ET.SubElement(enum_msg, f"{{{wsmn}}}MaxElements").text = "32000"
 
-        response = wsman.enumerate("http://schemas.microsoft.com/wbem/wsman/1/windows/shell", enum_msg)
-        shells = response.findall("wsen:EnumerateResponse/wsman:Items/rsp:Shell", NAMESPACES)
+        wsman.enumerate("http://schemas.microsoft.com/wbem/wsman/1/windows/shell", enum_msg)
         self.admin_privs = True
         return True
 
@@ -283,7 +282,7 @@ class winrm(connection):
             if "with ntlm" in str(e):
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
             else:
-                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()} ({str(e)})")
+                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()} '{e}'")
 
             return False
 
@@ -333,7 +332,7 @@ class winrm(connection):
             if "with ntlm" in str(e):
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(nthash)}")
             else:
-                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(nthash)} ({str(e)})")
+                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(nthash)} '{e}'")
             return False
 
     def execute(self, payload=None, get_output=True, shell_type="cmd"):
@@ -356,7 +355,7 @@ class winrm(connection):
             elif ("decode" in str(e)) and not get_output:
                 self.logger.success(f"Executed command (shell type: {shell_type})")
             else:
-                self.logger.fail(f"Execute command failed, error: {str(e)}")
+                self.logger.fail(f"Execute command failed, error: '{e}'")
         else:
             self.logger.success(f"Executed command (shell type: {shell_type})")
             buf = StringIO(result[0]).readlines() if get_output else ""
