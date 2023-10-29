@@ -231,7 +231,6 @@ class NXCModule:
                 self.save_credentials(context, connection, cred["domain"], cred["username"], cred["password"], cred["lmhash"], cred["nthash"])
         global credentials_data
         credentials_data = credentials_output
-        return None
 
     def spider_pcs(self, context, connection, cursor, dbconnection, driver):
         cursor.execute("SELECT * from admin_users WHERE hash is not NULL")

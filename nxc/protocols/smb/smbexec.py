@@ -132,7 +132,6 @@ class SMBEXEC:
             pass
 
         self.get_output_remote()
-        return None
 
     def get_output_remote(self):
         if self.__retOutput is False:

@@ -37,6 +37,7 @@ if platform != "win32":
     resource.setrlimit(resource.RLIMIT_NOFILE, file_limit)
 
 
+
 def create_db_engine(db_path):
     return sqlalchemy.create_engine(f"sqlite:///{db_path}", isolation_level="AUTOCOMMIT", future=True)
 
@@ -165,8 +166,13 @@ def main():
         modules = loader.list_modules()
 
     if args.list_modules:
+        nxc_logger.highlight("LOW PRIVILEGE MODULES")
         for name, props in sorted(modules.items()):
-            if args.protocol in props["supported_protocols"]:
+            if args.protocol in props["supported_protocols"] and not props["requires_admin"]:
+                nxc_logger.display(f"{name:<25} {props['description']}")
+        nxc_logger.highlight("\nHIGH PRIVILEGE MODULES (requires admin privs)")
+        for name, props in sorted(modules.items()):
+            if args.protocol in props["supported_protocols"] and props["requires_admin"]:
                 nxc_logger.display(f"{name:<25} {props['description']}")
         exit(0)
     elif args.module and args.show_module_options:

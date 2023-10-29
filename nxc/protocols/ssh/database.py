@@ -167,7 +167,6 @@ class database:
         if updated_ids:
             nxc_logger.debug(f"add_host() - Host IDs Updated: {updated_ids}")
             return updated_ids
-        return None
 
     def add_credential(self, credtype, username, password, key=None):
         """Check if this credential has already been added to the database, if not add it in."""
@@ -267,7 +266,14 @@ class database:
         add_links = []
 
         creds_q = select(self.CredentialsTable)
-        creds_q = creds_q.filter(self.CredentialsTable.c.id == cred_id) if cred_id else creds_q.filter(func.lower(self.CredentialsTable.c.credtype) == func.lower(credtype), func.lower(self.CredentialsTable.c.username) == func.lower(username), self.CredentialsTable.c.password == secret)
+        if cred_id:  # noqa: SIM108
+            creds_q = creds_q.filter(self.CredentialsTable.c.id == cred_id)
+        else:
+            creds_q = creds_q.filter(
+                func.lower(self.CredentialsTable.c.credtype) == func.lower(credtype),
+                func.lower(self.CredentialsTable.c.username) == func.lower(username),
+                self.CredentialsTable.c.password == secret,
+            )
         creds = self.sess.execute(creds_q)
         hosts = self.get_hosts(host_id)
 
@@ -343,9 +349,7 @@ class database:
             self.CredentialsTable.c.credtype == cred_type,
         )
         results = self.sess.execute(q).first()
-        if results is None:
-            return None
-        else:
+        if results is not None:
             return results.id
 
     def is_host_valid(self, host_id):
@@ -414,7 +418,6 @@ class database:
                 return inserted_id_results[0].id
             except Exception as e:
                 nxc_logger.debug(f"Error inserting LoggedinRelation: {e}")
-        return None
 
     def get_loggedin_relations(self, cred_id=None, host_id=None, shell=None):
         q = select(self.LoggedinRelationsTable)  # .returning(self.LoggedinRelationsTable.c.id)

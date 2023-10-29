@@ -243,4 +243,9 @@ class KerberosAttacks:
             return None
 
         # Let's output the TGT enc-part/cipher in Hashcat format, in case somebody wants to use it.
-        return "$krb5asrep$%d$%s@%s:%s$%s" % (as_rep["enc-part"]["etype"], client_name, domain, hexlify(as_rep["enc-part"]["cipher"].asOctets()[:12]).decode(), hexlify(as_rep["enc-part"]["cipher"].asOctets()[12:]).decode()) if as_rep["enc-part"]["etype"] == 17 or as_rep["enc-part"]["etype"] == 18 else "$krb5asrep$%d$%s@%s:%s$%s" % (as_rep["enc-part"]["etype"], client_name, domain, hexlify(as_rep["enc-part"]["cipher"].asOctets()[:16]).decode(), hexlify(as_rep["enc-part"]["cipher"].asOctets()[16:]).decode())
+        hash_tgt = f"$krb5asrep${as_rep['enc-part']['etype']}${client_name}@{domain}:"
+        if as_rep["enc-part"]["etype"] in (17, 18):
+            hash_tgt += f"{hexlify(as_rep['enc-part']['cipher'].asOctets()[:12]).decode()}${hexlify(as_rep['enc-part']['cipher'].asOctets()[12:]).decode()}"
+        else:
+            hash_tgt += f"{hexlify(as_rep['enc-part']['cipher'].asOctets()[:16]).decode()}${hexlify(as_rep['enc-part']['cipher'].asOctets()[16:]).decode()}"
+        return hash_tgt

@@ -289,7 +289,6 @@ class database:
         if updated_ids:
             nxc_logger.debug(f"add_host() - Host IDs Updated: {updated_ids}")
             return updated_ids
-        return None
 
     def add_credential(self, credtype, domain, username, password, group_id=None, pillaged_from=None):
         """Check if this credential has already been added to the database, if not add it in."""
@@ -452,9 +451,7 @@ class database:
         if user_domain:
             q = select(self.HostsTable).filter(func.lower(self.HostsTable.c.id) == func.lower(user_domain))
             results = self.conn.execute(q).all()
-
             return len(results) > 0
-        return None
 
     def is_host_valid(self, host_id):
         """Check if this host ID is valid."""
@@ -826,7 +823,6 @@ class database:
                 return inserted_id_results[0].id
             except Exception as e:
                 nxc_logger.debug(f"Error inserting LoggedinRelation: {e}")
-        return None
 
     def get_loggedin_relations(self, user_id=None, host_id=None):
         q = select(self.LoggedinRelationsTable)  # .returning(self.LoggedinRelationsTable.c.id)
@@ -897,7 +893,6 @@ class database:
         if updated_ids:
             nxc_logger.debug(f"add_check() - Checks IDs Updated: {updated_ids}")
             return updated_ids
-        return None
 
     def add_check_result(self, host_id, check_id, secure, reasons):
         """Check if this check result has already been added to the database, if not, add it in."""
@@ -910,4 +905,3 @@ class database:
         if updated_ids:
             nxc_logger.debug(f"add_check_result() - Check Results IDs Updated: {updated_ids}")
             return updated_ids
-        return None
