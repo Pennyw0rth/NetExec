@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 import base64
 import warnings
 from datetime import datetime
@@ -16,6 +14,8 @@ from sqlalchemy.exc import SAWarning
 from sqlalchemy.orm import sessionmaker, scoped_session
 
 from nxc.logger import nxc_logger
+import sys
+from typing import Optional
 
 # if there is an issue with SQLAlchemy and a connection cannot be cleaned up properly it spews out annoying warnings
 warnings.filterwarnings("ignore", category=SAWarning)
@@ -84,7 +84,6 @@ class database:
             """
         )
 
-        # type = hash, plaintext
         db_conn.execute(
             """CREATE TABLE "users" (
             "id" integer PRIMARY KEY,
@@ -177,7 +176,7 @@ class database:
         #    )''')
 
     def reflect_tables(self):
-        with self.db_engine.connect() as conn:
+        with self.db_engine.connect():
             try:
                 self.HostsTable = Table("hosts", self.metadata, autoload_with=self.db_engine)
                 self.UsersTable = Table("users", self.metadata, autoload_with=self.db_engine)
@@ -198,7 +197,7 @@ class database:
                     [-] Optionally save the old DB data (`cp {self.db_path} ~/nxc_{self.protocol.lower()}.bak`)
                     [-] Then remove the {self.protocol} DB (`rm -f {self.db_path}`) and run nxc to initialize the new DB"""
                 )
-                exit()
+                sys.exit()
 
     def shutdown_db(self):
         try:
@@ -227,9 +226,7 @@ class database:
         petitpotam=None,
         dc=None,
     ):
-        """
-        Check if this host has already been added to the database, if not, add it in.
-        """
+        """Check if this host has already been added to the database, if not, add it in."""
         hosts = []
         updated_ids = []
 
@@ -294,14 +291,12 @@ class database:
             return updated_ids
 
     def add_credential(self, credtype, domain, username, password, group_id=None, pillaged_from=None):
-        """
-        Check if this credential has already been added to the database, if not add it in.
-        """
+        """Check if this credential has already been added to the database, if not add it in."""
         credentials = []
         groups = []
 
         if (group_id and not self.is_group_valid(group_id)) or (pillaged_from and not self.is_host_valid(pillaged_from)):
-            nxc_logger.debug(f"Invalid group or host")
+            nxc_logger.debug("Invalid group or host")
             return
 
         q = select(self.UsersTable).filter(
@@ -357,12 +352,9 @@ class database:
             q_groups = Insert(self.GroupRelationsTable)
 
             self.conn.execute(q_groups, groups)
-        # return user_ids
 
     def remove_credentials(self, creds_id):
-        """
-        Removes a credential ID from the database
-        """
+        """Removes a credential ID from the database"""
         del_hosts = []
         for cred_id in creds_id:
             q = delete(self.UsersTable).filter(self.UsersTable.c.id == cred_id)
@@ -373,15 +365,7 @@ class database:
         add_links = []
 
         creds_q = select(self.UsersTable)
-        if user_id:
-            creds_q = creds_q.filter(self.UsersTable.c.id == user_id)
-        else:
-            creds_q = creds_q.filter(
-                func.lower(self.UsersTable.c.credtype) == func.lower(credtype),
-                func.lower(self.UsersTable.c.domain) == func.lower(domain),
-                func.lower(self.UsersTable.c.username) == func.lower(username),
-                self.UsersTable.c.password == password,
-            )
+        creds_q = creds_q.filter(self.UsersTable.c.id == user_id) if user_id else creds_q.filter(func.lower(self.UsersTable.c.credtype) == func.lower(credtype), func.lower(self.UsersTable.c.domain) == func.lower(domain), func.lower(self.UsersTable.c.username) == func.lower(username), self.UsersTable.c.password == password)
         users = self.conn.execute(creds_q)
         hosts = self.get_hosts(host)
 
@@ -412,8 +396,7 @@ class database:
         else:
             q = select(self.AdminRelationsTable)
 
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def remove_admin_relation(self, user_ids=None, host_ids=None):
         q = delete(self.AdminRelationsTable)
@@ -426,9 +409,7 @@ class database:
         self.conn.execute(q)
 
     def is_credential_valid(self, credential_id):
-        """
-        Check if this credential ID is valid.
-        """
+        """Check if this credential ID is valid."""
         q = select(self.UsersTable).filter(
             self.UsersTable.c.id == credential_id,
             self.UsersTable.c.password is not None,
@@ -437,9 +418,7 @@ class database:
         return len(results) > 0
 
     def get_credentials(self, filter_term=None, cred_type=None):
-        """
-        Return credentials from the database.
-        """
+        """Return credentials from the database."""
         # if we're returning a single credential by ID
         if self.is_credential_valid(filter_term):
             q = select(self.UsersTable).filter(self.UsersTable.c.id == filter_term)
@@ -453,11 +432,9 @@ class database:
         else:
             q = select(self.UsersTable)
 
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def get_credential(self, cred_type, domain, username, password):
-
         q = select(self.UsersTable).filter(
             self.UsersTable.c.domain == domain,
             self.UsersTable.c.username == username,
@@ -474,21 +451,16 @@ class database:
         if user_domain:
             q = select(self.HostsTable).filter(func.lower(self.HostsTable.c.id) == func.lower(user_domain))
             results = self.conn.execute(q).all()
-
             return len(results) > 0
 
     def is_host_valid(self, host_id):
-        """
-        Check if this host ID is valid.
-        """
+        """Check if this host ID is valid."""
         q = select(self.HostsTable).filter(self.HostsTable.c.id == host_id)
         results = self.conn.execute(q).all()
         return len(results) > 0
 
     def get_hosts(self, filter_term=None, domain=None):
-        """
-        Return hosts from the database.
-        """
+        """Return hosts from the database."""
         q = select(self.HostsTable)
 
         # if we're returning a single host by ID
@@ -499,18 +471,18 @@ class database:
             return [results]
         # if we're filtering by domain controllers
         elif filter_term == "dc":
-            q = q.filter(self.HostsTable.c.dc == True)
+            q = q.filter(self.HostsTable.c.dc is True)
             if domain:
                 q = q.filter(func.lower(self.HostsTable.c.domain) == func.lower(domain))
         elif filter_term == "signing":
             # generally we want hosts that are vulnerable, so signing disabled
-            q = q.filter(self.HostsTable.c.signing == False)
+            q = q.filter(self.HostsTable.c.signing is False)
         elif filter_term == "spooler":
-            q = q.filter(self.HostsTable.c.spooler == True)
+            q = q.filter(self.HostsTable.c.spooler is True)
         elif filter_term == "zerologon":
-            q = q.filter(self.HostsTable.c.zerologon == True)
+            q = q.filter(self.HostsTable.c.zerologon is True)
         elif filter_term == "petitpotam":
-            q = q.filter(self.HostsTable.c.petitpotam == True)
+            q = q.filter(self.HostsTable.c.petitpotam is True)
         elif filter_term is not None and filter_term.startswith("domain"):
             domain = filter_term.split()[1]
             like_term = func.lower(f"%{domain}%")
@@ -524,13 +496,11 @@ class database:
         return results
 
     def is_group_valid(self, group_id):
-        """
-        Check if this group ID is valid.
-        """
+        """Check if this group ID is valid."""
         q = select(self.GroupsTable).filter(self.GroupsTable.c.id == group_id)
         results = self.conn.execute(q).first()
 
-        valid = True if results else False
+        valid = bool(results)
         nxc_logger.debug(f"is_group_valid(groupID={group_id}) => {valid}")
 
         return valid
@@ -593,20 +563,13 @@ class database:
 
         self.conn.execute(q, groups)
         # TODO: always return a list and fix code references to not expect a single integer
-        # inserted_result = res_inserted_result.first()
-        # gid = inserted_result.id
         #
-        # logger.debug(f"inserted_results: {inserted_result}\ntype: {type(inserted_result)}")
-        # logger.debug('add_group(domain={}, name={}) => {}'.format(domain, name, gid))
         if updated_ids:
             nxc_logger.debug(f"Updated groups with IDs: {updated_ids}")
         return updated_ids
 
     def get_groups(self, filter_term=None, group_name=None, group_domain=None):
-        """
-        Return groups from the database
-        """
-
+        """Return groups from the database"""
         if filter_term and self.is_group_valid(filter_term):
             q = select(self.GroupsTable).filter(self.GroupsTable.c.id == filter_term)
             results = self.conn.execute(q).first()
@@ -639,8 +602,7 @@ class database:
         elif group_id:
             q = select(self.GroupRelationsTable).filter(self.GroupRelationsTable.c.groupid == group_id)
 
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def remove_group_relations(self, user_id=None, group_id=None):
         q = delete(self.GroupRelationsTable)
@@ -651,9 +613,7 @@ class database:
         self.conn.execute(q)
 
     def is_user_valid(self, user_id):
-        """
-        Check if this User ID is valid.
-        """
+        """Check if this User ID is valid."""
         q = select(self.UsersTable).filter(self.UsersTable.c.id == user_id)
         results = self.conn.execute(q).all()
         return len(results) > 0
@@ -667,24 +627,20 @@ class database:
         elif filter_term and filter_term != "":
             like_term = func.lower(f"%{filter_term}%")
             q = q.filter(func.lower(self.UsersTable.c.username).like(like_term))
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def get_user(self, domain, username):
         q = select(self.UsersTable).filter(
             func.lower(self.UsersTable.c.domain) == func.lower(domain),
             func.lower(self.UsersTable.c.username) == func.lower(username),
         )
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def get_domain_controllers(self, domain=None):
         return self.get_hosts(filter_term="dc", domain=domain)
 
     def is_share_valid(self, share_id):
-        """
-        Check if this share ID is valid.
-        """
+        """Check if this share ID is valid."""
         q = select(self.SharesTable).filter(self.SharesTable.c.id == share_id)
         results = self.conn.execute(q).all()
 
@@ -700,11 +656,10 @@ class database:
             "read": read,
             "write": write,
         }
-        share_id = self.conn.execute(
+        self.conn.execute(
             Insert(self.SharesTable).on_conflict_do_nothing(),  # .returning(self.SharesTable.c.id),
             share_data,
         )  # .scalar_one()
-        # return share_id
 
     def get_shares(self, filter_term=None):
         if self.is_share_valid(filter_term):
@@ -714,8 +669,7 @@ class database:
             q = select(self.SharesTable).filter(self.SharesTable.c.name.like(like_term))
         else:
             q = select(self.SharesTable)
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def get_shares_by_access(self, permissions, share_id=None):
         permissions = permissions.lower()
@@ -726,8 +680,7 @@ class database:
             q = q.filter(self.SharesTable.c.read == 1)
         if "w" in permissions:
             q = q.filter(self.SharesTable.c.write == 1)
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def get_users_with_share_access(self, host_id, share_name, permissions):
         permissions = permissions.lower()
@@ -736,9 +689,8 @@ class database:
             q = q.filter(self.SharesTable.c.read == 1)
         if "w" in permissions:
             q = q.filter(self.SharesTable.c.write == 1)
-        results = self.conn.execute(q).all()
+        return self.conn.execute(q).all()
 
-        return results
 
     def add_domain_backupkey(self, domain: str, pvk: bytes):
         """
@@ -758,11 +710,10 @@ class database:
 
                 self.conn.execute(q, [backup_key])  # .scalar()
                 nxc_logger.debug(f"add_domain_backupkey(domain={domain}, pvk={pvk_encoded})")
-                # return inserted_id
             except Exception as e:
                 nxc_logger.debug(f"Issue while inserting DPAPI Backup Key: {e}")
 
-    def get_domain_backupkey(self, domain: str = None):
+    def get_domain_backupkey(self, domain: Optional[str] = None):
         """
         Get domain backupkey
         :domain is the domain fqdn
@@ -785,7 +736,7 @@ class database:
         """
         q = select(self.DpapiSecrets).filter(func.lower(self.DpapiSecrets.c.id) == dpapi_secret_id)
         results = self.conn.execute(q).first()
-        valid = True if results is not None else False
+        valid = results is not None
         nxc_logger.debug(f"is_dpapi_secret_valid(groupID={dpapi_secret_id}) => {valid}")
         return valid
 
@@ -798,9 +749,7 @@ class database:
         password: str,
         url: str = "",
     ):
-        """
-        Add dpapi secrets to nxcdb
-        """
+        """Add dpapi secrets to nxcdb"""
         secret = {
             "host": host,
             "dpapi_type": dpapi_type,
@@ -813,23 +762,19 @@ class database:
 
         self.conn.execute(q, [secret])  # .scalar()
 
-        # inserted_result = res_inserted_result.first()
-        # inserted_id = inserted_result.id
 
         nxc_logger.debug(f"add_dpapi_secrets(host={host}, dpapi_type={dpapi_type}, windows_user={windows_user}, username={username}, password={password}, url={url})")
 
     def get_dpapi_secrets(
         self,
         filter_term=None,
-        host: str = None,
-        dpapi_type: str = None,
-        windows_user: str = None,
-        username: str = None,
-        url: str = None,
+        host: Optional[str] = None,
+        dpapi_type: Optional[str] = None,
+        windows_user: Optional[str] = None,
+        username: Optional[str] = None,
+        url: Optional[str] = None,
     ):
-        """
-        Get dpapi secrets from nxcdb
-        """
+        """Get dpapi secrets from nxcdb"""
         q = select(self.DpapiSecrets)
 
         if self.is_dpapi_secret_valid(filter_term):
@@ -885,8 +830,7 @@ class database:
             q = q.filter(self.LoggedinRelationsTable.c.userid == user_id)
         if host_id:
             q = q.filter(self.LoggedinRelationsTable.c.hostid == host_id)
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def remove_loggedin_relations(self, user_id=None, host_id=None):
         q = delete(self.LoggedinRelationsTable)
@@ -899,16 +843,18 @@ class database:
     def get_checks(self):
         q = select(self.ConfChecksTable)
         return self.conn.execute(q).all()
-        
+
     def get_check_results(self):
         q = select(self.ConfChecksResultsTable)
         return self.conn.execute(q).all()
-        
-    def insert_data(self, table, select_results=[], **new_row):
+
+    def insert_data(self, table, select_results=None, **new_row):
         """
         Insert a new row in the given table.
         Basically it's just a more generic version of add_host
         """
+        if select_results is None:
+            select_results = []
         results = []
         updated_ids = []
 
@@ -919,31 +865,29 @@ class database:
         else:
             for row in select_results:
                 row_data = row._asdict()
-                for column,value in new_row.items():
+                for column, value in new_row.items():
                     row_data[column] = value
 
                 # Only add data to be updated if it has changed
                 if row_data not in results:
                     results.append(row_data)
-                    updated_ids.append(row_data['id'])
+                    updated_ids.append(row_data["id"])
 
-        nxc_logger.debug(f'Update data: {results}')
+        nxc_logger.debug(f"Update data: {results}")
         # TODO: find a way to abstract this away to a single Upsert call
-        q = Insert(table) # .returning(table.c.id)
-        update_column = {col.name: col for col in q.excluded if col.name not in 'id'}
+        q = Insert(table)  # .returning(table.c.id)
+        update_column = {col.name: col for col in q.excluded if col.name not in "id"}
         q = q.on_conflict_do_update(index_elements=table.primary_key, set_=update_column)
-        self.conn.execute(q, results) # .scalar()
+        self.conn.execute(q, results)  # .scalar()
         # we only return updated IDs for now - when RETURNING clause is allowed we can return inserted
         return updated_ids
 
     def add_check(self, name, description):
-        """
-        Check if this check item has already been added to the database, if not, add it in.
-        """
+        """Check if this check item has already been added to the database, if not, add it in."""
         q = select(self.ConfChecksTable).filter(self.ConfChecksTable.c.name == name)
         select_results = self.conn.execute(q).all()
         context = locals()
-        new_row = dict(((column, context[column]) for column in ('name', 'description')))
+        new_row = {column: context[column] for column in ("name", "description")}
         updated_ids = self.insert_data(self.ConfChecksTable, select_results, **new_row)
 
         if updated_ids:
@@ -951,13 +895,11 @@ class database:
             return updated_ids
 
     def add_check_result(self, host_id, check_id, secure, reasons):
-        """
-        Check if this check result has already been added to the database, if not, add it in.
-        """
+        """Check if this check result has already been added to the database, if not, add it in."""
         q = select(self.ConfChecksResultsTable).filter(self.ConfChecksResultsTable.c.host_id == host_id, self.ConfChecksResultsTable.c.check_id == check_id)
         select_results = self.conn.execute(q).all()
         context = locals()
-        new_row = dict(((column, context[column]) for column in ('host_id', 'check_id', 'secure', 'reasons')))
+        new_row = {column: context[column] for column in ("host_id", "check_id", "secure", "reasons")}
         updated_ids = self.insert_data(self.ConfChecksResultsTable, select_results, **new_row)
 
         if updated_ids:

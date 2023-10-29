@@ -1,11 +1,9 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 import os
 from nxc.config import process_secret
-from nxc.connection import *
+from nxc.connection import connection
+from nxc.helpers.logger import highlight
 from nxc.logger import NXCAdapter
-from ftplib import FTP, error_reply, error_temp, error_perm, error_proto
-
+from ftplib import FTP, error_perm
 
 class ftp(connection):
     def __init__(self, args, db, host):
@@ -26,11 +24,8 @@ class ftp(connection):
 
     def proto_flow(self):
         self.proto_logger()
-        if self.create_conn_obj():
-            if self.enum_host_info():
-                if self.print_host_info():
-                    if self.login():
-                        pass
+        if self.create_conn_obj() and self.enum_host_info() and self.print_host_info() and self.login():
+            pass
 
     def enum_host_info(self):
         welcome = self.conn.getwelcome()
@@ -47,15 +42,8 @@ class ftp(connection):
         self.conn = FTP()
         try:
             self.conn.connect(host=self.host, port=self.args.port)
-        except error_reply:
-            return False
-        except error_temp:
-            return False
-        except error_perm:
-            return False
-        except error_proto:
-            return False
-        except socket.error:
+        except Exception as e:
+            self.logger.debug(f"Error connecting to FTP host: {e}")
             return False
         return True
 
@@ -94,7 +82,7 @@ class ftp(connection):
                 if not files:
                     return False
                 # If there are files, then we can list the files
-                self.logger.display(f"Directory Listing")
+                self.logger.display("Directory Listing")
                 for file in files:
                     self.logger.highlight(file)
             else:
@@ -123,7 +111,6 @@ class ftp(connection):
             return True
         self.conn.close()
 
-
     def list_directory_full(self):
         # in the future we can use mlsd/nlst if we want, but this gives a full output like `ls -la`
         # ftplib's "dir" prints directly to stdout, and "nlst" only returns the folder name, not full details
@@ -138,7 +125,7 @@ class ftp(connection):
 
     def get_file(self, filename):
         # Extract the filename from the path
-        downloaded_file =  filename.split("/")[-1]
+        downloaded_file = filename.split("/")[-1]
         try:
             # Check if the current connection is ASCII (ASCII does not support .size())
             if self.conn.encoding == "utf-8":
@@ -147,13 +134,13 @@ class ftp(connection):
             # Check if the file exists 
             self.conn.size(filename)
             # Attempt to download the file
-            self.conn.retrbinary(f"RETR {filename}", open(downloaded_file, "wb").write)
+            self.conn.retrbinary(f"RETR {filename}", open(downloaded_file, "wb").write)  # noqa: SIM115
         except error_perm as error_message:
             self.logger.fail(f"Failed to download the file. Response: ({error_message})")
             self.conn.close()
             return False
         except FileNotFoundError:
-            self.logger.fail(f"Failed to download the file. Response: (No such file or directory.)")
+            self.logger.fail("Failed to download the file. Response: (No such file or directory.)")
             self.conn.close()
             return False
         # Check if the file was downloaded
@@ -165,7 +152,7 @@ class ftp(connection):
     def put_file(self, local_file, remote_file):
         try:
             # Attempt to upload the file
-            self.conn.storbinary(f"STOR {remote_file}", open(local_file, "rb"))
+            self.conn.storbinary(f"STOR {remote_file}", open(local_file, "rb"))  # noqa: SIM115
         except error_perm as error_message:
             self.logger.fail(f"Failed to upload file. Response: ({error_message})")
             return False

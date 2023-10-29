@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import nxc
 import importlib
 import traceback
@@ -12,7 +9,7 @@ from os.path import join as path_join
 
 from nxc.context import Context
 from nxc.logger import NXCAdapter
-from nxc.paths import nxc_PATH
+from nxc.paths import NXC_PATH
 
 
 class ModuleLoader:
@@ -22,9 +19,7 @@ class ModuleLoader:
         self.logger = logger
 
     def module_is_sane(self, module, module_path):
-        """
-        Check if a module has the proper attributes
-        """
+        """Check if a module has the proper attributes"""
         module_error = False
         if not hasattr(module, "name"):
             self.logger.fail(f"{module_path} missing the name variable")
@@ -47,18 +42,13 @@ class ModuleLoader:
         elif not hasattr(module, "on_login") and not (module, "on_admin_login"):
             self.logger.fail(f"{module_path} missing the on_login/on_admin_login function(s)")
             module_error = True
-        # elif not hasattr(module, 'chain_support'):
-        #    self.logger.fail('{} missing the chain_support variable'.format(module_path))
-        #    module_error = True
 
         if module_error:
             return False
         return True
 
     def load_module(self, module_path):
-        """
-        Load a module, initializing it and checking that it has the proper attributes
-        """
+        """Load a module, initializing it and checking that it has the proper attributes"""
         try:
             spec = importlib.util.spec_from_file_location("NXCModule", module_path)
             module = spec.loader.load_module().NXCModule()
@@ -68,12 +58,9 @@ class ModuleLoader:
         except Exception as e:
             self.logger.fail(f"Failed loading module at {module_path}: {e}")
             self.logger.debug(traceback.format_exc())
-        return None
 
     def init_module(self, module_path):
-        """
-        Initialize a module for execution
-        """
+        """Initialize a module for execution"""
         module = None
         module = self.load_module(module_path)
 
@@ -99,9 +86,7 @@ class ModuleLoader:
                 sys.exit(1)
 
     def get_module_info(self, module_path):
-        """
-        Get the path, description, and options from a module
-        """
+        """Get the path, description, and options from a module"""
         try:
             spec = importlib.util.spec_from_file_location("NXCModule", module_path)
             module_spec = spec.loader.load_module().NXCModule
@@ -114,7 +99,7 @@ class ModuleLoader:
                     "supported_protocols": module_spec.supported_protocols,
                     "opsec_safe": module_spec.opsec_safe,
                     "multiple_hosts": module_spec.multiple_hosts,
-                    "requires_admin": True if hasattr(module_spec, 'on_admin_login') and callable(module_spec.on_admin_login) else False,
+                    "requires_admin": bool(hasattr(module_spec, "on_admin_login") and callable(module_spec.on_admin_login)),
                 }
             }
             if self.module_is_sane(module_spec, module_path):
@@ -122,16 +107,13 @@ class ModuleLoader:
         except Exception as e:
             self.logger.fail(f"Failed loading module at {module_path}: {e}")
             self.logger.debug(traceback.format_exc())
-        return None
 
     def list_modules(self):
-        """
-        List modules without initializing them
-        """
+        """List modules without initializing them"""
         modules = {}
         modules_paths = [
             path_join(dirname(nxc.__file__), "modules"),
-            path_join(nxc_PATH, "modules"),
+            path_join(NXC_PATH, "modules"),
         ]
 
         for path in modules_paths:
@@ -141,6 +123,6 @@ class ModuleLoader:
                         module_path = path_join(path, module)
                         module_data = self.get_module_info(module_path)
                         modules.update(module_data)
-                    except:
-                        pass
+                    except Exception as e:
+                        self.logger.debug(f"Error loading module {module}: {e}")
         return modules

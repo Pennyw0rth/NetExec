@@ -1,13 +1,10 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-import logging
 import os
-from io import StringIO
 
 from nxc.config import process_secret
+from nxc.connection import connection
+from nxc.connection import requires_admin
+from nxc.logger import NXCAdapter
 from nxc.protocols.mssql.mssqlexec import MSSQLEXEC
-from nxc.connection import *
-from nxc.helpers.logger import highlight
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.powershell import create_ps_command
 from impacket import tds
@@ -25,6 +22,7 @@ from impacket.tds import (
     TDS_ENVCHANGE_CHARSET,
     TDS_ENVCHANGE_PACKETSIZE,
 )
+import contextlib
 
 
 class mssql(connection):
@@ -61,10 +59,10 @@ class mssql(connection):
 
     def enum_host_info(self):
         # this try pass breaks module http server, more info https://github.com/byt3bl33d3r/CrackMapExec/issues/363
-        try:
+        try:  # noqa: SIM105
             # Probably a better way of doing this, grab our IP from the socket
             self.local_ip = str(self.conn.socket).split()[2].split("=")[1].split(":")[0]
-        except:
+        except Exception:
             pass
 
         if self.args.no_smb:
@@ -83,10 +81,8 @@ class mssql(connection):
                 self.server_os = smb_conn.getServerOS()
                 self.logger.extra["hostname"] = self.hostname
 
-                try:
+                with contextlib.suppress(Exception):
                     smb_conn.logoff()
-                except:
-                    pass
 
                 if self.args.domain:
                     self.domain = self.args.domain
@@ -105,25 +101,20 @@ class mssql(connection):
             len(self.mssql_instances),
         )
 
-        try:
+        with contextlib.suppress(Exception):
             self.conn.disconnect()
-        except:
-            pass
 
     def print_host_info(self):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
         # if len(self.mssql_instances) > 0:
-        #     self.logger.display("MSSQL DB Instances: {}".format(len(self.mssql_instances)))
         #     for i, instance in enumerate(self.mssql_instances):
-        #         self.logger.debug("Instance {}".format(i))
         #         for key in instance.keys():
-        #             self.logger.debug(key + ":" + instance[key])
 
     def create_conn_obj(self):
         try:
             self.conn = tds.MSSQL(self.host, self.args.port)
             self.conn.connect()
-        except socket.error as e:
+        except OSError as e:
             self.logger.debug(f"Error connecting to MSSQL: {e}")
             return False
         return True
@@ -138,7 +129,7 @@ class mssql(connection):
 
         if is_admin:
             self.admin_privs = True
-            self.logger.debug(f"User is admin")
+            self.logger.debug("User is admin")
         else:
             return False
         return True
@@ -153,27 +144,20 @@ class mssql(connection):
         kdcHost="",
         useCache=False,
     ):
-        try:
+        with contextlib.suppress(Exception):
             self.conn.disconnect()
-        except:
-            pass
         self.create_conn_obj()
 
-        nthash = ""
         hashes = None
         if ntlm_hash != "":
             if ntlm_hash.find(":") != -1:
                 hashes = ntlm_hash
-                nthash = ntlm_hash.split(":")[1]
+                ntlm_hash.split(":")[1]
             else:
                 # only nt hash
                 hashes = f":{ntlm_hash}"
-                nthash = ntlm_hash
 
-        if not all("" == s for s in [self.nthash, password, aesKey]):
-            kerb_pass = next(s for s in [self.nthash, password, aesKey] if s)
-        else:
-            kerb_pass = ""
+        kerb_pass = next(s for s in [self.nthash, password, aesKey] if s) if not all(s == "" for s in [self.nthash, password, aesKey]) else ""
         try:
             res = self.conn.kerberosLogin(
                 None,
@@ -214,10 +198,8 @@ class mssql(connection):
             return False
 
     def plaintext_login(self, domain, username, password):
-        try:
+        with contextlib.suppress(Exception):
             self.conn.disconnect()
-        except:
-            pass
         self.create_conn_obj()
 
         try:
@@ -244,8 +226,8 @@ class mssql(connection):
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             return True
-        except BrokenPipeError as e:
-            self.logger.fail(f"Broken Pipe Error while attempting to login")
+        except BrokenPipeError:
+            self.logger.fail("Broken Pipe Error while attempting to login")
             return False
         except Exception as e:
             self.logger.fail(f"{domain}\\{username}:{process_secret(password)}")
@@ -262,10 +244,8 @@ class mssql(connection):
         else:
             nthash = ntlm_hash
 
-        try:
+        with contextlib.suppress(Exception):
             self.conn.disconnect()
-        except:
-            pass
         self.create_conn_obj()
 
         try:
@@ -295,8 +275,8 @@ class mssql(connection):
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             return True
-        except BrokenPipeError as e:
-            self.logger.fail(f"Broken Pipe Error while attempting to login")
+        except BrokenPipeError:
+            self.logger.fail("Broken Pipe Error while attempting to login")
             return False
         except Exception as e:
             self.logger.fail(f"{domain}\\{username}:{process_secret(ntlm_hash)} {e}")
@@ -348,7 +328,7 @@ class mssql(connection):
         if self.args.execute or self.args.ps_execute:
             self.logger.success("Executed command via mssqlexec")
             if self.args.no_output:
-                self.logger.debug(f"Output set to disabled")
+                self.logger.debug("Output set to disabled")
             else:
                 for line in raw_output:
                     self.logger.highlight(line)
@@ -394,7 +374,7 @@ class mssql(connection):
         remote_path = self.args.get_file[0]
         download_path = self.args.get_file[1]
         self.logger.display(f'Copying "{remote_path}" to "{download_path}"')
-        
+
         try:
             exec_method = MSSQLEXEC(self.conn)
             exec_method.get_file(self.args.get_file[0], self.args.get_file[1])
@@ -407,8 +387,8 @@ class mssql(connection):
     # We hook these functions in the tds library to use nxc's logger instead of printing the output to stdout
     # The whole tds library in impacket needs a good overhaul to preserve my sanity
     def handle_mssql_reply(self):
-        for keys in self.conn.replies.keys():
-            for i, key in enumerate(self.conn.replies[keys]):
+        for keys in self.conn.replies:
+            for _i, key in enumerate(self.conn.replies[keys]):
                 if key["TokenType"] == TDS_ERROR_TOKEN:
                     error = f"ERROR({key['ServerName'].decode('utf-16le')}): Line {key['LineNumber']:d}: {key['MsgText'].decode('utf-16le')}"
                     self.conn.lastError = SQLErrorException(f"ERROR: Line {key['LineNumber']:d}: {key['MsgText'].decode('utf-16le')}")
@@ -417,26 +397,25 @@ class mssql(connection):
                     self.logger.display(f"INFO({key['ServerName'].decode('utf-16le')}): Line {key['LineNumber']:d}: {key['MsgText'].decode('utf-16le')}")
                 elif key["TokenType"] == TDS_LOGINACK_TOKEN:
                     self.logger.display(f"ACK: Result: {key['Interface']} - {key['ProgName'].decode('utf-16le')} ({key['MajorVer']:d}{key['MinorVer']:d} {key['BuildNumHi']:d}{key['BuildNumLow']:d}) ")
-                elif key["TokenType"] == TDS_ENVCHANGE_TOKEN:
-                    if key["Type"] in (
-                        TDS_ENVCHANGE_DATABASE,
-                        TDS_ENVCHANGE_LANGUAGE,
-                        TDS_ENVCHANGE_CHARSET,
-                        TDS_ENVCHANGE_PACKETSIZE,
-                    ):
-                        record = TDS_ENVCHANGE_VARCHAR(key["Data"])
-                        if record["OldValue"] == "":
-                            record["OldValue"] = "None".encode("utf-16le")
-                        elif record["NewValue"] == "":
-                            record["NewValue"] = "None".encode("utf-16le")
-                        if key["Type"] == TDS_ENVCHANGE_DATABASE:
-                            _type = "DATABASE"
-                        elif key["Type"] == TDS_ENVCHANGE_LANGUAGE:
-                            _type = "LANGUAGE"
-                        elif key["Type"] == TDS_ENVCHANGE_CHARSET:
-                            _type = "CHARSET"
-                        elif key["Type"] == TDS_ENVCHANGE_PACKETSIZE:
-                            _type = "PACKETSIZE"
-                        else:
-                            _type = f"{key['Type']:d}"
-                        self.logger.display(f"ENVCHANGE({_type}): Old Value: {record['OldValue'].decode('utf-16le')}, New Value: {record['NewValue'].decode('utf-16le')}")
+                elif key["TokenType"] == TDS_ENVCHANGE_TOKEN and key["Type"] in (
+                    TDS_ENVCHANGE_DATABASE,
+                    TDS_ENVCHANGE_LANGUAGE,
+                    TDS_ENVCHANGE_CHARSET,
+                    TDS_ENVCHANGE_PACKETSIZE,
+                ):
+                    record = TDS_ENVCHANGE_VARCHAR(key["Data"])
+                    if record["OldValue"] == "":
+                        record["OldValue"] = "None".encode("utf-16le")
+                    elif record["NewValue"] == "":
+                        record["NewValue"] = "None".encode("utf-16le")
+                    if key["Type"] == TDS_ENVCHANGE_DATABASE:
+                        _type = "DATABASE"
+                    elif key["Type"] == TDS_ENVCHANGE_LANGUAGE:
+                        _type = "LANGUAGE"
+                    elif key["Type"] == TDS_ENVCHANGE_CHARSET:
+                        _type = "CHARSET"
+                    elif key["Type"] == TDS_ENVCHANGE_PACKETSIZE:
+                        _type = "PACKETSIZE"
+                    else:
+                        _type = f"{key['Type']:d}"
+                    self.logger.display(f"ENVCHANGE({_type}): Old Value: {record['OldValue'].decode('utf-16le')}, New Value: {record['NewValue'].decode('utf-16le')}")
