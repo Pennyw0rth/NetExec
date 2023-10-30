@@ -1,3 +1,4 @@
+import sys
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import identify_target_file
 from nxc.parsers.ip import parse_targets
@@ -22,10 +23,10 @@ from sys import exit
 import logging
 import sqlalchemy
 from rich.progress import Progress
-from sys import platform
+import platform
 
 # Increase file_limit to prevent error "Too many open files"
-if platform != "win32":
+if platform != "Windows":
     import resource
 
     file_limit = list(resource.getrlimit(resource.RLIMIT_NOFILE))
@@ -85,6 +86,8 @@ def main():
     if hasattr(args, "log") and args.log:
         nxc_logger.add_file_log(args.log)
 
+    nxc_logger.debug("PYTHON VERSION: " + sys.version)
+    nxc_logger.debug("RUNNING ON: " + platform.system() + " Release: " + platform.release())
     nxc_logger.debug(f"Passed args: {args}")
 
     # FROM HERE ON A PROTOCOL IS REQUIRED
