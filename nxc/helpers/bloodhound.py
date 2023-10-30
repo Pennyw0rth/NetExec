@@ -58,7 +58,7 @@ def add_user_bh(user, domain, logger, config):
                         account_type = "User"
 
 
-                    result = tx.run(f"MATCH (c:{account_type} {{name:'{user_owned}''}}) RETURN c")
+                    result = tx.run(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) RETURN c")
 
                     if result.data()[0]["c"].get("owned") in (False, None):
                         logger.debug(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) SET c.owned=True RETURN c.name AS name")
