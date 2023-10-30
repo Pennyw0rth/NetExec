@@ -5,7 +5,7 @@
 [![Twitter](https://img.shields.io/twitter/follow/mpgn_x64?label=mpgn_x64&style=social)](https://twitter.com/intent/follow?screen_name=mpgn_x64)
 
 
-🚩 This is the open source repository of NetExec maintained by a community of passionate people
+🚩 This is the open-source repository of NetExec, maintained by a community of passionate people
 # NetExec - The Network Execution Tool
 
 This project was initially created in 2015 by @byt3bl33d3r, known as CrackMapExec. In 2019 @mpgn_x64 started maintaining the project for the next 4 years, adding a lot of great tools and features. In September 2023 he retired from maintaining the project.
@@ -13,7 +13,7 @@ This project was initially created in 2015 by @byt3bl33d3r, known as CrackMapExe
 Along with many other contributors, we (NeffIsBack, Marshall-Hallenbeck, and zblurx) developed new features, bug fixes, and helped maintain the original project CrackMapExec.
 During this time, with both a private and public repository, community contributions were not easily merged into the project. The 6-8 month discrepancy between the code bases caused many development issues and heavily reduced community-driven development.
 With the end of mpgn's maintainer role, we (the remaining most active contributors) decided to maintain the project together as a fully free and open source project under the new name **NetExec** 🚀
-Going forward, our intent is to maintain a community-driven and maintained project with regular updates for everyone to use.
+Going forward, our intent is to maintain a community-driven and well maintained project with regular updates for everyone to use.
 
 <p align="center">
   <!-- placeholder for nxc logo-->
