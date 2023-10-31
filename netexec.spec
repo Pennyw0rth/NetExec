@@ -48,6 +48,7 @@ a = Analysis(
         'lsassy.parser',
         'lsassy.session',
         'lsassy.impacketfile',
+        'bloodhound',
         'dns',
         'dns.name',
         'dns.resolver',

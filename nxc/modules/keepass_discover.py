@@ -20,7 +20,7 @@ class NXCModule:
         self.search_path = "'C:\\Users\\','$env:PROGRAMFILES','env:ProgramFiles(x86)'"
 
     def options(self, context, module_options):
-        """
+        r"""
         SEARCH_TYPE     Specify what to search, between:
                           PROCESS     Look for running KeePass.exe process only
                           FILES       Look for KeePass-related files (KeePass.config.xml, .kdbx, KeePass.exe) only, may take some time
@@ -29,7 +29,6 @@ class NXCModule:
         SEARCH_PATH     Comma-separated remote locations where to search for KeePass-related files (you must add single quotes around the paths if they include spaces)
                         Default: 'C:\\Users\\','$env:PROGRAMFILES','env:ProgramFiles(x86)'
         """
-
         if "SEARCH_PATH" in module_options:
             self.search_path = module_options["SEARCH_PATH"]
 
@@ -49,20 +48,14 @@ class NXCModule:
                 keepass_process_id = row[0]
                 keepass_process_username = row[1]
                 keepass_process_name = row[2]
-                context.log.highlight(
-                    'Found process "{}" with PID {} (user {})'.format(
-                        keepass_process_name,
-                        keepass_process_id,
-                        keepass_process_username,
-                    )
-                )
+                context.log.highlight(f'Found process "{keepass_process_name}" with PID {keepass_process_id} (user {keepass_process_username})')
             if row_number == 0:
                 context.log.display("No KeePass-related process was found")
 
         # search for keepass-related files
         if self.search_type == "ALL" or self.search_type == "FILES":
-            search_keepass_files_payload = "Get-ChildItem -Path {} -Recurse -Force -Include ('KeePass.config.xml','KeePass.exe','*.kdbx') -ErrorAction SilentlyContinue | Select FullName -ExpandProperty FullName".format(self.search_path)
-            search_keepass_files_cmd = 'powershell.exe "{}"'.format(search_keepass_files_payload)
+            search_keepass_files_payload = f"Get-ChildItem -Path {self.search_path} -Recurse -Force -Include ('KeePass.config.xml','KeePass.exe','*.kdbx') -ErrorAction SilentlyContinue | Select FullName -ExpandProperty FullName"
+            search_keepass_files_cmd = f'powershell.exe "{search_keepass_files_payload}"'
             search_keepass_files_output = connection.execute(search_keepass_files_cmd, True).split("\r\n")
             found = False
             found_xml = False
@@ -71,7 +64,7 @@ class NXCModule:
                     if "xml" in file:
                         found_xml = True
                     found = True
-                    context.log.highlight("Found {}".format(file))
+                    context.log.highlight(f"Found {file}")
             if not found:
                 context.log.display("No KeePass-related file were found")
             elif not found_xml:

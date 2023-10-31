@@ -1,46 +1,51 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from nxc.nxcdb import DatabaseNavigator, print_table, print_help
 
 
 class navigator(DatabaseNavigator):
     def display_creds(self, creds):
-        data = [[
-            "CredID",
-            "Total Logins",
-            "Username",
-            "Password",
-        ]]
+        data = [
+            [
+                "CredID",
+                "Total Logins",
+                "Username",
+                "Password",
+            ]
+        ]
 
         for cred in creds:
             total_users = self.db.get_loggedin_relations(cred_id=cred[0])
-            data.append([
-                cred[0],
-                str(len(total_users)) + " Host(s)",
-                cred[1],
-                cred[2],
-            ])
+            data.append(
+                [
+                    cred[0],
+                    str(len(total_users)) + " Host(s)",
+                    cred[1],
+                    cred[2],
+                ]
+            )
         print_table(data, title="Credentials")
 
     def display_hosts(self, hosts):
-        data = [[
-            "HostID",
-            "Total Users",
-            "Host",
-            "Port",
-            "Banner",
-        ]]
+        data = [
+            [
+                "HostID",
+                "Total Users",
+                "Host",
+                "Port",
+                "Banner",
+            ]
+        ]
 
         for h in hosts:
             total_users = self.db.get_loggedin_relations(host_id=h[0])
-            data.append([
-                h[0],
-                str(len(total_users)) + " User(s)",
-                h[1],
-                h[2],
-                h[3],
-            ])
+            data.append(
+                [
+                    h[0],
+                    str(len(total_users)) + " User(s)",
+                    h[1],
+                    h[2],
+                    h[3],
+                ]
+            )
         print_table(data, title="Hosts")
 
     def do_hosts(self, line):
@@ -55,24 +60,14 @@ class navigator(DatabaseNavigator):
             if len(hosts) > 1:
                 self.display_hosts(hosts)
             elif len(hosts) == 1:
-                data = [[
-                    "HostID",
-                    "Host",
-                    "Port",
-                    "Banner"
-                ]]
+                data = [["HostID", "Host", "Port", "Banner"]]
                 host_id_list = [h[0] for h in hosts]
 
-                for h in hosts:
-                    data.append([h[0], h[1], h[2], h[3], h[4]])
+                data += [[h[0], h[1], h[2], h[3], h[4]] for h in hosts]
 
                 print_table(data, title="Host")
 
-                login_data = [[
-                    "CredID",
-                    "UserName",
-                    "Password"
-                ]]
+                login_data = [["CredID", "UserName", "Password"]]
                 for host_id in host_id_list:
                     login_links = self.db.get_loggedin_relations(host_id=host_id)
 
@@ -85,7 +80,10 @@ class navigator(DatabaseNavigator):
                                 login_data.append(cred_data)
 
                 if len(login_data) > 1:
-                    print_table(login_data, title="Credential(s) with Logins",)
+                    print_table(
+                        login_data,
+                        title="Credential(s) with Logins",
+                    )
 
     @staticmethod
     def help_hosts(self):
@@ -146,8 +144,7 @@ class navigator(DatabaseNavigator):
                     for link in logins:
                         link_id, cred_id, host_id = link
                         hosts = self.db.get_hosts(host_id)
-                        for h in hosts:
-                            access_data.append([h[0], h[1], h[2], h[3]])
+                        access_data += [[h[0], h[1], h[2], h[3]] for h in hosts]
 
                 # we look if it's greater than one because the header row always exists
                 if len(access_data) > 1:

@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import xmltodict
 
 # Ideally i'd like to be able to pull this info out dynamically from each protocol object but i'm a lazy bastard
@@ -38,7 +35,7 @@ def parse_nessus_file(nessus_file, protocol):
         else:
             return True
 
-    with open(nessus_file, "r") as file_handle:
+    with open(nessus_file) as file_handle:
         xmltodict.parse(file_handle, item_depth=4, item_callback=handle_nessus_file)
 
     return targets

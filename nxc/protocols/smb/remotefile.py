@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 from impacket.smb3structs import FILE_READ_DATA, FILE_WRITE_DATA
 
 
@@ -19,7 +17,7 @@ class RemoteFile:
         self.__fid = None
         self.__currentOffset = 0
 
-    def open(self):
+    def open_file(self):
         self.__fid = self.__smbConnection.openFile(self.__tid, self.__fileName, desiredAccess=self.__access)
 
     def seek(self, offset, whence):

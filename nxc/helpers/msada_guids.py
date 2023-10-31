@@ -12,7 +12,8 @@ Authors:
   Guillaume DAUMAS (@BlWasp_)
   Lucien DOUSTALY (@Wlayzz)
 
-References:
+References
+----------
   MS-ADA1, MS-ADA2, MS-ADA3 Active Directory Schema Attributes and their GUID:
   - [MS-ADA1] https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-ada1/19528560-f41e-4623-a406-dabcfff0660f
   - [MS-ADA2] https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-ada2/e20ebc4e-5285-40ba-b3bd-ffcb81c2783e
@@ -22,6 +23,7 @@ References:
 
 
 This library is, for the moment, not present in the Impacket version used by NetExec, so I add it manually in helpers.
+
 """
 
 SCHEMA_OBJECTS = {

@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from pathlib import Path
 from datetime import datetime
 from impacket.ldap import ldap, ldapasn1
@@ -87,25 +84,21 @@ class NXCModule:
                 perRecordCallback=self.process_record,
             )
         except LDAPSearchError as e:
-            context.log.fail(f"Obtained unexpected exception: {str(e)}")
+            context.log.fail(f"Obtained unexpected exception: {e!s}")
         finally:
             self.delete_log_file()
 
     def create_log_file(self, host, time):
-        """
-        Create a log file for dumping user descriptions.
-        """
+        """Create a log file for dumping user descriptions."""
         logfile = f"UserDesc-{host}-{time}.log"
         logfile = Path.home().joinpath(".nxc").joinpath("logs").joinpath(logfile)
 
         self.context.log.info(f"Creating log file '{logfile}'")
-        self.log_file = open(logfile, "w")
+        self.log_file = open(logfile, "w")  # noqa: SIM115
         self.append_to_log("User:", "Description:")
 
     def delete_log_file(self):
-        """
-        Closes the log file.
-        """
+        """Closes the log file."""
         try:
             self.log_file.close()
             info = f"Saved {self.desc_count} user descriptions to {self.log_file.name}"
@@ -145,7 +138,7 @@ class NXCModule:
                     description = attribute["vals"][0].asOctets().decode("utf-8")
         except Exception as e:
             entry = sAMAccountName or "item"
-            self.context.error(f"Skipping {entry}, cannot process LDAP entry due to error: '{str(e)}'")
+            self.context.error(f"Skipping {entry}, cannot process LDAP entry due to error: '{e!s}'")
 
         if description and sAMAccountName not in self.account_names:
             self.desc_count += 1
@@ -170,7 +163,4 @@ class NXCModule:
         More dedicated searches for sensitive information should be done using the logfile.
         This allows you to refine your search query at any time without having to pull data from AD again.
         """
-        for keyword in self.keywords:
-            if keyword.lower() in description.lower():
-                return True
-        return False
+        return any(keyword.lower() in description.lower() for keyword in self.keywords)

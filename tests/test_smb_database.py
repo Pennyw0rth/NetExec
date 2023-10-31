@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import os
 import pytest
 from sqlalchemy import create_engine
@@ -25,7 +22,6 @@ def db_engine():
 @pytest.fixture(scope="session")
 def db_setup(db_engine):
     proto = "smb"
-    # setup_logger()
     logger = NXCAdapter()
     first_run_setup(logger)
     p_loader = ProtocolLoader()
@@ -33,7 +29,7 @@ def db_setup(db_engine):
     NXCDBMenu.create_workspace("test", p_loader, protocols)
 
     protocol_db_path = p_loader.get_protocols()[proto]["dbpath"]
-    protocol_db_object = getattr(p_loader.load_protocol(protocol_db_path), "database")
+    protocol_db_object = p_loader.load_protocol(protocol_db_path).database
 
     database_obj = protocol_db_object(db_engine)
     database_obj.reflect_tables()
@@ -42,7 +38,7 @@ def db_setup(db_engine):
     delete_workspace("test")
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def db(db_setup):
     yield db_setup
     db_setup.clear_database()

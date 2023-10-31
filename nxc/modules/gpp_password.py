@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import xml.etree.ElementTree as ET
 from Cryptodome.Cipher import AES
 from base64 import b64decode
@@ -43,7 +40,7 @@ class NXCModule:
                 )
 
                 for path in paths:
-                    context.log.display("Found {}".format(path))
+                    context.log.display(f"Found {path}")
 
                     buf = BytesIO()
                     connection.conn.getFile("SYSVOL", path, buf.write)
@@ -57,10 +54,7 @@ class NXCModule:
                         sections.append("./NTService/Properties")
 
                     elif "ScheduledTasks.xml" in path:
-                        sections.append("./Task/Properties")
-                        sections.append("./ImmediateTask/Properties")
-                        sections.append("./ImmediateTaskV2/Properties")
-                        sections.append("./TaskV2/Properties")
+                        sections.extend(("./Task/Properties", "./ImmediateTask/Properties", "./ImmediateTaskV2/Properties", "./TaskV2/Properties"))
 
                     elif "DataSources.xml" in path:
                         sections.append("./DataSource/Properties")
@@ -88,11 +82,11 @@ class NXCModule:
 
                                 password = self.decrypt_cpassword(props["cpassword"])
 
-                                context.log.success("Found credentials in {}".format(path))
-                                context.log.highlight("Password: {}".format(password))
+                                context.log.success(f"Found credentials in {path}")
+                                context.log.highlight(f"Password: {password}")
                                 for k, v in props.items():
                                     if k != "cpassword":
-                                        context.log.highlight("{}: {}".format(k, v))
+                                        context.log.highlight(f"{k}: {v}")
 
                                 hostid = context.db.get_hosts(connection.host)[0][0]
                                 context.db.add_credential(

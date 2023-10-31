@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 # All credit to @an0n_r0
 # https://github.com/tothi/serviceDetector
 # Module by @mpgn_x64
@@ -30,7 +27,6 @@ class NXCModule:
     def options(self, context, module_options):
         """
         """
-        pass
 
     def on_login(self, context, connection):
         target = self._get_target(connection)
@@ -62,15 +58,14 @@ class NXCModule:
 
             dce, _ = lsa.connect()
             policyHandle = lsa.open_policy(dce)
-
-            for product in conf["products"]:
-                for service in product["services"]:
-                    try:
+            try:
+                for product in conf["products"]:
+                    for service in product["services"]:
                         lsa.LsarLookupNames(dce, policyHandle, service["name"])
                         context.log.info(f"Detected installed service on {connection.host}: {product['name']} {service['description']}")
                         results.setdefault(product["name"], {"services": []})["services"].append(service)
-                    except:
-                        pass
+            except Exception:
+                pass
 
         except Exception as e:
             context.log.fail(str(e))
@@ -93,7 +88,7 @@ class NXCModule:
 
     def dump_results(self, results, remoteName, context):
         if not results:
-            context.log.highlight(f"Found NOTHING!")
+            context.log.highlight("Found NOTHING!")
             return
 
         for item, data in results.items():
@@ -148,7 +143,7 @@ class LsaLookupNames:
         """
         string_binding = string_binding or self.string_binding
         if not string_binding:
-            raise NotImplemented("String binding must be defined")
+            raise NotImplementedError("String binding must be defined")
 
         rpc_transport = transport.DCERPCTransportFactory(string_binding)
 
@@ -199,12 +194,11 @@ class LsaLookupNames:
         request["PolicyHandle"] = policyHandle
         request["Count"] = 1
         name1 = RPC_UNICODE_STRING()
-        name1["Data"] = "NT Service\{}".format(service)
+        name1["Data"] = f"NT Service\\{service}"
         request["Names"].append(name1)
         request["TranslatedSids"]["Sids"] = NULL
         request["LookupLevel"] = lsat.LSAP_LOOKUP_LEVEL.LsapLookupWksta
-        resp = dce.request(request)
-        return resp
+        return dce.request(request)
 
 
 conf = {

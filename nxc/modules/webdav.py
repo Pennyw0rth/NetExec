@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from nxc.protocols.smb.remotefile import RemoteFile
 from impacket import nt_errors
 from impacket.smb3structs import FILE_READ_DATA
@@ -22,9 +19,7 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """
-        MSG     Info message when the WebClient service is running. '{}' is replaced by the target.
-        """
+        """MSG     Info message when the WebClient service is running. '{}' is replaced by the target."""
         self.output = "WebClient Service enabled on: {}"
 
         if "MSG" in module_options:
@@ -38,7 +33,7 @@ class NXCModule:
         try:
             remote_file = RemoteFile(connection.conn, "DAV RPC Service", "IPC$", access=FILE_READ_DATA)
 
-            remote_file.open()
+            remote_file.open_file()
             remote_file.close()
 
             context.log.highlight(self.output.format(connection.conn.getRemoteHost()))

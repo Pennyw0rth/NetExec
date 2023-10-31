@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 # Credit to https://airbus-cyber-security.com/fr/the-oxid-resolver-part-1-remote-enumeration-of-network-interfaces-without-any-authentication/
 # Airbus CERT
 # module by @mpgn_x64
@@ -36,7 +33,6 @@ class NXCModule:
 
         context.log.debug("[*] Retrieving network interface of " + connection.host)
 
-        # NetworkAddr = bindings[0]['aNetworkAddr']
         for binding in bindings:
             NetworkAddr = binding["aNetworkAddr"]
             try:

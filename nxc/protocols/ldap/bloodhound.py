@@ -1,4 +1,5 @@
-import sys, time
+import sys
+import time
 
 from nxc.logger import NXCAdapter
 from bloodhound.ad.domain import ADDC
@@ -7,7 +8,7 @@ from bloodhound.enumeration.memberships import MembershipEnumerator
 from bloodhound.enumeration.domains import DomainEnumerator
 
 
-class BloodHound(object):
+class BloodHound:
     def __init__(self, ad, hostname, host, port):
         self.ad = ad
         self.ldap = None
@@ -43,7 +44,6 @@ class BloodHound(object):
         # Create an object resolver
         self.ad.create_objectresolver(self.pdc)
 
-    #        self.pdc.ldap_connect(self.ad.auth.username, self.ad.auth.password, kdc)
 
     def run(
         self,

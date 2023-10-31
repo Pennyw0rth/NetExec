@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from dploot.lib.target import Target
 from nxc.protocols.smb.firefox import FirefoxTriage
 
@@ -18,7 +17,6 @@ class NXCModule:
 
     def options(self, context, module_options):
         """Dump credentials from Firefox"""
-        pass
 
     def on_admin_login(self, context, connection):
         host = connection.hostname + "." + connection.domain
@@ -50,8 +48,7 @@ class NXCModule:
             firefox_credentials = firefox_triage.run()
             for credential in firefox_credentials:
                 context.log.highlight(
-                    "[%s][FIREFOX] %s %s:%s"
-                    % (
+                    "[{}][FIREFOX] {} {}:{}".format(
                         credential.winuser,
                         credential.url + " -" if credential.url != "" else "-",
                         credential.username,
@@ -59,4 +56,4 @@ class NXCModule:
                     )
                 )
         except Exception as e:
-            context.log.debug("Error while looting firefox: {}".format(e))
+            context.log.debug(f"Error while looting firefox: {e}")

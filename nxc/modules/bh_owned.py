@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Author:
 #  Romain Bentz (pixis - @hackanddo)
 # Website:
@@ -33,7 +31,6 @@ class NXCModule:
         USER           Username for Neo4j database (default: 'neo4j')
         PASS           Password for Neo4j database (default: 'neo4j')
         """
-
         self.neo4j_URI = "127.0.0.1"
         self.neo4j_Port = "7687"
         self.neo4j_user = "neo4j"
@@ -49,10 +46,7 @@ class NXCModule:
             self.neo4j_pass = module_options["PASS"]
 
     def on_admin_login(self, context, connection):
-        if context.local_auth:
-            domain = connection.conn.getServerDNSDomainName()
-        else:
-            domain = connection.domain
+        domain = connection.conn.getServerDNSDomainName() if context.local_auth else connection.domain
 
         host_fqdn = f"{connection.hostname}.{domain}".upper()
         uri = f"bolt://{self.neo4j_URI}:{self.neo4j_Port}"
@@ -62,7 +56,7 @@ class NXCModule:
         try:
             driver = GraphDatabase.driver(uri, auth=(self.neo4j_user, self.neo4j_pass), encrypted=False)
         except AuthError:
-            context.log.fail(f"Provided Neo4J credentials ({self.neo4j_user}:{self.neo4j_pass}) are" " not valid. See --options")
+            context.log.fail(f"Provided Neo4J credentials ({self.neo4j_user}:{self.neo4j_pass}) are not valid. See --options")
             sys.exit()
         except ServiceUnavailable:
             context.log.fail(f"Neo4J does not seem to be available on {uri}. See --options")
@@ -73,15 +67,21 @@ class NXCModule:
             sys.exit()
 
         with driver.session() as session:
-            with session.begin_transaction() as tx:
-                result = tx.run(f'MATCH (c:Computer {{name:"{host_fqdn}"}}) SET c.owned=True RETURN' " c.name AS name")
-                record = result.single()
-                try:
-                    value = record.value()
-                except AttributeError:
-                    value = []
+            try:
+                with session.begin_transaction() as tx:
+                    result = tx.run(f"MATCH (c:Computer {{name:{host_fqdn}}}) SET c.owned=True RETURN c.name AS name")
+                    record = result.single()
+                    try:
+                        value = record.value()
+                    except AttributeError:
+                        value = []
+            except ServiceUnavailable as e:
+                context.log.fail(f"Neo4J does not seem to be available on {uri}. See --options")
+                context.log.debug(f"Error {e}: ")
+                driver.close()
+                sys.exit()
         if len(value) > 0:
             context.log.success(f"Node {host_fqdn} successfully set as owned in BloodHound")
         else:
-            context.log.fail(f"Node {host_fqdn} does not appear to be in Neo4J database. Have you" " imported the correct data?")
+            context.log.fail(f"Node {host_fqdn} does not appear to be in Neo4J database. Have you imported the correct data?")
         driver.close()

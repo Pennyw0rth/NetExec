@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from pathlib import Path
 from sqlalchemy.dialects.sqlite import Insert
 from sqlalchemy.orm import sessionmaker, scoped_session
@@ -11,6 +8,7 @@ from sqlalchemy.exc import (
     NoSuchTableError,
 )
 from nxc.logger import nxc_logger
+import sys
 
 
 class database:
@@ -74,7 +72,7 @@ class database:
         )
 
     def reflect_tables(self):
-        with self.db_engine.connect() as conn:
+        with self.db_engine.connect():
             try:
                 self.HostsTable = Table("hosts", self.metadata, autoload_with=self.db_engine)
                 self.UsersTable = Table("users", self.metadata, autoload_with=self.db_engine)
@@ -88,7 +86,7 @@ class database:
                     [-] Optionally save the old DB data (`cp {self.db_path} ~/nxc_{self.protocol.lower()}.bak`)
                     [-] Then remove the {self.protocol} DB (`rm -f {self.db_path}`) and run nxc to initialize the new DB"""
                 )
-                exit()
+                sys.exit()
 
     def shutdown_db(self):
         try:
@@ -152,9 +150,7 @@ class database:
         self.conn.execute(q, hosts)
 
     def add_credential(self, credtype, domain, username, password, pillaged_from=None):
-        """
-        Check if this credential has already been added to the database, if not add it in.
-        """
+        """Check if this credential has already been added to the database, if not add it in."""
         domain = domain.split(".")[0].upper()
         credentials = []
 
@@ -212,12 +208,9 @@ class database:
         update_columns_users = {col.name: col for col in q_users.excluded if col.name not in "id"}
         q_users = q_users.on_conflict_do_update(index_elements=self.UsersTable.primary_key, set_=update_columns_users)
         self.conn.execute(q_users, credentials)  # .scalar()
-        # return user_ids
 
     def remove_credentials(self, creds_id):
-        """
-        Removes a credential ID from the database
-        """
+        """Removes a credential ID from the database"""
         del_hosts = []
         for cred_id in creds_id:
             q = delete(self.UsersTable).filter(self.UsersTable.c.id == cred_id)
@@ -229,7 +222,7 @@ class database:
         add_links = []
 
         creds_q = select(self.UsersTable)
-        if user_id:
+        if user_id:  # noqa: SIM108
             creds_q = creds_q.filter(self.UsersTable.c.id == user_id)
         else:
             creds_q = creds_q.filter(
@@ -267,8 +260,7 @@ class database:
         else:
             q = select(self.AdminRelationsTable)
 
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def remove_admin_relation(self, user_ids=None, host_ids=None):
         q = delete(self.AdminRelationsTable)
@@ -281,9 +273,7 @@ class database:
         self.conn.execute(q)
 
     def is_credential_valid(self, credential_id):
-        """
-        Check if this credential ID is valid.
-        """
+        """Check if this credential ID is valid."""
         q = select(self.UsersTable).filter(
             self.UsersTable.c.id == credential_id,
             self.UsersTable.c.password is not None,
@@ -292,9 +282,7 @@ class database:
         return len(results) > 0
 
     def get_credentials(self, filter_term=None, cred_type=None):
-        """
-        Return credentials from the database.
-        """
+        """Return credentials from the database."""
         # if we're returning a single credential by ID
         if self.is_credential_valid(filter_term):
             q = select(self.UsersTable).filter(self.UsersTable.c.id == filter_term)
@@ -308,8 +296,7 @@ class database:
         else:
             q = select(self.UsersTable)
 
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def is_credential_local(self, credential_id):
         q = select(self.UsersTable.c.domain).filter(self.UsersTable.c.id == credential_id)
@@ -322,17 +309,13 @@ class database:
             return len(results) > 0
 
     def is_host_valid(self, host_id):
-        """
-        Check if this host ID is valid.
-        """
+        """Check if this host ID is valid."""
         q = select(self.HostsTable).filter(self.HostsTable.c.id == host_id)
         results = self.conn.execute(q).all()
         return len(results) > 0
 
     def get_hosts(self, filter_term=None):
-        """
-        Return hosts from the database.
-        """
+        """Return hosts from the database."""
         q = select(self.HostsTable)
 
         # if we're returning a single host by ID
@@ -355,9 +338,7 @@ class database:
         return results
 
     def is_user_valid(self, user_id):
-        """
-        Check if this User ID is valid.
-        """
+        """Check if this User ID is valid."""
         q = select(self.UsersTable).filter(self.UsersTable.c.id == user_id)
         results = self.conn.execute(q).all()
         return len(results) > 0
@@ -371,16 +352,14 @@ class database:
         elif filter_term and filter_term != "":
             like_term = func.lower(f"%{filter_term}%")
             q = q.filter(func.lower(self.UsersTable.c.username).like(like_term))
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def get_user(self, domain, username):
         q = select(self.UsersTable).filter(
             func.lower(self.UsersTable.c.domain) == func.lower(domain),
             func.lower(self.UsersTable.c.username) == func.lower(username),
         )
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def add_loggedin_relation(self, user_id, host_id):
         relation_query = select(self.LoggedinRelationsTable).filter(
@@ -397,7 +376,6 @@ class database:
                 q = Insert(self.LoggedinRelationsTable)  # .returning(self.LoggedinRelationsTable.c.id)
 
                 self.conn.execute(q, [relation])  # .scalar()
-                # return inserted_ids
             except Exception as e:
                 nxc_logger.debug(f"Error inserting LoggedinRelation: {e}")
 
@@ -407,8 +385,7 @@ class database:
             q = q.filter(self.LoggedinRelationsTable.c.userid == user_id)
         if host_id:
             q = q.filter(self.LoggedinRelationsTable.c.hostid == host_id)
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def remove_loggedin_relations(self, user_id=None, host_id=None):
         q = delete(self.LoggedinRelationsTable)

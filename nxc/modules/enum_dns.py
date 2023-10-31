@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from datetime import datetime
 from nxc.helpers.logger import write_log
 
@@ -23,9 +20,7 @@ class NXCModule:
         self.domains = None
 
     def options(self, context, module_options):
-        """
-        DOMAIN  Domain to enumerate DNS for. Defaults to all zones.
-        """
+        """DOMAIN  Domain to enumerate DNS for. Defaults to all zones."""
         self.domains = None
         if module_options and "DOMAIN" in module_options:
             self.domains = module_options["DOMAIN"]
@@ -34,15 +29,12 @@ class NXCModule:
         if not self.domains:
             domains = []
             output = connection.wmi("Select Name FROM MicrosoftDNS_Zone", "root\\microsoftdns")
-
-            if output:
-                for result in output:
-                    domains.append(result["Name"]["value"])
-
-                context.log.success("Domains retrieved: {}".format(domains))
+            domains = [result["Name"]["value"] for result in output] if output else []
+            context.log.success(f"Domains retrieved: {domains}")
         else:
             domains = [self.domains]
         data = ""
+        
         for domain in domains:
             output = connection.wmi(
                 f"Select TextRepresentation FROM MicrosoftDNS_ResourceRecord WHERE DomainName = {domain}",
@@ -70,6 +62,6 @@ class NXCModule:
                         context.log.highlight("\t" + d)
                         data += "\t" + d + "\n"
 
-        log_name = "DNS-Enum-{}-{}.log".format(connection.host, datetime.now().strftime("%Y-%m-%d_%H%M%S"))
+        log_name = f"DNS-Enum-{connection.host}-{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log"
         write_log(data, log_name)
         context.log.display(f"Saved raw output to ~/.nxc/logs/{log_name}")

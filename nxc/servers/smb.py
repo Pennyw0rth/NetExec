@@ -1,10 +1,8 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import threading
 from threading import enumerate
 from sys import exit
 from impacket import smbserver
+from nxc.logger import nxc_logger
 
 
 class NXCSMBServer(threading.Thread):
@@ -28,19 +26,16 @@ class NXCSMBServer(threading.Thread):
         except Exception as e:
             errno, message = e.args
             if errno == 98 and message == "Address already in use":
-                logger.error("Error starting SMB server on port 445: the port is already in use")
+                nxc_logger.error("Error starting SMB server on port 445: the port is already in use")
             else:
-                logger.error(f"Error starting SMB server on port 445: {message}")
+                nxc_logger.error(f"Error starting SMB server on port 445: {message}")
                 exit(1)
-
-    def addShare(self, share_name, share_path):
-        self.server.addShare(share_name, share_path)
 
     def run(self):
         try:
             self.server.start()
-        except:
-            pass
+        except Exception as e:
+            nxc_logger.debug(f"Error starting SMB server: {e}")
 
     def shutdown(self):
         # TODO: should fine the proper way
@@ -49,5 +44,5 @@ class NXCSMBServer(threading.Thread):
             if thread.is_alive():
                 try:
                     self._stop()
-                except:
-                    pass
+                except Exception as e:
+                    nxc_logger.debug(f"Error stopping SMB server: {e}")

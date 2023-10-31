@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 
 class NXCModule:
     name = "runasppl"
@@ -21,6 +18,6 @@ class NXCModule:
         context.log.display("Executing command")
         p = connection.execute(command, True)
         if "The system was unable to find the specified registry key or value" in p:
-            context.log.debug(f"Unable to find RunAsPPL Registry Key")
+            context.log.debug("Unable to find RunAsPPL Registry Key")
         else:
             context.log.highlight(p)

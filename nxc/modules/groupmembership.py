@@ -1,8 +1,6 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ldap import ldap as ldap_impacket
+import sys
 
 
 class NXCModule:
@@ -21,27 +19,24 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """
-        USER	Choose a username to query group membership
-        """
-
+        """USER	Choose a username to query group membership"""
         self.user = ""
         if "USER" in module_options:
             if module_options["USER"] == "":
                 context.log.fail("Invalid value for USER option!")
-                exit(1)
+                sys.exit(1)
             self.user = module_options["USER"]
         else:
             context.log.fail("Missing USER option, use --options to list available parameters")
-            exit(1)
+            sys.exit(1)
 
     def on_login(self, context, connection):
         """Concurrent. Required if on_admin_login is not present. This gets called on each authenticated connection"""
         # Building the search filter
-        searchFilter = "(&(objectClass=user)(sAMAccountName={}))".format(self.user)
+        searchFilter = f"(&(objectClass=user)(sAMAccountName={self.user}))"
 
         try:
-            context.log.debug("Search Filter=%s" % searchFilter)
+            context.log.debug(f"Search Filter={searchFilter}")
             resp = connection.ldapConnection.search(
                 searchFilter=searchFilter,
                 attributes=["memberOf", "primaryGroupID"],
@@ -53,7 +48,6 @@ class NXCModule:
                 # We reached the sizeLimit, process the answers we have already and that's it. Until we implement
                 # paged queries
                 resp = e.getAnswers()
-                pass
             else:
                 context.log.debug(e)
                 return False
@@ -61,7 +55,7 @@ class NXCModule:
         memberOf = []
         primaryGroupID = ""
 
-        context.log.debug("Total of records returned %d" % len(resp))
+        context.log.debug(f"Total of records returned {len(resp)}")
         for item in resp:
             if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
                 continue
@@ -75,16 +69,12 @@ class NXCModule:
                         if str(primaryGroupID) == "513":
                             memberOf.append("CN=Domain Users,CN=Users,DC=XXXXX,DC=XXX")
                     elif str(attribute["type"]) == "memberOf":
-                        for group in attribute["vals"]:
-                            if isinstance(group._value, bytes):
-                                memberOf.append(str(group))
-
+                        memberOf += [str(group) for group in attribute["vals"] if isinstance(group._value, bytes)]
             except Exception as e:
                 context.log.debug("Exception:", exc_info=True)
-                context.log.debug("Skipping item, cannot process due to error %s" % str(e))
-                pass
+                context.log.debug(f"Skipping item, cannot process due to error {e!s}")
         if len(memberOf) > 0:
-            context.log.success("User: {} is member of following groups: ".format(self.user))
+            context.log.success(f"User: {self.user} is member of following groups: ")
             for group in memberOf:
                 # Split the string on the "," character to get a list of the group name and parent group names
                 group_parts = group.split(",")
@@ -93,5 +83,4 @@ class NXCModule:
                 # and splitting it on the "=" character to get a list of the group name and its prefix (e.g., "CN")
                 group_name = group_parts[0].split("=")[1]
 
-                # print("Group name: %s" % group_name)
-                context.log.highlight("{}".format(group_name))
+                context.log.highlight(f"{group_name}")

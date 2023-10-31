@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from nxc.nxcdb import DatabaseNavigator, print_table, print_help
 
 
@@ -153,19 +150,10 @@ class navigator(DatabaseNavigator):
             creds = self.db.get_credentials()
             self.display_creds(creds)
         # TODO
-        # elif filter_term.split()[0].lower() == "add":
         #     # add format: "domain username password <notes> <credType> <sid>
-        #     args = filter_term.split()[1:]
         #
         #     if len(args) == 3:
-        #         domain, username, password = args
         #         if validate_ntlm(password):
-        #             self.db.add_credential("hash", domain, username, password)
-        #         else:
-        #             self.db.add_credential("plaintext", domain, username, password)
-        #     else:
-        #         print("[!] Format is 'add username password")
-        #         return
         elif filter_term.split()[0].lower() == "remove":
             args = filter_term.split()[1:]
             if len(args) != 1:
@@ -259,9 +247,8 @@ class navigator(DatabaseNavigator):
         print_help(help_string)
 
     def display_keys(self, keys):
-        data = [["Key ID", "Cred ID", "Key Data"]]
-        for key in keys:
-            data.append([key[0], key[1], key[2]])
+        data = [[key[0], key[1], key[2]] for key in keys]
+        data.insert(0, ["Key ID", "Cred ID", "Key Data"])
         print_table(data, "Keys")
 
     def do_keys(self, line):
@@ -287,7 +274,7 @@ class navigator(DatabaseNavigator):
         print_help(help_string)
 
     def do_clear_database(self, line):
-        if input("This will destroy all data in the current database, are you SURE you" " want to run this? (y/n): ") == "y":
+        if input("This will destroy all data in the current database, are you SURE you want to run this? (y/n): ") == "y":
             self.db.clear_database()
 
     def help_clear_database(self):
@@ -300,9 +287,7 @@ class navigator(DatabaseNavigator):
 
     @staticmethod
     def complete_hosts(self, text, line):
-        """
-        Tab-complete 'hosts' commands.
-        """
+        """Tab-complete 'hosts' commands."""
         commands = ["add", "remove"]
 
         mline = line.partition(" ")[2]
@@ -310,9 +295,7 @@ class navigator(DatabaseNavigator):
         return [s[offs:] for s in commands if s.startswith(mline)]
 
     def complete_creds(self, text, line):
-        """
-        Tab-complete 'creds' commands.
-        """
+        """Tab-complete 'creds' commands."""
         commands = ["add", "remove", "key", "plaintext"]
 
         mline = line.partition(" ")[2]

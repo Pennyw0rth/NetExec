@@ -1,13 +1,11 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from nxc.helpers.misc import validate_ntlm
 from nxc.nxcdb import DatabaseNavigator, print_table, print_help
 from termcolor import colored
 import functools
 
-help_header = functools.partial(colored, color='cyan', attrs=['bold'])
-help_kw = functools.partial(colored, color='green', attrs=['bold'])
+help_header = functools.partial(colored, color="cyan", attrs=["bold"])
+help_kw = functools.partial(colored, color="green", attrs=["bold"])
+
 
 class navigator(DatabaseNavigator):
     def display_creds(self, creds):
@@ -19,7 +17,6 @@ class navigator(DatabaseNavigator):
             username = cred[2]
             password = cred[3]
             credtype = cred[4]
-            # pillaged_from = cred[5]
 
             links = self.db.get_admin_relations(user_id=cred_id)
             data.append(
@@ -84,7 +81,7 @@ class navigator(DatabaseNavigator):
 
             try:
                 os = host[4].decode()
-            except:
+            except Exception:
                 os = host[4]
             try:
                 smbv1 = host[6]
@@ -228,18 +225,7 @@ class navigator(DatabaseNavigator):
                     ]
                 ]
 
-                for group in groups:
-                    data.append(
-                        [
-                            group[0],
-                            group[1],
-                            group[2],
-                            group[3],
-                            len(self.db.get_group_relations(group_id=group[0])),
-                            group[4],
-                            group[5],
-                        ]
-                    )
+                data += [[group[0], group[1], group[2], group[3], len(self.db.get_group_relations(group_id=group[0])), group[4], group[5]] for group in groups]
                 print_table(data, title="Group")
                 data = [
                     [
@@ -309,7 +295,7 @@ class navigator(DatabaseNavigator):
 
                     try:
                         os = host[4].decode()
-                    except:
+                    except Exception:
                         os = host[4]
                     try:
                         dc = host[5]
@@ -361,35 +347,21 @@ class navigator(DatabaseNavigator):
                 print_table(data, title="Credential(s) with Admin Access")
 
     def do_wcc(self, line):
-        valid_columns = {
-            'ip':'IP',
-            'hostname':'Hostname',
-            'check':'Check',
-            'description':'Description',
-            'status':'Status',
-            'reasons':'Reasons'
-        }
+        valid_columns = {"ip": "IP", "hostname": "Hostname", "check": "Check", "description": "Description", "status": "Status", "reasons": "Reasons"}
 
         line = line.strip()
 
-        if line.lower() == 'full':
+        if line.lower() == "full":
             columns_to_display = list(valid_columns.values())
         else:
-            requested_columns = line.split(' ')
-            columns_to_display = list(valid_columns[column.lower()] for column in requested_columns if column.lower() in valid_columns)
+            requested_columns = line.split(" ")
+            columns_to_display = [valid_columns[column.lower()] for column in requested_columns if column.lower() in valid_columns]
 
         results = self.db.get_check_results()
         self.display_wcc_results(results, columns_to_display)
 
     def display_wcc_results(self, results, columns_to_display=None):
-        data = [
-            [
-                "IP",
-                "Hostname",
-                "Check",
-                "Status"
-            ]
-        ]
+        data = [["IP", "Hostname", "Check", "Status"]]
         if columns_to_display:
             data = [columns_to_display]
 
@@ -397,25 +369,25 @@ class navigator(DatabaseNavigator):
         checks_dict = {}
         for check in checks:
             check = check._asdict()
-            checks_dict[check['id']] = check
+            checks_dict[check["id"]] = check
 
-        for (result_id, host_id, check_id, secure, reasons)  in results:
-            status = 'OK' if secure else 'KO'
+        for _result_id, host_id, check_id, secure, reasons in results:
+            status = "OK" if secure else "KO"
             host = self.db.get_hosts(host_id)[0]._asdict()
             check = checks_dict[check_id]
             row = []
             for column in data[0]:
-                if column == 'IP':
-                    row.append(host['ip'])
-                if column == 'Hostname':
-                    row.append(host['hostname'])
-                if column == 'Check':
-                    row.append(check['name'])
-                if column == 'Description':
-                    row.append(check['description'])
-                if column == 'Status':
+                if column == "IP":
+                    row.append(host["ip"])
+                if column == "Hostname":
+                    row.append(host["hostname"])
+                if column == "Check":
+                    row.append(check["name"])
+                if column == "Description":
+                    row.append(check["description"])
+                if column == "Status":
                     row.append(status)
-                if column == 'Reasons':
+                if column == "Reasons":
                     row.append(reasons)
             data.append(row)
 
@@ -714,7 +686,7 @@ class navigator(DatabaseNavigator):
         print_help(help_string)
 
     def do_clear_database(self, line):
-        if input("This will destroy all data in the current database, are you SURE you" " want to run this? (y/n): ") == "y":
+        if input("This will destroy all data in the current database, are you SURE you want to run this? (y/n): ") == "y":
             self.db.clear_database()
 
     def help_clear_database(self):
@@ -726,9 +698,7 @@ class navigator(DatabaseNavigator):
         print_help(help_string)
 
     def complete_hosts(self, text, line):
-        """
-        Tab-complete 'hosts' commands.
-        """
+        """Tab-complete 'hosts' commands."""
         commands = ("add", "remove", "dc")
 
         mline = line.partition(" ")[2]
@@ -736,9 +706,7 @@ class navigator(DatabaseNavigator):
         return [s[offs:] for s in commands if s.startswith(mline)]
 
     def complete_creds(self, text, line):
-        """
-        Tab-complete 'creds' commands.
-        """
+        """Tab-complete 'creds' commands."""
         commands = ("add", "remove", "hash", "plaintext")
 
         mline = line.partition(" ")[2]

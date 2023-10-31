@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+import sys
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import identify_target_file
 from nxc.parsers.ip import parse_targets
@@ -8,19 +7,15 @@ from nxc.parsers.nessus import parse_nessus_file
 from nxc.cli import gen_cli_args
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.loaders.moduleloader import ModuleLoader
-from nxc.servers.http import NXCHTTPServer
 from nxc.first_run import first_run_setup
-from nxc.context import Context
-from nxc.paths import nxc_PATH, DATA_PATH
+from nxc.paths import NXC_PATH
 from nxc.console import nxc_console
 from nxc.logger import nxc_logger
 from nxc.config import nxc_config, nxc_workspace, config_log, ignore_opsec
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
-import nxc.helpers.powershell as powershell
+from nxc.helpers import powershell
 import shutil
-import webbrowser
-import random
 import os
 from os.path import exists
 from os.path import join as path_join
@@ -28,11 +23,12 @@ from sys import exit
 import logging
 import sqlalchemy
 from rich.progress import Progress
-from sys import platform
+import platform
 
 # Increase file_limit to prevent error "Too many open files"
-if platform != "win32":
+if platform != "Windows":
     import resource
+
     file_limit = list(resource.getrlimit(resource.RLIMIT_NOFILE))
     if file_limit[1] > 10000:
         file_limit[0] = 10000
@@ -41,37 +37,31 @@ if platform != "win32":
     file_limit = tuple(file_limit)
     resource.setrlimit(resource.RLIMIT_NOFILE, file_limit)
 
-try:
-    import librlers
-except:
-    print("Incompatible python version, try with another python version or another binary 3.8 / 3.9 / 3.10 / 3.11 that match your python version (python -V)")
-    exit(1)
+
 
 def create_db_engine(db_path):
-    db_engine = sqlalchemy.create_engine(f"sqlite:///{db_path}", isolation_level="AUTOCOMMIT", future=True)
-    return db_engine
+    return sqlalchemy.create_engine(f"sqlite:///{db_path}", isolation_level="AUTOCOMMIT", future=True)
 
 
 async def start_run(protocol_obj, args, db, targets):
-    nxc_logger.debug(f"Creating ThreadPoolExecutor")
+    nxc_logger.debug("Creating ThreadPoolExecutor")
     if args.no_progress or len(targets) == 1:
         with ThreadPoolExecutor(max_workers=args.threads + 1) as executor:
             nxc_logger.debug(f"Creating thread for {protocol_obj}")
             _ = [executor.submit(protocol_obj, args, db, target) for target in targets]
     else:
-        with Progress(console=nxc_console) as progress:
-            with ThreadPoolExecutor(max_workers=args.threads + 1) as executor:
-                current = 0
-                total = len(targets)
-                tasks = progress.add_task(
-                    f"[green]Running nxc against {total} {'target' if total == 1 else 'targets'}",
-                    total=total,
-                )
-                nxc_logger.debug(f"Creating thread for {protocol_obj}")
-                futures = [executor.submit(protocol_obj, args, db, target) for target in targets]
-                for _ in as_completed(futures):
-                    current += 1
-                    progress.update(tasks, completed=current)
+        with Progress(console=nxc_console) as progress, ThreadPoolExecutor(max_workers=args.threads + 1) as executor:
+            current = 0
+            total = len(targets)
+            tasks = progress.add_task(
+                f"[green]Running nxc against {total} {'target' if total == 1 else 'targets'}",
+                total=total,
+            )
+            nxc_logger.debug(f"Creating thread for {protocol_obj}")
+            futures = [executor.submit(protocol_obj, args, db, target) for target in targets]
+            for _ in as_completed(futures):
+                current += 1
+                progress.update(tasks, completed=current)
 
 
 def main():
@@ -96,17 +86,17 @@ def main():
     if hasattr(args, "log") and args.log:
         nxc_logger.add_file_log(args.log)
 
+    nxc_logger.debug("PYTHON VERSION: " + sys.version)
+    nxc_logger.debug("RUNNING ON: " + platform.system() + " Release: " + platform.release())
     nxc_logger.debug(f"Passed args: {args}")
 
     # FROM HERE ON A PROTOCOL IS REQUIRED
     if not args.protocol:
         exit(1)
 
-    if args.protocol == "ssh":
-        if args.key_file:
-            if not args.password:
-                nxc_logger.fail(f"Password is required, even if a key file is used - if no passphrase for key, use `-p ''`")
-                exit(1)
+    if args.protocol == "ssh" and args.key_file and not args.password:
+        nxc_logger.fail("Password is required, even if a key file is used - if no passphrase for key, use `-p ''`")
+        exit(1)
 
     if args.use_kcache and not os.environ.get("KRB5CCNAME"):
         nxc_logger.error("KRB5CCNAME environment variable is not set")
@@ -137,7 +127,7 @@ def main():
                 elif target_file_type == "nessus":
                     targets.extend(parse_nessus_file(target, args.protocol))
                 else:
-                    with open(target, "r") as target_file:
+                    with open(target) as target_file:
                         for target_entry in target_file:
                             targets.extend(parse_targets(target_entry.strip()))
             else:
@@ -161,10 +151,10 @@ def main():
 
     protocol_object = getattr(p_loader.load_protocol(protocol_path), args.protocol)
     nxc_logger.debug(f"Protocol Object: {protocol_object}")
-    protocol_db_object = getattr(p_loader.load_protocol(protocol_db_path), "database")
+    protocol_db_object = p_loader.load_protocol(protocol_db_path).database
     nxc_logger.debug(f"Protocol DB Object: {protocol_db_object}")
 
-    db_path = path_join(nxc_PATH, "workspaces", nxc_workspace, f"{args.protocol}.db")
+    db_path = path_join(NXC_PATH, "workspaces", nxc_workspace, f"{args.protocol}.db")
     nxc_logger.debug(f"DB Path: {db_path}")
 
     db_engine = create_db_engine(db_path)
@@ -172,15 +162,20 @@ def main():
     db = protocol_db_object(db_engine)
 
     # with the new nxc/config.py this can be eventually removed, as it can be imported anywhere
-    setattr(protocol_object, "config", nxc_config)
+    protocol_object.config = nxc_config
 
     if args.module or args.list_modules:
         loader = ModuleLoader(args, db, nxc_logger)
         modules = loader.list_modules()
 
     if args.list_modules:
+        nxc_logger.highlight("LOW PRIVILEGE MODULES")
         for name, props in sorted(modules.items()):
-            if args.protocol in props["supported_protocols"]:
+            if args.protocol in props["supported_protocols"] and not props["requires_admin"]:
+                nxc_logger.display(f"{name:<25} {props['description']}")
+        nxc_logger.highlight("\nHIGH PRIVILEGE MODULES (requires admin privs)")
+        for name, props in sorted(modules.items()):
+            if args.protocol in props["supported_protocols"] and props["requires_admin"]:
                 nxc_logger.display(f"{name:<25} {props['description']}")
         exit(0)
     elif args.module and args.show_module_options:
@@ -199,8 +194,8 @@ def main():
 
             if not module.opsec_safe:
                 if ignore_opsec:
-                    nxc_logger.debug(f"ignore_opsec is set in the configuration, skipping prompt")
-                    nxc_logger.display(f"Ignore OPSEC in configuration is set and OPSEC unsafe module loaded")
+                    nxc_logger.debug("ignore_opsec is set in the configuration, skipping prompt")
+                    nxc_logger.display("Ignore OPSEC in configuration is set and OPSEC unsafe module loaded")
                 else:
                     ans = input(
                         highlight(
@@ -228,28 +223,12 @@ def main():
                 if not args.server_port:
                     args.server_port = server_port_dict[args.server]
 
-                # loading a module server multiple times will obviously fail
-                try:
-                    context = Context(db, nxc_logger, args)
-                    module_server = NXCHTTPServer(
-                        module,
-                        context,
-                        nxc_logger,
-                        args.server_host,
-                        args.server_port,
-                        args.server,
-                    )
-                    module_server.start()
-                    protocol_object.server = module_server.server
-                except Exception as e:
-                    nxc_logger.error(f"Error loading module server for {module}: {e}")
-
             nxc_logger.debug(f"proto_object: {protocol_object}, type: {type(protocol_object)}")
             nxc_logger.debug(f"proto object dir: {dir(protocol_object)}")
             # get currently set modules, otherwise default to empty list
             current_modules = getattr(protocol_object, "module", [])
             current_modules.append(module)
-            setattr(protocol_object, "module", current_modules)
+            protocol_object.module = current_modules
             nxc_logger.debug(f"proto object module after adding: {protocol_object.module}")
 
     if hasattr(args, "ntds") and args.ntds and not args.userntds:

