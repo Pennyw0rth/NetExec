@@ -259,12 +259,14 @@ class winrm(connection):
     # So, we can get a TGT when doing nthash with kerberos auth
     def getTGT(self):
         userName = Principal(self.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
-        tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(clientName = userName,
-                                                                password = self.password,
-                                                                domain = self.domain,
-                                                                lmhash = unhexlify(self.lmhash),
-                                                                nthash = unhexlify(self.nthash),
-                                                                kdcHost = self.kdcHost)
+        tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(
+            clientName=userName,
+            password=self.password,
+            domain=self.domain,
+            lmhash=unhexlify(self.lmhash),
+            nthash=unhexlify(self.nthash),
+            kdcHost=self.kdcHost
+        )
         ccache = CCache()
         ccache.fromTGT(tgt, oldSessionKey, sessionKey)
         tgt_file = os.path.join(tempfile.gettempdir(), f"{self.username}@{self.domain}.ccache")
