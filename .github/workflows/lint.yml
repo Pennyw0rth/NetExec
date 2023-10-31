@@ -23,6 +23,7 @@ jobs:
           cache-dependency-path: poetry.lock
       - name: Install dependencies with dev group
         run: |
+          apt-get install gcc python3-dev libkrb5-dev gss-ntlmssp
           poetry install --with dev
       - name: Run ruff
         run: |
