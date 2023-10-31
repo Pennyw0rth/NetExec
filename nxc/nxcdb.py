@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import cmd
 import configparser
 import csv
@@ -26,23 +23,20 @@ class UserExitedProto(Exception):
 
 
 def create_db_engine(db_path):
-    db_engine = create_engine(f"sqlite:///{db_path}", isolation_level="AUTOCOMMIT", future=True)
-    return db_engine
+    return create_engine(f"sqlite:///{db_path}", isolation_level="AUTOCOMMIT", future=True)
 
 
 def print_table(data, title=None):
-    print("")
+    print()
     table = AsciiTable(data)
     if title:
         table.title = title
     print(table.table)
-    print("")
+    print()
 
 
 def write_csv(filename, headers, entries):
-    """
-    Writes a CSV file with the provided parameters.
-    """
+    """Writes a CSV file with the provided parameters."""
     with open(os.path.expanduser(filename), "w") as export_file:
         csv_file = csv.writer(
             export_file,
@@ -57,19 +51,14 @@ def write_csv(filename, headers, entries):
 
 
 def write_list(filename, entries):
-    """
-    Writes a file with a simple list
-    """
+    """Writes a file with a simple list"""
     with open(os.path.expanduser(filename), "w") as export_file:
         for line in entries:
             export_file.write(line + "\n")
-    return
 
 
 def complete_import(text, line):
-    """
-    Tab-complete 'import' commands
-    """
+    """Tab-complete 'import' commands"""
     commands = ("empire", "metasploit")
     mline = line.partition(" ")[2]
     offs = len(mline) - len(text)
@@ -77,9 +66,7 @@ def complete_import(text, line):
 
 
 def complete_export(text, line):
-    """
-    Tab-complete 'creds' commands.
-    """
+    """Tab-complete 'creds' commands."""
     commands = (
         "creds",
         "plaintext",
@@ -172,7 +159,7 @@ class DatabaseNavigator(cmd.Cmd):
                     if cred[4] == "hash":
                         usernames.append(cred[2])
                         passwords.append(cred[3])
-                output_list = [':'.join(combination) for combination in zip(usernames, passwords)]
+                output_list = [":".join(combination) for combination in zip(usernames, passwords)]
                 write_list(filename, output_list)
             else:
                 print(f"[-] No such export option: {line[1]}")
@@ -243,15 +230,12 @@ class DatabaseNavigator(cmd.Cmd):
                 formatted_shares = []
                 for share in shares:
                     user = self.db.get_users(share[2])[0]
-                    if self.db.get_hosts(share[1]): 
-                        share_host = self.db.get_hosts(share[1])[0][2] 
-                    else: 
-                        share_host = "ERROR"
+                    share_host = self.db.get_hosts(share[1])[0][2] if self.db.get_hosts(share[1]) else "ERROR"
 
                     entry = (
                         share[0],  # shareID
                         share_host,  # hosts
-                        f"{user[1]}\{user[2]}",  # userID
+                        f"{user[1]}\\{user[2]}",  # userID
                         share[3],  # name
                         share[4],  # remark
                         bool(share[5]),  # read
@@ -333,10 +317,7 @@ class DatabaseNavigator(cmd.Cmd):
                 return
             print("[+] DPAPI secrets exported")
         elif command == "keys":
-            if line[1].lower() == "all":
-                keys = self.db.get_keys()
-            else:
-                keys = self.db.get_keys(key_id=int(line[1]))
+            keys = self.db.get_keys() if line[1].lower() == "all" else self.db.get_keys(key_id=int(line[1]))
             writable_keys = [key[2] for key in keys]
             filename = line[2]
             write_list(filename, writable_keys)
@@ -352,15 +333,7 @@ class DatabaseNavigator(cmd.Cmd):
                 "check",
                 "status",
             )
-            csv_header_detailed = (
-                "id",
-                "ip",
-                "hostname",
-                "check",
-                "description",
-                "status",
-                "reasons"
-            )
+            csv_header_detailed = ("id", "ip", "hostname", "check", "description", "status", "reasons")
             filename = line[2]
             host_mapping = {}
             check_mapping = {}
@@ -370,12 +343,12 @@ class DatabaseNavigator(cmd.Cmd):
             check_results = self.db.get_check_results()
             rows = []
 
-            for result_id,hostid,checkid,secure,reasons in check_results:
+            for result_id, hostid, checkid, secure, reasons in check_results:
                 row = [result_id]
                 if hostid in host_mapping:
                     row.extend(host_mapping[hostid])
                 else:
-                    for host_id,ip,hostname,_,_,_,_,_,_,_,_ in hosts:
+                    for host_id, ip, hostname, _, _, _, _, _, _, _, _ in hosts:
                         if host_id == hostid:
                             row.extend([ip, hostname])
                             host_mapping[hostid] = [ip, hostname]
@@ -389,12 +362,11 @@ class DatabaseNavigator(cmd.Cmd):
                             row.extend([name, description])
                             check_mapping[checkid] = [name, description]
                             break
-                row.append('OK' if secure else 'KO')
-                row.append(reasons)
+                row.extend(("OK" if secure else "KO", reasons))
                 rows.append(row)
 
             if line[1].lower() == "simple":
-                simple_rows = list((row[0], row[1], row[2], row[3], row[5]) for row in rows)
+                simple_rows = [(row[0], row[1], row[2], row[3], row[5]) for row in rows]
                 write_csv(filename, csv_header_simple, simple_rows)
             elif line[1].lower() == "detailed":
                 write_csv(filename, csv_header_detailed, rows)
@@ -509,7 +481,7 @@ class NXCDBMenu(cmd.Cmd):
             self.config.set("nxc", "last_used_db", proto)
             self.write_configfile()
             try:
-                proto_menu = getattr(db_nav_object, "navigator")(self, getattr(db_object, "database")(self.conn), proto)
+                proto_menu = db_nav_object.navigator(self, db_object.database(self.conn), proto)
                 proto_menu.cmdloop()
             except UserExitedProto:
                 pass
@@ -571,7 +543,7 @@ class NXCDBMenu(cmd.Cmd):
     def create_workspace(workspace_name, p_loader, protocols):
         os.mkdir(path_join(WORKSPACE_DIR, workspace_name))
 
-        for protocol in protocols.keys():
+        for protocol in protocols:
             protocol_object = p_loader.load_protocol(protocols[protocol]["dbpath"])
             proto_db_path = path_join(WORKSPACE_DIR, workspace_name, f"{protocol}.db")
 
@@ -584,7 +556,7 @@ class NXCDBMenu(cmd.Cmd):
                 c.execute("PRAGMA journal_mode = OFF")
                 c.execute("PRAGMA foreign_keys = 1")
 
-                getattr(protocol_object, "database").db_schema(c)
+                protocol_object.database.db_schema(c)
 
                 # commit the changes and close everything off
                 conn.commit()
@@ -602,7 +574,7 @@ def initialize_db(logger):
 
     p_loader = ProtocolLoader()
     protocols = p_loader.get_protocols()
-    for protocol in protocols.keys():
+    for protocol in protocols:
         protocol_object = p_loader.load_protocol(protocols[protocol]["dbpath"])
         proto_db_path = path_join(WS_PATH, "default", f"{protocol}.db")
 
@@ -615,7 +587,7 @@ def initialize_db(logger):
             c.execute("PRAGMA foreign_keys = 1")
             # set a small timeout (5s) so if another thread is writing to the database, the entire program doesn't crash
             c.execute("PRAGMA busy_timeout = 5000")
-            getattr(protocol_object, "database").db_schema(c)
+            protocol_object.database.db_schema(c)
             # commit the changes and close everything off
             conn.commit()
             conn.close()

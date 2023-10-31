@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from pathlib import Path
 from sqlalchemy.dialects.sqlite import Insert
 from sqlalchemy.orm import sessionmaker, scoped_session
@@ -11,6 +8,7 @@ from sqlalchemy.exc import (
     NoSuchTableError,
 )
 from nxc.logger import nxc_logger
+import sys
 
 
 class database:
@@ -31,47 +29,47 @@ class database:
 
     @staticmethod
     def db_schema(db_conn):
-        db_conn.execute("""CREATE TABLE "credentials" (
+        db_conn.execute(
+            """CREATE TABLE "credentials" (
             "id" integer PRIMARY KEY,
             "username" text,
             "password" text
-            )""")
+            )"""
+        )
 
-        db_conn.execute("""CREATE TABLE "hosts" (
+        db_conn.execute(
+            """CREATE TABLE "hosts" (
             "id" integer PRIMARY KEY,
             "host" text,
             "port" integer,
             "banner" text
-            )""")
-        db_conn.execute("""CREATE TABLE "loggedin_relations" (
+            )"""
+        )
+        db_conn.execute(
+            """CREATE TABLE "loggedin_relations" (
             "id" integer PRIMARY KEY,
             "credid" integer,
             "hostid" integer,
             FOREIGN KEY(credid) REFERENCES credentials(id),
             FOREIGN KEY(hostid) REFERENCES hosts(id)
-        )""")
-        db_conn.execute("""CREATE TABLE "directory_listings" (
+        )"""
+        )
+        db_conn.execute(
+            """CREATE TABLE "directory_listings" (
             "id" integer PRIMARY KEY,
             "lir_id" integer,
             "data" text,
             FOREIGN KEY(lir_id) REFERENCES loggedin_relations(id)
-        )""")
+        )"""
+        )
 
     def reflect_tables(self):
         with self.db_engine.connect():
             try:
-                self.CredentialsTable = Table(
-                    "credentials", self.metadata, autoload_with=self.db_engine
-                )
-                self.HostsTable = Table(
-                    "hosts", self.metadata, autoload_with=self.db_engine
-                )
-                self.LoggedinRelationsTable = Table(
-                    "loggedin_relations", self.metadata, autoload_with=self.db_engine
-                )
-                self.DirectoryListingsTable = Table(
-                    "directory_listings", self.metadata, autoload_with=self.db_engine
-                )
+                self.CredentialsTable = Table("credentials", self.metadata, autoload_with=self.db_engine)
+                self.HostsTable = Table("hosts", self.metadata, autoload_with=self.db_engine)
+                self.LoggedinRelationsTable = Table("loggedin_relations", self.metadata, autoload_with=self.db_engine)
+                self.DirectoryListingsTable = Table("directory_listings", self.metadata, autoload_with=self.db_engine)
             except (NoInspectionAvailable, NoSuchTableError):
                 print(
                     f"""
@@ -80,7 +78,7 @@ class database:
                     [-] Optionally save the old DB data (`cp {self.db_path} ~/nxc_{self.protocol.lower()}.bak`)
                     [-] Then remove the {self.protocol} DB (`rm -f {self.db_path}`) and run nxc to initialize the new DB"""
                 )
-                exit()
+                sys.exit()
 
     def shutdown_db(self):
         try:
@@ -96,9 +94,7 @@ class database:
             self.sess.execute(table.delete())
 
     def add_host(self, host, port, banner):
-        """
-        Check if this host is already in the DB, if not add it
-        """
+        """Check if this host is already in the DB, if not add it"""
         hosts = []
         updated_ids = []
 
@@ -135,10 +131,7 @@ class database:
         # TODO: find a way to abstract this away to a single Upsert call
         q = Insert(self.HostsTable)  # .returning(self.HostsTable.c.id)
         update_columns = {col.name: col for col in q.excluded if col.name not in "id"}
-        q = q.on_conflict_do_update(
-            index_elements=self.HostsTable.primary_key,
-            set_=update_columns
-        )
+        q = q.on_conflict_do_update(index_elements=self.HostsTable.primary_key, set_=update_columns)
 
         self.sess.execute(q, hosts)  # .scalar()
         # we only return updated IDs for now - when RETURNING clause is allowed we can return inserted
@@ -147,15 +140,10 @@ class database:
             return updated_ids
 
     def add_credential(self, username, password):
-        """
-        Check if this credential has already been added to the database, if not add it in.
-        """
+        """Check if this credential has already been added to the database, if not add it in."""
         credentials = []
 
-        q = select(self.CredentialsTable).filter(
-            func.lower(self.CredentialsTable.c.username) == func.lower(username),
-            func.lower(self.CredentialsTable.c.password) == func.lower(password)
-        )
+        q = select(self.CredentialsTable).filter(func.lower(self.CredentialsTable.c.username) == func.lower(username), func.lower(self.CredentialsTable.c.password) == func.lower(password))
         results = self.sess.execute(q).all()
 
         # add new credential
@@ -182,26 +170,19 @@ class database:
         # TODO: find a way to abstract this away to a single Upsert call
         q_users = Insert(self.CredentialsTable)  # .returning(self.CredentialsTable.c.id)
         update_columns_users = {col.name: col for col in q_users.excluded if col.name not in "id"}
-        q_users = q_users.on_conflict_do_update(
-            index_elements=self.CredentialsTable.primary_key,
-            set_=update_columns_users
-        )
+        q_users = q_users.on_conflict_do_update(index_elements=self.CredentialsTable.primary_key, set_=update_columns_users)
         nxc_logger.debug(f"Adding credentials: {credentials}")
 
         self.sess.execute(q_users, credentials)  # .scalar()
-        # return cred_ids
 
         # hacky way to get cred_id since we can't use returning() yet
         if len(credentials) == 1:
-            cred_id = self.get_credential(username, password)
-            return cred_id
+            return self.get_credential(username, password)
         else:
             return credentials
 
     def remove_credentials(self, creds_id):
-        """
-        Removes a credential ID from the database
-        """
+        """Removes a credential ID from the database"""
         del_hosts = []
         for cred_id in creds_id:
             q = delete(self.CredentialsTable).filter(self.CredentialsTable.c.id == cred_id)
@@ -209,9 +190,7 @@ class database:
         self.sess.execute(q)
 
     def is_credential_valid(self, credential_id):
-        """
-        Check if this credential ID is valid.
-        """
+        """Check if this credential ID is valid."""
         q = select(self.CredentialsTable).filter(
             self.CredentialsTable.c.id == credential_id,
             self.CredentialsTable.c.password is not None,
@@ -225,15 +204,11 @@ class database:
             self.CredentialsTable.c.password == password,
         )
         results = self.sess.execute(q).first()
-        if results is None:
-            return None
-        else:
+        if results is not None:
             return results.id
 
     def get_credentials(self, filter_term=None):
-        """
-        Return credentials from the database.
-        """
+        """Return credentials from the database."""
         # if we're returning a single credential by ID
         if self.is_credential_valid(filter_term):
             q = select(self.CredentialsTable).filter(self.CredentialsTable.c.id == filter_term)
@@ -245,21 +220,16 @@ class database:
         else:
             q = select(self.CredentialsTable)
 
-        results = self.sess.execute(q).all()
-        return results
+        return self.sess.execute(q).all()
 
     def is_host_valid(self, host_id):
-        """
-        Check if this host ID is valid.
-        """
+        """Check if this host ID is valid."""
         q = select(self.HostsTable).filter(self.HostsTable.c.id == host_id)
         results = self.sess.execute(q).all()
         return len(results) > 0
 
     def get_hosts(self, filter_term=None):
-        """
-        Return hosts from the database.
-        """
+        """Return hosts from the database."""
         q = select(self.HostsTable)
 
         # if we're returning a single host by ID
@@ -277,17 +247,14 @@ class database:
         return results
 
     def is_user_valid(self, cred_id):
-        """
-        Check if this User ID is valid.
-        """
+        """Check if this User ID is valid."""
         q = select(self.CredentialsTable).filter(self.CredentialsTable.c.id == cred_id)
         results = self.sess.execute(q).all()
         return len(results) > 0
 
     def get_user(self, username):
         q = select(self.CredentialsTable).filter(func.lower(self.CredentialsTable.c.username) == func.lower(username))
-        results = self.sess.execute(q).all()
-        return results
+        return self.sess.execute(q).all()
 
     def get_users(self, filter_term=None):
         q = select(self.CredentialsTable)
@@ -298,8 +265,7 @@ class database:
         elif filter_term and filter_term != "":
             like_term = func.lower(f"%{filter_term}%")
             q = q.filter(func.lower(self.CredentialsTable.c.username).like(like_term))
-        results = self.sess.execute(q).all()
-        return results
+        return self.sess.execute(q).all()
 
     def add_loggedin_relation(self, cred_id, host_id):
         relation_query = select(self.LoggedinRelationsTable).filter(
@@ -310,10 +276,7 @@ class database:
 
         # only add one if one doesn't already exist
         if not results:
-            relation = {
-                "credid": cred_id,
-                "hostid": host_id
-            }
+            relation = {"credid": cred_id, "hostid": host_id}
             try:
                 nxc_logger.debug(f"Inserting loggedin_relations: {relation}")
                 # TODO: find a way to abstract this away to a single Upsert call
@@ -332,8 +295,7 @@ class database:
             q = q.filter(self.LoggedinRelationsTable.c.credid == cred_id)
         if host_id:
             q = q.filter(self.LoggedinRelationsTable.c.hostid == host_id)
-        results = self.sess.execute(q).all()
-        return results
+        return self.sess.execute(q).all()
 
     def remove_loggedin_relations(self, cred_id=None, host_id=None):
         q = delete(self.LoggedinRelationsTable)

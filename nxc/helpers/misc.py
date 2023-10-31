@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import random
 import string
 import re
@@ -9,7 +6,7 @@ import os
 
 
 def identify_target_file(target_file):
-    with open(target_file, "r") as target_file_handle:
+    with open(target_file) as target_file_handle:
         for i, line in enumerate(target_file_handle):
             if i == 1:
                 if line.startswith("<NessusClientData"):
@@ -26,10 +23,7 @@ def gen_random_string(length=10):
 
 def validate_ntlm(data):
     allowed = re.compile("^[0-9a-f]{32}", re.IGNORECASE)
-    if allowed.match(data):
-        return True
-    else:
-        return False
+    return bool(allowed.match(data))
 
 
 def called_from_cmd_args():
@@ -45,12 +39,10 @@ def called_from_cmd_args():
 
 # Stolen from https://github.com/pydanny/whichcraft/
 def which(cmd, mode=os.F_OK | os.X_OK, path=None):
-    """Given a command, mode, and a PATH string, return the path which
-    conforms to the given mode on the PATH, or None if there is no such
-    file.
-    `mode` defaults to os.F_OK | os.X_OK. `path` defaults to the result
-    of os.environ.get("PATH"), or can be overridden with a custom search
-    path.
+    """Find the path which conforms to the given mode on the PATH for a command.
+    
+    Given a command, mode, and a PATH string, return the path which conforms to the given mode on the PATH, or None if there is no such file.
+    `mode` defaults to os.F_OK | os.X_OK. `path` defaults to the result of os.environ.get("PATH"), or can be overridden with a custom search path.
     Note: This function was backported from the Python 3 source code.
     """
 
@@ -77,12 +69,11 @@ def which(cmd, mode=os.F_OK | os.X_OK, path=None):
     files = [cmd]
 
     seen = set()
-    for dir in path:
-        normdir = os.path.normcase(dir)
+    for p in path:
+        normdir = os.path.normcase(p)
         if normdir not in seen:
             seen.add(normdir)
             for thefile in files:
-                name = os.path.join(dir, thefile)
+                name = os.path.join(p, thefile)
                 if _access_check(name, mode):
                     return name
-    return None

@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import xml.etree.ElementTree as ET
 from io import BytesIO
 
@@ -30,7 +27,7 @@ class NXCModule:
                 paths = connection.spider("SYSVOL", pattern=["Registry.xml"])
 
                 for path in paths:
-                    context.log.display("Found {}".format(path))
+                    context.log.display(f"Found {path}")
 
                     buf = BytesIO()
                     connection.conn.getFile("SYSVOL", path, buf.write)
@@ -56,7 +53,7 @@ class NXCModule:
                                 domains.append(attrs["value"])
 
                         if usernames or passwords:
-                            context.log.success("Found credentials in {}".format(path))
-                            context.log.highlight("Usernames: {}".format(usernames))
-                            context.log.highlight("Domains: {}".format(domains))
-                            context.log.highlight("Passwords: {}".format(passwords))
+                            context.log.success(f"Found credentials in {path}")
+                            context.log.highlight(f"Usernames: {usernames}")
+                            context.log.highlight(f"Domains: {domains}")
+                            context.log.highlight(f"Passwords: {passwords}")

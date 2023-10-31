@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import os
 from time import sleep
 from datetime import datetime
@@ -21,7 +18,6 @@ class NXCModule:
         CMD            Command to execute
         USER           User to execute command as
         """
-
         self.cmd = self.user = self.time = None
         if "CMD" in module_options:
             self.cmd = module_options["CMD"]
@@ -60,7 +56,7 @@ class NXCModule:
                 connection.hash,
                 self.logger,
                 connection.args.get_output_tries,
-                "C$"  # This one shouldn't be hardcoded but I don't know where to retrive the info
+                "C$",  # This one shouldn't be hardcoded but I don't know where to retrive the info
             )
 
             self.logger.display(f"Executing {self.cmd} as {self.user}")
@@ -256,10 +252,10 @@ class TSCH_EXEC:
             if fileless:
                 while True:
                     try:
-                        with open(os.path.join("/tmp", "nxc_hosted", self.__output_filename), "r") as output:
+                        with open(os.path.join("/tmp", "nxc_hosted", self.__output_filename)) as output:
                             self.output_callback(output.read())
                         break
-                    except IOError:
+                    except OSError:
                         sleep(2)
             else:
                 smbConnection = self.__rpctransport.get_smb_connection()
