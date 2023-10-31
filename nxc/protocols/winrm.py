@@ -3,6 +3,9 @@ import hashlib
 import os
 import requests
 import urllib3
+import tempfile
+import contextlib
+from binascii import unhexlify
 import xml.etree.ElementTree as ET
 
 from io import StringIO
@@ -10,15 +13,19 @@ from datetime import datetime
 from pypsrp.wsman import NAMESPACES
 from pypsrp.client import Client
 
+from impacket.krb5.kerberosv5 import getKerberosTGT
+from impacket.krb5 import constants
+from impacket.krb5.types import Principal
+from impacket.krb5.ccache import CCache
 from impacket.smbconnection import SMBConnection
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 
+from nxc.helpers.powershell import get_ps_script
 from nxc.config import process_secret
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.protocols.ldap.laps import LDAPConnect, LAPSv2Extract
 from nxc.logger import NXCAdapter
-import contextlib
 
 
 urllib3.disable_warnings()
@@ -30,8 +37,8 @@ class winrm(connection):
         self.output_filename = None
         self.endpoint = None
         self.hash = None
-        self.lmhash = None
-        self.nthash = None
+        self.lmhash = ""
+        self.nthash = ""
         self.ssl = False
 
         connection.__init__(self, args, db, host)
@@ -248,17 +255,112 @@ class winrm(connection):
         self.admin_privs = True
         return True
 
+    # pypsrp not support nthash with kerberos auth, only support cleartext password with kerberos auth
+    # So, we can get a TGT when doing nthash with kerberos auth
+    def getTGT(self):
+        userName = Principal(self.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+        tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(clientName = userName,
+                                                                password = self.password,
+                                                                domain = self.domain,
+                                                                lmhash = unhexlify(self.lmhash),
+                                                                nthash = unhexlify(self.nthash),
+                                                                kdcHost = self.kdcHost)
+        ccache = CCache()
+        ccache.fromTGT(tgt, oldSessionKey, sessionKey)
+        tgt_file = os.path.join(tempfile.gettempdir(), f"{self.username}@{self.domain}.ccache")
+        ccache.saveFile(tgt_file)
+        os.environ["KRB5CCNAME"] = tgt_file
+
+    # pypsrp is relate MIT kerberos toolkit, not like impacket
+    def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
+        self.admin_privs = False
+        lmhash = ""
+        nthash = ""
+        self.password = password
+        self.username = username
+        self.domain = domain
+        self.hostname = self.args.hostname if self.args.no_smb else self.hostname
+        self.create_conn_obj()
+        
+        # MIT krb5.conf prepare
+        with open(get_ps_script("winrm_krb5_config/krb5.conf")) as krb5_conf:
+            krb5_conf = krb5_conf.read()
+        krb5_conf = krb5_conf.replace("REPLACE_ME_DOMAIN_UPPER", self.domain.upper())
+        krb5_conf = krb5_conf.replace("REPLACE_ME_DOMAIN", self.domain)
+        krb5_conf_name = os.path.join(tempfile.gettempdir(), f"{self.domain}.conf")
+        with open(krb5_conf_name, "w") as krb5_conf_write:
+            krb5_conf_write.write(krb5_conf)
+        os.environ["KRB5_CONFIG"] = krb5_conf_name
+
+        if password == "":
+            if ntlm_hash.find(":") != -1:
+                lmhash, nthash = ntlm_hash.split(":")
+            else:
+                nthash = ntlm_hash
+            self.nthash = nthash
+            self.lmhash = lmhash
+        
+        kerb_pass = next(s for s in [nthash, password, aesKey] if s) if not all(s == "" for s in [nthash, password, aesKey]) else ""
+        if useCache and kerb_pass == "":
+            ccache = CCache.loadFile(os.getenv("KRB5CCNAME"))
+            username = ccache.credentials[0].header["client"].prettyPrint().decode().split("@")[0]
+            self.username = username
+            # Clear password variable when using kerberos cache file
+            self.password = ""
+
+        used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
+        
+        for spn in ["HOST", "HTTP", "WSMAN"]:
+            # MIT kerberos not support nthash auth
+            try:
+                if self.nthash:
+                    self.getTGT()
+                self.conn = Client(
+                    self.host,
+                    auth="kerberos",
+                    username=f"{self.username}@{self.domain.upper()}",
+                    password=self.password,
+                    ssl=self.ssl,
+                    cert_validation=False,
+                    negotiate_service=spn,
+                    negotiate_hostname_override=self.hostname,
+                )
+                self.check_if_admin()
+                self.logger.success(f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}")
+
+                if not self.args.local_auth:
+                    add_user_bh(self.username, self.domain, self.logger, self.config)
+                return True
+            except Exception as e:
+                if hasattr(e, "base_error"):
+                    self.logger.debug(f"Request service ticket with SPN: '{spn}/{self.hostname}' failed")
+                elif (hasattr(e, "err_code") and e.err_code == -1765328360) or (hasattr(e, "getErrorCode") and e.getErrorCode() == 24):
+                    error_msg = "(Password error!)"
+                    out = f"{self.domain}\\{self.username}{used_ccache} {error_msg}"
+                    self.logger.fail(out)
+                    return False
+                elif (hasattr(e, "err_code") and e.err_code == -1765328378) or (hasattr(e, "getErrorCode") and e.getErrorCode() == 6):
+                    error_msg = "(Username invalid! (not found in Kerberos database))"
+                    out = f"{self.domain}\\{self.username}{used_ccache} {error_msg}"
+                    self.logger.fail(out)
+                    return False
+                else:
+                    out = f"{self.domain}\\{self.username}{used_ccache} ({e!s})"
+                    self.logger.fail(out)
+                    return False
+        
     def plaintext_login(self, domain, username, password):
         self.admin_privs = False
+        if not self.args.laps:
+            self.password = password
+            self.username = username
+        self.domain = domain
+
         try:
-            if not self.args.laps:
-                self.password = password
-                self.username = username
-            self.domain = domain
             self.conn = Client(
                 self.host,
                 auth="ntlm",
-                username=f"{domain}\\{self.username}",
+                username=f"{self.username}@{self.domain.upper()}",
                 password=self.password,
                 ssl=self.ssl,
                 cert_validation=False,
@@ -267,13 +369,10 @@ class winrm(connection):
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
 
-            self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
-            self.db.add_credential("plaintext", domain, self.username, self.password)
-            # TODO: when we can easily get the host_id via RETURNING statements, readd this in
-
-            if self.admin_privs:
-                self.logger.debug("Inside admin privs")
-                self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host)  # , user_id=user_id)
+            user_id = self.db.add_credential("plaintext", domain, self.username, self.password)
+            host_id = self.db.get_hosts(self.host)[0].id
+            self.db.add_loggedin_relation(user_id, host_id)
+            self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host, user_id=user_id)
 
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
@@ -288,41 +387,38 @@ class winrm(connection):
 
     def hash_login(self, domain, username, ntlm_hash):
         self.admin_privs = False
-        try:
-            lmhash = "00000000000000000000000000000000:"
-            nthash = ""
-
-            if not self.args.laps:
-                self.username = username
-                # This checks to see if we didn't provide the LM Hash
-                if ntlm_hash.find(":") != -1:
-                    lmhash, nthash = ntlm_hash.split(":")
-                else:
-                    nthash = ntlm_hash
-                    ntlm_hash = lmhash + nthash
-                if lmhash:
-                    self.lmhash = lmhash
-                if nthash:
-                    self.nthash = nthash
+        lmhash = "00000000000000000000000000000000"
+        nthash = ""
+        if not self.args.laps:
+            self.username = username
+            # This checks to see if we didn't provide the LM Hash
+            if ntlm_hash.find(":") != -1:
+                lmhash, nthash = ntlm_hash.split(":")
             else:
-                nthash = self.hash
+                nthash = ntlm_hash
+        else:
+            nthash = self.hash
+        self.lmhash = lmhash
+        self.nthash = nthash
 
+        try:
             self.domain = domain
             self.conn = Client(
                 self.host,
                 auth="ntlm",
-                username=f"{self.domain}\\{self.username}",
-                password=lmhash + nthash,
+                username=f"{self.username}@{self.domain.upper()}",
+                password=f"{self.lmhash}:{self.nthash}",
                 ssl=self.ssl,
                 cert_validation=False,
             )
 
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}:{process_secret(nthash)} {self.mark_pwned()}")
-            self.db.add_credential("hash", domain, self.username, nthash)
 
-            if self.admin_privs:
-                self.db.add_admin_user("hash", domain, self.username, nthash, self.host)
+            user_id = self.db.add_credential("hash", domain, self.username, nthash)
+            host_id = self.db.get_hosts(self.host)[0].id
+            self.db.add_loggedin_relation(user_id, host_id)
+            self.db.add_admin_user("hash", domain, self.username, nthash, self.host, user_id=user_id)
 
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
@@ -330,9 +426,9 @@ class winrm(connection):
 
         except Exception as e:
             if "with ntlm" in str(e):
-                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(nthash)}")
+                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)}")
             else:
-                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(nthash)} '{e}'")
+                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} '{e}'")
             return False
 
     def execute(self, payload=None, get_output=True, shell_type="cmd"):
