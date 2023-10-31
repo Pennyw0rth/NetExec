@@ -1,11 +1,11 @@
 # Contributing to Transcriptase
 We love your input! We want to make contributing to this project as easy and transparent as possible, whether it's:
 
-- Reporting a bug
-- Discussing the current state of the code
-- Submitting a fix
-- Proposing new features
-- Becoming a maintainer
+- Reporting a bug.
+- Discussing the current state of the code.
+- Submitting a fix.
+- Proposing new features.
+- Becoming a maintainer.
 
 ## We Develop with GitHub
 We use github to host code, to track issues and feature requests, as well as accept pull requests.
@@ -19,13 +19,13 @@ Pull requests are the best way to propose changes to the codebase (we use [GitHu
 4. Make sure your code lints.
 5. Issue that pull request!
 
-## Any contributions you make will be under the BSD-2-Clause Software License
+## Any Contributions You Make will be under the BSD-2-Clause Software License
 In short, when you submit code changes, your submissions are understood to be under the same [BSD-2-Clause License](https://choosealicense.com/licenses/bsd-2-clause/) that covers the project. Feel free to contact the maintainers if that's a concern.
 
-## Report bugs using GitHub's [issues](https://github.com/Pennyw0rth/NetExec/issues)
+## Report Bugs using GitHub's [issues](https://github.com/Pennyw0rth/NetExec/issues)
 We use GitHub issues to track public bugs. Report a bug by [opening a new issue](https://github.com/Pennyw0rth/NetExec/issues/new/choose); it's that easy!
 
-## Write bug reports with detail, background, and sample code
+## Write Bug Reports with Detail, Background, and Sample Code
 
 **Great Bug Reports** tend to have:
 
@@ -40,7 +40,7 @@ We use GitHub issues to track public bugs. Report a bug by [opening a new issue]
 People *love* thorough bug reports. I'm not even kidding.
 
 ## Use a Consistent Coding Style
-[PEP](https://peps.python.org/pep-0008/) is used in this project
+[PEP](https://peps.python.org/pep-0008/) is used in this project.
 
 * 4 spaces for indentation rather than tabs
 * Double quotes on outside of strings
