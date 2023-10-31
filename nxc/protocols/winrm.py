@@ -5,11 +5,11 @@ import requests
 import urllib3
 import tempfile
 import contextlib
-from binascii import unhexlify
 import xml.etree.ElementTree as ET
 
 from io import StringIO
 from datetime import datetime
+from binascii import unhexlify
 from pypsrp.wsman import NAMESPACES
 from pypsrp.client import Client
 
