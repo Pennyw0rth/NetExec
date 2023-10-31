@@ -5,6 +5,7 @@ import requests
 import urllib3
 import tempfile
 import contextlib
+import platform
 import xml.etree.ElementTree as ET
 
 from io import StringIO
@@ -42,6 +43,20 @@ class winrm(connection):
         self.ssl = False
 
         connection.__init__(self, args, db, host)
+
+    def proto_flow(self):
+        if self.kerberos and (platform.system() != "Linux"):
+            self.logger.info("Doing kerberos auth with WINRM only support Linux platform!")
+            return False
+        self.proto_logger()
+        if self.create_conn_obj():
+            self.enum_host_info()
+            self.print_host_info()
+            if self.login():
+                if hasattr(self.args, "module") and self.args.module:
+                    self.call_modules()
+                else:
+                    self.call_cmd_args()
 
     def proto_logger(self):
         self.logger = NXCAdapter(
