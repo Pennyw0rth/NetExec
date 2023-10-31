@@ -17,7 +17,8 @@ from impacket.krb5 import constants
 
 from nxc.logger import nxc_logger
 
-def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash, aesKey, kdcHost, impersonate, spn, use_cache, no_s4u2proxy = False):
+
+def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash, aesKey, kdcHost, impersonate, spn, use_cache, no_s4u2proxy=False):
     my_tgt = None
     if use_cache:
         domain, _, tgt, _ = CCache.parseFile(domain, username, f"cifs/{hostname}")
@@ -29,12 +30,9 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
     if my_tgt is None:
         principal = Principal(username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
         nxc_logger.debug("Getting TGT for user")
-        tgt, cipher, _, session_key = getKerberosTGT(principal, password, domain,
-                                                                lmhash, nthash,
-                                                                aesKey,
-                                                                kdcHost)
+        tgt, cipher, _, session_key = getKerberosTGT(principal, password, domain, lmhash, nthash, aesKey, kdcHost)
         my_tgt = decoder.decode(tgt, asn1Spec=AS_REP())[0]
-    decoded_tgt=my_tgt
+    decoded_tgt = my_tgt
     # Extract the ticket from the TGT
     ticket = Ticket()
     ticket.from_asn1(decoded_tgt["ticket"])
@@ -130,8 +128,7 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
 
     req_body["till"] = KerberosTime.to_asn1(now)
     req_body["nonce"] = random.getrandbits(31)
-    seq_set_iter(req_body, "etype",
-                    (int(cipher.enctype), int(constants.EncryptionTypes.rc4_hmac.value)))
+    seq_set_iter(req_body, "etype", (int(cipher.enctype), int(constants.EncryptionTypes.rc4_hmac.value)))
 
     nxc_logger.info("Requesting S4U2self")
     message = encoder.encode(tgs_req)
@@ -155,7 +152,7 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
         # Creating new cipher based on received keytype
         cipher = _enctype_table[enc_tgs_rep_part["key"]["keytype"]]
 
-        #return r, cipher, session_key, new_session_key
+        # return r, cipher, session_key, new_session_key
         tgs_formated = dict()
         tgs_formated["KDC_REP"] = r
         tgs_formated["cipher"] = cipher
@@ -247,13 +244,13 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
     req_body["till"] = KerberosTime.to_asn1(now)
     req_body["nonce"] = random.getrandbits(31)
     seq_set_iter(req_body, "etype",
-                    (
-                        int(constants.EncryptionTypes.rc4_hmac.value),
-                        int(constants.EncryptionTypes.des3_cbc_sha1_kd.value),
-                        int(constants.EncryptionTypes.des_cbc_md5.value),
-                        int(cipher.enctype)
-                    )
-                )
+                 (
+                     int(constants.EncryptionTypes.rc4_hmac.value),
+                     int(constants.EncryptionTypes.des3_cbc_sha1_kd.value),
+                     int(constants.EncryptionTypes.des_cbc_md5.value),
+                     int(cipher.enctype)
+                 )
+                 )
     message = encoder.encode(tgs_req)
 
     nxc_logger.info("Requesting S4U2Proxy")
@@ -275,7 +272,7 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
     # Creating new cipher based on received keytype
     cipher = _enctype_table[enc_tgs_rep_part["key"]["keytype"]]
 
-    #return r, cipher, session_key, new_session_key
+    # return r, cipher, session_key, new_session_key
     tgs_formated = dict()
     tgs_formated["KDC_REP"] = r
     tgs_formated["cipher"] = cipher
