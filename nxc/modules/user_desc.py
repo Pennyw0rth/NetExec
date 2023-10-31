@@ -28,10 +28,10 @@ class NXCModule:
     def options(self, context, module_options):
         """
         LDAP_FILTER     Custom LDAP search filter (fully replaces the default search)
-        DESC_FILTER     An additional seach filter for descriptions (supports wildcard *)
-        DESC_INVERT     An additional seach filter for descriptions (shows non matching)
-        USER_FILTER     An additional seach filter for usernames (supports wildcard *)
-        USER_INVERT     An additional seach filter for usernames (shows non matching)
+        DESC_FILTER     An additional search filter for descriptions (supports wildcard *)
+        DESC_INVERT     An additional search filter for descriptions (shows non matching)
+        USER_FILTER     An additional search filter for usernames (supports wildcard *)
+        USER_INVERT     An additional search filter for usernames (shows non matching)
         KEYWORDS        Use a custom set of keywords (comma separated)
         ADD_KEYWORDS    Add additional keywords to the default set (comma separated)
         """
