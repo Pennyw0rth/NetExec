@@ -280,6 +280,7 @@ class winrm(connection):
             domain=self.domain,
             lmhash=unhexlify(self.lmhash),
             nthash=unhexlify(self.nthash),
+            aesKey=self.aesKey,
             kdcHost=self.kdcHost
         )
         ccache = CCache()
@@ -326,11 +327,10 @@ class winrm(connection):
             self.password = ""
 
         used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
-        
         for spn in ["HOST", "HTTP", "WSMAN"]:
             # MIT kerberos not support nthash auth
             try:
-                if self.nthash:
+                if self.nthash or self.aesKey:
                     self.getTGT()
                 self.conn = Client(
                     self.host,
