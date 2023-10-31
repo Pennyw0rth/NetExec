@@ -56,7 +56,7 @@ class NXCModule:
                 connection.hash,
                 self.logger,
                 connection.args.get_output_tries,
-                "C$",  # This one shouldn't be hardcoded but I don't know where to retrive the info
+                "C$",  # This one shouldn't be hardcoded but I don't know where to retrieve the info
             )
 
             self.logger.display(f"Executing {self.cmd} as {self.user}")
@@ -66,7 +66,7 @@ class NXCModule:
                 if not isinstance(output, str):
                     output = output.decode(connection.args.codec)
             except UnicodeDecodeError:
-                # Required to decode specific french caracters otherwise it'll print b"<result>"
+                # Required to decode specific French characters otherwise it'll print b"<result>"
                 output = output.decode("cp437")
             if output:
                 self.logger.highlight(output)
