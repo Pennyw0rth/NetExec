@@ -74,7 +74,7 @@ class NXCModule:
         USER                    Targeted user running KeePass, used to restart the appropriate process
                                 (used by RESTART action)
 
-        EXPORT_NAME             Name fo the database export file, default: export.xml
+        EXPORT_NAME             Name of the database export file, default: export.xml
         EXPORT_PATH             Path where to export the KeePass database in cleartext
                                 default: C:\\Users\\Public, %APPDATA% works well too for user permissions
 
