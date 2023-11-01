@@ -228,9 +228,9 @@ class winrm(connection):
             }
         }
 
-        if self.args.check_proto == "https":
+        if "http" not in self.args.check_proto:
             endpoints.pop("HTTP")
-        elif self.args.check_proto == "http":
+        if "https" not in self.args.check_proto:
             endpoints.pop("HTTPS")
 
         for protocol in endpoints:

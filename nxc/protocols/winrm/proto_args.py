@@ -4,9 +4,9 @@ from argparse import _StoreTrueAction
 def proto_args(parser, std_parser, module_parser):
     winrm_parser = parser.add_parser("winrm", help="own stuff using WINRM", parents=[std_parser, module_parser])
     winrm_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
-    winrm_parser.add_argument("--port", nargs="+", default=["5985", "5986"], help="Custom WinRM port, default is %(default)s, format: 'http-port,https-port' or 'single-port'"
+    winrm_parser.add_argument("--port", nargs="+", default=["5985", "5986"], help="Custom WinRM port, default is %(default)s, format: 'http-port https-port'(with space separated) or 'single-port'"
                               "(http & https will use same port when given single port)")
-    winrm_parser.add_argument("--check-proto", choices={"both", "http", "https"}, default="both", help="Choose what prorocol you want to check, default is %(default)s")
+    winrm_parser.add_argument("--check-proto", nargs="+", default=["http", "https"], help="Choose what prorocol you want to check, default is %(default)s, format: 'http https'(with space separated) or 'single-protocol'")
     winrm_parser.add_argument("--laps", dest="laps", metavar="LAPS", type=str, help="LAPS authentification", nargs="?", const="administrator")
     winrm_parser.add_argument("--http-timeout", dest="http_timeout", type=int, default=10, help="HTTP timeout for WinRM connections")
     no_smb_arg = winrm_parser.add_argument("--no-smb", action=get_conditional_action(_StoreTrueAction), make_required=[], help="No smb connection")
