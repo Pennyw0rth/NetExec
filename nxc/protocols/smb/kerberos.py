@@ -41,7 +41,7 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
     ap_req["pvno"] = 5
     ap_req["msg-type"] = int(constants.ApplicationTagNumbers.AP_REQ.value)
 
-    opts = list()
+    opts = []
     ap_req["ap-options"] = constants.encodeFlags(opts)
     seq_set(ap_req, "ticket", ticket.to_asn1)
 
@@ -112,7 +112,7 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
 
     req_body = seq_set(tgs_req, "req-body")
 
-    opts = list()
+    opts = []
     opts.append(constants.KDCOptions.forwardable.value)
     opts.append(constants.KDCOptions.renewable.value)
     opts.append(constants.KDCOptions.canonicalize.value)
@@ -152,8 +152,7 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
         # Creating new cipher based on received keytype
         cipher = _enctype_table[enc_tgs_rep_part["key"]["keytype"]]
 
-        # return r, cipher, session_key, new_session_key
-        tgs_formated = dict()
+        tgs_formated = {}
         tgs_formated["KDC_REP"] = r
         tgs_formated["cipher"] = cipher
         tgs_formated["sessionKey"] = new_session_key
@@ -174,7 +173,7 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
     ap_req["pvno"] = 5
     ap_req["msg-type"] = int(constants.ApplicationTagNumbers.AP_REQ.value)
 
-    opts = list()
+    opts = []
     ap_req["ap-options"] = constants.encodeFlags(opts)
     seq_set(ap_req, "ticket", ticket_tgt.to_asn1)
 
@@ -224,7 +223,7 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
 
     req_body = seq_set(tgs_req, "req-body")
 
-    opts = list()
+    opts = []
     # This specified we"re doing S4U
     opts.append(constants.KDCOptions.cname_in_addl_tkt.value)
     opts.append(constants.KDCOptions.canonicalize.value)
@@ -272,8 +271,7 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
     # Creating new cipher based on received keytype
     cipher = _enctype_table[enc_tgs_rep_part["key"]["keytype"]]
 
-    # return r, cipher, session_key, new_session_key
-    tgs_formated = dict()
+    tgs_formated = {}
     tgs_formated["KDC_REP"] = r
     tgs_formated["cipher"] = cipher
     tgs_formated["sessionKey"] = new_session_key
