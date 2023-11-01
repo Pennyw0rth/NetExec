@@ -37,7 +37,7 @@ python = "^3.7.0"
 requests = ">=2.27.1"
 beautifulsoup4 = ">=4.11,<5"
 lsassy = ">=3.1.8"
-termcolor = "^2.3.0"
+termcolor = "2.0.1"
 msgpack = "^1.0.0"
 neo4j = "^4.1.1" # do not upgrade this until performance regression issues in 5 are fixed (as of 9/23)
 pylnk3 = "^0.4.2"
@@ -64,13 +64,63 @@ python-libnmap = "^0.7.3"
 resource = "^0.2.1"
 oscrypto = { git = "https://github.com/Pennyw0rth/oscrypto" } # Pypi version currently broken, see: https://github.com/wbond/oscrypto/issues/78 (as of 9/23)
 pyreadline = "^2.1" # for the build - impacket imports its hidden from the builder so an error occurs
+ruff = "=0.0.292"
 
 [tool.poetry.group.dev.dependencies]
-ruff = "*"
-pylint = "*"
+flake8 = "*"
 shiv = "*"
 pytest = "^7.2.2"
 
 [build-system]
 requires = ["poetry-core>=1.2.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+# Ruff doesn't enable pycodestyle warnings (`W`) or
+# McCabe complexity (`C901`) by default.
+# Other options: pep8-naming (N), flake8-annotations (ANN), flake8-blind-except (BLE), flake8-commas (COM), flake8-pyi (PYI), flake8-pytest-style (PT), flake8-unused-arguments (ARG), etc
+# Should tackle flake8-use-pathlib (PTH) at some point
+select = ["E", "F", "D", "UP", "YTT", "ASYNC", "B", "A", "C4", "ISC", "ICN", "PIE", "PT", "Q", "RSE", "RET", "SIM", "TID", "ERA", "FLY", "PERF", "FURB", "LOG", "RUF"]
+ignore = [ "E501", "F405", "D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107", "D203", "D204", "D205", "D212", "D213", "D400", "D401", "D415", "D417", "D419", "RET503", "RET505", "RET506", "RET507", "RET508", "PERF203", "RUF012"]
+
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+]
+per-file-ignores = {}
+
+line-length = 65000
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+target-version = "py37"
+
+[tool.ruff.flake8-quotes]
+docstring-quotes = "double"
+inline-quotes = "double"
+multiline-quotes = "double"

@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from nxc.nxcdb import DatabaseNavigator, print_help, print_table
 from nxc.helpers.misc import validate_ntlm
 
@@ -15,7 +12,6 @@ class navigator(DatabaseNavigator):
             username = cred[2]
             password = cred[3]
             credtype = cred[4]
-            # pillaged_from = cred[5]
 
             links = self.db.get_admin_relations(user_id=cred_id)
             data.append(
@@ -42,7 +38,7 @@ class navigator(DatabaseNavigator):
 
             try:
                 os = host[5].decode()
-            except:
+            except Exception:
                 os = host[5]
 
             links = self.db.get_admin_relations(host_id=host_id)
@@ -84,7 +80,7 @@ class navigator(DatabaseNavigator):
 
                     try:
                         os = host[5].decode()
-                    except:
+                    except Exception:
                         os = host[5]
 
                     data.append([host_id, ip, port, hostname, domain, os])
@@ -104,7 +100,6 @@ class navigator(DatabaseNavigator):
                             username = cred[2]
                             password = cred[3]
                             credtype = cred[4]
-                            # pillaged_from = cred[5]
                             data.append([cred_id, credtype, domain, username, password])
                 print_table(data, title="Credential(s) with Admin Access")
 
