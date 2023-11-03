@@ -26,7 +26,7 @@ from rich.progress import Progress
 import platform
 
 # Increase file_limit to prevent error "Too many open files"
-if platform != "Windows":
+if platform.system() != "Windows":
     import resource
 
     file_limit = list(resource.getrlimit(resource.RLIMIT_NOFILE))

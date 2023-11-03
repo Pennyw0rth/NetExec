@@ -52,7 +52,7 @@ def new_record(rtype, serial):
     nr["Type"] = rtype
     nr["Serial"] = serial
     nr["TtlSeconds"] = 180
-    # From authoritive zone
+    # From authoritative zone
     nr["Rank"] = 240
     return nr
 

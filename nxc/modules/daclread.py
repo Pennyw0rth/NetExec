@@ -197,7 +197,7 @@ class NXCModule:
     """
 
     name = "daclread"
-    description = "Read and backup the Discretionary Access Control List of objects. Based on the work of @_nwodtuhs and @BlWasp_. Be carefull, this module cannot read the DACLS recursively, more explains in the  options."
+    description = "Read and backup the Discretionary Access Control List of objects. Based on the work of @_nwodtuhs and @BlWasp_. Be careful, this module cannot read the DACLS recursively, more explains in the  options."
     supported_protocols = ["ldap"]
     opsec_safe = True
     multiple_hosts = False
@@ -208,11 +208,11 @@ class NXCModule:
 
     def options(self, context, module_options):
         """
-        Be carefull, this module cannot read the DACLS recursively. 
+        Be careful, this module cannot read the DACLS recursively. 
         For example, if an object has particular rights because it belongs to a group, the module will not be able to see it directly, you have to check the group rights manually.
 
-        TARGET          The objects that we want to read or backup the DACLs, sepcified by its SamAccountName
-        TARGET_DN       The object that we want to read or backup the DACL, specified by its DN (usefull to target the domain itself)
+        TARGET          The objects that we want to read or backup the DACLs, specified by its SamAccountName
+        TARGET_DN       The object that we want to read or backup the DACL, specified by its DN (useful to target the domain itself)
         PRINCIPAL       The trustee that we want to filter on
         ACTION          The action to realise on the DACL (read, backup)
         ACE_TYPE        The type of ACE to read (Allowed or Denied)
@@ -271,8 +271,8 @@ class NXCModule:
         self.filename = None
 
     def on_login(self, context, connection):
-        """On a successful LDAP login we perform a search for the targets' SID, their Security Decriptors and the principal's SID if there is one specified"""
-        context.log.highlight("Be carefull, this module cannot read the DACLS recursively.")
+        """On a successful LDAP login we perform a search for the targets' SID, their Security Descriptors and the principal's SID if there is one specified"""
+        context.log.highlight("Be careful, this module cannot read the DACLS recursively.")
         self.baseDN = connection.ldapConnection._baseDN
         self.ldap_session = connection.ldapConnection
 
@@ -292,7 +292,7 @@ class NXCModule:
                 context.log.fail(f"Principal SID not found in LDAP ({_lookedup_principal})")
                 sys.exit(1)
 
-        # Searching for the targets SID and their Security Decriptors
+        # Searching for the targets SID and their Security Descriptors
         # If there is only one target
         if (self.target_sAMAccountName or self.target_DN) and self.target_file is None:
             # Searching for target account with its security descriptor
@@ -383,7 +383,7 @@ class NXCModule:
             context.log.fail(f"Principal not found in LDAP ({_lookedup_principal}), probably an LDAP session issue.")
             sys.exit(0)
 
-    # Attempts to retieve the SID and Distinguisehd Name from the sAMAccountName
+    # Attempts to retrieve the SID and Distinguisehd Name from the sAMAccountName
     # Not used for the moment
     #   - samname : a sAMAccountName
     def get_user_info(self, context, samname):

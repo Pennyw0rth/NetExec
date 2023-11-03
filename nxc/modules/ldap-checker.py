@@ -54,10 +54,10 @@ class NXCModule:
 
         # Conduct a bind to LDAPS with channel binding supported
         # but intentionally miscalculated. In the case that and
-        # LDAPS bind has without channel binding supported has occured,
+        # LDAPS bind has without channel binding supported has occurred,
         # you can determine whether the policy is set to "never" or
         # if it's set to "when supported" based on the potential
-        # error recieved from the bind attempt.
+        # error received from the bind attempt.
         async def run_ldaps_withEPA(target, credential):
             ldapsClientConn = MSLDAPClientConnection(target, credential)
             _, err = await ldapsClientConn.connect()

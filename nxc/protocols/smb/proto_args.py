@@ -1,6 +1,11 @@
+from argparse import _StoreTrueAction
+
+
 def proto_args(parser, std_parser, module_parser):
     smb_parser = parser.add_parser("smb", help="own stuff using SMB", parents=[std_parser, module_parser])
     smb_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
+    delegate_arg = smb_parser.add_argument("--delegate", action="store", help="Impersonate user with S4U2Self + S4U2Proxy")
+    self_delegate_arg = smb_parser.add_argument("--self", dest="no_s4u2proxy", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Only do S4U2Self, no S4U2Proxy (use with delegate)")
     dgroup = smb_parser.add_mutually_exclusive_group()
     dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, help="domain to authenticate to")
     dgroup.add_argument("--local-auth", action="store_true", help="authenticate locally to each target")
@@ -10,6 +15,7 @@ def proto_args(parser, std_parser, module_parser):
     smb_parser.add_argument("--gen-relay-list", metavar="OUTPUT_FILE", help="outputs all hosts that don't require SMB signing to the specified file")
     smb_parser.add_argument("--smb-timeout", help="SMB connection timeout, default 2 secondes", type=int, default=2)
     smb_parser.add_argument("--laps", dest="laps", metavar="LAPS", type=str, help="LAPS authentification", nargs="?", const="administrator")
+    self_delegate_arg.make_required = [delegate_arg]
 
     cgroup = smb_parser.add_argument_group("Credential Gathering", "Options for gathering credentials")
     cgroup.add_argument("--sam", action="store_true", help="dump SAM hashes from target systems")
@@ -73,3 +79,17 @@ def proto_args(parser, std_parser, module_parser):
     psgroup.add_argument("--clear-obfscripts", action="store_true", help="Clear all cached obfuscated PowerShell scripts")
 
     return parser
+
+def get_conditional_action(baseAction):
+    class ConditionalAction(baseAction):
+        def __init__(self, option_strings, dest, **kwargs):
+            x = kwargs.pop("make_required", [])
+            super().__init__(option_strings, dest, **kwargs)
+            self.make_required = x
+
+        def __call__(self, parser, namespace, values, option_string=None):
+            for x in self.make_required:
+                x.required = True
+            super().__call__(parser, namespace, values, option_string)
+
+    return ConditionalAction

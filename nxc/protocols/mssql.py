@@ -52,7 +52,7 @@ class mssql(connection):
             extra={
                 "protocol": "MSSQL",
                 "host": self.host,
-                "port": self.args.port,
+                "port": self.port,
                 "hostname": "None",
             }
         )
@@ -112,7 +112,7 @@ class mssql(connection):
 
     def create_conn_obj(self):
         try:
-            self.conn = tds.MSSQL(self.host, self.args.port)
+            self.conn = tds.MSSQL(self.host, self.port)
             self.conn.connect()
         except OSError as e:
             self.logger.debug(f"Error connecting to MSSQL: {e}")

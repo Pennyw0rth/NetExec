@@ -23,7 +23,8 @@ from impacket.dcerpc.v5.epm import MSRPC_UUID_PORTMAP
 from impacket.dcerpc.v5.samr import SID_NAME_USE
 from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
 from impacket.krb5.kerberosv5 import SessionKeyDecryptionError
-from impacket.krb5.types import KerberosException
+from impacket.krb5.types import KerberosException, Principal
+from impacket.krb5 import constants
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login
@@ -33,6 +34,7 @@ from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
 from nxc.protocols.smb.firefox import FirefoxTriage
+from nxc.protocols.smb.kerberos import kerberos_login_with_S4U
 from nxc.servers.smb import NXCSMBServer
 from nxc.protocols.smb.wmiexec import WMIEXEC
 from nxc.protocols.smb.atexec import TSCH_EXEC
@@ -169,7 +171,7 @@ class smb(connection):
             extra={
                 "protocol": "SMB",
                 "host": self.host,
-                "port": self.args.port,
+                "port": self.port,
                 "hostname": self.hostname,
             }
         )
@@ -382,22 +384,32 @@ class smb(connection):
                     kerb_pass = ""
                     self.logger.debug(f"Attempting to do Kerberos Login with useCache: {useCache}")
 
-                self.conn.kerberosLogin(username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache=useCache)
+                tgs = None
+                if self.args.delegate:
+                    kerb_pass = ""
+                    self.username = self.args.delegate
+                    serverName = Principal(f"cifs/{self.hostname}", type=constants.PrincipalNameType.NT_SRV_INST.value)
+                    tgs = kerberos_login_with_S4U(domain, self.hostname, username, password, nthash, lmhash, aesKey, kdcHost, self.args.delegate, serverName, useCache, no_s4u2proxy=self.args.no_s4u2proxy)
+                    self.logger.debug(f"Got TGS for {self.args.delegate} through S4U")
+
+                self.conn.kerberosLogin(self.username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache=useCache, TGS=tgs)
                 self.check_if_admin()
 
                 if username == "":
                     self.username = self.conn.getCredentials()[0]
-                else:
+                elif not self.args.delegate:
                     self.username = username
 
                 used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
+                if self.args.delegate:
+                    used_ccache = f" through S4U with {username}"
             else:
                 self.plaintext_login(self.hostname, username, password)
                 return True
 
             out = f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}"
             self.logger.success(out)
-            if not self.args.local_auth:
+            if not self.args.local_auth and not self.args.delegate:
                 add_user_bh(self.username, domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -406,6 +418,7 @@ class smb(connection):
             if self.args.continue_on_success and self.signing:
                 with contextlib.suppress(Exception):
                     self.conn.logoff()
+                
                 self.create_conn_obj()
 
             return True
@@ -421,10 +434,14 @@ class smb(connection):
             return False
         except OSError as e:
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
+            if self.args.delegate:
+                used_ccache = f" through S4U with {username}"
             self.logger.fail(f"{domain}\\{self.username}{used_ccache} {e}")
         except (SessionError, Exception) as e:
             error, desc = e.getErrorString()
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
+            if self.args.delegate:
+                used_ccache = f" through S4U with {username}"
             self.logger.fail(
                 f"{domain}\\{self.username}{used_ccache} {error} {f'({desc})' if self.args.verbose else ''}",
                 color="magenta" if error in smb_error_status else "red",
@@ -569,7 +586,7 @@ class smb(connection):
                 kdc if kdc else self.host,
                 kdc if kdc else self.host,
                 None,
-                self.args.port,
+                self.port,
                 preferredDialect=SMB_DIALECT,
                 timeout=self.args.smb_timeout,
             )
@@ -590,7 +607,7 @@ class smb(connection):
                 kdc if kdc else self.host,
                 kdc if kdc else self.host,
                 None,
-                self.args.port,
+                self.port,
                 timeout=self.args.smb_timeout,
             )
             self.smbv1 = False
@@ -722,7 +739,7 @@ class smb(connection):
                         self.host if not self.kerberos else self.hostname + "." + self.domain,
                         self.smb_share_name,
                         self.conn,
-                        self.args.port,
+                        self.port,
                         self.username,
                         self.password,
                         self.domain,
@@ -731,7 +748,7 @@ class smb(connection):
                         self.kdcHost,
                         self.hash,
                         self.args.share,
-                        self.args.port,
+                        self.port,
                         self.logger,
                         self.args.get_output_tries
                     )
@@ -1243,12 +1260,12 @@ class smb(connection):
 
         try:
             full_hostname = self.host if not self.kerberos else self.hostname + "." + self.domain
-            string_binding = KNOWN_PROTOCOLS[self.args.port]["bindstr"]
+            string_binding = KNOWN_PROTOCOLS[self.port]["bindstr"]
             logging.debug(f"StringBinding {string_binding}")
             rpc_transport = transport.DCERPCTransportFactory(string_binding)
-            rpc_transport.set_dport(self.args.port)
+            rpc_transport.set_dport(self.port)
 
-            if KNOWN_PROTOCOLS[self.args.port]["set_host"]:
+            if KNOWN_PROTOCOLS[self.port]["set_host"]:
                 rpc_transport.setRemoteHost(full_hostname)
 
             if hasattr(rpc_transport, "set_credentials"):
