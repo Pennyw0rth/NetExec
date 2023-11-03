@@ -44,7 +44,7 @@ class NXCModule:
             if row is None:
                 context.log.fail("No " + name + " present in Microsoft Teams Cookies database")
             else:
-                context.log.success("Succesfully extracted " + name + ": ")
+                context.log.success("Successfully extracted " + name + ": ")
                 context.log.success(row[0])
             conn.close()
         except Exception as e:

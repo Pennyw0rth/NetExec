@@ -39,9 +39,9 @@ class NXCModule:
         # These are for more critical error handling
         context.log.error("I'm doing something")  # This will not be printed in the module context and should only be used for critical errors (e.g. a required python file is missing)
         try:
-            raise Exception("Exception that might occure")
+            raise Exception("Exception that might have occurred")
         except Exception as e:
-            context.log.exception(f"Exception occured: {e}")  # This will display an exception traceback screen after an exception was raised and should only be used for critical errors
+            context.log.exception(f"Exception occurred: {e}")  # This will display an exception traceback screen after an exception was raised and should only be used for critical errors
 
     def on_admin_login(self, context, connection):
         """Concurrent.
