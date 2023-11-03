@@ -46,7 +46,7 @@ class ssh(connection):
             extra={
                 "protocol": "SSH",
                 "host": self.host,
-                "port": self.args.port,
+                "port": self.port,
                 "hostname": self.hostname,
             }
         )
@@ -59,13 +59,13 @@ class ssh(connection):
         if self.conn._transport.remote_version:
             self.remote_version = self.conn._transport.remote_version
         self.logger.debug(f"Remote version: {self.remote_version}")
-        self.db.add_host(self.host, self.args.port, self.remote_version)
+        self.db.add_host(self.host, self.port, self.remote_version)
 
     def create_conn_obj(self):
         self.conn = paramiko.SSHClient()
         self.conn.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:
-            self.conn.connect(self.host, port=self.args.port, timeout=self.args.ssh_timeout, look_for_keys=False)
+            self.conn.connect(self.host, port=self.port, timeout=self.args.ssh_timeout, look_for_keys=False)
         except AuthenticationException:
             return True
         except SSHException:

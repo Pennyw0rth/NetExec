@@ -171,7 +171,7 @@ class smb(connection):
             extra={
                 "protocol": "SMB",
                 "host": self.host,
-                "port": self.args.port,
+                "port": self.port,
                 "hostname": self.hostname,
             }
         )
@@ -582,7 +582,7 @@ class smb(connection):
                 kdc if kdc else self.host,
                 kdc if kdc else self.host,
                 None,
-                self.args.port,
+                self.port,
                 preferredDialect=SMB_DIALECT,
                 timeout=self.args.smb_timeout,
             )
@@ -603,7 +603,7 @@ class smb(connection):
                 kdc if kdc else self.host,
                 kdc if kdc else self.host,
                 None,
-                self.args.port,
+                self.port,
                 timeout=self.args.smb_timeout,
             )
             self.smbv1 = False
@@ -735,7 +735,7 @@ class smb(connection):
                         self.host if not self.kerberos else self.hostname + "." + self.domain,
                         self.smb_share_name,
                         self.conn,
-                        self.args.port,
+                        self.port,
                         self.username,
                         self.password,
                         self.domain,
@@ -744,7 +744,7 @@ class smb(connection):
                         self.kdcHost,
                         self.hash,
                         self.args.share,
-                        self.args.port,
+                        self.port,
                         self.logger,
                         self.args.get_output_tries
                     )
@@ -1256,12 +1256,12 @@ class smb(connection):
 
         try:
             full_hostname = self.host if not self.kerberos else self.hostname + "." + self.domain
-            string_binding = KNOWN_PROTOCOLS[self.args.port]["bindstr"]
+            string_binding = KNOWN_PROTOCOLS[self.port]["bindstr"]
             logging.debug(f"StringBinding {string_binding}")
             rpc_transport = transport.DCERPCTransportFactory(string_binding)
-            rpc_transport.set_dport(self.args.port)
+            rpc_transport.set_dport(self.port)
 
-            if KNOWN_PROTOCOLS[self.args.port]["set_host"]:
+            if KNOWN_PROTOCOLS[self.port]["set_host"]:
                 rpc_transport.setRemoteHost(full_hostname)
 
             if hasattr(rpc_transport, "set_credentials"):
