@@ -235,6 +235,8 @@ class rdp(connection):
             )
             if not self.args.local_auth:
                 add_user_bh(username, domain, self.logger, self.config)
+            if self.admin_privs:
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
 
         except Exception as e:
@@ -279,6 +281,8 @@ class rdp(connection):
             self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
             if not self.args.local_auth:
                 add_user_bh(username, domain, self.logger, self.config)
+            if self.admin_privs:
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except Exception as e:
             if "Authentication failed!" in str(e):
@@ -311,6 +315,8 @@ class rdp(connection):
             self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
             if not self.args.local_auth:
                 add_user_bh(username, domain, self.logger, self.config)
+            if self.admin_privs:
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except Exception as e:
             if "Authentication failed!" in str(e):
