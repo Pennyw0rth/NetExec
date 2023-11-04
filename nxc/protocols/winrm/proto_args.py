@@ -11,19 +11,10 @@ def proto_args(parser, std_parser, module_parser):
     winrm_parser.add_argument("--http-timeout", dest="http_timeout", type=int, default=10, help="HTTP timeout for WinRM connections")
     no_smb_arg = winrm_parser.add_argument("--no-smb", action=get_conditional_action(_StoreTrueAction), make_required=[], help="No smb connection")
 
-    dgroup = winrm_parser.add_argument_group("Authentication", "Options for authentication")
+    dgroup = winrm_parser.add_mutually_exclusive_group()
     domain_arg = dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, default=None, help="domain to authenticate to")
-    hostname_arg = dgroup.add_argument("--hostname", metavar="HOSTNAME", dest="hostname", type=str, default=None, help="Hostname to request ST when doing kerberos auth with '--no-smb'")
     dgroup.add_argument("--local-auth", action="store_true", help="authenticate locally to each target")
-    
-    def make_required(args):
-        if args.kerberos:
-            hostname_arg.required = True
-            domain_arg.required = True
-        else:
-            hostname_arg.required = False
-            domain_arg.required = True
-    no_smb_arg.make_required = make_required
+    no_smb_arg.make_required = [domain_arg]
 
     cgroup = winrm_parser.add_argument_group("Credential Gathering", "Options for gathering credentials")
     cegroup = cgroup.add_mutually_exclusive_group()
@@ -47,7 +38,8 @@ def get_conditional_action(baseAction):
             self.make_required = x
 
         def __call__(self, parser, namespace, values, option_string=None):
-            self.make_required(namespace)
+            for x in self.make_required:
+                x.required = True
             super().__call__(parser, namespace, values, option_string)
 
     return ConditionalAction
