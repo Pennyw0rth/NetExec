@@ -4,7 +4,6 @@ import os
 import requests
 import urllib3
 import contextlib
-import platform
 import xml.etree.ElementTree as ET
 
 from io import StringIO
