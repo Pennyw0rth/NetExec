@@ -30,7 +30,7 @@ If applicable, add screenshots to help explain your problem.
 
 **NetExec info**
  - OS: [e.g. Kali]
- - Version of nxc [e.g. v1.5.2]
+ - Version of nxc: [e.g. v1.5.2]
  - Installed from: apt/github/pip/docker/...? Please try with latest release before openning an issue
 
 **Additional context**
