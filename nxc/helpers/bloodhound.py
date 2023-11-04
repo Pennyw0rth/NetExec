@@ -41,27 +41,15 @@ def add_user_bh(user, domain, logger, config):
         )
         try:
             with driver.session().begin_transaction() as tx:
-                for info in users_owned:
-                    distinguished_name = "".join([f"DC={dc}," for dc in info["domain"].split(".")]).rstrip(",")
+                for user_info in users_owned:
+                    distinguished_name = "".join([f"DC={dc}," for dc in user_info["domain"].split(".")]).rstrip(",")
                     domain_query = tx.run(f"MATCH (d:Domain) WHERE d.distinguishedname STARTS WITH '{distinguished_name}' RETURN d").data()
                     if not domain_query:
-                        raise Exception("Domain not found in bloodhound")
+                        logger.debug(f"Domain {user_info['domain']} not found in BloodHound. Falling back to domainless query.")
+                        _add_without_domain(user_info, tx, logger)
                     else:
                         domain = domain_query[0]["d"].get("name")
-
-                    if info["username"][-1] == "$":
-                        user_owned = f"{info['username'][:-1]}.{domain}"
-                        account_type = "Computer"
-                    else:
-                        user_owned = f"{info['username']}@{domain}"
-                        account_type = "User"
-
-                    result = tx.run(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) RETURN c")
-
-                    if result.data()[0]["c"].get("owned") in (False, None):
-                        logger.debug(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) SET c.owned=True RETURN c.name AS name")
-                        result = tx.run(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) SET c.owned=True RETURN c.name AS name")
-                        logger.highlight(f"Node {user_owned} successfully set as owned in BloodHound")
+                        _add_with_domain(user_info, domain, tx, logger)
         except AuthError:
             logger.fail(f"Provided Neo4J credentials ({config.get('BloodHound', 'bh_user')}:{config.get('BloodHound', 'bh_pass')}) are not valid.")
             return
@@ -69,10 +57,47 @@ def add_user_bh(user, domain, logger, config):
             logger.fail(f"Neo4J does not seem to be available on {uri}.")
             return
         except Exception as e:
-            if "Domain not found in bloodhound" in str(e):
-                logger.fail("Neo4J Error: Domain not found in BloodHound. Please specify the FQDN ex:domain.local.")
-            else:
-                logger.fail(f"Unexpected error with Neo4J: {e}")
-                logger.fail("Account not found on the domain")
+            logger.fail(f"Unexpected error with Neo4J: {e}")
             return
         driver.close()
+
+
+def _add_with_domain(user_info, domain, tx, logger):
+    if user_info["username"][-1] == "$":
+        user_owned = f"{user_info['username'][:-1]}.{domain}"
+        account_type = "Computer"
+    else:
+        user_owned = f"{user_info['username']}@{domain}"
+        account_type = "User"
+
+    result = tx.run(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) RETURN c").data()
+
+    if len(result) == 0:
+        logger.fail("Account not found in the BloodHound database.")
+        return
+    if result[0]["c"].get("owned") in (False, None):
+        logger.debug(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) SET c.owned=True RETURN c.name AS name")
+        result = tx.run(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) SET c.owned=True RETURN c.name AS name").data()[0]
+        logger.highlight(f"Node {result['name']} successfully set as owned in BloodHound")
+
+
+def _add_without_domain(user_info, tx, logger):
+    if user_info["username"][-1] == "$":
+        user_owned = user_info["username"][:-1]
+        account_type = "Computer"
+    else:
+        user_owned = user_info["username"]
+        account_type = "User"
+
+    result = tx.run(f"MATCH (c:{account_type}) WHERE c.name STARTS WITH '{user_owned}' RETURN c").data()
+
+    if len(result) == 0:
+        logger.fail("Account not found in the BloodHound database.")
+        return
+    elif len(result) >= 2:
+        logger.fail(f"Multiple accounts found with the name '{user_info['username']}' in the BloodHound database. Please specify the FQDN ex:domain.local")
+        return
+    elif result[0]["c"].get("owned") in (False, None):
+        logger.debug(f"MATCH (c:{account_type} {{name:'{result[0]['c']['name']}'}}) SET c.owned=True RETURN c.name AS name")
+        result = tx.run(f"MATCH (c:{account_type} {{name:'{result[0]['c']['name']}'}}) SET c.owned=True RETURN c.name AS name").data()[0]
+        logger.highlight(f"Node {result['name']} successfully set as owned in BloodHound")
