@@ -51,42 +51,45 @@ class winrm(connection):
         if self.args.no_smb:
             self.domain = self.args.domain
         else:
-            smb_conn = SMBConnection(self.host, self.host, None, timeout=5)
-            no_ntlm = False
             try:
-                smb_conn.login("", "")
-            except BrokenPipeError:
-                self.logger.fail("Broken Pipe Error while attempting to login")
+                smb_conn = SMBConnection(self.host, self.host, None, timeout=5)
+                no_ntlm = False
+                try:
+                    smb_conn.login("", "")
+                except BrokenPipeError:
+                    self.logger.fail("Broken Pipe Error while attempting to login")
+                except Exception as e:
+                    if "STATUS_NOT_SUPPORTED" in str(e):
+                        # no ntlm supported
+                        no_ntlm = True
+
+                self.domain = smb_conn.getServerDNSDomainName() if not no_ntlm else self.args.domain
+                self.hostname = smb_conn.getServerName() if not no_ntlm else self.host
+                self.server_os = smb_conn.getServerOS()
+                if isinstance(self.server_os.lower(), bytes):
+                    self.server_os = self.server_os.decode("utf-8")
+
+                self.logger.extra["hostname"] = self.hostname
+
+                self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}")
+
+                with contextlib.suppress(Exception):
+                    smb_conn.logoff()
+
+                if self.args.domain:
+                    self.domain = self.args.domain
+
+                if self.args.local_auth:
+                    self.domain = self.hostname
+
+                if self.server_os is None:
+                    self.server_os = ""
+                if self.domain is None:
+                    self.domain = ""
+
+                self.db.add_host(self.host, self.port, self.hostname, self.domain, self.server_os)
             except Exception as e:
-                if "STATUS_NOT_SUPPORTED" in str(e):
-                    # no ntlm supported
-                    no_ntlm = True
-
-            self.domain = smb_conn.getServerDNSDomainName() if not no_ntlm else self.args.domain
-            self.hostname = smb_conn.getServerName() if not no_ntlm else self.host
-            self.server_os = smb_conn.getServerOS()
-            if isinstance(self.server_os.lower(), bytes):
-                self.server_os = self.server_os.decode("utf-8")
-
-            self.logger.extra["hostname"] = self.hostname
-
-            self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}")
-
-            with contextlib.suppress(Exception):
-                smb_conn.logoff()
-
-            if self.args.domain:
-                self.domain = self.args.domain
-
-            if self.args.local_auth:
-                self.domain = self.hostname
-
-            if self.server_os is None:
-                self.server_os = ""
-            if self.domain is None:
-                self.domain = ""
-
-            self.db.add_host(self.host, self.port, self.hostname, self.domain, self.server_os)
+                self.logger.fail(f"Error retrieving host domain: {e} specify one manually with the '-d' flag")
 
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
@@ -191,38 +194,28 @@ class winrm(connection):
 
     def create_conn_obj(self):
         if self.is_link_local_ipv6:
-            self.logger.info("winrm not support link-local ipv6, exitting...")
+            self.logger.fail("winrm not support link-local ipv6, exiting...")
             return False
-        endpoints = {
-            "HTTP": {
-                "protocol": "http", 
-                "port": self.port[0],
-                "ssl": False
-            },
-            "HTTPS": {
-                "protocol": "https", 
-                "port": self.port[1] if len(self.port) != 1 else self.port[0],
-                "ssl": True
-            }
-        }
 
-        if "http" not in self.args.check_proto:
-            endpoints.pop("HTTP")
-        if "https" not in self.args.check_proto:
-            endpoints.pop("HTTPS")
+        endpoints = {}
+
+        for protocol in self.args.check_proto:
+            endpoints[protocol] = {}
+            endpoints[protocol]["port"] = self.port[self.args.check_proto.index(protocol)] if len(self.port) == 2 else self.port[0]
+            endpoints[protocol]["url"] = "{}://{}:{}/wsman".format(
+                protocol,
+                self.host if not self.is_ipv6 else f"[{self.host}]",
+                endpoints[protocol]["port"]
+            )
+            endpoints[protocol]["ssl"] = False if protocol == 'http' else True
 
         for protocol in endpoints:
             self.port = endpoints[protocol]["port"]
-            url = "{}://{}:{}/wsman".format(
-                endpoints[protocol]["protocol"],
-                self.host if not self.is_ipv6 else f"[{self.host}]",
-                self.port
-            )
             try:
-                self.logger.debug(f"Requesting URL: {url}")
-                res = requests.post(url, verify=False, timeout=self.args.http_timeout) 
+                self.logger.debug(f"Requesting URL: {endpoints[protocol]['url']}")
+                res = requests.post(endpoints[protocol]["url"], verify=False, timeout=self.args.http_timeout) 
                 self.logger.debug(f"Received response code: {res.status_code}")
-                self.endpoint = url
+                self.endpoint = endpoints[protocol]["url"]
                 self.ssl = endpoints[protocol]["ssl"]
                 self.logger.extra["port"] = self.port
                 return True
@@ -330,7 +323,7 @@ class winrm(connection):
             if "with ntlm" in str(e):
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)}")
             else:
-                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} '{e}'")
+                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {e}")
             return False
 
     def execute(self, payload=None, get_output=True, shell_type="cmd"):
@@ -348,7 +341,7 @@ class winrm(connection):
                 self.logger.fail(f"Execute command failed, current user: '{self.domain}\\{self.username}' has no 'Invoke' rights to execute command (shell type: {shell_type})")
                 
                 if shell_type == "cmd":
-                    self.logger.info("Cannot execute command, probably has not invoke rights with Root WinRM listener, now auto switch to PSSession!")
+                    self.logger.info("Cannot execute command via cmd, the user probably does not have invoke rights with Root WinRM listener - now switching to Powershell to attempt execution")
                     self.execute(payload, get_output, shell_type="powershell")
             elif ("decode" in str(e)) and not get_output:
                 self.logger.success(f"Executed command (shell type: {shell_type})")
