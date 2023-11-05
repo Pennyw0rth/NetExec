@@ -274,10 +274,9 @@ class winrm(connection):
             return True
         except Exception as e:
             if "with ntlm" in str(e):
-                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
+                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)}")
             else:
-                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()} '{e}'")
-
+                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {e}")
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
@@ -345,7 +344,7 @@ class winrm(connection):
             elif ("decode" in str(e)) and not get_output:
                 self.logger.success(f"Executed command (shell type: {shell_type})")
             else:
-                self.logger.fail(f"Execute command failed, error: '{e}'")
+                self.logger.fail(f"Execute command failed, error: {e}")
         else:
             self.logger.success(f"Executed command (shell type: {shell_type})")
             buf = StringIO(result[0]).readlines() if get_output else ""
