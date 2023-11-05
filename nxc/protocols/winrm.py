@@ -39,7 +39,7 @@ class winrm(connection):
     def proto_logger(self):
         self.logger = NXCAdapter(
             extra={
-                "protocol": "SMB",
+                "protocol": "WINRM",
                 "host": self.host,
                 "port": "445",
                 "hostname": self.hostname,
@@ -182,6 +182,7 @@ class winrm(connection):
             self.logger.extra["port"] = self.port
             self.logger.display(self.endpoint)
         else:
+            self.logger.extra["protocol"] = "SMB"
             self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
             self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
             self.logger.extra["port"] = self.port
