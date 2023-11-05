@@ -250,7 +250,7 @@ class winrm(connection):
             self.password = password
             self.username = username
         self.domain = domain
-        
+
         try:
             self.conn = Client(
                 self.host,
