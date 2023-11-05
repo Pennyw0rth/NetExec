@@ -207,7 +207,7 @@ class winrm(connection):
                 self.host if not self.is_ipv6 else f"[{self.host}]",
                 endpoints[protocol]["port"]
             )
-            endpoints[protocol]["ssl"] = not (protocol == "http")
+            endpoints[protocol]["ssl"] = (protocol != "http")
 
         for protocol in endpoints:
             self.port = endpoints[protocol]["port"]
