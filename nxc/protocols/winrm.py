@@ -268,10 +268,14 @@ class winrm(connection):
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
 
-            user_id = self.db.add_credential("plaintext", domain, self.username, self.password)
-            host_id = self.db.get_hosts(self.host)[0].id
-            self.db.add_loggedin_relation(user_id, host_id)
-            self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host, user_id=user_id)
+            self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
+            self.db.add_credential("plaintext", domain, self.username, self.password)
+            # TODO: when we can easily get the host_id via RETURNING statements, readd this in
+
+            if self.admin_privs:
+                self.logger.debug("Inside admin privs")
+                self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host)  # , user_id=user_id)
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
@@ -314,10 +318,9 @@ class winrm(connection):
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}:{process_secret(nthash)} {self.mark_pwned()}")
 
-            user_id = self.db.add_credential("hash", domain, self.username, nthash)
-            host_id = self.db.get_hosts(self.host)[0].id
-            self.db.add_loggedin_relation(user_id, host_id)
-            self.db.add_admin_user("hash", domain, self.username, nthash, self.host, user_id=user_id)
+            if self.admin_privs:
+                self.db.add_admin_user("hash", domain, self.username, nthash, self.host)
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)

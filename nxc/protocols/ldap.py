@@ -379,6 +379,8 @@ class ldap(connection):
 
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
+            if self.admin_privs:
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except SessionKeyDecryptionError:
             # for PRE-AUTH account
@@ -434,6 +436,8 @@ class ldap(connection):
 
                     if not self.args.local_auth:
                         add_user_bh(self.username, self.domain, self.logger, self.config)
+                    if self.admin_privs:
+                        add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
                     return True
                 except SessionError as e:
                     error, desc = e.getErrorString()
@@ -488,6 +492,8 @@ class ldap(connection):
 
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
+            if self.admin_privs:
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("strongerAuthRequired") >= 0:
@@ -514,6 +520,8 @@ class ldap(connection):
 
                     if not self.args.local_auth:
                         add_user_bh(self.username, self.domain, self.logger, self.config)
+                    if self.admin_privs:
+                        add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
                     return True
                 except Exception as e:
                     error_code = str(e).split()[-2][:-1]
@@ -578,6 +586,8 @@ class ldap(connection):
 
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
+            if self.admin_privs:
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("strongerAuthRequired") >= 0:
@@ -603,6 +613,8 @@ class ldap(connection):
 
                     if not self.args.local_auth:
                         add_user_bh(self.username, self.domain, self.logger, self.config)
+                    if self.admin_privs:
+                        add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
                     return True
                 except ldap_impacket.LDAPSessionError as e:
                     error_code = str(e).split()[-2][:-1]

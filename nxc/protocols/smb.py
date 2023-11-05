@@ -409,14 +409,17 @@ class smb(connection):
 
             out = f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}"
             self.logger.success(out)
+
             if not self.args.local_auth and not self.args.delegate:
                 add_user_bh(self.username, domain, self.logger, self.config)
+            if self.admin_privs:
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
             # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
             if self.args.continue_on_success and self.signing:
                 with contextlib.suppress(Exception):
                     self.conn.logoff()
-                
+
                 self.create_conn_obj()
 
             return True
@@ -473,6 +476,11 @@ class smb(connection):
 
             self.db.add_loggedin_relation(user_id, host_id)
 
+            out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}"
+            self.logger.success(out)
+
+            if not self.args.local_auth:
+                add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 self.logger.debug(f"Adding admin user: {self.domain}/{self.username}:{self.password}@{self.host}")
                 self.db.add_admin_user(
@@ -483,12 +491,7 @@ class smb(connection):
                     self.host,
                     user_id=user_id,
                 )
-
-            out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}"
-            self.logger.success(out)
-
-            if not self.args.local_auth:
-                add_user_bh(self.username, self.domain, self.logger, self.config)
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
             # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
             if self.args.continue_on_success and self.signing:
@@ -544,14 +547,14 @@ class smb(connection):
 
             self.db.add_loggedin_relation(user_id, host_id)
 
-            if self.admin_privs:
-                self.db.add_admin_user("hash", domain, self.username, nthash, self.host, user_id=user_id)
-
             out = f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_pwned()}"
             self.logger.success(out)
 
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
+            if self.admin_privs:
+                self.db.add_admin_user("hash", domain, self.username, nthash, self.host, user_id=user_id)
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
             # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
             if self.args.continue_on_success and self.signing:
