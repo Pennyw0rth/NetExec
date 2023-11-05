@@ -41,7 +41,7 @@ class winrm(connection):
             extra={
                 "protocol": "WINRM",
                 "host": self.host,
-                "port": "445",
+                "port": "5985",
                 "hostname": self.hostname,
             }
         )
@@ -177,16 +177,9 @@ class winrm(connection):
         return True
 
     def print_host_info(self):
-        if self.args.domain:
-            self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
-            self.logger.extra["port"] = self.port
-            self.logger.display(self.endpoint)
-        else:
-            self.logger.extra["protocol"] = "SMB"
-            self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
-            self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
-            self.logger.extra["port"] = self.port
-            self.logger.display(self.endpoint)
+        self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
+        self.logger.extra["port"] = self.port
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
 
         if self.args.laps:
             return self.laps_search(self.args.username, self.args.password, self.args.hash, self.domain)
