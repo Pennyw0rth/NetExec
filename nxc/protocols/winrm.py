@@ -39,9 +39,9 @@ class winrm(connection):
     def proto_logger(self):
         self.logger = NXCAdapter(
             extra={
-                "protocol": "WINRM",
+                "protocol": "SMB",
                 "host": self.host,
-                "port": self.port,
+                "port": "445",
                 "hostname": self.hostname,
             }
         )
@@ -178,13 +178,12 @@ class winrm(connection):
 
     def print_host_info(self):
         if self.args.domain:
-            self.logger.extra["protocol"] = "HTTPS" if self.ssl else "HTTP"
+            self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
+            self.logger.extra["port"] = self.port
             self.logger.display(self.endpoint)
         else:
-            self.logger.extra["protocol"] = "SMB"
-            self.logger.extra["port"] = "445"
             self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
-            self.logger.extra["protocol"] = "HTTPS" if self.ssl else "HTTP"
+            self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
             self.logger.extra["port"] = self.port
             self.logger.display(self.endpoint)
 
@@ -217,7 +216,6 @@ class winrm(connection):
                 self.logger.debug(f"Received response code: {res.status_code}")
                 self.endpoint = endpoints[protocol]["url"]
                 self.ssl = endpoints[protocol]["ssl"]
-                self.logger.extra["port"] = self.port
                 return True
             except requests.exceptions.Timeout as e:
                 self.logger.info(f"Connection Timed out to WinRM service: {e}")
