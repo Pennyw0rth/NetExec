@@ -223,8 +223,7 @@ class winrm(connection):
         return False
     
     def check_if_admin(self):
-        print(dir(self.conn))
-        wsman = self.conn.__getstate__()["wsman"]
+        wsman = self.conn.wsman
         wsen = NAMESPACES["wsen"]
         wsmn = NAMESPACES["wsman"]
 
