@@ -54,6 +54,9 @@ class winrm(connection):
             try:
                 smb_conn = SMBConnection(self.host, self.host, None, timeout=5)
                 no_ntlm = False
+            except Exception as e:
+                self.logger.fail(f"Error retrieving host domain: {e} specify one manually with the '-d' flag")
+            else:
                 try:
                     smb_conn.login("", "")
                 except BrokenPipeError:
@@ -82,15 +85,14 @@ class winrm(connection):
                 if self.args.local_auth:
                     self.domain = self.hostname
 
-                if self.server_os is None:
-                    self.server_os = ""
-                if self.domain is None:
-                    self.domain = ""
-
                 self.db.add_host(self.host, self.port, self.hostname, self.domain, self.server_os)
-            except Exception as e:
-                self.logger.fail(f"Error retrieving host domain: {e} specify one manually with the '-d' flag")
+        
+        if self.server_os is None:
+            self.server_os = ""
 
+        if self.domain is None:
+            self.domain = ""
+        
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
     def laps_search(self, username, password, ntlm_hash, domain):
@@ -221,6 +223,7 @@ class winrm(connection):
         return False
     
     def check_if_admin(self):
+        print(dir(self.conn))
         wsman = self.conn.__getstate__()["wsman"]
         wsen = NAMESPACES["wsen"]
         wsmn = NAMESPACES["wsman"]
@@ -244,7 +247,7 @@ class winrm(connection):
             self.conn = Client(
                 self.host,
                 auth="ntlm",
-                username=f"{self.username}@{self.domain.upper()}",
+                username=f"{self.username}@{self.domain.upper()}" if self.domain else self.username,
                 password=self.password,
                 ssl=self.ssl,
                 cert_validation=False,
@@ -293,7 +296,7 @@ class winrm(connection):
             self.conn = Client(
                 self.host,
                 auth="ntlm",
-                username=f"{self.username}@{self.domain.upper()}",
+                username=f"{self.username}@{self.domain.upper()}" if self.domain else self.username,
                 password=f"{self.lmhash}:{self.nthash}",
                 ssl=self.ssl,
                 cert_validation=False,

@@ -14,7 +14,6 @@ def proto_args(parser, std_parser, module_parser):
     dgroup = winrm_parser.add_mutually_exclusive_group()
     domain_arg = dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, default=None, help="domain to authenticate to")
     dgroup.add_argument("--local-auth", action="store_true", help="authenticate locally to each target")
-    no_smb_arg.make_required = [domain_arg]
 
     cgroup = winrm_parser.add_argument_group("Credential Gathering", "Options for gathering credentials")
     cegroup = cgroup.add_mutually_exclusive_group()
