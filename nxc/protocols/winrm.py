@@ -354,7 +354,7 @@ class winrm(connection):
             self.conn.fetch("C:\\windows\\temp\\SYSTEM", self.output_filename + ".system")
             self.execute("del C:\\windows\\temp\\SAM && del C:\\windows\\temp\\SYSTEM", False)
         except Exception as e:
-            if "does not exist" or "TransformFinalBlock" in e:
+            if e in ["does not exist", "TransformFinalBlock"]:
                 self.logger.fail("Failed to dump SAM hashes, maybe got blocked by AV softwares or current user is not privileged user")
             else:
                 self.logger.fail(e)
@@ -377,7 +377,7 @@ class winrm(connection):
             self.conn.fetch("C:\\windows\\temp\\SYSTEM", f"{self.output_filename}.system")
             self.execute("del C:\\windows\\temp\\SYSTEM && del C:\\windows\\temp\\SECURITY", False)
         except Exception as e:
-            if "does not exist" or "TransformFinalBlock" in e:
+            if e in ["does not exist", "TransformFinalBlock"]:
                 self.logger.fail("Failed to dump LSA secrets, maybe got blocked by AV softwares or current user is not privileged user")
             else:
                 self.logger.fail(e)
