@@ -17,6 +17,7 @@ def proto_args(parser, std_parser, module_parser):
     no_smb_arg.make_required = [domain_arg]
 
     cgroup = winrm_parser.add_argument_group("Credential Gathering", "Options for gathering credentials")
+    cgroup.add_argument("--dump-method", action="store", default="cmd", choices={"cmd", "powershell"}, help="dump LSA secrets from target systems")
     cegroup = cgroup.add_mutually_exclusive_group()
     cegroup.add_argument("--sam", action="store_true", help="dump SAM hashes from target systems")
     cegroup.add_argument("--lsa", action="store_true", help="dump LSA secrets from target systems")

