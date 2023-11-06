@@ -68,7 +68,7 @@ class winrm(connection):
                         no_ntlm = True
 
                 self.domain = smb_conn.getServerDNSDomainName() if not no_ntlm else self.args.domain
-                self.hostname = smb_conn.getServerDNSHostName() if not no_ntlm else self.host
+                self.hostname = smb_conn.getServerName() if not no_ntlm else self.host
                 self.server_os = smb_conn.getServerOS()
                 if isinstance(self.server_os.lower(), bytes):
                     self.server_os = self.server_os.decode("utf-8")
@@ -85,10 +85,10 @@ class winrm(connection):
         if self.args.domain:
             self.domain = self.args.domain
 
-        # In winrm, auth without domain is equal local auth
-        # If use "local-user@hostname", it will fail
-        if self.args.local_auth or self.domain == self.hostname or self.domain is None:
-            self.local_auth = True
+        if self.args.local_auth:
+            self.domain = self.hostname
+        
+        if self.domain is None:
             self.domain = ""
         
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
@@ -243,14 +243,14 @@ class winrm(connection):
             self.conn = Client(
                 self.host,
                 auth="ntlm",
-                username=self.username if self.local_auth else f"{self.username}@{self.domain.upper()}",
+                username=f"{self.domain}\\{self.username}",
                 password=self.password,
                 ssl=self.ssl,
                 cert_validation=False,
             )
 
             self.check_if_admin()
-            self.logger.success(f"{self.hostname if self.local_auth else self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
+            self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
 
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
             self.db.add_credential("plaintext", domain, self.username, self.password)
@@ -266,9 +266,9 @@ class winrm(connection):
             return True
         except Exception as e:
             if "with ntlm" in str(e):
-                self.logger.fail(f"{self.hostname if self.local_auth else self.domain}\\{self.username}:{process_secret(self.password)}")
+                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)}")
             else:
-                self.logger.fail(f"{self.hostname if self.local_auth else self.domain}\\{self.username}:{process_secret(self.password)} {e}")
+                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {e}")
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
@@ -292,14 +292,14 @@ class winrm(connection):
             self.conn = Client(
                 self.host,
                 auth="ntlm",
-                username=self.username if self.local_auth else f"{self.username}@{self.domain.upper()}",
+                username=f"{self.domain}\\{self.username}",
                 password=f"{self.lmhash}:{self.nthash}",
                 ssl=self.ssl,
                 cert_validation=False,
             )
 
             self.check_if_admin()
-            self.logger.success(f"{self.hostname if self.local_auth else self.domain}\\{self.username}:{process_secret(nthash)} {self.mark_pwned()}")
+            self.logger.success(f"{self.domain}\\{self.username}:{process_secret(nthash)} {self.mark_pwned()}")
 
             if self.admin_privs:
                 self.db.add_admin_user("hash", domain, self.username, nthash, self.host)
@@ -311,9 +311,9 @@ class winrm(connection):
 
         except Exception as e:
             if "with ntlm" in str(e):
-                self.logger.fail(f"{self.hostname if self.local_auth else self.domain}\\{self.username}:{process_secret(self.nthash)}")
+                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)}")
             else:
-                self.logger.fail(f"{self.hostname if self.local_auth else self.domain}\\{self.username}:{process_secret(self.nthash)} {e}")
+                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {e}")
             return False
 
     def execute(self, payload=None, get_output=True, shell_type="cmd"):
