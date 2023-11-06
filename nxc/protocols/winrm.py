@@ -87,19 +87,8 @@ class winrm(connection):
 
         # In winrm, auth without domain is equal local auth
         # If use "local-user@hostname", it will fail
-        if self.args.local_auth:
+        if self.args.local_auth or self.domain == self.hostname or self.domain is None:
             self.local_auth = True
-            self.domain = ""
-
-        # Switch into local auth
-        if self.domain == self.hostname:
-            self.local_auth = True
-            self.doamin = ""
-
-        if self.server_os is None:
-            self.server_os = ""
-
-        if self.domain is None:
             self.domain = ""
         
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
@@ -250,7 +239,6 @@ class winrm(connection):
             self.password = password
             self.username = username
         self.domain = domain
-
         try:
             self.conn = Client(
                 self.host,
