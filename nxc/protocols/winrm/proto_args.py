@@ -9,11 +9,12 @@ def proto_args(parser, std_parser, module_parser):
     winrm_parser.add_argument("--check-proto", nargs="+", default=["http", "https"], help="Choose what prorocol you want to check, default is %(default)s, format: 'http https'(with space separated) or 'single-protocol'")
     winrm_parser.add_argument("--laps", dest="laps", metavar="LAPS", type=str, help="LAPS authentification", nargs="?", const="administrator")
     winrm_parser.add_argument("--http-timeout", dest="http_timeout", type=int, default=10, help="HTTP timeout for WinRM connections")
-    winrm_parser.add_argument("--no-smb", action=get_conditional_action(_StoreTrueAction), make_required=[], help="No smb connection")
+    no_smb_arg = winrm_parser.add_argument("--no-smb", action=get_conditional_action(_StoreTrueAction), make_required=[], help="No smb connection")
 
     dgroup = winrm_parser.add_mutually_exclusive_group()
-    dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, default=None, help="domain to authenticate to")
+    domain_arg = dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, default=None, help="domain to authenticate to")
     dgroup.add_argument("--local-auth", action="store_true", help="authenticate locally to each target")
+    no_smb_arg.make_required = [domain_arg]
 
     cgroup = winrm_parser.add_argument_group("Credential Gathering", "Options for gathering credentials")
     cegroup = cgroup.add_mutually_exclusive_group()
