@@ -268,7 +268,7 @@ class winrm(connection):
             if "with ntlm" in str(e):
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)}")
             else:
-                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {e}")
+                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {e!s}")
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
@@ -313,7 +313,7 @@ class winrm(connection):
             if "with ntlm" in str(e):
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)}")
             else:
-                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {e}")
+                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {e!s}")
             return False
 
     def execute(self, payload=None, get_output=True, shell_type="cmd"):
@@ -336,7 +336,7 @@ class winrm(connection):
             elif ("decode" in str(e)) and not get_output:
                 self.logger.success(f"Executed command (shell type: {shell_type})")
             else:
-                self.logger.fail(f"Execute command failed, error: {e}")
+                self.logger.fail(f"Execute command failed, error: {e!s}")
         else:
             self.logger.success(f"Executed command (shell type: {shell_type})")
             buf = StringIO(result[0]).readlines() if get_output else ""
@@ -368,7 +368,7 @@ class winrm(connection):
             elif hasattr(e, "code") and e.code == 5:
                 self.logger.fail(f"Dump SAM hashes with {self.args.dump_method} failed, please try '--dump-method'")
             else:
-                self.logger.fail(str(e))
+                self.logger.fail(f"Failed to dump SAM hashes, error: {e!s}")
         else:
             local_operations = LocalOperations(f"{self.output_filename}.system")
             boot_key = local_operations.getBootKey()
@@ -397,7 +397,7 @@ class winrm(connection):
             elif hasattr(e, "code") and e.code == 5:
                 self.logger.fail(f"Dump LSA secrets with {self.args.dump_method} failed, please try '--dump-method'")
             else:
-                self.logger.fail(str(e))
+                self.logger.fail(f"Failed to dump LSA secrets, error: {e!s}")
         else:
             local_operations = LocalOperations(f"{self.output_filename}.system")
             boot_key = local_operations.getBootKey()
