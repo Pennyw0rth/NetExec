@@ -34,7 +34,6 @@ class winrm(connection):
         self.lmhash = ""
         self.nthash = ""
         self.ssl = False
-        self.local_auth = False
 
         connection.__init__(self, args, db, host)
 
@@ -347,6 +346,12 @@ class winrm(connection):
     def ps_execute(self):
         self.execute(payload=self.args.ps_execute, get_output=True, shell_type="powershell")
 
+    # Dos attack prevent:
+    # if someboby executed "reg save HKLM\sam C:\windows\temp\sam" before, but didn't remove "C:\windows\temp\sam" file,
+    # when user execute the same command next time, in tty shell, the prompt will ask "File C:\windows\temp\sam already exists. Overwrite (Yes/No)?"
+    # but in here, it isn't not a tty shell, pypsrp will do a crazy loop command execution when it didn't get any response (stuck in "Yes/No" prompt)
+    # and it will make target host OOM error just like dos attack.
+    # To prevent that, just make the store file name randomly.
     def sam(self):
         sam_storename = gen_random_string(6)
         system_storename = gen_random_string(6)
