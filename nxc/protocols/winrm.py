@@ -364,7 +364,7 @@ class winrm(connection):
             self.conn.execute_cmd(clean_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{clean_command}'")
         except Exception as e:
             if ("does not exist" in str(e)) or ("TransformFinalBlock" in str(e)):
-                self.logger.fail("Failed to dump SAM hashes, maybe got blocked by AV softwares or current user is not privileged user")
+                self.logger.fail("Failed to dump SAM hashes, it may have been detected by AV or current user is not privileged user")
             elif hasattr(e, "code") and e.code == 5:
                 self.logger.fail(f"Dump SAM hashes with {self.args.dump_method} failed, please try '--dump-method'")
             else:
@@ -393,7 +393,7 @@ class winrm(connection):
             self.conn.execute_cmd(clean_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{clean_command}'")
         except Exception as e:
             if ("does not exist" in str(e)) or ("TransformFinalBlock" in str(e)):
-                self.logger.fail("Failed to dump LSA secrets, maybe got blocked by AV softwares or current user is not privileged user")
+                self.logger.fail("Failed to dump LSA secrets, it may have been detected by AV or current user is not privileged user")
             elif hasattr(e, "code") and e.code == 5:
                 self.logger.fail(f"Dump LSA secrets with {self.args.dump_method} failed, please try '--dump-method'")
             else:
