@@ -271,6 +271,7 @@ class winrm(connection):
         self.password = password
         self.username = username
         self.domain = domain
+        self.kdcHost = kdcHost
         self.hostname = self.args.hostname if self.args.no_smb else self.hostname
         
         # MIT krb5.conf prepare
