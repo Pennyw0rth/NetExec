@@ -45,20 +45,6 @@ class winrm(connection):
 
         connection.__init__(self, args, db, host)
 
-    def proto_flow(self):
-        if self.kerberos and (platform.system() != "Linux"):
-            self.logger.info("Doing kerberos auth with WINRM only support Linux platform!")
-            return False
-        self.proto_logger()
-        if self.create_conn_obj():
-            self.enum_host_info()
-            self.print_host_info()
-            if self.login():
-                if hasattr(self.args, "module") and self.args.module:
-                    self.call_modules()
-                else:
-                    self.call_cmd_args()
-
     def proto_logger(self):
         self.logger = NXCAdapter(
             extra={
@@ -276,6 +262,9 @@ class winrm(connection):
 
     # pypsrp is relate MIT kerberos toolkit, not like impacket
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
+        if platform.system() != "Linux":
+            self.logger.fail("Doing kerberos auth with WINRM only support Linux platform!")
+            return False
         self.admin_privs = False
         lmhash = ""
         nthash = ""
@@ -283,7 +272,6 @@ class winrm(connection):
         self.username = username
         self.domain = domain
         self.hostname = self.args.hostname if self.args.no_smb else self.hostname
-        self.create_conn_obj()
         
         # MIT krb5.conf prepare
         with open(get_ps_script("winrm_krb5_config/krb5.conf")) as krb5_conf:
@@ -295,7 +283,7 @@ class winrm(connection):
             krb5_conf_write.write(krb5_conf)
         os.environ["KRB5_CONFIG"] = krb5_conf_name
 
-        if password == "":
+        if not password:
             if ntlm_hash.find(":") != -1:
                 lmhash, nthash = ntlm_hash.split(":")
             else:
@@ -304,24 +292,22 @@ class winrm(connection):
             self.lmhash = lmhash
         
         kerb_pass = next(s for s in [nthash, password, aesKey] if s) if not all(s == "" for s in [nthash, password, aesKey]) else ""
-        if useCache and kerb_pass == "":
+        if useCache and not kerb_pass:
             ccache = CCache.loadFile(os.getenv("KRB5CCNAME"))
             username = ccache.credentials[0].header["client"].prettyPrint().decode().split("@")[0]
             self.username = username
-            # Clear password variable when using kerberos cache file
-            self.password = ""
-
         used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
+
         for spn in ["HOST", "HTTP", "WSMAN"]:
             # MIT kerberos not support nthash auth
             try:
-                if self.nthash or self.aesKey:
+                if not useCache and kerb_pass:
                     self.getTGT()
                 self.conn = Client(
                     self.host,
                     auth="kerberos",
                     username=f"{self.username}@{self.domain.upper()}",
-                    password=self.password,
+                    password="",
                     ssl=self.ssl,
                     cert_validation=False,
                     negotiate_service=spn,
@@ -347,7 +333,7 @@ class winrm(connection):
                     self.logger.fail(out)
                     return False
                 else:
-                    out = f"{self.domain}\\{self.username}{used_ccache} ({e!s})"
+                    out = f"{self.domain}\\{self.username}{used_ccache} {e!s}"
                     self.logger.fail(out)
                     return False
         
