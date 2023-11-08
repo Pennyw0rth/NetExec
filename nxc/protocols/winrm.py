@@ -306,6 +306,7 @@ class winrm(connection):
                     self.getTGT()
                 self.conn = Client(
                     self.host,
+                    port=self.port,
                     auth="kerberos",
                     username=f"{self.username}@{self.domain.upper()}",
                     password="",
