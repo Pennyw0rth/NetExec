@@ -104,21 +104,23 @@ class KerberosAttacks:
         return entry
 
     def get_tgt_kerberoasting(self):
-        try:
-            ccache = CCache.loadFile(getenv("KRB5CCNAME"))
-            # retrieve user and domain information from CCache file if needed
-            domain = ccache.principal.realm["data"] if self.domain == "" else self.domain
-            nxc_logger.debug(f"Using Kerberos Cache: {getenv('KRB5CCNAME')}")
-            principal = f"krbtgt/{domain.upper()}@{domain.upper()}"
-            creds = ccache.getCredential(principal)
-            if creds is not None:
-                tgt = creds.toTGT()
-                nxc_logger.debug("Using TGT from cache")
-                return tgt
-            else:
-                nxc_logger.debug("No valid credentials found in cache. ")
-        except Exception:
-            pass
+        if getenv("KRB5CCNAME"):
+            nxc_logger.debug("KRB5CCNAME environment variable exists, attempting to use that...")
+            try:
+                ccache = CCache.loadFile(getenv("KRB5CCNAME"))
+                # retrieve user and domain information from CCache file if needed
+                domain = ccache.principal.realm["data"] if self.domain == "" else self.domain
+                nxc_logger.debug(f"Using Kerberos Cache: {getenv('KRB5CCNAME')}")
+                principal = f"krbtgt/{domain.upper()}@{domain.upper()}"
+                creds = ccache.getCredential(principal)
+                if creds is not None:
+                    tgt = creds.toTGT()
+                    nxc_logger.debug("Using TGT from cache")
+                    return tgt
+                else:
+                    nxc_logger.debug("No valid credentials found in cache")
+            except Exception:
+                pass
 
         # No TGT in cache, request it
         user_name = Principal(self.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
