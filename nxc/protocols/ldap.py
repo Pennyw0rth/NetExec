@@ -989,8 +989,8 @@ class ldap(connection):
                                 )
                                 self.logger.highlight(f"sAMAccountName: {sAMAccountName} memberOf: {memberOf} pwdLastSet: {pwdLastSet} lastLogon:{lastLogon}")
                                 self.logger.highlight(f"{r}")
-                                if self.args.output_file:
-                                    with open(self.args.output_file, "a+") as hash_kerberoasting:
+                                if self.args.kerberoasting:
+                                    with open(self.args.kerberoasting, "a+") as hash_kerberoasting:
                                         hash_kerberoasting.write(r + "\n")
                                 dejavue.append(sAMAccountName)
                             except Exception as e:
