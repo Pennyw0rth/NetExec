@@ -197,7 +197,7 @@ class NXCModule:
     """
 
     name = "daclread"
-    description = "Read and backup the Discretionary Access Control List of objects. Be careful, this module cannot read the DACLS recursively, more explains in the options."
+    description = "Read and backup the Discretionary Access Control List of objects. Be careful, this module cannot read the DACLS recursively, see more explanation in the options."
     supported_protocols = ["ldap"]
     opsec_safe = True
     multiple_hosts = False
