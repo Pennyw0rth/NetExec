@@ -107,11 +107,6 @@ class NXCAdapter(logging.LoggerAdapter):
 
     def fail(self, msg, color="red", *args, **kwargs):
         """Prints a failure (may or may not be an error) - e.g. login creds didn't work"""
-        try:
-            if self.extra and "protocol" in self.extra and not called_from_cmd_args():
-                return
-        except AttributeError:
-            pass
         msg, kwargs = self.format(f"{colored('[-]', color, attrs=['bold'])} {msg}", kwargs)
         text = Text.from_ansi(msg)
         nxc_console.print(text, *args, **kwargs)
