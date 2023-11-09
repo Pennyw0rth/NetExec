@@ -5,22 +5,7 @@
 from ctypes import c_uint8, c_uint16, c_uint32, c_uint64, Structure
 import socket
 import struct
-
-
-class NXCModule:
-    name = "ms17-010"
-    description = "MS17-010 - EternalBlue - NOT TESTED OUTSIDE LAB ENVIRONMENT"
-    supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
-
-    def options(self, context, module_options):
-        """ """
-
-    def on_login(self, context, connection):
-        if check(connection.host):
-            context.log.highlight("VULNERABLE")
-            context.log.highlight("Next step: https://www.rapid7.com/db/modules/exploit/windows/smb/ms17_010_eternalblue/")
+from nxc.logger import nxc_logger
 
 
 class SmbHeader(Structure):
@@ -45,373 +30,428 @@ class SmbHeader(Structure):
         ("multiplex_id", c_uint16),
     ]
 
-    def __new__(cls, buffer=None):
-        return cls.from_buffer_copy(buffer)
+    def __init__(self, buffer):
+        nxc_logger.debug("server_component : %04x" % self.server_component)
+        nxc_logger.debug("smb_command      : %01x" % self.smb_command)
+        nxc_logger.debug("error_class      : %01x" % self.error_class)
+        nxc_logger.debug("error_code       : %02x" % self.error_code)
+        nxc_logger.debug("flags            : %01x" % self.flags)
+        nxc_logger.debug("flags2           : %02x" % self.flags2)
+        nxc_logger.debug("process_id_high  : %02x" % self.process_id_high)
+        nxc_logger.debug("signature        : %08x" % self.signature)
+        nxc_logger.debug("reserved2        : %02x" % self.reserved2)
+        nxc_logger.debug("tree_id          : %02x" % self.tree_id)
+        nxc_logger.debug("process_id       : %02x" % self.process_id)
+        nxc_logger.debug("user_id          : %02x" % self.user_id)
+        nxc_logger.debug("multiplex_id     : %02x" % self.multiplex_id)
+
+    def __new__(self, buffer=None):
+        nxc_logger.debug(f"Creating SMB_HEADER object from buffer: {buffer}")
+        return self.from_buffer_copy(buffer)
 
 
-def generate_smb_proto_payload(*protos):
-    """
-    Generates an SMB Protocol payload by concatenating a list of packet protos.
+class NXCModule:
+    name = "ms17-010"
+    description = "MS17-010 - EternalBlue - NOT TESTED OUTSIDE LAB ENVIRONMENT"
+    supported_protocols = ["smb"]
+    opsec_safe = True
+    multiple_hosts = True
 
-    Args:
-    ----
-        *protos (list): List of packet protos.
+    def options(self, context, module_options):
+        """ """
+        self.logger = context.log
 
-    Returns:
-    -------
-        str: The generated SMB Protocol payload.
-    """
-    # Initialize an empty list to store the hex data
-    hex_data = []
-
-    # Iterate over each proto in the input list
-    for proto in protos:
-        # Extend the hex_data list with the elements of the current proto
-        hex_data.extend(proto)
-
-    # Join the elements of the hex_data list into a single string and return it
-    return "".join(hex_data)
-
-
-def calculate_doublepulsar_xor_key(s):
-    """
-    Calculate Doublepulsar Xor Key.
-
-    Args:
-    ----
-        s (int): The input value.
-
-    Returns:
-    -------
-        int: The calculated xor key.
-    """
-    # Shift the value 16 bits to the left and combine it with the value shifted 8 bits to the left
-    # OR the result with s shifted 16 bits to the right and combined with s masked with 0xFF0000
-    temp = ((s & 0xFF00) | (s << 16)) << 8 | (((s >> 16) | s & 0xFF0000) >> 8)
-
-    # Multiply the temp value by 2 and perform a bitwise XOR with 0xFFFFFFFF
-    return 2 * temp ^ 0xFFFFFFFF
+    def on_login(self, context, connection):
+        if self.check(connection.host):
+            context.log.highlight("VULNERABLE")
+            context.log.highlight("Next step: https://www.rapid7.com/db/modules/exploit/windows/smb/ms17_010_eternalblue/")
 
 
 
-def negotiate_proto_request():
-    """Generate a negotiate_proto_request packet."""
-    # Define the NetBIOS header
-    netbios = [
-        "\x00",  # Message Type
-        "\x00\x00\x54",  # Length
-    ]
+    def generate_smb_proto_payload(self, *protos):
+        """
+        Flattens a nested list and merges all bytes objects into a single bytes object.
 
-    # Define the SMB header
-    smb_header = [
-        "\xFF\x53\x4D\x42",  # Server Component
-        "\x72",  # SMB Command
-        "\x00\x00\x00\x00",  # NT Status
-        "\x18",  # Flags
-        "\x01\x28",  # Flags2
-        "\x00\x00",  # Process ID High
-        "\x00\x00\x00\x00\x00\x00\x00\x00",  # Signature
-        "\x00\x00",  # Reserved
-        "\x00\x00",  # Tree ID
-        "\x2F\x4B",  # Process ID
-        "\x00\x00",  # User ID
-        "\xC5\x5E",  # Multiplex ID
-    ]
+        Args:
+        ----
+            *protos (list): The list to flatten and merge.
 
-    # Define the negotiate_proto_request
-    negotiate_proto_request = [
-        "\x00",  # Word Count
-        "\x31\x00",  # Byte Count
-        "\x02",  # Requested Dialects Count
-        "\x4C\x41\x4E\x4D\x41\x4E\x31\x2E\x30\x00",  # Requested Dialects
-        "\x02",  # Requested Dialects Count
-        "\x4C\x4D\x31\x2E\x32\x58\x30\x30\x32\x00",  # Requested Dialects
-        "\x02",  # Requested Dialects Count
-        "\x4E\x54\x20\x4C\x41\x4E\x4D\x41\x4E\x20\x31\x2E\x30\x00",  # Requested Dialects
-        "\x02",  # Requested Dialects Count
-        "\x4E\x54\x20\x4C\x4D\x20\x30\x2E\x31\x32\x00",  # Requested Dialects
-    ]
+        Returns:
+        -------
+            bytes: The merged bytes object.
+        """
+        self.logger.debug("generate smb proto payload")
+        self.logger.debug(f"Protos: {protos}")
 
-    # Return the generated SMB protocol payload
-    return generate_smb_proto_payload(netbios, smb_header, negotiate_proto_request)
+        hex_data = b""
+        for proto in protos:
+            if isinstance(proto, list):
+                hex_data += self.generate_smb_proto_payload(*proto)
+            elif isinstance(proto, bytes):
+                hex_data += proto
+
+        self.logger.debug(f"Packed proto data: {hex_data}")
+        return hex_data
 
 
-def session_setup_andx_request():
-    """Generate session setup andx request."""
-    # Define the NetBIOS bytes
-    netbios = [
-        "\x00",  # length
-        "\x00\x00\x63",  # session service
-    ]
+    def calculate_doublepulsar_xor_key(self, s):
+        """
+        Calculate Doublepulsar Xor Key.
 
-    # Define the SMB header bytes
-    smb_header = [
-        "\xFF\x53\x4D\x42",  # server component
-        "\x73",  # command
-        "\x00\x00\x00\x00",  # NT status
-        "\x18",  # flags
-        "\x01\x20",  # flags2
-        "\x00\x00",  # PID high
-        "\x00\x00\x00\x00\x00\x00\x00\x00",  # signature
-        "\x00\x00",  # reserved
-        "\x00\x00",  # tid
-        "\x2F\x4B",  # pid
-        "\x00\x00",  # uid
-        "\xC5\x5E",  # mid
-    ]
+        Args:
+        ----
+            s (int): The input value.
 
-    # Define the session setup andx request bytes
-    session_setup_andx_request = [
-        "\x0D",  # word count
-        "\xFF",  # andx command
-        "\x00",  # reserved
-        "\x00\x00",  # andx offset
-        "\xDF\xFF",  # max buffer
-        "\x02\x00",  # max mpx count
-        "\x01\x00",  # VC number
-        "\x00\x00\x00\x00",  # session key
-        "\x00\x00",  # ANSI password length
-        "\x00\x00",  # Unicode password length
-        "\x00\x00\x00\x00",  # reserved
-        "\x40\x00\x00\x00",  # capabilities
-        "\x26\x00",  # byte count
-        "\x00",  # account name length
-        "\x2e\x00",  # account name offset
-        "\x57\x69\x6e\x64\x6f\x77\x73\x20\x32\x30\x30\x30\x20\x32\x31\x39\x35\x00",  # account name
-        "\x57\x69\x6e\x64\x6f\x77\x73\x20\x32\x30\x30\x30\x20\x35\x2e\x30\x00",  # primary domain
-    ]
-
-    # Call the generate_smb_proto_payload function and return the result
-    return generate_smb_proto_payload(netbios, smb_header, session_setup_andx_request)
+        Returns:
+        -------
+            int: The calculated xor key.
+        """
+        nxc_logger.debug(f"Calculating Doublepulsar XOR key for: {s}")
+        x = (2 * s ^ (((s & 0xff00 | (s << 16)) << 8) | (((s >> 16) | s & 0xff0000) >> 8)))
+        return x & 0xffffffff  # truncate to 32 bits
 
 
-def tree_connect_andx_request(ip: str, userid: str) -> str:
-    """Generate tree connect andx request.
 
-    Args:
-    ----
-        ip (str): The IP address.
-        userid (str): The user ID.
+    def negotiate_proto_request(self):
+        """Generate a negotiate_proto_request packet."""
+        self.logger.debug("generate negotiate proto request")
 
-    Returns:
-    -------
-        bytes: The generated tree connect andx request payload.
-    """
-    # Initialize the netbios header
-    netbios = [b"\x00", b"\x00\x00\x47"]
+        # Define the NetBIOS header
+        netbios = [
+            b"\x00",  # Message Type
+            b"\x00\x00\x54",  # Length
+        ]
 
-    # Initialize the SMB header
-    smb_header = [
-        b"\xFF\x53\x4D\x42",
-        b"\x75",
-        b"\x00\x00\x00\x00",
-        b"\x18",
-        b"\x01\x20",
-        b"\x00\x00",
-        b"\x00\x00\x00\x00\x00\x00\x00\x00",
-        b"\x00\x00",
-        b"\x00\x00",
-        b"\x2F\x4B",
-        userid,
-        b"\xC5\x5E",
-    ]
+        # Define the SMB header
+        smb_header = [
+            b"\xFF\x53\x4D\x42",  # Server Component
+            b"\x72",  # SMB Command
+            b"\x00\x00\x00\x00",  # NT Status
+            b"\x18",  # Flags
+            b"\x01\x28",  # Flags2
+            b"\x00\x00",  # Process ID High
+            b"\x00\x00\x00\x00\x00\x00\x00\x00",  # Signature
+            b"\x00\x00",  # Reserved
+            b"\x00\x00",  # Tree ID
+            b"\x2F\x4B",  # Process ID
+            b"\x00\x00",  # User ID
+            b"\xC5\x5E",  # Multiplex ID
+        ]
 
-    # Create the IPC string
-    ipc = f"\\\\{ip}\\IPC$\\x00"
+        # Define the negotiate_proto_request
+        negotiate_proto_request = [
+            b"\x00",  # Word Count
+            b"\x31\x00",  # Byte Count
+            b"\x02",  # Requested Dialects Count
+            b"\x4C\x41\x4E\x4D\x41\x4E\x31\x2E\x30\x00",  # Requested Dialects: LANMAN1.0
+            b"\x02",  # Requested Dialects Count
+            b"\x4C\x4D\x31\x2E\x32\x58\x30\x30\x32\x00",  # Requested Dialects: LM1.2X002
+            b"\x02",  # Requested Dialects Count
+            b"\x4E\x54\x20\x4C\x41\x4E\x4D\x41\x4E\x20\x31\x2E\x30\x00",  # Requested Dialects: NT LANMAN 1.0
+            b"\x02",  # Requested Dialects Count
+            b"\x4E\x54\x20\x4C\x4D\x20\x30\x2E\x31\x32\x00",  # Requested Dialects: NT LM 0.12
+        ]
 
-    # Initialize the tree connect andx request
-    tree_connect_andx_request = [
-        b"\x04",
-        b"\xFF",
-        b"\x00",
-        b"\x00\x00",
-        b"\x00\x00",
-        b"\x01\x00",
-        b"\x1A\x00",
-        b"\x00",
-        ipc.encode(),
-        b"\x3f\x3f\x3f\x3f\x3f\x00",
-    ]
-
-    # Calculate the length of the payload
-    length = len(b"".join(smb_header)) + len(b"".join(tree_connect_andx_request))
-
-    # Update the length in the netbios header
-    netbios[1] = struct.pack(">L", length)[-3:]
-
-    # Generate the final SMB protocol payload
-    return generate_smb_proto_payload(netbios, smb_header, tree_connect_andx_request)
+        # Return the generated SMB protocol payload
+        return self.generate_smb_proto_payload(netbios, smb_header, negotiate_proto_request)
 
 
-def peeknamedpipe_request(treeid, processid, userid, multiplex_id):
-    """
-    Generate tran2 request.
+    def session_setup_andx_request(self):
+        """Generate session setup andx request."""
+        self.logger.debug("generate session setup andx request"
+        )
+        # Define the NetBIOS bytes
+        netbios = [
+            b"\x00",  # length
+            b"\x00\x00\x63",  # session service
+        ]
 
-    Args:
-    ----
-        treeid (str): The tree ID.
-        processid (str): The process ID.
-        userid (str): The user ID.
-        multiplex_id (str): The multiplex ID.
+        # Define the SMB header bytes
+        smb_header = [
+            b"\xFF\x53\x4D\x42",  # server component: .SMB
+            b"\x73",  # command: Session Setup AndX
+            b"\x00\x00\x00\x00",  # NT status
+            b"\x18",  # flags
+            b"\x01\x20",  # flags2
+            b"\x00\x00",  # PID high
+            b"\x00\x00\x00\x00\x00\x00\x00\x00",  # signature
+            b"\x00\x00",  # reserved
+            b"\x00\x00",  # tree id
+            b"\x2F\x4B",  # pid
+            b"\x00\x00",  # uid
+            b"\xC5\x5E",  # multiplex id
+        ]
 
-    Returns:
-    -------
-        str: The generated SMB protocol payload.
-    """
-    # Set the necessary values for the netbios header
-    netbios = ["\x00", "\x00\x00\x4a"]
+        # Define the session setup andx request bytes
+        session_setup_andx_request = [
+            b"\x0D",  # word count
+            b"\xFF",  # andx command: no further commands
+            b"\x00",  # reserved
+            b"\x00\x00",  # andx offset
+            b"\xDF\xFF",  # max buffer
+            b"\x02\x00",  # max mpx count
+            b"\x01\x00",  # VC number
+            b"\x00\x00\x00\x00",  # session key
+            b"\x00\x00",  # ANSI password length
+            b"\x00\x00",  # Unicode password length
+            b"\x00\x00\x00\x00",  # reserved
+            b"\x40\x00\x00\x00",  # capabilities
+            b"\x26\x00",  # byte count
+            b"\x00",  # account
+            b"\x2e\x00",  # primary domain
+            b"\x57\x69\x6e\x64\x6f\x77\x73\x20\x32\x30\x30\x30\x20\x32\x31\x39\x35\x00",  # Native OS: Windows 2000 2195
+            b"\x57\x69\x6e\x64\x6f\x77\x73\x20\x32\x30\x30\x30\x20\x35\x2e\x30\x00",  # Native OS: Windows 2000 5.0
+        ]
 
-    # Set the values for the SMB header
-    smb_header = [
-        "\xFF\x53\x4D\x42",  # Server Component
-        "\x25",  # SMB Command
-        "\x00\x00\x00\x00",  # NT Status
-        "\x18",  # Flags2
-        "\x01\x28",  # Process ID High & Multiplex ID
-        "\x00\x00",  # Tree ID
-        "\x00\x00\x00\x00\x00\x00\x00\x00",  # NT Time
-        "\x00\x00",  # Process ID Low
-        treeid,  # Tree ID
-        processid,  # Process ID
-        userid,  # User ID
-        multiplex_id,  # Multiplex ID
-    ]
-
-    # Set the values for the transaction request
-    tran_request = [
-        "\x10",  # Word Count
-        "\x00\x00",  # Total Parameter Count
-        "\x00\x00",  # Total Data Count
-        "\xff\xff",  # Max Parameter Count
-        "\xff\xff",  # Max Data Count
-        "\x00",  # Max Setup Count
-        "\x00",  # Reserved
-        "\x00\x00",  # Flags
-        "\x00\x00\x00\x00",  # Timeout
-        "\x00\x00",  # Reserved
-        "\x00\x00",  # Parameter Count
-        "\x4a\x00",  # Parameter Offset
-        "\x00\x00",  # Data Count
-        "\x4a\x00",  # Data Offset
-        "\x02",  # Setup Count
-        "\x00",  # Reserved
-        "\x23\x00",  # Function Code
-        "\x00\x00",  # Reserved2
-        "\x07\x00",  # Byte Count
-        "\x5c\x50\x49\x50\x45\x5c\x00",  # Transaction Name
-    ]
-
-    # Generate the SMB protocol payload
-    return generate_smb_proto_payload(netbios, smb_header, tran_request)
+        return self.generate_smb_proto_payload(netbios, smb_header, session_setup_andx_request)
 
 
-def trans2_request(treeid: str, processid: str, userid: str, multiplex_id: str) -> str:
-    """Generate trans2 request.
+    def tree_connect_andx_request(self, ip, userid):
+        """Generate tree connect andx request.
 
-    Args:
-    ----
-        treeid: The treeid parameter.
-        processid: The processid parameter.
-        userid: The userid parameter.
-        multiplex_id: The multiplex_id parameter.
+        Args:
+        ----
+            ip (str): The IP address.
+            userid (str): The user ID.
 
-    Returns:
-    -------
-        The generated SMB protocol payload.
-    """
-    # Define the netbios section of the SMB request
-    netbios = ["\x00", "\x00\x00\x4f"]
+        Returns:
+        -------
+            bytes: The generated tree connect andx request payload.
+        """
+        self.logger.debug("generate tree connect andx request")
 
-    # Define the SMB header section of the SMB request
-    smb_header = [
-        "\xFF\x53\x4D\x42",
-        "\x32",
-        "\x00\x00\x00\x00",
-        "\x18",
-        "\x07\xc0",
-        "\x00\x00",
-        "\x00\x00\x00\x00\x00\x00\x00\x00",
-        "\x00\x00",
-        treeid,
-        processid,
-        userid,
-        multiplex_id,
-    ]
+        # Initialize the netbios header
+        netbios = [
+            b"\x00",  # 'Message_Type'
+            b"\x00\x00\x47"  # 'Length'
+        ]
 
-    # Define the trans2 request section of the SMB request
-    trans2_request = [
-        "\x0f",
-        "\x0c\x00",
-        "\x00\x00",
-        "\x01\x00",
-        "\x00\x00",
-        "\x00",
-        "\x00",
-        "\x00\x00",
-        "\xa6\xd9\xa4\x00",
-        "\x00\x00",
-        "\x0c\x00",
-        "\x42\x00",
-        "\x00\x00",
-        "\x4e\x00",
-        "\x01",
-        "\x00",
-        "\x0e\x00",
-        "\x00\x00",
-        "\x0c\x00" + "\x00" * 12,
-    ]
+        # Initialize the SMB header
+        smb_header = [
+            b"\xFF\x53\x4D\x42",  # server_compnent: .SMB
+            b"\x75",  # smb_command: Tree Connect AndX
+            b"\x00\x00\x00\x00",  # 'nt_status'
+            b"\x18",  # 'flags'
+            b"\x01\x20",  # 'flags2'
+            b"\x00\x00",  # 'process_id_high'
+            b"\x00\x00\x00\x00\x00\x00\x00\x00",  # 'signature'
+            b"\x00\x00",  # 'reserved'
+            b"\x00\x00",  # 'tree_id'
+            b"\x2F\x4B",  # 'process_id'
+            userid,  # 'user_id'
+            b"\xC5\x5E",  # 'multiplex_id'
+        ]
 
-    # Generate the SMB protocol payload by combining the netbios, smb_header, and trans2_request sections
-    return generate_smb_proto_payload(netbios, smb_header, trans2_request)
+        # Create the IPC string
+        ipc = f"\\\\{ip}\IPC$\x00"
+        self.logger.debug(f"Connecting to {ip} with UID: {userid.hex()}")
+
+        # Initialize the tree connect andx request
+        tree_connect_andx_request = [
+            b"\x04",  # Word Count
+            b"\xFF",  # AndXCommand: No further commands
+            b"\x00",  # Reserved
+            b"\x00\x00",  # AndXOffset
+            b"\x00\x00",  # Flags
+            b"\x01\x00",  # Password Length
+            b"\x1A\x00",  # Byte Count
+            b"\x00",  # Password
+            ipc.encode(),  # \\xxx.xxx.xxx.xxx\IPC$
+            b"\x3f\x3f\x3f\x3f\x3f\x00",  # Service
+        ]
+
+        # Calculate the length of the payload
+        length = len(b"".join(smb_header)) + len(b"".join(tree_connect_andx_request))
+        self.logger.debug(f"Length of payload: {length}")
+
+        # Update the length in the netbios header
+        netbios[1] = struct.pack(">L", length)[-3:]
+
+        self.logger.debug(f"Netbios: {netbios}")
+        self.logger.debug(f"SMB Header: {smb_header}")
+        self.logger.debug(f"Tree Connect AndX Request: {tree_connect_andx_request}")
+
+        # Generate the final SMB protocol payload
+        return self.generate_smb_proto_payload(netbios, smb_header, tree_connect_andx_request)
 
 
-def check(ip, port=445):
-    """Check if MS17_010 SMB Vulnerability exists.
+    def peeknamedpipe_request(self, treeid, processid, userid, multiplex_id):
+        """
+        Generate tran2 request.
 
-    Args:
-    ----
-        ip (str): The IP address of the target machine.
-        port (int, optional): The port number to connect to. Defaults to 445.
+        Args:
+        ----
+            treeid (str): The tree ID.
+            processid (str): The process ID.
+            userid (str): The user ID.
+            multiplex_id (str): The multiplex ID.
 
-    Returns:
-    -------
-        bool: True if the vulnerability exists, False otherwise.
-    """
-    try:
+        Returns:
+        -------
+            str: The generated SMB protocol payload.
+        """
+        self.logger.debug("generate peeknamedpipe request")
+
+        # Set the necessary values for the netbios header
+        netbios = [
+            b"\x00",  # message type
+            b"\x00\x00\x4a"  # length
+        ]
+
+        # Set the values for the SMB header
+        smb_header = [
+            b"\xFF\x53\x4D\x42",  # Server Component: .SMB
+            b"\x25",  # SMB Command: Trans2
+            b"\x00\x00\x00\x00",  # NT Status
+            b"\x18",  # flags
+            b"\x01\x28",  # flags2
+            b"\x00\x00",  # pid high
+            b"\x00\x00\x00\x00\x00\x00\x00\x00",  # sig
+            b"\x00\x00",  # Reserved
+            treeid,  # Tree ID
+            processid,  # Process ID
+            userid,  # User ID
+            multiplex_id,  # Multiplex ID
+        ]
+
+        # Set the values for the transaction request
+        tran_request = [
+            b"\x10",  # Word Count
+            b"\x00\x00",  # Total Parameter Count
+            b"\x00\x00",  # Total Data Count
+            b"\xff\xff",  # Max Parameter Count
+            b"\xff\xff",  # Max Data Count
+            b"\x00",  # Max Setup Count
+            b"\x00",  # Reserved
+            b"\x00\x00",  # Flags
+            b"\x00\x00\x00\x00",  # Timeout
+            b"\x00\x00",  # Reserved
+            b"\x00\x00",  # Parameter Count
+            b"\x4a\x00",  # Parameter Offset
+            b"\x00\x00",  # Data Count
+            b"\x4a\x00",  # Data Offset
+            b"\x02",  # Setup Count
+            b"\x00",  # Reserved
+            b"\x23\x00",  # SMB Pipe Protocol: Function: PeekNamedPipe (0x0023)
+            b"\x00\x00",  # SMB Pipe Protocol: FID
+            b"\x07\x00",
+            b"\x5c\x50\x49\x50\x45\x5c\x00",  # \PIPE\
+        ]
+
+        return self.generate_smb_proto_payload(netbios, smb_header, tran_request)
+
+
+    def trans2_request(self, treeid, processid, userid, multiplex_id):
+        """Generate trans2 request.
+
+        Args:
+        ----
+            treeid: The treeid parameter.
+            processid: The processid parameter.
+            userid: The userid parameter.
+            multiplex_id: The multiplex_id parameter.
+
+        Returns:
+        -------
+            The generated SMB protocol payload.
+        """
+        self.logger.debug("generate trans2 request")
+
+        # Define the netbios section of the SMB request
+        netbios = [
+            b"\x00",
+            b"\x00\x00\x4f"
+        ]
+
+        # Define the SMB header section of the SMB request
+        smb_header = [
+            b"\xFF\x53\x4D\x42",  # 'server_component': .SMB
+            b"\x32",  # 'smb_command': Trans2
+            b"\x00\x00\x00\x00",
+            b"\x18",
+            b"\x07\xc0",
+            b"\x00\x00",
+            b"\x00\x00\x00\x00\x00\x00\x00\x00",
+            b"\x00\x00",
+            treeid,
+            processid,
+            userid,
+            multiplex_id,
+        ]
+
+        # Define the trans2 request section of the SMB request
+        trans2_request = [
+            b"\x0f",
+            b"\x0c\x00",
+            b"\x00\x00",
+            b"\x01\x00",
+            b"\x00\x00",
+            b"\x00",
+            b"\x00",
+            b"\x00\x00",
+            b"\xa6\xd9\xa4\x00",  # Timeout: 3 hours, 3.622 seconds
+            b"\x00\x00",
+            b"\x0c\x00",
+            b"\x42\x00",
+            b"\x00\x00",
+            b"\x4e\x00",
+            b"\x01",
+            b"\x00",
+            b"\x0e\x00",  # subcommand: SESSION_SETUP
+            b"\x00\x00",
+            b"\x0c\x00" + b"\x00" * 12,
+        ]
+
+        return self.generate_smb_proto_payload(netbios, smb_header, trans2_request)
+
+
+    def check(self, ip, port=445):
+        """Check if MS17_010 SMB Vulnerability exists.
+
+        Args:
+        ----
+            ip (str): The IP address of the target machine.
+            port (int, optional): The port number to connect to. Defaults to 445.
+
+        Returns:
+        -------
+            bool: True if the vulnerability exists, False otherwise.
+        """
         buffersize = 1024
         timeout = 5.0
 
-        # Create a socket and connect to the target IP and port
+        # Send smb request based on socket.
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client.settimeout(timeout)
         client.connect((ip, port))
 
-        # Send negotiate protocol request and receive response
-        raw_proto = negotiate_proto_request()
+        # SMB - Negotiate Protocol Request
+        raw_proto = self.negotiate_proto_request()
         client.send(raw_proto)
         tcp_response = client.recv(buffersize)
 
-        # Send session setup request and receive response
-        raw_proto = session_setup_andx_request()
+        # SMB - Session Setup AndX Request
+        raw_proto = self.session_setup_andx_request()
         client.send(raw_proto)
         tcp_response = client.recv(buffersize)
+
         tcp_response[:4]
-        smb_header = tcp_response[4:36]
+        smb_header = tcp_response[4:36]   # SMB Header: 32 bytes
         smb = SmbHeader(smb_header)
 
         user_id = struct.pack("<H", smb.user_id)
 
-        # Extract native OS from session setup response
+        # parse native_os from Session Setup Andx Response
         session_setup_andx_response = tcp_response[36:]
-        session_setup_andx_response[9:].split("\x00")[0]
+        native_os = session_setup_andx_response[9:].split(b"\x00")[0]
 
-        # Send tree connect request and receive response
-        raw_proto = tree_connect_andx_request(ip, user_id)
+        # SMB - Tree Connect AndX Request
+        raw_proto = self.tree_connect_andx_request(ip, user_id)
         client.send(raw_proto)
         tcp_response = client.recv(buffersize)
 
         tcp_response[:4]
-        smb_header = tcp_response[4:36]
+        smb_header = tcp_response[4:36]   # SMB Header: 32 bytes
         smb = SmbHeader(smb_header)
 
         tree_id = struct.pack("<H", smb.tree_id)
@@ -419,8 +459,8 @@ def check(ip, port=445):
         user_id = struct.pack("<H", smb.user_id)
         multiplex_id = struct.pack("<H", smb.multiplex_id)
 
-        # Send peek named pipe request and receive response
-        raw_proto = peeknamedpipe_request(tree_id, process_id, user_id, multiplex_id)
+        # SMB - PeekNamedPipe Request
+        raw_proto = self.peeknamedpipe_request(tree_id, process_id, user_id, multiplex_id)
         client.send(raw_proto)
         tcp_response = client.recv(buffersize)
 
@@ -429,11 +469,30 @@ def check(ip, port=445):
         smb = SmbHeader(smb_header)
 
         nt_status = struct.pack("BBH", smb.error_class, smb.reserved1, smb.error_code)
+        self.logger.debug(f"NT Status: {nt_status}")
 
-        # Check the NT status to determine if the vulnerability exists
-        return nt_status == "\x05\x02\x00À"
+        # 0xC0000205 - STATUS_INSUFF_SERVER_RESOURCES - vulnerable
+        # 0xC0000008 - STATUS_INVALID_HANDLE
+        # 0xC0000022 - STATUS_ACCESS_DENIED
 
-    except Exception:
-        return False
-    finally:
+        if nt_status == b"\x05\x02\x00\xc0":
+            self.logger.highlight(f"[+] [{ip}] is likely VULNERABLE to MS17-010! ({native_os.decode()})")
+
+            # vulnerable to MS17-010, check for DoublePulsar infection
+            raw_proto = self.trans2_request(tree_id, process_id, user_id, multiplex_id)
+            client.send(raw_proto)
+            tcp_response = client.recv(buffersize)
+
+            tcp_response[:4]
+            smb_header = tcp_response[4:36]
+            smb = SmbHeader(smb_header)
+
+            if smb.multiplex_id == 0x0051:
+                key = self.calculate_doublepulsar_xor_key(smb.signature)
+                self.logger.highlight(f"Host is likely INFECTED with DoublePulsar! - XOR Key: {key.decode()}")
+        elif nt_status in (b"\x08\x00\x00\xc0", b"\x22\x00\x00\xc0"):
+            self.logger.fail(f"[-] [{ip}] does NOT appear vulnerable")
+        else:
+            self.logger.fail(f"[-] [{ip}] Unable to detect if this host is vulnerable")
+
         client.close()

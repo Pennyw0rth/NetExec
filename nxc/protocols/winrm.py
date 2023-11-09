@@ -6,6 +6,7 @@ import urllib3
 import tempfile
 import contextlib
 import platform
+import logging
 import xml.etree.ElementTree as ET
 
 from io import StringIO
@@ -46,6 +47,8 @@ class winrm(connection):
         connection.__init__(self, args, db, host)
 
     def proto_logger(self):
+        logging.getLogger("pypsrp").disabled = True
+        logging.getLogger("pypsrp.wsman").disabled = True
         self.logger = NXCAdapter(
             extra={
                 "protocol": "WINRM",
@@ -348,6 +351,7 @@ class winrm(connection):
         try:
             self.conn = Client(
                 self.host,
+                port=self.port,
                 auth="ntlm",
                 username=f"{self.domain}\\{self.username}",
                 password=self.password,
@@ -397,6 +401,7 @@ class winrm(connection):
         try:
             self.conn = Client(
                 self.host,
+                port=self.port,
                 auth="ntlm",
                 username=f"{self.domain}\\{self.username}",
                 password=f"{self.lmhash}:{self.nthash}",
