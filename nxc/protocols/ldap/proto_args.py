@@ -13,8 +13,8 @@ def proto_args(parser, std_parser, module_parser):
     no_smb_arg.make_required = [domain_arg]
 
     egroup = ldap_parser.add_argument_group("Retrevie hash on the remote DC", "Options to get hashes from Kerberos")
-    egroup.add_argument("--asreproast", help="Get AS_REP response ready to crack with hashcat")
-    egroup.add_argument("--kerberoasting", help="Get TGS ticket ready to crack with hashcat")
+    egroup.add_argument("--asreproast", help="Output AS_REP response to crack with hashcat to file")
+    egroup.add_argument("--kerberoasting", help="Output TGS ticket to crack with hashcat to file")
 
     vgroup = ldap_parser.add_argument_group("Retrieve useful information on the domain", "Options to to play with Kerberos")
     vgroup.add_argument("--trusted-for-delegation", action="store_true", help="Get the list of users and computers with flag TRUSTED_FOR_DELEGATION")
