@@ -103,8 +103,8 @@ class KerberosAttacks:
 
         return entry
 
-    def get_tgt_kerberoasting(self):
-        if self.args.use_kcache:
+    def get_tgt_kerberoasting(self, kcache=None):
+        if kcache:
             if getenv("KRB5CCNAME"):
                 nxc_logger.debug("KRB5CCNAME environment variable exists, attempting to use that...")
                 try:
@@ -170,12 +170,12 @@ class KerberosAttacks:
                 self.aesKey,
                 kdcHost=self.kdcHost,
             )
-        tgt = {}
-        tgt["KDC_REP"] = tgt
-        tgt["cipher"] = cipher
-        tgt["session_key"] = sessionKey
-        nxc_logger.debug(f"Final TGT: {tgt}")
-        return tgt
+        tgt_data = {}
+        tgt_data["KDC_REP"] = tgt
+        tgt_data["cipher"] = cipher
+        tgt_data["sessionKey"] = sessionKey
+        nxc_logger.debug(f"Final TGT: {tgt_data}")
+        return tgt_data
 
     def get_tgt_asroast(self, userName, requestPAC=True):
         client_name = Principal(userName, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
