@@ -197,7 +197,7 @@ class NXCModule:
     """
 
     name = "daclread"
-    description = "Read and backup the Discretionary Access Control List of objects. Based on the work of @_nwodtuhs and @BlWasp_. Be careful, this module cannot read the DACLS recursively, more explains in the  options."
+    description = "Read and backup the Discretionary Access Control List of objects. Be careful, this module cannot read the DACLS recursively, see more explanation in the options."
     supported_protocols = ["ldap"]
     opsec_safe = True
     multiple_hosts = False
@@ -218,6 +218,8 @@ class NXCModule:
         ACE_TYPE        The type of ACE to read (Allowed or Denied)
         RIGHTS          An interesting right to filter on ('FullControl', 'ResetPassword', 'WriteMembers', 'DCSync')
         RIGHTS_GUID     A right GUID that specify a particular rights to filter on
+
+        Based on the work of @_nwodtuhs and @BlWasp_.
         """
         self.context = context
 

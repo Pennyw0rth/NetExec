@@ -470,13 +470,16 @@ class NXCModule:
     """
 
     name = "spider_plus"
-    description = "List files recursively (excluding `EXCLUDE_FILTER` and `EXCLUDE_EXTS` extensions) and save JSON share-file metadata to the `OUTPUT_FOLDER`. If `DOWNLOAD_FLAG`=True, download files smaller then `MAX_FILE_SIZE` to the `OUTPUT_FOLDER`."
+    description = "List files recursively and save a JSON share-file metadata to the 'OUTPUT_FOLDER'. See module options for finer configuration."
     supported_protocols = ["smb"]
     opsec_safe = True  # Does the module touch disk?
     multiple_hosts = True  # Does the module support multiple hosts?
 
     def options(self, context, module_options):
         """
+        List files recursively (excluding `EXCLUDE_FILTER` and `EXCLUDE_EXTS` extensions) and save JSON share-file metadata to the `OUTPUT_FOLDER`.
+        If `DOWNLOAD_FLAG`=True, download files smaller then `MAX_FILE_SIZE` to the `OUTPUT_FOLDER`.
+
         DOWNLOAD_FLAG     Download all share folders/files (Default: False)
         STATS_FLAG        Disable file/download statistics (Default: True)
         EXCLUDE_EXTS      Case-insensitive extension filter to exclude (Default: ico,lnk)

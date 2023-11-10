@@ -103,22 +103,27 @@ class KerberosAttacks:
 
         return entry
 
-    def get_tgt_kerberoasting(self):
-        try:
-            ccache = CCache.loadFile(getenv("KRB5CCNAME"))
-            # retrieve user and domain information from CCache file if needed
-            domain = ccache.principal.realm["data"] if self.domain == "" else self.domain
-            nxc_logger.debug(f"Using Kerberos Cache: {getenv('KRB5CCNAME')}")
-            principal = f"krbtgt/{domain.upper()}@{domain.upper()}"
-            creds = ccache.getCredential(principal)
-            if creds is not None:
-                tgt = creds.toTGT()
-                nxc_logger.debug("Using TGT from cache")
-                return tgt
+    def get_tgt_kerberoasting(self, kcache=None):
+        if kcache:
+            if getenv("KRB5CCNAME"):
+                nxc_logger.debug("KRB5CCNAME environment variable exists, attempting to use that...")
+                try:
+                    ccache = CCache.loadFile(getenv("KRB5CCNAME"))
+                    # retrieve user and domain information from CCache file if needed
+                    domain = ccache.principal.realm["data"] if self.domain == "" else self.domain
+                    nxc_logger.debug(f"Using Kerberos Cache: {getenv('KRB5CCNAME')}")
+                    principal = f"krbtgt/{domain.upper()}@{domain.upper()}"
+                    creds = ccache.getCredential(principal)
+                    if creds is not None:
+                        tgt = creds.toTGT()
+                        nxc_logger.debug("Using TGT from cache")
+                        return tgt
+                    else:
+                        nxc_logger.debug("No valid credentials found in cache")
+                except Exception:
+                    pass
             else:
-                nxc_logger.debug("No valid credentials found in cache. ")
-        except Exception:
-            pass
+                nxc_logger.fail("KRB5CCNAME environment variable not found, unable to use Kerberos Cache")
 
         # No TGT in cache, request it
         user_name = Principal(self.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
@@ -138,6 +143,12 @@ class KerberosAttacks:
                     self.aesKey,
                     kdcHost=self.kdcHost,
                 )
+            except OSError as e:
+                if e.errno == 113:
+                    nxc_logger.fail(f"Unable to resolve KDC hostname: {e!s}")
+                else:
+                    nxc_logger.fail(f"Some other OSError occured: {e!s}")
+                return None
             except Exception as e:
                 nxc_logger.debug(f"TGT: {e!s}")
                 tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(
@@ -149,7 +160,6 @@ class KerberosAttacks:
                     self.aesKey,
                     kdcHost=self.kdcHost,
                 )
-
         else:
             tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(
                 user_name,
@@ -160,12 +170,12 @@ class KerberosAttacks:
                 self.aesKey,
                 kdcHost=self.kdcHost,
             )
-        tgt = {}
-        tgt["KDC_REP"] = tgt
-        tgt["cipher"] = cipher
-        tgt["session_key"] = sessionKey
-
-        return tgt
+        tgt_data = {}
+        tgt_data["KDC_REP"] = tgt
+        tgt_data["cipher"] = cipher
+        tgt_data["sessionKey"] = sessionKey
+        nxc_logger.debug(f"Final TGT: {tgt_data}")
+        return tgt_data
 
     def get_tgt_asroast(self, userName, requestPAC=True):
         client_name = Principal(userName, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
