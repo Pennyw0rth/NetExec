@@ -65,7 +65,7 @@ class ssh(connection):
         self.conn = paramiko.SSHClient()
         self.conn.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:
-            self.conn.connect(self.host, port=self.port, timeout=self.args.ssh_timeout, look_for_keys=False)
+            self.conn.connect(self.host, port=self.port, timeout=self.args.ssh_timeout, look_for_keys=False, allow_agent=False)
         except AuthenticationException:
             return True
         except SSHException:
@@ -195,9 +195,16 @@ class ssh(connection):
                     with open(self.args.key_file) as f:
                         private_key = f.read()
 
-                pkey = paramiko.RSAKey.from_private_key(StringIO(private_key), password)
-
-                self.conn._transport.auth_publickey(username, pkey)
+                pkey = paramiko.RSAKey.from_private_key(StringIO(private_key))
+                self.conn.connect(
+                    self.host,
+                    port=self.port,
+                    username=username,
+                    passphrase=password if password != "" else None,
+                    pkey=pkey,
+                    look_for_keys=False,
+                    allow_agent=False,
+                )
 
                 cred_id = self.db.add_credential(
                     "key",
@@ -208,7 +215,14 @@ class ssh(connection):
 
             else:
                 self.logger.debug(f"Logging {self.host} with username: {self.username}, password: {self.password}")
-                self.conn._transport.auth_password(username, password, fallback=True)
+                self.conn.connect(
+                    self.host,
+                    port=self.port,
+                    username=username,
+                    password=password,
+                    look_for_keys=False,
+                    allow_agent=False,
+                )
                 cred_id = self.db.add_credential("plaintext", username, password)
 
             # Some IOT devices will not raise exception in self.conn._transport.auth_password / self.conn._transport.auth_publickey
