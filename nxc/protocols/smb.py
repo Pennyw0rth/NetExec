@@ -1,5 +1,4 @@
 import ntpath
-import hashlib
 import binascii
 import os
 import re
@@ -44,7 +43,7 @@ from nxc.protocols.smb.smbspider import SMBSpider
 from nxc.protocols.smb.passpol import PassPolDump
 from nxc.protocols.smb.samruser import UserSamrDump
 from nxc.protocols.smb.samrfunc import SamrFunc
-from nxc.protocols.ldap.laps import LDAPConnect, LAPSv2Extract
+from nxc.protocols.ldap.laps import laps_search
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.helpers.logger import highlight
 from nxc.helpers.bloodhound import add_user_bh
@@ -65,7 +64,6 @@ from datetime import datetime
 from functools import wraps
 from traceback import format_exc
 import logging
-from json import loads
 from termcolor import colored
 import contextlib
 
@@ -253,104 +251,12 @@ class smb(connection):
         if self.args.local_auth:
             self.domain = self.hostname
 
-    def laps_search(self, username, password, ntlm_hash, domain):
-        self.logger.extra["protocol"] = "LDAP"
-        self.logger.extra["port"] = "389"
-
-        ldapco = LDAPConnect(self.domain, "389", self.domain)
-
-        if self.kerberos:
-            if self.kdcHost is None:
-                self.logger.fail("Add --kdcHost parameter to use laps with kerberos")
-                return False
-
-            connection = ldapco.kerberos_login(
-                domain,
-                username[0] if username else "",
-                password[0] if password else "",
-                ntlm_hash[0] if ntlm_hash else "",
-                kdcHost=self.kdcHost,
-                aesKey=self.aesKey,
-            )
-        else:
-            connection = ldapco.auth_login(
-                domain,
-                username[0] if username else "",
-                password[0] if password else "",
-                ntlm_hash[0] if ntlm_hash else "",
-            )
-        if not connection:
-            self.logger.fail(f"LDAP connection failed with account {username[0]}")
-
-            return False
-
-        search_filter = "(&(objectCategory=computer)(|(msLAPS-EncryptedPassword=*)(ms-MCS-AdmPwd=*)(msLAPS-Password=*))(name=" + self.hostname + "))"
-        attributes = [
-            "msLAPS-EncryptedPassword",
-            "msLAPS-Password",
-            "ms-MCS-AdmPwd",
-            "sAMAccountName",
-        ]
-        results = connection.search(searchFilter=search_filter, attributes=attributes, sizeLimit=0)
-
-        msMCSAdmPwd = ""
-        sAMAccountName = ""
-        username_laps = ""
-
-        from impacket.ldap import ldapasn1 as ldapasn1_impacket
-
-        results = [r for r in results if isinstance(r, ldapasn1_impacket.SearchResultEntry)]
-        if len(results) != 0:
-            for host in results:
-                values = {str(attr["type"]).lower(): attr["vals"][0] for attr in host["attributes"]}
-                if "mslaps-encryptedpassword" in values:
-                    msMCSAdmPwd = values["mslaps-encryptedpassword"]
-                    d = LAPSv2Extract(bytes(msMCSAdmPwd), username[0] if username else "", password[0] if password else "", domain, ntlm_hash[0] if ntlm_hash else "", self.args.kerberos, self.args.kdcHost, 339)
-                    try:
-                        data = d.run()
-                    except Exception as e:
-                        self.logger.fail(str(e))
-                        return None
-                    r = loads(data)
-                    msMCSAdmPwd = r["p"]
-                    username_laps = r["n"]
-                elif "mslaps-password" in values:
-                    r = loads(str(values["mslaps-password"]))
-                    msMCSAdmPwd = r["p"]
-                    username_laps = r["n"]
-                elif "ms-mcs-admpwd" in values:
-                    msMCSAdmPwd = str(values["ms-mcs-admpwd"])
-                else:
-                    self.logger.fail("No result found with attribute ms-MCS-AdmPwd or msLAPS-Password")
-            logging.debug(f"Host: {sAMAccountName:<20} Password: {msMCSAdmPwd} {self.hostname}")
-        else:
-            self.logger.fail(f"msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS property for {self.hostname}")
-
-            return False
-
-        self.username = username_laps if username_laps else self.args.laps
-        self.password = msMCSAdmPwd
-
-        if msMCSAdmPwd == "":
-            self.logger.fail(f"msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS property for {self.hostname}")
-
-            return False
-        if ntlm_hash:
-            hash_ntlm = hashlib.new("md4", msMCSAdmPwd.encode("utf-16le")).digest()
-            self.hash = binascii.hexlify(hash_ntlm).decode()
-
-        self.args.local_auth = True
-        self.domain = self.hostname
-        self.logger.extra["protocol"] = "SMB"
-        self.logger.extra["port"] = "445"
-        return True
-
     def print_host_info(self):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
         smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
         self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({smbv1})")
         if self.args.laps:
-            return self.laps_search(self.args.username, self.args.password, self.args.hash, self.domain)
+            return laps_search(self.args.username, self.args.password, self.args.hash, self.domain)
         return True
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):

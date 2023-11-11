@@ -1,5 +1,3 @@
-import binascii
-import hashlib
 import os
 import requests
 import urllib3
@@ -19,11 +17,12 @@ from nxc.config import process_secret
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.misc import gen_random_string
-from nxc.protocols.ldap.laps import LDAPConnect, LAPSv2Extract
+from nxc.protocols.ldap.laps import laps_search
 from nxc.logger import NXCAdapter
 
 
 urllib3.disable_warnings()
+
 
 class winrm(connection):
     def __init__(self, args, db, host):
@@ -90,94 +89,11 @@ class winrm(connection):
 
         if self.args.local_auth:
             self.domain = self.hostname
-        
+
         if self.domain is None:
             self.domain = ""
-        
+
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
-
-    def laps_search(self, username, password, ntlm_hash, domain):
-        ldapco = LDAPConnect(self.domain, "389", self.domain)
-
-        if self.kerberos:
-            if self.kdcHost is None:
-                self.logger.fail("Add --kdcHost parameter to use laps with kerberos")
-                return False
-
-            connection = ldapco.kerberos_login(
-                domain,
-                username[0] if username else "",
-                password[0] if password else "",
-                ntlm_hash[0] if ntlm_hash else "",
-                kdcHost=self.kdcHost,
-                aesKey=self.aesKey,
-            )
-        else:
-            connection = ldapco.auth_login(
-                domain,
-                username[0] if username else "",
-                password[0] if password else "",
-                ntlm_hash[0] if ntlm_hash else "",
-            )
-        if not connection:
-            self.logger.fail(f"LDAP connection failed with account {username[0]}")
-            return False
-
-        search_filter = "(&(objectCategory=computer)(|(msLAPS-EncryptedPassword=*)(ms-MCS-AdmPwd=*)(msLAPS-Password=*))(name=" + self.hostname + "))"
-        attributes = [
-            "msLAPS-EncryptedPassword",
-            "msLAPS-Password",
-            "ms-MCS-AdmPwd",
-            "sAMAccountName",
-        ]
-        results = connection.search(searchFilter=search_filter, attributes=attributes, sizeLimit=0)
-
-        msMCSAdmPwd = ""
-        sAMAccountName = ""
-        username_laps = ""
-
-        from impacket.ldap import ldapasn1 as ldapasn1_impacket
-
-        results = [r for r in results if isinstance(r, ldapasn1_impacket.SearchResultEntry)]
-        if len(results) != 0:
-            for host in results:
-                values = {str(attr["type"]).lower(): attr["vals"][0] for attr in host["attributes"]}
-                if "mslaps-encryptedpassword" in values:
-                    from json import loads
-
-                    msMCSAdmPwd = values["mslaps-encryptedpassword"]
-                    d = LAPSv2Extract(bytes(msMCSAdmPwd), username[0] if username else "", password[0] if password else "", domain, ntlm_hash[0] if ntlm_hash else "", self.args.kerberos, self.args.kdcHost, 339)
-                    data = d.run()
-                    r = loads(data)
-                    msMCSAdmPwd = r["p"]
-                    username_laps = r["n"]
-                elif "mslaps-password" in values:
-                    from json import loads
-
-                    r = loads(str(values["mslaps-password"]))
-                    msMCSAdmPwd = r["p"]
-                    username_laps = r["n"]
-                elif "ms-mcs-admpwd" in values:
-                    msMCSAdmPwd = str(values["ms-mcs-admpwd"])
-                else:
-                    self.logger.fail("No result found with attribute ms-MCS-AdmPwd or msLAPS-Password")
-            self.logger.debug(f"Host: {sAMAccountName:<20} Password: {msMCSAdmPwd} {self.hostname}")
-        else:
-            self.logger.fail(f"msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS property for {self.hostname}")
-            return False
-
-        self.username = username_laps if username_laps else self.args.laps
-        self.password = msMCSAdmPwd
-
-        if msMCSAdmPwd == "":
-            self.logger.fail(f"msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS property for {self.hostname}")
-            return False
-        if ntlm_hash:
-            hash_ntlm = hashlib.new("md4", msMCSAdmPwd.encode("utf-16le")).digest()
-            self.hash = binascii.hexlify(hash_ntlm).decode()
-
-        self.domain = self.hostname
-        return True
 
     def print_host_info(self):
         self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
@@ -185,7 +101,7 @@ class winrm(connection):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
 
         if self.args.laps:
-            return self.laps_search(self.args.username, self.args.password, self.args.hash, self.domain)
+            return laps_search(self.args.username, self.args.password, self.args.hash, self.domain)
         return True
 
     def create_conn_obj(self):
@@ -209,7 +125,7 @@ class winrm(connection):
             self.port = endpoints[protocol]["port"]
             try:
                 self.logger.debug(f"Requesting URL: {endpoints[protocol]['url']}")
-                res = requests.post(endpoints[protocol]["url"], verify=False, timeout=self.args.http_timeout) 
+                res = requests.post(endpoints[protocol]["url"], verify=False, timeout=self.args.http_timeout)
                 self.logger.debug(f"Received response code: {res.status_code}")
                 self.endpoint = endpoints[protocol]["url"]
                 self.ssl = endpoints[protocol]["ssl"]
@@ -222,7 +138,7 @@ class winrm(connection):
                 else:
                     self.logger.info(f"Other ConnectionError to WinRM service: {e}")
         return False
-    
+
     def check_if_admin(self):
         wsman = self.conn.wsman
         wsen = NAMESPACES["wsen"]
@@ -235,7 +151,7 @@ class winrm(connection):
         wsman.enumerate("http://schemas.microsoft.com/wbem/wsman/1/windows/shell", enum_msg)
         self.admin_privs = True
         return True
-        
+
     def plaintext_login(self, domain, username, password):
         self.admin_privs = False
         if not self.args.laps:
@@ -334,7 +250,7 @@ class winrm(connection):
             # Reference: https://github.com/diyan/pywinrm/issues/275
             if hasattr(e, "code") and e.code == 5:
                 self.logger.fail(f"Execute command failed, current user: '{self.domain}\\{self.username}' has no 'Invoke' rights to execute command (shell type: {shell_type})")
-                
+
                 if shell_type == "cmd":
                     self.logger.info("Cannot execute command via cmd, the user probably does not have invoke rights with Root WinRM listener - now switching to Powershell to attempt execution")
                     self.execute(payload, get_output, shell_type="powershell")
