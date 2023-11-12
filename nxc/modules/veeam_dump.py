@@ -155,7 +155,7 @@ class NXCModule:
             for account in output_stripped:
                 user, password = account.split(" ", 1)
                 password = password.replace("WHITESPACE_ERROR", " ")
-                context.log.highlight(user + ":" + f"{password}")
+                context.log.highlight(f"{user}:{password}")
                 if " " in password:
                     context.log.fail(f'Password contains whitespaces! The password for user "{user}" is: "{password}"')
         except ValueError:
