@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "netexec"
-version = "1.0.0"
+version = "1.1.0"
 description = "The Network Execution tool"
 authors = [
     "Marshall Hallenbeck <marshall.hallenbeck@gmail.com>",
