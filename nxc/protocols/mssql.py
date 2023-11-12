@@ -52,7 +52,7 @@ class mssql(connection):
             extra={
                 "protocol": "MSSQL",
                 "host": self.host,
-                "port": self.args.port,
+                "port": self.port,
                 "hostname": "None",
             }
         )
@@ -112,7 +112,7 @@ class mssql(connection):
 
     def create_conn_obj(self):
         try:
-            self.conn = tds.MSSQL(self.host, self.args.port)
+            self.conn = tds.MSSQL(self.host, self.port)
             self.conn.connect()
         except OSError as e:
             self.logger.debug(f"Error connecting to MSSQL: {e}")
@@ -190,6 +190,8 @@ class mssql(connection):
             self.logger.success(f"{domain}{username}{used_ccache} {self.mark_pwned()}")
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
+            if self.admin_privs:
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except Exception as e:
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
@@ -219,6 +221,7 @@ class mssql(connection):
 
             if self.admin_privs:
                 self.db.add_admin_user("plaintext", domain, username, password, self.host)
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
             domain = f"{domain}\\" if not self.args.local_auth else ""
             out = f"{domain}{username}:{process_secret(password)} {self.mark_pwned()}"
@@ -269,6 +272,7 @@ class mssql(connection):
 
             if self.admin_privs:
                 self.db.add_admin_user("hash", domain, username, ntlm_hash, self.host)
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
             out = f"{domain}\\{username} {process_secret(ntlm_hash)} {self.mark_pwned()}"
             self.logger.success(out)
