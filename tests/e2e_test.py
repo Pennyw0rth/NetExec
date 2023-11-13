@@ -108,6 +108,7 @@ def run_e2e_tests(args):
 
         while tasks:
             task = tasks.pop(0)
+            console.log(f"Running command: {task!s}")
             result = subprocess.Popen(
                 str(task),
                 shell=True,
@@ -129,7 +130,8 @@ def run_e2e_tests(args):
             if args.errors:
                 raw_text = text.decode("utf-8")
                 if "error" in raw_text.lower() or "failure" in raw_text.lower():
-                    console.log(f"[bold red] Error Detected: {raw_text}")
+                    console.log("[bold red]Error Detected:")
+                    console.log(f"{raw_text}")
 
             if args.verbose:
                 # this prints sorta janky, but it does its job
