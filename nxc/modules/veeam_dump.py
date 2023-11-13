@@ -149,12 +149,18 @@ class NXCModule:
             context.log.fail(output_stripped[0])
             return
 
-        for account in output_stripped:
-            user, password = account.split(" ", 1)
-            password = password.replace("WHITESPACE_ERROR", " ")
-            context.log.highlight(user + ":" + f"{password}")
-            if " " in password:
-                context.log.fail(f'Password contains whitespaces! The password for user "{user}" is: "{password}"')
+        # When powershell returns something else than the usernames and passwords account.split() will throw a ValueError.
+        # This is likely an error thrown by powershell, so we print the error and the output for debugging purposes.
+        try:
+            for account in output_stripped:
+                user, password = account.split(" ", 1)
+                password = password.replace("WHITESPACE_ERROR", " ")
+                context.log.highlight(f"{user}:{password}")
+                if " " in password:
+                    context.log.fail(f'Password contains whitespaces! The password for user "{user}" is: "{password}"')
+        except ValueError:
+            context.log.fail(f"Powershell returned unexpected output: {output_stripped}")
+            context.log.fail("Please report this issue on GitHub!")
 
     def on_admin_login(self, context, connection):
         self.checkVeeamInstalled(context, connection)
