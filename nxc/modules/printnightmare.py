@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import sys
 from impacket import system_errors
 from impacket.dcerpc.v5.rpcrt import DCERPCException
@@ -35,9 +32,7 @@ class NXCModule:
         self.port = None
 
     def options(self, context, module_options):
-        """
-        PORT    Port to check (defaults to 445)
-        """
+        """PORT    Port to check (defaults to 445)"""
         self.port = 445
         if "PORT" in module_options:
             self.port = int(module_options["PORT"])
@@ -46,7 +41,7 @@ class NXCModule:
         # Connect and bind to MS-RPRN (https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-rprn/848b8334-134a-4d02-aea4-03b673d6c515)
         stringbinding = r"ncacn_np:%s[\PIPE\spoolss]" % connection.host
 
-        context.log.info("Binding to %s" % (repr(stringbinding)))
+        context.log.info(f"Binding to {stringbinding!r}")
 
         rpctransport = transport.DCERPCTransportFactory(stringbinding)
 
@@ -71,7 +66,7 @@ class NXCModule:
             # Bind to MSRPC MS-RPRN UUID: 12345678-1234-ABCD-EF00-0123456789AB
             dce.bind(rprn.MSRPC_UUID_RPRN)
         except Exception as e:
-            context.log.fail("Failed to bind: %s" % e)
+            context.log.fail(f"Failed to bind: {e}")
             sys.exit(1)
 
         flags = APD_COPY_ALL_FILES | APD_COPY_FROM_DIRECTORY | APD_INSTALL_WARNED_DRIVER
@@ -119,13 +114,9 @@ class DCERPCSessionError(DCERPCException):
         if key in system_errors.ERROR_MESSAGES:
             error_msg_short = system_errors.ERROR_MESSAGES[key][0]
             error_msg_verbose = system_errors.ERROR_MESSAGES[key][1]
-            return "RPRN SessionError: code: 0x%x - %s - %s" % (
-                self.error_code,
-                error_msg_short,
-                error_msg_verbose,
-            )
+            return f"RPRN SessionError: code: 0x{self.error_code:x} - {error_msg_short} - {error_msg_verbose}"
         else:
-            return "RPRN SessionError: unknown error code: 0x%x" % self.error_code
+            return f"RPRN SessionError: unknown error code: 0x{self.error_code:x}"
 
 
 ################################################################################
@@ -191,26 +182,26 @@ class DRIVER_INFO_2_BLOB(Structure):
     def fromString(self, data, offset=0):
         Structure.fromString(self, data)
 
-        name = data[self["NameOffset"] + offset :].decode("utf-16-le")
+        name = data[self["NameOffset"] + offset:].decode("utf-16-le")
         name_len = name.find("\0")
         self["Name"] = checkNullString(name[:name_len])
 
-        self["ConfigFile"] = data[self["ConfigFileOffset"] + offset : self["DataFileOffset"] + offset].decode("utf-16-le")
-        self["DataFile"] = data[self["DataFileOffset"] + offset : self["DriverPathOffset"] + offset].decode("utf-16-le")
-        self["DriverPath"] = data[self["DriverPathOffset"] + offset : self["EnvironmentOffset"] + offset].decode("utf-16-le")
-        self["Environment"] = data[self["EnvironmentOffset"] + offset : self["NameOffset"] + offset].decode("utf-16-le")
+        self["ConfigFile"] = data[self["ConfigFileOffset"] + offset: self["DataFileOffset"] + offset].decode("utf-16-le")
+        self["DataFile"] = data[self["DataFileOffset"] + offset: self["DriverPathOffset"] + offset].decode("utf-16-le")
+        self["DriverPath"] = data[self["DriverPathOffset"] + offset: self["EnvironmentOffset"] + offset].decode("utf-16-le")
+        self["Environment"] = data[self["EnvironmentOffset"] + offset: self["NameOffset"] + offset].decode("utf-16-le")
 
 
 class DRIVER_INFO_2_ARRAY(Structure):
     def __init__(self, data=None, pcReturned=None):
         Structure.__init__(self, data=data)
-        self["drivers"] = list()
+        self["drivers"] = []
         remaining = data
         if data is not None:
             for _ in range(pcReturned):
                 attr = DRIVER_INFO_2_BLOB(remaining)
                 self["drivers"].append(attr)
-                remaining = remaining[len(attr) :]
+                remaining = remaining[len(attr):]
 
 
 class DRIVER_INFO_UNION(NDRUNION):

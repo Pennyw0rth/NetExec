@@ -1,15 +1,10 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import random
-import socket
-from socket import AF_INET, AF_INET6, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME
-from socket import getaddrinfo
 from os.path import isfile
 from threading import BoundedSemaphore
 from functools import wraps
 from time import sleep
 from ipaddress import ip_address
+from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
 
 from nxc.config import pwned_label
 from nxc.helpers.logger import highlight
@@ -17,6 +12,7 @@ from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
 
 from impacket.dcerpc.v5 import transport
+import sys
 
 sem = BoundedSemaphore(1)
 global_failed_logins = 0
@@ -24,40 +20,49 @@ user_failed_logins = {}
 
 
 def gethost_addrinfo(hostname):
-    try:
-        for res in getaddrinfo( hostname, None, AF_INET6, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
-            af, socktype, proto, canonname, sa = res
-        host = canonname if ip_address(sa[0]).is_link_local else sa[0]
-    except socket.gaierror:
-        for res in getaddrinfo( hostname, None, AF_INET, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
-            af, socktype, proto, canonname, sa = res
-        host = sa[0] if sa[0] else canonname
-    return host
+    is_ipv6 = False
+    is_link_local_ipv6 = False
+    address_info = {"AF_INET6": "", "AF_INET": ""}
+
+    for res in getaddrinfo(hostname, None, AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
+        af, _, _, canonname, sa = res
+        address_info[af.name] = sa[0]
+
+    # IPv4 preferred
+    if address_info["AF_INET"]:
+        host = address_info["AF_INET"]
+    else:
+        is_ipv6 = True
+        host, is_link_local_ipv6 = (canonname, True) if ip_address(address_info["AF_INET6"]).is_link_local else (address_info["AF_INET6"], False)
+
+    return host, is_ipv6, is_link_local_ipv6
+
 
 def requires_admin(func):
     def _decorator(self, *args, **kwargs):
         if self.admin_privs is False:
-            return
+            return None
         return func(self, *args, **kwargs)
 
     return wraps(func)(_decorator)
 
+
 def dcom_FirewallChecker(iInterface, timeout):
     stringBindings = iInterface.get_cinstance().get_string_bindings()
     for strBinding in stringBindings:
-        if strBinding['wTowerId'] == 7:
-            if strBinding['aNetworkAddr'].find('[') >= 0:
-                binding, _, bindingPort = strBinding['aNetworkAddr'].partition('[')
-                bindingPort = '[' + bindingPort
+        if strBinding["wTowerId"] == 7:
+            if strBinding["aNetworkAddr"].find("[") >= 0:
+                binding, _, bindingPort = strBinding["aNetworkAddr"].partition("[")
+                bindingPort = "[" + bindingPort
             else:
-                binding = strBinding['aNetworkAddr']
-                bindingPort = ''
+                binding = strBinding["aNetworkAddr"]
+                bindingPort = ""
 
             if binding.upper().find(iInterface.get_target().upper()) >= 0:
-                stringBinding = 'ncacn_ip_tcp:' + strBinding['aNetworkAddr'][:-1]
+                stringBinding = "ncacn_ip_tcp:" + strBinding["aNetworkAddr"][:-1]
                 break
-            elif iInterface.is_fqdn() and binding.upper().find(iInterface.get_target().upper().partition('.')[0]) >= 0:
-                stringBinding = 'ncacn_ip_tcp:%s%s' % (iInterface.get_target(), bindingPort)
+            elif iInterface.is_fqdn() and binding.upper().find(iInterface.get_target().upper().partition(".")[0]) >= 0:
+                stringBinding = f"ncacn_ip_tcp:{iInterface.get_target()}{bindingPort}"
     if "stringBinding" not in locals():
         return True, None
     try:
@@ -65,22 +70,25 @@ def dcom_FirewallChecker(iInterface, timeout):
         rpctransport.set_connect_timeout(timeout)
         rpctransport.connect()
         rpctransport.disconnect()
-    except:
+    except Exception as e:
+        nxc_logger.debug(f"Exception while connecting to {stringBinding}: {e}")
         return False, stringBinding
     else:
         return True, stringBinding
 
-class connection(object):
+
+class connection:
     def __init__(self, args, db, host):
         self.domain = None
         self.args = args
         self.db = db
         self.hostname = host
+        self.port = self.args.port
         self.conn = None
         self.admin_privs = False
         self.password = ""
         self.username = ""
-        self.kerberos = True if self.args.kerberos or self.args.use_kcache or self.args.aesKey else False
+        self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey)
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.kdcHost = None if not self.args.kdcHost else self.args.kdcHost
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
@@ -89,10 +97,10 @@ class connection(object):
         self.logger = nxc_logger
 
         try:
-            self.host = gethost_addrinfo(self.hostname)
+            self.host, self.is_ipv6, self.is_link_local_ipv6 = gethost_addrinfo(self.hostname)
             if self.args.kerberos:
                 self.host = self.hostname
-            self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={ 'True' if self.args.kerberos else 'False' }")
+            self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
         except Exception as e:
             self.logger.info(f"Error resolving hostname {self.hostname}: {e}")
             return
@@ -152,26 +160,46 @@ class connection(object):
         return
 
     def proto_flow(self):
-        self.logger.debug(f"Kicking off proto_flow")
+        self.logger.debug("Kicking off proto_flow")
         self.proto_logger()
         if self.create_conn_obj():
+            self.logger.debug("Created connection object")
             self.enum_host_info()
-            if self.print_host_info():
-                # because of null session
-                if self.login() or (self.username == "" and self.password == ""):
-                    if hasattr(self.args, "module") and self.args.module:
-                        self.call_modules()
-                    else:
-                        self.call_cmd_args()
+            if self.print_host_info() and (self.login() or (self.username == "" and self.password == "")):
+                if hasattr(self.args, "module") and self.args.module:
+                    self.logger.debug("Calling modules")
+                    self.call_modules()
+                else:
+                    self.logger.debug("Calling command arguments")
+                    self.call_cmd_args()
 
     def call_cmd_args(self):
-        for k, v in vars(self.args).items():
-            if hasattr(self, k) and hasattr(getattr(self, k), "__call__"):
-                if v is not False and v is not None:
-                    self.logger.debug(f"Calling {k}()")
-                    r = getattr(self, k)()
+        """Calls all the methods specified by the command line arguments
+
+        Iterates over the attributes of an object (self.args)
+        For each attribute, it checks if the object (self) has an attribute with the same name and if that attribute is callable (i.e., a function)
+        If both conditions are met and the attribute value is not False or None,
+        it calls the function and logs a debug message
+
+        Parameters
+        ----------
+            self (object): The instance of the class.
+
+        Returns
+        -------
+            None
+        """
+        for attr, value in vars(self.args).items():
+            if hasattr(self, attr) and callable(getattr(self, attr)) and value is not False and value is not None:
+                self.logger.debug(f"Calling {attr}()")
+                getattr(self, attr)()
 
     def call_modules(self):
+        """Calls modules and performs various actions based on the module's attributes.
+
+        It iterates over the modules specified in the command line arguments.
+        For each module, it loads the module and creates a context object, then calls functions based on the module's attributes.
+        """
         for module in self.module:
             self.logger.debug(f"Loading module {module.name} - {module}")
             module_logger = NXCAdapter(
@@ -208,7 +236,7 @@ class connection(object):
         global global_failed_logins
         global user_failed_logins
 
-        if username not in user_failed_logins.keys():
+        if username not in user_failed_logins:
             user_failed_logins[username] = 0
 
         user_failed_logins[username] += 1
@@ -225,53 +253,54 @@ class connection(object):
         if self.failed_logins == self.args.fail_limit:
             return True
 
-        if username in user_failed_logins.keys():
-            if self.args.ufail_limit == user_failed_logins[username]:
-                return True
+        if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:
+            return True
 
         return False
 
     def query_db_creds(self):
-        """
-        Queries the database for credentials to be used for authentication.
+        """Queries the database for credentials to be used for authentication.
+
         Valid cred_id values are:
             - a single cred_id
             - a range specified with a dash (ex. 1-5)
             - 'all' to select all credentials
 
-        :return: domain[], username[], owned[], secret[], cred_type[]
+        :return: domains[], usernames[], owned[], secrets[], cred_types[]
         """
-        domain = []
-        username = []
+        domains = []
+        usernames = []
         owned = []
-        secret = []
-        cred_type = []
+        secrets = []
+        cred_types = []
         creds = []  # list of tuples (cred_id, domain, username, secret, cred_type, pillaged_from) coming from the database
         data = []  # Arbitrary data needed for the login, e.g. ssh_key
 
         for cred_id in self.args.cred_id:
-            if isinstance(cred_id, str) and cred_id.lower() == 'all':
+            if cred_id.lower() == "all":
                 creds = self.db.get_credentials()
             else:
                 if not self.db.get_credentials(filter_term=int(cred_id)):
-                    self.logger.error('Invalid database credential ID {}!'.format(cred_id))
+                    self.logger.error(f"Invalid database credential ID {cred_id}!")
                     continue
                 creds.extend(self.db.get_credentials(filter_term=int(cred_id)))
 
         for cred in creds:
-            c_id, domain_single, username_single, secret_single, cred_type_single, pillaged_from = cred
-            domain.append(domain_single)
-            username.append(username_single)
+            c_id, domain, username, secret, cred_type, pillaged_from = cred
+            domains.append(domain)
+            usernames.append(username)
             owned.append(False)  # As these are likely valid we still want to test them if they are specified in the command line
-            secret.append(secret_single)
-            cred_type.append(cred_type_single)
+            secrets.append(secret)
+            cred_types.append(cred_type)
 
-        if len(secret) != len(data): data = [None] * len(secret)
-        return domain, username, owned, secret, cred_type, data
+        if len(secrets) != len(data):
+            data = [None] * len(secrets)
+
+        return domains, usernames, owned, secrets, cred_types, data
 
     def parse_credentials(self):
-        """
-        Parse credentials from the command line or from a file specified.
+        r"""Parse credentials from the command line or from a file specified.
+
         Usernames can be specified with a domain (domain\\username) or without (username).
         If the file contains domain\\username the domain specified will be overwritten by the one in the file.
 
@@ -286,7 +315,7 @@ class connection(object):
         # Parse usernames
         for user in self.args.username:
             if isfile(user):
-                with open(user, 'r') as user_file:
+                with open(user) as user_file:
                     for line in user_file:
                         if "\\" in line:
                             domain_single, username_single = line.split("\\")
@@ -310,42 +339,41 @@ class connection(object):
         for password in self.args.password:
             if isfile(password):
                 try:
-                    with open(password, 'r', errors = ('ignore' if self.args.ignore_pw_decoding else 'strict')) as password_file:
+                    with open(password, errors=("ignore" if self.args.ignore_pw_decoding else "strict")) as password_file:
                         for line in password_file:
                             secret.append(line.strip())
-                            cred_type.append('plaintext')
+                            cred_type.append("plaintext")
                 except UnicodeDecodeError as e:
                     self.logger.error(f"{type(e).__name__}: Could not decode password file. Make sure the file only contains UTF-8 characters.")
                     self.logger.error("You can ignore non UTF-8 characters with the option '--ignore-pw-decoding'")
-                    exit(1)
-
+                    sys.exit(1)
             else:
                 secret.append(password)
-                cred_type.append('plaintext')
+                cred_type.append("plaintext")
 
         # Parse NTLM-hashes
         if hasattr(self.args, "hash") and self.args.hash:
             for ntlm_hash in self.args.hash:
                 if isfile(ntlm_hash):
-                    with open(ntlm_hash, 'r') as ntlm_hash_file:
+                    with open(ntlm_hash) as ntlm_hash_file:
                         for line in ntlm_hash_file:
                             secret.append(line.strip())
-                            cred_type.append('hash')
+                            cred_type.append("hash")
                 else:
                     secret.append(ntlm_hash)
-                    cred_type.append('hash')
+                    cred_type.append("hash")
 
         # Parse AES keys
         if self.args.aesKey:
             for aesKey in self.args.aesKey:
                 if isfile(aesKey):
-                    with open(aesKey, 'r') as aesKey_file:
+                    with open(aesKey) as aesKey_file:
                         for line in aesKey_file:
                             secret.append(line.strip())
-                            cred_type.append('aesKey')
+                            cred_type.append("aesKey")
                 else:
                     secret.append(aesKey)
-                    cred_type.append('aesKey')
+                    cred_type.append("aesKey")
 
         # Allow trying multiple users with a single password
         if len(username) > 1 and len(secret) == 1:
@@ -356,8 +384,8 @@ class connection(object):
         return domain, username, owned, secret, cred_type, [None] * len(secret)
 
     def try_credentials(self, domain, username, owned, secret, cred_type, data=None):
-        """
-        Try to login using the specified credentials and protocol.
+        """Try to login using the specified credentials and protocol.
+
         Possible login methods are:
             - plaintext (/kerberos)
             - NTLM-hash (/kerberos)
@@ -367,31 +395,31 @@ class connection(object):
             return False
         if self.args.continue_on_success and owned:
             return False
-        # Enforcing FQDN for SMB if not using local authentication. Related issues/PRs: #26, #28, #24, #38
-        if self.args.protocol == 'smb' and not self.args.local_auth and "." not in domain and not self.args.laps and secret != "" and not (self.domain.upper() == self.hostname.upper()) :
-            self.logger.error(f"Domain {domain} for user {username.rstrip()} need to be FQDN ex:domain.local, not domain")
-            return False
-
+        if hasattr(self.args, "delegate") and self.args.delegate:
+            self.args.kerberos = True
         with sem:
-            if cred_type == 'plaintext':
+            if cred_type == "plaintext":
                 if self.args.kerberos:
-                    return self.kerberos_login(domain, username, secret, '', '', self.kdcHost, False)
-                elif hasattr(self.args, "domain"):  # Some protocolls don't use domain for login
+                    self.logger.debug("Trying to authenticate using Kerberos")
+                    return self.kerberos_login(domain, username, secret, "", "", self.kdcHost, False)
+                elif hasattr(self.args, "domain"):  # Some protocols don't use domain for login
+                    self.logger.debug("Trying to authenticate using plaintext with domain")
                     return self.plaintext_login(domain, username, secret)
-                elif self.args.protocol == 'ssh':
+                elif self.args.protocol == "ssh":
+                    self.logger.debug("Trying to authenticate using plaintext over SSH")
                     return self.plaintext_login(username, secret, data)
                 else:
+                    self.logger.debug("Trying to authenticate using plaintext")
                     return self.plaintext_login(username, secret)
-            elif cred_type == 'hash':
+            elif cred_type == "hash":
                 if self.args.kerberos:
-                    return self.kerberos_login(domain, username, '', secret, '', self.kdcHost, False)
+                    return self.kerberos_login(domain, username, "", secret, "", self.kdcHost, False)
                 return self.hash_login(domain, username, secret)
-            elif cred_type == 'aesKey':
-                return self.kerberos_login(domain, username, '', '', secret, self.kdcHost, False)
+            elif cred_type == "aesKey":
+                return self.kerberos_login(domain, username, "", "", secret, self.kdcHost, False)
 
     def login(self):
-        """
-        Try to login using the credentials specified in the command line or in the database.
+        """Try to login using the credentials specified in the command line or in the database.
 
         :return: True if the login was successful and "--continue-on-success" was not specified, False otherwise.
         """
@@ -423,6 +451,7 @@ class connection(object):
             data.extend(parsed_data)
 
         if self.args.use_kcache:
+            self.logger.debug("Trying to authenticate using Kerberos cache")
             with sem:
                 username = self.args.username[0] if len(self.args.username) else ""
                 password = self.args.password[0] if len(self.args.password) else ""

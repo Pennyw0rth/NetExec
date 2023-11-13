@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from pathlib import Path
 from sqlalchemy import MetaData, func, Table, select, insert, update, delete
 from sqlalchemy.dialects.sqlite import Insert  # used for upsert
@@ -13,6 +10,7 @@ from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.exc import SAWarning
 import warnings
 from nxc.logger import nxc_logger
+import sys
 
 # if there is an issue with SQLAlchemy and a connection cannot be cleaned up properly it spews out annoying warnings
 warnings.filterwarnings("ignore", category=SAWarning)
@@ -57,7 +55,6 @@ class database:
             FOREIGN KEY(hostid) REFERENCES hosts(id)
             )"""
         )
-        # type = hash, plaintext
         db_conn.execute(
             """CREATE TABLE "users" (
             "id" integer PRIMARY KEY,
@@ -71,7 +68,7 @@ class database:
         )
 
     def reflect_tables(self):
-        with self.db_engine.connect() as conn:
+        with self.db_engine.connect():
             try:
                 self.HostsTable = Table("hosts", self.metadata, autoload_with=self.db_engine)
                 self.UsersTable = Table("users", self.metadata, autoload_with=self.db_engine)
@@ -84,7 +81,7 @@ class database:
                     [-] Optionally save the old DB data (`cp {self.db_path} ~/nxc_{self.protocol.lower()}.bak`)
                     [-] Then remove the {self.protocol} DB (`rm -f {self.db_path}`) and run nxc to initialize the new DB"""
                 )
-                exit()
+                sys.exit()
 
     def shutdown_db(self):
         try:
@@ -148,9 +145,7 @@ class database:
         self.conn.execute(q, hosts)
 
     def add_credential(self, credtype, domain, username, password, pillaged_from=None):
-        """
-        Check if this credential has already been added to the database, if not add it in.
-        """
+        """Check if this credential has already been added to the database, if not add it in."""
         user_rowid = None
 
         credential_data = {}
@@ -188,15 +183,12 @@ class database:
                 if not user[3] and not user[4] and not user[5]:
                     q = update(self.UsersTable).values(credential_data)  # .returning(self.UsersTable.c.id)
                     results = self.conn.execute(q)  # .first()
-                    # user_rowid = results.id
 
         nxc_logger.debug(f"add_credential(credtype={credtype}, domain={domain}, username={username}, password={password}, pillaged_from={pillaged_from})")
         return user_rowid
 
     def remove_credentials(self, creds_id):
-        """
-        Removes a credential ID from the database
-        """
+        """Removes a credential ID from the database"""
         del_hosts = []
         for cred_id in creds_id:
             q = delete(self.UsersTable).filter(self.UsersTable.c.id == cred_id)
@@ -204,7 +196,6 @@ class database:
         self.conn.execute(q)
 
     def add_admin_user(self, credtype, domain, username, password, host, user_id=None):
-
         if user_id:
             q = select(self.UsersTable).filter(self.UsersTable.c.id == user_id)
             users = self.conn.execute(q).all()
@@ -246,8 +237,7 @@ class database:
         else:
             q = select(self.AdminRelationsTable)
 
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def remove_admin_relation(self, user_ids=None, host_ids=None):
         q = delete(self.AdminRelationsTable)
@@ -260,9 +250,7 @@ class database:
         self.conn.execute(q)
 
     def is_credential_valid(self, credential_id):
-        """
-        Check if this credential ID is valid.
-        """
+        """Check if this credential ID is valid."""
         q = select(self.UsersTable).filter(
             self.UsersTable.c.id == credential_id,
             self.UsersTable.c.password is not None,
@@ -271,9 +259,7 @@ class database:
         return len(results) > 0
 
     def get_credentials(self, filter_term=None, cred_type=None):
-        """
-        Return credentials from the database.
-        """
+        """Return credentials from the database."""
         # if we're returning a single credential by ID
         if self.is_credential_valid(filter_term):
             q = select(self.UsersTable).filter(self.UsersTable.c.id == filter_term)
@@ -287,21 +273,16 @@ class database:
         else:
             q = select(self.UsersTable)
 
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()
 
     def is_host_valid(self, host_id):
-        """
-        Check if this host ID is valid.
-        """
+        """Check if this host ID is valid."""
         q = select(self.HostsTable).filter(self.HostsTable.c.id == host_id)
         results = self.conn.execute(q).all()
         return len(results) > 0
 
     def get_hosts(self, filter_term=None, domain=None):
-        """
-        Return hosts from the database.
-        """
+        """Return hosts from the database."""
         q = select(self.HostsTable)
 
         # if we're returning a single host by ID
@@ -312,7 +293,7 @@ class database:
             return [results]
         # if we're filtering by domain controllers
         elif filter_term == "dc":
-            q = q.filter(self.HostsTable.c.dc == True)
+            q = q.filter(self.HostsTable.c.dc is True)
             if domain:
                 q = q.filter(func.lower(self.HostsTable.c.domain) == func.lower(domain))
         # if we're filtering by ip/hostname
@@ -320,5 +301,4 @@ class database:
             like_term = func.lower(f"%{filter_term}%")
             q = select(self.HostsTable).filter(self.HostsTable.c.ip.like(like_term) | func.lower(self.HostsTable.c.hostname).like(like_term))
 
-        results = self.conn.execute(q).all()
-        return results
+        return self.conn.execute(q).all()

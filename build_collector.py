@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import os
 import shutil
 import subprocess
@@ -11,27 +8,26 @@ from pathlib import Path
 
 from shiv.bootstrap import Environment
 
-# from distutils.ccompiler import new_compiler
 from shiv.builder import create_archive
 from shiv.cli import __version__ as VERSION
 
 
 def build_nxc():
-    print("building nxc")
+    print("Building nxc")
     try:
         shutil.rmtree("bin")
         shutil.rmtree("build")
-    except Exception as e:
+    except FileNotFoundError:
         pass
+    except Exception as e:
+        print(f"Exception while removing bin & build: {e}")
 
     try:
-        print("remove useless files")
         os.mkdir("build")
         os.mkdir("bin")
         shutil.copytree("nxc", "build/nxc")
-
     except Exception as e:
-        print(e)
+        print(f"Exception while creating bin and build directories: {e}")
         return
 
     subprocess.run(
@@ -48,7 +44,6 @@ def build_nxc():
         check=True,
     )
 
-    # [shutil.rmtree(p) for p in Path("build").glob("**/__pycache__")]
     [shutil.rmtree(p) for p in Path("build").glob("**/*.dist-info")]
 
     env = Environment(
@@ -93,7 +88,7 @@ if __name__ == "__main__":
     try:
         build_nxc()
         build_nxcdb()
-    except:
+    except FileNotFoundError:
         pass
     finally:
         shutil.rmtree("build")

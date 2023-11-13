@@ -1,13 +1,10 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import asyncio
 import os
 from datetime import datetime
 
 from aardwolf.commons.target import RDPTarget
 
-from nxc.connection import *
+from nxc.connection import connection
 from nxc.helpers.logger import highlight
 from nxc.logger import NXCAdapter
 from aardwolf.vncconnection import VNCConnection
@@ -43,7 +40,7 @@ class vnc(connection):
             extra={
                 "protocol": "VNC",
                 "host": self.host,
-                "port": self.args.port,
+                "port": self.port,
                 "hostname": self.hostname,
             }
         )
@@ -53,7 +50,7 @@ class vnc(connection):
 
     def create_conn_obj(self):
         try:
-            self.target = RDPTarget(ip=self.host, port=self.args.port)
+            self.target = RDPTarget(ip=self.host, port=self.port)
             credential = UniCredential(protocol=asyauthProtocol.PLAIN, stype=asyauthSecret.NONE)
             self.conn = VNCConnection(target=self.target, credentials=credential, iosettings=self.iosettings)
             asyncio.run(self.connect_vnc(True))

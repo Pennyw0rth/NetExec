@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import asyncio
 import os
 from datetime import datetime
@@ -9,7 +6,7 @@ from termcolor import colored
 
 from impacket.krb5.ccache import CCache
 
-from nxc.connection import *
+from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.logger import NXCAdapter
 from nxc.config import host_info_colors
@@ -24,6 +21,7 @@ from asyauth.common.credentials.ntlm import NTLMCredential
 from asyauth.common.credentials.kerberos import KerberosCredential
 from asyauth.common.constants import asyauthSecret
 from asysocks.unicomm.common.target import UniTarget, UniProto
+
 
 class rdp(connection):
     def __init__(self, args, db, host):
@@ -85,34 +83,29 @@ class rdp(connection):
 
     # def proto_flow(self):
     #     if self.create_conn_obj():
-    #         self.proto_logger()
-    #         self.print_host_info()
     #         if self.login() or (self.username == '' and self.password == ''):
     #             if hasattr(self.args, 'module') and self.args.module:
-    #                 self.call_modules()
-    #             else:
-    #                 self.call_cmd_args()
 
     def proto_logger(self):
         self.logger = NXCAdapter(
             extra={
                 "protocol": "RDP",
                 "host": self.host,
-                "port": self.args.port,
+                "port": self.port,
                 "hostname": self.hostname,
             }
         )
 
     def print_host_info(self):
-        nla = colored(f"nla:{self.nla}", host_info_colors[3], attrs=['bold']) if self.nla else colored(f"nla:{self.nla}", host_info_colors[2], attrs=['bold'])
+        nla = colored(f"nla:{self.nla}", host_info_colors[3], attrs=["bold"]) if self.nla else colored(f"nla:{self.nla}", host_info_colors[2], attrs=["bold"])
         if self.domain is None:
-            self.logger.display("Probably old, doesn't not support HYBRID or HYBRID_EX" f" ({nla})")
+            self.logger.display("Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
         else:
-            self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})" f" ({nla})")
+            self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({nla})")
         return True
 
     def create_conn_obj(self):
-        self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.args.port, timeout=self.args.rdp_timeout)
+        self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout)
         self.auth = NTLMCredential(secret="pass", username="user", domain="FAKE", stype=asyauthSecret.PASS)
 
         self.check_nla()
@@ -135,7 +128,7 @@ class rdp(connection):
                 if "Reason:" not in str(e):
                     try:
                         info_domain = self.conn.get_extra_info()
-                    except:
+                    except Exception:
                         pass
                     else:
                         self.domain = info_domain["dnsdomainname"]
@@ -154,7 +147,7 @@ class rdp(connection):
         self.target = RDPTarget(
             ip=self.host,
             hostname=self.hostname,
-            port=self.args.port,
+            port=self.port,
             domain=self.domain,
             dc_ip=self.domain,
             timeout=self.args.rdp_timeout,
@@ -175,7 +168,7 @@ class rdp(connection):
                 if str(proto) == "SUPP_PROTOCOLS.RDP" or str(proto) == "SUPP_PROTOCOLS.SSL" or str(proto) == "SUPP_PROTOCOLS.SSL|SUPP_PROTOCOLS.RDP":
                     self.nla = False
                     return
-            except Exception as e:
+            except Exception:
                 pass
 
     async def connect_rdp(self):
@@ -199,18 +192,15 @@ class rdp(connection):
             if nthash:
                 self.nthash = nthash
 
-            if not all("" == s for s in [nthash, password, aesKey]):
-                kerb_pass = next(s for s in [nthash, password, aesKey] if s)
-            else:
-                kerb_pass = ""
+            kerb_pass = next(s for s in [nthash, password, aesKey] if s) if not all(s == "" for s in [nthash, password, aesKey]) else ""
 
-            fqdn_host = self.hostname + "." + self.domain
+            self.hostname + "." + self.domain
             password = password if password else nthash
 
             if useCache:
                 stype = asyauthSecret.CCACHE
                 if not password:
-                    password = getenv("KRB5CCNAME") if not password else password
+                    password = password if password else getenv("KRB5CCNAME")
                     if "/" in password:
                         self.logger.fail("Kerberos ticket need to be on the local directory")
                         return False
@@ -220,15 +210,7 @@ class rdp(connection):
             else:
                 stype = asyauthSecret.PASS if not nthash else asyauthSecret.NT
 
-            kerberos_target = UniTarget(
-                self.domain,
-                88,
-                UniProto.CLIENT_TCP,
-                proxies=None,
-                dns=None,
-                dc_ip=self.domain,
-                domain=self.domain
-            )
+            kerberos_target = UniTarget(self.domain, 88, UniProto.CLIENT_TCP, proxies=None, dns=None, dc_ip=self.domain, domain=self.domain)
             self.auth = KerberosCredential(
                 target=kerberos_target,
                 secret=password,
@@ -246,25 +228,25 @@ class rdp(connection):
                     username,
                     (
                         # Show what was used between cleartext, nthash, aesKey and ccache
-                        " from ccache"
-                        if useCache
-                        else ":%s" % (process_secret(kerb_pass))
+                        " from ccache" if useCache else f":{process_secret(kerb_pass)}"
                     ),
                     self.mark_pwned(),
                 )
             )
             if not self.args.local_auth:
                 add_user_bh(username, domain, self.logger, self.config)
+            if self.admin_privs:
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
 
         except Exception as e:
             if "KDC_ERR" in str(e):
                 reason = None
-                for word in self.rdp_error_status.keys():
+                for word in self.rdp_error_status:
                     if word in str(e):
                         reason = self.rdp_error_status[word]
                 self.logger.fail(
-                    (f"{domain}\\{username}{' from ccache' if useCache else ':%s' % (process_secret(kerb_pass))} {f'({reason})' if reason else str(e)}"),
+                    (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {f'({reason})' if reason else str(e)}"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "KDC_ERR_C_PRINCIPAL_UNKNOWN") else "red"),
                 )
             elif "Authentication failed!" in str(e):
@@ -273,13 +255,13 @@ class rdp(connection):
                 self.logger.fail(e)
             else:
                 reason = None
-                for word in self.rdp_error_status.keys():
+                for word in self.rdp_error_status:
                     if word in str(e):
                         reason = self.rdp_error_status[word]
-                if "cannot unpack non-iterable NoneType object" == str(e):
+                if str(e) == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
                 self.logger.fail(
-                    (f"{domain}\\{username}{' from ccache' if useCache else ':%s' % (process_secret(kerb_pass))} {f'({reason})' if reason else ''}"),
+                    (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {f'({reason})' if reason else ''}"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
             return False
@@ -299,16 +281,18 @@ class rdp(connection):
             self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
             if not self.args.local_auth:
                 add_user_bh(username, domain, self.logger, self.config)
+            if self.admin_privs:
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except Exception as e:
             if "Authentication failed!" in str(e):
                 self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
             else:
                 reason = None
-                for word in self.rdp_error_status.keys():
+                for word in self.rdp_error_status:
                     if word in str(e):
                         reason = self.rdp_error_status[word]
-                if "cannot unpack non-iterable NoneType object" == str(e):
+                if str(e) == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
                 self.logger.fail(
                     (f"{domain}\\{username}:{process_secret(password)} {f'({reason})' if reason else ''}"),
@@ -331,16 +315,18 @@ class rdp(connection):
             self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
             if not self.args.local_auth:
                 add_user_bh(username, domain, self.logger, self.config)
+            if self.admin_privs:
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except Exception as e:
             if "Authentication failed!" in str(e):
                 self.logger.success(f"{domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
             else:
                 reason = None
-                for word in self.rdp_error_status.keys():
+                for word in self.rdp_error_status:
                     if word in str(e):
                         reason = self.rdp_error_status[word]
-                if "cannot unpack non-iterable NoneType object" == str(e):
+                if str(e) == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
 
                 self.logger.fail(
@@ -353,10 +339,10 @@ class rdp(connection):
         try:
             self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
             await self.connect_rdp()
-        except Exception as e:
+        except Exception:
             return
 
-        await asyncio.sleep(int(5))
+        await asyncio.sleep(5)
         if self.conn is not None and self.conn.desktop_buffer_has_data is True:
             buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
             filename = os.path.expanduser(f"~/.nxc/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")

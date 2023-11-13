@@ -1,12 +1,10 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from time import strftime, localtime
 from nxc.protocols.smb.remotefile import RemoteFile
 from impacket.smb3structs import FILE_READ_DATA
 from impacket.smbconnection import SessionError
 import re
 import traceback
+import contextlib
 
 
 class SMBSpider:
@@ -26,13 +24,19 @@ class SMBSpider:
         self,
         share,
         folder=".",
-        pattern=[],
-        regex=[],
-        exclude_dirs=[],
+        pattern=None,
+        regex=None,
+        exclude_dirs=None,
         depth=None,
         content=False,
         onlyfiles=True,
     ):
+        if exclude_dirs is None:
+            exclude_dirs = []
+        if regex is None:
+            regex = []
+        if pattern is None:
+            pattern = []
         if regex:
             try:
                 self.regex = [re.compile(bytes(rx, "utf8")) for rx in regex]
@@ -47,11 +51,10 @@ class SMBSpider:
 
         if share == "*":
             self.logger.display("Enumerating shares for spidering")
-            permissions = []
             try:
                 for share in self.smbconnection.listShares():
                     share_name = share["shi1_netname"][:-1]
-                    share_remark = share["shi1_remark"][:-1]
+                    share["shi1_remark"][:-1]
                     try:
                         self.smbconnection.listPath(share_name, "*")
                         self.share = share_name
@@ -69,14 +72,7 @@ class SMBSpider:
         return self.results
 
     def _spider(self, subfolder, depth):
-        """
-        Abandon all hope ye who enter here.
-        You're now probably wondering if I was drunk and/or high when writing this.
-        Getting this to work took a toll on my sanity. So yes. a lot.
-        """
-
-        # The following is some funky shit that deals with the way impacket treats file paths
-
+        """"""
         if subfolder in ["", "."]:
             subfolder = "*"
 
@@ -84,8 +80,6 @@ class SMBSpider:
             subfolder = subfolder[2:] + "/*"
         else:
             subfolder = subfolder.replace("/*/", "/") + "/*"
-
-        # End of the funky shit... or is it? Surprise! This whole thing is funky
 
         filelist = None
         try:
@@ -100,8 +94,9 @@ class SMBSpider:
                 return
 
         for result in filelist:
+            # this can potentially be refactored
             if result.is_directory() and result.get_longname() not in [".", ".."]:
-                if subfolder == "*":
+                if subfolder == "*":  # noqa: SIM114
                     self._spider(
                         subfolder.replace("*", "") + result.get_longname(),
                         depth - 1 if depth else None,
@@ -151,11 +146,9 @@ class SMBSpider:
                             )
                         self.results.append(f"{path}{result.get_longname()}")
 
-            if self.content:
-                if not result.is_directory():
-                    self.search_content(path, result)
+            if self.content and not result.is_directory():
+                self.search_content(path, result)
 
-        return
 
     def search_content(self, path, result):
         path = path.replace("*", "")
@@ -166,7 +159,7 @@ class SMBSpider:
                 self.share,
                 access=FILE_READ_DATA,
             )
-            rfile.open()
+            rfile.open_file()
 
             while True:
                 try:
@@ -224,10 +217,6 @@ class SMBSpider:
             traceback.print_exc()
 
     def get_lastm_time(self, result_obj):
-        lastm_time = None
-        try:
-            lastm_time = strftime("%Y-%m-%d %H:%M", localtime(result_obj.get_mtime_epoch()))
-        except Exception:
-            pass
+        with contextlib.suppress(Exception):
+            return strftime("%Y-%m-%d %H:%M", localtime(result_obj.get_mtime_epoch()))
 
-        return lastm_time
