@@ -439,7 +439,7 @@ class smb(connection):
                 used_ccache = f" through S4U with {username}"
             self.logger.fail(f"{domain}\\{self.username}{used_ccache} {e}")
         except (SessionError, Exception) as e:
-            error, desc = e.getErrorString()
+            error = e.getErrorString()
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             if self.args.delegate:
                 used_ccache = f" through S4U with {username}"
@@ -500,7 +500,7 @@ class smb(connection):
                 self.create_conn_obj()
             return True
         except SessionError as e:
-            error, desc = e.getErrorString()
+            error = e.getErrorString()
             self.logger.fail(
                 f'{domain}\\{self.username}:{process_secret(self.password)} {error} {f"({desc})" if self.args.verbose else ""}',
                 color="magenta" if error in smb_error_status else "red",
@@ -563,7 +563,7 @@ class smb(connection):
                 self.create_conn_obj()
             return True
         except SessionError as e:
-            error, desc = e.getErrorString()
+            error = e.getErrorString()
             self.logger.fail(
                 f"{domain}\\{self.username}:{process_secret(self.hash)} {error} {f'({desc})' if self.args.verbose else ''}",
                 color="magenta" if error in smb_error_status else "red",
@@ -920,7 +920,7 @@ class smb(connection):
             for disk in disks:
                 self.logger.highlight(disk.disk)
         except Exception as e:
-            error, desc = e.getErrorString()
+            error = e.getErrorString()
             self.logger.fail(
                 f"Error enumerating disks: {error}",
                 color="magenta" if error in smb_error_status else "red",
