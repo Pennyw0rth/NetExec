@@ -484,7 +484,7 @@ class NXCDBMenu(cmd.Cmd):
         if subcommand == "create":
             new_workspace = line.split()[1].strip()
             print(f"[*] Creating workspace '{new_workspace}'")
-            create_workspace(new_workspace, self.p_loader, self.protocols)
+            create_workspace(new_workspace, self.p_loader)
             self.do_workspace(new_workspace)
         elif subcommand == "list":
             print("[*] Enumerating Workspaces")
