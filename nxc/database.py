@@ -9,7 +9,6 @@ from os.path import join as path_join
 
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.paths import WORKSPACE_DIR
-from nxc.logger import nxc_logger
 
 
 def create_db_engine(db_path):
