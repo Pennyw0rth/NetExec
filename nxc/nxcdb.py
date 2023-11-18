@@ -2,6 +2,7 @@ import cmd
 import csv
 import sys
 import os
+import argparse
 from os import listdir
 from os.path import exists
 from os.path import join as path_join
@@ -11,7 +12,7 @@ from terminaltables import AsciiTable
 
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.paths import CONFIG_PATH, WORKSPACE_DIR
-from nxc.database import create_db_engine, open_config, get_workspace, get_db, write_configfile, create_workspace
+from nxc.database import create_db_engine, open_config, get_workspace, get_db, write_configfile, create_workspace, set_workspace
 
 
 class UserExitedProto(Exception):
@@ -516,12 +517,35 @@ class NXCDBMenu(cmd.Cmd):
         Exits
         """
         print_help(help_string)
-
+    
 
 def main():
     if not exists(CONFIG_PATH):
         print("[-] Unable to find config file")
         sys.exit(1)
+    
+    parser = argparse.ArgumentParser(
+        description="NXCDB is a database navigator for NXC",
+    )
+    parser.add_argument(
+        "-cw",
+        "--create-workspace",
+        help="create a new workspace",
+    )
+    parser.add_argument(
+        "-ws",
+        "--set-workspace",
+        help="set the current workspace",
+    )
+    args = parser.parse_args()
+
+    if args.create_workspace:
+        create_workspace(args.create_workspace)
+        sys.exit()
+    if args.set_workspace:
+        set_workspace(CONFIG_PATH, args.set_workspace)
+        sys.exit()
+
     try:
         nxcdbnav = NXCDBMenu(CONFIG_PATH)
         nxcdbnav.cmdloop()

@@ -30,6 +30,13 @@ def get_workspace(config):
     return config.get("nxc", "workspace")
 
 
+def set_workspace(config_path, workspace_name):
+    config = open_config(config_path)
+    config.set("nxc", "workspace", workspace_name)
+    write_configfile(config, config_path)
+    print(f"[*] Workspace set to {workspace_name}")
+
+
 def get_db(config):
     return config.get("nxc", "last_used_db")
 
@@ -51,8 +58,10 @@ def create_workspace(workspace_name, p_loader=None):
     -------
         None
     """
-    if not exists(path_join(WORKSPACE_DIR, workspace_name)):
-        nxc_logger.debug(f"Creating {workspace_name} workspace")
+    if exists(path_join(WORKSPACE_DIR, workspace_name)):
+        print(f"[-] Workspace {workspace_name} already exists")
+    else:
+        print(f"[*] Creating {workspace_name} workspace")
         mkdir(path_join(WORKSPACE_DIR, workspace_name))
     
     if p_loader is None:
@@ -81,6 +90,7 @@ def create_workspace(workspace_name, p_loader=None):
 
 def delete_workspace(workspace_name):
     shutil.rmtree(path_join(WORKSPACE_DIR, workspace_name))
+    print(f"[*] Workspace {workspace_name} deleted")
 
 
 def initialize_db():
