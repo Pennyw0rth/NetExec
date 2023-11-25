@@ -528,6 +528,12 @@ def main():
         description="NXCDB is a database navigator for NXC",
     )
     parser.add_argument(
+        "-gw",
+        "--get-workspace",
+        action="store_true",
+        help="get the current workspace",
+    )
+    parser.add_argument(
         "-cw",
         "--create-workspace",
         help="create a new workspace",
@@ -544,6 +550,10 @@ def main():
         sys.exit()
     if args.set_workspace:
         set_workspace(CONFIG_PATH, args.set_workspace)
+        sys.exit()
+    if args.get_workspace:
+        config = open_config(CONFIG_PATH)
+        print(f"Current workspace: {get_workspace(config)}")
         sys.exit()
 
     try:
