@@ -540,7 +540,7 @@ def main():
         help="create a new workspace",
     )
     parser.add_argument(
-        "-ws",
+        "-sw",
         "--set-workspace",
         help="set the current workspace",
     )
