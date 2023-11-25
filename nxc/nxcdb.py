@@ -9,6 +9,7 @@ from os.path import join as path_join
 from textwrap import dedent
 from requests import get, post, ConnectionError
 from terminaltables import AsciiTable
+from termcolor import colored
 
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.paths import CONFIG_PATH, WORKSPACE_DIR
@@ -491,9 +492,9 @@ class NXCDBMenu(cmd.Cmd):
             print("[*] Enumerating Workspaces")
             for workspace in listdir(path_join(WORKSPACE_DIR)):
                 if workspace == self.workspace:
-                    print("==> " + workspace)
+                    print(f" * {colored(workspace, 'green')}")
                 else:
-                    print(workspace)
+                    print(f"   {workspace}")
         elif exists(path_join(WORKSPACE_DIR, line)):
             self.config.set("nxc", "workspace", line)
             write_configfile(self.config, self.config_path)
@@ -552,8 +553,12 @@ def main():
         set_workspace(CONFIG_PATH, args.set_workspace)
         sys.exit()
     if args.get_workspace:
-        config = open_config(CONFIG_PATH)
-        print(f"Current workspace: {get_workspace(config)}")
+        current_workspace = get_workspace(open_config(CONFIG_PATH))
+        for workspace in listdir(path_join(WORKSPACE_DIR)):
+            if workspace == current_workspace:
+                print(f" * {colored(workspace, 'green')}")
+            else:
+                print(f"   {workspace}")
         sys.exit()
 
     try:
