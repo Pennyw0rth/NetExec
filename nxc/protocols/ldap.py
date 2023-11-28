@@ -834,7 +834,7 @@ class ldap(connection):
     def active_users(self):
         # Building the search filter
         search_filter = "(sAMAccountType=805306368)" if self.username != "" else "(objectclass=*)"
-        attributes = ["sAMAccountName","userAccountControl"]
+        attributes = ["sAMAccountName", "userAccountControl"]
 
         resp = self.search(search_filter, attributes, sizeLimit=0)
         if resp:
