@@ -62,10 +62,15 @@ class NXCModule:
         self.logger = context.log
 
     def on_login(self, context, connection):
-        if self.check(connection.host):
-            context.log.highlight("VULNERABLE")
-            context.log.highlight("Next step: https://www.rapid7.com/db/modules/exploit/windows/smb/ms17_010_eternalblue/")
-
+        try:
+            if self.check(connection.host):
+                context.log.highlight("VULNERABLE")
+                context.log.highlight("Next step: https://www.rapid7.com/db/modules/exploit/windows/smb/ms17_010_eternalblue/")
+        except ConnectionResetError as e:
+            context.log.debug(f"Error connecting to host when checking for MS17-010: {e!s}")
+        except ValueError as e:
+            if str(e) == "Buffer size too small (0 instead of at least 32 bytes)":
+                context.log.debug("Buffer size too small, which means the response was not the expected size")
 
 
     def generate_smb_proto_payload(self, *protos):
@@ -476,7 +481,7 @@ class NXCModule:
         # 0xC0000022 - STATUS_ACCESS_DENIED
 
         if nt_status == b"\x05\x02\x00\xc0":
-            self.logger.highlight(f"[+] [{ip}] is likely VULNERABLE to MS17-010! ({native_os.decode()})")
+            self.logger.highlight(f"[+] {ip} is likely VULNERABLE to MS17-010! ({native_os.decode()})")
 
             # vulnerable to MS17-010, check for DoublePulsar infection
             raw_proto = self.trans2_request(tree_id, process_id, user_id, multiplex_id)
@@ -491,8 +496,8 @@ class NXCModule:
                 key = self.calculate_doublepulsar_xor_key(smb.signature)
                 self.logger.highlight(f"Host is likely INFECTED with DoublePulsar! - XOR Key: {key.decode()}")
         elif nt_status in (b"\x08\x00\x00\xc0", b"\x22\x00\x00\xc0"):
-            self.logger.fail(f"[-] [{ip}] does NOT appear vulnerable")
+            self.logger.fail(f"{ip} does NOT appear vulnerable")
         else:
-            self.logger.fail(f"[-] [{ip}] Unable to detect if this host is vulnerable")
+            self.logger.fail(f"{ip} Unable to detect if this host is vulnerable")
 
         client.close()
