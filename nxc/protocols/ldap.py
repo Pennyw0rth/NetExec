@@ -831,6 +831,34 @@ class ldap(connection):
                 self.logger.fail("Exception:", exc_info=True)
                 self.logger.fail(f"Skipping item, cannot process due to error {e}")
 
+    def active_users(self):
+        # Building the search filter
+        search_filter = "(sAMAccountType=805306368)" if self.username != "" else "(objectclass=*)"
+        attributes = ["sAMAccountName", "userAccountControl"]
+
+        resp = self.search(search_filter, attributes, sizeLimit=0)
+        if resp:
+            for item in resp:
+                if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
+                    continue
+                sAMAccountName = ""
+                userAccountControl = ""
+                try:
+                    if self.username == "":
+                        self.logger.highlight(f"{item['objectName']}")
+                    else:
+                        for attribute in item["attributes"]:
+                            if str(attribute["type"]) == "sAMAccountName":
+                                sAMAccountName = str(attribute["vals"][0])
+                            elif str(attribute["type"]) == "userAccountControl":
+                                userAccountControl = int(attribute["vals"][0])
+                                account_disabled = userAccountControl & 2
+                        if not account_disabled: 
+                            self.logger.highlight(f"{sAMAccountName}")
+                except Exception as e:
+                    self.logger.debug(f"Skipping item, cannot process due to error {e}")
+            return
+
     def asreproast(self):
         if self.password == "" and self.nthash == "" and self.kerberos is False:
             return False
