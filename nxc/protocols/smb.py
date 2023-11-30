@@ -464,9 +464,11 @@ class smb(connection):
             try:
                 self.conn.login(self.username, self.password, domain)
             except UnicodeEncodeError:
-                self.logger.error(f"UnicodeEncodeError on: '{self.username}:{self.password}'. Trying again with a different encoding...")
+                self.logger.error(f"UnicodeEncodeError on: '{self.username}:{self.password}'. Falling back to hash login.")
                 self.create_conn_obj()
-                self.conn.login(self.username, self.password.encode().decode("latin-1"), domain)
+                import hashlib
+                nt_hash = hashlib.new("md4", self.password.encode("utf-16le")).hexdigest()
+                return self.hash_login(domain, username, nt_hash)
 
             self.check_if_admin()
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
