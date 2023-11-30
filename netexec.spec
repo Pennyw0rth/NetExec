@@ -13,6 +13,7 @@ a = Analysis(
         ('./nxc/modules', 'nxc/modules')
      ],
      hiddenimports=[
+        'aardwolf',
         'impacket.examples.secretsdump',
         'impacket.dcerpc.v5.lsat',
         'impacket.dcerpc.v5.transport',
