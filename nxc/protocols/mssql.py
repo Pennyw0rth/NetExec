@@ -145,6 +145,7 @@ class mssql(connection):
                 hashes = f":{ntlm_hash}"
 
         kerb_pass = next(s for s in [self.nthash, password, aesKey] if s) if not all(s == "" for s in [self.nthash, password, aesKey]) else ""
+        used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
         try:
             res = self.conn.kerberosLogin(
                 None,
@@ -157,9 +158,24 @@ class mssql(connection):
                 useCache=useCache,
             )
             if res is not True:
-                self.conn.printReplies()
+                error_msg = self.conn.printReplies()
+                self.logger.fail(
+                    "{}\\{}:{} {}".format(
+                        domain,
+                        username,
+                        used_ccache,
+                        error_msg if error_msg else ""
+                    )
+                )
                 return False
-
+        except BrokenPipeError:
+            self.logger.fail("Broken Pipe Error while attempting to login")
+            return False
+        except Exception as e:
+            domain = f"{domain}\\" if not self.args.local_auth else ""
+            self.logger.fail(f"{domain}{username}{used_ccache} ({e!s})")
+            return False
+        else:
             self.password = password
             if username == "" and useCache:
                 ccache = CCache.loadFile(os.getenv("KRB5CCNAME"))
@@ -171,7 +187,6 @@ class mssql(connection):
             self.domain = domain
             self.check_if_admin()
 
-            used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             domain = f"{domain}\\" if not self.args.local_auth else ""
 
             self.logger.success(f"{domain}{username}{used_ccache} {self.mark_pwned()}")
@@ -180,11 +195,6 @@ class mssql(connection):
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
-        except Exception as e:
-            used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
-            domain = f"{domain}\\" if not self.args.local_auth else ""
-            self.logger.fail(f"{domain}\\{username}{used_ccache} {e}")
-            return False
 
     def plaintext_login(self, domain, username, password):
         with contextlib.suppress(Exception):
@@ -192,14 +202,26 @@ class mssql(connection):
         self.create_conn_obj()
 
         try:
-            # this is to prevent a decoding issue in impacket/ntlm.py:617 where it attempts to decode the domain
-            if not domain:
-                domain = ""
-            res = self.conn.login(None, username, password, domain, None, not self.args.local_auth)
+            # domain = "" is to prevent a decoding issue in impacket/ntlm.py:617 where it attempts to decode the domain
+            res = self.conn.login(None, username, password, domain if domain else "", None, not self.args.local_auth)
             if res is not True:
-                self.handle_mssql_reply()
+                error_msg = self.handle_mssql_reply()
+                self.logger.fail(
+                    "{}\\{}:{} {}".format(
+                        domain,
+                        username,
+                        process_secret(password),
+                        error_msg if error_msg else ""
+                    )
+                )
                 return False
-
+        except BrokenPipeError:
+            self.logger.fail("Broken Pipe Error while attempting to login")
+            return False
+        except Exception as e:
+            self.logger.fail(f"{domain}\\{username}:{process_secret(password)} ({e!s})")
+            return False
+        else:
             self.password = password
             self.username = username
             self.domain = domain
@@ -216,15 +238,12 @@ class mssql(connection):
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             return True
-        except BrokenPipeError:
-            self.logger.fail("Broken Pipe Error while attempting to login")
-            return False
-        except Exception as e:
-            self.logger.fail(f"{domain}\\{username}:{process_secret(password)}")
-            self.logger.exception(e)
-            return False
 
     def hash_login(self, domain, username, ntlm_hash):
+        with contextlib.suppress(Exception):
+            self.conn.disconnect()
+        self.create_conn_obj()
+
         lmhash = ""
         nthash = ""
 
@@ -233,10 +252,6 @@ class mssql(connection):
             lmhash, nthash = ntlm_hash.split(":")
         else:
             nthash = ntlm_hash
-
-        with contextlib.suppress(Exception):
-            self.conn.disconnect()
-        self.create_conn_obj()
 
         try:
             res = self.conn.login(
@@ -248,9 +263,23 @@ class mssql(connection):
                 not self.args.local_auth,
             )
             if res is not True:
-                self.conn.printReplies()
+                error_msg = self.conn.printReplies()
+                self.logger.fail(
+                    "{}\\{}:{} {}".format(
+                        domain,
+                        username,
+                        process_secret(nthash),
+                        error_msg if error_msg else ""
+                    )
+                )
                 return False
-
+        except BrokenPipeError:
+            self.logger.fail("Broken Pipe Error while attempting to login")
+            return False
+        except Exception as e:
+            self.logger.fail(f"{domain}\\{username}:{process_secret(ntlm_hash)} ({e!s})")
+            return False
+        else:
             self.hash = ntlm_hash
             self.username = username
             self.domain = domain
@@ -266,12 +295,6 @@ class mssql(connection):
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             return True
-        except BrokenPipeError:
-            self.logger.fail("Broken Pipe Error while attempting to login")
-            return False
-        except Exception as e:
-            self.logger.fail(f"{domain}\\{username}:{process_secret(ntlm_hash)} {e}")
-            return False
 
     def mssql_query(self):
         if self.conn.lastError:
@@ -381,13 +404,13 @@ class mssql(connection):
         for keys in self.conn.replies:
             for _i, key in enumerate(self.conn.replies[keys]):
                 if key["TokenType"] == TDS_ERROR_TOKEN:
-                    error = f"ERROR({key['ServerName'].decode('utf-16le')}): Line {key['LineNumber']:d}: {key['MsgText'].decode('utf-16le')}"
+                    error_msg = f"{key['MsgText'].decode('utf-16le')} Please try again with or without '--local-auth'"
                     self.conn.lastError = SQLErrorException(f"ERROR: Line {key['LineNumber']:d}: {key['MsgText'].decode('utf-16le')}")
-                    self.logger.fail(error)
+                    return error_msg
                 elif key["TokenType"] == TDS_INFO_TOKEN:
-                    self.logger.display(f"INFO({key['ServerName'].decode('utf-16le')}): Line {key['LineNumber']:d}: {key['MsgText'].decode('utf-16le')}")
+                    return f"{key['MsgText'].decode('utf-16le')}"
                 elif key["TokenType"] == TDS_LOGINACK_TOKEN:
-                    self.logger.display(f"ACK: Result: {key['Interface']} - {key['ProgName'].decode('utf-16le')} ({key['MajorVer']:d}{key['MinorVer']:d} {key['BuildNumHi']:d}{key['BuildNumLow']:d}) ")
+                    return f"ACK: Result: {key['Interface']} - {key['ProgName'].decode('utf-16le')} ({key['MajorVer']:d}{key['MinorVer']:d} {key['BuildNumHi']:d}{key['BuildNumLow']:d}) "
                 elif key["TokenType"] == TDS_ENVCHANGE_TOKEN and key["Type"] in (
                     TDS_ENVCHANGE_DATABASE,
                     TDS_ENVCHANGE_LANGUAGE,
@@ -409,4 +432,4 @@ class mssql(connection):
                         _type = "PACKETSIZE"
                     else:
                         _type = f"{key['Type']:d}"
-                    self.logger.display(f"ENVCHANGE({_type}): Old Value: {record['OldValue'].decode('utf-16le')}, New Value: {record['NewValue'].decode('utf-16le')}")
+                    return f"ENVCHANGE({_type}): Old Value: {record['OldValue'].decode('utf-16le')}, New Value: {record['NewValue'].decode('utf-16le')}"
