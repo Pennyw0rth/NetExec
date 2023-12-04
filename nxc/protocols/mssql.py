@@ -404,13 +404,13 @@ class mssql(connection):
         for keys in self.conn.replies:
             for _i, key in enumerate(self.conn.replies[keys]):
                 if key["TokenType"] == TDS_ERROR_TOKEN:
-                    error_msg = f"{key['MsgText'].decode('utf-16le')} Please try again with or without '--local-auth'"
+                    error_msg = f"({key['MsgText'].decode('utf-16le')} Please try again with or without '--local-auth')"
                     self.conn.lastError = SQLErrorException(f"ERROR: Line {key['LineNumber']:d}: {key['MsgText'].decode('utf-16le')}")
                     return error_msg
                 elif key["TokenType"] == TDS_INFO_TOKEN:
-                    return f"{key['MsgText'].decode('utf-16le')}"
+                    return f"({key['MsgText'].decode('utf-16le')})"
                 elif key["TokenType"] == TDS_LOGINACK_TOKEN:
-                    return f"ACK: Result: {key['Interface']} - {key['ProgName'].decode('utf-16le')} ({key['MajorVer']:d}{key['MinorVer']:d} {key['BuildNumHi']:d}{key['BuildNumLow']:d}) "
+                    return f"(ACK: Result: {key['Interface']} - {key['ProgName'].decode('utf-16le')} ({key['MajorVer']:d}{key['MinorVer']:d} {key['BuildNumHi']:d}{key['BuildNumLow']:d}) )"
                 elif key["TokenType"] == TDS_ENVCHANGE_TOKEN and key["Type"] in (
                     TDS_ENVCHANGE_DATABASE,
                     TDS_ENVCHANGE_LANGUAGE,
@@ -432,4 +432,4 @@ class mssql(connection):
                         _type = "PACKETSIZE"
                     else:
                         _type = f"{key['Type']:d}"
-                    return f"ENVCHANGE({_type}): Old Value: {record['OldValue'].decode('utf-16le')}, New Value: {record['NewValue'].decode('utf-16le')}"
+                    return f"(ENVCHANGE({_type}): Old Value: {record['OldValue'].decode('utf-16le')}, New Value: {record['NewValue'].decode('utf-16le')})"
