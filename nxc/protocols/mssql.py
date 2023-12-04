@@ -1,15 +1,18 @@
 import os
+import random
+import contextlib
 
 from nxc.config import process_secret
 from nxc.connection import connection
 from nxc.connection import requires_admin
 from nxc.logger import NXCAdapter
-from nxc.protocols.mssql.mssqlexec import MSSQLEXEC
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.powershell import create_ps_command
-from impacket import tds
+from nxc.protocols.mssql.mssqlexec import MSSQLEXEC
+from nxc.protocols.mssql.mssql_ntlm_parser import parse_challenge
+
+from impacket import tds, ntlm
 from impacket.krb5.ccache import CCache
-from impacket.smbconnection import SMBConnection, SessionError
 from impacket.tds import (
     SQLErrorException,
     TDS_LOGINACK_TOKEN,
@@ -22,12 +25,10 @@ from impacket.tds import (
     TDS_ENVCHANGE_CHARSET,
     TDS_ENVCHANGE_PACKETSIZE,
 )
-import contextlib
-
 
 class mssql(connection):
     def __init__(self, args, db, host):
-        self.mssql_instances = None
+        self.mssql_instances = []
         self.domain = None
         self.server_os = None
         self.hash = None
@@ -35,17 +36,6 @@ class mssql(connection):
         self.nthash = ""
 
         connection.__init__(self, args, db, host)
-
-    def proto_flow(self):
-        self.proto_logger()
-        if self.create_conn_obj():
-            self.enum_host_info()
-            self.print_host_info()
-            if self.login():
-                if hasattr(self.args, "module") and self.args.module:
-                    self.call_modules()
-                else:
-                    self.call_cmd_args()
 
     def proto_logger(self):
         self.logger = NXCAdapter(
@@ -58,41 +48,40 @@ class mssql(connection):
         )
 
     def enum_host_info(self):
-        # this try pass breaks module http server, more info https://github.com/byt3bl33d3r/CrackMapExec/issues/363
-        try:  # noqa: SIM105
-            # Probably a better way of doing this, grab our IP from the socket
-            self.local_ip = str(self.conn.socket).split()[2].split("=")[1].split(":")[0]
-        except Exception:
-            pass
+        challenge = None
+        try:
+            login = tds.TDS_LOGIN()
+            login["HostName"] = ""
+            login["AppName"] = ""
+            login["ServerName"] = self.conn.server.encode("utf-16le")
+            login["CltIntName"] = login["AppName"]
+            login["ClientPID"] = random.randint(0, 1024)
+            login["PacketSize"] = self.conn.packetSize
+            login["OptionFlags2"] = tds.TDS_INIT_LANG_FATAL | tds.TDS_ODBC_ON | tds.TDS_INTEGRATED_SECURITY_ON
+            
+            # NTLMSSP Negotiate
+            auth = ntlm.getNTLMSSPType1("", "")
+            login["SSPI"] = auth.getData()
+            login["Length"] = len(login.getData())
 
-        if self.args.no_smb:
-            self.domain = self.args.domain
+            # Get number of mssql instance
+            self.mssql_instances = self.conn.getInstances(0)
+
+            # Send the NTLMSSP Negotiate or SQL Auth Packet
+            self.conn.sendTDS(tds.TDS_LOGIN7, login.getData())
+
+            tdsx = self.conn.recvTDS()
+            challenge = tdsx["Data"][3:]
+            self.logger.info(f"NTLM challenge: {challenge!s}")
+        except Exception as e:
+            self.logger.info(f"Failed to receive NTLM challenge, reason: {e!s}")
         else:
-            try:
-                smb_conn = SMBConnection(self.host, self.host, None)
-                try:
-                    smb_conn.login("", "")
-                except SessionError as e:
-                    if "STATUS_ACCESS_DENIED" in e.getErrorString():
-                        pass
+            ntlm_info = parse_challenge(challenge)
+            self.domain = ntlm_info["target_info"]["MsvAvDnsDomainName"]
+            self.hostname = ntlm_info["target_info"]["MsvAvNbComputerName"]
+            self.server_os = f'Windows NT {ntlm_info["version"]}'
+            self.logger.extra["hostname"] = self.hostname
 
-                self.domain = smb_conn.getServerDNSDomainName()
-                self.hostname = smb_conn.getServerName()
-                self.server_os = smb_conn.getServerOS()
-                self.logger.extra["hostname"] = self.hostname
-
-                with contextlib.suppress(Exception):
-                    smb_conn.logoff()
-
-                if self.args.domain:
-                    self.domain = self.args.domain
-
-                if self.args.local_auth:
-                    self.domain = self.hostname
-            except Exception as e:
-                self.logger.fail(f"Error retrieving host domain: {e} specify one manually with the '-d' flag")
-
-        self.mssql_instances = self.conn.getInstances(0)
         self.db.add_host(
             self.host,
             self.hostname,
@@ -106,9 +95,7 @@ class mssql(connection):
 
     def print_host_info(self):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
-        # if len(self.mssql_instances) > 0:
-        #     for i, instance in enumerate(self.mssql_instances):
-        #         for key in instance.keys():
+        return True
 
     def create_conn_obj(self):
         try:
