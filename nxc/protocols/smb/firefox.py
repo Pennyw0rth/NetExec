@@ -155,7 +155,10 @@ class FirefoxTriage:
                     return b""
         db.close()
         fh.close()
-        os.remove(fh.name)
+        try:
+            os.remove(fh.name)
+        except Exception as e:
+            self.logger.error(f"Error removing temporary file: {e}")
 
     def is_master_password_correct(self, key_data, master_password=b""):
         try:
