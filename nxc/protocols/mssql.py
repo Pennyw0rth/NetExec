@@ -83,14 +83,16 @@ class mssql(connection):
             self.hostname = ntlm_info["target_info"]["MsvAvNbComputerName"]
             self.server_os = f'Windows NT {ntlm_info["version"]}'
             self.logger.extra["hostname"] = self.hostname
+            self.db.add_host(self.host, self.hostname, self.domain, self.server_os, len(self.mssql_instances),)
 
-        self.db.add_host(
-            self.host,
-            self.hostname,
-            self.domain,
-            self.server_os,
-            len(self.mssql_instances),
-        )
+        if self.args.domain:
+            self.domain = self.args.domain
+
+        if self.args.local_auth:
+            self.domain = self.hostname
+
+        if self.domain is None:
+            self.domain = ""
 
         with contextlib.suppress(Exception):
             self.conn.disconnect()
@@ -115,19 +117,15 @@ class mssql(connection):
             return True
 
     def check_if_admin(self):
+        self.admin_privs = False
         try:
             results = self.conn.sql_query("SELECT IS_SRVROLEMEMBER('sysadmin')")
             is_admin = int(results[0][""])
         except Exception as e:
             self.logger.fail(f"Error querying for sysadmin role: {e}")
-            return False
-
-        if is_admin:
-            self.admin_privs = True
-            self.logger.debug("User is admin")
         else:
-            return False
-        return True
+            if is_admin:
+                self.admin_privs = True
 
     def kerberos_login(
         self,
@@ -143,24 +141,30 @@ class mssql(connection):
             self.conn.disconnect()
         self.create_conn_obj()
 
-        hashes = None
-        if ntlm_hash != "":
-            if ntlm_hash.find(":") != -1:
-                hashes = ntlm_hash
-                ntlm_hash.split(":")[1]
-            else:
-                # only nt hash
-                hashes = f":{ntlm_hash}"
+        if useCache and kerb_pass == "":
+            ccache = CCache.loadFile(os.getenv("KRB5CCNAME"))
+            principal = ccache.principal.toPrincipal()
+            self.username = principal.components[0]
+            username = principal.components[0]
+
+        self.username = username
+        self.password = password
+        self.domain = domain
+        
+        self.nthash = None
+        if ntlm_hash:
+            self.nthash = f':{ntlm_hash.split(":")[1]}' if ntlm_hash.find(":") != -1 else f":{ntlm_hash}"
 
         kerb_pass = next(s for s in [self.nthash, password, aesKey] if s) if not all(s == "" for s in [self.nthash, password, aesKey]) else ""
         used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
+
         try:
             res = self.conn.kerberosLogin(
                 None,
                 username,
                 password,
                 domain,
-                hashes,
+                self.nthash,
                 aesKey,
                 kdcHost=kdcHost,
                 useCache=useCache,
@@ -169,8 +173,8 @@ class mssql(connection):
                 error_msg = self.conn.printReplies()
                 self.logger.fail(
                     "{}\\{}:{} {}".format(
-                        domain,
-                        username,
+                        self.domain,
+                        self.username,
                         used_ccache,
                         error_msg if error_msg else ""
                     )
@@ -180,28 +184,15 @@ class mssql(connection):
             self.logger.fail("Broken Pipe Error while attempting to login")
             return False
         except Exception as e:
-            domain = f"{domain}\\" if not self.args.local_auth else ""
-            self.logger.fail(f"{domain}{username}{used_ccache} ({e!s})")
+            self.logger.fail(f"{self.domain}\\{self.username}{used_ccache} ({e!s})")
             return False
         else:
-            self.password = password
-            if username == "" and useCache:
-                ccache = CCache.loadFile(os.getenv("KRB5CCNAME"))
-                principal = ccache.principal.toPrincipal()
-                self.username = principal.components[0]
-                username = principal.components[0]
-            else:
-                self.username = username
-            self.domain = domain
             self.check_if_admin()
-
-            domain = f"{domain}\\" if not self.args.local_auth else ""
-
-            self.logger.success(f"{domain}{username}{used_ccache} {self.mark_pwned()}")
+            self.logger.success(f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}")
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
-                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
+                add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
             return True
 
     def plaintext_login(self, domain, username, password):
@@ -209,16 +200,20 @@ class mssql(connection):
             self.conn.disconnect()
         self.create_conn_obj()
 
+        self.password = password
+        self.username = username
+        self.domain = domain
+        
         try:
             # domain = "" is to prevent a decoding issue in impacket/ntlm.py:617 where it attempts to decode the domain
-            res = self.conn.login(None, username, password, domain if domain else "", None, not self.args.local_auth)
+            res = self.conn.login(None, username, password, domain, None, not self.args.local_auth)
             if res is not True:
                 error_msg = self.handle_mssql_reply()
                 self.logger.fail(
                     "{}\\{}:{} {}".format(
-                        domain,
-                        username,
-                        process_secret(password),
+                        self.domain,
+                        self.username,
+                        process_secret(self.password),
                         error_msg if error_msg else ""
                     )
                 )
@@ -227,24 +222,16 @@ class mssql(connection):
             self.logger.fail("Broken Pipe Error while attempting to login")
             return False
         except Exception as e:
-            self.logger.fail(f"{domain}\\{username}:{process_secret(password)} ({e!s})")
+            self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} ({e!s})")
             return False
         else:
-            self.password = password
-            self.username = username
-            self.domain = domain
             self.check_if_admin()
-            self.db.add_credential("plaintext", domain, username, password)
-
-            if self.admin_privs:
-                self.db.add_admin_user("plaintext", domain, username, password, self.host)
-                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
-
-            domain = f"{domain}\\" if not self.args.local_auth else ""
-            out = f"{domain}{username}:{process_secret(password)} {self.mark_pwned()}"
+            out = f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}"
             self.logger.success(out)
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
+            if self.admin_privs:
+                add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
             return True
 
     def hash_login(self, domain, username, ntlm_hash):
@@ -252,14 +239,9 @@ class mssql(connection):
             self.conn.disconnect()
         self.create_conn_obj()
 
-        lmhash = ""
-        nthash = ""
-
-        # This checks to see if we didn't provide the LM Hash
-        if ntlm_hash.find(":") != -1:
-            lmhash, nthash = ntlm_hash.split(":")
-        else:
-            nthash = ntlm_hash
+        self.username = username
+        self.domain = domain
+        self.nthash = f':{ntlm_hash.split(":")[1]}' if ntlm_hash.find(":") != -1 else f":{ntlm_hash}"
 
         try:
             res = self.conn.login(
@@ -267,16 +249,16 @@ class mssql(connection):
                 username,
                 "",
                 domain,
-                ":" + nthash if not lmhash else ntlm_hash,
+                self.nthash,
                 not self.args.local_auth,
             )
             if res is not True:
                 error_msg = self.conn.printReplies()
                 self.logger.fail(
                     "{}\\{}:{} {}".format(
-                        domain,
-                        username,
-                        process_secret(nthash),
+                        self.domain,
+                        self.username,
+                        process_secret(self.nthash),
                         error_msg if error_msg else ""
                     )
                 )
@@ -285,23 +267,15 @@ class mssql(connection):
             self.logger.fail("Broken Pipe Error while attempting to login")
             return False
         except Exception as e:
-            self.logger.fail(f"{domain}\\{username}:{process_secret(ntlm_hash)} ({e!s})")
+            self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} ({e!s})")
             return False
         else:
-            self.hash = ntlm_hash
-            self.username = username
-            self.domain = domain
             self.check_if_admin()
-            self.db.add_credential("hash", domain, username, ntlm_hash)
-
-            if self.admin_privs:
-                self.db.add_admin_user("hash", domain, username, ntlm_hash, self.host)
-                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
-
-            out = f"{domain}\\{username} {process_secret(ntlm_hash)} {self.mark_pwned()}"
-            self.logger.success(out)
+            self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}")
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
+            if self.admin_privs:
+                add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
             return True
 
     def mssql_query(self):
@@ -324,9 +298,8 @@ class mssql(connection):
                 else:
                     self.logger.fail("Unexpected output")
         except Exception as e:
-            self.logger.exception(e)
+            self.logger.exception(f"Failed to excuted MSSQL query, reason: {e}")
             return None
-
         return raw_output
 
     @requires_admin
