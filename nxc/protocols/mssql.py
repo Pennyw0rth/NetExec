@@ -141,6 +141,8 @@ class mssql(connection):
             self.conn.disconnect()
         self.create_conn_obj()
 
+        kerb_pass = next(s for s in [self.nthash, password, aesKey] if s) if not all(s == "" for s in [self.nthash, password, aesKey]) else ""
+
         if useCache and kerb_pass == "":
             ccache = CCache.loadFile(os.getenv("KRB5CCNAME"))
             principal = ccache.principal.toPrincipal()
@@ -155,7 +157,6 @@ class mssql(connection):
         if ntlm_hash:
             self.nthash = f':{ntlm_hash.split(":")[1]}' if ntlm_hash.find(":") != -1 else f":{ntlm_hash}"
 
-        kerb_pass = next(s for s in [self.nthash, password, aesKey] if s) if not all(s == "" for s in [self.nthash, password, aesKey]) else ""
         used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
 
         try:
@@ -358,7 +359,7 @@ class mssql(connection):
                 self.logger.fail(f"Error during upload : {e}")
 
     @requires_admin
-    def get_file(self):
+    def get_file(self): 
         remote_path = self.args.get_file[0]
         download_path = self.args.get_file[1]
         self.logger.display(f'Copying "{remote_path}" to "{download_path}"')
