@@ -322,41 +322,34 @@ class mssql(connection):
         return raw_output
 
     @requires_admin
-    def execute(self, payload=None, print_output=False):
+    def execute(self, payload=None, get_output=False):
         if not payload and self.args.execute:
             payload = self.args.execute
 
-        self.logger.info(f"Command to execute:\n{payload}")
+        if not self.args.no_output:
+            get_output = True
+
+        self.logger.info(f"Command to execute: {payload}")
         try:
-            exec_method = MSSQLEXEC(self.conn)
-            raw_output = exec_method.execute(payload, print_output)
-            self.logger.info("Executed command via mssqlexec")
-            self.logger.debug(f"Raw output: {raw_output}")
+            exec_method = MSSQLEXEC(self.conn, self.logger)
+            raw_output = exec_method.execute(payload, get_output)
         except Exception as e:
-            self.logger.exception(e)
-            return None
-
-        if hasattr(self, "server"):
-            self.server.track_host(self.host)
-
-        if self.args.execute or self.args.ps_execute:
+            self.logger.fail(f"Execute command failed, error: {e!s}")
+            return False
+        else:
             self.logger.success("Executed command via mssqlexec")
-            if self.args.no_output:
-                self.logger.debug("Output set to disabled")
-            else:
+            if raw_output:
                 for line in raw_output:
                     self.logger.highlight(line)
-
-        return raw_output
+            return raw_output
 
     @requires_admin
     def ps_execute(
         self,
         payload=None,
         get_output=False,
-        methods=None,
         force_ps32=False,
-        dont_obfs=True,
+        dont_obfs=False,
     ):
         if not payload and self.args.ps_execute:
             payload = self.args.ps_execute
@@ -374,7 +367,7 @@ class mssql(connection):
             try:
                 data = f.read()
                 self.logger.display(f"Size is {len(data)} bytes")
-                exec_method = MSSQLEXEC(self.conn)
+                exec_method = MSSQLEXEC(self.conn, self.logger)
                 exec_method.put_file(data, self.args.put_file[1])
                 if exec_method.file_exists(self.args.put_file[1]):
                     self.logger.success("File has been uploaded on the remote machine")
@@ -390,7 +383,7 @@ class mssql(connection):
         self.logger.display(f'Copying "{remote_path}" to "{download_path}"')
 
         try:
-            exec_method = MSSQLEXEC(self.conn)
+            exec_method = MSSQLEXEC(self.conn, self.logger)
             exec_method.get_file(self.args.get_file[0], self.args.get_file[1])
             self.logger.success(f'File "{remote_path}" was downloaded to "{download_path}"')
         except Exception as e:

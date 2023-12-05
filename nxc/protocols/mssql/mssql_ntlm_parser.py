@@ -2,6 +2,7 @@
 
 import datetime
 
+
 def decoder(byte_string, decode_type):
     if decode_type == "byte":
         return byte_string.decode("UTF-8").replace("\x00", "")

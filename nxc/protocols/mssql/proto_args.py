@@ -25,8 +25,8 @@ def proto_args(parser, std_parser, module_parser):
     psgroup.add_argument("--clear-obfscripts", action="store_true", help="Clear all cached obfuscated PowerShell scripts")
 
     tgroup = mssql_parser.add_argument_group("Files", "Options for put and get remote files")
-    tgroup.add_argument("--put-file", nargs=2, metavar="FILE", help="Put a local file into remote target, ex: whoami.txt C:\\Windows\\Temp\\whoami.txt")
-    tgroup.add_argument("--get-file", nargs=2, metavar="FILE", help="Get a remote file, ex: C:\\Windows\\Temp\\whoami.txt whoami.txt")
+    tgroup.add_argument("--put-file", nargs=2, metavar=("SRC_FILE", "DEST_FILE"), help="Put a local file into remote target, ex: whoami.txt C:\\Windows\\Temp\\whoami.txt")
+    tgroup.add_argument("--get-file", nargs=2, metavar=("SRC_FILE", "DEST_FILE"), help="Get a remote file, ex: C:\\Windows\\Temp\\whoami.txt whoami.txt")
 
     return parser
 
