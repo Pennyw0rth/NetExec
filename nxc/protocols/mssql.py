@@ -26,6 +26,7 @@ from impacket.tds import (
     TDS_ENVCHANGE_PACKETSIZE,
 )
 
+
 class mssql(connection):
     def __init__(self, args, db, host):
         self.mssql_instances = []
