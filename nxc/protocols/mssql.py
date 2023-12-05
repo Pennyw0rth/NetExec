@@ -94,9 +94,6 @@ class mssql(connection):
         if self.domain is None:
             self.domain = ""
 
-        with contextlib.suppress(Exception):
-            self.conn.disconnect()
-
     def print_host_info(self):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
         return True
@@ -116,6 +113,17 @@ class mssql(connection):
             self.conn.socket = sock
             return True
 
+    def reconnect_mssql(func):
+        def wrapper(self, *args, **kwargs):
+            with contextlib.suppress(Exception):
+                self.conn.disconnect()
+            # When using ccache file, we must need to set target host to hostname when creating connection object.
+            if self.kerberos:
+                self.host = self.hostname
+            self.create_conn_obj()
+            return func(self, *args, **kwargs)
+        return wrapper
+
     def check_if_admin(self):
         self.admin_privs = False
         try:
@@ -127,6 +135,7 @@ class mssql(connection):
             if is_admin:
                 self.admin_privs = True
 
+    @reconnect_mssql
     def kerberos_login(
         self,
         domain,
@@ -137,12 +146,6 @@ class mssql(connection):
         kdcHost="",
         useCache=False,
     ):
-        with contextlib.suppress(Exception):
-            self.conn.disconnect()
-        # When using ccache file, we must need to set target host to hostname when creating connection object.
-        self.host = self.hostname
-        self.create_conn_obj()
-
         kerb_pass = next(s for s in [self.nthash, password, aesKey] if s) if not all(s == "" for s in [self.nthash, password, aesKey]) else ""
 
         if useCache and kerb_pass == "":
@@ -197,11 +200,8 @@ class mssql(connection):
                 add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
             return True
 
+    @reconnect_mssql
     def plaintext_login(self, domain, username, password):
-        with contextlib.suppress(Exception):
-            self.conn.disconnect()
-        self.create_conn_obj()
-
         self.password = password
         self.username = username
         self.domain = domain
@@ -235,11 +235,8 @@ class mssql(connection):
                 add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
             return True
 
+    @reconnect_mssql
     def hash_login(self, domain, username, ntlm_hash):
-        with contextlib.suppress(Exception):
-            self.conn.disconnect()
-        self.create_conn_obj()
-
         self.username = username
         self.domain = domain
         self.nthash = f':{ntlm_hash.split(":")[1]}' if ntlm_hash.find(":") != -1 else f":{ntlm_hash}"
