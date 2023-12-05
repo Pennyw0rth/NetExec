@@ -139,15 +139,16 @@ class mssql(connection):
     ):
         with contextlib.suppress(Exception):
             self.conn.disconnect()
+        # When using ccache file, we must need to set target host to hostname when creating connection object.
+        self.host = self.hostname
         self.create_conn_obj()
 
         kerb_pass = next(s for s in [self.nthash, password, aesKey] if s) if not all(s == "" for s in [self.nthash, password, aesKey]) else ""
 
         if useCache and kerb_pass == "":
             ccache = CCache.loadFile(os.getenv("KRB5CCNAME"))
-            principal = ccache.principal.toPrincipal()
-            self.username = principal.components[0]
-            username = principal.components[0]
+            username = ccache.credentials[0].header["client"].prettyPrint().decode().split("@")[0]
+            self.username = username
 
         self.username = username
         self.password = password
@@ -206,7 +207,6 @@ class mssql(connection):
         self.domain = domain
         
         try:
-            # domain = "" is to prevent a decoding issue in impacket/ntlm.py:617 where it attempts to decode the domain
             res = self.conn.login(None, username, password, domain, None, not self.args.local_auth)
             if res is not True:
                 error_msg = self.handle_mssql_reply()
