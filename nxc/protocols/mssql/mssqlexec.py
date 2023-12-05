@@ -4,8 +4,8 @@ import binascii
 class MSSQLEXEC:
     def __init__(self, connection, logger):
         self.mssql_conn = connection
-        self.outputBuffer = []
         self.logger = logger
+        self.outputBuffer = []
 
     def execute(self, command, output=False):
         try:
