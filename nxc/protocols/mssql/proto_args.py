@@ -1,6 +1,3 @@
-from argparse import _StoreTrueAction
-
-
 def proto_args(parser, std_parser, module_parser):
     mssql_parser = parser.add_parser("mssql", help="own stuff using MSSQL", parents=[std_parser, module_parser])
     mssql_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
@@ -27,18 +24,3 @@ def proto_args(parser, std_parser, module_parser):
     tgroup.add_argument("--get-file", nargs=2, metavar=("SRC_FILE", "DEST_FILE"), help="Get a remote file, ex: C:\\Windows\\Temp\\whoami.txt whoami.txt")
 
     return parser
-
-
-def get_conditional_action(baseAction):
-    class ConditionalAction(baseAction):
-        def __init__(self, option_strings, dest, **kwargs):
-            x = kwargs.pop("make_required", [])
-            super().__init__(option_strings, dest, **kwargs)
-            self.make_required = x
-
-        def __call__(self, parser, namespace, values, option_string=None):
-            for x in self.make_required:
-                x.required = True
-            super().__call__(parser, namespace, values, option_string)
-
-    return ConditionalAction
