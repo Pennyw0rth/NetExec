@@ -588,16 +588,12 @@ class HostChecker:
         subkey_handle = ans["phkResult"]
 
         if valueName is None:
-            _, _, data = get_value(subkey_handle)
+            return get_value(subkey_handle)[3]
         else:
-            found = False
             for _, name, data in subkey_values(subkey_handle):
                 if name.upper() == valueName.upper():
-                    found = True
-                    break
-            if not found:
-                return DCERPCSessionError(error_code=ERROR_OBJECT_NOT_FOUND)
-        return data
+                    return data
+            return DCERPCSessionError(error_code=ERROR_OBJECT_NOT_FOUND)
 
     # Methods for getting values from SAMR and SCM #
     ################################################
