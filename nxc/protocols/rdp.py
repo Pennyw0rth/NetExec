@@ -23,17 +23,6 @@ from asyauth.common.constants import asyauthSecret
 from asysocks.unicomm.common.target import UniTarget, UniProto
 
 
-import platform
-if platform.python_version() in ["3.11.5", "3.11.6", "3.12.0"]:
-    import sys
-
-    class DevNull:
-        def write(self, msg):
-            pass
-
-    sys.stderr = DevNull()
-
-
 class rdp(connection):
     def __init__(self, args, db, host):
         self.domain = None
@@ -98,6 +87,16 @@ class rdp(connection):
     #             if hasattr(self.args, 'module') and self.args.module:
 
     def proto_logger(self):
+        import platform
+        if platform.python_version() in ["3.11.5", "3.11.6", "3.12.0"]:
+            import sys
+
+            class DevNull:
+                def write(self, msg):
+                    pass
+
+            sys.stderr = DevNull()
+
         self.logger = NXCAdapter(
             extra={
                 "protocol": "RDP",
