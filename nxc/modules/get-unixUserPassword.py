@@ -5,12 +5,12 @@ from nxc.logger import nxc_logger
 
 class NXCModule:
     """
-    Get unixUserPassword attribute attribute stored in ldap.
+    Get unixUserPassword attribute from all users in ldap
     Module by @SyzikSecu
     """
 
     name = "get-unixUserPassword"
-    description = "Get unixUserPassword stored in ldap"
+    description = "Get unixUserPassword attribute from all users in ldap"
     supported_protocols = ["ldap"]
     opsec_safe = True
     multiple_hosts = True
