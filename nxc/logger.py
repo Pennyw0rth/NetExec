@@ -68,12 +68,6 @@ class NXCAdapter(logging.LoggerAdapter):
 
     def display(self, msg, *args, **kwargs):
         """Display text to console, formatted for nxc"""
-        try:
-            if self.extra and "protocol" in self.extra and not called_from_cmd_args():
-                return
-        except AttributeError:
-            pass
-
         msg, kwargs = self.format(f"{colored('[*]', 'blue', attrs=['bold'])} {msg}", kwargs)
         text = Text.from_ansi(msg)
         nxc_console.print(text, *args, **kwargs)
@@ -81,12 +75,6 @@ class NXCAdapter(logging.LoggerAdapter):
 
     def success(self, msg, color="green", *args, **kwargs):
         """Print some sort of success to the user"""
-        try:
-            if self.extra and "protocol" in self.extra and not called_from_cmd_args():
-                return
-        except AttributeError:
-            pass
-
         msg, kwargs = self.format(f"{colored('[+]', color, attrs=['bold'])} {msg}", kwargs)
         text = Text.from_ansi(msg)
         nxc_console.print(text, *args, **kwargs)
@@ -94,12 +82,6 @@ class NXCAdapter(logging.LoggerAdapter):
 
     def highlight(self, msg, *args, **kwargs):
         """Prints a completely yellow highlighted message to the user"""
-        try:
-            if self.extra and "protocol" in self.extra and not called_from_cmd_args():
-                return
-        except AttributeError:
-            pass
-
         msg, kwargs = self.format(f"{colored(msg, 'yellow', attrs=['bold'])}", kwargs)
         text = Text.from_ansi(msg)
         nxc_console.print(text, *args, **kwargs)
@@ -107,11 +89,6 @@ class NXCAdapter(logging.LoggerAdapter):
 
     def fail(self, msg, color="red", *args, **kwargs):
         """Prints a failure (may or may not be an error) - e.g. login creds didn't work"""
-        try:
-            if self.extra and "protocol" in self.extra and not called_from_cmd_args():
-                return
-        except AttributeError:
-            pass
         msg, kwargs = self.format(f"{colored('[-]', color, attrs=['bold'])} {msg}", kwargs)
         text = Text.from_ansi(msg)
         nxc_console.print(text, *args, **kwargs)
