@@ -17,7 +17,6 @@ from nxc.config import process_secret
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.misc import gen_random_string
-from nxc.protocols.ldap.laps import laps_search
 from nxc.logger import NXCAdapter
 
 

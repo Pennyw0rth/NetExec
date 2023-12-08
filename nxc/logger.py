@@ -4,7 +4,6 @@ from logging.handlers import RotatingFileHandler
 import os.path
 import sys
 import re
-from nxc.helpers.misc import called_from_cmd_args
 from nxc.console import nxc_console
 from termcolor import colored
 from datetime import datetime
