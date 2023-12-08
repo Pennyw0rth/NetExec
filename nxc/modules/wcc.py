@@ -588,7 +588,7 @@ class HostChecker:
         subkey_handle = ans["phkResult"]
 
         if valueName is None:
-            return get_value(subkey_handle)[3]
+            return get_value(subkey_handle)[2]
         else:
             for _, name, data in subkey_values(subkey_handle):
                 if name.upper() == valueName.upper():
