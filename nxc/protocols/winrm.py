@@ -99,9 +99,6 @@ class winrm(connection):
         self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
         self.logger.extra["port"] = self.port
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
-
-        if self.args.laps:
-            return laps_search(self.args.username, self.args.password, self.args.hash, self.domain)
         return True
 
     def create_conn_obj(self):
@@ -154,9 +151,8 @@ class winrm(connection):
 
     def plaintext_login(self, domain, username, password):
         self.admin_privs = False
-        if not self.args.laps:
-            self.password = password
-            self.username = username
+        self.password = password
+        self.username = username
         self.domain = domain
         try:
             self.conn = Client(

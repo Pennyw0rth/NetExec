@@ -43,7 +43,6 @@ from nxc.protocols.smb.smbspider import SMBSpider
 from nxc.protocols.smb.passpol import PassPolDump
 from nxc.protocols.smb.samruser import UserSamrDump
 from nxc.protocols.smb.samrfunc import SamrFunc
-from nxc.protocols.ldap.laps import laps_search
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.helpers.logger import highlight
 from nxc.helpers.bloodhound import add_user_bh
@@ -255,8 +254,6 @@ class smb(connection):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
         smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
         self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({smbv1})")
-        if self.args.laps:
-            return laps_search(self.args.username, self.args.password, self.args.hash, self.domain)
         return True
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
@@ -269,49 +266,45 @@ class smb(connection):
         nthash = ""
 
         try:
-            if not self.args.laps:
-                self.password = password
-                self.username = username
-                # This checks to see if we didn't provide the LM Hash
-                if ntlm_hash.find(":") != -1:
-                    lmhash, nthash = ntlm_hash.split(":")
-                    self.hash = nthash
-                else:
-                    nthash = ntlm_hash
-                    self.hash = ntlm_hash
-                if lmhash:
-                    self.lmhash = lmhash
-                if nthash:
-                    self.nthash = nthash
-
-                if not all(s == "" for s in [self.nthash, password, aesKey]):
-                    kerb_pass = next(s for s in [self.nthash, password, aesKey] if s)
-                else:
-                    kerb_pass = ""
-                    self.logger.debug(f"Attempting to do Kerberos Login with useCache: {useCache}")
-
-                tgs = None
-                if self.args.delegate:
-                    kerb_pass = ""
-                    self.username = self.args.delegate
-                    serverName = Principal(f"cifs/{self.hostname}", type=constants.PrincipalNameType.NT_SRV_INST.value)
-                    tgs = kerberos_login_with_S4U(domain, self.hostname, username, password, nthash, lmhash, aesKey, kdcHost, self.args.delegate, serverName, useCache, no_s4u2proxy=self.args.no_s4u2proxy)
-                    self.logger.debug(f"Got TGS for {self.args.delegate} through S4U")
-
-                self.conn.kerberosLogin(self.username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache=useCache, TGS=tgs)
-                self.check_if_admin()
-
-                if username == "":
-                    self.username = self.conn.getCredentials()[0]
-                elif not self.args.delegate:
-                    self.username = username
-
-                used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
-                if self.args.delegate:
-                    used_ccache = f" through S4U with {username}"
+            self.password = password
+            self.username = username
+            # This checks to see if we didn't provide the LM Hash
+            if ntlm_hash.find(":") != -1:
+                lmhash, nthash = ntlm_hash.split(":")
+                self.hash = nthash
             else:
-                self.plaintext_login(self.hostname, username, password)
-                return True
+                nthash = ntlm_hash
+                self.hash = ntlm_hash
+            if lmhash:
+                self.lmhash = lmhash
+            if nthash:
+                self.nthash = nthash
+
+            if not all(s == "" for s in [self.nthash, password, aesKey]):
+                kerb_pass = next(s for s in [self.nthash, password, aesKey] if s)
+            else:
+                kerb_pass = ""
+                self.logger.debug(f"Attempting to do Kerberos Login with useCache: {useCache}")
+
+            tgs = None
+            if self.args.delegate:
+                kerb_pass = ""
+                self.username = self.args.delegate
+                serverName = Principal(f"cifs/{self.hostname}", type=constants.PrincipalNameType.NT_SRV_INST.value)
+                tgs = kerberos_login_with_S4U(domain, self.hostname, username, password, nthash, lmhash, aesKey, kdcHost, self.args.delegate, serverName, useCache, no_s4u2proxy=self.args.no_s4u2proxy)
+                self.logger.debug(f"Got TGS for {self.args.delegate} through S4U")
+
+            self.conn.kerberosLogin(self.username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache=useCache, TGS=tgs)
+            self.check_if_admin()
+
+            if username == "":
+                self.username = self.conn.getCredentials()[0]
+            elif not self.args.delegate:
+                self.username = username
+
+            used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
+            if self.args.delegate:
+                used_ccache = f" through S4U with {username}"
 
             out = f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}"
             self.logger.success(out)
@@ -362,9 +355,8 @@ class smb(connection):
         # Re-connect since we logged off
         self.create_conn_obj()
         try:
-            if not self.args.laps:
-                self.password = password
-                self.username = username
+            self.password = password
+            self.username = username
             self.domain = domain
 
             try:
