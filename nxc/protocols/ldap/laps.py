@@ -274,7 +274,7 @@ def laps_search(self, username, password, ntlm_hash, domain):
     if self.kerberos:
         if self.kdcHost is None:
             self.logger.fail("Add --kdcHost parameter to use laps with kerberos")
-            return False
+            return None, None, None, None
 
         connection = ldapco.kerberos_login(
             domain,
@@ -294,7 +294,7 @@ def laps_search(self, username, password, ntlm_hash, domain):
     if not connection:
         self.logger.fail(f"LDAP connection failed with account {username[0]}")
 
-        return False
+        return None, None, None, None
 
     search_filter = "(&(objectCategory=computer)(|(msLAPS-EncryptedPassword=*)(ms-MCS-AdmPwd=*)(msLAPS-Password=*))(name=" + self.hostname + "))"
     attributes = [
@@ -322,7 +322,7 @@ def laps_search(self, username, password, ntlm_hash, domain):
                     data = d.run()
                 except Exception as e:
                     self.logger.fail(str(e))
-                    return None
+                    return None, None, None, None
                 r = loads(data)
                 msMCSAdmPwd = r["p"]
                 username_laps = r["n"]
@@ -337,22 +337,21 @@ def laps_search(self, username, password, ntlm_hash, domain):
         self.logger.debug(f"Host: {sAMAccountName:<20} Password: {msMCSAdmPwd} {self.hostname}")
     else:
         self.logger.fail(f"msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS property for {self.hostname}")
-
-        return False
-
-    self.username = username_laps if username_laps else self.args.laps
-    self.password = msMCSAdmPwd
+        return None, None, None, None
 
     if msMCSAdmPwd == "":
         self.logger.fail(f"msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS property for {self.hostname}")
+        return None, None, None, None
 
-        return False
+    hash_ntlm = None
     if ntlm_hash:
         hash_ntlm = hashlib.new("md4", msMCSAdmPwd.encode("utf-16le")).digest()
-        self.hash = binascii.hexlify(hash_ntlm).decode()
+        hash_ntlm = binascii.hexlify(hash_ntlm).decode()
 
+    username = username_laps if username_laps else self.args.laps
+    password = msMCSAdmPwd
+    domain = self.hostname
     self.args.local_auth = True
-    self.domain = self.hostname
     self.logger.extra["protocol"] = prev_protocol
     self.logger.extra["port"] = prev_port
-    return True
+    return username, password, domain, hash_ntlm
