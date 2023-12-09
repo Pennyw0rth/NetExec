@@ -190,15 +190,13 @@ class winrm(connection):
         self.admin_privs = False
         lmhash = "00000000000000000000000000000000"
         nthash = ""
-        if not self.args.laps:
-            self.username = username
-            # This checks to see if we didn't provide the LM Hash
-            if ntlm_hash.find(":") != -1:
-                lmhash, nthash = ntlm_hash.split(":")
-            else:
-                nthash = ntlm_hash
+        self.username = username
+        # This checks to see if we didn't provide the LM Hash
+        if ntlm_hash.find(":") != -1:
+            lmhash, nthash = ntlm_hash.split(":")
         else:
-            nthash = self.hash
+            nthash = ntlm_hash
+
         self.lmhash = lmhash
         self.nthash = nthash
         self.domain = domain

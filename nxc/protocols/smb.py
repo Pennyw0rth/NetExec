@@ -419,23 +419,19 @@ class smb(connection):
         lmhash = ""
         nthash = ""
         try:
-            if not self.args.laps:
-                self.username = username
-                # This checks to see if we didn't provide the LM Hash
-                if ntlm_hash.find(":") != -1:
-                    lmhash, nthash = ntlm_hash.split(":")
-                    self.hash = nthash
-                else:
-                    nthash = ntlm_hash
-                    self.hash = ntlm_hash
-                if lmhash:
-                    self.lmhash = lmhash
-                if nthash:
-                    self.nthash = nthash
-            else:
-                nthash = self.hash
-
             self.domain = domain
+            self.username = username
+            # This checks to see if we didn't provide the LM Hash
+            if ntlm_hash.find(":") != -1:
+                lmhash, nthash = ntlm_hash.split(":")
+                self.hash = nthash
+            else:
+                nthash = ntlm_hash
+                self.hash = ntlm_hash
+            if lmhash:
+                self.lmhash = lmhash
+            if nthash:
+                self.nthash = nthash
 
             self.conn.login(self.username, "", domain, lmhash, nthash)
 
