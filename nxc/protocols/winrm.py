@@ -183,17 +183,11 @@ class winrm(connection):
         return True
 
     def print_host_info(self):
-        if not self.args.domain:
-            self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
         
         self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
         self.logger.extra["port"] = self.port
-        winrm_info = "{} {} {}".format(
-            self.endpoint,
-            f"(auth type:{self.auth_type})",
-            f"(domain:{self.domain})" if self.args.domain else "",
-        )
-        self.logger.display(winrm_info)
+        self.logger.info(f"Connection information: {self.endpoint} (auth type:{self.auth_type}) (domain:{self.domain if self.args.domain else ''})")
 
         if self.args.laps:
             return self.laps_search(self.args.username, self.args.password, self.args.hash, self.domain)
