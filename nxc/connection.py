@@ -462,7 +462,7 @@ class connection:
 
         if hasattr(self.args, "laps") and self.args.laps:
             self.logger.debug("Trying to authenticate using LAPS")
-            username[0], secret[0], domain[0], ntlm_hash = laps_search(self, self.args.username, self.args.password, self.args.hash, self.domain)
+            username[0], secret[0], domain[0], ntlm_hash = laps_search(self, username, secret, cred_type, domain)
             cred_type = ["plaintext"]
             if not (username[0] or secret[0] or domain[0]):
                 return False

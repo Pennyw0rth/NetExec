@@ -263,7 +263,7 @@ class LAPSv2Extract:
         return plaintext[:-18].decode("utf-16le")
 
 
-def laps_search(self, username, password, ntlm_hash, domain):
+def laps_search(self, username, password, cred_type, domain):
     prev_protocol = self.logger.extra["protocol"]
     prev_port = self.logger.extra["port"]
     self.logger.extra["protocol"] = "LDAP"
@@ -277,19 +277,19 @@ def laps_search(self, username, password, ntlm_hash, domain):
             return None, None, None, None
 
         connection = ldapco.kerberos_login(
-            domain,
+            domain[0],
             username[0] if username else "",
-            password[0] if password else "",
-            ntlm_hash[0] if ntlm_hash else "",
+            password[0] if cred_type[0] == "plaintext" else "",
+            password[0] if cred_type[0] == "hash" else "",
             kdcHost=self.kdcHost,
             aesKey=self.aesKey,
         )
     else:
         connection = ldapco.auth_login(
-            domain,
+            domain[0],
             username[0] if username else "",
-            password[0] if password else "",
-            ntlm_hash[0] if ntlm_hash else "",
+            password[0] if cred_type[0] == "plaintext" else "",
+            password[0] if cred_type[0] == "hash" else "",
         )
     if not connection:
         self.logger.fail(f"LDAP connection failed with account {username[0]}")
@@ -317,7 +317,16 @@ def laps_search(self, username, password, ntlm_hash, domain):
             values = {str(attr["type"]).lower(): attr["vals"][0] for attr in host["attributes"]}
             if "mslaps-encryptedpassword" in values:
                 msMCSAdmPwd = values["mslaps-encryptedpassword"]
-                d = LAPSv2Extract(bytes(msMCSAdmPwd), username[0] if username else "", password[0] if password else "", domain, ntlm_hash[0] if ntlm_hash else "", self.args.kerberos, self.args.kdcHost, 339)
+                d = LAPSv2Extract(
+                    bytes(msMCSAdmPwd),
+                    username[0] if username else "",
+                    password[0] if cred_type[0] == "plaintext" else "",
+                    domain[0],
+                    password[0] if cred_type[0] == "hash" else "",
+                    self.args.kerberos,
+                    self.args.kdcHost,
+                    339
+                )
                 try:
                     data = d.run()
                 except Exception as e:
@@ -344,7 +353,7 @@ def laps_search(self, username, password, ntlm_hash, domain):
         return None, None, None, None
 
     hash_ntlm = None
-    if ntlm_hash:
+    if cred_type[0] == "hash":
         hash_ntlm = hashlib.new("md4", msMCSAdmPwd.encode("utf-16le")).digest()
         hash_ntlm = binascii.hexlify(hash_ntlm).decode()
 
