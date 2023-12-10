@@ -33,17 +33,20 @@ class winrm(connection):
         self.lmhash = ""
         self.nthash = ""
         self.ssl = False
+        self.auth_type = None
 
         connection.__init__(self, args, db, host)
 
     def proto_logger(self):
+        # Reason why default is SMB/445, because default is enumerate over SMB.
+        # For more details, please check the function "print_host_info" 
         logging.getLogger("pypsrp").disabled = True
         logging.getLogger("pypsrp.wsman").disabled = True
         self.logger = NXCAdapter(
             extra={
-                "protocol": "WINRM",
+                "protocol": "SMB",
                 "host": self.host,
-                "port": "5985",
+                "port": "445",
                 "hostname": self.hostname,
             }
         )
@@ -95,9 +98,16 @@ class winrm(connection):
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
     def print_host_info(self):
-        self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
-        self.logger.extra["port"] = self.port
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
+        if self.args.no_smb:
+            self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
+            self.logger.extra["port"] = self.port
+            self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
+        else:
+            self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
+            self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
+            self.logger.extra["port"] = self.port
+        
+        self.logger.info(f"Connection information: {self.endpoint} (auth type:{self.auth_type}) (domain:{self.domain if self.args.domain else ''})")
         return True
 
     def create_conn_obj(self):
@@ -123,6 +133,7 @@ class winrm(connection):
                 self.logger.debug(f"Requesting URL: {endpoints[protocol]['url']}")
                 res = requests.post(endpoints[protocol]["url"], verify=False, timeout=self.args.http_timeout)
                 self.logger.debug(f"Received response code: {res.status_code}")
+                self.auth_type = res.headers["WWW-Authenticate"] if "WWW-Authenticate" in res.headers else "NOAUTH"
                 self.endpoint = endpoints[protocol]["url"]
                 self.ssl = endpoints[protocol]["ssl"]
                 return True
