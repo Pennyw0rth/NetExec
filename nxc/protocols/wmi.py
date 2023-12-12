@@ -159,9 +159,10 @@ class wmi(connection):
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
     def print_host_info(self):
-        self.logger.extra["protocol"] = "RPC"
-        self.logger.extra["port"] = "135"
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
+        if not self.args.no_host_info:
+            self.logger.extra["protocol"] = "RPC"
+            self.logger.extra["port"] = "135"
+            self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
         return True
 
     def check_if_admin(self):

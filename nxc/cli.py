@@ -34,6 +34,7 @@ def gen_cli_args():
     parser.add_argument("--timeout", default=None, type=int, help="max timeout in seconds of each thread (default: None)")
     parser.add_argument("--jitter", metavar="INTERVAL", type=str, help="sets a random delay between each connection (default: None)")
     parser.add_argument("--no-progress", action="store_true", help="Not displaying progress bar during scan")
+    parser.add_argument("--no-host-info", action="store_true", help="Not displaying operating system information")
     parser.add_argument("--verbose", action="store_true", help="enable verbose output")
     parser.add_argument("--debug", action="store_true", help="enable debug level information")
     parser.add_argument("--version", action="store_true", help="Display nxc version")

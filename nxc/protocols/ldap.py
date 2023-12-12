@@ -292,18 +292,19 @@ class ldap(connection):
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
     def print_host_info(self):
-        self.logger.debug("Printing host info for LDAP")
-        if self.args.no_smb:
-            self.logger.extra["protocol"] = "LDAP"
-            self.logger.extra["port"] = "389"
-            self.logger.display(f"Connecting to LDAP {self.hostname}")
-        else:
-            self.logger.extra["protocol"] = "SMB" if not self.no_ntlm else "LDAP"
-            self.logger.extra["port"] = "445" if not self.no_ntlm else "389"
-            signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
-            smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
-            self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({smbv1})")
-            self.logger.extra["protocol"] = "LDAP"
+        if not self.args.no_host_info:
+            self.logger.debug("Printing host info for LDAP")
+            if self.args.no_smb:
+                self.logger.extra["protocol"] = "LDAP"
+                self.logger.extra["port"] = "389"
+                self.logger.display(f"Connecting to LDAP {self.hostname}")
+            else:
+                self.logger.extra["protocol"] = "SMB" if not self.no_ntlm else "LDAP"
+                self.logger.extra["port"] = "445" if not self.no_ntlm else "389"
+                signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
+                smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
+                self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({smbv1})")
+                self.logger.extra["protocol"] = "LDAP"
         return True
 
     def kerberos_login(

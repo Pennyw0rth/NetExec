@@ -183,19 +183,20 @@ class winrm(connection):
         return True
 
     def print_host_info(self):
-        if self.args.no_smb:
-            self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
-            self.logger.extra["port"] = self.port
-            self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
-        else:
-            self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
-            self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
-            self.logger.extra["port"] = self.port
-        
-        self.logger.info(f"Connection information: {self.endpoint} (auth type:{self.auth_type}) (domain:{self.domain if self.args.domain else ''})")
+        if not self.args.no_host_info:
+            if self.args.no_smb:
+                self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
+                self.logger.extra["port"] = self.port
+                self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
+            else:
+                self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
+                self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
+                self.logger.extra["port"] = self.port
+            
+            self.logger.info(f"Connection information: {self.endpoint} (auth type:{self.auth_type}) (domain:{self.domain if self.args.domain else ''})")
 
-        if self.args.laps:
-            return self.laps_search(self.args.username, self.args.password, self.args.hash, self.domain)
+            if self.args.laps:
+                return self.laps_search(self.args.username, self.args.password, self.args.hash, self.domain)
         return True
 
     def create_conn_obj(self):

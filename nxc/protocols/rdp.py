@@ -97,11 +97,12 @@ class rdp(connection):
         )
 
     def print_host_info(self):
-        nla = colored(f"nla:{self.nla}", host_info_colors[3], attrs=["bold"]) if self.nla else colored(f"nla:{self.nla}", host_info_colors[2], attrs=["bold"])
-        if self.domain is None:
-            self.logger.display("Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
-        else:
-            self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({nla})")
+        if not self.args.no_host_info:
+            nla = colored(f"nla:{self.nla}", host_info_colors[3], attrs=["bold"]) if self.nla else colored(f"nla:{self.nla}", host_info_colors[2], attrs=["bold"])
+            if self.domain is None:
+                self.logger.display("Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
+            else:
+                self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({nla})")
         return True
 
     def create_conn_obj(self):

@@ -46,7 +46,8 @@ class vnc(connection):
         )
 
     def print_host_info(self):
-        self.logger.display(f"VNC connecting to {self.hostname}")
+        if not self.args.no_host_info:
+            self.logger.display(f"VNC connecting to {self.hostname}")
 
     def create_conn_obj(self):
         try:
