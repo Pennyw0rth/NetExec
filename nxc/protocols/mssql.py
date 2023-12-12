@@ -39,6 +39,19 @@ class mssql(connection):
 
         connection.__init__(self, args, db, host)
 
+    def proto_flow(self):
+        self.logger.debug("Kicking off proto_flow")
+        self.proto_logger()
+        if self.create_conn_obj() and self.enum_host_info():
+            self.logger.debug("Created connection object")
+            if self.print_host_info() and (self.login() or (self.username == "" and self.password == "")):
+                if hasattr(self.args, "module") and self.args.module:
+                    self.logger.debug("Calling modules")
+                    self.call_modules()
+                else:
+                    self.logger.debug("Calling command arguments")
+                    self.call_cmd_args()
+
     def proto_logger(self):
         self.logger = NXCAdapter(
             extra={
@@ -77,6 +90,7 @@ class mssql(connection):
             self.logger.info(f"NTLM challenge: {challenge!s}")
         except Exception as e:
             self.logger.info(f"Failed to receive NTLM challenge, reason: {e!s}")
+            return False
         else:
             ntlm_info = parse_challenge(challenge)
             self.domain = ntlm_info["target_info"]["MsvAvDnsDomainName"]
@@ -93,6 +107,8 @@ class mssql(connection):
 
         if self.domain is None:
             self.domain = ""
+
+        return True
 
     def print_host_info(self):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
