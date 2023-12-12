@@ -36,21 +36,9 @@ class mssql(connection):
         self.hash = None
         self.os_arch = None
         self.nthash = ""
+        self.is_mssql = False
 
         connection.__init__(self, args, db, host)
-
-    def proto_flow(self):
-        self.logger.debug("Kicking off proto_flow")
-        self.proto_logger()
-        if self.create_conn_obj() and self.enum_host_info():
-            self.logger.debug("Created connection object")
-            if self.print_host_info() and (self.login() or (self.username == "" and self.password == "")):
-                if hasattr(self.args, "module") and self.args.module:
-                    self.logger.debug("Calling modules")
-                    self.call_modules()
-                else:
-                    self.logger.debug("Calling command arguments")
-                    self.call_cmd_args()
 
     def proto_logger(self):
         self.logger = NXCAdapter(
@@ -62,6 +50,47 @@ class mssql(connection):
             }
         )
 
+    def create_conn_obj(self):
+        try:
+            self.conn = tds.MSSQL(self.host, self.port)
+            # Default has not timeout option in tds.MSSQL.connect() function, let rewrite it.
+            af, socktype, proto, canonname, sa = socket.getaddrinfo(self.host, self.port, 0, socket.SOCK_STREAM)[0]
+            sock = socket.socket(af, socktype, proto)
+            sock.settimeout(self.args.mssql_timeout)
+            sock.connect(sa)
+            self.conn.socket = sock
+            if self.is_mssql == False:
+                self.conn.preLogin()
+        except Exception as e:
+            self.logger.debug(f"Error connecting to MSSQL service on host: {self.host}, reason: {e}")
+            return False
+        else:
+            self.is_mssql = True
+            return True
+
+    def reconnect_mssql(func):
+        def wrapper(self, *args, **kwargs):
+            with contextlib.suppress(Exception):
+                self.conn.disconnect()
+            # When using ccache file, we must need to set target host to hostname when creating connection object.
+            if self.kerberos:
+                self.host = self.hostname
+            self.create_conn_obj()
+            return func(self, *args, **kwargs)
+        return wrapper
+
+    def check_if_admin(self):
+        self.admin_privs = False
+        try:
+            results = self.conn.sql_query("SELECT IS_SRVROLEMEMBER('sysadmin')")
+            is_admin = int(results[0][""])
+        except Exception as e:
+            self.logger.fail(f"Error querying for sysadmin role: {e}")
+        else:
+            if is_admin:
+                self.admin_privs = True
+    
+    @reconnect_mssql
     def enum_host_info(self):
         challenge = None
         try:
@@ -108,48 +137,9 @@ class mssql(connection):
         if self.domain is None:
             self.domain = ""
 
-        return True
-
     def print_host_info(self):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
         return True
-
-    def create_conn_obj(self):
-        try:
-            self.conn = tds.MSSQL(self.host, self.port)
-            # Default has not timeout option in tds.MSSQL.connect() function, let rewrite it.
-            af, socktype, proto, canonname, sa = socket.getaddrinfo(self.host, self.port, 0, socket.SOCK_STREAM)[0]
-            sock = socket.socket(af, socktype, proto)
-            sock.settimeout(self.args.mssql_timeout)
-            sock.connect(sa)
-        except Exception as e:
-            self.logger.debug(f"Error connecting to MSSQL service on host: {self.host}, reason: {e}")
-            return False
-        else:
-            self.conn.socket = sock
-            return True
-
-    def reconnect_mssql(func):
-        def wrapper(self, *args, **kwargs):
-            with contextlib.suppress(Exception):
-                self.conn.disconnect()
-            # When using ccache file, we must need to set target host to hostname when creating connection object.
-            if self.kerberos:
-                self.host = self.hostname
-            self.create_conn_obj()
-            return func(self, *args, **kwargs)
-        return wrapper
-
-    def check_if_admin(self):
-        self.admin_privs = False
-        try:
-            results = self.conn.sql_query("SELECT IS_SRVROLEMEMBER('sysadmin')")
-            is_admin = int(results[0][""])
-        except Exception as e:
-            self.logger.fail(f"Error querying for sysadmin role: {e}")
-        else:
-            if is_admin:
-                self.admin_privs = True
 
     @reconnect_mssql
     def kerberos_login(
