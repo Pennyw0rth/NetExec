@@ -59,7 +59,7 @@ class mssql(connection):
             sock.settimeout(self.args.mssql_timeout)
             sock.connect(sa)
             self.conn.socket = sock
-            if self.is_mssql == False:
+            if not self.is_mssql:
                 self.conn.preLogin()
         except Exception as e:
             self.logger.debug(f"Error connecting to MSSQL service on host: {self.host}, reason: {e}")
