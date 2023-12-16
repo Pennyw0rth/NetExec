@@ -25,7 +25,7 @@ class ModuleLoader:
             self.logger.fail(f"{module_path} missing the name variable")
             module_error = True
         elif hasattr(module, "name") and module.name != module_path.split("/")[-1][:-3]:
-            self.logger.fail(f"{module_path} name variable must match the filename")
+            self.logger.fail(f"{module_path} filename must match the module name {module.name}")
             module_error = True
         elif not hasattr(module, "description"):
             self.logger.fail(f"{module_path} missing the description variable")
