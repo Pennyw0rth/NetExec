@@ -1,4 +1,4 @@
-import argparse
+import argparse, argcomplete
 import sys
 from argparse import RawTextHelpFormatter
 from nxc.loaders.protocolloader import ProtocolLoader
@@ -81,11 +81,12 @@ def gen_cli_args():
     except Exception as e:
         nxc_logger.exception(f"Error loading proto_args from proto_args.py file in protocol folder: {protocol} - {e}")
 
+    argcomplete.autocomplete(parser)
+    args = parser.parse_args()
+
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(1)
-
-    args = parser.parse_args()
 
     if args.version:
         print(f"{VERSION} - {CODENAME}")
