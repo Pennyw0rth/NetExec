@@ -4,7 +4,7 @@ from hashlib import pbkdf2_hmac, sha1
 import hmac
 import json
 import ntpath
-import os
+from os import remove
 import sqlite3
 import tempfile
 from Cryptodome.Cipher import AES, DES3
@@ -156,7 +156,7 @@ class FirefoxTriage:
         db.close()
         fh.close()
         try:
-            os.remove(fh.name)
+            remove(fh.name)
         except Exception as e:
             self.logger.error(f"Error removing temporary file: {e}")
 
