@@ -17,12 +17,11 @@ class NXCModule:
         pass
 
     def on_login(self, context, connection):
-        domain_dn = ",".join(["DC=" + dc for dc in connection.domain.split(".")])
         search_filter = "(&(objectClass=trustedDomain))"
         attributes = ["flatName", "trustPartner", "trustDirection", "trustAttributes"]
 
         context.log.debug(f"Search Filter={search_filter}")
-        resp = connection.ldapConnection.search(searchBase=domain_dn, searchFilter=search_filter, attributes=attributes, sizeLimit=0)
+        resp = connection.ldapConnection.search(searchFilter=search_filter, attributes=attributes, sizeLimit=0)
 
         trusts = []
         context.log.debug(f"Total of records returned {len(resp)}")
