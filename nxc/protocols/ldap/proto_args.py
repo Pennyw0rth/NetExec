@@ -1,16 +1,12 @@
-from argparse import _StoreTrueAction
-
-
 def proto_args(parser, std_parser, module_parser):
     ldap_parser = parser.add_parser("ldap", help="own stuff using LDAP", parents=[std_parser, module_parser])
     ldap_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
     ldap_parser.add_argument("--port", type=int, choices={389, 636}, default=389, help="LDAP port (default: 389)")
-    no_smb_arg = ldap_parser.add_argument("--no-smb", action=get_conditional_action(_StoreTrueAction), make_required=[], help="No smb connection")
+    ldap_parser.add_argument("--no-smb", action="store_true", help="No smb connection")
 
     dgroup = ldap_parser.add_mutually_exclusive_group()
-    domain_arg = dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, default=None, help="domain to authenticate to")
+    dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, default=None, help="domain to authenticate to")
     dgroup.add_argument("--local-auth", action="store_true", help="authenticate locally to each target")
-    no_smb_arg.make_required = [domain_arg]
 
     egroup = ldap_parser.add_argument_group("Retrevie hash on the remote DC", "Options to get hashes from Kerberos")
     egroup.add_argument("--asreproast", help="Output AS_REP response to crack with hashcat to file")
