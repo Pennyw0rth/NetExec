@@ -1690,10 +1690,10 @@ class smb(connection):
             add_ntds_hash.ntds_hashes += 1
             if self.args.enabled:
                 if "Enabled" in ntds_hash:
-                    ntds_hash = ntds_hash.split(" ")[0]
+                    ntds_hash = " ".join(ntds_hash.split(" ")[:-1])
                     self.logger.highlight(ntds_hash)
             else:
-                ntds_hash = ntds_hash.split(" ")[0]
+                ntds_hash = " ".join(ntds_hash.split(" ")[:-1])
                 self.logger.highlight(ntds_hash)
             if ntds_hash.find("$") == -1:
                 if ntds_hash.find("\\") != -1:
