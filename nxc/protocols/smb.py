@@ -359,12 +359,7 @@ class smb(connection):
             self.username = username
             self.domain = domain
 
-            try:
-                self.conn.login(self.username, self.password, domain)
-            except UnicodeEncodeError:
-                self.logger.error(f"UnicodeEncodeError on: '{self.username}:{self.password}'. Trying again with a different encoding...")
-                self.create_conn_obj()
-                self.conn.login(self.username, self.password.encode().decode("latin-1"), domain)
+            self.conn.login(self.username, self.password, domain)
 
             self.check_if_admin()
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
