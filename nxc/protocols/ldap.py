@@ -7,6 +7,7 @@ import socket
 from binascii import hexlify
 from datetime import datetime
 from re import sub, I
+import sys
 from zipfile import ZipFile
 from termcolor import colored
 
@@ -250,12 +251,12 @@ class ldap(connection):
 
     def enum_host_info(self):
         self.target, self.targetDomain, self.baseDN = self.get_ldap_info(self.host)
+        if self.args.no_smb and not (self.target and self.targetDomain and self.baseDN):
+            sys.exit(1)
         self.hostname = self.target
         self.domain = self.targetDomain
         # smb no open, specify the domain
-        if self.args.no_smb:
-            self.domain = self.args.domain
-        else:
+        if not self.args.no_smb:
             self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
 
             try:
@@ -302,7 +303,7 @@ class ldap(connection):
             self.logger.extra["port"] = "445" if not self.no_ntlm else "389"
             signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
             smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
-            self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({smbv1})")
+            self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1})")
             self.logger.extra["protocol"] = "LDAP"
         return True
 
