@@ -13,16 +13,16 @@ class NXCModule:
     Module by @0xjbb, original code from Impacket rpcdump.py
     """
     KNOWN_PROTOCOLS = {
-        135: {'bindstr': r'ncacn_ip_tcp:%s[135]'},
-        139: {'bindstr': r'ncacn_np:%s[\pipe\epmapper]'},
-        443: {'bindstr': r'ncacn_http:[593,RpcProxy=%s:443]'},
-        445: {'bindstr': r'ncacn_np:%s[\pipe\epmapper]'},
-        593: {'bindstr': r'ncacn_http:%s'}
+        135: {"bindstr": r"ncacn_ip_tcp:%s[135]"},
+        139: {"bindstr": r"ncacn_np:%s[\pipe\epmapper]"},
+        443: {"bindstr": r"ncacn_http:[593,RpcProxy=%s:443]"},
+        445: {"bindstr": r"ncacn_np:%s[\pipe\epmapper]"},
+        593: {"bindstr": r"ncacn_http:%s"}
         }
     
     name = "enum_ca"
     description = "Anonymously uses RPC endpoints to hunt for ADCS CAs"
-    supported_protocols = ['smb']  # Example: ['smb', 'mssql']
+    supported_protocols = ["smb"]  # Example: ['smb', 'mssql']
     opsec_safe = True  # Does the module touch disk?
     multiple_hosts = True  # Does it make sense to run this module on multiple hosts at a time?
 
@@ -43,10 +43,10 @@ class NXCModule:
         self.__username = connection.username
         self.__password = connection.password
         self.__domain = connection.domain
-        self.__lmhash = ''
-        self.__nthash = ''
+        self.__lmhash = ""
+        self.__nthash = ""
         self.__port = 135.
-        self.__stringbinding = ''
+        self.__stringbinding = ""
 
         if context.hash and ":" in context.hash[0]:
             hashList = context.hash[0].split(":")
@@ -56,8 +56,8 @@ class NXCModule:
             self.__nthash = context.hash[0]
             self.__lmhash = "00000000000000000000000000000000"
 
-        self.__stringbinding = self.KNOWN_PROTOCOLS[self.__port]['bindstr'] % connection.host
-        context.log.debug('StringBinding %s' % self.__stringbinding)
+        self.__stringbinding = self.KNOWN_PROTOCOLS[self.__port]["bindstr"] % connection.host
+        context.log.debug("StringBinding %s" % self.__stringbinding)
         
         rpctransport = transport.DCERPCTransportFactory(self.__stringbinding)
 
@@ -78,7 +78,7 @@ class NXCModule:
         try:
             entries = self.__fetchList(rpctransport)
         except Exception as e:
-            error_text = 'Protocol failed: %s' % e
+            error_text = "Protocol failed: %s" % e
             context.log.fail(error_text)
 
             if RPC_PROXY_INVALID_RPC_PORT_ERR in error_text or \
@@ -89,11 +89,11 @@ class NXCModule:
                                  "to connect to its epmapper using RpcProxy.")
                 return
         for entry in entries:
-            tmpUUID = str(entry['tower']['Floors'][0])
+            tmpUUID = str(entry["tower"]["Floors"][0])
 
             if uuid.uuidtup_to_bin(uuid.string_to_uuidtup(tmpUUID))[:18] in epm.KNOWN_UUIDS:
                 exename = epm.KNOWN_UUIDS[uuid.uuidtup_to_bin(uuid.string_to_uuidtup(tmpUUID))[:18]]
-                context.log.debug('EXEs %s' % exename)
+                context.log.debug("EXEs %s" % exename)
                 if exename == "certsrv.exe":
                     context.log.success("[+] Active Directory Certificate Services Found.")
                     url = "http://%s/certsrv/" % connection.host
