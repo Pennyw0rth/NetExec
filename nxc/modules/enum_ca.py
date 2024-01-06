@@ -1,4 +1,3 @@
-
 from impacket.dcerpc.v5 import transport, epm
 from impacket.http import AUTH_NTLM
 from impacket.dcerpc.v5.rpch import RPC_PROXY_INVALID_RPC_PORT_ERR, \
