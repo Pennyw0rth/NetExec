@@ -30,15 +30,9 @@ class NXCModule:
         self.module_options = module_options
 
     def options(self, context, module_options):
-        """Required.
-        Module options get parsed here. Additionally, put the modules usage here as well
-                Usage: nxc smb $IP -u '' -p '' -M enum-ca
-        """
+        pass
 
     def on_login(self, context, connection):
-        """Concurrent.
-        Required if on_admin_login is not present. This gets called on each authenticated connection
-        """
         self.__username = connection.username
         self.__password = connection.password
         self.__domain = connection.domain
