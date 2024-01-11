@@ -59,13 +59,13 @@ files = [
 
 [[package]]
 name = "aiosmb"
-version = "0.4.8"
+version = "0.4.10"
 description = "Asynchronous SMB protocol implementation"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "aiosmb-0.4.8-py3-none-any.whl", hash = "sha256:a0121de29d04750fc3591b4a60fb24b9676e4a3f9bc0734dea09d1907579cd42"},
-    {file = "aiosmb-0.4.8.tar.gz", hash = "sha256:b2257672bf18b94e245913471a5576f518de1f10a4ea671b2bb275e4b660ba5b"},
+    {file = "aiosmb-0.4.10-py3-none-any.whl", hash = "sha256:8b6f4c586fcd4e757e31aa3ea5a17060d9355d8994011ff6040acc18c578c023"},
+    {file = "aiosmb-0.4.10.tar.gz", hash = "sha256:b8de656e1b8fb7d6b1a766534f10e01ee0d1c254235c03449063e04092f5a3dd"},
 ]
 
 [package.dependencies]
@@ -79,7 +79,7 @@ six = "*"
 tqdm = "*"
 unicrypto = ">=0.0.10"
 wcwidth = "*"
-winacl = ">=0.1.7"
+winacl = ">=0.1.8"
 
 [[package]]
 name = "aiosqlite"
@@ -2360,13 +2360,13 @@ watchdog = ["watchdog"]
 
 [[package]]
 name = "winacl"
-version = "0.1.7"
+version = "0.1.8"
 description = "ACL/ACE/Security Descriptor manipulation library in pure Python"
 optional = false
 python-versions = ">=3.6"
 files = [
-    {file = "winacl-0.1.7-py3-none-any.whl", hash = "sha256:5d00ed1d2378823050b4eb87ff3e69d49cb3ecb8bf1e012b69afe15e3bdb2703"},
-    {file = "winacl-0.1.7.tar.gz", hash = "sha256:ca662c091471a6c629d76c5eec63d8a1bf1af7c054348f09c1242f338850b2bd"},
+    {file = "winacl-0.1.8-py3-none-any.whl", hash = "sha256:f17028422c0b2dc6752c801350d37878919804728b776289521dc83622982a45"},
+    {file = "winacl-0.1.8.tar.gz", hash = "sha256:44271a302562de51629f68ef1540d40f3a26e7bc0173646b01a6779cedad644c"},
 ]
 
 [package.dependencies]
@@ -2401,4 +2401,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.0"
-content-hash = "24299c2386a030c4fa12bd631daa702dc86088c604a9689757bf189aae82c288"
+content-hash = "b461dbcf179153795102e7cc900818b0b2e2216bce83d1a68d6805b2c08825a2"
