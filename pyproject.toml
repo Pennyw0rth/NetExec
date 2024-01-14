@@ -62,7 +62,7 @@ pyasn1-modules = "^0.3.0"
 rich = "^13.3.5"
 python-libnmap = "^0.7.3"
 oscrypto = { git = "https://github.com/Pennyw0rth/oscrypto" } # Pypi version currently broken, see: https://github.com/wbond/oscrypto/issues/78 (as of 9/23)
-pyreadline = "^2.1" # for the build - impacket imports its hidden from the builder so an error occurs
+pyreadline = { version = "^2.1", markers = "sys_platform == 'win32'" } # for the build - impacket imports its hidden from the builder so an error occurs
 argcomplete = "3.2.1"
 
 [tool.poetry.group.dev.dependencies]
