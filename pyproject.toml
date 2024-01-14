@@ -63,13 +63,13 @@ rich = "^13.3.5"
 python-libnmap = "^0.7.3"
 oscrypto = { git = "https://github.com/Pennyw0rth/oscrypto" } # Pypi version currently broken, see: https://github.com/wbond/oscrypto/issues/78 (as of 9/23)
 pyreadline = "^2.1" # for the build - impacket imports its hidden from the builder so an error occurs
-ruff = "=0.0.292"
 argcomplete = "3.2.1"
 
 [tool.poetry.group.dev.dependencies]
 flake8 = "*"
 shiv = "*"
 pytest = "^7.2.2"
+ruff = "=0.0.292"
 
 [build-system]
 requires = ["poetry-core>=1.2.0"]
