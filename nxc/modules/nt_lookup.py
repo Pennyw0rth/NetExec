@@ -115,9 +115,7 @@ class NXCModule:
         # Create NT hashes for known plaintext passwords in database. Remove known plaintext hashes from lookup.
         known_plaintext = []
 
-        for cred in all_creds:
-            if cred[4] == "plaintext":
-                known_plaintext.append(cred[3])
+        known_plaintext = [cred[3] for cred in all_creds if cred[4] == "plaintext"]
 
         context.log.debug(known_plaintext)
         calculated_nt_hashes = self.password_to_ntlm(known_plaintext)
@@ -139,8 +137,7 @@ class NXCModule:
             answers = []
             for hash_group in hash_groups:
                 answer = self.perform_lookup(context, hash_group)
-                for i in answer:
-                    answers.append(i)
+                answers.extend(answer)
 
         else:
             answers = self.perform_lookup(context, uniq_nt_hashes)
