@@ -4,6 +4,7 @@ from hashlib import pbkdf2_hmac, sha1
 import hmac
 import json
 import ntpath
+from os import remove
 import sqlite3
 import tempfile
 from Cryptodome.Cipher import AES, DES3
@@ -121,7 +122,10 @@ class FirefoxTriage:
         ]
 
     def get_key(self, key4_data, master_password=b""):
-        fh = tempfile.NamedTemporaryFile()
+        # Instead of disabling "delete" and removing the file manually,
+        # in the future (py3.12) we could use "delete_on_close=False" as a cleaner solution
+        # Related issue: #134
+        fh = tempfile.NamedTemporaryFile(delete=False)
         fh.write(key4_data)
         fh.seek(0)
         db = sqlite3.connect(fh.name)
@@ -149,7 +153,12 @@ class FirefoxTriage:
                     self.logger.debug(e)
                     fh.close()
                     return b""
+        db.close()
         fh.close()
+        try:
+            remove(fh.name)
+        except Exception as e:
+            self.logger.error(f"Error removing temporary file: {e}")
 
     def is_master_password_correct(self, key_data, master_password=b""):
         try:
