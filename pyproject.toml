@@ -33,7 +33,7 @@ NetExec = 'nxc.netexec:main'
 nxcdb = 'nxc.nxcdb:main'
 
 [tool.poetry.dependencies]
-python = "^3.7.0"
+python = "^3.8.0"
 requests = ">=2.27.1"
 beautifulsoup4 = ">=4.11,<5"
 lsassy = ">=3.1.8"
@@ -61,15 +61,15 @@ aiosqlite = "^0.19.0"
 pyasn1-modules = "^0.3.0"
 rich = "^13.3.5"
 python-libnmap = "^0.7.3"
-resource = "^0.2.1"
 oscrypto = { git = "https://github.com/Pennyw0rth/oscrypto" } # Pypi version currently broken, see: https://github.com/wbond/oscrypto/issues/78 (as of 9/23)
-pyreadline = "^2.1" # for the build - impacket imports its hidden from the builder so an error occurs
-ruff = "=0.0.292"
+pyreadline = { version = "^2.1", markers = "sys_platform == 'win32'" } # for the build - impacket imports its hidden from the builder so an error occurs
+argcomplete = "3.2.1"
 
 [tool.poetry.group.dev.dependencies]
 flake8 = "*"
 shiv = "*"
 pytest = "^7.2.2"
+ruff = "=0.0.292"
 
 [build-system]
 requires = ["poetry-core>=1.2.0"]
