@@ -93,4 +93,5 @@ def delete_workspace(workspace_name):
 
 
 def initialize_db():
-    create_workspace("default")
+    if not exists(path_join(WORKSPACE_DIR, "default")):
+        create_workspace("default")
