@@ -3,6 +3,7 @@ hash_spider_default.sqlite3
 *.bak
 *.log
 .venv
+pyvenv.cfg
 .vscode
 .idea
 # Byte-compiled / optimized / DLL files
