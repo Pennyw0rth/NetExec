@@ -130,7 +130,6 @@ class TriggerAuth:
             request['fdwFlags'] =  rprn.PRINTER_CHANGE_ADD_JOB
             request['pszLocalMachine'] =  '\\\\%s\x00' % listener
             request['pOptions'] =  NULL
-            nxc_logger.debug(request.dump())
         except Exception as e:
             nxc_logger.debug(e)
 
