@@ -51,7 +51,7 @@ class winrm(connection):
         )
 
     def enum_host_info(self):
-        ntlm_info = parse_challenge(base64.b64decode(self.challenge_header.split(' ')[1].replace(',', '')))
+        ntlm_info = parse_challenge(base64.b64decode(self.challenge_header.split(" ")[1].replace(",", "")))
         self.domain = ntlm_info["target_info"]["MsvAvDnsDomainName"]
         self.hostname = ntlm_info["target_info"]["MsvAvNbComputerName"]
         self.server_os = f'Windows NT {ntlm_info["version"]}'
@@ -111,7 +111,7 @@ class winrm(connection):
                 res = requests.post(endpoints[protocol]["url"], headers=headers, verify=False, timeout=self.args.http_timeout)
                 self.logger.debug(f"Received response code: {res.status_code}")
                 self.challenge_header = res.headers["WWW-Authenticate"]
-                if (not self.challenge_header) or (not 'Negotiate' in self.challenge_header):
+                if (not self.challenge_header) or ("Negotiate" not in self.challenge_header):
                     self.logger.info('Failed to get NTLM challenge from target "/wsman" endpoint, maybe isn\'t winrm service.')
                     return False
                 self.endpoint = endpoints[protocol]["url"]
