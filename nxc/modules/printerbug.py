@@ -1,4 +1,3 @@
-from impacket import system_errors
 from impacket.dcerpc.v5 import transport, rprn
 from nxc.logger import nxc_logger
 
@@ -89,7 +88,7 @@ class TriggerAuth:
         nxc_logger.debug("[+] Successfully bound!")
         return dce
 
-    def RpcRemoteFindFirstPrinterChange(self, dce, listener,target):
+    def RpcRemoteFindFirstPrinterChange(self, dce, listener, target):
         nxc_logger.debug("[-] Sending RpcRemoteFindFirstPrinterChange!")
         try:
             resp = rprn.hRpcOpenPrinter(dce, "\\\\%s\x00" % target)
