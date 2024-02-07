@@ -10,6 +10,7 @@ from nxc.config import pwned_label
 from nxc.helpers.logger import highlight
 from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
+from nxc.protocols.ldap.laps import laps_search
 
 from impacket.dcerpc.v5 import transport
 import sys
@@ -458,6 +459,13 @@ class connection:
                 self.kerberos_login(self.domain, username, password, "", "", self.kdcHost, True)
                 self.logger.info("Successfully authenticated using Kerberos cache")
                 return True
+
+        if hasattr(self.args, "laps") and self.args.laps:
+            self.logger.debug("Trying to authenticate using LAPS")
+            username[0], secret[0], domain[0], ntlm_hash = laps_search(self, username, secret, cred_type, domain)
+            cred_type = ["plaintext"]
+            if not (username[0] or secret[0] or domain[0]):
+                return False
 
         if not self.args.no_bruteforce:
             for secr_index, secr in enumerate(secret):
