@@ -1,7 +1,7 @@
 import os
+import base64
 import requests
 import urllib3
-import contextlib
 import logging
 import xml.etree.ElementTree as ET
 
@@ -10,7 +10,6 @@ from datetime import datetime
 from pypsrp.wsman import NAMESPACES
 from pypsrp.client import Client
 
-from impacket.smbconnection import SMBConnection
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 
 from nxc.config import process_secret
@@ -18,6 +17,7 @@ from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.misc import gen_random_string
 from nxc.logger import NXCAdapter
+from nxc.protocols.winrm.winrm_ntlm_parser import parse_challenge
 
 
 urllib3.disable_warnings()
@@ -33,58 +33,33 @@ class winrm(connection):
         self.lmhash = ""
         self.nthash = ""
         self.ssl = False
-        self.auth_type = None
+        self.challenge_header = None
 
         connection.__init__(self, args, db, host)
 
     def proto_logger(self):
-        # Reason why default is SMB/445, because default is enumerate over SMB.
         # For more details, please check the function "print_host_info" 
         logging.getLogger("pypsrp").disabled = True
         logging.getLogger("pypsrp.wsman").disabled = True
         self.logger = NXCAdapter(
             extra={
-                "protocol": "SMB",
+                "protocol": "WINRM",
                 "host": self.host,
-                "port": "445",
+                "port": "5985",
                 "hostname": self.hostname,
             }
         )
 
     def enum_host_info(self):
-        # smb no open, specify the domain
-        if self.args.no_smb:
-            self.domain = self.args.domain
-        else:
-            try:
-                smb_conn = SMBConnection(self.host, self.host, None, timeout=5)
-                no_ntlm = False
-            except Exception as e:
-                self.logger.fail(f"Error retrieving host domain: {e} specify one manually with the '-d' flag")
-            else:
-                try:
-                    smb_conn.login("", "")
-                except BrokenPipeError:
-                    self.logger.fail("Broken Pipe Error while attempting to login")
-                except Exception as e:
-                    if "STATUS_NOT_SUPPORTED" in str(e):
-                        # no ntlm supported
-                        no_ntlm = True
+        ntlm_info = parse_challenge(base64.b64decode(self.challenge_header.split(' ')[1].replace(',', '')))
+        self.domain = ntlm_info["target_info"]["MsvAvDnsDomainName"]
+        self.hostname = ntlm_info["target_info"]["MsvAvNbComputerName"]
+        self.server_os = f'Windows NT {ntlm_info["version"]}'
+        self.logger.extra["hostname"] = self.hostname
 
-                self.domain = smb_conn.getServerDNSDomainName() if not no_ntlm else self.args.domain
-                self.hostname = smb_conn.getServerName() if not no_ntlm else self.host
-                self.server_os = smb_conn.getServerOS()
-                if isinstance(self.server_os.lower(), bytes):
-                    self.server_os = self.server_os.decode("utf-8")
+        self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}")
 
-                self.logger.extra["hostname"] = self.hostname
-
-                self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}")
-
-                with contextlib.suppress(Exception):
-                    smb_conn.logoff()
-
-                self.db.add_host(self.host, self.port, self.hostname, self.domain, self.server_os)
+        self.db.add_host(self.host, self.port, self.hostname, self.domain, self.server_os)
 
         if self.args.domain:
             self.domain = self.args.domain
@@ -98,16 +73,10 @@ class winrm(connection):
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
     def print_host_info(self):
-        if self.args.no_smb:
-            self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
-            self.logger.extra["port"] = self.port
-            self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
-        else:
-            self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
-            self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
-            self.logger.extra["port"] = self.port
-        
-        self.logger.info(f"Connection information: {self.endpoint} (auth type:{self.auth_type}) (domain:{self.domain if self.args.domain else ''})")
+        self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
+        self.logger.extra["port"] = self.port
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
+
         return True
 
     def create_conn_obj(self):
@@ -116,6 +85,14 @@ class winrm(connection):
             return False
 
         endpoints = {}
+
+        headers = {
+            "Content-Length": "0",
+            "Keep-Alive": "true",
+            "Content-Type": "application/soap+xml;charset=UTF-8",
+            "User-Agent": "Microsoft WinRM Client",
+            "Authorization": "Negotiate TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAGAbEdAAAADw=="
+        }
 
         for protocol in self.args.check_proto:
             endpoints[protocol] = {}
@@ -131,9 +108,12 @@ class winrm(connection):
             self.port = endpoints[protocol]["port"]
             try:
                 self.logger.debug(f"Requesting URL: {endpoints[protocol]['url']}")
-                res = requests.post(endpoints[protocol]["url"], verify=False, timeout=self.args.http_timeout)
+                res = requests.post(endpoints[protocol]["url"], headers=headers, verify=False, timeout=self.args.http_timeout)
                 self.logger.debug(f"Received response code: {res.status_code}")
-                self.auth_type = res.headers["WWW-Authenticate"] if "WWW-Authenticate" in res.headers else "NOAUTH"
+                self.challenge_header = res.headers["WWW-Authenticate"]
+                if (not self.challenge_header) or (not 'Negotiate' in self.challenge_header):
+                    self.logger.info('Failed to get NTLM challenge from target "/wsman" endpoint, maybe isn\'t winrm service.')
+                    return False
                 self.endpoint = endpoints[protocol]["url"]
                 self.ssl = endpoints[protocol]["ssl"]
                 return True
