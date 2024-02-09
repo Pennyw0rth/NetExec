@@ -44,11 +44,12 @@ def create_db_engine(db_path):
 
 
 async def start_run(protocol_obj, args, db, targets):
+    futures = []
     nxc_logger.debug("Creating ThreadPoolExecutor")
     if args.no_progress or len(targets) == 1:
         with ThreadPoolExecutor(max_workers=args.threads + 1) as executor:
             nxc_logger.debug(f"Creating thread for {protocol_obj}")
-            _ = [executor.submit(protocol_obj, args, db, target) for target in targets]
+            futures = [executor.submit(protocol_obj, args, db, target) for target in targets]
     else:
         with Progress(console=nxc_console) as progress, ThreadPoolExecutor(max_workers=args.threads + 1) as executor:
             current = 0
@@ -62,6 +63,11 @@ async def start_run(protocol_obj, args, db, targets):
             for _ in as_completed(futures):
                 current += 1
                 progress.update(tasks, completed=current)
+    for future in as_completed(futures):
+        try:
+            future.result()
+        except Exception:
+            nxc_logger.exception(f"Exception for target {targets[futures.index(future)]}: {future.exception()}")
 
 
 def main():
