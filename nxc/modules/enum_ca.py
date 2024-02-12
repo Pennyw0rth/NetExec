@@ -6,6 +6,7 @@ from impacket.dcerpc.v5.rpch import RPC_PROXY_INVALID_RPC_PORT_ERR, \
 from impacket import uuid
 import requests
 
+
 class NXCModule:
     """
     -------
@@ -17,8 +18,8 @@ class NXCModule:
         443: {"bindstr": r"ncacn_http:[593,RpcProxy=%s:443]"},
         445: {"bindstr": r"ncacn_np:%s[\pipe\epmapper]"},
         593: {"bindstr": r"ncacn_http:%s"}
-        }
-    
+    }
+
     name = "enum_ca"
     description = "Anonymously uses RPC endpoints to hunt for ADCS CAs"
     supported_protocols = ["smb"]  # Example: ['smb', 'mssql']
@@ -50,28 +51,26 @@ class NXCModule:
             self.__lmhash = "00000000000000000000000000000000"
 
         self.__stringbinding = self.KNOWN_PROTOCOLS[self.__port]["bindstr"] % connection.host
-        context.log.debug("StringBinding %s" % self.__stringbinding)
-        
+        context.log.debug(f"StringBinding {self.__stringbinding}")
+
         rpctransport = transport.DCERPCTransportFactory(self.__stringbinding)
 
         if self.__port in [139, 445]:
             # Setting credentials for SMB
-            rpctransport.set_credentials(self.__username, self.__password, self.__domain,
-                                         self.__lmhash, self.__nthash)            
+            rpctransport.set_credentials(self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash)
             rpctransport.setRemoteHost(connection.host)
             rpctransport.set_dport(self.__port)
         elif self.__port in [443]:
             # Setting credentials only for RPC Proxy, but not for the MSRPC level
-            rpctransport.set_credentials(self.__username, self.__password, self.__domain,
-                                         self.__lmhash, self.__nthash)
+            rpctransport.set_credentials(self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash)
             rpctransport.set_auth_type(AUTH_NTLM)
         else:
             pass
-        
+
         try:
             entries = self.__fetchList(rpctransport)
         except Exception as e:
-            error_text = "Protocol failed: %s" % e
+            error_text = f"Protocol failed: {e}"
             context.log.fail(error_text)
 
             if RPC_PROXY_INVALID_RPC_PORT_ERR in error_text or \
@@ -88,21 +87,20 @@ class NXCModule:
                 exename = epm.KNOWN_UUIDS[uuid.uuidtup_to_bin(uuid.string_to_uuidtup(tmpUUID))[:18]]
                 context.log.debug("EXEs %s" % exename)
                 if exename == "certsrv.exe":
-                    context.log.success("[+] Active Directory Certificate Services Found.")
-                    url = "http://%s/certsrv/" % connection.host
-                    context.log.debug(url) 
+                    context.log.highlight("Active Directory Certificate Services Found.")
+                    url = f"http://{connection.host}/certsrv/certfnsh.asp"
+                    context.log.debug(url)
                     try:
-                        response = requests.get(url, timeout=3)
-                        if "Microsoft Active Directory Certificate Services" in response.text:
-                            context.log.success("[+] Web enrollment found on HTTP (ESC8).")
+                        response = requests.get(url, timeout=5)
+                        if response.status_code == 401 and "WWW-Authenticate" in response.headers and "ntlm" in response.headers["WWW-Authenticate"].lower():
+                            context.log.highlight("Web enrollment found on HTTP (ESC8).")
                     except requests.RequestException as e:
-                        context.log.debug(e)        
-                    return 
-               
+                        context.log.debug(e)
+                    return
+
     def __fetchList(self, rpctransport):
         dce = rpctransport.get_dce_rpc()
         dce.connect()
         resp = epm.hept_lookup(None, dce=dce)
         dce.disconnect()
-
         return resp
