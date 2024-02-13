@@ -13,7 +13,7 @@ def parse_version(version_bytes):
     major_version = version_bytes[0]
     minor_version = version_bytes[1]
     product_build = decoder(version_bytes[2:4], "int")
-    return f"{major_version}.{minor_version}.{product_build}"
+    return f"{major_version}.{minor_version} Build {product_build}"
 
 def parse_target_info(target_info_bytes):
     MsvAvEOL = 0x0000

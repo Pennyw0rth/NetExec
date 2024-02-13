@@ -54,7 +54,7 @@ class winrm(connection):
         ntlm_info = parse_challenge(base64.b64decode(self.challenge_header.split(" ")[1].replace(",", "")))
         self.domain = ntlm_info["target_info"]["MsvAvDnsDomainName"]
         self.hostname = ntlm_info["target_info"]["MsvAvNbComputerName"]
-        self.server_os = f'Windows NT {ntlm_info["version"]}'
+        self.server_os = f'Windows {ntlm_info["version"]}'
         self.logger.extra["hostname"] = self.hostname
 
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}")
