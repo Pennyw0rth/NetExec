@@ -9,11 +9,13 @@ def decoder(byte_string, decode_type):
     else:
         return int.from_bytes(byte_string, "little")
 
-def parse_version(version_bytes):  
+
+def parse_version(version_bytes):
     major_version = version_bytes[0]
     minor_version = version_bytes[1]
     product_build = decoder(version_bytes[2:4], "int")
     return f"{major_version}.{minor_version} Build {product_build}"
+
 
 def parse_target_info(target_info_bytes):
     MsvAvEOL = 0x0000
@@ -38,9 +40,9 @@ def parse_target_info(target_info_bytes):
         av_id = decoder(target_info_bytes[info_offset:info_offset + 2], "int")
         av_len = decoder(target_info_bytes[info_offset + 2:info_offset + 4], "int")
         av_value = target_info_bytes[info_offset + 4:info_offset + 4 + av_len]
-        
+
         info_offset = info_offset + 4 + av_len
-        
+
         if av_id == MsvAvEOL:
             pass
         elif av_id == MsvAvNbComputerName:
@@ -67,6 +69,7 @@ def parse_target_info(target_info_bytes):
         elif av_id == MsvAvChannelBindings:
             target_info["MsvAvChannelBindings"] = av_value
     return target_info
+
 
 def parse_challenge(challenge_message):
     # TargetNameFields

@@ -38,7 +38,7 @@ class winrm(connection):
         connection.__init__(self, args, db, host)
 
     def proto_logger(self):
-        # For more details, please check the function "print_host_info" 
+        # For more details, please check the function "print_host_info"
         logging.getLogger("pypsrp").disabled = True
         logging.getLogger("pypsrp.wsman").disabled = True
         self.logger = NXCAdapter(
