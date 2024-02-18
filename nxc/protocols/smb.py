@@ -741,12 +741,18 @@ class smb(connection):
             if not self.args.no_write_check:
                 try:
                     self.conn.createDirectory(share_name, temp_dir)
-                    self.conn.deleteDirectory(share_name, temp_dir)
                     write = True
                     share_info["access"].append("WRITE")
                 except SessionError as e:
                     error = get_error_string(e)
-                    self.logger.debug(f"Error checking WRITE access on share: {error}")
+                    self.logger.debug(f"Error checking WRITE access on share {share_name}: {error}")
+
+                if write:
+                    try:
+                        self.conn.deleteDirectory(share_name, temp_dir)
+                    except SessionError as e:
+                        error = get_error_string(e)
+                        self.logger.debug(f"Error DELETING created temp dir {temp_dir} on share {share_name}: {error}")
 
             permissions.append(share_info)
 
