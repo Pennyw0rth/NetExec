@@ -736,7 +736,7 @@ class smb(connection):
                 share_info["access"].append("READ")
             except SessionError as e:
                 error = get_error_string(e)
-                self.logger.debug(f"Error checking READ access on share: {error}")
+                self.logger.debug(f"Error checking READ access on share {share_name}: {error}")
 
             if not self.args.no_write_check:
                 try:
