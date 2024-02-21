@@ -1258,12 +1258,11 @@ class smb(connection):
                     os.remove(download_path)
 
     def enable_remoteops(self):
-        if self.remote_ops is not None and self.bootkey is not None:
-            return
         try:
             self.remote_ops = RemoteOperations(self.conn, self.kerberos, self.kdcHost)
             self.remote_ops.enableRegistry()
-            self.bootkey = self.remote_ops.getBootKey()
+            if self.bootkey is None:
+                self.bootkey = self.remote_ops.getBootKey()
         except Exception as e:
             self.logger.fail(f"RemoteOperations failed: {e}")
 
