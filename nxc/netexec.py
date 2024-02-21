@@ -12,6 +12,7 @@ from nxc.paths import NXC_PATH
 from nxc.console import nxc_console
 from nxc.logger import nxc_logger
 from nxc.config import nxc_config, nxc_workspace, config_log, ignore_opsec
+from nxc.database import create_db_engine
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
 from nxc.helpers import powershell
@@ -21,7 +22,6 @@ from os.path import exists
 from os.path import join as path_join
 from sys import exit
 import logging
-import sqlalchemy
 from rich.progress import Progress
 import platform
 
@@ -36,11 +36,6 @@ if platform.system() != "Windows":
         file_limit[0] = file_limit[1]
     file_limit = tuple(file_limit)
     resource.setrlimit(resource.RLIMIT_NOFILE, file_limit)
-
-
-
-def create_db_engine(db_path):
-    return sqlalchemy.create_engine(f"sqlite:///{db_path}", isolation_level="AUTOCOMMIT", future=True)
 
 
 async def start_run(protocol_obj, args, db, targets):
