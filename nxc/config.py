@@ -43,5 +43,5 @@ if len(host_info_colors) != 4:
 
 # this should probably be put somewhere else, but if it's in the config helpers, there is a circular import
 def process_secret(text):
-    hidden = text[:reveal_chars_of_pwd]
-    return text if not audit_mode else hidden + audit_mode * 8
+    reveal = text[:reveal_chars_of_pwd]
+    return text if not audit_mode else reveal + (audit_mode if len(audit_mode) > 1 else audit_mode * 8)
