@@ -89,7 +89,7 @@ class NXCModule:
                 if exename == "certsrv.exe":
                     context.log.highlight("Active Directory Certificate Services Found.")
                     url = f"http://{connection.host}/certsrv/certfnsh.asp"
-                    context.log.debug(url)
+                    context.log.highlight(url)
                     try:
                         response = requests.get(url, timeout=5)
                         if response.status_code == 401 and "WWW-Authenticate" in response.headers and "ntlm" in response.headers["WWW-Authenticate"].lower():
