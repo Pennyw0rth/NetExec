@@ -13,8 +13,13 @@ def decoder(byte_string, decode_type):
 
 
 def parse_version(version_bytes):
+    major_version = version_bytes[0]
+    minor_version = version_bytes[1]
     product_build = decoder(version_bytes[2:4], "int")
-    return f"{WIN_VERSIONS[product_build]} Build {product_build}"
+    if product_build in WIN_VERSIONS:
+        return f"{WIN_VERSIONS[product_build]} Build {product_build}"
+    else:
+        return f"Windows {major_version}.{minor_version} Build {product_build}"
 
 
 def parse_target_info(target_info_bytes):
@@ -93,7 +98,6 @@ def parse_challenge(challenge_message):
 
     # TargetInfo
     target_info_bytes = challenge_message[target_info_offset:target_info_offset + target_info_len]
-
     target_info = parse_target_info(target_info_bytes)
 
     return {
