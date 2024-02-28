@@ -8,9 +8,9 @@ from nxc.connection import connection
 from nxc.connection import requires_admin
 from nxc.logger import NXCAdapter
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.ntlm_parser import parse_challenge
 from nxc.helpers.powershell import create_ps_command
 from nxc.protocols.mssql.mssqlexec import MSSQLEXEC
-from nxc.protocols.mssql.mssql_ntlm_parser import parse_challenge
 
 from impacket import tds, ntlm
 from impacket.krb5.ccache import CCache
@@ -124,7 +124,7 @@ class mssql(connection):
             ntlm_info = parse_challenge(challenge)
             self.domain = ntlm_info["target_info"]["MsvAvDnsDomainName"]
             self.hostname = ntlm_info["target_info"]["MsvAvNbComputerName"]
-            self.server_os = f'Windows NT {ntlm_info["version"]}'
+            self.server_os = ntlm_info["version"]
             self.logger.extra["hostname"] = self.hostname
             self.db.add_host(self.host, self.hostname, self.domain, self.server_os, len(self.mssql_instances),)
 
