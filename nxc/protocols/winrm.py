@@ -3,7 +3,6 @@ import base64
 import requests
 import urllib3
 import tempfile
-import contextlib
 import platform
 import logging
 import xml.etree.ElementTree as ET
@@ -18,7 +17,6 @@ from impacket.krb5.kerberosv5 import getKerberosTGT
 from impacket.krb5 import constants
 from impacket.krb5.types import Principal
 from impacket.krb5.ccache import CCache
-from impacket.smbconnection import SMBConnection
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 
 from nxc.helpers.powershell import get_ps_script
@@ -180,7 +178,6 @@ class winrm(connection):
         self.username = username
         self.domain = domain
         self.kdcHost = kdcHost
-        self.hostname = self.args.hostname if self.args.no_smb else self.hostname
         
         # MIT krb5.conf prepare
         with open(get_ps_script("winrm_krb5_config/krb5.conf")) as krb5_conf:
