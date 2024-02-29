@@ -122,9 +122,9 @@ class mssql(connection):
             return False
         else:
             ntlm_info = parse_challenge(challenge)
-            self.domain = ntlm_info["target_info"]["MsvAvDnsDomainName"]
-            self.hostname = ntlm_info["target_info"]["MsvAvNbComputerName"]
-            self.server_os = ntlm_info["version"]
+            self.domain = ntlm_info["domain"]
+            self.hostname = ntlm_info["hostname"]
+            self.server_os = ntlm_info["os_version"]
             self.logger.extra["hostname"] = self.hostname
             self.db.add_host(self.host, self.hostname, self.domain, self.server_os, len(self.mssql_instances),)
 
