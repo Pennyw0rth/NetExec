@@ -4,6 +4,7 @@ from threading import BoundedSemaphore
 from functools import wraps
 from time import sleep
 from ipaddress import ip_address
+from dns import resolver, rdatatype
 from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
 
 from nxc.config import pwned_label
@@ -20,21 +21,57 @@ global_failed_logins = 0
 user_failed_logins = {}
 
 
-def gethost_addrinfo(hostname):
+def gethost_addrinfo(hostname, force_ipv6, dns_server, dns_tcp, dns_timeout):
     is_ipv6 = False
     is_link_local_ipv6 = False
     address_info = {"AF_INET6": "", "AF_INET": ""}
 
-    for res in getaddrinfo(hostname, None, AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
-        af, _, _, canonname, sa = res
-        address_info[af.name] = sa[0]
+    try:
+        if ip_address(hostname).version == 4:
+            address_info["AF_INET"] = hostname
+        else:
+            address_info["AF_INET6"] = hostname
+    except Exception:
+        if not (dns_server or dns_tcp):
+            for res in getaddrinfo(hostname, None, AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
+                af, _, _, canonname, sa = res
+                address_info[af.name] = sa[0]
+
+            if address_info["AF_INET6"] and ip_address(address_info["AF_INET6"]).is_link_local:
+                address_info["AF_INET6"] = canonname
+                is_link_local_ipv6 = True
+        else:
+            dnsresolver = resolver.Resolver()
+            dnsresolver.timeout = dns_timeout
+            dnsresolver.lifetime = dns_timeout
+
+            if dns_server:
+                dnsresolver.nameservers = [dns_server]
+
+            try:
+                answers_ipv4 = dnsresolver.resolve(hostname, rdatatype.A, raise_on_no_answer=False, tcp=dns_tcp)
+                address_info["AF_INET"] = answers_ipv4[0].address
+            except Exception:
+                pass
+                
+            try:
+                answers_ipv6 = dnsresolver.resolve(hostname, rdatatype.AAAA, raise_on_no_answer=False, tcp=dns_tcp)
+                address_info["AF_INET6"] = answers_ipv6[0].address
+
+                if address_info["AF_INET6"] and ip_address(address_info["AF_INET6"]).is_link_local:
+                    is_link_local_ipv6 = True
+            except Exception:
+                pass
+
+    if not (address_info["AF_INET"] or address_info["AF_INET6"]):
+        raise Exception(f"The DNS query name does not exist: {hostname}")
 
     # IPv4 preferred
-    if address_info["AF_INET"]:
+    if address_info["AF_INET"] and not force_ipv6:
         host = address_info["AF_INET"]
     else:
         is_ipv6 = True
-        host, is_link_local_ipv6 = (canonname, True) if ip_address(address_info["AF_INET6"]).is_link_local else (address_info["AF_INET6"], False)
+        host = address_info["AF_INET6"]
 
     return host, is_ipv6, is_link_local_ipv6
 
@@ -98,7 +135,13 @@ class connection:
         self.logger = nxc_logger
 
         try:
-            self.host, self.is_ipv6, self.is_link_local_ipv6 = gethost_addrinfo(self.hostname)
+            self.host, self.is_ipv6, self.is_link_local_ipv6 = gethost_addrinfo(
+                hostname=self.hostname,
+                force_ipv6=self.args.force_ipv6,
+                dns_server=self.args.dns_server,
+                dns_tcp=self.args.dns_tcp,
+                dns_timeout=self.args.dns_timeout
+                )
             if self.args.kerberos:
                 self.host = self.hostname
             self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")

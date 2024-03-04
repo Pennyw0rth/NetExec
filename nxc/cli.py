@@ -44,6 +44,12 @@ def gen_cli_args():
     parser.add_argument("--debug", action="store_true", help="enable debug level information")
     parser.add_argument("--version", action="store_true", help="Display nxc version")
 
+    dns_parser = parser.add_argument_group("DNS")
+    dns_parser.add_argument("-6", dest="force_ipv6", action="store_true", help="Enable force IPv6")
+    dns_parser.add_argument("--dns-server", action="store", help="Specify DNS server (default: Use hosts file & System DNS)")
+    dns_parser.add_argument("--dns-tcp", action="store_true", help="Use TCP instead of UDP for DNS queries")
+    dns_parser.add_argument("--dns-timeout", action="store", type=int, default=3, help="DNS query timeout in seconds (default: %(default)s)")
+
     # we do module arg parsing here so we can reference the module_list attribute below
     module_parser = argparse.ArgumentParser(add_help=False)
     mgroup = module_parser.add_mutually_exclusive_group()
