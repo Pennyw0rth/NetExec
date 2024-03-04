@@ -2,7 +2,7 @@ def proto_args(parser, std_parser, module_parser):
     mssql_parser = parser.add_parser("mssql", help="own stuff using MSSQL", parents=[std_parser, module_parser])
     mssql_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
     mssql_parser.add_argument("--port", default=1433, type=int, metavar="PORT", help="MSSQL port (default: 1433)")
-    mssql_parser.add_argument("--mssql-timeout", help="SQL server connection timeout, default is %(default)s seconds", type=int, default=2)
+    mssql_parser.add_argument("--mssql-timeout", help="SQL server connection timeout, default is %(default)s seconds", type=int, default=5)
     mssql_parser.add_argument("-q", "--query", dest="mssql_query", metavar="QUERY", type=str, help="execute the specified query against the MSSQL DB")
 
     dgroup = mssql_parser.add_mutually_exclusive_group()

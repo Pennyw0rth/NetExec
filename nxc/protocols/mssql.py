@@ -152,6 +152,19 @@ class mssql(connection):
         kdcHost="",
         useCache=False,
     ):
+        self.username = username
+        self.password = password
+        self.domain = domain
+        self.nthash = ""
+        hashes = None
+        if ntlm_hash:
+            if ntlm_hash.find(":") != -1:
+                self.nthash = ntlm_hash.split(":")[1]
+                hashes = f":{self.nthash}"
+            else:
+                self.nthash = ntlm_hash
+                hashes = f":{self.nthash}"
+
         kerb_pass = next(s for s in [self.nthash, password, aesKey] if s) if not all(s == "" for s in [self.nthash, password, aesKey]) else ""
 
         if useCache and kerb_pass == "":
@@ -159,45 +172,21 @@ class mssql(connection):
             username = ccache.credentials[0].header["client"].prettyPrint().decode().split("@")[0]
             self.username = username
 
-        self.username = username
-        self.password = password
-        self.domain = domain
-        
-        self.nthash = None
-        if ntlm_hash:
-            self.nthash = f':{ntlm_hash.split(":")[1]}' if ntlm_hash.find(":") != -1 else f":{ntlm_hash}"
-
         used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
 
         try:
             res = self.conn.kerberosLogin(
                 None,
-                username,
-                password,
-                domain,
-                self.nthash,
+                self.username,
+                self.password,
+                self.domain,
+                hashes,
                 aesKey,
                 kdcHost=kdcHost,
                 useCache=useCache,
             )
             if res is not True:
-                error_msg = self.conn.printReplies()
-                self.logger.fail(
-                    "{}\\{}:{} {}".format(
-                        self.domain,
-                        self.username,
-                        used_ccache,
-                        error_msg if error_msg else ""
-                    )
-                )
-                return False
-        except BrokenPipeError:
-            self.logger.fail("Broken Pipe Error while attempting to login")
-            return False
-        except Exception as e:
-            self.logger.fail(f"{self.domain}\\{self.username}{used_ccache} ({e!s})")
-            return False
-        else:
+                raise
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}")
             if not self.args.local_auth:
@@ -205,6 +194,13 @@ class mssql(connection):
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
             return True
+        except BrokenPipeError:
+            self.logger.fail("Broken Pipe Error while attempting to login")
+            return False
+        except Exception:
+            error_msg = self.handle_mssql_reply()
+            self.logger.fail("{}\\{}:{} {}".format(self.domain, self.username, kerb_pass, error_msg if error_msg else ""))
+            return False
 
     @reconnect_mssql
     def plaintext_login(self, domain, username, password):
@@ -213,25 +209,16 @@ class mssql(connection):
         self.domain = domain
         
         try:
-            res = self.conn.login(None, username, password, domain, None, not self.args.local_auth)
+            res = self.conn.login(
+                None,
+                self.username,
+                self.password,
+                self.domain,
+                None,
+                not self.args.local_auth,
+            )
             if res is not True:
-                error_msg = self.handle_mssql_reply()
-                self.logger.fail(
-                    "{}\\{}:{} {}".format(
-                        self.domain,
-                        self.username,
-                        process_secret(self.password),
-                        error_msg if error_msg else ""
-                    )
-                )
-                return False
-        except BrokenPipeError:
-            self.logger.fail("Broken Pipe Error while attempting to login")
-            return False
-        except Exception as e:
-            self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} ({e!s})")
-            return False
-        else:
+                raise
             self.check_if_admin()
             out = f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}"
             self.logger.success(out)
@@ -240,47 +227,52 @@ class mssql(connection):
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
             return True
+        except BrokenPipeError:
+            self.logger.fail("Broken Pipe Error while attempting to login")
+            return False
+        except Exception:
+            error_msg = self.handle_mssql_reply()
+            self.logger.fail("{}\\{}:{} {}".format(self.domain, self.username, process_secret(self.password), error_msg if error_msg else ""))
+            return False
 
     @reconnect_mssql
     def hash_login(self, domain, username, ntlm_hash):
         self.username = username
         self.domain = domain
-        self.nthash = f':{ntlm_hash.split(":")[1]}' if ntlm_hash.find(":") != -1 else f":{ntlm_hash}"
+        self.lmhash = ""
+        self.nthash = ""
+        
+        if ntlm_hash.find(":") != -1:
+            self.lmhash, self.nthash = ntlm_hash.split(":")
+        else:
+            self.nthash = ntlm_hash
 
         try:
             res = self.conn.login(
                 None,
-                username,
+                self.username,
                 "",
-                domain,
-                self.nthash,
+                self.domain,
+                f"{self.lmhash}:{self.nthash}",
                 not self.args.local_auth,
             )
             if res is not True:
-                error_msg = self.conn.printReplies()
-                self.logger.fail(
-                    "{}\\{}:{} {}".format(
-                        self.domain,
-                        self.username,
-                        process_secret(self.nthash),
-                        error_msg if error_msg else ""
-                    )
-                )
-                return False
-        except BrokenPipeError:
-            self.logger.fail("Broken Pipe Error while attempting to login")
-            return False
-        except Exception as e:
-            self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} ({e!s})")
-            return False
-        else:
+                raise
             self.check_if_admin()
-            self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}")
+            out = f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}"
+            self.logger.success(out)
             if not self.args.local_auth:
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
             return True
+        except BrokenPipeError:
+            self.logger.fail("Broken Pipe Error while attempting to login")
+            return False
+        except Exception:
+            error_msg = self.handle_mssql_reply()
+            self.logger.fail("{}\\{}:{} {}".format(self.domain, self.username, process_secret(self.nthash), error_msg if error_msg else ""))
+            return False
 
     def mssql_query(self):
         if self.conn.lastError:
