@@ -22,8 +22,11 @@ user_failed_logins = {}
 
 
 def gethost_addrinfo(hostname, force_ipv6, dns_server, dns_tcp, dns_timeout):
-    is_ipv6 = False
-    is_link_local_ipv6 = False
+    result = {
+        "host": "",
+        "is_ipv6": False,
+        "is_link_local_ipv6": False
+    }
     address_info = {"AF_INET6": "", "AF_INET": ""}
 
     try:
@@ -39,7 +42,7 @@ def gethost_addrinfo(hostname, force_ipv6, dns_server, dns_tcp, dns_timeout):
 
             if address_info["AF_INET6"] and ip_address(address_info["AF_INET6"]).is_link_local:
                 address_info["AF_INET6"] = canonname
-                is_link_local_ipv6 = True
+                result["is_link_local_ipv6"] = True
         else:
             dnsresolver = resolver.Resolver()
             dnsresolver.timeout = dns_timeout
@@ -59,7 +62,7 @@ def gethost_addrinfo(hostname, force_ipv6, dns_server, dns_tcp, dns_timeout):
                 address_info["AF_INET6"] = answers_ipv6[0].address
 
                 if address_info["AF_INET6"] and ip_address(address_info["AF_INET6"]).is_link_local:
-                    is_link_local_ipv6 = True
+                    result["is_link_local_ipv6"] = True
             except Exception:
                 pass
 
@@ -68,12 +71,12 @@ def gethost_addrinfo(hostname, force_ipv6, dns_server, dns_tcp, dns_timeout):
 
     # IPv4 preferred
     if address_info["AF_INET"] and not force_ipv6:
-        host = address_info["AF_INET"]
+        result["host"] = address_info["AF_INET"]
     else:
-        is_ipv6 = True
-        host = address_info["AF_INET6"]
+        result["is_ipv6"] = True
+        result["host"] = address_info["AF_INET6"]
 
-    return host, is_ipv6, is_link_local_ipv6
+    return result
 
 
 def requires_admin(func):
@@ -134,20 +137,15 @@ class connection:
         self.local_ip = None
         self.logger = nxc_logger
 
-        try:
-            self.host, self.is_ipv6, self.is_link_local_ipv6 = gethost_addrinfo(
-                hostname=self.hostname,
-                force_ipv6=self.args.force_ipv6,
-                dns_server=self.args.dns_server,
-                dns_tcp=self.args.dns_tcp,
-                dns_timeout=self.args.dns_timeout
-                )
-            if self.args.kerberos:
-                self.host = self.hostname
-            self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
-        except Exception as e:
-            self.logger.info(f"Error resolving hostname {self.hostname}: {e}")
+        dns_result = self.resolver(self.hostname)
+        if dns_result:
+            self.host, self.is_ipv6, self.is_link_local_ipv6 = dns_result["host"], dns_result["is_ipv6"], dns_result["is_link_local_ipv6"]
+        else:
             return
+
+        if self.args.kerberos:
+            self.host = self.hostname
+        self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
 
         if args.jitter:
             jitter = args.jitter
@@ -165,6 +163,19 @@ class connection:
             self.proto_flow()
         except Exception as e:
             self.logger.exception(f"Exception while calling proto_flow() on target {self.host}: {e}")
+
+    def resolver(self, hostname):
+        try:
+            return gethost_addrinfo(
+            hostname=hostname,
+            force_ipv6=self.args.force_ipv6,
+            dns_server=self.args.dns_server,
+            dns_tcp=self.args.dns_tcp,
+            dns_timeout=self.args.dns_timeout
+            )
+        except Exception as e:
+            self.logger.info(f"Error resolving hostname {self.hostname}: {e}")
+            return None
 
     @staticmethod
     def proto_args(std_parser, module_parser):
