@@ -476,7 +476,7 @@ class smb(connection):
         try:
             self.conn = SMBConnection(
                 kdc if kdc else self.host,
-                kdc if kdc else self.host,
+                self.remoteHost,
                 None,
                 self.port,
                 preferredDialect=SMB_DIALECT,
@@ -497,7 +497,7 @@ class smb(connection):
         try:
             self.conn = SMBConnection(
                 kdc if kdc else self.host,
-                kdc if kdc else self.host,
+                self.remoteHost,
                 None,
                 self.port,
                 timeout=self.args.smb_timeout,
@@ -591,11 +591,14 @@ class smb(connection):
                         self.password,
                         self.domain,
                         self.conn,
-                        self.args.share,
+                        self.kerberos,
+                        self.aesKey,
+                        self.kdcHost,
                         self.hash,
-                        self.logger,
-                        self.args.get_output_tries,
-                        self.args.dcom_timeout
+                        self.args.share,
+                        logger=self.logger,
+                        timeout=self.args.dcom_timeout,
+                        tries=self.args.get_output_tries
                     )
                     self.logger.info("Executed command via mmcexec")
                     break
@@ -613,6 +616,7 @@ class smb(connection):
                         self.domain,
                         self.kerberos,
                         self.aesKey,
+                        self.remoteHost,
                         self.kdcHost,
                         self.hash,
                         self.logger,
@@ -631,12 +635,12 @@ class smb(connection):
                         self.host if not self.kerberos else self.hostname + "." + self.domain,
                         self.smb_share_name,
                         self.conn,
-                        self.port,
                         self.username,
                         self.password,
                         self.domain,
                         self.kerberos,
                         self.aesKey,
+                        self.remoteHost,
                         self.kdcHost,
                         self.hash,
                         self.args.share,
