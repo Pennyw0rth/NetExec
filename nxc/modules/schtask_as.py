@@ -52,6 +52,7 @@ class NXCModule:
                 self.cmd,
                 connection.kerberos,
                 connection.aesKey,
+                connection.remoteHost,
                 connection.kdcHost,
                 connection.hash,
                 self.logger,
@@ -77,7 +78,7 @@ class NXCModule:
 
 
 class TSCH_EXEC:
-    def __init__(self, target, share_name, username, password, domain, user, cmd, doKerberos=False, aesKey=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
+    def __init__(self, target, share_name, username, password, domain, user, cmd, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -89,6 +90,7 @@ class TSCH_EXEC:
         self.__retOutput = False
         self.__aesKey = aesKey
         self.__doKerberos = doKerberos
+        self.__remoteHost = remoteHost
         self.__kdcHost = kdcHost
         self.__tries = tries
         self.__output_filename = None
