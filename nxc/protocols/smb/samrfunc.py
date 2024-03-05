@@ -15,7 +15,7 @@ from nxc.logger import nxc_logger
 class SamrFunc:
     def __init__(self, connection):
         self.logger = connection.logger
-        self.addr = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
+        self.addr = connection.host
         self.protocol = connection.args.port
         self.username = connection.username
         self.password = connection.password
@@ -25,6 +25,8 @@ class SamrFunc:
         self.nthash = ""
         self.aesKey = connection.aesKey
         self.doKerberos = connection.kerberos
+        self.remoteHost = connection.remoteHost
+        self.kdcHost = connection.kdcHost
 
         if self.hash is not None:
             if self.hash.find(":") != -1:
@@ -40,11 +42,12 @@ class SamrFunc:
             password=self.password,
             domain=self.domain,
             remote_name=self.addr,
-            remote_host=self.addr,
+            remote_host=self.remoteHost,
             kerberos=self.doKerberos,
+            kdcHost=self.kdcHost,
             aesKey=self.aesKey,
         )
-        self.lsa_query = LSAQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.addr, remote_host=self.addr, kerberos=self.doKerberos, aesKey=self.aesKey, logger=self.logger)
+        self.lsa_query = LSAQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.addr, remote_host=self.remoteHost, kdcHost=self.kdcHost, kerberos=self.doKerberos, aesKey=self.aesKey, logger=self.logger)
 
     def get_builtin_groups(self):
         domains = self.samr_query.get_domains()
@@ -99,6 +102,7 @@ class SAMRQuery:
         remote_name="",
         remote_host="",
         kerberos=None,
+        kdcHost="",
         aesKey="",
     ):
         self.__username = username
@@ -111,6 +115,7 @@ class SAMRQuery:
         self.__remote_name = remote_name
         self.__remote_host = remote_host
         self.__kerberos = kerberos
+        self.__kdcHost = kdcHost
         self.dce = self.get_dce()
         self.server_handle = self.get_server_handle()
 
@@ -119,7 +124,7 @@ class SAMRQuery:
         nxc_logger.debug(f"Binding to {string_binding}")
         # using a direct SMBTransport instead of DCERPCTransportFactory since we need the filename to be '\samr'
         return transport.SMBTransport(
-            self.__remote_host,
+            self.__remote_name,
             self.__port,
             r"\samr",
             self.__username,
@@ -129,10 +134,12 @@ class SAMRQuery:
             self.__nthash,
             self.__aesKey,
             doKerberos=self.__kerberos,
+            kdcHost=self.__kdcHost,
         )
 
     def get_dce(self):
         rpc_transport = self.get_transport()
+        rpc_transport.setRemoteHost(self.__remote_host)
         try:
             dce = rpc_transport.get_dce_rpc()
             dce.connect()
@@ -184,7 +191,7 @@ class SAMRQuery:
 
 
 class LSAQuery:
-    def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", aesKey="", kerberos=None, logger=None):
+    def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", kdcHost="", aesKey="", kerberos=None, logger=None):
         self.__username = username
         self.__password = password
         self.__domain = domain
@@ -194,6 +201,7 @@ class LSAQuery:
         self.__port = port
         self.__remote_name = remote_name
         self.__remote_host = remote_host
+        self.__kdcHost = kdcHost
         self.__kerberos = kerberos
         self.dce = self.get_dce()
         self.policy_handle = self.get_policy_handle()
@@ -205,7 +213,7 @@ class LSAQuery:
         rpc_transport.set_dport(self.__port)
         rpc_transport.setRemoteHost(self.__remote_host)
         if self.__kerberos:
-            rpc_transport.set_kerberos(True, None)
+            rpc_transport.set_kerberos(self.__kerberos, self.__kdcHost)
         if hasattr(rpc_transport, "set_credentials"):
             # This method exists only for selected protocol sequences.
             rpc_transport.set_credentials(

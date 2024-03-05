@@ -43,10 +43,11 @@ class NXCModule:
             lmhash=connection.lmhash,
             nthash=connection.nthash,
             aesKey=connection.aesKey,
-            target=connection.host if not connection.kerberos else connection.hostname + "." + connection.domain,
+            target=connection.host,
             pipe="FssagentRpc",
             doKerberos=connection.kerberos,
             dcHost=connection.kdcHost,
+            remoteHost=connection.remoteHost,
         )
 
         # If pipe not available, try again. "TL;DR: run the command twice if it doesn't work." - @Shutdown
@@ -61,8 +62,9 @@ class NXCModule:
                 lmhash=connection.lmhash,
                 nthash=connection.nthash,
                 aesKey=connection.aesKey,
-                target=connection.host if not connection.kerberos else connection.hostname + "." + connection.domain,
+                target=connection.host,
                 pipe="FssagentRpc",
+                remoteHost=connection.remoteHost,
             )
 
         if self.ipsc:
@@ -194,6 +196,7 @@ class CoerceAuth:
         pipe,
         doKerberos,
         dcHost,
+        remoteHost,
     ):
         binding_params = {
             "FssagentRpc": {
@@ -202,7 +205,7 @@ class CoerceAuth:
             },
         }
         rpctransport = transport.DCERPCTransportFactory(binding_params[pipe]["stringBinding"])
-        dce = rpctransport.get_dce_rpc()
+        rpctransport.setRemoteHost(remoteHost)
 
         if hasattr(rpctransport, "set_credentials"):
             rpctransport.set_credentials(
@@ -213,7 +216,8 @@ class CoerceAuth:
                 nthash=nthash,
                 aesKey=aesKey,
             )
-
+        
+        dce = rpctransport.get_dce_rpc()
         dce.set_credentials(*rpctransport.get_credentials())
         dce.set_auth_type(RPC_C_AUTHN_WINNT)
         dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)

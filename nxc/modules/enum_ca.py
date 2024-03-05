@@ -3,6 +3,7 @@ from impacket.http import AUTH_NTLM
 from impacket.dcerpc.v5.rpch import RPC_PROXY_INVALID_RPC_PORT_ERR, \
     RPC_PROXY_CONN_A1_0X6BA_ERR, RPC_PROXY_CONN_A1_404_ERR, \
     RPC_PROXY_RPC_OUT_DATA_404_ERR
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket import uuid
 import requests
 
@@ -65,10 +66,10 @@ class NXCModule:
             rpctransport.set_credentials(self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash)
             rpctransport.set_auth_type(AUTH_NTLM)
         else:
-            pass
+            rpctransport.setRemoteHost(connection.remoteHost)
 
         try:
-            entries = self.__fetchList(rpctransport)
+            entries = self.__fetchList(connection.kerberos, rpctransport)
         except Exception as e:
             error_text = f"Protocol failed: {e}"
             context.log.fail(error_text)
@@ -98,8 +99,10 @@ class NXCModule:
                         context.log.debug(e)
                     return
 
-    def __fetchList(self, rpctransport):
+    def __fetchList(self, doKerberos, rpctransport):
         dce = rpctransport.get_dce_rpc()
+        if doKerberos:
+            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
         dce.connect()
         resp = epm.hept_lookup(None, dce=dce)
         dce.disconnect()

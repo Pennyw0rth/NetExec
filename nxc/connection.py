@@ -148,7 +148,7 @@ class connection:
         if self.args.kerberos:
             self.host = self.hostname
 
-        self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
+        self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, remoteHost={self.remoteHost}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
 
         if args.jitter:
             jitter = args.jitter

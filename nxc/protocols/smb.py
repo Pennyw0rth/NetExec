@@ -239,10 +239,6 @@ class smb(connection):
             self.signing,
         )
 
-        if not self.kdcHost:
-            result = self.resolver(self.domain)
-            self.kdcHost = result["host"] if result else None
-
         try:
             # DCs seem to want us to logoff first, windows workstations sometimes reset the connection
             self.conn.logoff()
@@ -253,6 +249,10 @@ class smb(connection):
             self.domain = self.args.domain
         if self.args.local_auth:
             self.domain = self.hostname
+        
+        if not self.kdcHost:
+            result = self.resolver(self.domain)
+            self.kdcHost = result["host"] if result else None
 
     def print_host_info(self):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
@@ -1155,20 +1155,16 @@ class smb(connection):
             max_rid = int(self.args.rid_brute)
 
         KNOWN_PROTOCOLS = {
-            135: {"bindstr": r"ncacn_ip_tcp:%s", "set_host": False},
-            139: {"bindstr": r"ncacn_np:{}[\pipe\lsarpc]", "set_host": True},
-            445: {"bindstr": r"ncacn_np:{}[\pipe\lsarpc]", "set_host": True},
+            135: {"bindstr": rf"ncacn_ip_tcp:{self.host}"},
+            139: {"bindstr": rf"ncacn_np:{self.host}[\pipe\lsarpc]"},
+            445: {"bindstr": rf"ncacn_np:{self.host}[\pipe\lsarpc]"},
         }
 
         try:
-            full_hostname = self.host if not self.kerberos else self.hostname + "." + self.domain
             string_binding = KNOWN_PROTOCOLS[self.port]["bindstr"]
             logging.debug(f"StringBinding {string_binding}")
             rpc_transport = transport.DCERPCTransportFactory(string_binding)
-            rpc_transport.set_dport(self.port)
-
-            if KNOWN_PROTOCOLS[self.port]["set_host"]:
-                rpc_transport.setRemoteHost(full_hostname)
+            rpc_transport.setRemoteHost(self.remoteHost)
 
             if hasattr(rpc_transport, "set_credentials"):
                 # This method exists only for selected protocol sequences.

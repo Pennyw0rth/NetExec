@@ -24,6 +24,8 @@ class UserSamrDump:
         self.nthash = ""
         self.aesKey = connection.aesKey
         self.doKerberos = connection.kerberos
+        self.remoteHost = connection.remoteHost
+        self.kdcHost = connection.kdcHost
         self.protocols = UserSamrDump.KNOWN_PROTOCOLS.keys()
         self.users = []
 
@@ -56,6 +58,8 @@ class UserSamrDump:
                 self.nthash,
                 self.aesKey,
                 doKerberos=self.doKerberos,
+                kdcHost=self.kdcHost,
+                remote_host=self.remoteHost,
             )
             try:
                 self.fetchList(rpctransport)
