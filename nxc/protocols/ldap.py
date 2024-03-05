@@ -165,7 +165,7 @@ class ldap(connection):
             ldap_url = f"{proto}://{host}"
             self.logger.info(f"Connecting to {ldap_url} with no baseDN")
             try:
-                ldap_connection = ldap_impacket.LDAPConnection(ldap_url)
+                ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.remoteHost)
                 if ldap_connection:
                     self.logger.debug(f"ldap_connection: {ldap_connection}")
             except SysCallError as e:
@@ -212,6 +212,7 @@ class ldap(connection):
         try:
             string_binding = rf"ncacn_ip_tcp:{self.host}[135]"
             transport = DCERPCTransportFactory(string_binding)
+            transport.setRemoteHost(self.remoteHost)
             transport.set_connect_timeout(5)
             dce = transport.get_dce_rpc()
             if self.args.kerberos:
@@ -286,6 +287,10 @@ class ldap(connection):
                 self.domain = self.args.domain
             if self.args.local_auth:
                 self.domain = self.hostname
+            
+            if not self.kdcHost:
+                result = self.resolver(self.domain)
+                self.kdcHost = result["host"] if result else None
 
             # Re-connect since we logged off
             self.create_conn_obj()
@@ -351,8 +356,8 @@ class ldap(connection):
             # Connect to LDAP
             proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldap_url = f"{proto}://{self.target}"
-            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [1]")
-            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
+            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.remoteHost} [1]")
+            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.remoteHost)
             self.ldapConnection.kerberosLogin(
                 username,
                 password,
@@ -409,8 +414,8 @@ class ldap(connection):
                 try:
                     # Connect to LDAPS
                     ldaps_url = f"ldaps://{self.target}"
-                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [2]")
-                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.remoteHost} [2]")
+                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.remoteHost)
                     self.ldapConnection.kerberosLogin(
                         username,
                         password,
@@ -478,8 +483,8 @@ class ldap(connection):
             # Connect to LDAP
             proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldap_url = f"{proto}://{self.target}"
-            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3]")
-            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
+            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.remoteHost} [3]")
+            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.remoteHost)
             self.ldapConnection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
             self.check_if_admin()
 
@@ -501,8 +506,8 @@ class ldap(connection):
                 try:
                     # Connect to LDAPS
                     ldaps_url = f"ldaps://{self.target}"
-                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [4]")
-                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.remoteHost} [4]")
+                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.remoteHost)
                     self.ldapConnection.login(
                         self.username,
                         self.password,
@@ -573,8 +578,8 @@ class ldap(connection):
             # Connect to LDAP
             proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldaps_url = f"{proto}://{self.target}"
-            self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
-            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+            self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.remoteHost}")
+            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.remoteHost)
             self.ldapConnection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
             self.check_if_admin()
 
@@ -594,8 +599,8 @@ class ldap(connection):
                 try:
                     # We need to try SSL
                     ldaps_url = f"{proto}://{self.target}"
-                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
-                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.remoteHost}")
+                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.remoteHost)
                     self.ldapConnection.login(
                         self.username,
                         self.password,
@@ -636,7 +641,7 @@ class ldap(connection):
     def create_smbv1_conn(self):
         self.logger.debug("Creating smbv1 connection object")
         try:
-            self.conn = SMBConnection(self.host, self.host, None, 445, preferredDialect=SMB_DIALECT)
+            self.conn = SMBConnection(self.host, self.remoteHost, None, 445, preferredDialect=SMB_DIALECT)
             self.smbv1 = True
             if self.conn:
                 self.logger.debug("SMBv1 Connection successful")
@@ -652,7 +657,7 @@ class ldap(connection):
     def create_smbv3_conn(self):
         self.logger.debug("Creating smbv3 connection object")
         try:
-            self.conn = SMBConnection(self.host, self.host, None, 445)
+            self.conn = SMBConnection(self.host, self.remoteHost, None, 445)
             self.smbv1 = False
             if self.conn:
                 self.logger.debug("SMBv3 Connection successful")

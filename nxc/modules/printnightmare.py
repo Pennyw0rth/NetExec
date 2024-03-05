@@ -1,6 +1,6 @@
 import sys
 from impacket import system_errors
-from impacket.dcerpc.v5.rpcrt import DCERPCException
+from impacket.dcerpc.v5.rpcrt import DCERPCException, RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.structure import Structure
 from impacket.dcerpc.v5 import transport, rprn
 from impacket.dcerpc.v5.ndr import NDRCALL, NDRPOINTER, NDRSTRUCT, NDRUNION, NULL
@@ -55,12 +55,12 @@ class NXCModule:
         )
 
         rpctransport.set_kerberos(connection.kerberos, kdcHost=connection.kdcHost)
-
-        rpctransport.setRemoteHost(connection.host)
-        rpctransport.set_dport(self.port)
+        rpctransport.setRemoteHost(connection.remoteHost)
 
         try:
             dce = rpctransport.get_dce_rpc()
+            if connection.kerberos:
+                dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
             # Connect to spoolss named pipe
             dce.connect()
             # Bind to MSRPC MS-RPRN UUID: 12345678-1234-ABCD-EF00-0123456789AB

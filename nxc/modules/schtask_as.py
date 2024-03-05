@@ -110,6 +110,7 @@ class TSCH_EXEC:
 
         stringbinding = f"ncacn_np:{self.__target}[\\pipe\\atsvc]"
         self.__rpctransport = transport.DCERPCTransportFactory(stringbinding)
+        self.__rpctransport.setRemoteHost(self.__remoteHost)
 
         if hasattr(self.__rpctransport, "set_credentials"):
             # This method exists only for selected protocol sequences.
