@@ -68,7 +68,7 @@ class wmi(connection):
         try:
             rpctansport = transport.DCERPCTransportFactory(fr"ncacn_ip_tcp:{self.remoteName}[{self.port!s}]")
             rpctansport.set_credentials(username="", password="", domain="", lmhash="", nthash="", aesKey="")
-            rpctansport.setRemoteHost(self.host)
+            rpctansport.setRemoteHost("192.168.1.128")
             rpctansport.set_connect_timeout(self.args.rpc_timeout)
             dce = rpctansport.get_dce_rpc()
             dce.set_auth_type(RPC_C_AUTHN_WINNT)
@@ -133,6 +133,10 @@ class wmi(connection):
         if self.args.domain:
             self.domain = self.args.domain
             self.fqdn = f"{self.hostname}.{self.domain}"
+
+        if not self.kdcHost:
+            result = self.resolver(self.domain)
+            self.kdcHost = result["host"] if result else None
 
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 

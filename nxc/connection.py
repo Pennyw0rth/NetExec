@@ -132,6 +132,7 @@ class connection:
         self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey)
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.kdcHost = None if not self.args.kdcHost else self.args.kdcHost
+        self.remoteHost = None
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
         self.failed_logins = 0
         self.local_ip = None
@@ -140,11 +141,13 @@ class connection:
         dns_result = self.resolver(self.hostname)
         if dns_result:
             self.host, self.is_ipv6, self.is_link_local_ipv6 = dns_result["host"], dns_result["is_ipv6"], dns_result["is_link_local_ipv6"]
+            self.remoteHost = self.host
         else:
             return
 
         if self.args.kerberos:
             self.host = self.hostname
+
         self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
 
         if args.jitter:
