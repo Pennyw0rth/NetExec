@@ -21,7 +21,7 @@ Going forward, our intent is to maintain a community-driven and maintained proje
 
 You are on the **latest up-to-date** repository of the project NetExec (nxc) ! 🎉
 
-- 🚧 If you want to report a problem, open un [Issue](https://github.com/Pennyw0rth/NetExec/issues) 
+- 🚧 If you want to report a problem, open an [Issue](https://github.com/Pennyw0rth/NetExec/issues) 
 - 🔀 If you want to contribute, open a [Pull Request](https://github.com/Pennyw0rth/NetExec/pulls)
 - 💬 If you want to discuss, open a [Discussion](https://github.com/Pennyw0rth/NetExec/discussions)
 
@@ -37,6 +37,12 @@ See the project's [wiki](https://netexec.wiki/) (in development) for documentati
 # Installation
 Please see the installation instructions on the [wiki](https://netexec.wiki/getting-started/installation) (in development)
 
+## Linux
+```
+sudo apt install pipx git
+pipx ensurepath
+pipx install git+https://github.com/Pennyw0rth/NetExec
+```
 # Development
 Development guidelines and recommendations in development
 

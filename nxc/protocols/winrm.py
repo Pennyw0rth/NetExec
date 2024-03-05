@@ -60,9 +60,9 @@ class winrm(connection):
 
     def enum_host_info(self):
         ntlm_info = parse_challenge(base64.b64decode(self.challenge_header.split(" ")[1].replace(",", "")))
-        self.domain = ntlm_info["target_info"]["MsvAvDnsDomainName"]
-        self.hostname = ntlm_info["target_info"]["MsvAvNbComputerName"]
-        self.server_os = ntlm_info["version"]
+        self.domain = ntlm_info["domain"]
+        self.hostname = ntlm_info["hostname"]
+        self.server_os = ntlm_info["os_version"]
         self.logger.extra["hostname"] = self.hostname
 
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}")
