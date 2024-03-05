@@ -68,7 +68,7 @@ class wmi(connection):
         try:
             rpctansport = transport.DCERPCTransportFactory(fr"ncacn_ip_tcp:{self.remoteName}[{self.port!s}]")
             rpctansport.set_credentials(username="", password="", domain="", lmhash="", nthash="", aesKey="")
-            rpctansport.setRemoteHost("192.168.1.128")
+            rpctansport.setRemoteHost(self.remoteHost)
             rpctansport.set_connect_timeout(self.args.rpc_timeout)
             dce = rpctansport.get_dce_rpc()
             dce.set_auth_type(RPC_C_AUTHN_WINNT)
@@ -208,10 +208,10 @@ class wmi(connection):
         used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
         try:
             self.conn.set_credentials(username=username, password=password, domain=domain, lmhash=lmhash, nthash=nthash, aesKey=self.aesKey)
+            self.conn.setRemoteHost(self.remoteHost)
             self.conn.set_kerberos(True, kdcHost)
             dce = self.conn.get_dce_rpc()
             dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-            dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
             dce.connect()
             dce.bind(MSRPC_UUID_PORTMAP)
         except Exception as e:
