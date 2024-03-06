@@ -7,13 +7,13 @@ import socket
 
 
 class NXCModule:
-    '''
+    """
     Extract obsolete operating systems from LDAP
     Module by Brandon Fisher @shad0wcntr0ller
-    '''
-    name = 'obsolete'
-    description = 'Extract all obsolete operating systems from LDAP'
-    supported_protocols = ['ldap']
+    """
+    name = "obsolete"
+    description = "Extract all obsolete operating systems from LDAP"
+    supported_protocols = ["ldap"]
     opsec_safe = True
     multiple_hosts = True
 
@@ -22,14 +22,14 @@ class NXCModule:
         Convert an LDAP timestamp to a datetime object.
         LDAP timestamp is the number of 100-nanosecond intervals since January 1, 1601.
         """
-        if ldap_time == '0':  # Account for never-set passwords
-            return 'Never'
+        if ldap_time == "0":  # Account for never-set passwords
+            return "Never"
         try:
             # Remove the last 7 digits (fractional seconds) and convert to seconds
             epoch = datetime(1601, 1, 1) + timedelta(seconds=int(ldap_time) / 10000000)
-            return epoch.strftime('%Y-%m-%d %H:%M:%S')
+            return epoch.strftime("%Y-%m-%d %H:%M:%S")
         except Exception as e:
-            return 'Conversion Error'
+            return "Conversion Error"
 
     def options(self, context, module_options):
         """
@@ -44,32 +44,32 @@ class NXCModule:
                          "(operatingSystem=*Windows 7*)(operatingSystem=*Windows 8*)"
                          "(operatingSystem=*Windows 8.1*)(operatingSystem=*Windows Server 2003*)"
                          "(operatingSystem=*Windows Server 2008*)(operatingSystem=*Windows Server 2012*)))")
-        attributes = ['name', 'operatingSystem', 'dNSHostName', 'pwdLastSet']
+        attributes = ["name", "operatingSystem", "dNSHostName", "pwdLastSet"]
 
         try:
-            context.log.debug(f'Search Filter={search_filter}')
+            context.log.debug(f"Search Filter={search_filter}")
             resp = connection.ldapConnection.search(searchFilter=search_filter, attributes=attributes, sizeLimit=0)
         except Exception as e:
-            context.log.error('LDAP search error:', exc_info=True)
+            context.log.error("LDAP search error:", exc_info=True)
             return False
 
         answers = []
-        context.log.debug(f'Total of records returned {len(resp)}')
+        context.log.debug(f"Total of records returned {len(resp)}")
 
         for item in resp:
-            if 'attributes' not in item:
+            if "attributes" not in item:
                 continue
-            name, os, dns_hostname, pwd_last_set = '', '', '', '0'  # Default '0' for pwdLastSet
-            for attribute in item['attributes']:
-                attr_type = str(attribute['type'])
-                if attr_type == 'name':
-                    name = str(attribute['vals'][0])
-                elif attr_type == 'operatingSystem':
-                    os = str(attribute['vals'][0])
-                elif attr_type == 'dNSHostName':
-                    dns_hostname = str(attribute['vals'][0])
-                elif attr_type == 'pwdLastSet':
-                    pwd_last_set = str(attribute['vals'][0])
+            name, os, dns_hostname, pwd_last_set = "", "", "", "0"  # Default "0" for pwdLastSet
+            for attribute in item["attributes"]:
+                attr_type = str(attribute["type"])
+                if attr_type == "name":
+                    name = str(attribute["vals"][0])
+                elif attr_type == "operatingSystem":
+                    os = str(attribute["vals"][0])
+                elif attr_type == "dNSHostName":
+                    dns_hostname = str(attribute["vals"][0])
+                elif attr_type == "pwdLastSet":
+                    pwd_last_set = str(attribute["vals"][0])
 
             if dns_hostname and os:
                 pwd_last_set_readable = self.ldap_time_to_datetime(pwd_last_set)
@@ -81,16 +81,16 @@ class NXCModule:
 
         if answers:
             obsolete_hosts_count = len(answers)
-            logs_path = Path.home() / ".nxc" / 'logs'
+            logs_path = Path.home() / ".nxc" / "logs"
             logs_path.mkdir(parents=True, exist_ok=True)
-            filename = logs_path / f'{connection.domain}.obsoletehosts.txt'
+            filename = logs_path / f"{connection.domain}.obsoletehosts.txt"
 
-            context.log.display(f'{obsolete_hosts_count} Obsolete hosts will be saved to {filename}')
-            with open(filename, 'w') as f:
+            context.log.display(f"{obsolete_hosts_count} Obsolete hosts will be saved to {filename}")
+            with open(filename, "w") as f:
                 for dns_hostname, ip_address, os, pwd_last_set_readable in answers:
-                    log_message = f'{dns_hostname} ({ip_address}) : {os} [pwd-last-set: {pwd_last_set_readable}]'
+                    log_message = f"{dns_hostname} ({ip_address}) : {os} [pwd-last-set: {pwd_last_set_readable}]"
                     context.log.highlight(log_message)
-                    f.write(log_message + '\n')
+                    f.write(log_message + "\n")
         else:
             context.log.display("No Obsolete Hosts Identified")
 
