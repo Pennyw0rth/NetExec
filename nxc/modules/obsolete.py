@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -18,25 +17,18 @@ class NXCModule:
     multiple_hosts = True
 
     def ldap_time_to_datetime(self, ldap_time):
-        """
-        Convert an LDAP timestamp to a datetime object.
-        LDAP timestamp is the number of 100-nanosecond intervals since January 1, 1601.
-        """
+        """Convert an LDAP timestamp to a datetime object."""
         if ldap_time == "0":  # Account for never-set passwords
             return "Never"
         try:
-            # Remove the last 7 digits (fractional seconds) and convert to seconds
             epoch = datetime(1601, 1, 1) + timedelta(seconds=int(ldap_time) / 10000000)
             return epoch.strftime("%Y-%m-%d %H:%M:%S")
-        except Exception as e:
+        except Exception:
             return "Conversion Error"
 
     def options(self, context, module_options):
-        """
-        No module-specific options required.
-        """
-        pass
-
+        """No module-specific options required."""
+        
     def on_login(self, context, connection):
         search_filter = ("(&(objectclass=computer)(!(userAccountControl:1.2.840.113556.1.4.803:=2))"
                          "(|(operatingSystem=*Windows 6*)(operatingSystem=*Windows 2000*)"
@@ -49,7 +41,7 @@ class NXCModule:
         try:
             context.log.debug(f"Search Filter={search_filter}")
             resp = connection.ldapConnection.search(searchFilter=search_filter, attributes=attributes, sizeLimit=0)
-        except Exception as e:
+        except Exception:
             context.log.error("LDAP search error:", exc_info=True)
             return False
 
@@ -59,12 +51,10 @@ class NXCModule:
         for item in resp:
             if "attributes" not in item:
                 continue
-            name, os, dns_hostname, pwd_last_set = "", "", "", "0"  # Default "0" for pwdLastSet
+            dns_hostname, pwd_last_set = "", "0"  # Default '0' for pwdLastSet
             for attribute in item["attributes"]:
                 attr_type = str(attribute["type"])
-                if attr_type == "name":
-                    name = str(attribute["vals"][0])
-                elif attr_type == "operatingSystem":
+                if attr_type == "operatingSystem":
                     os = str(attribute["vals"][0])
                 elif attr_type == "dNSHostName":
                     dns_hostname = str(attribute["vals"][0])
