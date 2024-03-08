@@ -823,7 +823,7 @@ files = [
 
 [[package]]
 name = "impacket"
-version = "0.12.0.dev1+20240307.140557.af62eb40"
+version = "0.12.0.dev1+20231025.93634.0d3af96b"
 description = "Network protocols Constructors and Dissectors"
 optional = false
 python-versions = "*"
@@ -832,20 +832,22 @@ develop = false
 
 [package.dependencies]
 charset-normalizer = "*"
+dsinternals = "*"
 flask = ">=1.0"
+future = "*"
 ldap3 = ">2.5.0,<2.5.2 || >2.5.2,<2.6 || >2.6"
 ldapdomaindump = ">=0.9.0"
 pyasn1 = ">=0.2.3"
+pyasn1-modules = "*"
 pycryptodomex = "*"
 pyOpenSSL = ">=21.0.0"
-setuptools = "*"
 six = "*"
 
 [package.source]
 type = "git"
 url = "https://github.com/blacklanternsecurity/impacket.git"
-reference = "master"
-resolved_reference = "af62eb407da332167025f6672caf654f5e8de678"
+reference = "gkdi"
+resolved_reference = "0d3af96bce49a33bcf4c36d6fc9c1e2ce88c4843"
 
 [[package]]
 name = "importlib-metadata"
@@ -2311,4 +2313,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.0"
-content-hash = "e785cfc9992f4899887d23733dff125465af4b86eac651f31eebfe0bd1f11b67"
+content-hash = "4f402ee84c38c2e9d546de52afa736d5363fa46c109249ab2f0a78f46c2f95bb"
