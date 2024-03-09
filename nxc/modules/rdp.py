@@ -218,6 +218,7 @@ class RdpWmi:
         self.__target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
         self.__doKerberos = connection.kerberos
         self.__kdcHost = connection.kdcHost
+        self.__remoteHost = connection.remoteHost
         self.__aesKey = connection.aesKey
         self.__timeout = timeout
 
@@ -233,11 +234,12 @@ class RdpWmi:
                 oxidResolver=True,
                 doKerberos=self.__doKerberos,
                 kdcHost=self.__kdcHost,
+                remoteHost=self.__remoteHost,
             )
 
             i_interface = self.__dcom.CoCreateInstanceEx(wmi.CLSID_WbemLevel1Login, wmi.IID_IWbemLevel1Login)
             if self.__currentprotocol == "smb":
-                flag, self.__stringBinding = dcom_FirewallChecker(i_interface, self.__timeout)
+                flag, self.__stringBinding = dcom_FirewallChecker(i_interface, self.__remoteHost, self.__timeout)
                 if not flag or not self.__stringBinding:
                     error_msg = f'RDP-WMI: Dcom initialization failed on connection with stringbinding: "{self.__stringBinding}", please increase the timeout with the module option "DCOM-TIMEOUT=10". If it\'s still failing maybe something is blocking the RPC connection, please try to use "-o" with "METHOD=smb"'
 

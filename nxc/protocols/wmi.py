@@ -28,7 +28,6 @@ class wmi(connection):
         self.hash = ""
         self.lmhash = ""
         self.nthash = ""
-        self.fqdn = ""
         self.remoteName = ""
         self.server_os = None
         self.doKerberos = False
@@ -132,7 +131,9 @@ class wmi(connection):
             self.domain = self.hostname
         if self.args.domain:
             self.domain = self.args.domain
-            self.fqdn = f"{self.hostname}.{self.domain}"
+
+        # DCOM connection with kerberos needed
+        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
 
         if not self.kdcHost and self.domain:
             result = self.resolver(self.domain)
@@ -149,9 +150,9 @@ class wmi(connection):
 
     def check_if_admin(self):
         try:
-            dcom = DCOMConnection(self.conn.getRemoteName(), self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey)
+            dcom = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.remoteHost)
             iInterface = dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
-            flag, self.stringBinding = dcom_FirewallChecker(iInterface, self.args.rpc_timeout)
+            flag, self.stringBinding = dcom_FirewallChecker(iInterface, self.remoteHost, self.args.rpc_timeout)
         except Exception as e:
             if "dcom" in locals():
                 dcom.disconnect()
@@ -188,7 +189,6 @@ class wmi(connection):
         self.password = password
         self.username = username
         self.domain = domain
-        self.remoteName = self.fqdn
         self.create_conn_obj()
 
         if password == "":
@@ -377,7 +377,7 @@ class wmi(connection):
             namespace = self.args.wmi_namespace
 
         try:
-            dcom = DCOMConnection(self.conn.getRemoteName(), self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey)
+            dcom = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.remoteHost)
             iInterface = dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
             iWbemLevel1Login = IWbemLevel1Login(iInterface)
             iWbemServices = iWbemLevel1Login.NTLMLogin(namespace, NULL, NULL)
@@ -423,11 +423,11 @@ class wmi(connection):
             return False
 
         if self.args.exec_method == "wmiexec":
-            exec_method = wmiexec.WMIEXEC(self.conn.getRemoteName(), self.username, self.password, self.domain, self.lmhash, self.nthash, self.doKerberos, self.kdcHost, self.aesKey, self.logger, self.args.exec_timeout, self.args.codec)
+            exec_method = wmiexec.WMIEXEC(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, self.doKerberos, self.kdcHost, self.remoteHost, self.aesKey, self.logger, self.args.exec_timeout, self.args.codec)
             output = exec_method.execute(command, get_output)
 
         elif self.args.exec_method == "wmiexec-event":
-            exec_method = wmiexec_event.WMIEXEC_EVENT(self.conn.getRemoteName(), self.username, self.password, self.domain, self.lmhash, self.nthash, self.doKerberos, self.kdcHost, self.aesKey, self.logger, self.args.exec_timeout, self.args.codec)
+            exec_method = wmiexec_event.WMIEXEC_EVENT(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, self.doKerberos, self.kdcHost, self.remoteHost, self.aesKey, self.logger, self.args.exec_timeout, self.args.codec)
             output = exec_method.execute(command, get_output)
 
         self.conn.disconnect()
