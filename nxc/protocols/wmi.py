@@ -134,9 +134,10 @@ class wmi(connection):
             self.domain = self.args.domain
             self.fqdn = f"{self.hostname}.{self.domain}"
 
-        if not self.kdcHost:
+        if not self.kdcHost and self.domain:
             result = self.resolver(self.domain)
             self.kdcHost = result["host"] if result else None
+            self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
