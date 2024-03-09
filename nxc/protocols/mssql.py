@@ -52,7 +52,7 @@ class mssql(connection):
 
     def create_conn_obj(self):
         try:
-            self.conn = tds.MSSQL(self.host, self.port)
+            self.conn = tds.MSSQL(self.host, self.port, self.remoteHost)
             # Default has not timeout option in tds.MSSQL.connect() function, let rewrite it.
             af, socktype, proto, canonname, sa = socket.getaddrinfo(self.host, self.port, 0, socket.SOCK_STREAM)[0]
             sock = socket.socket(af, socktype, proto)
@@ -136,6 +136,11 @@ class mssql(connection):
 
         if self.domain is None:
             self.domain = ""
+        
+        if not self.kdcHost and self.domain:
+            result = self.resolver(self.domain)
+            self.kdcHost = result["host"] if result else None
+            self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")

@@ -288,9 +288,10 @@ class ldap(connection):
             if self.args.local_auth:
                 self.domain = self.hostname
             
-            if not self.kdcHost:
+            if not self.kdcHost and self.domain:
                 result = self.resolver(self.domain)
                 self.kdcHost = result["host"] if result else None
+                self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
             # Re-connect since we logged off
             self.create_conn_obj()
