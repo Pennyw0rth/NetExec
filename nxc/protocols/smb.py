@@ -589,6 +589,9 @@ class smb(connection):
                     continue
             elif method == "mmcexec":
                 try:
+                    # https://github.com/fortra/impacket/issues/1611
+                    if self.kerberos:
+                        raise Exception("MMCExec current is buggly with kerberos")
                     exec_method = MMCEXEC(
                         self.remoteName,
                         self.smb_share_name,
