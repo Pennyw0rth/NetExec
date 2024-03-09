@@ -250,6 +250,9 @@ class smb(connection):
         if self.args.local_auth:
             self.domain = self.hostname
         
+        # DCOM connection with kerberos needed
+        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
+        
         if not self.kdcHost and self.domain:
             result = self.resolver(self.domain)
             self.kdcHost = result["host"] if result else None
@@ -562,7 +565,7 @@ class smb(connection):
             if method == "wmiexec":
                 try:
                     exec_method = WMIEXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
+                        self.remoteName,
                         self.smb_share_name,
                         self.username,
                         self.password,
@@ -571,6 +574,7 @@ class smb(connection):
                         self.kerberos,
                         self.aesKey,
                         self.kdcHost,
+                        self.remoteHost,
                         self.hash,
                         self.args.share,
                         logger=self.logger,
@@ -586,7 +590,7 @@ class smb(connection):
             elif method == "mmcexec":
                 try:
                     exec_method = MMCEXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
+                        self.remoteName,
                         self.smb_share_name,
                         self.username,
                         self.password,
@@ -595,6 +599,7 @@ class smb(connection):
                         self.kerberos,
                         self.aesKey,
                         self.kdcHost,
+                        self.remoteHost,
                         self.hash,
                         self.args.share,
                         logger=self.logger,
@@ -1074,9 +1079,9 @@ class smb(connection):
             namespace = self.args.wmi_namespace
 
         try:
-            dcom = DCOMConnection(self.host if not self.kerberos else self.hostname + "." + self.domain, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.kerberos, kdcHost=self.kdcHost, aesKey=self.aesKey)
+            dcom = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.kerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.remoteHost)
             iInterface = dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
-            flag, stringBinding = dcom_FirewallChecker(iInterface, self.args.dcom_timeout)
+            flag, stringBinding = dcom_FirewallChecker(iInterface, self.remoteHost, self.args.dcom_timeout)
             if not flag or not stringBinding:
                 error_msg = f"WMI Query: Dcom initialization failed on connection with stringbinding: '{stringBinding}', please increase the timeout with the option '--dcom-timeout'. If it's still failing maybe something is blocking the RPC connection, try another exec method"
 

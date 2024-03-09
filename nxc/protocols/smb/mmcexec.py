@@ -58,7 +58,7 @@ from impacket.dcerpc.v5.dtypes import NULL
 
 
 class MMCEXEC:
-    def __init__(self, target, share_name, username, password, domain, smbconnection, doKerberos=False, aesKey=None, kdcHost=None, hashes=None, share=None, logger=None, timeout=None, tries=None):
+    def __init__(self, target, share_name, username, password, domain, smbconnection, doKerberos=False, aesKey=None, kdcHost=None, remoteHost=None, hashes=None, share=None, logger=None, timeout=None, tries=None):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -75,6 +75,7 @@ class MMCEXEC:
         self.__pwd = "C:\\"
         self.__aesKey = aesKey
         self.__kdcHost = kdcHost
+        self.__remoteHost = remoteHost
         self.__doKerberos = doKerberos
         self.__retOutput = True
         self.__stringBinding = ""
@@ -98,13 +99,14 @@ class MMCEXEC:
             oxidResolver=True,
             doKerberos=self.__doKerberos,
             kdcHost=self.__kdcHost,
+            remoteHost=self.__remoteHost,
         )
         try:
             iInterface = self.__dcom.CoCreateInstanceEx(string_to_bin("49B2791A-B1AE-4C90-9B8E-E860BA07F889"), IID_IDispatch)
         except Exception:
             # Make it force break function
             self.__dcom.disconnect()
-        flag, self.__stringBinding = dcom_FirewallChecker(iInterface, self.__timeout)
+        flag, self.__stringBinding = dcom_FirewallChecker(iInterface, self.__remoteHost, self.__timeout)
         if not flag or not self.__stringBinding:
             error_msg = f'MMCEXEC: Dcom initialization failed on connection with stringbinding: "{self.__stringBinding}", please increase the timeout with the option "--dcom-timeout". If it\'s still failing maybe something is blocking the RPC connection, try another exec method'
 
