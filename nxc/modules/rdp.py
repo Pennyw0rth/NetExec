@@ -83,7 +83,7 @@ class NXCModule:
 
             wmi_rdp = RdpWmi(context, connection, self.dcom_timeout)
 
-            if hasattr(wmi_rdp, "_rdp_WMI__iWbemLevel1Login"):
+            if hasattr(wmi_rdp, "_RdpWmi__iWbemLevel1Login"):
                 if "ram" in self.action:
                     # Nt version under 6 not support RAM.
                     try:
@@ -101,7 +101,7 @@ class NXCModule:
                             context.log.fail("Looks like target system version is under NT6, please add 'OLD=true' in module options.")
                         else:
                             context.log.fail(str(e))
-                wmi_rdp._rdp_WMI__dcom.disconnect()
+                wmi_rdp._RdpWmi__dcom.disconnect()
 
 
 class RdpSmb:
