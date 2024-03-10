@@ -143,7 +143,6 @@ class NXCModule:
                 connection.remoteHost,
                 88,
                 UniProto.CLIENT_TCP,
-                #timeout=timeout,
                 hostname=connection.remoteName,
                 dc_ip=connection.kdcHost,
                 domain=connection.domain,
