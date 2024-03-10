@@ -253,10 +253,9 @@ class ldap(connection):
         self.target, self.targetDomain, self.baseDN = self.get_ldap_info(self.host)
         self.hostname = self.target
         self.domain = self.targetDomain
+        self.remoteName = self.hostname
         # smb no open, specify the domain
-        if self.args.no_smb:
-            self.domain = self.args.domain
-        else:
+        if not self.args.no_smb:
             self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
 
             try:
@@ -287,24 +286,25 @@ class ldap(connection):
                 self.domain = self.args.domain
             if self.args.local_auth:
                 self.domain = self.hostname
-            
-            self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
 
-            if not self.kdcHost and self.domain:
-                result = self.resolver(self.domain)
-                self.kdcHost = result["host"] if result else None
-                self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
+            self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
 
             # Re-connect since we logged off
             self.create_conn_obj()
+
+        if not self.kdcHost and self.domain:
+            result = self.resolver(self.domain)
+            self.kdcHost = result["host"] if result else None
+            self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
+
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
     def print_host_info(self):
         self.logger.debug("Printing host info for LDAP")
         if self.args.no_smb:
-            self.logger.extra["protocol"] = "LDAP"
-            self.logger.extra["port"] = "389"
-            self.logger.display(f"Connecting to LDAP {self.hostname}")
+            self.logger.extra["protocol"] = "LDAP" if self.port == "389" else "LDAPS"
+            self.logger.extra["port"] = self.port
+            self.logger.display(f'{self.baseDN} (Hostname: {self.hostname.split(".")[0]}) (domain: {self.domain})')
         else:
             self.logger.extra["protocol"] = "SMB" if not self.no_ntlm else "LDAP"
             self.logger.extra["port"] = "445" if not self.no_ntlm else "389"
