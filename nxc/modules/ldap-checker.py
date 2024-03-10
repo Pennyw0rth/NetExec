@@ -139,7 +139,17 @@ class NXCModule:
                 stype=stype,
             )
         else:
-            kerberos_target = UniTarget(connection.hostname + "." + connection.domain, 88, UniProto.CLIENT_TCP, proxies=None, dns=None, dc_ip=connection.domain, domain=connection.domain)
+            kerberos_target = UniTarget(
+                connection.remoteHost,
+                88,
+                UniProto.CLIENT_TCP,
+                #timeout=timeout,
+                hostname=connection.remoteName,
+                dc_ip=connection.kdcHost,
+                domain=connection.domain,
+                proxies=None,
+                dns=None,
+            )
             credential = KerberosCredential(
                 target=kerberos_target,
                 secret=secret,
@@ -148,7 +158,7 @@ class NXCModule:
                 stype=stype,
             )
 
-        target = MSLDAPTarget(connection.host, hostname=connection.hostname, domain=connection.domain, dc_ip=connection.domain)
+        target = MSLDAPTarget(connection.remoteHost, hostname=connection.remoteName, domain=connection.domain, dc_ip=connection.kdcHost)
         ldapIsProtected = asyncio.run(run_ldap(target, credential))
 
         if ldapIsProtected is False:
@@ -159,10 +169,10 @@ class NXCModule:
             context.log.fail("Connection fail, exiting now")
             sys.exit()
 
-        if DoesLdapsCompleteHandshake(connection.host) is True:
-            target = MSLDAPTarget(connection.host, 636, UniProto.CLIENT_SSL_TCP, hostname=connection.hostname, domain=connection.domain, dc_ip=connection.domain)
+        if DoesLdapsCompleteHandshake(connection.remoteHost) is True:
+            target = MSLDAPTarget(connection.remoteHost, 636, UniProto.CLIENT_SSL_TCP, hostname=connection.remoteName, domain=connection.domain, dc_ip=connection.kdcHost)
             ldapsChannelBindingAlwaysCheck = asyncio.run(run_ldaps_noEPA(target, credential))
-            target = MSLDAPTarget(connection.host, hostname=connection.hostname, domain=connection.domain, dc_ip=connection.domain)
+            target = MSLDAPTarget(connection.remoteHost, hostname=connection.remoteName, domain=connection.domain, dc_ip=connection.kdcHost)
             ldapsChannelBindingWhenSupportedCheck = asyncio.run(run_ldaps_withEPA(target, credential))
             if ldapsChannelBindingAlwaysCheck is False and ldapsChannelBindingWhenSupportedCheck is True:
                 context.log.highlight('LDAPS Channel Binding is set to "When Supported"')

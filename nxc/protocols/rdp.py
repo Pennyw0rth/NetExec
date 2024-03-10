@@ -115,7 +115,7 @@ class rdp(connection):
         return True
 
     def create_conn_obj(self):
-        self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout)
+        self.target = RDPTarget(ip=self.remoteHost, hostname=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout)
         self.auth = NTLMCredential(secret="pass", username="user", domain="FAKE", stype=asyauthSecret.PASS)
 
         self.check_nla()
@@ -154,8 +154,15 @@ class rdp(connection):
         if self.args.local_auth:
             self.domain = self.hostname
 
+        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
+
+        if not self.kdcHost and self.domain:
+            result = self.resolver(self.domain)
+            self.kdcHost = result["host"] if result else None
+            self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
+
         self.target = RDPTarget(
-            ip=self.host,
+            ip=self.remoteHost,
             hostname=self.hostname,
             port=self.port,
             domain=self.domain,
@@ -220,7 +227,17 @@ class rdp(connection):
             else:
                 stype = asyauthSecret.PASS if not nthash else asyauthSecret.NT
 
-            kerberos_target = UniTarget(self.domain, 88, UniProto.CLIENT_TCP, proxies=None, dns=None, dc_ip=self.domain, domain=self.domain)
+            kerberos_target = UniTarget(
+                self.remoteHost,
+                88,
+                UniProto.CLIENT_TCP,
+                timeout=self.args.rdp_timeout,
+                hostname=self.remoteName,
+                dc_ip=self.kdcHost,
+                domain=self.domain,
+                proxies=None,
+                dns=None,
+            )
             self.auth = KerberosCredential(
                 target=kerberos_target,
                 secret=password,

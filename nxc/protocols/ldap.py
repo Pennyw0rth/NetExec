@@ -288,6 +288,8 @@ class ldap(connection):
             if self.args.local_auth:
                 self.domain = self.hostname
             
+            self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
+
             if not self.kdcHost and self.domain:
                 result = self.resolver(self.domain)
                 self.kdcHost = result["host"] if result else None
