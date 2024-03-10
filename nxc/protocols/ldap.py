@@ -282,15 +282,15 @@ class ldap(connection):
             except Exception:
                 pass
 
-            if self.args.domain:
-                self.domain = self.args.domain
-            if self.args.local_auth:
-                self.domain = self.hostname
-
             self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
 
             # Re-connect since we logged off
             self.create_conn_obj()
+
+        if self.args.domain:
+            self.domain = self.args.domain
+        if self.args.local_auth:
+            self.domain = self.hostname
 
         if not self.kdcHost and self.domain:
             result = self.resolver(self.domain)
