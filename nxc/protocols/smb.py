@@ -268,7 +268,7 @@ class smb(connection):
         logging.getLogger("impacket").disabled = True
         # Re-connect since we logged off
         self.logger.debug(f"KDC set to: {kdcHost}")
-        self.create_conn_obj(kdcHost)
+        self.create_conn_obj()
         lmhash = ""
         nthash = ""
         try:
@@ -478,10 +478,10 @@ class smb(connection):
             self.logger.fail("Broken Pipe Error while attempting to login")
             return False
 
-    def create_smbv1_conn(self, kdc=""):
+    def create_smbv1_conn(self):
         try:
             self.conn = SMBConnection(
-                kdc if kdc else self.host,
+                self.host,
                 self.remoteHost,
                 None,
                 self.port,
@@ -491,18 +491,18 @@ class smb(connection):
             self.smbv1 = True
         except OSError as e:
             if str(e).find("Connection reset by peer") != -1:
-                self.logger.info(f"SMBv1 might be disabled on {kdc if kdc else self.host}")
+                self.logger.info(f"SMBv1 might be disabled on {self.host}")
             return False
         except (Exception, NetBIOSTimeout) as e:
-            self.logger.info(f"Error creating SMBv1 connection to {kdc if kdc else self.host}: {e}")
+            self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
             return False
 
         return True
 
-    def create_smbv3_conn(self, kdc=""):
+    def create_smbv3_conn(self):
         try:
             self.conn = SMBConnection(
-                kdc if kdc else self.host,
+                self.host,
                 self.remoteHost,
                 None,
                 self.port,
@@ -515,15 +515,15 @@ class smb(connection):
                 if not self.logger:
                     print("DEBUG ERROR: logger not set, please open an issue on github: " + str(self) + str(self.logger))
                     self.proto_logger()
-                self.logger.fail(f"SMBv3 connection error on {kdc if kdc else self.host}: {e}")
+                self.logger.fail(f"SMBv3 connection error on {self.host}: {e}")
             return False
         except (Exception, NetBIOSTimeout) as e:
-            self.logger.info(f"Error creating SMBv3 connection to {kdc if kdc else self.host}: {e}")
+            self.logger.info(f"Error creating SMBv3 connection to {self.host}: {e}")
             return False
         return True
 
-    def create_conn_obj(self, kdc_host=None):
-        return bool(self.create_smbv1_conn(kdc_host) or self.create_smbv3_conn(kdc_host))
+    def create_conn_obj(self):
+        return bool(self.create_smbv1_conn() or self.create_smbv3_conn())
 
     def check_if_admin(self):
         rpctransport = SMBTransport(self.conn.getRemoteHost(), 445, r"\svcctl", smb_connection=self.conn)
