@@ -267,12 +267,10 @@ class smb(connection):
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         logging.getLogger("impacket").disabled = True
         # Re-connect since we logged off
-        kdc_host = f"{self.hostname}.{self.domain}" if not self.no_ntlm else f"{self.host}"
-        self.logger.debug(f"KDC set to: {kdc_host}")
-        self.create_conn_obj(kdc_host)
+        self.logger.debug(f"KDC set to: {kdcHost}")
+        self.create_conn_obj(kdcHost)
         lmhash = ""
         nthash = ""
-
         try:
             self.password = password
             self.username = username
@@ -346,7 +344,11 @@ class smb(connection):
                 used_ccache = f" through S4U with {username}"
             self.logger.fail(f"{domain}\\{self.username}{used_ccache} {e}")
         except (SessionError, Exception) as e:
-            error, desc = e.getErrorString()
+            if not hasattr(e, "getErrorString"):
+                error = str(e)
+                desc = ""
+            else:
+                error, desc = e.getErrorString()
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             if self.args.delegate:
                 used_ccache = f" through S4U with {username}"
