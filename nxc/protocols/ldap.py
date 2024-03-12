@@ -144,6 +144,8 @@ class ldap(connection):
         self.admin_privs = False
         self.no_ntlm = False
         self.sid_domain = ""
+        self.ldap_url = ""
+        self.protocol_map = None
 
         connection.__init__(self, args, db, host)
 
@@ -158,20 +160,24 @@ class ldap(connection):
         )
 
     def create_conn_obj(self):
-        proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
-        ldap_url = f"{proto}://{self.host}"
-        self.logger.info(f"Connecting to {ldap_url} with no baseDN")
+        self.protocol_map = {
+            389: "ldap",
+            636: "ldaps",
+            3268: "gc",
+        }
+        self.ldap_url = f"{self.protocol_map[636] if self.args.gmsa else self.protocol_map[self.port]}://{self.host}"
+        self.logger.info(f"Connecting to {self.ldap_url} with no baseDN")
         try:
-            self.ldapConnection = ldap_impacket.LDAPConnection(ldap_url, timeout=self.args.ldap_timeout)
+            self.ldapConnection = ldap_impacket.LDAPConnection(self.ldap_url, timeout=self.args.ldap_timeout)
         except (SysCallError, WantReadError) as e:
-            if proto == "ldaps":
-                self.logger.debug(f"LDAPs connection to {ldap_url} failed - {e}")
+            if self.protocol_map[self.port] == "ldaps":
+                self.logger.debug(f"LDAPs connection to {self.ldap_url} failed - {e}")
                 # https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/enable-ldap-over-ssl-3rd-certification-authority
                 self.logger.debug("Even if the port is open, LDAPS may not be configured")
             else:
-                self.logger.debug(f"LDAP connection to {ldap_url} failed: {e}")
+                self.logger.debug(f"LDAP connection to {self.ldap_url} failed: {e}")
         except OSError as e:
-            self.logger.debug(f"LDAP connection to {ldap_url} failed: {e}")
+            self.logger.debug(f"LDAP connection to {self.ldap_url} failed: {e}")
         else:
             if self.ldapConnection:
                 self.logger.debug(f"ldap_connection: {self.ldapConnection}")
@@ -217,8 +223,7 @@ class ldap(connection):
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
     def print_host_info(self):
-        self.logger.debug("Printing host info for LDAP")
-        self.logger.extra["protocol"] = "LDAP" if str(self.port) == "389" else "LDAPS"
+        self.logger.extra["protocol"] = self.protocol_map[self.port].upper()
         self.logger.extra["port"] = self.port
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
         return True
@@ -265,11 +270,9 @@ class ldap(connection):
         kerb_pass = next(s for s in [self.nthash, password, aesKey] if s) if not all(s == "" for s in [self.nthash, password, aesKey]) else ""
 
         try:
-            # Connect to LDAP
-            proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
-            ldap_url = f"{proto}://{self.remoteName}"
-            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.remoteHost} [1]")
-            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.remoteHost, timeout=self.args.ldap_timeout)
+            self.ldap_url = f"{self.protocol_map[self.port]}://{self.remoteName}"
+            self.logger.info(f"Connecting to {self.ldap_url} - {self.baseDN} - {self.remoteHost} [1]")
+            self.ldapConnection = ldap_impacket.LDAPConnection(url=self.ldap_url, baseDN=self.baseDN, dstIp=self.remoteHost, timeout=self.args.ldap_timeout)
             self.ldapConnection.kerberosLogin(
                 username,
                 password,
@@ -289,10 +292,6 @@ class ldap(connection):
 
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             out = f"{domain}\\{self.username}{used_ccache} {self.mark_pwned()}"
-
-
-            self.logger.extra["protocol"] = "LDAP"
-            self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             self.logger.success(out)
 
             if not self.args.local_auth:
@@ -318,9 +317,9 @@ class ldap(connection):
                 # We need to try SSL
                 try:
                     # Connect to LDAPS
-                    ldaps_url = f"ldaps://{self.remoteName}"
-                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.remoteHost} [2]")
-                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.remoteHost, timeout=self.args.ldap_timeout)
+                    self.ldap_url = f"ldaps://{self.remoteName}"
+                    self.logger.info(f"Connecting to {self.ldap_url} - {self.baseDN} - {self.remoteHost} [2]")
+                    self.ldapConnection = ldap_impacket.LDAPConnection(url=self.ldap_url, baseDN=self.baseDN, dstIp=self.remoteHost, timeout=self.args.ldap_timeout)
                     self.ldapConnection.kerberosLogin(
                         username,
                         password,
@@ -340,7 +339,6 @@ class ldap(connection):
 
                     # Prepare success credential text
                     out = f"{domain}\\{self.username} {self.mark_pwned()}"
-
                     self.logger.extra["protocol"] = "LDAPS"
                     self.logger.extra["port"] = "636"
                     self.logger.success(out)
@@ -380,18 +378,13 @@ class ldap(connection):
 
         try:
             # Connect to LDAP
-            proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
-            ldap_url = f"{proto}://{self.remoteName}"
-            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.remoteHost} [3]")
-            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.remoteHost, timeout=self.args.ldap_timeout)
+            self.logger.info(f"Connecting to {self.ldap_url} - {self.baseDN} - {self.remoteHost} [3]")
+            self.ldapConnection = ldap_impacket.LDAPConnection(url=self.ldap_url, baseDN=self.baseDN, dstIp=self.remoteHost, timeout=self.args.ldap_timeout)
             self.ldapConnection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
             self.check_if_admin()
 
             # Prepare success credential text
             out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}"
-
-            self.logger.extra["protocol"] = "LDAP"
-            self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             self.logger.success(out)
 
             if not self.args.local_auth:
@@ -404,9 +397,9 @@ class ldap(connection):
                 # We need to try SSL
                 try:
                     # Connect to LDAPS
-                    ldaps_url = f"ldaps://{self.remoteName}"
-                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.remoteHost} [4]")
-                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.remoteHost, timeout=self.args.ldap_timeout)
+                    self.ldap_url = f"ldaps://{self.remoteName}"
+                    self.logger.info(f"Connecting to {self.ldap_url} - {self.baseDN} - {self.remoteHost} [4]")
+                    self.ldapConnection = ldap_impacket.LDAPConnection(url=self.ldap_url, baseDN=self.baseDN, dstIp=self.remoteHost, timeout=self.args.ldap_timeout)
                     self.ldapConnection.login(
                         self.username,
                         self.password,
@@ -445,8 +438,6 @@ class ldap(connection):
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
-        self.logger.extra["protocol"] = "LDAP"
-        self.logger.extra["port"] = "389"
         lmhash = ""
         nthash = ""
 
@@ -475,17 +466,13 @@ class ldap(connection):
 
         try:
             # Connect to LDAP
-            proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
-            ldaps_url = f"{proto}://{self.remoteName}"
-            self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.remoteHost}")
-            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.remoteHost, timeout=self.args.ldap_timeout)
+            self.logger.info(f"Connecting to {self.ldap_url} - {self.baseDN} - {self.remoteHost}")
+            self.ldapConnection = ldap_impacket.LDAPConnection(url=self.ldap_url, baseDN=self.baseDN, dstIp=self.remoteHost, timeout=self.args.ldap_timeout)
             self.ldapConnection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
             self.check_if_admin()
 
             # Prepare success credential text
             out = f"{domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}"
-            self.logger.extra["protocol"] = "LDAP"
-            self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             self.logger.success(out)
 
             if not self.args.local_auth:
@@ -497,9 +484,9 @@ class ldap(connection):
             if str(e).find("strongerAuthRequired") >= 0:
                 try:
                     # We need to try SSL
-                    ldaps_url = f"{proto}://{self.remoteName}"
-                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.remoteHost}")
-                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.remoteHost, timeout=self.args.ldap_timeout)
+                    self.ldap_url = f"ldaps://{self.remoteName}"
+                    self.logger.info(f"Connecting to {self.ldap_url} - {self.baseDN} - {self.remoteHost}")
+                    self.ldapConnection = ldap_impacket.LDAPConnection(url=self.ldap_url, baseDN=self.baseDN, dstIp=self.remoteHost, timeout=self.args.ldap_timeout)
                     self.ldapConnection.login(
                         self.username,
                         self.password,
