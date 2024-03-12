@@ -182,13 +182,13 @@ class ldap(connection):
     def enum_host_info(self):
         ntlm_challenge = None
         bindRequest = ldapasn1_impacket.BindRequest()
-        bindRequest['version'] = 3
-        bindRequest['name'] = ""
+        bindRequest["version"] = 3
+        bindRequest["name"] = ""
         negotiate = getNTLMSSPType1()
-        bindRequest['authentication']['sicilyNegotiate'] = negotiate.getData()
+        bindRequest["authentication"]["sicilyNegotiate"] = negotiate.getData()
         try:
-            response = self.ldapConnection.sendReceive(bindRequest)[0]['protocolOp']
-            ntlm_challenge = bytes(response['bindResponse']['matchedDN'])
+            response = self.ldapConnection.sendReceive(bindRequest)[0]["protocolOp"]
+            ntlm_challenge = bytes(response["bindResponse"]["matchedDN"])
         except Exception as e:
             self.logger.debug(f"Failed to get target {self.host} ntlm challenge, error: {e!s}")
 
@@ -206,7 +206,7 @@ class ldap(connection):
         if self.args.local_auth:
             self.domain = self.hostname
 
-        self.baseDN = ','.join([f'dc={i}' for i in self.domain.split('.')])
+        self.baseDN = ",".join([f"dc={i}" for i in self.domain.split(".")])
 
         self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
 
@@ -554,18 +554,18 @@ class ldap(connection):
             return False
 
     def get_ldap_username(self):
-            extended_request = ldapasn1_impacket.ExtendedRequest()
-            extended_request["requestName"] = "1.3.6.1.4.1.4203.1.11.3"  # whoami
+        extended_request = ldapasn1_impacket.ExtendedRequest()
+        extended_request["requestName"] = "1.3.6.1.4.1.4203.1.11.3"  # whoami
 
-            response = self.ldapConnection.sendReceive(extended_request)
-            for message in response:
-                search_result = message["protocolOp"].getComponent()
-                if search_result["resultCode"] == ldapasn1_impacket.ResultCode("success"):
-                    response_value = search_result["responseValue"]
-                    if response_value.hasValue():
-                        value = response_value.asOctets().decode(response_value.encoding)[2:]
-                        return value.split("\\")[1]
-            return ""
+        response = self.ldapConnection.sendReceive(extended_request)
+        for message in response:
+            search_result = message["protocolOp"].getComponent()
+            if search_result["resultCode"] == ldapasn1_impacket.ResultCode("success"):
+                response_value = search_result["responseValue"]
+                if response_value.hasValue():
+                    value = response_value.asOctets().decode(response_value.encoding)[2:]
+                    return value.split("\\")[1]
+        return ""
 
     def get_sid(self):
         self.logger.highlight(f"Domain SID {self.sid_domain}")
