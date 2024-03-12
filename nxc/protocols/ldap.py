@@ -27,7 +27,6 @@ from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError
 from impacket.krb5.types import Principal, KerberosException
 from impacket.ldap import ldap as ldap_impacket
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
-from impacket.smbconnection import SessionError
 
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
@@ -308,14 +307,6 @@ class ldap(connection):
                 color="yellow",
             )
             return False
-        except SessionError as e:
-            error, desc = e.getErrorString()
-            used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
-            self.logger.fail(
-                f"{self.domain}\\{self.username}{used_ccache} {error!s}",
-                color="magenta" if error in ldap_error_status else "red",
-            )
-            return False
         except (KeyError, KerberosException, OSError) as e:
             self.logger.fail(
                 f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (process_secret(kerb_pass))} {e!s}",
@@ -359,13 +350,6 @@ class ldap(connection):
                     if self.admin_privs:
                         add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
                     return True
-                except SessionError as e:
-                    error, desc = e.getErrorString()
-                    self.logger.fail(
-                        f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (process_secret(kerb_pass))} {error!s}",
-                        color="magenta" if error in ldap_error_status else "red",
-                    )
-                    return False
                 except Exception as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
