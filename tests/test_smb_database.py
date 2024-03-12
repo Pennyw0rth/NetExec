@@ -7,13 +7,13 @@ from nxc.nxcdb import delete_workspace, NXCDBMenu
 from nxc.first_run import first_run_setup
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.logger import NXCAdapter
-from nxc.paths import WS_PATH
+from nxc.paths import WORKSPACE_DIR
 from sqlalchemy.dialects.sqlite import Insert
 
 
 @pytest.fixture(scope="session")
 def db_engine():
-    db_path = os.path.join(WS_PATH, "test/smb.db")
+    db_path = os.path.join(WORKSPACE_DIR, "test/smb.db")
     db_engine = create_engine(f"sqlite:///{db_path}", isolation_level="AUTOCOMMIT", future=True)
     yield db_engine
     db_engine.dispose()

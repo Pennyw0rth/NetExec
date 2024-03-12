@@ -817,7 +817,7 @@ files = [
 
 [[package]]
 name = "impacket"
-version = "0.12.0.dev1+20231130.165011.d370e635"
+version = "0.12.0.dev1+20240215.65950.da6f5255"
 description = "Network protocols Constructors and Dissectors"
 optional = false
 python-versions = "*"
@@ -840,7 +840,7 @@ six = "*"
 type = "git"
 url = "https://github.com/Pennyw0rth/impacket.git"
 reference = "gkdi"
-resolved_reference = "d370e6359a410063b2c9c68f6572c3b5fb178a38"
+resolved_reference = "da6f52552b7d15f177587d902b3405e0aa07f22e"
 
 [[package]]
 name = "importlib-metadata"
@@ -1781,16 +1781,6 @@ unicrypto = ">=0.0.10,<=0.1.0"
 winacl = ">=0.1.7,<=0.2.0"
 
 [[package]]
-name = "pyreadline"
-version = "2.1"
-description = "A python implmementation of GNU readline."
-optional = false
-python-versions = "*"
-files = [
-    {file = "pyreadline-2.1.zip", hash = "sha256:4530592fc2e85b25b1a9f79664433da09237c1a270e4d78ea5aa3a2c7229e2d1"},
-]
-
-[[package]]
 name = "pyspnego"
 version = "0.10.2"
 description = "Windows Negotiate Authentication Client and Server"
@@ -2298,4 +2288,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.0"
-content-hash = "b1498f097759871b38b6ed64c9948316ed443b6814f5a736abaf5cf576cd4b78"
+content-hash = "4e045412fc20caeb6239f12573928595853c81e558ed1a53d95a7ff0da39a427"
