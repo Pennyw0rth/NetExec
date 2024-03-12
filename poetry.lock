@@ -1786,16 +1786,6 @@ unicrypto = ">=0.0.10,<=0.1.0"
 winacl = ">=0.1.7,<=0.2.0"
 
 [[package]]
-name = "pyreadline"
-version = "2.1"
-description = "A python implmementation of GNU readline."
-optional = false
-python-versions = "*"
-files = [
-    {file = "pyreadline-2.1.zip", hash = "sha256:4530592fc2e85b25b1a9f79664433da09237c1a270e4d78ea5aa3a2c7229e2d1"},
-]
-
-[[package]]
 name = "pyspnego"
 version = "0.10.2"
 description = "Windows Negotiate Authentication Client and Server"
@@ -2303,4 +2293,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.0"
-content-hash = "81bc9d45918894b9293b2d9d0b04a2844f42dd6cf432766abf3f2418a4f3a905"
+content-hash = "19dfeaa2fa332997fb149a591b147061c8da77e2f69b8734d7f988562231a4e7"
