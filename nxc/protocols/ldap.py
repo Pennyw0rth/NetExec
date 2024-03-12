@@ -10,7 +10,7 @@ from datetime import datetime
 from zipfile import ZipFile
 from termcolor import colored
 from Cryptodome.Hash import MD4
-from OpenSSL.SSL import SysCallError, WantReadError
+from OpenSSL.SSL import SysCallError
 
 from bloodhound.ad.authentication import ADAuthentication
 from bloodhound.ad.domain import AD
@@ -167,9 +167,13 @@ class ldap(connection):
         }
         self.ldap_url = f"{self.protocol_map[636] if self.args.gmsa else self.protocol_map[self.port]}://{self.host}"
         self.logger.info(f"Connecting to {self.ldap_url} with no baseDN")
+        # LDAPS with timeout will cause some weird issues
+        # https://github.com/pyca/pyopenssl/issues/168
+        if self.port == 636:
+            self.args.ldap_timeout = None
         try:
             self.ldapConnection = ldap_impacket.LDAPConnection(self.ldap_url, timeout=self.args.ldap_timeout)
-        except (SysCallError, WantReadError) as e:
+        except SysCallError as e:
             if self.protocol_map[self.port] == "ldaps":
                 self.logger.debug(f"LDAPs connection to {self.ldap_url} failed - {e}")
                 # https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/enable-ldap-over-ssl-3rd-certification-authority

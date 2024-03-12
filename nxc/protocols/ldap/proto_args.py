@@ -2,7 +2,7 @@ def proto_args(parser, std_parser, module_parser):
     ldap_parser = parser.add_parser("ldap", help="own stuff using LDAP", parents=[std_parser, module_parser])
     ldap_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
     ldap_parser.add_argument("--port", type=int, choices={389, 636, 3268}, default=389, help="LDAP port (default: 389)")
-    ldap_parser.add_argument("--ldap-timeout", help="LDAP connection timeout, default is %(default)s seconds", type=int, default=5)
+    ldap_parser.add_argument("--ldap-timeout", help="LDAP connection timeout, default is %(default)s seconds (Only works without LDAPS)", type=int, default=5)
 
     dgroup = ldap_parser.add_mutually_exclusive_group()
     dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, default=None, help="domain to authenticate to")
