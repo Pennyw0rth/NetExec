@@ -65,7 +65,7 @@ WELL_KNOWN_SIDS = {
     "S-1-5-64-14": "SChannel Authentication",
     "S-1-5-64-21": "Digest Authority",
     "S-1-5-80": "NT Service",
-    "S-1-5-83-0": "NT VIRTUAL MACHINE\Virtual Machines",
+    "S-1-5-83-0": "NT VIRTUAL MACHINE\\Virtual Machines",
     "S-1-16-0": "Untrusted Mandatory Level",
     "S-1-16-4096": "Low Mandatory Level",
     "S-1-16-8192": "Medium Mandatory Level",
@@ -74,24 +74,24 @@ WELL_KNOWN_SIDS = {
     "S-1-16-16384": "System Mandatory Level",
     "S-1-16-20480": "Protected Process Mandatory Level",
     "S-1-16-28672": "Secure Process Mandatory Level",
-    "S-1-5-32-554": "BUILTIN\Pre-Windows 2000 Compatible Access",
-    "S-1-5-32-555": "BUILTIN\Remote Desktop Users",
-    "S-1-5-32-557": "BUILTIN\Incoming Forest Trust Builders",
+    "S-1-5-32-554": "BUILTIN\\Pre-Windows 2000 Compatible Access",
+    "S-1-5-32-555": "BUILTIN\\Remote Desktop Users",
+    "S-1-5-32-557": "BUILTIN\\Incoming Forest Trust Builders",
     "S-1-5-32-556": "BUILTIN\\Network Configuration Operators",
-    "S-1-5-32-558": "BUILTIN\Performance Monitor Users",
-    "S-1-5-32-559": "BUILTIN\Performance Log Users",
-    "S-1-5-32-560": "BUILTIN\Windows Authorization Access Group",
-    "S-1-5-32-561": "BUILTIN\Terminal Server License Servers",
-    "S-1-5-32-562": "BUILTIN\Distributed COM Users",
-    "S-1-5-32-569": "BUILTIN\Cryptographic Operators",
-    "S-1-5-32-573": "BUILTIN\Event Log Readers",
-    "S-1-5-32-574": "BUILTIN\Certificate Service DCOM Access",
-    "S-1-5-32-575": "BUILTIN\RDS Remote Access Servers",
-    "S-1-5-32-576": "BUILTIN\RDS Endpoint Servers",
-    "S-1-5-32-577": "BUILTIN\RDS Management Servers",
-    "S-1-5-32-578": "BUILTIN\Hyper-V Administrators",
-    "S-1-5-32-579": "BUILTIN\Access Control Assistance Operators",
-    "S-1-5-32-580": "BUILTIN\Remote Management Users",
+    "S-1-5-32-558": "BUILTIN\\Performance Monitor Users",
+    "S-1-5-32-559": "BUILTIN\\Performance Log Users",
+    "S-1-5-32-560": "BUILTIN\\Windows Authorization Access Group",
+    "S-1-5-32-561": "BUILTIN\\Terminal Server License Servers",
+    "S-1-5-32-562": "BUILTIN\\Distributed COM Users",
+    "S-1-5-32-569": "BUILTIN\\Cryptographic Operators",
+    "S-1-5-32-573": "BUILTIN\\Event Log Readers",
+    "S-1-5-32-574": "BUILTIN\\Certificate Service DCOM Access",
+    "S-1-5-32-575": "BUILTIN\\RDS Remote Access Servers",
+    "S-1-5-32-576": "BUILTIN\\RDS Endpoint Servers",
+    "S-1-5-32-577": "BUILTIN\\RDS Management Servers",
+    "S-1-5-32-578": "BUILTIN\\Hyper-V Administrators",
+    "S-1-5-32-579": "BUILTIN\\Access Control Assistance Operators",
+    "S-1-5-32-580": "BUILTIN\\Remote Management Users",
 }
 
 
@@ -516,6 +516,8 @@ class NXCModule:
         # If a principal has been specified, only the ACE where he is the trustee will be printed
         for parsed_ace in parsed_dacl:
             print_ace = True
+            context.log.debug(f"{parsed_ace=}, {self.rights=}, {self.rights_guid=}, {self.ace_type=}, {self.principal_sid=}")
+
             # Filter on specific rights
             if self.rights is not None:
                 try:
@@ -528,7 +530,7 @@ class NXCModule:
                     if (self.rights == "ResetPassword") and (("Object type (GUID)" not in parsed_ace) or (RIGHTS_GUID.ResetPassword.value not in parsed_ace["Object type (GUID)"])):
                         print_ace = False
                 except Exception as e:
-                    context.log.fail(f"Error filtering ACE, probably because of ACE type unsupported for parsing yet ({e})")
+                    context.log.debug(f"Error filtering with {parsed_ace=} and {self.rights=}, probably because of ACE type unsupported for parsing yet ({e})")
 
             # Filter on specific right GUID
             if self.rights_guid is not None:
@@ -536,7 +538,7 @@ class NXCModule:
                     if ("Object type (GUID)" not in parsed_ace) or (self.rights_guid not in parsed_ace["Object type (GUID)"]):
                         print_ace = False
                 except Exception as e:
-                    context.log.fail(f"Error filtering ACE, probably because of ACE type unsupported for parsing yet ({e})")
+                    context.log.debug(f"Error filtering with {parsed_ace=} and {self.rights_guid=}, probably because of ACE type unsupported for parsing yet ({e})")
 
             # Filter on ACE type
             if self.ace_type == "allowed":
@@ -544,13 +546,13 @@ class NXCModule:
                     if ("ACCESS_ALLOWED_OBJECT_ACE" not in parsed_ace["ACE Type"]) and ("ACCESS_ALLOWED_ACE" not in parsed_ace["ACE Type"]):
                         print_ace = False
                 except Exception as e:
-                    context.log.fail(f"Error filtering ACE, probably because of ACE type unsupported for parsing yet ({e})")
+                    context.log.debug(f"Error filtering with {parsed_ace=} and {self.ace_type=}, probably because of ACE type unsupported for parsing yet ({e})")
             else:
                 try:
                     if ("ACCESS_DENIED_OBJECT_ACE" not in parsed_ace["ACE Type"]) and ("ACCESS_DENIED_ACE" not in parsed_ace["ACE Type"]):
                         print_ace = False
                 except Exception as e:
-                    context.log.fail(f"Error filtering ACE, probably because of ACE type unsupported for parsing yet ({e})")
+                    context.log.debug(f"Error filtering with {parsed_ace=} and {self.ace_type=}, probably because of ACE type unsupported for parsing yet ({e})")
 
             # Filter on trusted principal
             if self.principal_sid is not None:
@@ -558,7 +560,7 @@ class NXCModule:
                     if self.principal_sid not in parsed_ace["Trustee (SID)"]:
                         print_ace = False
                 except Exception as e:
-                    context.log.fail(f"Error filtering ACE, probably because of ACE type unsupported for parsing yet ({e})")
+                    context.log.debug(f"Error filtering with {parsed_ace=} and {self.principal_sid=}, probably because of ACE type unsupported for parsing yet ({e})")
             if print_ace:
                 self.context.log.highlight("%-28s" % "ACE[%d] info" % i)
                 self.print_parsed_ace(parsed_ace)
