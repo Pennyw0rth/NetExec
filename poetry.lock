@@ -1307,16 +1307,21 @@ winacl = ">=0.1.8"
 
 [[package]]
 name = "neo4j"
-version = "4.4.11"
+version = "5.18.0"
 description = "Neo4j Bolt driver for Python"
 optional = false
-python-versions = ">=3.6"
+python-versions = ">=3.7"
 files = [
-    {file = "neo4j-4.4.11.tar.gz", hash = "sha256:2fb4693d524e7661ed6b0ea5b4e3a6272dba2567809ecd1d63f1c896ebcfc241"},
+    {file = "neo4j-5.18.0.tar.gz", hash = "sha256:4014406ae5b8b485a8ba46c9f00b6f5b4aaf88e7c3a50603445030c2aab701c9"},
 ]
 
 [package.dependencies]
 pytz = "*"
+
+[package.extras]
+numpy = ["numpy (>=1.7.0,<2.0.0)"]
+pandas = ["numpy (>=1.7.0,<2.0.0)", "pandas (>=1.1.0,<3.0.0)"]
+pyarrow = ["pyarrow (>=1.0.0)"]
 
 [[package]]
 name = "netaddr"
@@ -2298,4 +2303,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.0"
-content-hash = "b1498f097759871b38b6ed64c9948316ed443b6814f5a736abaf5cf576cd4b78"
+content-hash = "81bc9d45918894b9293b2d9d0b04a2844f42dd6cf432766abf3f2418a4f3a905"
