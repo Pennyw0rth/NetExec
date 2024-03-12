@@ -10,7 +10,7 @@ from datetime import datetime
 from zipfile import ZipFile
 from termcolor import colored
 from Cryptodome.Hash import MD4
-from OpenSSL.SSL import SysCallError
+from OpenSSL.SSL import SysCallError, WantReadError
 
 from bloodhound.ad.authentication import ADAuthentication
 from bloodhound.ad.domain import AD
@@ -163,7 +163,7 @@ class ldap(connection):
         self.logger.info(f"Connecting to {ldap_url} with no baseDN")
         try:
             self.ldapConnection = ldap_impacket.LDAPConnection(ldap_url, timeout=self.args.ldap_timeout)
-        except SysCallError as e:
+        except (SysCallError, WantReadError) as e:
             if proto == "ldaps":
                 self.logger.debug(f"LDAPs connection to {ldap_url} failed - {e}")
                 # https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/enable-ldap-over-ssl-3rd-certification-authority
