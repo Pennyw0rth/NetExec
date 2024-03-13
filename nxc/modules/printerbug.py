@@ -108,8 +108,6 @@ class TriggerAuth:
             request["hPrinter"] = resp["pHandle"]
             request["fdwFlags"] = rprn.PRINTER_CHANGE_ADD_JOB
             request["pszLocalMachine"] = "\\\\%s\x00" % listener
-            request["pOptions"] = None
-            self.context.log.debug(request.dump())
         except Exception as e:
             self.context.log.debug(e)
 
