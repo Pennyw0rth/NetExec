@@ -1,10 +1,10 @@
 import os
-import struct
 import logging
 
 from io import StringIO
-from six import indexbytes
 from datetime import datetime
+
+from nxc.helpers.ntlm_parser import parse_challenge
 from nxc.config import process_secret
 from nxc.connection import connection, dcom_FirewallChecker, requires_admin
 from nxc.logger import NXCAdapter
@@ -18,7 +18,6 @@ from impacket.dcerpc.v5 import transport, epm
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_AUTHN_WINNT, RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_INTEGRITY, MSRPC_BIND, MSRPCBind, CtxItem, MSRPCHeader, SEC_TRAILER, MSRPCBindAck
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login
-import contextlib
 
 MSRPC_UUID_PORTMAP = uuidtup_to_bin(("E1AF8308-5D1F-11C9-91A4-08002B14A0FA", "3.0"))
 
@@ -86,7 +85,6 @@ class wmi(connection):
     def enum_host_info(self):
         # All code pick from DumpNTLNInfo.py
         # https://github.com/fortra/impacket/blob/master/examples/DumpNTLMInfo.py
-        ntlmChallenge = None
 
         bind = MSRPCBind()
         item = CtxItem()
@@ -123,38 +121,18 @@ class wmi(connection):
         if buffer != 0:
             response = MSRPCHeader(buffer)
             bindResp = MSRPCBindAck(response.getData())
-
-            ntlmChallenge = ntlm.NTLMAuthChallenge(bindResp["auth_data"])
-
-            if ntlmChallenge["TargetInfoFields_len"] > 0:
-                av_pairs = ntlm.AV_PAIRS(ntlmChallenge["TargetInfoFields"][: ntlmChallenge["TargetInfoFields_len"]])
-                if av_pairs[ntlm.NTLMSSP_AV_HOSTNAME][1] is not None:
-                    try:
-                        self.hostname = av_pairs[ntlm.NTLMSSP_AV_HOSTNAME][1].decode("utf-16le")
-                    except Exception:
-                        self.hostname = self.host
-                if av_pairs[ntlm.NTLMSSP_AV_DNS_DOMAINNAME][1] is not None:
-                    try:
-                        self.domain = av_pairs[ntlm.NTLMSSP_AV_DNS_DOMAINNAME][1].decode("utf-16le")
-                    except Exception:
-                        self.domain = self.args.domain
-                if av_pairs[ntlm.NTLMSSP_AV_DNS_HOSTNAME][1] is not None:
-                    with contextlib.suppress(Exception):
-                        self.fqdn = av_pairs[ntlm.NTLMSSP_AV_DNS_HOSTNAME][1].decode("utf-16le")
-                if "Version" in ntlmChallenge.fields:
-                    version = ntlmChallenge["Version"]
-                    if len(version) >= 4:
-                        self.server_os = "Windows NT %d.%d Build %d" % (indexbytes(version, 0), indexbytes(version, 1), struct.unpack("<H", version[2:4])[0])
+            ntlm_info = parse_challenge(bindResp["auth_data"])
+            self.domain = ntlm_info["domain"]
+            self.hostname = ntlm_info["hostname"]
+            self.server_os = ntlm_info["os_version"]
+            self.logger.extra["hostname"] = self.hostname
         else:
             self.hostname = self.host
-
         if self.args.local_auth:
             self.domain = self.hostname
         if self.args.domain:
             self.domain = self.args.domain
             self.fqdn = f"{self.hostname}.{self.domain}"
-
-        self.logger.extra["hostname"] = self.hostname
 
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
