@@ -248,7 +248,7 @@ class NXCModule:
         ]
 
         # Create the IPC string
-        ipc = f"\\\\{ip}\IPC$\x00"
+        ipc = f"\\\\{ip}\\IPC$\x00"
         self.logger.debug(f"Connecting to {ip} with UID: {userid.hex()}")
 
         # Initialize the tree connect andx request
