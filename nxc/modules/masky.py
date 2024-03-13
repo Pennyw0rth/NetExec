@@ -37,7 +37,7 @@ class NXCModule:
 
     def on_admin_login(self, context, connection):
         if not self.ca:
-            context.log.fail("Please provide a valid CA server and CA name (CA_SERVER\CA_NAME)")
+            context.log.fail(r"Please provide a valid CA server and CA name (CA_SERVER\CA_NAME)")
             return False
 
         host = connection.host
