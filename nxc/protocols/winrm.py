@@ -260,7 +260,7 @@ class winrm(connection):
     def sam(self):
         sam_storename = gen_random_string(6)
         system_storename = gen_random_string(6)
-        dump_command = f"reg save HKLM\SAM C:\\windows\\temp\\{sam_storename} && reg save HKLM\SYSTEM C:\\windows\\temp\\{system_storename}"
+        dump_command = f"reg save HKLM\\SAM C:\\windows\\temp\\{sam_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
         clean_command = f"del C:\\windows\\temp\\{sam_storename} && del C:\\windows\\temp\\{system_storename}"
         try:
             self.conn.execute_cmd(dump_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{dump_command}'")
@@ -289,7 +289,7 @@ class winrm(connection):
     def lsa(self):
         security_storename = gen_random_string(6)
         system_storename = gen_random_string(6)
-        dump_command = f"reg save HKLM\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\SYSTEM C:\\windows\\temp\\{system_storename}"
+        dump_command = f"reg save HKLM\\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
         clean_command = f"del C:\\windows\\temp\\{security_storename} && del C:\\windows\\temp\\{system_storename}"
         try:
             self.conn.execute_cmd(dump_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{dump_command}'")
