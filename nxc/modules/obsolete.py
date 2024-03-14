@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from datetime import datetime, timedelta
-from pathlib import Path
+from nxc.paths import NXC_PATH
 import socket
 
 
@@ -28,7 +28,7 @@ class NXCModule:
 
     def options(self, context, module_options):
         """No module-specific options required."""
-        
+
     def on_login(self, context, connection):
         search_filter = ("(&(objectclass=computer)(!(userAccountControl:1.2.840.113556.1.4.803:=2))"
                          "(|(operatingSystem=*Windows 6*)(operatingSystem=*Windows 2000*)"
@@ -71,10 +71,7 @@ class NXCModule:
 
         if answers:
             obsolete_hosts_count = len(answers)
-            logs_path = Path.home() / ".nxc" / "logs"
-            logs_path.mkdir(parents=True, exist_ok=True)
-            filename = logs_path / f"{connection.domain}.obsoletehosts.txt"
-
+            filename = f"{NXC_PATH}/logs/{connection.domain}.obsoletehosts.txt"
             context.log.display(f"{obsolete_hosts_count} Obsolete hosts will be saved to {filename}")
             with open(filename, "w") as f:
                 for dns_hostname, ip_address, os, pwd_last_set_readable in answers:
