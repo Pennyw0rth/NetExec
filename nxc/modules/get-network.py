@@ -1,17 +1,18 @@
 # Credit to https://twitter.com/snovvcrash/status/1550518555438891009
 # Credit to https://github.com/dirkjanm/adidnsdump @_dirkjan
 # module by @mpgn_x64
-
+import re
 from os.path import expanduser
 import codecs
 import socket
-from builtins import str
 from datetime import datetime
 from struct import unpack
 
 import dns.name
 import dns.resolver
+from impacket.ldap import ldap
 from impacket.structure import Structure
+from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from ldap3 import LEVEL
 
 
@@ -37,13 +38,13 @@ def get_dns_resolver(server, context):
             server = server[8:]
         socket.inet_aton(server)
         dnsresolver.nameservers = [server]
-    except socket.error:
-        context.info("Using System DNS to resolve unknown entries. Make sure resolving your" " target domain works here or specify an IP as target host to use that" " server for queries")
+    except OSError:
+        context.info("Using System DNS to resolve unknown entries. Make sure resolving your target domain works here or specify an IP as target host to use that server for queries")
     return dnsresolver
 
 
 def ldap2domain(ldap):
-    return re.sub(",DC=", ".", ldap[ldap.lower().find("dc=") :], flags=re.I)[3:]
+    return re.sub(",DC=", ".", ldap[ldap.lower().find("dc="):], flags=re.I)[3:]
 
 
 def new_record(rtype, serial):
@@ -51,7 +52,7 @@ def new_record(rtype, serial):
     nr["Type"] = rtype
     nr["Serial"] = serial
     nr["TtlSeconds"] = 180
-    # From authoritive zone
+    # From authoritative zone
     nr["Rank"] = 240
     return nr
 
@@ -82,17 +83,16 @@ def searchResEntry_to_dict(results):
 
 class NXCModule:
     name = "get-network"
-    description = ""
+    description = "Query all DNS records with the corresponding IP from the domain."
     supported_protocols = ["ldap"]
     opsec_safe = True
     multiple_hosts = True
 
     def options(self, context, module_options):
         """
-        ALL      Get DNS and IP (default: false)
+        ALL           Get DNS and IP (default: false)
         ONLY_HOSTS    Get DNS only (no ip) (default: false)
         """
-
         self.showall = False
         self.showhosts = False
         self.showip = True
@@ -115,29 +115,27 @@ class NXCModule:
 
     def on_login(self, context, connection):
         zone = ldap2domain(connection.baseDN)
-        dnsroot = "CN=MicrosoftDNS,DC=DomainDnsZones,%s" % connection.baseDN
-        searchtarget = "DC=%s,%s" % (zone, dnsroot)
+        dns_root = f"CN=MicrosoftDNS,DC=DomainDnsZones,{connection.baseDN}"
+        search_target = f"DC={zone},{dns_root}"
         context.log.display("Querying zone for records")
         sfilter = "(DC=*)"
 
         try:
             list_sites = connection.ldapConnection.search(
-                searchBase=searchtarget,
+                searchBase=search_target,
                 searchFilter=sfilter,
                 attributes=["dnsRecord", "dNSTombstoned", "name"],
                 sizeLimit=100000,
             )
         except ldap.LDAPSearchError as e:
             if e.getErrorString().find("sizeLimitExceeded") >= 0:
-                context.log.debug("sizeLimitExceeded exception caught, giving up and processing the" " data received")
+                context.log.debug("sizeLimitExceeded exception caught, giving up and processing the data received")
                 # We reached the sizeLimit, process the answers we have already and that's it. Until we implement
                 # paged queries
                 list_sites = e.getAnswers()
-                pass
             else:
                 raise
-        targetentry = None
-        dnsresolver = get_dns_resolver(connection.host, context.log)
+        get_dns_resolver(connection.host, context.log)
 
         outdata = []
 
@@ -168,7 +166,7 @@ class NXCModule:
                                 {
                                     "name": recordname,
                                     "type": RECORD_TYPE_MAPPING[dr["Type"]],
-                                    "value": address[list(address.fields)[0]].toFqdn(),
+                                    "value": address[next(iter(address.fields))].toFqdn(),
                                 }
                             )
                     elif dr["Type"] == 28:
@@ -182,19 +180,19 @@ class NXCModule:
                                 }
                             )
 
-        context.log.highlight("Found %d records" % len(outdata))
-        path = expanduser("~/.nxc/logs/{}_network_{}.log".format(connection.domain, datetime.now().strftime("%Y-%m-%d_%H%M%S")))
+        context.log.highlight(f"Found {len(outdata)} records")
+        path = expanduser(f"~/.nxc/logs/{connection.domain}_network_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")
         with codecs.open(path, "w", "utf-8") as outfile:
             for row in outdata:
                 if self.showhosts:
-                    outfile.write("{}\n".format(row["name"] + "." + connection.domain))
+                    outfile.write(f"{row['name'] + '.' + connection.domain}\n")
                 elif self.showall:
-                    outfile.write("{} \t {}\n".format(row["name"] + "." + connection.domain, row["value"]))
+                    outfile.write(f"{row['name'] + '.' + connection.domain} \t {row['value']}\n")
                 else:
-                    outfile.write("{}\n".format(row["value"]))
-        context.log.success("Dumped {} records to {}".format(len(outdata), path))
+                    outfile.write(f"{row['value']}\n")
+        context.log.success(f"Dumped {len(outdata)} records to {path}")
         if not self.showall and not self.showhosts:
-            context.log.display("To extract CIDR from the {} ip, run  the following command: cat" " your_file | mapcidr -aa -silent | mapcidr -a -silent".format(len(outdata)))
+            context.log.display(f"To extract CIDR from the {len(outdata)} ip, run  the following command: cat your_file | mapcidr -aa -silent | mapcidr -a -silent")
 
 
 class DNS_RECORD(Structure):
@@ -250,9 +248,9 @@ class DNS_COUNT_NAME(Structure):
     def toFqdn(self):
         ind = 0
         labels = []
-        for i in range(self["LabelCount"]):
-            nextlen = unpack("B", self["RawName"][ind : ind + 1])[0]
-            labels.append(self["RawName"][ind + 1 : ind + 1 + nextlen].decode("utf-8"))
+        for _i in range(self["LabelCount"]):
+            nextlen = unpack("B", self["RawName"][ind: ind + 1])[0]
+            labels.append(self["RawName"][ind + 1: ind + 1 + nextlen].decode("utf-8"))
             ind += nextlen + 1
         # For the final dot
         labels.append("")

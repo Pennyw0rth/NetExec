@@ -23,7 +23,7 @@ class NXCModule:
         self.module_options = module_options
 
     def options(self, context, module_options):
-        """ """
+        """No options available."""
 
     def on_login(self, context, connection):
 

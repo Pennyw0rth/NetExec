@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import os
 from os.path import join as path_join
 from time import sleep
@@ -10,24 +7,7 @@ from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 
 
 class SMBEXEC:
-    def __init__(
-        self,
-        host,
-        share_name,
-        smbconnection,
-        protocol,
-        username="",
-        password="",
-        domain="",
-        doKerberos=False,
-        aesKey=None,
-        kdcHost=None,
-        hashes=None,
-        share=None,
-        port=445,
-        logger=None,
-        tries=None
-    ):
+    def __init__(self, host, share_name, smbconnection, protocol, username="", password="", domain="", doKerberos=False, aesKey=None, kdcHost=None, hashes=None, share=None, port=445, logger=None, tries=None):
         self.__host = host
         self.__share_name = "C$"
         self.__port = port
@@ -47,7 +27,6 @@ class SMBEXEC:
         self.__rpctransport = None
         self.__scmr = None
         self.__conn = None
-        # self.__mode  = mode
         self.__aesKey = aesKey
         self.__doKerberos = doKerberos
         self.__kdcHost = kdcHost
@@ -64,8 +43,8 @@ class SMBEXEC:
         if self.__password is None:
             self.__password = ""
 
-        stringbinding = "ncacn_np:%s[\pipe\svcctl]" % self.__host
-        self.logger.debug("StringBinding %s" % stringbinding)
+        stringbinding = f"ncacn_np:{self.__host}[\\pipe\\svcctl]"
+        self.logger.debug(f"StringBinding {stringbinding}")
         self.__rpctransport = transport.DCERPCTransportFactory(stringbinding)
         self.__rpctransport.set_dport(self.__port)
 
@@ -113,21 +92,17 @@ class SMBEXEC:
         self.__output = gen_random_string(6)
         self.__batchFile = gen_random_string(6) + ".bat"
 
-        if self.__retOutput:
-            command = self.__shell + "echo " + data + f" ^> \\\\127.0.0.1\\{self.__share_name}\\{self.__output} 2^>^&1 > %TEMP%\{self.__batchFile} & %COMSPEC% /Q /c %TEMP%\{self.__batchFile} & %COMSPEC% /Q /c del %TEMP%\{self.__batchFile}"
-        else:
-            command = self.__shell + data
+        command = self.__shell + "echo " + data + f" ^> \\\\127.0.0.1\\{self.__share_name}\\{self.__output} 2^>^&1 > %TEMP%\\{self.__batchFile} & %COMSPEC% /Q /c %TEMP%\\{self.__batchFile} & %COMSPEC% /Q /c del %TEMP%\\{self.__batchFile}" if self.__retOutput else self.__shell + data
 
         with open(path_join("/tmp", "nxc_hosted", self.__batchFile), "w") as batch_file:
             batch_file.write(command)
 
         self.logger.debug("Hosting batch file with command: " + command)
 
-        # command = self.__shell + '\\\\{}\\{}\\{}'.format(local_ip,self.__share_name, self.__batchFile)
         self.logger.debug("Command to execute: " + command)
 
         self.logger.debug(f"Remote service {self.__serviceName} created.")
-        
+
         try:
             resp = scmr.hRCreateServiceW(
                 self.__scmr,
@@ -143,7 +118,7 @@ class SMBEXEC:
                 self.logger.fail("SMBEXEC: Create services got blocked.")
             else:
                 self.logger.fail(str(e))
-            
+
             return self.__outputBuffer
 
         try:
@@ -153,7 +128,7 @@ class SMBEXEC:
             self.logger.debug(f"Remote service {self.__serviceName} deleted.")
             scmr.hRDeleteService(self.__scmr, service)
             scmr.hRCloseServiceHandle(self.__scmr, service)
-        except Exception as e:
+        except Exception:
             pass
 
         self.get_output_remote()
@@ -170,9 +145,9 @@ class SMBEXEC:
                 break
             except Exception as e:
                 if tries >= self.__tries:
-                    self.logger.fail(f"SMBEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
+                    self.logger.fail("SMBEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
                     break
-                if str(e).find("STATUS_BAD_NETWORK_NAME") >0 :
+                if str(e).find("STATUS_BAD_NETWORK_NAME") > 0:
                     self.logger.fail(f"SMBEXEC: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
                     break
                 if str(e).find("STATUS_SHARING_VIOLATION") >= 0 or str(e).find("STATUS_OBJECT_NAME_NOT_FOUND") >= 0:
@@ -181,7 +156,7 @@ class SMBEXEC:
                     tries += 1
                 else:
                     self.logger.debug(str(e))
-        
+
         if self.__outputBuffer:
             self.logger.debug(f"Deleting file {self.__share}\\{self.__output}")
             self.__smbconnection.deleteFile(self.__share, self.__output)
@@ -191,10 +166,7 @@ class SMBEXEC:
         self.__batchFile = gen_random_string(6) + ".bat"
         local_ip = self.__rpctransport.get_socket().getsockname()[0]
 
-        if self.__retOutput:
-            command = self.__shell + data + f" ^> \\\\{local_ip}\\{self.__share_name}\\{self.__output}"
-        else:
-            command = self.__shell + data
+        command = self.__shell + data + f" ^> \\\\{local_ip}\\{self.__share_name}\\{self.__output}" if self.__retOutput else self.__shell + data
 
         with open(path_join("/tmp", "nxc_hosted", self.__batchFile), "w") as batch_file:
             batch_file.write(command)
@@ -218,7 +190,7 @@ class SMBEXEC:
         try:
             self.logger.debug(f"Remote service {self.__serviceName} started.")
             scmr.hRStartServiceW(self.__scmr, service)
-        except:
+        except Exception:
             pass
         self.logger.debug(f"Remote service {self.__serviceName} deleted.")
         scmr.hRDeleteService(self.__scmr, service)
@@ -234,7 +206,7 @@ class SMBEXEC:
                 with open(path_join("/tmp", "nxc_hosted", self.__output), "rb") as output:
                     self.output_callback(output.read())
                 break
-            except IOError:
+            except OSError:
                 sleep(2)
 
     def finish(self):
@@ -250,5 +222,5 @@ class SMBEXEC:
             scmr.hRDeleteService(self.__scmr, service)
             scmr.hRControlService(self.__scmr, service, scmr.SERVICE_CONTROL_STOP)
             scmr.hRCloseServiceHandle(self.__scmr, service)
-        except:
+        except Exception:
             pass

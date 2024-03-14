@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import pylnk3
 import ntpath
 from sys import exit
@@ -33,7 +30,6 @@ class NXCModule:
         NAME          LNK file name
         CLEANUP       Cleanup (choices: True or False)
         """
-
         self.cleanup = False
 
         if "CLEANUP" in module_options:

@@ -13,6 +13,12 @@ a = Analysis(
         ('./nxc/modules', 'nxc/modules')
      ],
      hiddenimports=[
+        'aardwolf',
+        'aardwolf.connection',
+        'aardwolf.commons.queuedata.constants',
+        'aardwolf.commons.iosettings',
+        'aardwolf.commons.target',
+        'aardwolf.protocol.x224.constants',
         'impacket.examples.secretsdump',
         'impacket.dcerpc.v5.lsat',
         'impacket.dcerpc.v5.transport',
@@ -48,6 +54,7 @@ a = Analysis(
         'lsassy.parser',
         'lsassy.session',
         'lsassy.impacketfile',
+        'bloodhound',
         'dns',
         'dns.name',
         'dns.resolver',
@@ -64,6 +71,7 @@ a = Analysis(
         'dploot.lib.smb',
         'pyasn1_modules.rfc5652',
         'unicrypto.backends.pycryptodomex',
+        'sspilib.raw._text',
      ],
      hookspath=['./nxc/.hooks'],
      runtime_hooks=[],

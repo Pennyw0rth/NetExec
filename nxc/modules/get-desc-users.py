@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ldap import ldap as ldap_impacket
 import re
@@ -34,7 +31,7 @@ class NXCModule:
             self.MINLENGTH = module_options["MINLENGTH"]
         if "PASSWORDPOLICY" in module_options:
             self.PASSWORDPOLICY = True
-            self.regex = re.compile("((?=[^ ]*[A-Z])(?=[^ ]*[a-z])(?=[^ ]*\d)|(?=[^ ]*[a-z])(?=[^ ]*\d)(?=[^ ]*[^\w \n])|(?=[^ ]*[A-Z])(?=[^ ]*\d)(?=[^ ]*[^\w \n])|(?=[^ ]*[A-Z])(?=[^ ]*[a-z])(?=[^ ]*[^\w \n]))[^ \n]{" + self.MINLENGTH + ",}")  # Credit : https://stackoverflow.com/questions/31191248/regex-password-must-have-at-least-3-of-the-4-of-the-following
+            self.regex = re.compile(r"((?=[^ ]*[A-Z])(?=[^ ]*[a-z])(?=[^ ]*\d)|(?=[^ ]*[a-z])(?=[^ ]*\d)(?=[^ ]*[^\w \n])|(?=[^ ]*[A-Z])(?=[^ ]*\d)(?=[^ ]*[^\w \n])|(?=[^ ]*[A-Z])(?=[^ ]*[a-z])(?=[^ ]*[^\w \n]))[^ \n]{" + self.MINLENGTH + ",}")  # Credit : https://stackoverflow.com/questions/31191248/regex-password-must-have-at-least-3-of-the-4-of-the-following
 
     def on_login(self, context, connection):
         """Concurrent. Required if on_admin_login is not present. This gets called on each authenticated connection"""
@@ -42,7 +39,7 @@ class NXCModule:
         searchFilter = "(objectclass=user)"
 
         try:
-            context.log.debug("Search Filter=%s" % searchFilter)
+            context.log.debug(f"Search Filter={searchFilter}")
             resp = connection.ldapConnection.search(
                 searchFilter=searchFilter,
                 attributes=["sAMAccountName", "description"],
@@ -54,13 +51,12 @@ class NXCModule:
                 # We reached the sizeLimit, process the answers we have already and that's it. Until we implement
                 # paged queries
                 resp = e.getAnswers()
-                pass
             else:
                 nxc_logger.debug(e)
                 return False
 
         answers = []
-        context.log.debug("Total of records returned %d" % len(resp))
+        context.log.debug(f"Total of records returned {len(resp)}")
         for item in resp:
             if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
                 continue
@@ -76,13 +72,12 @@ class NXCModule:
                     answers.append([sAMAccountName, description])
             except Exception as e:
                 context.log.debug("Exception:", exc_info=True)
-                context.log.debug("Skipping item, cannot process due to error %s" % str(e))
-                pass
+                context.log.debug(f"Skipping item, cannot process due to error {e!s}")
         answers = self.filter_answer(context, answers)
         if len(answers) > 0:
             context.log.success("Found following users: ")
             for answer in answers:
-                context.log.highlight("User: {} description: {}".format(answer[0], answer[1]))
+                context.log.highlight(f"User: {answer[0]} description: {answer[1]}")
 
     def filter_answer(self, context, answers):
         # No option to filter
@@ -107,10 +102,6 @@ class NXCModule:
                     if self.regex.search(description):
                         conditionPasswordPolicy = True
 
-                if self.FILTER and conditionFilter and self.PASSWORDPOLICY and conditionPasswordPolicy:
-                    answersFiltered.append([answer[0], description])
-                elif not self.FILTER and self.PASSWORDPOLICY and conditionPasswordPolicy:
-                    answersFiltered.append([answer[0], description])
-                elif not self.PASSWORDPOLICY and self.FILTER and conditionFilter:
+                if (conditionFilter == self.FILTER) and (conditionPasswordPolicy == self.PASSWORDPOLICY):
                     answersFiltered.append([answer[0], description])
         return answersFiltered

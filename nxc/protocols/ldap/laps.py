@@ -1,6 +1,6 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
+import binascii
+import hashlib
+from json import loads
 from pyasn1.codec.der import decoder
 from pyasn1_modules import rfc5652
 
@@ -59,8 +59,8 @@ class LDAPConnect:
         baseDN = baseDN[:-1]
 
         try:
-            ldapConnection = ldap_impacket.LDAPConnection(f"ldap://{kdcHost}", baseDN)
-            ldapConnection.kerberosLogin(
+            ldap_connection = ldap_impacket.LDAPConnection(f"ldap://{kdcHost}", baseDN)
+            ldap_connection.kerberosLogin(
                 username,
                 password,
                 domain,
@@ -71,16 +71,15 @@ class LDAPConnect:
                 useCache=False,
             )
             # Connect to LDAP
-            out = f"{domain}{username}:{password if password else ntlm_hash}"
             self.logger.extra["protocol"] = "LDAP"
             self.logger.extra["port"] = "389"
-            return ldapConnection
+            return ldap_connection
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("strongerAuthRequired") >= 0:
                 # We need to try SSL
                 try:
-                    ldapConnection = ldap_impacket.LDAPConnection(f"ldaps://{kdcHost}", baseDN)
-                    ldapConnection.login(
+                    ldap_connection = ldap_impacket.LDAPConnection(f"ldaps://{kdcHost}", baseDN)
+                    ldap_connection.login(
                         username,
                         password,
                         domain,
@@ -92,28 +91,27 @@ class LDAPConnect:
                     )
                     self.logger.extra["protocol"] = "LDAPS"
                     self.logger.extra["port"] = "636"
-                    # self.logger.success(out)
-                    return ldapConnection
+                    return ldap_connection
                 except ldap_impacket.LDAPSessionError as e:
-                    errorCode = str(e).split()[-2][:-1]
+                    error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
-                        f"{domain}\\{username}:{password if password else ntlm_hash} {ldap_error_status[errorCode] if errorCode in ldap_error_status else ''}",
-                        color="magenta" if errorCode in ldap_error_status else "red",
+                        f"{domain}\\{username}:{password if password else ntlm_hash} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                        color="magenta" if error_code in ldap_error_status else "red",
                     )
             else:
-                errorCode = str(e).split()[-2][:-1]
+                error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{domain}\\{username}:{password if password else ntlm_hash} {ldap_error_status[errorCode] if errorCode in ldap_error_status else ''}",
-                    color="magenta" if errorCode in ldap_error_status else "red",
+                    f"{domain}\\{username}:{password if password else ntlm_hash} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                    color="magenta" if error_code in ldap_error_status else "red",
                 )
             return False
 
-        except OSError as e:
+        except OSError:
             self.logger.debug(f"{domain}\\{username}:{password if password else ntlm_hash} {'Error connecting to the domain, please add option --kdcHost with the FQDN of the domain controller'}")
             return False
         except KerberosError as e:
             self.logger.fail(
-                f"{domain}\\{username}:{password if password else ntlm_hash} {str(e)}",
+                f"{domain}\\{username}:{password if password else ntlm_hash} {e!s}",
                 color="red",
             )
             return False
@@ -129,52 +127,50 @@ class LDAPConnect:
             nthash = ntlm_hash
 
         # Create the baseDN
-        baseDN = ""
-        domainParts = domain.split(".")
-        for i in domainParts:
-            baseDN += f"dc={i},"
+        base_dn = ""
+        domain_parts = domain.split(".")
+        for i in domain_parts:
+            base_dn += f"dc={i},"
         # Remove last ','
-        baseDN = baseDN[:-1]
+        base_dn = base_dn[:-1]
 
         try:
-            ldapConnection = ldap_impacket.LDAPConnection(f"ldap://{domain}", baseDN, domain)
-            ldapConnection.login(username, password, domain, lmhash, nthash)
+            ldap_connection = ldap_impacket.LDAPConnection(f"ldap://{domain}", base_dn, domain)
+            ldap_connection.login(username, password, domain, lmhash, nthash)
 
             # Connect to LDAP
-            out = "{domain}\\{username}:{password if password else ntlm_hash}"
             self.logger.extra["protocol"] = "LDAP"
             self.logger.extra["port"] = "389"
-            # self.logger.success(out)
 
-            return ldapConnection
+            return ldap_connection
 
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("strongerAuthRequired") >= 0:
                 # We need to try SSL
                 try:
-                    ldapConnection = ldap_impacket.LDAPConnection(f"ldaps://{domain}", baseDN, domain)
-                    ldapConnection.login(username, password, domain, lmhash, nthash)
+                    ldap_connection = ldap_impacket.LDAPConnection(f"ldaps://{domain}", base_dn, domain)
+                    ldap_connection.login(username, password, domain, lmhash, nthash)
                     self.logger.extra["protocol"] = "LDAPS"
                     self.logger.extra["port"] = "636"
-                    # self.logger.success(out)
-                    return ldapConnection
+                    return ldap_connection
                 except ldap_impacket.LDAPSessionError as e:
-                    errorCode = str(e).split()[-2][:-1]
+                    error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
-                        f"{domain}\\{username}:{password if password else ntlm_hash} {ldap_error_status[errorCode] if errorCode in ldap_error_status else ''}",
-                        color="magenta" if errorCode in ldap_error_status else "red",
+                        f"{domain}\\{username}:{password if password else ntlm_hash} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                        color="magenta" if error_code in ldap_error_status else "red",
                     )
             else:
-                errorCode = str(e).split()[-2][:-1]
+                error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{domain}\\{username}:{password if password else ntlm_hash} {ldap_error_status[errorCode] if errorCode in ldap_error_status else ''}",
-                    color="magenta" if errorCode in ldap_error_status else "red",
+                    f"{domain}\\{username}:{password if password else ntlm_hash} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                    color="magenta" if error_code in ldap_error_status else "red",
                 )
             return False
 
-        except OSError as e:
+        except OSError:
             self.logger.debug(f"{domain}\\{username}:{password if password else ntlm_hash} {'Error connecting to the domain, please add option --kdcHost with the FQDN of the domain controller'}")
             return False
+
 
 class LAPSv2Extract:
     def __init__(self, data, username, password, domain, ntlm_hash, do_kerberos, kdcHost, port):
@@ -182,7 +178,7 @@ class LAPSv2Extract:
             self.lmhash, self.nthash = ntlm_hash.split(":")
         else:
             self.nthash = ntlm_hash
-            self.lmhash = ''
+            self.lmhash = ""
 
         self.data = data
         self.username = username
@@ -197,72 +193,174 @@ class LAPSv2Extract:
         self.logger = NXCAdapter(extra={"protocol": "LDAP", "host": host, "port": port, "hostname": hostname})
 
     def run(self):
-        KDSCache = {}
-        self.logger.info('[-] Unpacking blob')
+        kds_cache = {}
+        self.logger.info("[-] Unpacking blob")
         try:
-            encryptedLAPSBlob = EncryptedPasswordBlob(self.data)
-            parsed_cms_data, remaining = decoder.decode(encryptedLAPSBlob['Blob'], asn1Spec=rfc5652.ContentInfo())
-            enveloped_data_blob = parsed_cms_data['content']
+            encrypted_laps_blob = EncryptedPasswordBlob(self.data)
+            parsed_cms_data, remaining = decoder.decode(encrypted_laps_blob["Blob"], asn1Spec=rfc5652.ContentInfo())
+            enveloped_data_blob = parsed_cms_data["content"]
             parsed_enveloped_data, _ = decoder.decode(enveloped_data_blob, asn1Spec=rfc5652.EnvelopedData())
 
-            recipient_infos = parsed_enveloped_data['recipientInfos']
-            kek_recipient_info = recipient_infos[0]['kekri']
-            kek_identifier = kek_recipient_info['kekid']
-            key_id = KeyIdentifier(bytes(kek_identifier['keyIdentifier']))
-            tmp,_ = decoder.decode(kek_identifier['other']['keyAttr'])
-            sid = tmp['field-1'][0][0][1].asOctets().decode("utf-8")
+            recipient_infos = parsed_enveloped_data["recipientInfos"]
+            kek_recipient_info = recipient_infos[0]["kekri"]
+            kek_identifier = kek_recipient_info["kekid"]
+            key_id = KeyIdentifier(bytes(kek_identifier["keyIdentifier"]))
+            tmp, _ = decoder.decode(kek_identifier["other"]["keyAttr"])
+            sid = tmp["field-1"][0][0][1].asOctets().decode("utf-8")
             target_sd = create_sd(sid)
         except Exception as e:
-            logging.error('Cannot unpack msLAPS-EncryptedPassword blob due to error %s' % str(e))
-            return
+            self.logger.error(f"Cannot unpack msLAPS-EncryptedPassword blob due to error {e}")
+            return None
 
         # Check if item is in cache
-        if key_id['RootKeyId'] in KDSCache:
+        if key_id["RootKeyId"] in kds_cache:
             self.logger.info("Got KDS from cache")
-            gke = KDSCache[key_id['RootKeyId']]
+            gke = kds_cache[key_id["RootKeyId"]]
         else:
             # Connect on RPC over TCP to MS-GKDI to call opnum 0 GetKey
-            stringBinding = hept_map(destHost=self.domain, remoteIf=MSRPC_UUID_GKDI, protocol='ncacn_ip_tcp')
-            rpctransport = transport.DCERPCTransportFactory(stringBinding)
-            if hasattr(rpctransport, 'set_credentials'):
-                rpctransport.set_credentials(username=self.username, password=self.password, domain=self.domain, lmhash=self.lmhash, nthash=self.nthash)
+            string_binding = hept_map(destHost=self.domain, remoteIf=MSRPC_UUID_GKDI, protocol="ncacn_ip_tcp")
+            rpc_transport = transport.DCERPCTransportFactory(string_binding)
+            if hasattr(rpc_transport, "set_credentials"):
+                rpc_transport.set_credentials(username=self.username, password=self.password, domain=self.domain, lmhash=self.lmhash, nthash=self.nthash)
             if self.do_kerberos:
                 self.logger.info("Connecting using kerberos")
-                rpctransport.set_kerberos(self.do_kerberos, kdcHost=self.kdcHost)
+                rpc_transport.set_kerberos(self.do_kerberos, kdcHost=self.kdcHost)
 
-            dce = rpctransport.get_dce_rpc()
+            dce = rpc_transport.get_dce_rpc()
             dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_INTEGRITY)
             dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
-            self.logger.info("Connecting to %s" % stringBinding)
+            self.logger.info(f"Connecting to {string_binding}")
             try:
                 dce.connect()
             except Exception as e:
-                logging.error("Something went wrong, check error status => %s" % str(e))
+                self.logger.error(f"Something went wrong, check error status => {e}")
                 return False
             self.logger.info("Connected")
             try:
                 dce.bind(MSRPC_UUID_GKDI)
             except Exception as e:
-                logging.error("Something went wrong, check error status => %s" % str(e))
+                self.logger.error(f"Something went wrong, check error status => {e!s}")
                 return False
             self.logger.info("Successfully bound")
-
-
             self.logger.info("Calling MS-GKDI GetKey")
-            resp = GkdiGetKey(dce, target_sd=target_sd, l0=key_id['L0Index'], l1=key_id['L1Index'], l2=key_id['L2Index'], root_key_id=key_id['RootKeyId'])
+
+            resp = GkdiGetKey(dce, target_sd=target_sd, l0=key_id["L0Index"], l1=key_id["L1Index"], l2=key_id["L2Index"], root_key_id=key_id["RootKeyId"])
             self.logger.info("Decrypting password")
             # Unpack GroupKeyEnvelope
-            gke = GroupKeyEnvelope(b''.join(resp['pbbOut']))
-            KDSCache[gke['RootKeyId']] = gke
+            gke = GroupKeyEnvelope(b"".join(resp["pbbOut"]))
+            kds_cache[gke["RootKeyId"]] = gke
 
         kek = compute_kek(gke, key_id)
-        self.logger.info("KEK:\t%s" % kek)
+        self.logger.info(f"KEK:\t{kek}")
         enc_content_parameter = bytes(parsed_enveloped_data["encryptedContentInfo"]["contentEncryptionAlgorithm"]["parameters"])
         iv, _ = decoder.decode(enc_content_parameter)
         iv = bytes(iv[0])
 
-        cek = unwrap_cek(kek, bytes(kek_recipient_info['encryptedKey']))
-        self.logger.info("CEK:\t%s" % cek)
+        cek = unwrap_cek(kek, bytes(kek_recipient_info["encryptedKey"]))
+        self.logger.info(f"CEK:\t{cek}")
         plaintext = decrypt_plaintext(cek, iv, remaining)
-        self.logger.info(plaintext[:-18].decode('utf-16le'))
-        return plaintext[:-18].decode('utf-16le')
+        self.logger.info(plaintext[:-18].decode("utf-16le"))
+        return plaintext[:-18].decode("utf-16le")
+
+
+def laps_search(self, username, password, cred_type, domain):
+    prev_protocol = self.logger.extra["protocol"]
+    prev_port = self.logger.extra["port"]
+    self.logger.extra["protocol"] = "LDAP"
+    self.logger.extra["port"] = "389"
+
+    ldapco = LDAPConnect(self.domain, "389", self.domain)
+
+    if self.kerberos:
+        if self.kdcHost is None:
+            self.logger.fail("Add --kdcHost parameter to use laps with kerberos")
+            return None, None, None, None
+
+        connection = ldapco.kerberos_login(
+            domain[0],
+            username[0] if username else "",
+            password[0] if cred_type[0] == "plaintext" else "",
+            password[0] if cred_type[0] == "hash" else "",
+            kdcHost=self.kdcHost,
+            aesKey=self.aesKey,
+        )
+    else:
+        connection = ldapco.auth_login(
+            domain[0],
+            username[0] if username else "",
+            password[0] if cred_type[0] == "plaintext" else "",
+            password[0] if cred_type[0] == "hash" else "",
+        )
+    if not connection:
+        self.logger.fail(f"LDAP connection failed with account {username[0]}")
+
+        return None, None, None, None
+
+    search_filter = "(&(objectCategory=computer)(|(msLAPS-EncryptedPassword=*)(ms-MCS-AdmPwd=*)(msLAPS-Password=*))(name=" + self.hostname + "))"
+    attributes = [
+        "msLAPS-EncryptedPassword",
+        "msLAPS-Password",
+        "ms-MCS-AdmPwd",
+        "sAMAccountName",
+    ]
+    results = connection.search(searchFilter=search_filter, attributes=attributes, sizeLimit=0)
+
+    msMCSAdmPwd = ""
+    sAMAccountName = ""
+    username_laps = ""
+
+    from impacket.ldap import ldapasn1 as ldapasn1_impacket
+
+    results = [r for r in results if isinstance(r, ldapasn1_impacket.SearchResultEntry)]
+    if len(results) != 0:
+        for host in results:
+            values = {str(attr["type"]).lower(): attr["vals"][0] for attr in host["attributes"]}
+            if "mslaps-encryptedpassword" in values:
+                msMCSAdmPwd = values["mslaps-encryptedpassword"]
+                d = LAPSv2Extract(
+                    bytes(msMCSAdmPwd),
+                    username[0] if username else "",
+                    password[0] if cred_type[0] == "plaintext" else "",
+                    domain[0],
+                    password[0] if cred_type[0] == "hash" else "",
+                    self.args.kerberos,
+                    self.args.kdcHost,
+                    339
+                )
+                try:
+                    data = d.run()
+                except Exception as e:
+                    self.logger.fail(str(e))
+                    return None, None, None, None
+                r = loads(data)
+                msMCSAdmPwd = r["p"]
+                username_laps = r["n"]
+            elif "mslaps-password" in values:
+                r = loads(str(values["mslaps-password"]))
+                msMCSAdmPwd = r["p"]
+                username_laps = r["n"]
+            elif "ms-mcs-admpwd" in values:
+                msMCSAdmPwd = str(values["ms-mcs-admpwd"])
+            else:
+                self.logger.fail("No result found with attribute ms-MCS-AdmPwd or msLAPS-Password")
+        self.logger.debug(f"Host: {sAMAccountName:<20} Password: {msMCSAdmPwd} {self.hostname}")
+    else:
+        self.logger.fail(f"msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS property for {self.hostname}")
+        return None, None, None, None
+
+    if msMCSAdmPwd == "":
+        self.logger.fail(f"msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS property for {self.hostname}")
+        return None, None, None, None
+
+    hash_ntlm = None
+    if cred_type[0] == "hash":
+        hash_ntlm = hashlib.new("md4", msMCSAdmPwd.encode("utf-16le")).digest()
+        hash_ntlm = binascii.hexlify(hash_ntlm).decode()
+
+    username = username_laps if username_laps else self.args.laps
+    password = msMCSAdmPwd
+    domain = self.hostname
+    self.args.local_auth = True
+    self.logger.extra["protocol"] = prev_protocol
+    self.logger.extra["port"] = prev_port
+    return username, password, domain, hash_ntlm

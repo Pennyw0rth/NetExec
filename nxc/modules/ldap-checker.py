@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 import socket
 import ssl
 import asyncio
@@ -12,6 +10,8 @@ from asyauth.common.credentials.ntlm import NTLMCredential
 from asyauth.common.credentials.kerberos import KerberosCredential
 
 from asysocks.unicomm.common.target import UniTarget, UniProto
+import sys
+
 
 class NXCModule:
     """
@@ -28,10 +28,7 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """
-        No options available.
-        """
-        pass
+        """No options available."""
 
     def on_login(self, context, connection):
         # Conduct a bind to LDAPS and determine if channel
@@ -44,7 +41,7 @@ class NXCModule:
             _, err = await ldapsClientConn.connect()
             if err is not None:
                 context.log.fail("ERROR while connecting to " + str(connection.domain) + ": " + str(err))
-                exit()
+                sys.exit()
             _, err = await ldapsClientConn.bind()
             if "data 80090346" in str(err):
                 return True  # channel binding IS enforced
@@ -57,16 +54,16 @@ class NXCModule:
 
         # Conduct a bind to LDAPS with channel binding supported
         # but intentionally miscalculated. In the case that and
-        # LDAPS bind has without channel binding supported has occured,
+        # LDAPS bind has without channel binding supported has occurred,
         # you can determine whether the policy is set to "never" or
         # if it's set to "when supported" based on the potential
-        # error recieved from the bind attempt.
+        # error received from the bind attempt.
         async def run_ldaps_withEPA(target, credential):
             ldapsClientConn = MSLDAPClientConnection(target, credential)
             _, err = await ldapsClientConn.connect()
             if err is not None:
                 context.log.fail("ERROR while connecting to " + str(connection.domain) + ": " + str(err))
-                exit()
+                sys.exit()
             # forcing a miscalculation of the "Channel Bindings" av pair in Type 3 NTLM message
             ldapsClientConn.cb_data = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
             _, err = await ldapsClientConn.bind()
@@ -123,15 +120,15 @@ class NXCModule:
                 _, err = await ldapsClientConn.bind()
                 if "stronger" in str(err):
                     return True  # because LDAP server signing requirements ARE enforced
-                elif ("data 52e" or "data 532") in str(err):
+                elif ("data 52e") in str(err):
                     context.log.fail("Not connected... exiting")
-                    exit()
+                    sys.exit()
                 elif err is None:
                     return False
             else:
                 context.log.fail(str(err))
 
-        # Run trough all our code blocks to determine LDAP signing and channel binding settings.   
+        # Run trough all our code blocks to determine LDAP signing and channel binding settings.
         stype = asyauthSecret.PASS if not connection.nthash else asyauthSecret.NT
         secret = connection.password if not connection.nthash else connection.nthash
         if not connection.kerberos:
@@ -142,15 +139,7 @@ class NXCModule:
                 stype=stype,
             )
         else:
-            kerberos_target = UniTarget(
-                connection.hostname + '.' + connection.domain,
-                88,
-                UniProto.CLIENT_TCP,
-                proxies=None,
-                dns=None,
-                dc_ip=connection.domain,
-                domain=connection.domain
-            )
+            kerberos_target = UniTarget(connection.hostname + "." + connection.domain, 88, UniProto.CLIENT_TCP, proxies=None, dns=None, dc_ip=connection.domain, domain=connection.domain)
             credential = KerberosCredential(
                 target=kerberos_target,
                 secret=secret,
@@ -162,27 +151,27 @@ class NXCModule:
         target = MSLDAPTarget(connection.host, hostname=connection.hostname, domain=connection.domain, dc_ip=connection.domain)
         ldapIsProtected = asyncio.run(run_ldap(target, credential))
 
-        if ldapIsProtected == False:
+        if ldapIsProtected is False:
             context.log.highlight("LDAP Signing NOT Enforced!")
-        elif ldapIsProtected == True:
+        elif ldapIsProtected is True:
             context.log.fail("LDAP Signing IS Enforced")
         else:
             context.log.fail("Connection fail, exiting now")
-            exit()
+            sys.exit()
 
-        if DoesLdapsCompleteHandshake(connection.host) == True:
+        if DoesLdapsCompleteHandshake(connection.host) is True:
             target = MSLDAPTarget(connection.host, 636, UniProto.CLIENT_SSL_TCP, hostname=connection.hostname, domain=connection.domain, dc_ip=connection.domain)
             ldapsChannelBindingAlwaysCheck = asyncio.run(run_ldaps_noEPA(target, credential))
             target = MSLDAPTarget(connection.host, hostname=connection.hostname, domain=connection.domain, dc_ip=connection.domain)
             ldapsChannelBindingWhenSupportedCheck = asyncio.run(run_ldaps_withEPA(target, credential))
-            if ldapsChannelBindingAlwaysCheck == False and ldapsChannelBindingWhenSupportedCheck == True:
+            if ldapsChannelBindingAlwaysCheck is False and ldapsChannelBindingWhenSupportedCheck is True:
                 context.log.highlight('LDAPS Channel Binding is set to "When Supported"')
-            elif ldapsChannelBindingAlwaysCheck == False and ldapsChannelBindingWhenSupportedCheck == False:
+            elif ldapsChannelBindingAlwaysCheck is False and ldapsChannelBindingWhenSupportedCheck is False:
                 context.log.highlight('LDAPS Channel Binding is set to "NEVER"')
-            elif ldapsChannelBindingAlwaysCheck == True:
+            elif ldapsChannelBindingAlwaysCheck is True:
                 context.log.fail('LDAPS Channel Binding is set to "Required"')
             else:
                 context.log.fail("\nSomething went wrong...")
-                exit()
+                sys.exit()
         else:
             context.log.fail(connection.domain + " - cannot complete TLS handshake, cert likely not configured")

@@ -1,10 +1,10 @@
-#!/usr/bin/env python3
 from base64 import b64decode
 from binascii import unhexlify
 from hashlib import pbkdf2_hmac, sha1
 import hmac
 import json
 import ntpath
+from os import remove
 import sqlite3
 import tempfile
 from Cryptodome.Cipher import AES, DES3
@@ -112,7 +112,7 @@ class FirefoxTriage:
         json_logins = json.loads(logins_data)
         if "logins" not in json_logins:
             return []  # No logins key in logins.json file
-        logins = [
+        return [
             (
                 self.decode_login_data(row["encryptedUsername"]),
                 self.decode_login_data(row["encryptedPassword"]),
@@ -120,10 +120,12 @@ class FirefoxTriage:
             )
             for row in json_logins["logins"]
         ]
-        return logins
 
     def get_key(self, key4_data, master_password=b""):
-        fh = tempfile.NamedTemporaryFile()
+        # Instead of disabling "delete" and removing the file manually,
+        # in the future (py3.12) we could use "delete_on_close=False" as a cleaner solution
+        # Related issue: #134
+        fh = tempfile.NamedTemporaryFile(delete=False)
         fh.write(key4_data)
         fh.seek(0)
         db = sqlite3.connect(fh.name)
@@ -151,7 +153,12 @@ class FirefoxTriage:
                     self.logger.debug(e)
                     fh.close()
                     return b""
+        db.close()
         fh.close()
+        try:
+            remove(fh.name)
+        except Exception as e:
+            self.logger.error(f"Error removing temporary file: {e}")
 
     def is_master_password_correct(self, key_data, master_password=b""):
         try:
@@ -160,7 +167,7 @@ class FirefoxTriage:
             item2 = key_data[1]
             decoded_item2 = decoder.decode(item2)
             cleartext_data = self.decrypt_3des(decoded_item2, master_password, global_salt)
-            if cleartext_data != "password-check\x02\x02".encode():
+            if cleartext_data != b"password-check\x02\x02":
                 return "", "", ""
             return global_salt, master_password, entry_salt
         except Exception as e:
@@ -168,14 +175,14 @@ class FirefoxTriage:
             return "", "", ""
 
     def get_users(self):
-        users = list()
+        users = []
 
         users_dir_path = "Users\\*"
         directories = self.conn.listPath(shareName=self.share, path=ntpath.normpath(users_dir_path))
 
         for d in directories:
             if d.get_longname() not in self.false_positive and d.is_directory() > 0:
-                users.append(d.get_longname())
+                users.append(d.get_longname())  # noqa: PERF401, ignoring for readability
         return users
 
     @staticmethod
@@ -189,9 +196,7 @@ class FirefoxTriage:
 
     @staticmethod
     def decrypt(key, iv, ciphertext):
-        """
-        Decrypt ciphered data (user / password) using the key previously found
-        """
+        """Decrypt ciphered data (user / password) using the key previously found"""
         cipher = DES3.new(key=key, mode=DES3.MODE_CBC, iv=iv)
         data = cipher.decrypt(ciphertext)
         nb = data[-1]
@@ -202,9 +207,7 @@ class FirefoxTriage:
 
     @staticmethod
     def decrypt_3des(decoded_item, master_password, global_salt):
-        """
-        User master key is also encrypted (if provided, the master_password could be used to encrypt it)
-        """
+        """User master key is also encrypted (if provided, the master_password could be used to encrypt it)"""
         # See http://www.drh-consultancy.demon.co.uk/key3.html
         pbeAlgo = str(decoded_item[0][0][0])
         if pbeAlgo == "1.2.840.113549.1.12.5.1.3":  # pbeWithSha1AndTripleDES-CBC
@@ -213,7 +216,7 @@ class FirefoxTriage:
 
             # See http://www.drh-consultancy.demon.co.uk/key3.html
             hp = sha1(global_salt + master_password).digest()
-            pes = entry_salt + "\x00".encode() * (20 - len(entry_salt))
+            pes = entry_salt + b"\x00" * (20 - len(entry_salt))
             chp = sha1(hp + entry_salt).digest()
             k1 = hmac.new(chp, pes + entry_salt, sha1).digest()
             tk = hmac.new(chp, pes, sha1).digest()
@@ -241,8 +244,4 @@ class FirefoxTriage:
             # 04 is OCTETSTRING, 0x0e is length == 14
             encrypted_value = decoded_item[0][1].asOctets()
             cipher = AES.new(key, AES.MODE_CBC, iv)
-            decrypted = cipher.decrypt(encrypted_value)
-            if decrypted is not None:
-                return decrypted
-            else:
-                return None
+            return cipher.decrypt(encrypted_value)

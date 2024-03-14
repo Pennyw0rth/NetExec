@@ -1,48 +1,36 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import cmd
-import configparser
 import csv
+import sys
 import os
+import argparse
 from os import listdir
 from os.path import exists
 from os.path import join as path_join
-import shutil
-from sqlite3 import connect
-import sys
 from textwrap import dedent
-
 from requests import get, post, ConnectionError
-from sqlalchemy import create_engine
 from terminaltables import AsciiTable
+from termcolor import colored
 
 from nxc.loaders.protocolloader import ProtocolLoader
-from nxc.paths import CONFIG_PATH, WS_PATH, WORKSPACE_DIR
+from nxc.paths import CONFIG_PATH, WORKSPACE_DIR
+from nxc.database import create_db_engine, open_config, get_workspace, get_db, write_configfile, create_workspace, set_workspace
 
 
 class UserExitedProto(Exception):
     pass
 
 
-def create_db_engine(db_path):
-    db_engine = create_engine(f"sqlite:///{db_path}", isolation_level="AUTOCOMMIT", future=True)
-    return db_engine
-
-
 def print_table(data, title=None):
-    print("")
+    print()
     table = AsciiTable(data)
     if title:
         table.title = title
     print(table.table)
-    print("")
+    print()
 
 
 def write_csv(filename, headers, entries):
-    """
-    Writes a CSV file with the provided parameters.
-    """
+    """Writes a CSV file with the provided parameters."""
     with open(os.path.expanduser(filename), "w") as export_file:
         csv_file = csv.writer(
             export_file,
@@ -57,19 +45,14 @@ def write_csv(filename, headers, entries):
 
 
 def write_list(filename, entries):
-    """
-    Writes a file with a simple list
-    """
+    """Writes a file with a simple list"""
     with open(os.path.expanduser(filename), "w") as export_file:
         for line in entries:
             export_file.write(line + "\n")
-    return
 
 
 def complete_import(text, line):
-    """
-    Tab-complete 'import' commands
-    """
+    """Tab-complete 'import' commands"""
     commands = ("empire", "metasploit")
     mline = line.partition(" ")[2]
     offs = len(mline) - len(text)
@@ -77,9 +60,7 @@ def complete_import(text, line):
 
 
 def complete_export(text, line):
-    """
-    Tab-complete 'creds' commands.
-    """
+    """Tab-complete 'creds' commands."""
     commands = (
         "creds",
         "plaintext",
@@ -172,7 +153,7 @@ class DatabaseNavigator(cmd.Cmd):
                     if cred[4] == "hash":
                         usernames.append(cred[2])
                         passwords.append(cred[3])
-                output_list = [':'.join(combination) for combination in zip(usernames, passwords)]
+                output_list = [":".join(combination) for combination in zip(usernames, passwords)]
                 write_list(filename, output_list)
             else:
                 print(f"[-] No such export option: {line[1]}")
@@ -243,15 +224,12 @@ class DatabaseNavigator(cmd.Cmd):
                 formatted_shares = []
                 for share in shares:
                     user = self.db.get_users(share[2])[0]
-                    if self.db.get_hosts(share[1]): 
-                        share_host = self.db.get_hosts(share[1])[0][2] 
-                    else: 
-                        share_host = "ERROR"
+                    share_host = self.db.get_hosts(share[1])[0][2] if self.db.get_hosts(share[1]) else "ERROR"
 
                     entry = (
                         share[0],  # shareID
                         share_host,  # hosts
-                        f"{user[1]}\{user[2]}",  # userID
+                        f"{user[1]}\\{user[2]}",  # userID
                         share[3],  # name
                         share[4],  # remark
                         bool(share[5]),  # read
@@ -333,10 +311,7 @@ class DatabaseNavigator(cmd.Cmd):
                 return
             print("[+] DPAPI secrets exported")
         elif command == "keys":
-            if line[1].lower() == "all":
-                keys = self.db.get_keys()
-            else:
-                keys = self.db.get_keys(key_id=int(line[1]))
+            keys = self.db.get_keys() if line[1].lower() == "all" else self.db.get_keys(key_id=int(line[1]))
             writable_keys = [key[2] for key in keys]
             filename = line[2]
             write_list(filename, writable_keys)
@@ -352,15 +327,7 @@ class DatabaseNavigator(cmd.Cmd):
                 "check",
                 "status",
             )
-            csv_header_detailed = (
-                "id",
-                "ip",
-                "hostname",
-                "check",
-                "description",
-                "status",
-                "reasons"
-            )
+            csv_header_detailed = ("id", "ip", "hostname", "check", "description", "status", "reasons")
             filename = line[2]
             host_mapping = {}
             check_mapping = {}
@@ -370,12 +337,12 @@ class DatabaseNavigator(cmd.Cmd):
             check_results = self.db.get_check_results()
             rows = []
 
-            for result_id,hostid,checkid,secure,reasons in check_results:
+            for result_id, hostid, checkid, secure, reasons in check_results:
                 row = [result_id]
                 if hostid in host_mapping:
                     row.extend(host_mapping[hostid])
                 else:
-                    for host_id,ip,hostname,_,_,_,_,_,_,_,_ in hosts:
+                    for host_id, ip, hostname, _, _, _, _, _, _, _, _ in hosts:
                         if host_id == hostid:
                             row.extend([ip, hostname])
                             host_mapping[hostid] = [ip, hostname]
@@ -389,12 +356,11 @@ class DatabaseNavigator(cmd.Cmd):
                             row.extend([name, description])
                             check_mapping[checkid] = [name, description]
                             break
-                row.append('OK' if secure else 'KO')
-                row.append(reasons)
+                row.extend(("OK" if secure else "KO", reasons))
                 rows.append(row)
 
             if line[1].lower() == "simple":
-                simple_rows = list((row[0], row[1], row[2], row[3], row[5]) for row in rows)
+                simple_rows = [(row[0], row[1], row[2], row[3], row[5]) for row in rows]
                 write_csv(filename, csv_header_simple, simple_rows)
             elif line[1].lower() == "detailed":
                 write_csv(filename, csv_header_detailed, rows)
@@ -474,28 +440,14 @@ class NXCDBMenu(cmd.Cmd):
     def __init__(self, config_path):
         cmd.Cmd.__init__(self)
         self.config_path = config_path
-
-        try:
-            self.config = configparser.ConfigParser()
-            self.config.read(self.config_path)
-        except Exception as e:
-            print(f"[-] Error reading nxc.conf: {e}")
-            sys.exit(1)
-
         self.conn = None
         self.p_loader = ProtocolLoader()
         self.protocols = self.p_loader.get_protocols()
 
-        self.workspace = self.config.get("nxc", "workspace")
+        self.config = open_config(self.config_path)
+        self.workspace = get_workspace(self.config)
+        self.db = get_db(self.config)
         self.do_workspace(self.workspace)
-
-        self.db = self.config.get("nxc", "last_used_db")
-        if self.db:
-            self.do_proto(self.db)
-
-    def write_configfile(self):
-        with open(self.config_path, "w") as configfile:
-            self.config.write(configfile)
 
     def do_proto(self, proto):
         if not proto:
@@ -507,9 +459,9 @@ class NXCDBMenu(cmd.Cmd):
             db_nav_object = self.p_loader.load_protocol(self.protocols[proto]["nvpath"])
             db_object = self.p_loader.load_protocol(self.protocols[proto]["dbpath"])
             self.config.set("nxc", "last_used_db", proto)
-            self.write_configfile()
+            write_configfile(self.config, self.config_path)
             try:
-                proto_menu = getattr(db_nav_object, "navigator")(self, getattr(db_object, "database")(self.conn), proto)
+                proto_menu = db_nav_object.navigator(self, db_object.database(self.conn), proto)
                 proto_menu.cmdloop()
             except UserExitedProto:
                 pass
@@ -534,18 +486,18 @@ class NXCDBMenu(cmd.Cmd):
         if subcommand == "create":
             new_workspace = line.split()[1].strip()
             print(f"[*] Creating workspace '{new_workspace}'")
-            self.create_workspace(new_workspace, self.p_loader, self.protocols)
+            create_workspace(new_workspace, self.p_loader)
             self.do_workspace(new_workspace)
         elif subcommand == "list":
             print("[*] Enumerating Workspaces")
             for workspace in listdir(path_join(WORKSPACE_DIR)):
                 if workspace == self.workspace:
-                    print("==> " + workspace)
+                    print(f" * {colored(workspace, 'green')}")
                 else:
-                    print(workspace)
+                    print(f"   {workspace}")
         elif exists(path_join(WORKSPACE_DIR, line)):
             self.config.set("nxc", "workspace", line)
-            self.write_configfile()
+            write_configfile(self.config, self.config_path)
             self.workspace = line
             self.prompt = f"nxcdb ({line}) > "
 
@@ -566,65 +518,49 @@ class NXCDBMenu(cmd.Cmd):
         Exits
         """
         print_help(help_string)
-
-    @staticmethod
-    def create_workspace(workspace_name, p_loader, protocols):
-        os.mkdir(path_join(WORKSPACE_DIR, workspace_name))
-
-        for protocol in protocols.keys():
-            protocol_object = p_loader.load_protocol(protocols[protocol]["dbpath"])
-            proto_db_path = path_join(WORKSPACE_DIR, workspace_name, f"{protocol}.db")
-
-            if not exists(proto_db_path):
-                print(f"[*] Initializing {protocol.upper()} protocol database")
-                conn = connect(proto_db_path)
-                c = conn.cursor()
-
-                # try to prevent some weird sqlite I/O errors
-                c.execute("PRAGMA journal_mode = OFF")
-                c.execute("PRAGMA foreign_keys = 1")
-
-                getattr(protocol_object, "database").db_schema(c)
-
-                # commit the changes and close everything off
-                conn.commit()
-                conn.close()
-
-
-def delete_workspace(workspace_name):
-    shutil.rmtree(path_join(WORKSPACE_DIR, workspace_name))
-
-
-def initialize_db(logger):
-    if not exists(path_join(WS_PATH, "default")):
-        logger.debug("Creating default workspace")
-        os.mkdir(path_join(WS_PATH, "default"))
-
-    p_loader = ProtocolLoader()
-    protocols = p_loader.get_protocols()
-    for protocol in protocols.keys():
-        protocol_object = p_loader.load_protocol(protocols[protocol]["dbpath"])
-        proto_db_path = path_join(WS_PATH, "default", f"{protocol}.db")
-
-        if not exists(proto_db_path):
-            logger.debug(f"Initializing {protocol.upper()} protocol database")
-            conn = connect(proto_db_path)
-            c = conn.cursor()
-            # try to prevent some weird sqlite I/O errors
-            c.execute("PRAGMA journal_mode = OFF")  # could try setting to PERSIST if DB corruption starts occurring
-            c.execute("PRAGMA foreign_keys = 1")
-            # set a small timeout (5s) so if another thread is writing to the database, the entire program doesn't crash
-            c.execute("PRAGMA busy_timeout = 5000")
-            getattr(protocol_object, "database").db_schema(c)
-            # commit the changes and close everything off
-            conn.commit()
-            conn.close()
-
+    
 
 def main():
     if not exists(CONFIG_PATH):
         print("[-] Unable to find config file")
         sys.exit(1)
+    
+    parser = argparse.ArgumentParser(
+        description="NXCDB is a database navigator for NXC",
+    )
+    parser.add_argument(
+        "-gw",
+        "--get-workspace",
+        action="store_true",
+        help="get the current workspace",
+    )
+    parser.add_argument(
+        "-cw",
+        "--create-workspace",
+        help="create a new workspace",
+    )
+    parser.add_argument(
+        "-sw",
+        "--set-workspace",
+        help="set the current workspace",
+    )
+    args = parser.parse_args()
+
+    if args.create_workspace:
+        create_workspace(args.create_workspace)
+        sys.exit()
+    if args.set_workspace:
+        set_workspace(CONFIG_PATH, args.set_workspace)
+        sys.exit()
+    if args.get_workspace:
+        current_workspace = get_workspace(open_config(CONFIG_PATH))
+        for workspace in listdir(path_join(WORKSPACE_DIR)):
+            if workspace == current_workspace:
+                print(f" * {colored(workspace, 'green')}")
+            else:
+                print(f"   {workspace}")
+        sys.exit()
+
     try:
         nxcdbnav = NXCDBMenu(CONFIG_PATH)
         nxcdbnav.cmdloop()
