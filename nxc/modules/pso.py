@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from datetime import datetime, timedelta
+from impacket.ldap import ldapasn1 as ldapasn1_impacket
 
 class NXCModule:
     """
@@ -23,16 +24,9 @@ class NXCModule:
         """No options available."""
 
     def on_login(self, context, connection):
-
-        # Set some variables
-        self.__domain = connection.domain
-        self.__kdcHost = (f'{connection.hostname}.{connection.domain}')
-        self.__username = connection.username
-        self.__password = connection.password
-
         # Are there even any FGPPs?
         context.log.success("Attempting to enumerate policies...")
-        resp = connection.ldapConnection.search(searchBase="CN=Password Settings Container,CN=System,"+ base_creator(self.__domain), searchFilter="(objectclass=*)")
+        resp = connection.ldapConnection.search(searchBase="CN=Password Settings Container,CN=System," + "".join([f"DC={dc}," for dc in connection.domain.split(".")]).rstrip(","), searchFilter="(objectclass=*)")
         if len(resp) > 1:
             context.log.highlight(str(len(resp) - 1) + " PSO Objects found!")
             context.log.highlight("")
@@ -116,13 +110,6 @@ class NXCModule:
             for object in str(policyApplies)[:-1].split(";"):
                 context.log.highlight("\t"+str(object))
             context.log.highlight("")
-
-def base_creator(domain):
-    search_base = ""
-    base = domain.split(".")
-    for b in base:
-        search_base += (f'DC={b},')
-    return search_base[:-1]
 
 def clock(ldap_time):
     fmt = "%d days %H hours %M minutes %S seconds"
