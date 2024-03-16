@@ -4,6 +4,7 @@
 from datetime import datetime, timedelta
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 
+
 class NXCModule:
     """
     Initial FGPP/PSO script written by @n00py: https://github.com/n00py/GetFGPP
@@ -33,7 +34,7 @@ class NXCModule:
             context.log.success("Attempting to enumerate objects with an applied policy...")
 
         # Who do they apply to?
-        resp=connection.search(searchFilter="(objectclass=*)",attributes=["DistinguishedName","msDS-PSOApplied"])
+        resp = connection.search(searchFilter="(objectclass=*)", attributes=["DistinguishedName", "msDS-PSOApplied"])
         for i in resp:
             if isinstance(i, ldapasn1_impacket.SearchResultEntry) is not True:
                 continue
@@ -45,28 +46,28 @@ class NXCModule:
                         context.log.highlight("\t"+attr["vals"][0])
                         context.log.highlight("")
                     else:
-                        policies=""
+                        policies = ""
                         for value in attr["vals"]:
-                            policies=policies+value+";"
+                            policies = policies+value+";"
                         context.log.highlight("Applied Policy: ")
-                        for object in str(policies)[:-1].split(";"):
-                            context.log.highlight("\t"+str(object))
+                        for obj in str(policies)[:-1].split(";"):
+                            context.log.highlight("\t"+str(obj))
                         context.log.highlight("")
 
         # Let"s find out even more details!
         context.log.success("Attempting to enumerate details...\n")
-        resp=connection.search(searchFilter="(objectclass=msDS-PasswordSettings)",
-                     attributes=["name", "msds-lockoutthreshold", "msds-psoappliesto", "msds-minimumpasswordlength",
-                                 "msds-passwordhistorylength", "msds-lockoutobservationwindow", "msds-lockoutduration",
-                                 "msds-passwordsettingsprecedence", "msds-passwordcomplexityenabled", "Description",
-                                 "msds-passwordreversibleencryptionenabled","msds-minimumpasswordage","msds-maximumpasswordage"])
+        resp = connection.search(searchFilter="(objectclass=msDS-PasswordSettings)",
+                                 attributes=["name", "msds-lockoutthreshold", "msds-psoappliesto", "msds-minimumpasswordlength",
+                                             "msds-passwordhistorylength", "msds-lockoutobservationwindow", "msds-lockoutduration",
+                                             "msds-passwordsettingsprecedence", "msds-passwordcomplexityenabled", "Description",
+                                             "msds-passwordreversibleencryptionenabled", "msds-minimumpasswordage", "msds-maximumpasswordage"])
         for i in resp:
             if isinstance(i, ldapasn1_impacket.SearchResultEntry) is not True:
                 continue
-            policyName,description,passwordLength,passwordhistorylength,lockoutThreshold,obersationWindow,lockoutDuration,complexity,minPassAge,maxPassAge,reverseibleEncryption,precedence,policyApplies=("",)*13
+            policyName, description, passwordLength, passwordhistorylength, lockoutThreshold, obersationWindow, lockoutDuration, complexity, minPassAge, maxPassAge, reverseibleEncryption, precedence, policyApplies = ("",)*13
             for attr in i["attributes"]:
                 if (str(attr["type"]) == "name"):
-                    name = attr["vals"][0]
+                    policyName = attr["vals"][0]
                 elif (str(attr["type"]) == "msDS-LockoutThreshold"):
                     lockoutThreshold = attr["vals"][0]
                 elif (str(attr["type"]) == "msDS-MinimumPasswordLength"):
@@ -82,7 +83,7 @@ class NXCModule:
                 elif (str(attr["type"]) == "msDS-PasswordComplexityEnabled"):
                     complexity = attr["vals"][0]
                 elif (str(attr["type"]) == "msDS-PasswordReversibleEncryptionEnabled"):
-                    reverseibleEncryption= attr["vals"][0]
+                    reverseibleEncryption = attr["vals"][0]
                 elif (str(attr["type"]) == "msDS-MinimumPasswordAge"):
                     minPassAge = attr["vals"][0]
                 elif (str(attr["type"]) == "msDS-MaximumPasswordAge"):
@@ -92,24 +93,25 @@ class NXCModule:
                 elif (str(attr["type"])) == "msDS-PSOAppliesTo":
                     policyApplies = ""
                     for value in attr["vals"]:
-                        policyApplies=policyApplies+value+";"
-            context.log.highlight("Policy Name: " + str(name))
-            if description != "":
+                        policyApplies = policyApplies+value+";"
+            context.log.highlight("Policy Name: " + str(policyName))
+            if description:
                 context.log.highlight("Description: " + str(description))
             context.log.highlight("Minimum Password Length: " + str(passwordLength))
             context.log.highlight("Minimum Password History Length: " + str(passwordhistorylength))
             context.log.highlight("Lockout Threshold: " + str(lockoutThreshold))
-            context.log.highlight("Observation Window: "  + clock(int(str(obersationWindow))))
-            context.log.highlight("Lockout Duration: "  + clock(int(str(lockoutDuration))))
+            context.log.highlight("Observation Window: " + clock(int(str(obersationWindow))))
+            context.log.highlight("Lockout Duration: " + clock(int(str(lockoutDuration))))
             context.log.highlight("Complexity Enabled: " + str(complexity))
-            context.log.highlight("Minimum Password Age "+ clock(int(str(minPassAge))))
+            context.log.highlight("Minimum Password Age " + clock(int(str(minPassAge))))
             context.log.highlight("Maximum Password Age: " + clock(int(str(maxPassAge))))
             context.log.highlight("Reversible Encryption: " + str(reverseibleEncryption))
-            context.log.highlight("Precedence: " + str(precedence)+ " (Lower is Higher Priority)")
+            context.log.highlight("Precedence: " + str(precedence) + " (Lower is Higher Priority)")
             context.log.highlight("Policy Applies to: ")
-            for object in str(policyApplies)[:-1].split(";"):
-                context.log.highlight("\t"+str(object))
+            for obj in str(policyApplies)[:-1].split(";"):
+                context.log.highlight("\t"+str(obj))
             context.log.highlight("")
+
 
 def clock(ldap_time):
     fmt = "%d days %H hours %M minutes %S seconds"
