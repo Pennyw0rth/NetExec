@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from ldap3 import ALL, Server, Connection, NTLM, extend, SUBTREE
 from dateutil.relativedelta import relativedelta as rd
-import argparse
-import time
 
 class NXCModule:
     """
