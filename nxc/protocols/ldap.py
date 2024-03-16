@@ -251,8 +251,6 @@ class ldap(connection):
 
     def enum_host_info(self):
         self.target, self.targetDomain, self.baseDN = self.get_ldap_info(self.host)
-        if self.args.no_smb and not (self.target and self.targetDomain and self.baseDN):
-            sys.exit(1)
         self.hostname = self.target
         self.domain = self.targetDomain
         # smb no open, specify the domain
