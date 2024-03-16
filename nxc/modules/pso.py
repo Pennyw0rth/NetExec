@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from dateutil.relativedelta import relativedelta as rd
+from datetime import datetime, timedelta
 
 class NXCModule:
     """
@@ -9,7 +9,7 @@ class NXCModule:
 
     Module by @_sandw1ch
     """
-    name = "PSO"
+    name = "pso"
     description = "Module to get the Fine Grained Password Policy/PSOs"
     supported_protocols = ["ldap"]
     opsec_safe = True
@@ -124,7 +124,7 @@ def base_creator(domain):
         search_base += (f'DC={b},')
     return search_base[:-1]
 
-def clock(nano):
-    fmt = "{0.days} days {0.hours} hours {0.minutes} minutes {0.seconds} seconds"
-    sec = int(abs(nano/10000000))
-    return fmt.format(rd(seconds=sec))
+def clock(ldap_time):
+    fmt = "%d days %H hours %M minutes %S seconds"
+    epoch = datetime(1601, 1, 1) + timedelta(seconds=int(ldap_time) / 10000000)
+    return epoch.strftime(fmt)
