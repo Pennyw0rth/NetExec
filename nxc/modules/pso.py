@@ -1,7 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta as rd
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 
 
@@ -35,12 +32,12 @@ class NXCModule:
 
         # Who do they apply to?
         resp = connection.search(searchFilter="(objectclass=*)", attributes=["DistinguishedName", "msDS-PSOApplied"])
-        for i in resp:
-            if isinstance(i, ldapasn1_impacket.SearchResultEntry) is not True:
+        for attrs in resp:
+            if isinstance(attrs, ldapasn1_impacket.SearchResultEntry) is not True:
                 continue
-            for attr in i["attributes"]:
+            for attr in attrs["attributes"]:
                 if (str(attr["type"]) == "msDS-PSOApplied"):
-                    context.log.highlight("Object: " + str(i["objectName"]))
+                    context.log.highlight("Object: " + str(attrs["objectName"]))
                     if len(attr["vals"]) == 1:
                         context.log.highlight("Applied Policy: ")
                         context.log.highlight("\t"+attr["vals"][0])
@@ -61,11 +58,11 @@ class NXCModule:
                                              "msds-passwordhistorylength", "msds-lockoutobservationwindow", "msds-lockoutduration",
                                              "msds-passwordsettingsprecedence", "msds-passwordcomplexityenabled", "Description",
                                              "msds-passwordreversibleencryptionenabled", "msds-minimumpasswordage", "msds-maximumpasswordage"])
-        for i in resp:
-            if isinstance(i, ldapasn1_impacket.SearchResultEntry) is not True:
+        for attrs in resp:
+            if isinstance(attrs, ldapasn1_impacket.SearchResultEntry) is not True:
                 continue
             policyName, description, passwordLength, passwordhistorylength, lockoutThreshold, obersationWindow, lockoutDuration, complexity, minPassAge, maxPassAge, reverseibleEncryption, precedence, policyApplies = ("",)*13
-            for attr in i["attributes"]:
+            for attr in attrs["attributes"]:
                 if (str(attr["type"]) == "name"):
                     policyName = attr["vals"][0]
                 elif (str(attr["type"]) == "msDS-LockoutThreshold"):
@@ -100,11 +97,11 @@ class NXCModule:
             context.log.highlight("Minimum Password Length: " + str(passwordLength))
             context.log.highlight("Minimum Password History Length: " + str(passwordhistorylength))
             context.log.highlight("Lockout Threshold: " + str(lockoutThreshold))
-            context.log.highlight("Observation Window: " + clock(int(str(obersationWindow))))
-            context.log.highlight("Lockout Duration: " + clock(int(str(lockoutDuration))))
+            context.log.highlight("Observation Window: " + mins(obersationWindow))
+            context.log.highlight("Lockout Duration: " + mins(lockoutDuration))
             context.log.highlight("Complexity Enabled: " + str(complexity))
-            context.log.highlight("Minimum Password Age " + clock(int(str(minPassAge))))
-            context.log.highlight("Maximum Password Age: " + clock(int(str(maxPassAge))))
+            context.log.highlight("Minimum Password Age: " + days(minPassAge))
+            context.log.highlight("Maximum Password Age: " + days(maxPassAge))
             context.log.highlight("Reversible Encryption: " + str(reverseibleEncryption))
             context.log.highlight("Precedence: " + str(precedence) + " (Lower is Higher Priority)")
             context.log.highlight("Policy Applies to: ")
@@ -113,7 +110,9 @@ class NXCModule:
             context.log.highlight("")
 
 
-def clock(ldap_time):
-    fmt = "%d days %H hours %M minutes %S seconds"
-    epoch = datetime(1601, 1, 1) + timedelta(seconds=int(ldap_time) / 10000000)
-    return epoch.strftime(fmt)
+def days(ldap_time):
+    return f"{rd(seconds=int(abs(int(ldap_time))/10000000)).days} days"
+
+
+def mins(ldap_time):
+    return f"{rd(seconds=int(abs(int(ldap_time))/10000000)).minutes} minutes"
