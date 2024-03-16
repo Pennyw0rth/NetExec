@@ -40,15 +40,15 @@ class NXCModule:
                     context.log.highlight("Object: " + str(attrs["objectName"]))
                     if len(attr["vals"]) == 1:
                         context.log.highlight("Applied Policy: ")
-                        context.log.highlight("\t"+attr["vals"][0])
+                        context.log.highlight("\t" + attr["vals"][0])
                         context.log.highlight("")
                     else:
                         policies = ""
                         for value in attr["vals"]:
-                            policies = policies+value+";"
+                            policies = policies + value + ";"
                         context.log.highlight("Applied Policy: ")
                         for obj in str(policies)[:-1].split(";"):
-                            context.log.highlight("\t"+str(obj))
+                            context.log.highlight("\t" + str(obj))
                         context.log.highlight("")
 
         # Let"s find out even more details!
@@ -61,7 +61,7 @@ class NXCModule:
         for attrs in resp:
             if isinstance(attrs, ldapasn1_impacket.SearchResultEntry) is not True:
                 continue
-            policyName, description, passwordLength, passwordhistorylength, lockoutThreshold, obersationWindow, lockoutDuration, complexity, minPassAge, maxPassAge, reverseibleEncryption, precedence, policyApplies = ("",)*13
+            policyName, description, passwordLength, passwordhistorylength, lockoutThreshold, obersationWindow, lockoutDuration, complexity, minPassAge, maxPassAge, reverseibleEncryption, precedence, policyApplies = ("",) * 13
             for attr in attrs["attributes"]:
                 if (str(attr["type"]) == "name"):
                     policyName = attr["vals"][0]
@@ -90,7 +90,7 @@ class NXCModule:
                 elif (str(attr["type"])) == "msDS-PSOAppliesTo":
                     policyApplies = ""
                     for value in attr["vals"]:
-                        policyApplies = policyApplies+value+";"
+                        policyApplies = policyApplies + value + ";"
             context.log.highlight("Policy Name: " + str(policyName))
             if description:
                 context.log.highlight("Description: " + str(description))
@@ -106,13 +106,13 @@ class NXCModule:
             context.log.highlight("Precedence: " + str(precedence) + " (Lower is Higher Priority)")
             context.log.highlight("Policy Applies to: ")
             for obj in str(policyApplies)[:-1].split(";"):
-                context.log.highlight("\t"+str(obj))
+                context.log.highlight("\t" + str(obj))
             context.log.highlight("")
 
 
 def days(ldap_time):
-    return f"{rd(seconds=int(abs(int(ldap_time))/10000000)).days} days"
+    return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).days} days"
 
 
 def mins(ldap_time):
-    return f"{rd(seconds=int(abs(int(ldap_time))/10000000)).minutes} minutes"
+    return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).minutes} minutes"
