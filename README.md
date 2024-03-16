@@ -1,4 +1,4 @@
-![Supported Python versions](https://img.shields.io/badge/python-3.7+-blue.svg)
+![Supported Python versions](https://img.shields.io/badge/python-3.8+-blue.svg)
 [![Twitter](https://img.shields.io/twitter/follow/al3xn3ff?label=al3x_n3ff&style=social)](https://twitter.com/intent/follow?screen_name=al3x_n3ff)
 [![Twitter](https://img.shields.io/twitter/follow/_zblurx?label=_zblurx&style=social)](https://twitter.com/intent/follow?screen_name=_zblurx)
 [![Twitter](https://img.shields.io/twitter/follow/MJHallenbeck?label=MJHallenbeck&style=social)](https://twitter.com/intent/follow?screen_name=MJHallenbeck)
@@ -21,7 +21,7 @@ Going forward, our intent is to maintain a community-driven and maintained proje
 
 You are on the **latest up-to-date** repository of the project NetExec (nxc) ! 🎉
 
-- 🚧 If you want to report a problem, open un [Issue](https://github.com/Pennyw0rth/NetExec/issues) 
+- 🚧 If you want to report a problem, open an [Issue](https://github.com/Pennyw0rth/NetExec/issues) 
 - 🔀 If you want to contribute, open a [Pull Request](https://github.com/Pennyw0rth/NetExec/pulls)
 - 💬 If you want to discuss, open a [Discussion](https://github.com/Pennyw0rth/NetExec/discussions)
 
@@ -37,6 +37,12 @@ See the project's [wiki](https://netexec.wiki/) (in development) for documentati
 # Installation
 Please see the installation instructions on the [wiki](https://netexec.wiki/getting-started/installation) (in development)
 
+## Linux
+```
+sudo apt install pipx git
+pipx ensurepath
+pipx install git+https://github.com/Pennyw0rth/NetExec
+```
 # Development
 Development guidelines and recommendations in development
 

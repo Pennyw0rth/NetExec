@@ -12,6 +12,7 @@ from nxc.paths import NXC_PATH
 from nxc.console import nxc_console
 from nxc.logger import nxc_logger
 from nxc.config import nxc_config, nxc_workspace, config_log, ignore_opsec
+from nxc.database import create_db_engine
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
 from nxc.helpers import powershell
@@ -21,7 +22,6 @@ from os.path import exists
 from os.path import join as path_join
 from sys import exit
 import logging
-import sqlalchemy
 from rich.progress import Progress
 import platform
 
@@ -38,17 +38,13 @@ if platform.system() != "Windows":
     resource.setrlimit(resource.RLIMIT_NOFILE, file_limit)
 
 
-
-def create_db_engine(db_path):
-    return sqlalchemy.create_engine(f"sqlite:///{db_path}", isolation_level="AUTOCOMMIT", future=True)
-
-
 async def start_run(protocol_obj, args, db, targets):
+    futures = []
     nxc_logger.debug("Creating ThreadPoolExecutor")
     if args.no_progress or len(targets) == 1:
         with ThreadPoolExecutor(max_workers=args.threads + 1) as executor:
             nxc_logger.debug(f"Creating thread for {protocol_obj}")
-            _ = [executor.submit(protocol_obj, args, db, target) for target in targets]
+            futures = [executor.submit(protocol_obj, args, db, target) for target in targets]
     else:
         with Progress(console=nxc_console) as progress, ThreadPoolExecutor(max_workers=args.threads + 1) as executor:
             current = 0
@@ -62,6 +58,11 @@ async def start_run(protocol_obj, args, db, targets):
             for _ in as_completed(futures):
                 current += 1
                 progress.update(tasks, completed=current)
+    for future in as_completed(futures):
+        try:
+            future.result()
+        except Exception:
+            nxc_logger.exception(f"Exception for target {targets[futures.index(future)]}: {future.exception()}")
 
 
 def main():

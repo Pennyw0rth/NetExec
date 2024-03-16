@@ -398,7 +398,7 @@ class ldap(connection):
             return False
         except (KeyError, KerberosException, OSError) as e:
             self.logger.fail(
-                f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (kerb_pass if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8)} {e!s}",
+                f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (process_secret(kerb_pass))} {e!s}",
                 color="red",
             )
             return False
@@ -441,21 +441,21 @@ class ldap(connection):
                 except SessionError as e:
                     error, desc = e.getErrorString()
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (kerb_pass if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8)} {error!s}",
+                        f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (process_secret(kerb_pass))} {error!s}",
                         color="magenta" if error in ldap_error_status else "red",
                     )
                     return False
                 except Exception as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}:{self.password if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                        f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                         color="magenta" if error_code in ldap_error_status else "red",
                     )
                     return False
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (kerb_pass if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8)} {error_code!s}",
+                    f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (process_secret(kerb_pass))} {error_code!s}",
                     color="magenta" if error_code in ldap_error_status else "red",
                 )
                 return False
@@ -525,18 +525,18 @@ class ldap(connection):
                 except Exception as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}:{self.password if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                        f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                         color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                     )
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{self.domain}\\{self.username}:{self.password if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                    f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
             return False
         except OSError as e:
-            self.logger.fail(f"{self.domain}\\{self.username}:{self.password if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8} {'Error connecting to the domain, are you sure LDAP service is running on the target?'} \nError: {e}")
+            self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {'Error connecting to the domain, are you sure LDAP service is running on the target?'} \nError: {e}")
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
@@ -618,18 +618,18 @@ class ldap(connection):
                 except ldap_impacket.LDAPSessionError as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}:{nthash if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                        f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                         color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                     )
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{self.domain}\\{self.username}:{nthash if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                    f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
             return False
         except OSError as e:
-            self.logger.fail(f"{self.domain}\\{self.username}:{self.password if not self.config.get('nxc', 'audit_mode') else self.config.get('nxc', 'audit_mode') * 8} {'Error connecting to the domain, are you sure LDAP service is running on the target?'} \nError: {e}")
+            self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {'Error connecting to the domain, are you sure LDAP service is running on the target?'} \nError: {e}")
             return False
 
     def create_smbv1_conn(self):

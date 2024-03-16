@@ -1,6 +1,12 @@
 import argparse
+import argcomplete
 import sys
 from argparse import RawTextHelpFormatter
+from os import listdir
+from os.path import dirname
+from os.path import join as path_join
+import nxc
+from nxc.paths import NXC_PATH
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.helpers.logger import highlight
 from nxc.logger import nxc_logger
@@ -11,11 +17,11 @@ def gen_cli_args():
     VERSION = importlib.metadata.version("netexec")
     CODENAME = "nxc4u"
 
-    parser = argparse.ArgumentParser(description=f"""
+    parser = argparse.ArgumentParser(description=rf"""
      .   .
     .|   |.     _   _          _     _____
     ||   ||    | \ | |   ___  | |_  | ____| __  __   ___    ___
-    \\\( )//    |  \| |  / _ \ | __| |  _|   \ \/ /  / _ \  / __|
+    \\( )//    |  \| |  / _ \ | __| |  _|   \ \/ /  / _ \  / __|
     .=[ ]=.    | |\  | |  __/ | |_  | |___   >  <  |  __/ | (__
    / /ॱ-ॱ\ \   |_| \_|  \___|  \__| |_____| /_/\_\  \___|  \___|
    ॱ \   / ॱ
@@ -41,7 +47,7 @@ def gen_cli_args():
     # we do module arg parsing here so we can reference the module_list attribute below
     module_parser = argparse.ArgumentParser(add_help=False)
     mgroup = module_parser.add_mutually_exclusive_group()
-    mgroup.add_argument("-M", "--module", action="append", metavar="MODULE", help="module to use")
+    mgroup.add_argument("-M", "--module", choices=get_module_names(), action="append", metavar="MODULE", help="module to use")
     module_parser.add_argument("-o", metavar="MODULE_OPTION", nargs="+", default=[], dest="module_options", help="module options")
     module_parser.add_argument("-L", "--list-modules", action="store_true", help="list available modules")
     module_parser.add_argument("--options", dest="show_module_options", action="store_true", help="display module options")
@@ -81,14 +87,28 @@ def gen_cli_args():
     except Exception as e:
         nxc_logger.exception(f"Error loading proto_args from proto_args.py file in protocol folder: {protocol} - {e}")
 
+    argcomplete.autocomplete(parser)
+    args = parser.parse_args()
+
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(1)
-
-    args = parser.parse_args()
 
     if args.version:
         print(f"{VERSION} - {CODENAME}")
         sys.exit(1)
 
     return args
+
+
+def get_module_names():
+    """Get module names without initializing them"""
+    modules = []
+    modules_paths = [
+        path_join(dirname(nxc.__file__), "modules"),
+        path_join(NXC_PATH, "modules"),
+    ]
+
+    for path in modules_paths:
+        modules.extend([module[:-3] for module in listdir(path) if module[-3:] == ".py" and module != "example_module.py"])
+    return sorted(modules, key=str.casefold)

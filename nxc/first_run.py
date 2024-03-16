@@ -3,7 +3,7 @@ from os.path import exists
 from os.path import join as path_join
 import shutil
 from nxc.paths import NXC_PATH, CONFIG_PATH, TMP_PATH, DATA_PATH
-from nxc.nxcdb import initialize_db
+from nxc.database import initialize_db
 from nxc.logger import nxc_logger
 
 
@@ -29,7 +29,7 @@ def first_run_setup(logger=nxc_logger):
             logger.display(f"Creating missing folder {folder}")
             mkdir(path_join(NXC_PATH, folder))
 
-    initialize_db(logger)
+    initialize_db()
 
     if not exists(CONFIG_PATH):
         logger.display("Copying default configuration file")

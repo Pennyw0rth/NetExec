@@ -115,7 +115,7 @@ class SAMRQuery:
         self.server_handle = self.get_server_handle()
 
     def get_transport(self):
-        string_binding = f"ncacn_np:{self.__port}[\pipe\samr]"
+        string_binding = rf"ncacn_np:{self.__port}[\pipe\samr]"
         nxc_logger.debug(f"Binding to {string_binding}")
         # using a direct SMBTransport instead of DCERPCTransportFactory since we need the filename to be '\samr'
         return transport.SMBTransport(
