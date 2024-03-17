@@ -7,7 +7,6 @@ import socket
 from binascii import hexlify
 from datetime import datetime
 from re import sub, I
-import sys
 from zipfile import ZipFile
 from termcolor import colored
 
