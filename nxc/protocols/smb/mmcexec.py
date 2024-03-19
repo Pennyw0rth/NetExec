@@ -58,26 +58,28 @@ from impacket.dcerpc.v5.dtypes import NULL
 
 
 class MMCEXEC:
-    def __init__(self, host, share_name, username, password, domain, smbconnection, share, hashes=None, logger=None, tries=None, timeout=None):
-        self.__host = host
+    def __init__(self, target, share_name, username, password, domain, smbconnection, doKerberos=False, aesKey=None, kdcHost=None, remoteHost=None, hashes=None, share=None, logger=None, timeout=None, tries=None):
+        self.__target = target
         self.__username = username
         self.__password = password
-        self.__smbconnection = smbconnection
         self.__domain = domain
         self.__lmhash = ""
         self.__nthash = ""
-        self.__share_name = share_name
+        self.__share = share
+        self.__timeout = timeout
+        self.__smbconnection = smbconnection
         self.__output = None
         self.__outputBuffer = b""
+        self.__share_name = share_name
         self.__shell = "c:\\windows\\system32\\cmd.exe"
         self.__pwd = "C:\\"
-        self.__quit = None
-        self.__executeShellCommand = None
+        self.__aesKey = aesKey
+        self.__kdcHost = kdcHost
+        self.__remoteHost = remoteHost
+        self.__doKerberos = doKerberos
         self.__retOutput = True
-        self.__share = share
-        self.__dcom = None
+        self.__stringBinding = ""
         self.__tries = tries
-        self.__timeout = timeout
         self.logger = logger
 
         if hashes is not None:
@@ -87,21 +89,24 @@ class MMCEXEC:
                 self.__nthash = hashes
 
         self.__dcom = DCOMConnection(
-            self.__host,
+            self.__target,
             self.__username,
             self.__password,
             self.__domain,
             self.__lmhash,
             self.__nthash,
-            None,
+            self.__aesKey,
             oxidResolver=True,
+            doKerberos=self.__doKerberos,
+            kdcHost=self.__kdcHost,
+            remoteHost=self.__remoteHost,
         )
         try:
             iInterface = self.__dcom.CoCreateInstanceEx(string_to_bin("49B2791A-B1AE-4C90-9B8E-E860BA07F889"), IID_IDispatch)
         except Exception:
             # Make it force break function
             self.__dcom.disconnect()
-        flag, self.__stringBinding = dcom_FirewallChecker(iInterface, self.__timeout)
+        flag, self.__stringBinding = dcom_FirewallChecker(iInterface, self.__remoteHost, self.__timeout)
         if not flag or not self.__stringBinding:
             error_msg = f'MMCEXEC: Dcom initialization failed on connection with stringbinding: "{self.__stringBinding}", please increase the timeout with the option "--dcom-timeout". If it\'s still failing maybe something is blocking the RPC connection, try another exec method'
 

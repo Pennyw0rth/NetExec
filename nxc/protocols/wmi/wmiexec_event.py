@@ -31,8 +31,8 @@ from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Lo
 
 
 class WMIEXEC_EVENT:
-    def __init__(self, host, username, password, domain, lmhash, nthash, doKerberos, kdcHost, aesKey, logger, exec_timeout, codec):
-        self.__host = host
+    def __init__(self, target, username, password, domain, lmhash, nthash, doKerberos, kdcHost, remoteHost, aesKey, logger, exec_timeout, codec):
+        self.__target = target
         self.__username = username
         self.__password = password
         self.__domain = domain
@@ -40,6 +40,7 @@ class WMIEXEC_EVENT:
         self.__nthash = nthash
         self.__doKerberos = doKerberos
         self.__kdcHost = kdcHost
+        self.__remoteHost = remoteHost
         self.__aesKey = aesKey
         self.__outputBuffer = ""
         self.__retOutput = True
@@ -50,7 +51,7 @@ class WMIEXEC_EVENT:
         self.__instanceID = f"windows-object-{uuid.uuid4()!s}"
         self.__instanceID_StoreResult = f"windows-object-{uuid.uuid4()!s}"
 
-        self.__dcom = DCOMConnection(self.__host, self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, oxidResolver=True, doKerberos=self.__doKerberos, kdcHost=self.__kdcHost, aesKey=self.__aesKey)
+        self.__dcom = DCOMConnection(self.__target, self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, oxidResolver=True, doKerberos=self.__doKerberos, kdcHost=self.__kdcHost, aesKey=self.__aesKey, remoteHost=self.__remoteHost)
         iInterface = self.__dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
         iWbemLevel1Login = IWbemLevel1Login(iInterface)
         self.__iWbemServices = iWbemLevel1Login.NTLMLogin("//./root/subscription", NULL, NULL)
@@ -75,7 +76,7 @@ class WMIEXEC_EVENT:
 
     def execute_handler(self, command):
         # Generate vbsript and execute it
-        self.logger.debug(f"{self.__host}: Execute command via wmi event, job instance id: {self.__instanceID}, command result instance id: {self.__instanceID_StoreResult}")
+        self.logger.debug(f"{self.__target}: Execute command via wmi event, job instance id: {self.__instanceID}, command result instance id: {self.__instanceID_StoreResult}")
         self.execute_remote(command)
 
         # Get command results

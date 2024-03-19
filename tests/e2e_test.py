@@ -60,6 +60,12 @@ def get_cli_args():
         required=False,
         help="Protocols to test",
     )
+    parser.add_argument(
+        "--dns-server",
+        action="store",
+        required=False,
+        help="Specify DNS server",
+    )
 
     return parser.parse_args()
 
@@ -83,8 +89,9 @@ def generate_commands(args):
 
 def replace_command(args, line):
     kerberos = "-k " if args.kerberos else ""
+    dns_server = f"--dns-server {args.dns_server}" if args.dns_server else ""
 
-    line = line.replace("TARGET_HOST", args.target).replace("LOGIN_USERNAME", f'"{args.username}"').replace("LOGIN_PASSWORD", f'"{args.password}"').replace("KERBEROS ", kerberos)
+    line = line.replace("TARGET_HOST", args.target).replace("LOGIN_USERNAME", f'"{args.username}"').replace("LOGIN_PASSWORD", f'"{args.password}"').replace("KERBEROS ", kerberos).replace("{DNS}", dns_server)
     if args.poetry:
         line = f"poetry run {line}"
     return line
