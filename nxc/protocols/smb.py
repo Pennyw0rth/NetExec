@@ -309,7 +309,7 @@ class smb(connection):
             out = f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}"
             self.logger.success(out)
 
-            if not self.args.local_auth and not self.args.delegate:
+            if not self.args.local_auth and self.username != "" and not self.args.delegate:
                 add_user_bh(self.username, domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -372,7 +372,7 @@ class smb(connection):
             out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}"
             self.logger.success(out)
 
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 self.logger.debug(f"Adding admin user: {self.domain}/{self.username}:{self.password}@{self.host}")
@@ -439,7 +439,7 @@ class smb(connection):
             out = f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_pwned()}"
             self.logger.success(out)
 
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 self.db.add_admin_user("hash", domain, self.username, nthash, self.host, user_id=user_id)

@@ -377,7 +377,7 @@ class ldap(connection):
             self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             self.logger.success(out)
 
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -434,7 +434,7 @@ class ldap(connection):
                     self.logger.extra["port"] = "636"
                     self.logger.success(out)
 
-                    if not self.args.local_auth:
+                    if not self.args.local_auth and self.username != "":
                         add_user_bh(self.username, self.domain, self.logger, self.config)
                     if self.admin_privs:
                         add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -490,7 +490,7 @@ class ldap(connection):
             self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             self.logger.success(out)
 
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -518,7 +518,7 @@ class ldap(connection):
                     self.logger.extra["port"] = "636"
                     self.logger.success(out)
 
-                    if not self.args.local_auth:
+                    if not self.args.local_auth and self.username != "":
                         add_user_bh(self.username, self.domain, self.logger, self.config)
                     if self.admin_privs:
                         add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -584,7 +584,7 @@ class ldap(connection):
             self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             self.logger.success(out)
 
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -611,7 +611,7 @@ class ldap(connection):
                     self.logger.extra["port"] = "636"
                     self.logger.success(out)
 
-                    if not self.args.local_auth:
+                    if not self.args.local_auth and self.username != "":
                         add_user_bh(self.username, self.domain, self.logger, self.config)
                     if self.admin_privs:
                         add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
