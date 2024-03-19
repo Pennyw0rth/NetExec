@@ -243,7 +243,7 @@ class rdp(connection):
                     self.mark_pwned(),
                 )
             )
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -289,7 +289,7 @@ class rdp(connection):
 
             self.admin_privs = True
             self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -323,7 +323,7 @@ class rdp(connection):
 
             self.admin_privs = True
             self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
