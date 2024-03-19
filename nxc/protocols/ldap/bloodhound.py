@@ -44,17 +44,7 @@ class BloodHound:
         # Create an object resolver
         self.ad.create_objectresolver(self.pdc)
 
-
-    def run(
-        self,
-        collect,
-        num_workers=10,
-        disable_pooling=False,
-        timestamp="",
-        computerfile="",
-        cachefile=None,
-        exclude_dcs=False,
-    ):
+    def run(self, collect, num_workers=10, disable_pooling=False, timestamp="", fileNamePrefix="", computerfile="", cachefile=None, exclude_dcs=False):
         start_time = time.time()
         if cachefile:
             self.ad.load_cachefile(cachefile)
@@ -82,7 +72,7 @@ class BloodHound:
             )
             # Initialize enumerator
             membership_enum = MembershipEnumerator(self.ad, self.pdc, collect, disable_pooling)
-            membership_enum.enumerate_memberships(timestamp=timestamp)
+            membership_enum.enumerate_memberships(timestamp=timestamp, fileNamePrefix=fileNamePrefix)
         elif "container" in collect:
             # Fetch domains for later, computers if needed
             self.pdc.prefetch_info(
@@ -92,7 +82,7 @@ class BloodHound:
             )
             # Initialize enumerator
             membership_enum = MembershipEnumerator(self.ad, self.pdc, collect, disable_pooling)
-            membership_enum.do_container_collection(timestamp=timestamp)
+            membership_enum.do_container_collection(timestamp=timestamp, fileNamePrefix=fileNamePrefix)
         elif do_computer_enum:
             # We need to know which computers to query regardless
             # We also need the domains to have a mapping from NETBIOS -> FQDN for local admins
@@ -102,7 +92,7 @@ class BloodHound:
             self.pdc.get_domains("acl" in collect)
         if "trusts" in collect or "acl" in collect or "objectprops" in collect:
             trusts_enum = DomainEnumerator(self.ad, self.pdc)
-            trusts_enum.dump_domain(collect, timestamp=timestamp)
+            trusts_enum.dump_domain(collect, timestamp=timestamp, fileNamePrefix=fileNamePrefix)
         if do_computer_enum:
             # If we don't have a GC server, don't use it for deconflictation
             have_gc = len(self.ad.gcs()) > 0
@@ -114,7 +104,7 @@ class BloodHound:
                 computerfile=computerfile,
                 exclude_dcs=exclude_dcs,
             )
-            computer_enum.enumerate_computers(self.ad.computers, num_workers=num_workers, timestamp=timestamp)
+            computer_enum.enumerate_computers(self.ad.computers, num_workers=num_workers, timestamp=timestamp, fileNamePrefix=fileNamePrefix)
         end_time = time.time()
         minutes, seconds = divmod(int(end_time - start_time), 60)
         self.logger.highlight("Done in %02dM %02dS" % (minutes, seconds))
