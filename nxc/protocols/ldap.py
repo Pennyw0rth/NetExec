@@ -289,7 +289,7 @@ class ldap(connection):
 
             # Re-connect since we logged off
             self.create_conn_obj()
-        self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
+        self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}".replace(":", "-"))
 
     def print_host_info(self):
         self.logger.debug("Printing host info for LDAP")
@@ -1375,15 +1375,18 @@ class ldap(connection):
             num_workers=10,
             disable_pooling=False,
             timestamp=timestamp,
+            fileNamePrefix=self.output_filename.split("/")[-1],
             computerfile=None,
             cachefile=None,
             exclude_dcs=False,
         )
 
+        self.output_filename += f"_{timestamp}"
+
         self.logger.highlight(f"Compressing output into {self.output_filename}bloodhound.zip")
         list_of_files = os.listdir(os.getcwd())
         with ZipFile(self.output_filename + "bloodhound.zip", "w") as z:
             for each_file in list_of_files:
-                if each_file.startswith(timestamp) and each_file.endswith("json"):
+                if each_file.startswith(self.output_filename.split("/")[-1]) and each_file.endswith("json"):
                     z.write(each_file)
                     os.remove(each_file)
