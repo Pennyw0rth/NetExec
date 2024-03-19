@@ -87,8 +87,8 @@ class connection:
         self.port = self.args.port
         self.conn = None
         self.admin_privs = False
-        self.password = None
-        self.username = None
+        self.password = ""
+        self.username = ""
         self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey)
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.kdcHost = None if not self.args.kdcHost else self.args.kdcHost
