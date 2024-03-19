@@ -5,6 +5,7 @@
 
 from impacket.dcerpc.v5 import lsat, lsad, transport
 from impacket.dcerpc.v5.dtypes import NULL, MAXIMUM_ALLOWED, RPC_UNICODE_STRING
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 import pathlib
 
 
@@ -50,7 +51,8 @@ class NXCModule:
                 password=connection.password,
                 remote_name=target,
                 do_kerberos=connection.kerberos,
-                kdcHost=connection.domain,
+                remoteHost=connection.remoteHost,
+                kdcHost=connection.kdcHost,
                 lmhash=connection.lmhash,
                 nthash=connection.nthash,
                 aesKey=connection.aesKey
@@ -119,6 +121,7 @@ class LsaLookupNames:
         password="",
         remote_name="",
         do_kerberos=False,
+        remoteHost="",
         kdcHost="",
         lmhash="",
         nthash="",
@@ -133,7 +136,8 @@ class LsaLookupNames:
         self.lmhash = lmhash
         self.nthash = nthash
         self.aesKey = aesKey
-        self.dcHost = kdcHost
+        self.kdcHost = kdcHost
+        self.remoteHost = remoteHost
 
     def connect(self, string_binding=None, iface_uuid=None):
         """Obtains a RPC Transport and a DCE interface according to the bindings and
@@ -146,6 +150,7 @@ class LsaLookupNames:
             raise NotImplementedError("String binding must be defined")
 
         rpc_transport = transport.DCERPCTransportFactory(string_binding)
+        rpc_transport.setRemoteHost(self.remoteHost)
 
         # Set timeout if defined
         if self.timeout:
@@ -157,14 +162,13 @@ class LsaLookupNames:
             rpc_transport.set_credentials(self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey)
 
         if self.doKerberos:
-            rpc_transport.set_kerberos(self.doKerberos, kdcHost=self.dcHost)
+            rpc_transport.set_kerberos(self.doKerberos, kdcHost=self.kdcHost)
 
         # Gets the DCE RPC object
         dce = rpc_transport.get_dce_rpc()
 
-        # Set the authentication level
-        if self.authn_level:
-            dce.set_auth_level(self.authn_level)
+        if self.doKerberos:
+            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
 
         # Connect
         dce.connect()

@@ -4,6 +4,7 @@ from threading import BoundedSemaphore
 from functools import wraps
 from time import sleep
 from ipaddress import ip_address
+from dns import resolver, rdatatype
 from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
 
 from nxc.config import pwned_label
@@ -20,23 +21,62 @@ global_failed_logins = 0
 user_failed_logins = {}
 
 
-def gethost_addrinfo(hostname):
-    is_ipv6 = False
-    is_link_local_ipv6 = False
+def gethost_addrinfo(hostname, force_ipv6, dns_server, dns_tcp, dns_timeout):
+    result = {
+        "host": "",
+        "is_ipv6": False,
+        "is_link_local_ipv6": False
+    }
     address_info = {"AF_INET6": "", "AF_INET": ""}
 
-    for res in getaddrinfo(hostname, None, AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
-        af, _, _, canonname, sa = res
-        address_info[af.name] = sa[0]
+    try:
+        if ip_address(hostname).version == 4:
+            address_info["AF_INET"] = hostname
+        else:
+            address_info["AF_INET6"] = hostname
+    except Exception:
+        if not (dns_server or dns_tcp):
+            for res in getaddrinfo(hostname, None, AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
+                af, _, _, canonname, sa = res
+                address_info[af.name] = sa[0]
+
+            if address_info["AF_INET6"] and ip_address(address_info["AF_INET6"]).is_link_local:
+                address_info["AF_INET6"] = canonname
+                result["is_link_local_ipv6"] = True
+        else:
+            dnsresolver = resolver.Resolver()
+            dnsresolver.timeout = dns_timeout
+            dnsresolver.lifetime = dns_timeout
+
+            if dns_server:
+                dnsresolver.nameservers = [dns_server]
+
+            try:
+                answers_ipv4 = dnsresolver.resolve(hostname, rdatatype.A, raise_on_no_answer=False, tcp=dns_tcp)
+                address_info["AF_INET"] = answers_ipv4[0].address
+            except Exception:
+                pass
+                
+            try:
+                answers_ipv6 = dnsresolver.resolve(hostname, rdatatype.AAAA, raise_on_no_answer=False, tcp=dns_tcp)
+                address_info["AF_INET6"] = answers_ipv6[0].address
+
+                if address_info["AF_INET6"] and ip_address(address_info["AF_INET6"]).is_link_local:
+                    result["is_link_local_ipv6"] = True
+            except Exception:
+                pass
+
+    if not (address_info["AF_INET"] or address_info["AF_INET6"]):
+        raise Exception(f"The DNS query name does not exist: {hostname}")
 
     # IPv4 preferred
-    if address_info["AF_INET"]:
-        host = address_info["AF_INET"]
+    if address_info["AF_INET"] and not force_ipv6:
+        result["host"] = address_info["AF_INET"]
     else:
-        is_ipv6 = True
-        host, is_link_local_ipv6 = (canonname, True) if ip_address(address_info["AF_INET6"]).is_link_local else (address_info["AF_INET6"], False)
+        result["is_ipv6"] = True
+        result["host"] = address_info["AF_INET6"]
 
-    return host, is_ipv6, is_link_local_ipv6
+    return result
 
 
 def requires_admin(func):
@@ -48,7 +88,7 @@ def requires_admin(func):
     return wraps(func)(_decorator)
 
 
-def dcom_FirewallChecker(iInterface, timeout):
+def dcom_FirewallChecker(iInterface, remoteHost, timeout):
     stringBindings = iInterface.get_cinstance().get_string_bindings()
     for strBinding in stringBindings:
         if strBinding["wTowerId"] == 7:
@@ -68,6 +108,7 @@ def dcom_FirewallChecker(iInterface, timeout):
         return True, None
     try:
         rpctransport = transport.DCERPCTransportFactory(stringBinding)
+        rpctransport.setRemoteHost(remoteHost)
         rpctransport.set_connect_timeout(timeout)
         rpctransport.connect()
         rpctransport.disconnect()
@@ -92,19 +133,27 @@ class connection:
         self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey)
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.kdcHost = None if not self.args.kdcHost else self.args.kdcHost
+        self.remoteHost = None
+        self.remoteName = None
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
         self.failed_logins = 0
         self.local_ip = None
         self.logger = nxc_logger
 
-        try:
-            self.host, self.is_ipv6, self.is_link_local_ipv6 = gethost_addrinfo(self.hostname)
-            if self.args.kerberos:
-                self.host = self.hostname
-            self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
-        except Exception as e:
-            self.logger.info(f"Error resolving hostname {self.hostname}: {e}")
+        dns_result = self.resolver(self.hostname)
+        if dns_result:
+            self.host, self.is_ipv6, self.is_link_local_ipv6 = dns_result["host"], dns_result["is_ipv6"], dns_result["is_link_local_ipv6"]
+            self.remoteHost = self.host
+        else:
             return
+
+        if self.args.kerberos:
+            self.host = self.hostname
+        
+        if not self.remoteHost:
+            self.remoteHost = self.host
+
+        self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, remoteHost={self.remoteHost}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
 
         if args.jitter:
             jitter = args.jitter
@@ -122,6 +171,19 @@ class connection:
             self.proto_flow()
         except Exception as e:
             self.logger.exception(f"Exception while calling proto_flow() on target {self.host}: {e}")
+
+    def resolver(self, hostname):
+        try:
+            return gethost_addrinfo(
+            hostname=hostname,
+            force_ipv6=self.args.force_ipv6,
+            dns_server=self.args.dns_server,
+            dns_tcp=self.args.dns_tcp,
+            dns_timeout=self.args.dns_timeout
+            )
+        except Exception as e:
+            self.logger.info(f"Error resolving hostname {self.hostname}: {e}")
+            return None
 
     @staticmethod
     def proto_args(std_parser, module_parser):
