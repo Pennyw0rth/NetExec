@@ -1000,8 +1000,12 @@ class smb(connection):
         return groups
 
     def users(self):
-        self.logger.display("Trying to dump local users with SAMRPC protocol")
-        return UserSamrDump(self).dump()
+        if len(self.args.users) > 1:
+            self.logger.display(f"Dumping users: {', '.join(self.args.users)}")
+        else:
+            self.logger.info("Trying to dump local users with SAMRPC protocol") 
+             
+        return UserSamrDump(self).dump(self.args.users)
 
     def hosts(self):
         hosts = []
