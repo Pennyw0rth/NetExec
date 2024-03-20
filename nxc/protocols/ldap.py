@@ -761,6 +761,7 @@ class ldap(connection):
             "badPasswordTime",
             "badPwdCount",
             "pwdLastSet",
+            "lastLogonTimestamp",
         ]
 
         resp = self.search(search_filter, attributes, sizeLimit=0)
@@ -771,6 +772,10 @@ class ldap(connection):
                     continue
                 sAMAccountName = ""
                 description = ""
+                pwdLastSet = ""
+                badPwdCount = 0
+                badPasswordTime = ""
+                lastLogonTimestamp = ""
                 try:
                     if self.username == "":
                         self.logger.highlight(f"{item['objectName']}")
@@ -780,7 +785,24 @@ class ldap(connection):
                                 sAMAccountName = str(attribute["vals"][0])
                             elif str(attribute["type"]) == "description":
                                 description = str(attribute["vals"][0])
-                        self.logger.highlight(f"{sAMAccountName:<30} {description}")
+                            elif str(attribute["type"]) == "pwdLastSet":
+                                if str(attribute['vals'][0]) == '0':
+                                    pwdLastSet = '<never>'
+                                else:
+                                    pwdLastSet = str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute['vals'][0])))))
+                            elif str(attribute["type"]) == "badPwdCount":
+                                badPwdCount = int(attribute["vals"][0])
+                            elif str(attribute['type']) == 'badPasswordTime':
+                                if str(attribute['vals'][0]) == '0':
+                                    badPasswordTime = '<never>'
+                                else:
+                                    badPasswordTime = str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute['vals'][0])))))
+                            elif str(attribute['type']) == 'lastLogonTimestamp':
+                                if str(attribute['vals'][0]) == '0':
+                                    lastLogonTimestamp = '<never>'
+                                else:
+                                    lastLogonTimestamp = str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute['vals'][0])))))
+                        self.logger.highlight(f"{sAMAccountName:<30} badPwdCount:{badPwdCount:<5} badPwdTime:{badPasswordTime:<30} pwdLastSet:{pwdLastSet:<30} lastLogonTimestamp:{lastLogonTimestamp:<30} desc:{description}")
                 except Exception as e:
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
             return
