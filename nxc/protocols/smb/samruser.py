@@ -126,7 +126,7 @@ class UserSamrDump:
             enumerationContext = 0
             while status == STATUS_MORE_ENTRIES:
                 try:
-                    enumerate_users_resp = samr.hSamrEnumerateUsersInDomain(self.dce,domain_handle,enumerationContext=enumerationContext)
+                    enumerate_users_resp = samr.hSamrEnumerateUsersInDomain(self.dce, domain_handle, enumerationContext=enumerationContext)
                 except DCERPCException as e:
                     if str(e).find("STATUS_MORE_ENTRIES") < 0:
                         self.logger.fail("Error enumerating domain user(s)")
@@ -171,15 +171,14 @@ class UserSamrDump:
         return users
     
     def print_user_info(self, users):
-        self.logger.highlight(f"{'Username':<42} {'Last PW Set':<20}\t {'Description'}") # header
+        self.logger.highlight(f"{'Username':<42} {'Last PW Set':<20}\t {'Description'}")  # header
         for user in users:
             self.logger.debug(f"Full user info: {user}")
             self.logger.highlight(f"{self.domain}\\{user['name']:<30} {user['last_pw_set']}\t {user['description']} ")
 
 
 def old_large_int_to_datetime(large_int):
-    combined = (large_int['HighPart'] << 32) | large_int['LowPart']
+    combined = (large_int["HighPart"] << 32) | large_int["LowPart"]
     timestamp_seconds = combined / 10**7
     start_date = datetime(1601, 1, 1)
-    actual_date = (start_date + timedelta(seconds=timestamp_seconds)).replace(microsecond=0)
-    return actual_date
+    return (start_date + timedelta(seconds=timestamp_seconds)).replace(microsecond=0)
