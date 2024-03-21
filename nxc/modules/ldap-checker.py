@@ -9,7 +9,7 @@ from asyauth.common.constants import asyauthSecret
 from asyauth.common.credentials.ntlm import NTLMCredential
 from asyauth.common.credentials.kerberos import KerberosCredential
 
-from asysocks.unicomm.common.target import UniTarget, UniProto, UniSSL
+from asysocks.unicomm.common.target import UniTarget, UniProto
 import sys
 
 
@@ -131,12 +131,14 @@ class NXCModule:
                 if err is not None:
                     errstr = str(err).lower()
                     if "stronger" in errstr:
-                        return True #because LDAP server signing requirements ARE enforced
+                        return True 
+                        # because LDAP server signing requirements ARE enforced
                     else:
                         context.log.fail(str(err))
                 else:
-                    #LDAPS bind successful
-                    return False #because LDAP server signing requirements are not enforced
+                    # LDAPS bind successful
+                    return False 
+                    # because LDAP server signing requirements are not enforced
             except Exception as e:
                 context.log.debug(str(e))
                 return False
