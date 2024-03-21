@@ -40,7 +40,7 @@ class NXCAdapter(logging.LoggerAdapter):
         if self.extra is None:
             return f"{msg}", kwargs
 
-        if "module_name" in self.extra and len(self.extra["module_name"]) > 8:
+        if "module_name" in self.extra and len(self.extra["module_name"]) > 11:
             self.extra["module_name"] = self.extra["module_name"][:8] + "..."
 
         # If the logger is being called when hooking the 'options' module function
