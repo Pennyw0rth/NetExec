@@ -165,20 +165,22 @@ class UserSamrDump:
             user_name = user_info["UserName"]
             user_description = user_info["AdminComment"]
             last_pw_set = old_large_int_to_datetime(user_info["PasswordLastSet"])
+            if last_pw_set == "1601-01-01 00:00:00":
+                last_pw_set = "<never>"
             users.append({"name": user_name, "description": user_description, "last_pw_set": last_pw_set})
             
             samr.hSamrCloseHandle(self.dce, open_user_resp["UserHandle"])
         return users
     
     def print_user_info(self, users):
-        self.logger.highlight(f"{'Username':<42} {'Last PW Set':<20}\t {'Description'}")  # header
+        self.logger.highlight(f"{'Username':<30} {'Last PW Set':<20}\t{'Description'}")  # header
         for user in users:
             self.logger.debug(f"Full user info: {user}")
-            self.logger.highlight(f"{self.domain}\\{user['name']:<30} {user['last_pw_set']}\t {user['description']} ")
+            self.logger.highlight(f"{user['name']:<30} {user['last_pw_set']:<20}\t{user['description']} ")
 
 
 def old_large_int_to_datetime(large_int):
     combined = (large_int["HighPart"] << 32) | large_int["LowPart"]
     timestamp_seconds = combined / 10**7
     start_date = datetime(1601, 1, 1)
-    return (start_date + timedelta(seconds=timestamp_seconds)).replace(microsecond=0)
+    return (start_date + timedelta(seconds=timestamp_seconds)).replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
