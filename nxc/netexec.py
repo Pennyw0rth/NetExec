@@ -79,6 +79,7 @@ def main():
     else:
         nxc_logger.logger.setLevel(logging.ERROR)
         root_logger.setLevel(logging.ERROR)
+    logging.getLogger("neo4j").setLevel(logging.ERROR)
 
     # if these are the same, it might double log to file (two FileHandlers will be added)
     # but this should never happen by accident
