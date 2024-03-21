@@ -64,7 +64,7 @@ class NXCModule:
                         lsa.LsarLookupNames(dce, policyHandle, service["name"])
                         context.log.info(f"Detected installed service on {connection.host}: {product['name']} {service['description']}")
                         results.setdefault(product["name"], {"services": []})["services"].append(service)
-                    except Exception as e:
+                    except Exception:
                         pass
         except Exception as e:
             context.log.fail(str(e))
@@ -83,7 +83,7 @@ class NXCModule:
                             prod_results.setdefault("pipes", []).append(pipe)
         except Exception as e:
             if "STATUS_ACCESS_DENIED" in str(e):
-                context.log.fail(f"Error STATUS_ACCESS_DENIED while enumerating pipes, probably due to using SMBv1")
+                context.log.fail("Error STATUS_ACCESS_DENIED while enumerating pipes, probably due to using SMBv1")
             else:
                 context.log.fail(str(e))
 
