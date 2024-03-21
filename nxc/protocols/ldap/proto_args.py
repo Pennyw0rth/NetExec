@@ -1,4 +1,4 @@
-from argparse import _StoreTrueAction, Action
+from argparse import _StoreTrueAction
 
 
 def proto_args(parser, std_parser, module_parser):
