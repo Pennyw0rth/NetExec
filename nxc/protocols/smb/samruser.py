@@ -47,10 +47,10 @@ class UserSamrDump:
                 port = protodef[1]
             except KeyError:
                 self.logger.debug(f"Invalid Protocol: {protocol}")
-                
+
             self.logger.debug(f"Trying protocol {protocol}")
             self.rpc_transport = transport.SMBTransport(self.addr, port, r"\samr", self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey, doKerberos=self.doKerberos)
-            
+
             try:
                 self.fetch_users(requested_users)
                 break
@@ -123,11 +123,11 @@ class UserSamrDump:
                         self.logger.fail("Error enumerating domain user(s)")
                         break
                     enumerate_users_resp = e.get_packet()
-                    
+
                 rids = [r["RelativeId"] for r in enumerate_users_resp["Buffer"]["Buffer"]]
                 self.logger.debug(f"Full domain RIDs retrieved: {rids}")
                 users = self.get_user_info(domain_handle, rids)
-                
+
                 # set these for the while loop
                 enumerationContext = enumerate_users_resp["EnumerationContext"]
                 status = enumerate_users_resp["ErrorCode"]
@@ -139,11 +139,11 @@ class UserSamrDump:
         users = []
 
         for user in user_ids:
-            self.logger.debug(f"Calling hSamrOpenUser for RID {user}")                
+            self.logger.debug(f"Calling hSamrOpenUser for RID {user}")
             open_user_resp = samr.hSamrOpenUser(
                 self.dce,
-                domain_handle, 
-                samr.MAXIMUM_ALLOWED, 
+                domain_handle,
+                samr.MAXIMUM_ALLOWED,
                 user
             )
             info_user_resp = samr.hSamrQueryInformationUser2(
@@ -151,7 +151,7 @@ class UserSamrDump:
                 open_user_resp["UserHandle"],
                 samr.USER_INFORMATION_CLASS.UserAllInformation
             )["Buffer"]
-            
+
             user_info = info_user_resp["All"]
             user_name = user_info["UserName"]
             bad_pwd_count = user_info["BadPasswordCount"]
@@ -160,10 +160,10 @@ class UserSamrDump:
             if last_pw_set == "1601-01-01 00:00:00":
                 last_pw_set = "<never>"
             users.append({"name": user_name, "description": user_description, "bad_pwd_count": bad_pwd_count, "last_pw_set": last_pw_set})
-            
+
             samr.hSamrCloseHandle(self.dce, open_user_resp["UserHandle"])
         return users
-    
+
     def print_user_info(self, users):
         self.logger.highlight(f"{'Username':<30} {'Last PW Set':<20} {'Bad PW #'} {'Description'}")  # header
         for user in users:
