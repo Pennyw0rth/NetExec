@@ -46,20 +46,11 @@ class UserSamrDump:
                 protodef = UserSamrDump.KNOWN_PROTOCOLS[protocol]
                 port = protodef[1]
             except KeyError:
-                self.logger.debug(f"Invalid Protocol '{protocol}'")
+                self.logger.debug(f"Invalid Protocol: {protocol}")
+                
             self.logger.debug(f"Trying protocol {protocol}")
-            self.rpc_transport = transport.SMBTransport(
-                self.addr,
-                port,
-                r"\samr",
-                self.username,
-                self.password,
-                self.domain,
-                self.lmhash,
-                self.nthash,
-                self.aesKey,
-                doKerberos=self.doKerberos,
-            )
+            self.rpc_transport = transport.SMBTransport(self.addr, port, r"\samr", self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey, doKerberos=self.doKerberos)
+            
             try:
                 self.fetch_users(requested_users)
                 break
