@@ -154,20 +154,21 @@ class UserSamrDump:
             
             user_info = info_user_resp["All"]
             user_name = user_info["UserName"]
+            bad_pwd_count = user_info["BadPasswordCount"]
             user_description = user_info["AdminComment"]
             last_pw_set = old_large_int_to_datetime(user_info["PasswordLastSet"])
             if last_pw_set == "1601-01-01 00:00:00":
                 last_pw_set = "<never>"
-            users.append({"name": user_name, "description": user_description, "last_pw_set": last_pw_set})
+            users.append({"name": user_name, "description": user_description, "bad_pwd_count": bad_pwd_count, "last_pw_set": last_pw_set})
             
             samr.hSamrCloseHandle(self.dce, open_user_resp["UserHandle"])
         return users
     
     def print_user_info(self, users):
-        self.logger.highlight(f"{'Username':<30} {'Last PW Set':<20}\t{'Description'}")  # header
+        self.logger.highlight(f"{'Username':<30} {'Last PW Set':<20} {'Bad PW #'} {'Description'}")  # header
         for user in users:
             self.logger.debug(f"Full user info: {user}")
-            self.logger.highlight(f"{user['name']:<30} {user['last_pw_set']:<20}\t{user['description']} ")
+            self.logger.highlight(f"{user['name']:<30} {user['last_pw_set']:<20} {user['bad_pwd_count']:<8} {user['description']} ")
 
 
 def old_large_int_to_datetime(large_int):
