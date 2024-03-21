@@ -9,7 +9,7 @@ from asyauth.common.constants import asyauthSecret
 from asyauth.common.credentials.ntlm import NTLMCredential
 from asyauth.common.credentials.kerberos import KerberosCredential
 
-from asysocks.unicomm.common.target import UniTarget, UniProto
+from asysocks.unicomm.common.target import UniTarget, UniProto, UniSSL
 import sys
 
 
@@ -119,23 +119,28 @@ class NXCModule:
         # requirements are enforced based on potential errors
         # during the bind attempt.
         async def run_ldap(target, credential):
-            ldapsClientConn = MSLDAPClientConnection(target, credential)
-            _, err = await ldapsClientConn.connect()
-            
-            # Intentionnaly breaking the security context
-            ldapsClientConn.cb_data = None
-
-            if err is None:
-                _, err = await ldapsClientConn.bind()
-                if "AcceptSecurityContext" in str(err):
-                    return True  # because LDAP server signing requirements ARE enforced
-                elif ("data 52e") in str(err):
-                    context.log.fail("Not connected... exiting")
-                    sys.exit()
-                elif err is None:
+            try:
+                ldapsClientConn = MSLDAPClientConnection(target, credential)
+                ldapsClientConn._disable_signing = True
+                _, err = await ldapsClientConn.connect()
+                if err is not None:
+                    context.log.fail(str(err))
                     return False
-            else:
-                context.log.fail(str(err))
+                
+                _, err = await ldapsClientConn.bind()
+                if err is not None:
+                    errstr = str(err).lower()
+                    if "stronger" in errstr:
+                        return True #because LDAP server signing requirements ARE enforced
+                    else:
+                        context.log.fail(str(err))
+                else:
+                    #LDAPS bind successful
+                    return False #because LDAP server signing requirements are not enforced
+            except Exception as e:
+                context.log.debug(str(e))
+                return False
+              
 
         # Run trough all our code blocks to determine LDAP signing and channel binding settings.
         stype = asyauthSecret.PASS if not connection.nthash else asyauthSecret.NT
@@ -157,7 +162,7 @@ class NXCModule:
                 stype=stype,
             )
 
-        target = MSLDAPTarget(connection.host, 636,UniProto.CLIENT_SSL_TCP, hostname=connection.hostname, domain=connection.domain, dc_ip=connection.domain)
+        target = MSLDAPTarget(connection.host, 389, hostname=connection.hostname, domain=connection.domain, dc_ip=connection.domain)
         ldapIsProtected = asyncio.run(run_ldap(target, credential))
         if ldapIsProtected is False:
             context.log.highlight("LDAP Signing NOT Enforced!")
