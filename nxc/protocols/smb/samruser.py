@@ -165,10 +165,10 @@ class UserSamrDump:
         return users
 
     def print_user_info(self, users):
-        self.logger.highlight(f"{'Username':<30} {'Last PW Set':<20} {'Bad PW #'} {'Description'}")  # header
+        self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
         for user in users:
             self.logger.debug(f"Full user info: {user}")
-            self.logger.highlight(f"{user['name']:<30} {user['last_pw_set']:<20} {user['bad_pwd_count']:<8} {user['description']} ")
+            self.logger.highlight(f"{user['name']:<30}{user['last_pw_set']:<20}{user['bad_pwd_count']:<8}{user['description']} ")
 
 
 def old_large_int_to_datetime(large_int):
