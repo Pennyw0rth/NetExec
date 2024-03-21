@@ -373,7 +373,6 @@ class ldap(connection):
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             out = f"{domain}\\{self.username}{used_ccache} {self.mark_pwned()}"
 
-
             self.logger.extra["protocol"] = "LDAP"
             self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             self.logger.success(out)
@@ -764,18 +763,18 @@ class ldap(connection):
         Returns:
         -------
             None
-        """       
+        """
         if len(self.args.users) > 1:
             self.logger.display(f"Trying to dumping users: {', '.join(self.args.users)}")
             search_filter = f"(|{''.join(f'(sAMAccountName={user})' for user in self.args.users)})"
         else:
-            self.logger.info("Trying to dump all users") 
+            self.logger.info("Trying to dump all users")
             search_filter = "(sAMAccountType=805306368)" if self.username != "" else "(objectclass=*)"
-            
+
         # default to these attributes to mirror the SMB --users functionality
-        request_attributes = ["sAMAccountName", "description", "badPwdCount", "pwdLastSet"]       
+        request_attributes = ["sAMAccountName", "description", "badPwdCount", "pwdLastSet"]
         resp = self.search(search_filter, request_attributes, sizeLimit=0)
-        
+
         if resp:
             # I think this was here for anonymous ldap bindings, so I kept it, but we might just want to remove it
             if self.username == "":
@@ -785,7 +784,7 @@ class ldap(connection):
                         continue
                     self.logger.highlight(f"{item['objectName']}")
                 return
-            
+
             users = parse_result_attributes(resp)
             # we print the total records after we parse the results since often SearchResultReferences are returned
             self.logger.display(f"Total records returned: {len(users):d}")
@@ -799,6 +798,7 @@ class ldap(connection):
                     parsed_pw_last_set = "<never>"
                 # we default attributes to blank strings if they don't exist in the dict
                 self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{parsed_pw_last_set:<20}{user.get('badPwdCount', ''):<8}{user.get('description', ''):<60}")
+
     def groups(self):
         # Building the search filter
         search_filter = "(objectCategory=group)"
@@ -867,7 +867,7 @@ class ldap(connection):
                             elif str(attribute["type"]) == "userAccountControl":
                                 userAccountControl = int(attribute["vals"][0])
                                 account_disabled = userAccountControl & 2
-                        if not account_disabled: 
+                        if not account_disabled:
                             self.logger.highlight(f"{sAMAccountName}")
                 except Exception as e:
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
@@ -1404,4 +1404,3 @@ class ldap(connection):
                 if each_file.startswith(self.output_filename.split("/")[-1]) and each_file.endswith("json"):
                     z.write(each_file)
                     os.remove(each_file)
-
