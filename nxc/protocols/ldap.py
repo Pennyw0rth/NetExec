@@ -759,7 +759,6 @@ class ldap(connection):
 
         Args:
             input_attributes (list): Optional. List of attributes to retrieve for each user.
-                                     TODO: allow users to pass this in
 
         Returns:
             None
@@ -772,7 +771,8 @@ class ldap(connection):
             search_filter = "(sAMAccountType=805306368)" if self.username != "" else "(objectclass=*)"
             
         # default to these attributes to mirror the SMB --users functionality
-        request_attributes = self.args.ldap_attributes
+        default_attributes = ["sAMAccountName", "description", "pwdLastSet"]
+        request_attributes = default_attributes + self.args.ldap_attributes if self.args.ldap_attributes else default_attributes
         self.logger.debug(f"{request_attributes=}")
         
         resp = self.search(search_filter, request_attributes, sizeLimit=0)
@@ -789,7 +789,7 @@ class ldap(connection):
             users = parse_result_attributes(resp)
             # we print the total records after we parse the results since often SearchResultReferences are returned
             self.logger.display(f"Total records returned: {len(users):d}")
-            self.logger.highlight(f"{'Username':<30} {'Last PW Set':<20}\t{'Description'}")  # header
+            self.logger.highlight(f"{'Username':<30} {'Last PW Set':<20}\t{'Description':<60} " + ' '.join(f"{a}" for a in self.args.ldap_attributes) if self.args.ldap_attributes else '')
             for user in users:
                 self.logger.debug(f"{user=}")
                 # we default attributes to blank strings if they don't exist in the dict
@@ -798,8 +798,7 @@ class ldap(connection):
                 parsed_pw_last_set = (start_date + timedelta(seconds=timestamp_seconds)).replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
                 if parsed_pw_last_set == "1601-01-01 00:00:00":
                     parsed_pw_last_set = "<never>"
-                self.logger.highlight(f"{user.get('sAMAccountName', ''):<30} {parsed_pw_last_set:<20}\t{user.get('description', '')}")
-
+                self.logger.highlight(f"{user.get('sAMAccountName', ''):<30} {parsed_pw_last_set:<20}\t{user.get('description', ''):<60} " + ' '.join(f"{user.get(a, '')}" for a in self.args.ldap_attributes) if self.args.ldap_attributes else '')
     def groups(self):
         # Building the search filter
         search_filter = "(objectCategory=group)"

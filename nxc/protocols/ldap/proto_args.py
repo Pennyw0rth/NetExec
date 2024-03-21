@@ -1,4 +1,4 @@
-from argparse import _StoreTrueAction
+from argparse import _StoreTrueAction, Action
 
 
 def proto_args(parser, std_parser, module_parser):
@@ -25,8 +25,8 @@ def proto_args(parser, std_parser, module_parser):
     vgroup.add_argument("--dc-list", action="store_true", help="Enumerate Domain Controllers")
     vgroup.add_argument("--get-sid", action="store_true", help="Get domain sid")
     vgroup.add_argument("--active-users", action="store_true", help="Get Active Domain Users Accounts")
-    vgroup.add_argument("--ldap-attributes", nargs="+", default=["sAMAccountName", "description", "pwdLastSet"], help="Attributes to search for")
-
+    vgroup.add_argument("--ldap-attributes", nargs="+", help="Additional attributes to search for (appends to default list)")
+    
     ggroup = ldap_parser.add_argument_group("Retrevie gmsa on the remote DC", "Options to play with gmsa")
     ggroup.add_argument("--gmsa", action="store_true", help="Enumerate GMSA passwords")
     ggroup.add_argument("--gmsa-convert-id", help="Get the secret name of specific gmsa or all gmsa if no gmsa provided")
