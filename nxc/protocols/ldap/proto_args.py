@@ -20,11 +20,12 @@ def proto_args(parser, std_parser, module_parser):
     vgroup.add_argument("--trusted-for-delegation", action="store_true", help="Get the list of users and computers with flag TRUSTED_FOR_DELEGATION")
     vgroup.add_argument("--password-not-required", action="store_true", help="Get the list of users with flag PASSWD_NOTREQD")
     vgroup.add_argument("--admin-count", action="store_true", help="Get objets that had the value adminCount=1")
-    vgroup.add_argument("--users", action="store_true", help="Enumerate enabled domain users")
+    vgroup.add_argument("--users", nargs="*", help="Enumerate enabled domain users")
     vgroup.add_argument("--groups", action="store_true", help="Enumerate domain groups")
     vgroup.add_argument("--dc-list", action="store_true", help="Enumerate Domain Controllers")
     vgroup.add_argument("--get-sid", action="store_true", help="Get domain sid")
     vgroup.add_argument("--active-users", action="store_true", help="Get Active Domain Users Accounts")
+    vgroup.add_argument("--ldap-attributes", nargs="+", default=["sAMAccountName", "description", "pwdLastSet"], help="Attributes to search for")
 
     ggroup = ldap_parser.add_argument_group("Retrevie gmsa on the remote DC", "Options to play with gmsa")
     ggroup.add_argument("--gmsa", action="store_true", help="Enumerate GMSA passwords")
