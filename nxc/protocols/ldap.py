@@ -846,15 +846,6 @@ class ldap(connection):
                 self.logger.fail(f"Skipping item, cannot process due to error {e}")
 
     def active_users(self):
-        """
-        Retrieves active user information from the LDAP server.
-        Args:
-        ----
-            input_attributes (list): Optional. List of attributes to retrieve for each user.
-        Returns:
-        -------
-            None
-        """
         if len(self.args.active_users) > 0:
             arg = True
             self.logger.debug(f"Dumping users: {', '.join(self.args.active_users)}")
@@ -883,8 +874,8 @@ class ldap(connection):
                 for i in range(len(self.args.active_users)):
                     argsusers = [users_args[i] for i in range(len(self.args.active_users))]
             except Exception as e:
-                    self.logger.debug("Exception:", exc_info=True)
-                    self.logger.debug(f"Skipping item, cannot process due to error {e}")
+                self.logger.debug("Exception:", exc_info=True)
+                self.logger.debug(f"Skipping item, cannot process due to error {e}")
         else:
             argsusers = allusers
             
