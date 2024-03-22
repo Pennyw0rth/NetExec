@@ -1044,17 +1044,17 @@ class smb(connection):
                 lmhash=self.lmhash,
                 nthash=self.nthash,
             )
+            logged_on = set([(f"{user.wkui1_logon_domain}\\{user.wkui1_username}", user.wkui1_logon_server) for user in logged_on])
             self.logger.success("Enumerated logged_on users")
             if self.args.loggedon_users_filter:
                 for user in logged_on:
-                    if re.match(self.args.loggedon_users_filter, user.wkui1_username):
-                        self.logger.highlight(f"{user.wkui1_logon_domain}\\{user.wkui1_username:<25} {f'logon_server: {user.wkui1_logon_server}' if user.wkui1_logon_server else ''}")
+                    if re.match(self.args.loggedon_users_filter, user[0].split("\\")[1]):
+                        self.logger.highlight(f"{user[0]:<25} {f'logon_server: {user[1]}'}")
             else:
                 for user in logged_on:
-                    self.logger.highlight(f"{user.wkui1_logon_domain}\\{user.wkui1_username:<25} {f'logon_server: {user.wkui1_logon_server}' if user.wkui1_logon_server else ''}")
+                    self.logger.highlight(f"{user[0]:<25} {f'logon_server: {user[1]}'}")
         except Exception as e:
             self.logger.fail(f"Error enumerating logged on users: {e}")
-        return logged_on
 
     def pass_pol(self):
         return PassPolDump(self).dump()
