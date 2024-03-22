@@ -10,7 +10,7 @@ class NXCModule:
     """
     Example:
     -------
-    Module by @zblurx
+    Module by @_zblurx
     """
 
     name = "sccm"

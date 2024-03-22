@@ -25,8 +25,7 @@ class NXCModule:
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options
-        self.vnc_decryption_key = b"\x17\x52\x6b\x06\x23\x4e\x58\x07"
-        self.ultravnc_decryption_key = b"\xe8\x4a\xd6\x60\xc4\x72\x1a\xe0"
+        self.vnc_decryption_key = b"\xe8\x4a\xd6\x60\xc4\x72\x1a\xe0"
         self.share = "C$" # TODO could be a parameter 
         self.false_positive = (
             ".",
@@ -166,7 +165,7 @@ class NXCModule:
     def decrypt_password(self, password):
         try:
             password = (password + b"\x00" * 8)[:8]
-            cipher = DES.new(key=self.ultravnc_decryption_key, mode=DES.MODE_ECB)
+            cipher = DES.new(key=self.vnc_decryption_key, mode=DES.MODE_ECB)
             return cipher.decrypt(password)
         except Exception as ex:
             self.context.log.debug(f"Error while decrypting VNC password {password}: {ex}")
