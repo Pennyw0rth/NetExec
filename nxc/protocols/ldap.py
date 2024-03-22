@@ -764,7 +764,7 @@ class ldap(connection):
         -------
             None
         """
-        if len(self.args.users) > 1:
+        if len(self.args.users) > 0:
             self.logger.display(f"Trying to dumping users: {', '.join(self.args.users)}")
             search_filter = f"(|{''.join(f'(sAMAccountName={user})' for user in self.args.users)})"
         else:
