@@ -1044,7 +1044,7 @@ class smb(connection):
                 lmhash=self.lmhash,
                 nthash=self.nthash,
             )
-            logged_on = set([(f"{user.wkui1_logon_domain}\\{user.wkui1_username}", user.wkui1_logon_server) for user in logged_on])
+            logged_on = {(f"{user.wkui1_logon_domain}\\{user.wkui1_username}", user.wkui1_logon_server) for user in logged_on}
             self.logger.success("Enumerated logged_on users")
             if self.args.loggedon_users_filter:
                 for user in logged_on:
