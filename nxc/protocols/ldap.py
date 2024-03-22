@@ -881,7 +881,7 @@ class ldap(connection):
             # This try except for, if user gives a doesn't exist username. If it does, parsing process is crashing
             try:
                 for i in range(len(self.args.active_users)):
-                    argsusers.append(users_args[i])
+                    argsusers = [users_args[i] for i in range(len(self.args.active_users))]
             except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
@@ -911,11 +911,11 @@ class ldap(connection):
             if parsed_pw_last_set == "1601-01-01 00:00:00":
                 parsed_pw_last_set = "<never>"
                 
-            if arguser.get('sAMAccountName').lower() in activeusers and arg is False:
+            if arguser.get("sAMAccountName").lower() in activeusers and arg is False:
                 self.logger.highlight(f"{arguser.get('sAMAccountName', ''):<30}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
-            elif (arguser.get('sAMAccountName').lower() not in activeusers) and (arg is True):
+            elif (arguser.get("sAMAccountName").lower() not in activeusers) and (arg is True):
                 self.logger.highlight(f"{arguser.get('sAMAccountName', ''):<7} {'(Disabled)':<22}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
-            elif (arguser.get('sAMAccountName').lower() in activeusers):
+            elif (arguser.get("sAMAccountName").lower() in activeusers):
                 self.logger.highlight(f"{arguser.get('sAMAccountName', ''):<30}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
 
     def asreproast(self):
