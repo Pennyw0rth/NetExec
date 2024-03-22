@@ -903,7 +903,6 @@ class ldap(connection):
             return
         self.logger.display(f"Total records returned: {len(allusers)}, Total {len(allusers) - count:d} user(s) disabled") if not arg else self.logger.display(f"Total records returned: {len(argsusers)}, Total {len(allusers) - count:d} user(s) disabled")
         self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
-        
 
         for arguser in argsusers:
             timestamp_seconds = int(arguser.get("pwdLastSet", "")) / 10**7
@@ -913,11 +912,11 @@ class ldap(connection):
                 parsed_pw_last_set = "<never>"
                 
             if arguser.get('sAMAccountName').lower() in activeusers and arg is False:
-                self.logger.highlight(f"{arguser.get("sAMAccountName", ""):<30}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
+                self.logger.highlight(f"{arguser.get('sAMAccountName', ''):<30}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
             elif (arguser.get('sAMAccountName').lower() not in activeusers) and (arg is True):
-                self.logger.highlight(f"{arguser.get("sAMAccountName", ""):<7} {'(Disabled)':<22}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
+                self.logger.highlight(f"{arguser.get('sAMAccountName', ''):<7} {'(Disabled)':<22}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
             elif (arguser.get('sAMAccountName').lower() in activeusers):
-                self.logger.highlight(f"{arguser.get("sAMAccountName", ""):<30}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
+                self.logger.highlight(f"{arguser.get('sAMAccountName', ''):<30}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
 
     def asreproast(self):
         if self.password == "" and self.nthash == "" and self.kerberos is False:
