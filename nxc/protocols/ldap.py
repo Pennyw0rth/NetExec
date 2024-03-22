@@ -765,10 +765,10 @@ class ldap(connection):
             None
         """
         if len(self.args.users) > 0:
-            self.logger.display(f"Trying to dumping users: {', '.join(self.args.users)}")
+            self.logger.debug(f"Dumping users: {', '.join(self.args.users)}")
             search_filter = f"(|{''.join(f'(sAMAccountName={user})' for user in self.args.users)})"
         else:
-            self.logger.info("Trying to dump all users")
+            self.logger.debug("Trying to dump all users")
             search_filter = "(sAMAccountType=805306368)" if self.username != "" else "(objectclass=*)"
 
         # default to these attributes to mirror the SMB --users functionality
