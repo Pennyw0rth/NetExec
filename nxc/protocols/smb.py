@@ -1000,10 +1000,8 @@ class smb(connection):
         return groups
 
     def users(self):
-        if len(self.args.users) > 1:
-            self.logger.display(f"Dumping users: {', '.join(self.args.users)}")
-        else:
-            self.logger.info("Trying to dump local users with SAMRPC protocol") 
+        if len(self.args.users) > 0:
+            self.logger.debug(f"Dumping users: {', '.join(self.args.users)}")
              
         return UserSamrDump(self).dump(self.args.users)
 
