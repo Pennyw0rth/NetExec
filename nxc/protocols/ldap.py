@@ -846,32 +846,77 @@ class ldap(connection):
                 self.logger.fail(f"Skipping item, cannot process due to error {e}")
 
     def active_users(self):
-        # Building the search filter
-        search_filter = "(sAMAccountType=805306368)" if self.username != "" else "(objectclass=*)"
-        attributes = ["sAMAccountName", "userAccountControl"]
+        """
+        Retrieves active user information from the LDAP server.
+        Args:
+        ----
+            input_attributes (list): Optional. List of attributes to retrieve for each user.
+        Returns:
+        -------
+            None
+        """
+        if len(self.args.active_users) > 0:
+            arg = True
+            self.logger.debug(f"Dumping users: {', '.join(self.args.active_users)}")
+            search_filter = "(sAMAccountType=805306368)" if self.username != "" else "(objectclass=*)"
+            search_filter_args = f"(|{''.join(f'(sAMAccountName={user})' for user in self.args.active_users)})"
+            
+        else:
+            arg = False
+            self.logger.debug("Trying to dump all users")
+            search_filter = "(sAMAccountType=805306368)" if self.username != "" else "(objectclass=*)"
+        
+        # default to these attributes to mirror the SMB --users functionality
+        request_attributes = ["sAMAccountName", "description", "badPwdCount", "pwdLastSet", "userAccountControl"]
+        resp = self.search(search_filter, request_attributes, sizeLimit=0)
+        allusers = parse_result_attributes(resp)
+        
+        count = 0
+        activeusers = []
+        argsusers = []
+        
+        if arg:
+            resp_args = self.search(search_filter_args, request_attributes, sizeLimit=0)
+            users_args = parse_result_attributes(resp_args)
+            # This try except for, if user gives a doesn't exist username. If it does, parsing process is crashing
+            try:
+                for i in range(0, len(self.args.active_users)):
+                    argsusers.append(users_args[i])
+            except:
+                pass
+        else:
+            argsusers = allusers
+            
+        for user in allusers:  
+            account_disabled = int(user.get('userAccountControl')) & 2
+            if not account_disabled:
+                count += 1
+                activeusers.append(user.get('sAMAccountName').lower()) 
 
-        resp = self.search(search_filter, attributes, sizeLimit=0)
-        if resp:
-            for item in resp:
+        if self.username == "":
+            self.logger.display(f"Total records returned: {len(resp):d}")
+            for item in resp_args:
                 if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
                     continue
-                sAMAccountName = ""
-                userAccountControl = ""
-                try:
-                    if self.username == "":
-                        self.logger.highlight(f"{item['objectName']}")
-                    else:
-                        for attribute in item["attributes"]:
-                            if str(attribute["type"]) == "sAMAccountName":
-                                sAMAccountName = str(attribute["vals"][0])
-                            elif str(attribute["type"]) == "userAccountControl":
-                                userAccountControl = int(attribute["vals"][0])
-                                account_disabled = userAccountControl & 2
-                        if not account_disabled:
-                            self.logger.highlight(f"{sAMAccountName}")
-                except Exception as e:
-                    self.logger.debug(f"Skipping item, cannot process due to error {e}")
+                self.logger.highlight(f"{item['objectName']}")
             return
+        self.logger.display(f"Total records returned: {len(allusers)}, Total {len(allusers) - count:d} user(s) disabled") if not arg else self.logger.display(f"Total records returned: {len(argsusers)}, Total {len(allusers) - count:d} user(s) disabled")
+        self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
+        
+
+        for arguser in argsusers:
+            timestamp_seconds = int(arguser.get("pwdLastSet", "")) / 10**7
+            start_date = datetime(1601, 1, 1)
+            parsed_pw_last_set = (start_date + timedelta(seconds=timestamp_seconds)).replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
+            if parsed_pw_last_set == "1601-01-01 00:00:00":
+                parsed_pw_last_set = "<never>"
+                
+            if arguser.get('sAMAccountName').lower() in activeusers and arg == False:
+                self.logger.highlight(f"{arguser.get('sAMAccountName', ''):<30}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
+            elif (arguser.get('sAMAccountName').lower() not in activeusers) and (arg == True):
+                self.logger.highlight(f"{arguser.get('sAMAccountName', ''):<7} {'(Disabled)':<22}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
+            elif (arguser.get('sAMAccountName').lower() in activeusers) :
+                self.logger.highlight(f"{arguser.get('sAMAccountName', ''):<30}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
 
     def asreproast(self):
         if self.password == "" and self.nthash == "" and self.kerberos is False:
