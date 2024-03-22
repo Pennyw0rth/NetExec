@@ -16,13 +16,11 @@ class NXCAdapter(logging.LoggerAdapter):
         logging.basicConfig(
             format="%(message)s",
             datefmt="[%X]",
-            handlers=[
-                RichHandler(
-                    console=nxc_console,
-                    rich_tracebacks=True,
-                    tracebacks_show_locals=False,
-                )
-            ],
+            handlers=[RichHandler(
+                console=nxc_console,
+                rich_tracebacks=True,
+                tracebacks_show_locals=False
+            )],
         )
         self.logger = logging.getLogger("nxc")
         self.extra = extra
@@ -40,30 +38,21 @@ class NXCAdapter(logging.LoggerAdapter):
         if self.extra is None:
             return f"{msg}", kwargs
 
-        if "module_name" in self.extra and len(self.extra["module_name"]) > 8:
+        if "module_name" in self.extra and len(self.extra["module_name"]) > 11:
             self.extra["module_name"] = self.extra["module_name"][:8] + "..."
 
         # If the logger is being called when hooking the 'options' module function
         if len(self.extra) == 1 and ("module_name" in self.extra):
-            return (
-                f"{colored(self.extra['module_name'], 'cyan', attrs=['bold']):<64} {msg}",
-                kwargs,
-            )
+            return (f"{colored(self.extra['module_name'], 'cyan', attrs=['bold']):<64} {msg}", kwargs)
 
         # If the logger is being called from nxcServer
         if len(self.extra) == 2 and ("module_name" in self.extra) and ("host" in self.extra):
-            return (
-                f"{colored(self.extra['module_name'], 'cyan', attrs=['bold']):<24} {self.extra['host']:<39} {msg}",
-                kwargs,
-            )
+            return (f"{colored(self.extra['module_name'], 'cyan', attrs=['bold']):<24} {self.extra['host']:<39} {msg}", kwargs)
 
         # If the logger is being called from a protocol
         module_name = colored(self.extra["module_name"], "cyan", attrs=["bold"]) if "module_name" in self.extra else colored(self.extra["protocol"], "blue", attrs=["bold"])
 
-        return (
-            f"{module_name:<24} {self.extra['host']:<15} {self.extra['port']:<6} {self.extra['hostname'] if self.extra['hostname'] else 'NONE':<16} {msg}",
-            kwargs,
-        )
+        return (f"{module_name:<24} {self.extra['host']:<15} {self.extra['port']:<6} {self.extra['hostname'] if self.extra['hostname'] else 'NONE':<16} {msg}", kwargs)
 
     def display(self, msg, *args, **kwargs):
         """Display text to console, formatted for nxc"""
@@ -104,17 +93,7 @@ class NXCAdapter(logging.LoggerAdapter):
             if len(self.logger.handlers):
                 try:
                     for handler in self.logger.handlers:
-                        handler.handle(
-                            LogRecord(
-                                "nxc",
-                                20,
-                                "",
-                                kwargs,
-                                msg=text,
-                                args=args,
-                                exc_info=None,
-                            )
-                        )
+                        handler.handle(LogRecord("nxc", 20, "", kwargs, msg=text, args=args, exc_info=None))
                 except Exception as e:
                     self.logger.fail(f"Issue while trying to custom print handler: {e}")
         else:
