@@ -880,18 +880,19 @@ class ldap(connection):
             users_args = parse_result_attributes(resp_args)
             # This try except for, if user gives a doesn't exist username. If it does, parsing process is crashing
             try:
-                for i in range(0, len(self.args.active_users)):
+                for i in range(len(self.args.active_users)):
                     argsusers.append(users_args[i])
-            except:
-                pass
+            except Exception as e:
+                    self.logger.debug("Exception:", exc_info=True)
+                    self.logger.debug(f"Skipping item, cannot process due to error {e}")
         else:
             argsusers = allusers
             
         for user in allusers:  
-            account_disabled = int(user.get('userAccountControl')) & 2
+            account_disabled = int(user.get("userAccountControl")) & 2
             if not account_disabled:
                 count += 1
-                activeusers.append(user.get('sAMAccountName').lower()) 
+                activeusers.append(user.get("sAMAccountName").lower()) 
 
         if self.username == "":
             self.logger.display(f"Total records returned: {len(resp):d}")
@@ -912,11 +913,11 @@ class ldap(connection):
                 parsed_pw_last_set = "<never>"
                 
             if arguser.get('sAMAccountName').lower() in activeusers and arg is False:
-                self.logger.highlight(f"{arguser.get('sAMAccountName', ''):<30}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
+                self.logger.highlight(f"{arguser.get("sAMAccountName", ""):<30}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
             elif (arguser.get('sAMAccountName').lower() not in activeusers) and (arg is True):
-                self.logger.highlight(f"{arguser.get('sAMAccountName', ''):<7} {'(Disabled)':<22}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
-            elif (arguser.get('sAMAccountName').lower() in activeusers) :
-                self.logger.highlight(f"{arguser.get('sAMAccountName', ''):<30}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
+                self.logger.highlight(f"{arguser.get("sAMAccountName", ""):<7} {'(Disabled)':<22}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
+            elif (arguser.get('sAMAccountName').lower() in activeusers):
+                self.logger.highlight(f"{arguser.get("sAMAccountName", ""):<30}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
 
     def asreproast(self):
         if self.password == "" and self.nthash == "" and self.kerberos is False:
