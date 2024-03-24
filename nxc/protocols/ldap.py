@@ -851,39 +851,38 @@ class ldap(connection):
             self.logger.debug(f"Dumping users: {', '.join(self.args.active_users)}")
             search_filter = "(sAMAccountType=805306368)" if self.username != "" else "(objectclass=*)"
             search_filter_args = f"(|{''.join(f'(sAMAccountName={user})' for user in self.args.active_users)})"
-            
         else:
             arg = False
             self.logger.debug("Trying to dump all users")
             search_filter = "(sAMAccountType=805306368)" if self.username != "" else "(objectclass=*)"
-        
+
         # default to these attributes to mirror the SMB --users functionality
         request_attributes = ["sAMAccountName", "description", "badPwdCount", "pwdLastSet", "userAccountControl"]
         resp = self.search(search_filter, request_attributes, sizeLimit=0)
         allusers = parse_result_attributes(resp)
-        
+
         count = 0
         activeusers = []
         argsusers = []
-        
+
         if arg:
             resp_args = self.search(search_filter_args, request_attributes, sizeLimit=0)
             users_args = parse_result_attributes(resp_args)
             # This try except for, if user gives a doesn't exist username. If it does, parsing process is crashing
-            try:
-                for i in range(len(self.args.active_users)):
-                    argsusers = [users_args[i] for i in range(len(self.args.active_users))]
-            except Exception as e:
-                self.logger.debug("Exception:", exc_info=True)
-                self.logger.debug(f"Skipping item, cannot process due to error {e}")
+            for i in range(len(self.args.active_users)):
+                try:
+                    argsusers.append(users_args[i])
+                except Exception as e:
+                    self.logger.debug("Exception:", exc_info=True)
+                    self.logger.debug(f"Skipping item, cannot process due to error {e}")
         else:
             argsusers = allusers
-            
-        for user in allusers:  
+
+        for user in allusers:
             account_disabled = int(user.get("userAccountControl")) & 2
             if not account_disabled:
                 count += 1
-                activeusers.append(user.get("sAMAccountName").lower()) 
+                activeusers.append(user.get("sAMAccountName").lower())
 
         if self.username == "":
             self.logger.display(f"Total records returned: {len(resp):d}")
@@ -901,11 +900,11 @@ class ldap(connection):
             parsed_pw_last_set = (start_date + timedelta(seconds=timestamp_seconds)).replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
             if parsed_pw_last_set == "1601-01-01 00:00:00":
                 parsed_pw_last_set = "<never>"
-                
+
             if arguser.get("sAMAccountName").lower() in activeusers and arg is False:
                 self.logger.highlight(f"{arguser.get('sAMAccountName', ''):<30}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
-            elif (arguser.get("sAMAccountName").lower() not in activeusers) and (arg is True):
-                self.logger.highlight(f"{arguser.get('sAMAccountName', ''):<7} {'(Disabled)':<22}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
+            elif (arguser.get("sAMAccountName").lower() not in activeusers) and arg is True:
+                self.logger.highlight(f"{arguser.get('sAMAccountName', '') + ' (Disabled)':<30}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
             elif (arguser.get("sAMAccountName").lower() in activeusers):
                 self.logger.highlight(f"{arguser.get('sAMAccountName', ''):<30}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
 
