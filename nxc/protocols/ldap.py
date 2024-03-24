@@ -265,8 +265,8 @@ class ldap(connection):
                 if "STATUS_NOT_SUPPORTED" in str(e):
                     self.no_ntlm = True
             if not self.no_ntlm:
-                self.domain = self.conn.getServerDNSDomainName()
                 self.hostname = self.conn.getServerName()
+                self.targetDomain = self.domain = self.conn.getServerDNSDomainName()
             self.server_os = self.conn.getServerOS()
             self.signing = self.conn.isSigningRequired() if self.smbv1 else self.conn._SMBConnection._Connection["RequireSigning"]
             self.os_arch = self.get_os_arch()
@@ -274,18 +274,16 @@ class ldap(connection):
 
             if not self.domain:
                 self.domain = self.hostname
+            if self.args.domain:
+                self.domain = self.args.domain
+            if self.args.local_auth:
+                self.domain = self.hostname
 
             try:  # noqa: SIM105
                 # DC's seem to want us to logoff first, windows workstations sometimes reset the connection
                 self.conn.logoff()
             except Exception:
                 pass
-
-            if self.args.domain:
-                self.domain = self.args.domain
-            if self.args.local_auth:
-                self.domain = self.hostname
-
             # Re-connect since we logged off
             self.create_conn_obj()
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}".replace(":", "-"))
