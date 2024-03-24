@@ -661,7 +661,7 @@ class ldap(connection):
         attributes = ["objectSid"]
         resp = self.search(search_filter, attributes, sizeLimit=0)
         answers = []
-        if resp and self.password != "" and self.username != "":
+        if resp and (self.password != "" or self.lmhash != "" or self.nthash != "") and self.username != "":
             for attribute in resp[0][1]:
                 if str(attribute["type"]) == "objectSid":
                     sid = self.sid_to_str(attribute["vals"][0])
