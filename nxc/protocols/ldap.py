@@ -5,7 +5,7 @@ import hmac
 import os
 import socket
 from binascii import hexlify
-from datetime import datetime
+from datetime import datetime, timedelta
 from re import sub, I
 from zipfile import ZipFile
 from termcolor import colored
@@ -38,6 +38,7 @@ from nxc.logger import NXCAdapter, nxc_logger
 from nxc.protocols.ldap.bloodhound import BloodHound
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.protocols.ldap.kerberos import KerberosAttacks
+from nxc.parsers.ldap_results import parse_result_attributes
 
 ldap_error_status = {
     "1": "STATUS_NOT_SUPPORTED",
@@ -287,7 +288,7 @@ class ldap(connection):
 
             # Re-connect since we logged off
             self.create_conn_obj()
-        self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
+        self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}".replace(":", "-"))
 
     def print_host_info(self):
         self.logger.debug("Printing host info for LDAP")
@@ -370,12 +371,11 @@ class ldap(connection):
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             out = f"{domain}\\{self.username}{used_ccache} {self.mark_pwned()}"
 
-
             self.logger.extra["protocol"] = "LDAP"
             self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             self.logger.success(out)
 
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -432,7 +432,7 @@ class ldap(connection):
                     self.logger.extra["port"] = "636"
                     self.logger.success(out)
 
-                    if not self.args.local_auth:
+                    if not self.args.local_auth and self.username != "":
                         add_user_bh(self.username, self.domain, self.logger, self.config)
                     if self.admin_privs:
                         add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -488,7 +488,7 @@ class ldap(connection):
             self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             self.logger.success(out)
 
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -516,7 +516,7 @@ class ldap(connection):
                     self.logger.extra["port"] = "636"
                     self.logger.success(out)
 
-                    if not self.args.local_auth:
+                    if not self.args.local_auth and self.username != "":
                         add_user_bh(self.username, self.domain, self.logger, self.config)
                     if self.admin_privs:
                         add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -582,7 +582,7 @@ class ldap(connection):
             self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             self.logger.success(out)
 
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -609,7 +609,7 @@ class ldap(connection):
                     self.logger.extra["port"] = "636"
                     self.logger.success(out)
 
-                    if not self.args.local_auth:
+                    if not self.args.local_auth and self.username != "":
                         add_user_bh(self.username, self.domain, self.logger, self.config)
                     if self.admin_privs:
                         add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -751,37 +751,51 @@ class ldap(connection):
         return False
 
     def users(self):
-        # Building the search filter
-        search_filter = "(sAMAccountType=805306368)" if self.username != "" else "(objectclass=*)"
-        attributes = [
-            "sAMAccountName",
-            "description",
-            "badPasswordTime",
-            "badPwdCount",
-            "pwdLastSet",
-        ]
+        """
+        Retrieves user information from the LDAP server.
 
-        resp = self.search(search_filter, attributes, sizeLimit=0)
+        Args:
+        ----
+            input_attributes (list): Optional. List of attributes to retrieve for each user.
+
+        Returns:
+        -------
+            None
+        """
+        if len(self.args.users) > 0:
+            self.logger.debug(f"Dumping users: {', '.join(self.args.users)}")
+            search_filter = f"(|{''.join(f'(sAMAccountName={user})' for user in self.args.users)})"
+        else:
+            self.logger.debug("Trying to dump all users")
+            search_filter = "(sAMAccountType=805306368)" if self.username != "" else "(objectclass=*)"
+
+        # default to these attributes to mirror the SMB --users functionality
+        request_attributes = ["sAMAccountName", "description", "badPwdCount", "pwdLastSet"]
+        resp = self.search(search_filter, request_attributes, sizeLimit=0)
+
         if resp:
-            self.logger.display(f"Total of records returned {len(resp):d}")
-            for item in resp:
-                if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
-                    continue
-                sAMAccountName = ""
-                description = ""
-                try:
-                    if self.username == "":
-                        self.logger.highlight(f"{item['objectName']}")
-                    else:
-                        for attribute in item["attributes"]:
-                            if str(attribute["type"]) == "sAMAccountName":
-                                sAMAccountName = str(attribute["vals"][0])
-                            elif str(attribute["type"]) == "description":
-                                description = str(attribute["vals"][0])
-                        self.logger.highlight(f"{sAMAccountName:<30} {description}")
-                except Exception as e:
-                    self.logger.debug(f"Skipping item, cannot process due to error {e}")
-            return
+            # I think this was here for anonymous ldap bindings, so I kept it, but we might just want to remove it
+            if self.username == "":
+                self.logger.display(f"Total records returned: {len(resp):d}")
+                for item in resp:
+                    if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
+                        continue
+                    self.logger.highlight(f"{item['objectName']}")
+                return
+
+            users = parse_result_attributes(resp)
+            # we print the total records after we parse the results since often SearchResultReferences are returned
+            self.logger.display(f"Total records returned: {len(users):d}")
+            self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
+            for user in users:
+                # TODO: functionize this - we do this calculation in a bunch of places, different, including in the `pso` module
+                timestamp_seconds = int(user.get("pwdLastSet", "")) / 10**7
+                start_date = datetime(1601, 1, 1)
+                parsed_pw_last_set = (start_date + timedelta(seconds=timestamp_seconds)).replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
+                if parsed_pw_last_set == "1601-01-01 00:00:00":
+                    parsed_pw_last_set = "<never>"
+                # we default attributes to blank strings if they don't exist in the dict
+                self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{parsed_pw_last_set:<20}{user.get('badPwdCount', ''):<8}{user.get('description', ''):<60}")
 
     def groups(self):
         # Building the search filter
@@ -851,7 +865,7 @@ class ldap(connection):
                             elif str(attribute["type"]) == "userAccountControl":
                                 userAccountControl = int(attribute["vals"][0])
                                 account_disabled = userAccountControl & 2
-                        if not account_disabled: 
+                        if not account_disabled:
                             self.logger.highlight(f"{sAMAccountName}")
                 except Exception as e:
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
@@ -1373,15 +1387,18 @@ class ldap(connection):
             num_workers=10,
             disable_pooling=False,
             timestamp=timestamp,
+            fileNamePrefix=self.output_filename.split("/")[-1],
             computerfile=None,
             cachefile=None,
             exclude_dcs=False,
         )
 
+        self.output_filename += f"_{timestamp}"
+
         self.logger.highlight(f"Compressing output into {self.output_filename}bloodhound.zip")
         list_of_files = os.listdir(os.getcwd())
         with ZipFile(self.output_filename + "bloodhound.zip", "w") as z:
             for each_file in list_of_files:
-                if each_file.startswith(timestamp) and each_file.endswith("json"):
+                if each_file.startswith(self.output_filename.split("/")[-1]) and each_file.endswith("json"):
                     z.write(each_file)
                     os.remove(each_file)
