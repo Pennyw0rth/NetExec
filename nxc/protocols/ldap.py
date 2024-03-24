@@ -307,16 +307,7 @@ class ldap(connection):
             self.logger.extra["protocol"] = "LDAP"
         return True
 
-    def kerberos_login(
-        self,
-        domain,
-        username,
-        password="",
-        ntlm_hash="",
-        aesKey="",
-        kdcHost="",
-        useCache=False,
-    ):
+    def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.username = username
         self.password = password
         self.domain = domain
@@ -350,20 +341,13 @@ class ldap(connection):
 
         try:
             # Connect to LDAP
+            self.logger.extra["protocol"] = "LDAPS" if (self.args.gmsa or self.port == 636) else "LDAP"
+            self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} [1]")
             self.ldapConnection = ldap_impacket.LDAPConnection(ldap_url, self.baseDN)
-            self.ldapConnection.kerberosLogin(
-                username,
-                password,
-                domain,
-                self.lmhash,
-                self.nthash,
-                aesKey,
-                kdcHost=kdcHost,
-                useCache=useCache,
-            )
+            self.ldapConnection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
 
             if self.username == "":
                 self.username = self.get_ldap_username()
@@ -371,11 +355,7 @@ class ldap(connection):
             self.check_if_admin()
 
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
-            out = f"{domain}\\{self.username}{used_ccache} {self.mark_pwned()}"
-
-            self.logger.extra["protocol"] = "LDAP"
-            self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
-            self.logger.success(out)
+            self.logger.success(f"{domain}\\{self.username}{used_ccache} {self.mark_pwned()}")
 
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
@@ -408,19 +388,12 @@ class ldap(connection):
                 # We need to try SSL
                 try:
                     # Connect to LDAPS
+                    self.logger.extra["protocol"] = "LDAPS"
+                    self.logger.extra["port"] = "636"
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} [2]")
                     self.ldapConnection = ldap_impacket.LDAPConnection(ldaps_url, self.baseDN)
-                    self.ldapConnection.kerberosLogin(
-                        username,
-                        password,
-                        domain,
-                        self.lmhash,
-                        self.nthash,
-                        aesKey,
-                        kdcHost=kdcHost,
-                        useCache=useCache,
-                    )
+                    self.ldapConnection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
 
                     if self.username == "":
                         self.username = self.get_ldap_username()
@@ -428,11 +401,7 @@ class ldap(connection):
                     self.check_if_admin()
 
                     # Prepare success credential text
-                    out = f"{domain}\\{self.username} {self.mark_pwned()}"
-
-                    self.logger.extra["protocol"] = "LDAPS"
-                    self.logger.extra["port"] = "636"
-                    self.logger.success(out)
+                    self.logger.success(f"{domain}\\{self.username} {self.mark_pwned()}")
 
                     if not self.args.local_auth and self.username != "":
                         add_user_bh(self.username, self.domain, self.logger, self.config)
@@ -476,6 +445,8 @@ class ldap(connection):
 
         try:
             # Connect to LDAP
+            self.logger.extra["protocol"] = "LDAPS" if (self.args.gmsa or self.port == 636) else "LDAP"
+            self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.debug(f"Connecting to {ldap_url} - {self.baseDN} [3]")
@@ -484,11 +455,7 @@ class ldap(connection):
             self.check_if_admin()
 
             # Prepare success credential text
-            out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}"
-
-            self.logger.extra["protocol"] = "LDAP"
-            self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
-            self.logger.success(out)
+            self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
 
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
@@ -500,23 +467,16 @@ class ldap(connection):
                 # We need to try SSL
                 try:
                     # Connect to LDAPS
+                    self.logger.extra["protocol"] = "LDAPS"
+                    self.logger.extra["port"] = "636"
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} [4]")
                     self.ldapConnection = ldap_impacket.LDAPConnection(ldaps_url, self.baseDN)
-                    self.ldapConnection.login(
-                        self.username,
-                        self.password,
-                        self.domain,
-                        self.lmhash,
-                        self.nthash,
-                    )
+                    self.ldapConnection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
                     self.check_if_admin()
 
                     # Prepare success credential text
-                    out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}"
-                    self.logger.extra["protocol"] = "LDAPS"
-                    self.logger.extra["port"] = "636"
-                    self.logger.success(out)
+                    self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
 
                     if not self.args.local_auth and self.username != "":
                         add_user_bh(self.username, self.domain, self.logger, self.config)
@@ -571,6 +531,8 @@ class ldap(connection):
 
         try:
             # Connect to LDAP
+            self.logger.extra["protocol"] = "LDAPS" if (self.args.gmsa or self.port == 636) else "LDAP"
+            self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldaps_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN}")
@@ -580,8 +542,6 @@ class ldap(connection):
 
             # Prepare success credential text
             out = f"{domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}"
-            self.logger.extra["protocol"] = "LDAP"
-            self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             self.logger.success(out)
 
             if not self.args.local_auth and self.username != "":
@@ -593,6 +553,8 @@ class ldap(connection):
             if str(e).find("strongerAuthRequired") >= 0:
                 try:
                     # We need to try SSL
+                    self.logger.extra["protocol"] = "LDAPS"
+                    self.logger.extra["port"] = "636"
                     ldaps_url = f"{proto}://{self.target}"
                     self.logger.debug(f"Connecting to {ldaps_url} - {self.baseDN}")
                     self.ldapConnection = ldap_impacket.LDAPConnection(ldaps_url, self.baseDN)
@@ -607,8 +569,6 @@ class ldap(connection):
 
                     # Prepare success credential text
                     out = f"{domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}"
-                    self.logger.extra["protocol"] = "LDAPS"
-                    self.logger.extra["port"] = "636"
                     self.logger.success(out)
 
                     if not self.args.local_auth and self.username != "":
