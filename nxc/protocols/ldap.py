@@ -489,12 +489,15 @@ class ldap(connection):
                         f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                         color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                     )
+                    self.logger.fail("LDAPS channel binding might be enabled, this is only supported with kerberos authentication. Try using '-k'.")
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
                     f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
+                if proto == "ldaps":
+                    self.logger.fail("LDAPS channel binding might be enabled, this is only supported with kerberos authentication. Try using '-k'.")
             return False
         except OSError as e:
             self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {'Error connecting to the domain, are you sure LDAP service is running on the target?'} \nError: {e}")
@@ -582,12 +585,15 @@ class ldap(connection):
                         f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                         color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                     )
+                    self.logger.fail("LDAPS channel binding might be enabled, this is only supported with kerberos authentication. Try using '-k'.")
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
                     f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
+                if proto == "ldaps":
+                    self.logger.fail("LDAPS channel binding might be enabled, this is only supported with kerberos authentication. Try using '-k'.")
             return False
         except OSError as e:
             self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {'Error connecting to the domain, are you sure LDAP service is running on the target?'} \nError: {e}")
