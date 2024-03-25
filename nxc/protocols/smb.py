@@ -211,8 +211,23 @@ class smb(connection):
                 # no ntlm supported
                 self.no_ntlm = True
 
-        self.domain = self.conn.getServerDNSDomainName() if not self.no_ntlm else self.args.domain
-        self.hostname = self.conn.getServerName() if not self.no_ntlm else self.host
+        # self.domain is the attribute we authenticate with
+        # self.targetDomain is the attribute which gets displayed as host domain
+        if not self.no_ntlm:
+            self.hostname = self.conn.getServerName()
+            self.targetDomain = self.conn.getServerDNSDomainName()
+            if not self.targetDomain:   # Not sure if that can even happen but now we are safe
+                self.targetDomain = self.hostname
+        else:
+            self.hostname = self.host
+            self.targetDomain = self.hostname
+
+        self.domain = self.targetDomain if not self.args.domain else self.args.domain
+
+        if self.args.local_auth:
+            self.domain = self.hostname
+            self.targetDomain = self.hostname
+
         self.server_os = self.conn.getServerOS()
         self.logger.extra["hostname"] = self.hostname
 
@@ -226,9 +241,6 @@ class smb(connection):
 
         self.os_arch = self.get_os_arch()
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
-
-        if not self.domain:
-            self.domain = self.hostname
 
         self.db.add_host(
             self.host,
@@ -245,15 +257,11 @@ class smb(connection):
         except Exception as e:
             self.logger.debug(f"Error logging off system: {e}")
 
-        if self.args.domain:
-            self.domain = self.args.domain
-        if self.args.local_auth:
-            self.domain = self.hostname
 
     def print_host_info(self):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
         smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
-        self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({smbv1})")
+        self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1})")
         return True
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):

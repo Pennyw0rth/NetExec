@@ -254,9 +254,7 @@ class ldap(connection):
         self.hostname = self.target
         self.domain = self.targetDomain
         # smb no open, specify the domain
-        if self.args.no_smb:
-            self.domain = self.args.domain
-        else:
+        if not self.args.no_smb:
             self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
 
             try:
@@ -267,8 +265,8 @@ class ldap(connection):
                 if "STATUS_NOT_SUPPORTED" in str(e):
                     self.no_ntlm = True
             if not self.no_ntlm:
-                self.domain = self.conn.getServerDNSDomainName()
                 self.hostname = self.conn.getServerName()
+                self.targetDomain = self.domain = self.conn.getServerDNSDomainName()
             self.server_os = self.conn.getServerOS()
             self.signing = self.conn.isSigningRequired() if self.smbv1 else self.conn._SMBConnection._Connection["RequireSigning"]
             self.os_arch = self.get_os_arch()
@@ -276,18 +274,16 @@ class ldap(connection):
 
             if not self.domain:
                 self.domain = self.hostname
+            if self.args.domain:
+                self.domain = self.args.domain
+            if self.args.local_auth:
+                self.domain = self.hostname
 
             try:  # noqa: SIM105
                 # DC's seem to want us to logoff first, windows workstations sometimes reset the connection
                 self.conn.logoff()
             except Exception:
                 pass
-
-            if self.args.domain:
-                self.domain = self.args.domain
-            if self.args.local_auth:
-                self.domain = self.hostname
-
             # Re-connect since we logged off
             self.create_conn_obj()
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}".replace(":", "-"))
@@ -303,7 +299,7 @@ class ldap(connection):
             self.logger.extra["port"] = "445" if not self.no_ntlm else "389"
             signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
             smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
-            self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({smbv1})")
+            self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1})")
             self.logger.extra["protocol"] = "LDAP"
         return True
 
