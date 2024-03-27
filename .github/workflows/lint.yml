@@ -28,15 +28,3 @@ jobs:
         run: |
           poetry run ruff --version
           poetry run ruff check . --preview
-      - name: Run NetExec tests
-        run: |
-          poetry run netexec winrm 127.0.0.1
-          poetry run netexec vnc 127.0.0.1
-          poetry run netexec smb 127.0.0.1
-          poetry run netexec ldap 127.0.0.1
-          poetry run netexec wmi 127.0.0.1
-          poetry run netexec rdp 127.0.0.1
-          poetry run netexec mssql 127.0.0.1
-          poetry run netexec ssh 127.0.0.1
-          poetry run netexec ftp 127.0.0.1
-          poetry run netexec smb 127.0.0.1 -M veeam

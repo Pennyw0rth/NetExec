@@ -31,7 +31,7 @@ jobs:
       - name: Install libraries with dev group
         run: |
           poetry install --with dev
-      - name: Run NetExec tests
+      - name: Load every protocol and module
         run: |
           poetry run netexec winrm 127.0.0.1
           poetry run netexec vnc 127.0.0.1
