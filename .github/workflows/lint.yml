@@ -1,3 +1,4 @@
+name: Lint Python code with ruff
 # Caching source: https://gist.github.com/gh640/233a6daf68e9e937115371c0ecd39c61?permalink_comment_id=4529233#gistcomment-4529233
 
 on:
@@ -5,7 +6,6 @@ on:
 
 jobs:
   lint:
-    name: Lint Python code with ruff
     runs-on: ubuntu-latest
     if:
       github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
