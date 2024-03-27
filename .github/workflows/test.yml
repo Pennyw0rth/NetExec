@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: NetExec Tests for Py${{ matrix.python-version }}
+    name: Test for Py${{ matrix.python-version }}
     if: github.event.review.state == 'APPROVED'
     runs-on: ${{ matrix.os }}
     strategy:
