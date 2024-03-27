@@ -1,7 +1,8 @@
 name: Lint Python code with ruff
 # Caching source: https://gist.github.com/gh640/233a6daf68e9e937115371c0ecd39c61?permalink_comment_id=4529233#gistcomment-4529233
 
-on: [push, pull_request]
+on:
+  push:
 
 jobs:
   lint:
