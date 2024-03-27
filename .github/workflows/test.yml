@@ -1,12 +1,13 @@
 name: NetExec Tests
 
 on:
-  repository_dispatch:
-    types: [create-pull-request]
+  pull_request_review:
+    types: [submitted]
 
 jobs:
   build:
     name: NetExec Tests for Py${{ matrix.python-version }}
+    if: github.event.review.state == 'APPROVED'
     runs-on: ${{ matrix.os }}
     strategy:
       max-parallel: 5
