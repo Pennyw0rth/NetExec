@@ -6,7 +6,6 @@ on:
 
 jobs:
   lint:
-    name: Lint Python code with ruff
     runs-on: ubuntu-latest
     if:
       github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
