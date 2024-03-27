@@ -2,26 +2,34 @@
 
 [[package]]
 name = "aardwolf"
-version = "0.2.2"
+version = "0.2.7"
 description = "Asynchronous RDP protocol implementation"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "aardwolf-0.2.2.tar.gz", hash = "sha256:2f6b4d150b9997ad5b7dbd161356f94e8b8d839cd15856af73255282f1ae3b65"},
+    {file = "aardwolf-0.2.7-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:53543661b0b199dc879eaf06f96c65c0a177404e0b34ab1cd762a799a69394c5"},
+    {file = "aardwolf-0.2.7-cp310-cp310-win_amd64.whl", hash = "sha256:dc45f3315c40c7c262fc060c3d492d746a265fdc521bbbb075b5745bc6d82875"},
+    {file = "aardwolf-0.2.7-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f289556734a5c7c4cfbde23e125ee73b6f6815ce1381a9de62eb5f1d0273ed03"},
+    {file = "aardwolf-0.2.7-cp311-cp311-win_amd64.whl", hash = "sha256:a6242dd3d15ec6e2f7ee58e46a4bb441c025912adf2de33414281f25b04c646a"},
+    {file = "aardwolf-0.2.7-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ae81032a24aecf091e810b798196370833e073b25936f9bb6e3bfc1c49c7618b"},
+    {file = "aardwolf-0.2.7-cp38-cp38-win_amd64.whl", hash = "sha256:0582560a4596a16ac46bef7d496d1b73dbb6d17ef826e977c8c23c31510cac0a"},
+    {file = "aardwolf-0.2.7-cp39-cp39-linux_armv7l.whl", hash = "sha256:d6b819fd090bbe8463e8c011b4f031073aed329eb0b8f7521071212afff6ace3"},
+    {file = "aardwolf-0.2.7-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:579f95dc49b568210d929e6b766561f5d808e081f7133226645ae6b8c681c9fe"},
+    {file = "aardwolf-0.2.7-cp39-cp39-win_amd64.whl", hash = "sha256:ecd946b31c3047cdc397ce5744d80d3a8e4567189429a52f8a798dc7c42a1ca8"},
+    {file = "aardwolf-0.2.7.tar.gz", hash = "sha256:ced52fbe177813c6a40eb01457397d4752ede698017d7ed11b1f9e4ff462016b"},
 ]
 
 [package.dependencies]
 arc4 = ">=0.3.0"
 asn1crypto = "*"
 asn1tools = "*"
-asyauth = ">=0.0.5"
-asysocks = ">=0.2.2"
+asyauth = ">=0.0.13"
+asysocks = ">=0.2.5"
 colorama = "*"
-minikerberos = ">=0.3.3"
 Pillow = ">=9.0.0"
 pyperclip = ">=1.8.2"
 tqdm = "*"
-unicrypto = ">=0.0.9"
+unicrypto = ">=0.0.10"
 
 [[package]]
 name = "aesedb"
@@ -181,20 +189,20 @@ shell = ["prompt_toolkit"]
 
 [[package]]
 name = "asyauth"
-version = "0.0.9"
+version = "0.0.13"
 description = "Unified authentication library"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "asyauth-0.0.9-py3-none-any.whl", hash = "sha256:1988a029fad89220baadfed0624825a99acc1d7f476f66983339d160b94e64ff"},
-    {file = "asyauth-0.0.9.tar.gz", hash = "sha256:9db67fb5cbfd71a52d1b2c27ef87a4addab44b5006076918d8823c996d0273a7"},
+    {file = "asyauth-0.0.13-py3-none-any.whl", hash = "sha256:a70975fc25676da585decd2f2187802fc3694463ff93fbb39bb7809014c240ef"},
+    {file = "asyauth-0.0.13.tar.gz", hash = "sha256:b55beaccab02bef4a0281df14413272102c40f309a3cefe1f1c33c58ca738ba3"},
 ]
 
 [package.dependencies]
 asn1crypto = ">=1.3.0"
-asysocks = ">=0.2.2"
-minikerberos = ">=0.3.5"
-unicrypto = ">=0.0.9"
+asysocks = ">=0.2.5"
+minikerberos = ">=0.4.0"
+unicrypto = ">=0.0.10"
 
 [[package]]
 name = "asysocks"
@@ -2275,4 +2283,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.0"
-content-hash = "8deda4bd52ebc14f1d52c961b6826f3f3173a9622faab0d81f79790140a2bb41"
+content-hash = "8eca11b6bb4d1623ae371032a10d31147950ed50fa50ca229033d9c294426ef8"
