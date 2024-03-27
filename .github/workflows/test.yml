@@ -1,6 +1,7 @@
 name: NetExec Tests
 
 on:
+  workflow_dispatch:
   pull_request_review:
     types: [submitted]
 
