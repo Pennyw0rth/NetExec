@@ -89,11 +89,11 @@ class NXCModule:
             sccm_triage = SCCMTriage(target=target, conn=conn, masterkeys=masterkeys)
             sccm_creds = sccm_triage.triage_sccm()
             for credential in sccm_creds:
-                if isinstance(credential,SCCMCred):
+                if isinstance(credential, SCCMCred):
                     context.log.highlight(f"[NAA Account] {credential.username.decode('latin-1')}:{credential.password.decode('latin-1')}")
-                elif isinstance(credential,SCCMSecret):
+                elif isinstance(credential, SCCMSecret):
                     context.log.highlight(f"[Task sequences secret] {credential.secret.decode('latin-1')}")
-                elif isinstance(credential,SCCMCollection):
+                elif isinstance(credential, SCCMCollection):
                     context.log.highlight(f"[Collection Variable] {credential.variable.decode('latin-1')}:{credential.value.decode('latin-1')}")
         except Exception as e:
             context.log.debug(f"Error while looting wifi: {e}")

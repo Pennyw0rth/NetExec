@@ -114,7 +114,7 @@ class NXCModule:
         # 3. Search for mRemoteNG files
         for user in users:
             for path in self.mRemoteNg_path:
-                user_path = ntpath.join(path.format(username=user),"confCons.xml")
+                user_path = ntpath.join(path.format(username=user), "confCons.xml")
                 content = dploot_conn.readFile(self.share, user_path)
                 if content is None:
                     continue
@@ -130,7 +130,7 @@ class NXCModule:
                 self.context.log.info(f"Found confCons.xml file: {self.custom_path}")
                 self.handle_confCons_file(content)
 
-    def upgrade_connection(self, target:Target, connection=None):
+    def upgrade_connection(self, target: Target, connection=None):
         conn = DPLootSMBConnection(target)
         if connection is not None:
             conn.smb_session = connection
@@ -149,13 +149,13 @@ class NXCModule:
                 users.append(d.get_longname())  # noqa: PERF401, ignoring for readability
         return users
     
-    def handle_confCons_file(self,file_content):
+    def handle_confCons_file(self, file_content):
         main = objectify.fromstring(file_content)
         encryption_attributes = MRemoteNgEncryptionAttributes(
-            kdf_iterations = int(main.attrib["KdfIterations"]),
-            block_cipher_mode = main.attrib["BlockCipherMode"],
-            encryption_engine = main.attrib["EncryptionEngine"],
-            full_file_encryption = bool(main.attrib["FullFileEncryption"]),
+            kdf_iterations=int(main.attrib["KdfIterations"]),
+            block_cipher_mode=main.attrib["BlockCipherMode"],
+            encryption_engine=main.attrib["EncryptionEngine"],
+            full_file_encryption=bool(main.attrib["FullFileEncryption"]),
         )
         
         for node_attribute in self.parse_xml_nodes(main):
@@ -187,13 +187,13 @@ class NXCModule:
         if directory_list is not None:
             for item in directory_list:
                 if item.get_longname() not in self.false_positive:
-                    new_path = ntpath.join(directory_path,item.get_longname())
+                    new_path = ntpath.join(directory_path, item.get_longname())
                     if item.is_directory() > 0:
                         if recurse_level < recurse_max:
-                            self.dig_confCons_in_files(conn=conn, directory_path=new_path, recurse_level=recurse_level+1, recurse_max=recurse_max)
+                            self.dig_confCons_in_files(conn=conn, directory_path=new_path, recurse_level=recurse_level + 1, recurse_max=recurse_max)
                     else:
                         # It's a file, download it to the output share if the mask is ok
-                        if "confCons.xml" in item.get_longname() :
+                        if "confCons.xml" in item.get_longname():
                             self.context.log.info(f"Found confCons.xml file: {new_path}")
                             content = conn.readFile(self.context.share, new_path)
                             self.handle_confCons_file(content)

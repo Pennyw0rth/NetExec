@@ -76,7 +76,7 @@ class NXCModule:
             self.vnc_from_registry(remote_ops)
         self.vnc_from_filesystem(dploot_conn)
 
-    def upgrade_connection(self, target:Target, connection=None):
+    def upgrade_connection(self, target: Target, connection=None):
         conn = DPLootSMBConnection(target)
         if connection is not None:
             conn.smb_session = connection

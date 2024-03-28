@@ -1480,7 +1480,7 @@ class smb(connection):
         except Exception as e:
             self.logger.debug(f"Error while looting browsers: {e}")
         for credential in browser_credentials:
-            if isinstance(credential,LoginData):
+            if isinstance(credential, LoginData):
                 cred_url = credential.url + " -" if credential.url != "" else "-"
                 self.logger.highlight(f"[{credential.winuser}][{credential.browser.upper()}] {cred_url} {credential.username}:{credential.password}")
                 self.db.add_dpapi_secrets(
@@ -1491,7 +1491,7 @@ class smb(connection):
                     credential.password,
                     credential.url,
                 )
-            elif isinstance(credential,GoogleRefreshToken):
+            elif isinstance(credential, GoogleRefreshToken):
                 self.logger.highlight(f"[{credential.winuser}][{credential.browser.upper()}] Google Refresh Token: {credential.service}:{credential.token}")
                 self.db.add_dpapi_secrets(
                     target.address,
