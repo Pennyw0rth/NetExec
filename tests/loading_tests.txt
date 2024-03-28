@@ -1,0 +1,12 @@
+# Load every protocol
+netexec winrm 127.0.0.1
+netexec vnc 127.0.0.1
+netexec smb 127.0.0.1
+netexec ldap 127.0.0.1
+netexec wmi 127.0.0.1
+netexec rdp 127.0.0.1
+netexec mssql 127.0.0.1
+netexec ssh 127.0.0.1
+netexec ftp 127.0.0.1
+# Load Modules
+netexec smb 127.0.0.1 -M veeam
