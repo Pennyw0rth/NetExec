@@ -38,7 +38,7 @@ def proto_args(parser, std_parser, module_parser):
     egroup.add_argument("--disks", action="store_true", help="enumerate disks")
     egroup.add_argument("--loggedon-users-filter", action="store", help="only search for specific user, works with regex")
     egroup.add_argument("--loggedon-users", action="store_true", help="enumerate logged on users")
-    egroup.add_argument("--users", nargs="?", const="", metavar="USER", help="enumerate domain users, if a user is specified than only its information is queried.")
+    egroup.add_argument("--users", nargs="*", metavar="USER", help="enumerate domain users, if a user is specified than only its information is queried.")
     egroup.add_argument("--groups", nargs="?", const="", metavar="GROUP", help="enumerate domain groups, if a group is specified than its members are enumerated")
     egroup.add_argument("--computers", nargs="?", const="", metavar="COMPUTER", help="enumerate computer users")
     egroup.add_argument("--local-groups", nargs="?", const="", metavar="GROUP", help="enumerate local groups, if a group is specified then its members are enumerated")

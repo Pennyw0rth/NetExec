@@ -35,7 +35,7 @@ class NXCModule:
         results = self._detect_installed_services(context, connection, target)
         self.detect_running_processes(context, connection, results)
 
-        self.dump_results(results, connection.hostname, context)
+        self.dump_results(results, context)
 
     def _get_target(self, connection):
         return connection.host if not connection.kerberos else f"{connection.hostname}.{connection.domain}"
@@ -58,18 +58,16 @@ class NXCModule:
 
             dce, _ = lsa.connect()
             policyHandle = lsa.open_policy(dce)
-            try:
-                for product in conf["products"]:
-                    for service in product["services"]:
+            for product in conf["products"]:
+                for service in product["services"]:
+                    try:
                         lsa.LsarLookupNames(dce, policyHandle, service["name"])
                         context.log.info(f"Detected installed service on {connection.host}: {product['name']} {service['description']}")
                         results.setdefault(product["name"], {"services": []})["services"].append(service)
-            except Exception:
-                pass
-
+                    except Exception:
+                        pass
         except Exception as e:
             context.log.fail(str(e))
-
         return results
 
     def detect_running_processes(self, context, connection, results):
@@ -80,13 +78,16 @@ class NXCModule:
                 for product in conf["products"]:
                     for pipe in product["pipes"]:
                         if pathlib.PurePath(fl).match(pipe["name"]):
-                            context.log.debug(f"{product['name']} running claim found on {connection.host} by existing pipe {fl} (likely processes: {pipe['processes']})")
+                            context.log.info(f"{product['name']} running claim found on {connection.host} by existing pipe {fl} (likely processes: {pipe['processes']})")
                             prod_results = results.setdefault(product["name"], {})
                             prod_results.setdefault("pipes", []).append(pipe)
         except Exception as e:
-            context.log.debug(str(e))
+            if "STATUS_ACCESS_DENIED" in str(e):
+                context.log.fail("Error STATUS_ACCESS_DENIED while enumerating pipes, probably due to using SMBv1")
+            else:
+                context.log.fail(str(e))
 
-    def dump_results(self, results, remoteName, context):
+    def dump_results(self, results, context):
         if not results:
             context.log.highlight("Found NOTHING!")
             return
@@ -261,7 +262,10 @@ conf = {
                 {"name": "epfw", "description": "ESET"},
                 {"name": "epfwlwf", "description": "ESET"},
                 {"name": "epfwwfp", "description": "ESET"},
-                {"name": "EraAgentSvc", "description": "ESET"},
+                {"name": "EraAgentSvc", "description": "ESET Management Agent service"},
+                {"name": "ERAAgent", "description": "ESET Management Agent service"},
+                {"name": "efwd", "description": "ESET Communication Forwarding Service"},
+                {"name": "ehttpsrv", "description": "ESET HTTP Server"},
             ],
             "pipes": [{"name": "nod_scriptmon_pipe", "processes": [""]}],
         },
