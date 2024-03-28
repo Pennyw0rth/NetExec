@@ -28,26 +28,6 @@ class NXCModule:
     multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):
-        """
-        SHARE           Share parsed. Default to C$
-        PASSWORD        Custom password to decrypt confCons.xml files
-        CUSTOM_PATH     Custom path to confCons.xml file
-        """
-        self.context = context
-        self.module_options = module_options
-        
-        self.share = "C$"
-        if "SHARE" in module_options:
-            self.share = module_options["SHARE"]
-
-        self.password = "mR3m"
-        if "PASSWORD" in module_options:
-            self.password = module_options["PASSWORD"]
-
-        self.custom_path = None
-        if "CUSTOM_PATH" in module_options:
-            self.custom_path = module_options["CUSTOM_PATH"]
-
         self.false_positive = (
             ".",
             "..",
@@ -71,13 +51,24 @@ class NXCModule:
         self.recurse_max = 10
 
     def options(self, context, module_options):
-        """Required.
-        Dump mRemoteNG confCons.xml files
-
-        PATH=Path on C$ to dump a specific confCons.xml file
-
-        PASSWORD=Custom mRemoteNG password
         """
+        SHARE           Share parsed. Default to C$
+        PASSWORD        Custom password to decrypt confCons.xml files
+        CUSTOM_PATH     Custom path to confCons.xml file
+        """
+        self.context = context
+        
+        self.share = "C$"
+        if "SHARE" in module_options:
+            self.share = module_options["SHARE"]
+
+        self.password = "mR3m"
+        if "PASSWORD" in module_options:
+            self.password = module_options["PASSWORD"]
+
+        self.custom_path = None
+        if "CUSTOM_PATH" in module_options:
+            self.custom_path = module_options["CUSTOM_PATH"]
 
     def on_admin_login(self, context, connection):
         # 1. Evole conn into dploot conn
