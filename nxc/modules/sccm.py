@@ -1,4 +1,4 @@
-from dploot.triage.masterkeys import MasterkeysTriage
+from dploot.triage.masterkeys import MasterkeysTriage, parse_masterkey_file
 from dploot.lib.target import Target
 from dploot.lib.smb import DPLootSMBConnection
 from dploot.triage.sccm import SCCMTriage, SCCMCollection, SCCMCred, SCCMSecret
@@ -8,8 +8,7 @@ from nxc.helpers.logger import highlight
 
 class NXCModule:
     """
-    Example:
-    -------
+    Dump SCCM Passwords
     Module by @_zblurx
     """
 
@@ -25,8 +24,14 @@ class NXCModule:
 
     def options(self, context, module_options):
         """Required.
-        Module options get parsed here. Additionally, put the modules usage here as well
+        Dump SCCM Credentials
+
+        Options:
+        MKFILE      Parse a file with masterkeys
         """
+        self.mkfile = None
+        if "MKFILE" in module_options:
+            self.mkfile = module_options["MKFILE"]
 
     def on_admin_login(self, context, connection):
         host = connection.hostname + "." + connection.domain
@@ -62,6 +67,12 @@ class NXCModule:
             return
 
         masterkeys = []
+
+        if self.mkfile is not None:
+            try:
+                self.masterkeys = parse_masterkey_file(self.options.mkfile)
+            except Exception as e:
+                context.log.fail(f"Could not open mkfile {self.mkfile}: {e}")
         try:
             masterkeys_triage = MasterkeysTriage(target=target, conn=conn)
             masterkeys += masterkeys_triage.triage_system_masterkeys()

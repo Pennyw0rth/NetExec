@@ -26,7 +26,7 @@ class NXCModule:
         self.context = context
         self.module_options = module_options
         self.vnc_decryption_key = b"\xe8\x4a\xd6\x60\xc4\x72\x1a\xe0"
-        self.share = "C$" # TODO could be a parameter 
+        self.share = "C$"
         self.false_positive = (
             ".",
             "..",
@@ -38,9 +38,10 @@ class NXCModule:
         )
 
     def options(self, context, module_options):
-        """Required.
-        Module options get parsed here. Additionally, put the modules usage here as well
-        """
+        """NO_REMOTEOPS     Do not use RemoteRegistry. Will not dump RealVNC, ThighVNC and TigerVNC passwords. Default is False"""
+        self.no_remoteops = False
+        if "NO_REMOTEOPS" in module_options and "True" in module_options["NO_REMOTEOPS"]:
+            self.no_remoteops = True
 
     def on_admin_login(self, context, connection):
         self.context = context
@@ -69,9 +70,10 @@ class NXCModule:
         )
 
         dploot_conn = self.upgrade_connection(target=target, connection=connection.conn)
-        remote_ops = RemoteOperations(connection.conn, False)
-        remote_ops.enableRegistry()
-        self.vnc_from_registry(remote_ops)
+        if not self.no_remoteops:
+            remote_ops = RemoteOperations(connection.conn, False)
+            remote_ops.enableRegistry()
+            self.vnc_from_registry(remote_ops)
         self.vnc_from_filesystem(dploot_conn)
 
     def upgrade_connection(self, target:Target, connection=None):
