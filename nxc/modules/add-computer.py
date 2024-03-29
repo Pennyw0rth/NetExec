@@ -1,7 +1,6 @@
 import ssl
 import ldap3
 from impacket.dcerpc.v5 import samr, epm, transport
-import sys
 
 
 class NXCModule:
@@ -50,13 +49,11 @@ class NXCModule:
                 self.__computerName += "$"
         else:
             context.log.error("NAME option is required!")
-            sys.exit(1)
 
         if "PASSWORD" in module_options:
             self.__computerPassword = module_options["PASSWORD"]
         elif "PASSWORD" not in module_options and not self.__delete:
             context.log.error("PASSWORD option is required!")
-            sys.exit(1)
 
     def on_login(self, context, connection):
         self.__domain = connection.domain
@@ -87,8 +84,7 @@ class NXCModule:
         # If SAMR fails now try over LDAPS
         if not self.noLDAPRequired:
             self.do_ldaps_add(connection, context)
-        else:
-            sys.exit(1)
+            
 
     def do_samr_add(self, context):
         """
@@ -178,7 +174,6 @@ class NXCModule:
                     samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
                     self.noLDAPRequired = True
                     context.log.highlight("{}".format('Computer account already exists with the name: "' + self.__computerName + '"'))
-                    sys.exit(1)
                 except samr.DCERPCSessionError as e:
                     if e.error_code != 0xC0000073:
                         raise
