@@ -39,10 +39,15 @@ class NXCModule:
         async def run_ldaps_noEPA(target, credential):
             ldapsClientConn = MSLDAPClientConnection(target, credential)
             _, err = await ldapsClientConn.connect()
+            
+            # Required step to try to bind without channel binding
+            ldapsClientConn.cb_data = None
+
             if err is not None:
                 context.log.fail("ERROR while connecting to " + str(connection.domain) + ": " + str(err))
                 sys.exit()
-            _, err = await ldapsClientConn.bind()
+
+            valid, err = await ldapsClientConn.bind()
             if "data 80090346" in str(err):
                 return True  # channel binding IS enforced
             elif "data 52e" in str(err):
@@ -114,19 +119,30 @@ class NXCModule:
         # requirements are enforced based on potential errors
         # during the bind attempt.
         async def run_ldap(target, credential):
-            ldapsClientConn = MSLDAPClientConnection(target, credential)
-            _, err = await ldapsClientConn.connect()
-            if err is None:
-                _, err = await ldapsClientConn.bind()
-                if "stronger" in str(err):
-                    return True  # because LDAP server signing requirements ARE enforced
-                elif ("data 52e") in str(err):
-                    context.log.fail("Not connected... exiting")
-                    sys.exit()
-                elif err is None:
+            try:
+                ldapsClientConn = MSLDAPClientConnection(target, credential)
+                ldapsClientConn._disable_signing = True
+                _, err = await ldapsClientConn.connect()
+                if err is not None:
+                    context.log.fail(str(err))
                     return False
-            else:
-                context.log.fail(str(err))
+                
+                _, err = await ldapsClientConn.bind()
+                if err is not None:
+                    errstr = str(err).lower()
+                    if "stronger" in errstr:
+                        return True 
+                        # because LDAP server signing requirements ARE enforced
+                    else:
+                        context.log.fail(str(err))
+                else:
+                    # LDAPS bind successful
+                    return False 
+                    # because LDAP server signing requirements are not enforced
+            except Exception as e:
+                context.log.debug(str(e))
+                return False
+              
 
         # Run trough all our code blocks to determine LDAP signing and channel binding settings.
         stype = asyauthSecret.PASS if not connection.nthash else asyauthSecret.NT
@@ -148,9 +164,8 @@ class NXCModule:
                 stype=stype,
             )
 
-        target = MSLDAPTarget(connection.host, hostname=connection.hostname, domain=connection.domain, dc_ip=connection.domain)
+        target = MSLDAPTarget(connection.host, 389, hostname=connection.hostname, domain=connection.domain, dc_ip=connection.domain)
         ldapIsProtected = asyncio.run(run_ldap(target, credential))
-
         if ldapIsProtected is False:
             context.log.highlight("LDAP Signing NOT Enforced!")
         elif ldapIsProtected is True:
@@ -162,7 +177,7 @@ class NXCModule:
         if DoesLdapsCompleteHandshake(connection.host) is True:
             target = MSLDAPTarget(connection.host, 636, UniProto.CLIENT_SSL_TCP, hostname=connection.hostname, domain=connection.domain, dc_ip=connection.domain)
             ldapsChannelBindingAlwaysCheck = asyncio.run(run_ldaps_noEPA(target, credential))
-            target = MSLDAPTarget(connection.host, hostname=connection.hostname, domain=connection.domain, dc_ip=connection.domain)
+            target = MSLDAPTarget(connection.host, 636, UniProto.CLIENT_SSL_TCP, hostname=connection.hostname, domain=connection.domain, dc_ip=connection.domain)
             ldapsChannelBindingWhenSupportedCheck = asyncio.run(run_ldaps_withEPA(target, credential))
             if ldapsChannelBindingAlwaysCheck is False and ldapsChannelBindingWhenSupportedCheck is True:
                 context.log.highlight('LDAPS Channel Binding is set to "When Supported"')

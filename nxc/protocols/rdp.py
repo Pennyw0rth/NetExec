@@ -87,6 +87,16 @@ class rdp(connection):
     #             if hasattr(self.args, 'module') and self.args.module:
 
     def proto_logger(self):
+        import platform
+        if platform.python_version() in ["3.11.5", "3.11.6", "3.12.0"]:
+            import sys
+
+            class DevNull:
+                def write(self, msg):
+                    pass
+
+            sys.stderr = DevNull()
+
         self.logger = NXCAdapter(
             extra={
                 "protocol": "RDP",
@@ -233,7 +243,7 @@ class rdp(connection):
                     self.mark_pwned(),
                 )
             )
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -279,7 +289,7 @@ class rdp(connection):
 
             self.admin_privs = True
             self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -313,7 +323,7 @@ class rdp(connection):
 
             self.admin_privs = True
             self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)

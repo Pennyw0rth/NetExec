@@ -1,16 +1,12 @@
-from argparse import _StoreTrueAction
-
-
 def proto_args(parser, std_parser, module_parser):
     ldap_parser = parser.add_parser("ldap", help="own stuff using LDAP", parents=[std_parser, module_parser])
     ldap_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
     ldap_parser.add_argument("--port", type=int, choices={389, 636}, default=389, help="LDAP port (default: 389)")
-    no_smb_arg = ldap_parser.add_argument("--no-smb", action=get_conditional_action(_StoreTrueAction), make_required=[], help="No smb connection")
+    ldap_parser.add_argument("--no-smb", action="store_true", help="No smb connection")
 
     dgroup = ldap_parser.add_mutually_exclusive_group()
-    domain_arg = dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, default=None, help="domain to authenticate to")
+    dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, default=None, help="domain to authenticate to")
     dgroup.add_argument("--local-auth", action="store_true", help="authenticate locally to each target")
-    no_smb_arg.make_required = [domain_arg]
 
     egroup = ldap_parser.add_argument_group("Retrevie hash on the remote DC", "Options to get hashes from Kerberos")
     egroup.add_argument("--asreproast", help="Output AS_REP response to crack with hashcat to file")
@@ -20,11 +16,11 @@ def proto_args(parser, std_parser, module_parser):
     vgroup.add_argument("--trusted-for-delegation", action="store_true", help="Get the list of users and computers with flag TRUSTED_FOR_DELEGATION")
     vgroup.add_argument("--password-not-required", action="store_true", help="Get the list of users with flag PASSWD_NOTREQD")
     vgroup.add_argument("--admin-count", action="store_true", help="Get objets that had the value adminCount=1")
-    vgroup.add_argument("--users", action="store_true", help="Enumerate enabled domain users")
+    vgroup.add_argument("--users", nargs="*", help="Enumerate enabled domain users")
     vgroup.add_argument("--groups", action="store_true", help="Enumerate domain groups")
     vgroup.add_argument("--dc-list", action="store_true", help="Enumerate Domain Controllers")
     vgroup.add_argument("--get-sid", action="store_true", help="Get domain sid")
-    vgroup.add_argument("--active-users", action="store_true", help="Get Active Domain Users Accounts")
+    vgroup.add_argument("--active-users", nargs="*", help="Get Active Domain Users Accounts")
 
     ggroup = ldap_parser.add_argument_group("Retrevie gmsa on the remote DC", "Options to play with gmsa")
     ggroup.add_argument("--gmsa", action="store_true", help="Enumerate GMSA passwords")

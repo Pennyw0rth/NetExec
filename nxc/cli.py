@@ -17,11 +17,11 @@ def gen_cli_args():
     VERSION = importlib.metadata.version("netexec")
     CODENAME = "nxc4u"
 
-    parser = argparse.ArgumentParser(description=f"""
+    parser = argparse.ArgumentParser(description=rf"""
      .   .
     .|   |.     _   _          _     _____
     ||   ||    | \ | |   ___  | |_  | ____| __  __   ___    ___
-    \\\( )//    |  \| |  / _ \ | __| |  _|   \ \/ /  / _ \  / __|
+    \\( )//    |  \| |  / _ \ | __| |  _|   \ \/ /  / _ \  / __|
     .=[ ]=.    | |\  | |  __/ | |_  | |___   >  <  |  __/ | (__
    / /ॱ-ॱ\ \   |_| \_|  \___|  \__| |_____| /_/\_\  \___|  \___|
    ॱ \   / ॱ
