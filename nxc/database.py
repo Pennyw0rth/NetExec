@@ -12,7 +12,7 @@ from nxc.paths import WORKSPACE_DIR
 
 
 def create_db_engine(db_path):
-    return create_engine(f"sqlite:///{db_path}", isolation_level="AUTOCOMMIT", future=True)
+    return create_engine(f"sqlite:///{db_path}", isolation_level="AUTOCOMMIT", future=True, connect_args={"check_same_thread": False})
 
 
 def open_config(config_path):

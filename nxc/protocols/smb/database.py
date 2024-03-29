@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlalchemy import MetaData, func, Table, select, delete
 from sqlalchemy.dialects.sqlite import Insert  # used for upsert
 from sqlalchemy.exc import (
-    IllegalStateChangeError,
+    # IllegalStateChangeError,
     NoInspectionAvailable,
     NoSuchTableError,
 )
@@ -205,7 +205,7 @@ class database:
         # due to the async nature of nxc, sometimes session state is a bit messy and this will throw:
         # Method 'close()' can't be called here; method '_connection_for_bind()' is already in progress and
         # this would cause an unexpected state change to <SessionTransactionState.CLOSED: 5>
-        except IllegalStateChangeError as e:
+        except Exception as e:
             nxc_logger.debug(f"Error while closing session db object: {e}")
 
     def clear_database(self):
