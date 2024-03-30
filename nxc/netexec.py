@@ -186,7 +186,7 @@ def main():
         exit(0)
     elif args.module:
         nxc_logger.debug(f"Modules to be Loaded: {args.module}, {type(args.module)}")
-        for m in map(str.lower, args.module):
+        for m in args.module:
             if m not in modules:
                 nxc_logger.error(f"Module not found: {m}")
                 exit(1)
