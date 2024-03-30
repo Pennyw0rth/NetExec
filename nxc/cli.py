@@ -14,7 +14,8 @@ import importlib.metadata
 
 
 def gen_cli_args():
-    VERSION = importlib.metadata.version("netexec")
+    VERSION, COMMIT = importlib.metadata.version("netexec").split("+")
+
     CODENAME = "nxc4u"
 
     parser = argparse.ArgumentParser(description=rf"""
@@ -95,7 +96,7 @@ def gen_cli_args():
         sys.exit(1)
 
     if args.version:
-        print(f"{VERSION} - {CODENAME}")
+        print(f"{VERSION} - {CODENAME} - {COMMIT}")
         sys.exit(1)
 
     return args
