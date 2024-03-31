@@ -17,7 +17,10 @@ jobs:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@v3
-      - name: NetExec set up python on ${{ matrix.os }}
+      - name: Install poetry
+        run: |
+          pipx install poetry
+      - name: NetExec set up python ${{ matrix.python-version }} on ${{ matrix.os }}
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
