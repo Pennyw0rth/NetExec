@@ -64,7 +64,7 @@ python-libnmap = "^0.7.3"
 oscrypto = { git = "https://github.com/Pennyw0rth/oscrypto" } # Pypi version currently broken, see: https://github.com/wbond/oscrypto/issues/78 (as of 9/23)
 argcomplete = "^3.1.4"
 python-dateutil = ">=2.8.2"
-dynamic-versioning = "^1.1.0"
+poetry-dynamic-versioning = "^1.2.0"
 
 [tool.poetry.group.dev.dependencies]
 flake8 = "*"
@@ -73,7 +73,7 @@ pytest = "^7.2.2"
 ruff = "=0.0.292"
 
 [build-system]
-requires = ["poetry-core>=1.2.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
+requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
 build-backend = "poetry_dynamic_versioning.backend"
 
 [tool.poetry-dynamic-versioning]
