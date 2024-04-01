@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "netexec"
-version = "0.0.0" # we set this to 0.0.0 so that the version is dynamically set by poetry-dynamic-versioning
+version = "1.1.0"
 description = "The Network Execution tool"
 authors = [
     "Marshall Hallenbeck <marshall.hallenbeck@gmail.com>",
