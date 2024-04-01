@@ -121,7 +121,10 @@ class connection:
         try:
             self.proto_flow()
         except Exception as e:
-            self.logger.exception(f"Exception while calling proto_flow() on target {self.host}: {e}")
+            if "ERROR_DEPENDENT_SERVICES_RUNNING" in str(e):
+                self.logger.error(f"Exception while calling proto_flow() on target {self.host}: {e}")
+            else:
+                self.logger.exception(f"Exception while calling proto_flow() on target {self.host}: {e}")
 
     @staticmethod
     def proto_args(std_parser, module_parser):

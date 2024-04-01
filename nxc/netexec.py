@@ -42,11 +42,11 @@ async def start_run(protocol_obj, args, db, targets):
     futures = []
     nxc_logger.debug("Creating ThreadPoolExecutor")
     if args.no_progress or len(targets) == 1:
-        with ThreadPoolExecutor(max_workers=args.threads + 1) as executor:
+        with ThreadPoolExecutor(max_workers=args.threads) as executor:
             nxc_logger.debug(f"Creating thread for {protocol_obj}")
             futures = [executor.submit(protocol_obj, args, db, target) for target in targets]
     else:
-        with Progress(console=nxc_console) as progress, ThreadPoolExecutor(max_workers=args.threads + 1) as executor:
+        with Progress(console=nxc_console) as progress, ThreadPoolExecutor(max_workers=args.threads) as executor:
             current = 0
             total = len(targets)
             tasks = progress.add_task(
