@@ -14,7 +14,11 @@ import importlib.metadata
 
 
 def gen_cli_args():
-    VERSION, COMMIT = importlib.metadata.version("netexec").split("+")
+    try:
+        VERSION, COMMIT = importlib.metadata.version("netexec").split("+")
+    except ValueError:
+        VERSION = importlib.metadata.version("netexec")
+        COMMIT = ""
 
     CODENAME = "nxc4u"
 
