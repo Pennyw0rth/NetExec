@@ -35,6 +35,7 @@ def gen_cli_args():
 
     {highlight('Version', 'red')} : {highlight(VERSION)}
     {highlight('Codename', 'red')}: {highlight(CODENAME)}
+    {highlight('Commit', 'red')}  : {highlight(COMMIT)}
     """, formatter_class=RawTextHelpFormatter)
 
     parser.add_argument("-t", type=int, dest="threads", default=100, help="set how many concurrent threads to use (default: 100)")
