@@ -42,11 +42,11 @@ async def start_run(protocol_obj, args, db, targets):
     futures = []
     nxc_logger.debug("Creating ThreadPoolExecutor")
     if args.no_progress or len(targets) == 1:
-        with ThreadPoolExecutor(max_workers=args.threads + 1) as executor:
+        with ThreadPoolExecutor(max_workers=args.threads) as executor:
             nxc_logger.debug(f"Creating thread for {protocol_obj}")
             futures = [executor.submit(protocol_obj, args, db, target) for target in targets]
     else:
-        with Progress(console=nxc_console) as progress, ThreadPoolExecutor(max_workers=args.threads + 1) as executor:
+        with Progress(console=nxc_console) as progress, ThreadPoolExecutor(max_workers=args.threads) as executor:
             current = 0
             total = len(targets)
             tasks = progress.add_task(
@@ -79,6 +79,7 @@ def main():
     else:
         nxc_logger.logger.setLevel(logging.ERROR)
         root_logger.setLevel(logging.ERROR)
+    logging.getLogger("neo4j").setLevel(logging.ERROR)
 
     # if these are the same, it might double log to file (two FileHandlers will be added)
     # but this should never happen by accident
@@ -185,7 +186,7 @@ def main():
         exit(0)
     elif args.module:
         nxc_logger.debug(f"Modules to be Loaded: {args.module}, {type(args.module)}")
-        for m in map(str.lower, args.module):
+        for m in args.module:
             if m not in modules:
                 nxc_logger.error(f"Module not found: {m}")
                 exit(1)

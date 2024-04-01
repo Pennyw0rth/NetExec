@@ -31,7 +31,8 @@ from impacket.tds import (
 class mssql(connection):
     def __init__(self, args, db, host):
         self.mssql_instances = []
-        self.domain = None
+        self.domain = ""
+        self.targetDomain = ""
         self.server_os = None
         self.hash = None
         self.os_arch = None
@@ -122,23 +123,19 @@ class mssql(connection):
             return False
         else:
             ntlm_info = parse_challenge(challenge)
-            self.domain = ntlm_info["domain"]
+            self.targetDomain = self.domain = ntlm_info["domain"]
             self.hostname = ntlm_info["hostname"]
             self.server_os = ntlm_info["os_version"]
             self.logger.extra["hostname"] = self.hostname
-            self.db.add_host(self.host, self.hostname, self.domain, self.server_os, len(self.mssql_instances),)
+            self.db.add_host(self.host, self.hostname, self.targetDomain, self.server_os, len(self.mssql_instances),)
 
         if self.args.domain:
             self.domain = self.args.domain
-
         if self.args.local_auth:
             self.domain = self.hostname
 
-        if self.domain is None:
-            self.domain = ""
-
     def print_host_info(self):
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain})")
         return True
 
     @reconnect_mssql
@@ -189,7 +186,7 @@ class mssql(connection):
                 raise
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}")
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
@@ -222,7 +219,7 @@ class mssql(connection):
             self.check_if_admin()
             out = f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}"
             self.logger.success(out)
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
@@ -261,7 +258,7 @@ class mssql(connection):
             self.check_if_admin()
             out = f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}"
             self.logger.success(out)
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)

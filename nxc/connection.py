@@ -87,8 +87,8 @@ class connection:
         self.port = self.args.port
         self.conn = None
         self.admin_privs = False
-        self.password = None
-        self.username = None
+        self.password = ""
+        self.username = ""
         self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey)
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.kdcHost = None if not self.args.kdcHost else self.args.kdcHost
@@ -121,7 +121,10 @@ class connection:
         try:
             self.proto_flow()
         except Exception as e:
-            self.logger.exception(f"Exception while calling proto_flow() on target {self.host}: {e}")
+            if "ERROR_DEPENDENT_SERVICES_RUNNING" in str(e):
+                self.logger.error(f"Exception while calling proto_flow() on target {self.host}: {e}")
+            else:
+                self.logger.exception(f"Exception while calling proto_flow() on target {self.host}: {e}")
 
     @staticmethod
     def proto_args(std_parser, module_parser):
@@ -163,7 +166,9 @@ class connection:
     def proto_flow(self):
         self.logger.debug("Kicking off proto_flow")
         self.proto_logger()
-        if self.create_conn_obj():
+        if not self.create_conn_obj():
+            self.logger.info(f"Failed to create connection object for target {self.host}, exiting...")
+        else:
             self.logger.debug("Created connection object")
             self.enum_host_info()
             if self.print_host_info() and (self.login() or (self.username == "" and self.password == "")):
