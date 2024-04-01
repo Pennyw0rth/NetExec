@@ -1,7 +1,7 @@
 import ssl
 import ldap3
 from impacket.dcerpc.v5 import samr, epm, transport
-
+import sys
 
 class NXCModule:
     """
@@ -40,6 +40,7 @@ class NXCModule:
 
         if "CHANGEPW" in module_options and ("NAME" not in module_options or "PASSWORD" not in module_options):
             context.log.error("NAME  and PASSWORD options are required!")
+            sys.exit(1)
         elif "CHANGEPW" in module_options:
             self.__noAdd = True
 
@@ -49,11 +50,13 @@ class NXCModule:
                 self.__computerName += "$"
         else:
             context.log.error("NAME option is required!")
+            sys.exit(1)
 
         if "PASSWORD" in module_options:
             self.__computerPassword = module_options["PASSWORD"]
         elif "PASSWORD" not in module_options and not self.__delete:
             context.log.error("PASSWORD option is required!")
+            sys.exit(1)
 
     def on_login(self, context, connection):
         self.__domain = connection.domain
