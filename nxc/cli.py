@@ -42,7 +42,7 @@ def gen_cli_args():
     {highlight('Commit', 'red')}  : {highlight(COMMIT)}
     """, formatter_class=RawTextHelpFormatter)
 
-    parser.add_argument("-t", type=int, dest="threads", default=100, help="set how many concurrent threads to use (default: 100)")
+    parser.add_argument("-t", type=int, dest="threads", default=256, help="set how many concurrent threads to use (default: 256)")
     parser.add_argument("--timeout", default=None, type=int, help="max timeout in seconds of each thread (default: None)")
     parser.add_argument("--jitter", metavar="INTERVAL", type=str, help="sets a random delay between each connection (default: None)")
     parser.add_argument("--no-progress", action="store_true", help="Not displaying progress bar during scan")

@@ -831,7 +831,7 @@ files = [
 
 [[package]]
 name = "impacket"
-version = "0.12.0.dev1+20240215.65950.da6f5255"
+version = "0.12.0.dev1+20240327.181547.f8899e65"
 description = "Network protocols Constructors and Dissectors"
 optional = false
 python-versions = "*"
@@ -840,11 +840,11 @@ develop = false
 
 [package.dependencies]
 charset_normalizer = "*"
-dsinternals = "*"
 flask = ">=1.0"
 ldap3 = ">2.5.0,<2.5.2 || >2.5.2,<2.6 || >2.6"
 ldapdomaindump = ">=0.9.0"
 pyasn1 = ">=0.2.3"
+pyasn1_modules = "*"
 pycryptodomex = "*"
 pyOpenSSL = ">=21.0.0"
 setuptools = "*"
@@ -852,9 +852,9 @@ six = "*"
 
 [package.source]
 type = "git"
-url = "https://github.com/Pennyw0rth/impacket.git"
-reference = "gkdi"
-resolved_reference = "da6f52552b7d15f177587d902b3405e0aa07f22e"
+url = "https://github.com/fortra/impacket.git"
+reference = "HEAD"
+resolved_reference = "f8899e65f16c50b871863528d419cfb701a5a3e3"
 
 [[package]]
 name = "importlib-metadata"
