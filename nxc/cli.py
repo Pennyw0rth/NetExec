@@ -9,18 +9,20 @@ import nxc
 from nxc.paths import NXC_PATH
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.helpers.logger import highlight
-from nxc.logger import nxc_logger
+from nxc.logger import nxc_logger, setup_debug_logging
 import importlib.metadata
 
 
 def gen_cli_args():
+    setup_debug_logging()
+    
     try:
         VERSION, COMMIT = importlib.metadata.version("netexec").split("+")
     except ValueError:
         VERSION = importlib.metadata.version("netexec")
         COMMIT = ""
-
     CODENAME = "nxc4u"
+    nxc_logger.debug(f"NXC VERSION: {VERSION} - {CODENAME} - {COMMIT}")
 
     parser = argparse.ArgumentParser(description=rf"""
      .   .
