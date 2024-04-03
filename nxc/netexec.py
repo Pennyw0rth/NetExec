@@ -21,7 +21,6 @@ import os
 from os.path import exists
 from os.path import join as path_join
 from sys import exit
-import logging
 from rich.progress import Progress
 import platform
 
@@ -42,11 +41,11 @@ async def start_run(protocol_obj, args, db, targets):
     futures = []
     nxc_logger.debug("Creating ThreadPoolExecutor")
     if args.no_progress or len(targets) == 1:
-        with ThreadPoolExecutor(max_workers=args.threads + 1) as executor:
+        with ThreadPoolExecutor(max_workers=args.threads) as executor:
             nxc_logger.debug(f"Creating thread for {protocol_obj}")
             futures = [executor.submit(protocol_obj, args, db, target) for target in targets]
     else:
-        with Progress(console=nxc_console) as progress, ThreadPoolExecutor(max_workers=args.threads + 1) as executor:
+        with Progress(console=nxc_console) as progress, ThreadPoolExecutor(max_workers=args.threads) as executor:
             current = 0
             total = len(targets)
             tasks = progress.add_task(
@@ -67,19 +66,7 @@ async def start_run(protocol_obj, args, db, targets):
 
 def main():
     first_run_setup(nxc_logger)
-    root_logger = logging.getLogger("root")
     args = gen_cli_args()
-
-    if args.verbose:
-        nxc_logger.logger.setLevel(logging.INFO)
-        root_logger.setLevel(logging.INFO)
-    elif args.debug:
-        nxc_logger.logger.setLevel(logging.DEBUG)
-        root_logger.setLevel(logging.DEBUG)
-    else:
-        nxc_logger.logger.setLevel(logging.ERROR)
-        root_logger.setLevel(logging.ERROR)
-    logging.getLogger("neo4j").setLevel(logging.ERROR)
 
     # if these are the same, it might double log to file (two FileHandlers will be added)
     # but this should never happen by accident
@@ -88,8 +75,8 @@ def main():
     if hasattr(args, "log") and args.log:
         nxc_logger.add_file_log(args.log)
 
-    nxc_logger.debug("PYTHON VERSION: " + sys.version)
-    nxc_logger.debug("RUNNING ON: " + platform.system() + " Release: " + platform.release())
+    nxc_logger.debug(f"PYTHON VERSION: {sys.version}")
+    nxc_logger.debug(f"RUNNING ON: {platform.system()} Release: {platform.release()}")
     nxc_logger.debug(f"Passed args: {args}")
 
     # FROM HERE ON A PROTOCOL IS REQUIRED
@@ -186,7 +173,7 @@ def main():
         exit(0)
     elif args.module:
         nxc_logger.debug(f"Modules to be Loaded: {args.module}, {type(args.module)}")
-        for m in map(str.lower, args.module):
+        for m in args.module:
             if m not in modules:
                 nxc_logger.error(f"Module not found: {m}")
                 exit(1)

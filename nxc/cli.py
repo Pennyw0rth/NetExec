@@ -9,13 +9,20 @@ import nxc
 from nxc.paths import NXC_PATH
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.helpers.logger import highlight
-from nxc.logger import nxc_logger
+from nxc.logger import nxc_logger, setup_debug_logging
 import importlib.metadata
 
 
 def gen_cli_args():
-    VERSION = importlib.metadata.version("netexec")
+    setup_debug_logging()
+    
+    try:
+        VERSION, COMMIT = importlib.metadata.version("netexec").split("+")
+    except ValueError:
+        VERSION = importlib.metadata.version("netexec")
+        COMMIT = ""
     CODENAME = "nxc4u"
+    nxc_logger.debug(f"NXC VERSION: {VERSION} - {CODENAME} - {COMMIT}")
 
     parser = argparse.ArgumentParser(description=rf"""
      .   .
@@ -34,9 +41,10 @@ def gen_cli_args():
 
     {highlight('Version', 'red')} : {highlight(VERSION)}
     {highlight('Codename', 'red')}: {highlight(CODENAME)}
+    {highlight('Commit', 'red')}  : {highlight(COMMIT)}
     """, formatter_class=RawTextHelpFormatter)
 
-    parser.add_argument("-t", type=int, dest="threads", default=100, help="set how many concurrent threads to use (default: 100)")
+    parser.add_argument("-t", type=int, dest="threads", default=256, help="set how many concurrent threads to use (default: 256)")
     parser.add_argument("--timeout", default=None, type=int, help="max timeout in seconds of each thread (default: None)")
     parser.add_argument("--jitter", metavar="INTERVAL", type=str, help="sets a random delay between each connection (default: None)")
     parser.add_argument("--no-progress", action="store_true", help="Not displaying progress bar during scan")
@@ -95,7 +103,7 @@ def gen_cli_args():
         sys.exit(1)
 
     if args.version:
-        print(f"{VERSION} - {CODENAME}")
+        print(f"{VERSION} - {CODENAME} - {COMMIT}")
         sys.exit(1)
 
     return args

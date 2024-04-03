@@ -753,11 +753,14 @@ class ldap(connection):
             self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
             for user in users:
                 # TODO: functionize this - we do this calculation in a bunch of places, different, including in the `pso` module
-                timestamp_seconds = int(user.get("pwdLastSet", "")) / 10**7
-                start_date = datetime(1601, 1, 1)
-                parsed_pw_last_set = (start_date + timedelta(seconds=timestamp_seconds)).replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
-                if parsed_pw_last_set == "1601-01-01 00:00:00":
-                    parsed_pw_last_set = "<never>"
+                parsed_pw_last_set = ""
+                pwd_last_set = user.get("pwdLastSet", "")
+                if pwd_last_set != "":
+                    timestamp_seconds = int(pwd_last_set) / 10**7
+                    start_date = datetime(1601, 1, 1)
+                    parsed_pw_last_set = (start_date + timedelta(seconds=timestamp_seconds)).replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
+                    if parsed_pw_last_set == "1601-01-01 00:00:00":
+                        parsed_pw_last_set = "<never>"
                 # we default attributes to blank strings if they don't exist in the dict
                 self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{parsed_pw_last_set:<20}{user.get('badPwdCount', ''):<8}{user.get('description', ''):<60}")
 
@@ -939,7 +942,7 @@ class ldap(connection):
 
     def kerberoasting(self):
         # Building the search filter
-        searchFilter = "(&(servicePrincipalName=*)(UserAccountControl:1.2.840.113556.1.4.803:=512)(!(UserAccountControl:1.2.840.113556.1.4.803:=2))(!(objectCategory=computer)))"
+        searchFilter = "(&(servicePrincipalName=*)(!(objectCategory=computer)))"
         attributes = [
             "servicePrincipalName",
             "sAMAccountName",
@@ -990,7 +993,7 @@ class ldap(connection):
 
                     if mustCommit is True:
                         if int(userAccountControl) & UF_ACCOUNTDISABLE:
-                            self.logger.debug(f"Bypassing disabled account {sAMAccountName} ")
+                            self.logger.highlight(f"Bypassing disabled account {sAMAccountName} ")
                         else:
                             answers += [[spn, sAMAccountName, memberOf, pwdLastSet, lastLogon, delegation] for spn in SPNs]
                 except Exception as e:
