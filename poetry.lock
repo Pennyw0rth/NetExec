@@ -634,13 +634,13 @@ wmi = ["wmi (>=1.5.1,<2.0.0)"]
 
 [[package]]
 name = "dploot"
-version = "2.7.0"
+version = "2.7.1"
 description = "DPAPI looting remotely in Python"
 optional = false
 python-versions = "<4.0,>=3.7"
 files = [
-    {file = "dploot-2.7.0-py3-none-any.whl", hash = "sha256:b202764be70a291d62e415993ebbe8ecba3142b31c14ca5cd6dcf896c41826d9"},
-    {file = "dploot-2.7.0.tar.gz", hash = "sha256:efaf9c4ee91039713cb63681ad6549639ebecd53b9caa079053f6aefe4c1a670"},
+    {file = "dploot-2.7.1-py3-none-any.whl", hash = "sha256:4d557a88c4fd6f6a53f45333ccb853e4125f0bf101d5336937ac1f6c0afb7171"},
+    {file = "dploot-2.7.1.tar.gz", hash = "sha256:bcd2f9c6b6647d83b5d62f0446a0fdeb7eefacc6f71a49a8dd18ef43538d5db6"},
 ]
 
 [package.dependencies]
@@ -2351,4 +2351,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.0"
-content-hash = "0ca780313d9d8e056bcb17f4a6f230d4eeedc7d566dc0e3c3e939da5612a9d46"
+content-hash = "15b7ff655411f4589196847a6b858ecf942536677e96a9d8106a4daf4a1e0e2c"
