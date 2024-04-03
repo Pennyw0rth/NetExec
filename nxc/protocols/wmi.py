@@ -63,7 +63,7 @@ class wmi(connection):
         )
 
     def create_conn_obj(self):
-        if self.remoteName == "":
+        if not self.remoteName:
             self.remoteName = self.host
         try:
             rpctansport = transport.DCERPCTransportFactory(fr"ncacn_ip_tcp:{self.remoteName}[{self.port!s}]")

@@ -52,6 +52,8 @@ class mssql(connection):
         )
 
     def create_conn_obj(self):
+        if not self.remoteName:
+            self.remoteName = self.host
         try:
             self.conn = tds.MSSQL(self.remoteHost, self.port, self.remoteName)
             # Default has not timeout option in tds.MSSQL.connect() function, let rewrite it.

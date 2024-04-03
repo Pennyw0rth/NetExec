@@ -264,7 +264,7 @@ class smb(connection):
         
         # DCOM connection with kerberos needed
         self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
-        
+
         if not self.kdcHost and self.domain:
             result = self.resolver(self.domain)
             self.kdcHost = result["host"] if result else None
@@ -493,7 +493,7 @@ class smb(connection):
     def create_smbv1_conn(self):
         try:
             self.conn = SMBConnection(
-                self.host,
+                self.remoteName,
                 self.remoteHost,
                 None,
                 self.port,
@@ -514,7 +514,7 @@ class smb(connection):
     def create_smbv3_conn(self):
         try:
             self.conn = SMBConnection(
-                self.host,
+                self.remoteName,
                 self.remoteHost,
                 None,
                 self.port,
@@ -535,6 +535,8 @@ class smb(connection):
         return True
 
     def create_conn_obj(self):
+        if not self.remoteName:
+            self.remoteName = self.host
         return bool(self.create_smbv1_conn() or self.create_smbv3_conn())
 
     def check_if_admin(self):
