@@ -14,7 +14,7 @@ class NXCModule:
     def options(self, context, module_options):
         pass
 
-    name = "MAQ"
+    name = "maq"
     description = "Retrieves the MachineAccountQuota domain-level attribute"
     supported_protocols = ["ldap"]
     opsec_safe = True

@@ -95,7 +95,7 @@ class ModuleLoader:
             module_spec = spec.loader.load_module().NXCModule
 
             module = {
-                f"{module_spec.name.lower()}": {
+                f"{module_spec.name}": {
                     "path": module_path,
                     "description": module_spec.description,
                     "options": module_spec.options.__doc__,

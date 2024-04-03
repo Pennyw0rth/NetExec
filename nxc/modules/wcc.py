@@ -194,7 +194,7 @@ class HostChecker:
             ConfigCheck("BitLocker configuration", "Checks the BitLocker configuration (based on https://www.stigviewer.com/stig/windows_10/2020-06-15/finding/V-94859)", checker_args=[[self, ("HKLM\\SOFTWARE\\Policies\\Microsoft\\FVE", "UseAdvancedStartup", 1), ("HKLM\\SOFTWARE\\Policies\\Microsoft\\FVE", "UseTPMPIN", 1)]]),
             ConfigCheck("Guest account disabled", "Checks if the guest account is disabled", checkers=[self.check_guest_account_disabled]),
             ConfigCheck("Automatic session lock enabled", "Checks if the session is automatically locked on after a period of inactivity", checker_args=[[self, ("HKCU\\Control Panel\\Desktop", "ScreenSaverIsSecure", 1), ("HKCU\\Control Panel\\Desktop", "ScreenSaveTimeOut", 300, le)]]),
-            ConfigCheck('Powershell Execution Policy == "Restricted"', 'Checks if the Powershell execution policy is set to "Restricted"', checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\PowerShell\\1\ShellIds\Microsoft.Powershell", "ExecutionPolicy", "Restricted\x00"), ("HKCU\\SOFTWARE\\Microsoft\\PowerShell\\1\ShellIds\Microsoft.Powershell", "ExecutionPolicy", "Restricted\x00")]], checker_kwargs=[{"options": {"KOIfMissing": False, "lastWins": True}}])
+            ConfigCheck('Powershell Execution Policy == "Restricted"', 'Checks if the Powershell execution policy is set to "Restricted"', checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\PowerShell\\1\\ShellIds\\Microsoft.Powershell", "ExecutionPolicy", "Restricted\x00"), ("HKCU\\SOFTWARE\\Microsoft\\PowerShell\\1\\ShellIds\\Microsoft.Powershell", "ExecutionPolicy", "Restricted\x00")]], checker_kwargs=[{"options": {"KOIfMissing": False, "lastWins": True}}])
         ]
 
         # Add check to conf_checks table if missing
