@@ -49,7 +49,7 @@ class NXCModule:
 
     def on_admin_login(self, context, connection):
         if self.use_embedded:
-            file_to_upload =(f"{TMP_PATH}/msol.ps1")
+            file_to_upload = f"{TMP_PATH}/msol.ps1"
 
             try:
                 with open(file_to_upload, "w") as msol:
