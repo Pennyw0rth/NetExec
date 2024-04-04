@@ -1,5 +1,6 @@
 import ntpath
 from sys import exit
+from nxc.paths import TMP_PATH
 
 
 class NXCModule:
@@ -44,7 +45,7 @@ class NXCModule:
             exit(1)
 
         self.scf_name = module_options["NAME"]
-        self.scf_path = f"/tmp/{self.scf_name}.scf"
+        self.scf_path = f"{TMP_PATH}/{self.scf_name}.scf"
         self.file_path = ntpath.join("\\", f"{self.scf_name}.scf")
 
         if not self.cleanup:
