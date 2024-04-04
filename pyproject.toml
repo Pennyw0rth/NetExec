@@ -43,7 +43,7 @@ neo4j = "^5.0.0"
 pylnk3 = "^0.4.2"
 pypsrp = "^0.8.1"
 paramiko = "^3.3.1"
-impacket =  { git = "https://github.com/Pennyw0rth/impacket.git", branch = "gkdi" }
+impacket =  { git = "https://github.com/fortra/impacket.git" }
 dsinternals = "^1.2.4"
 xmltodict = "^0.13.0"
 terminaltables = "^3.1.0"
@@ -61,9 +61,9 @@ aiosqlite = "^0.19.0"
 pyasn1-modules = "^0.3.0"
 rich = "^13.3.5"
 python-libnmap = "^0.7.3"
-oscrypto = { git = "https://github.com/Pennyw0rth/oscrypto" } # Pypi version currently broken, see: https://github.com/wbond/oscrypto/issues/78 (as of 9/23)
 argcomplete = "^3.1.4"
 python-dateutil = ">=2.8.2"
+poetry-dynamic-versioning = "^1.2.0"
 
 [tool.poetry.group.dev.dependencies]
 flake8 = "*"
@@ -72,8 +72,13 @@ pytest = "^7.2.2"
 ruff = "=0.0.292"
 
 [build-system]
-requires = ["poetry-core>=1.2.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core>=1.2.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
+build-backend = "poetry_dynamic_versioning.backend"
+
+[tool.poetry-dynamic-versioning]
+enable = true
+pattern = "(?P<base>\\d+\\.\\d+\\.\\d+)"
+format = "{base}+{commit}"
 
 [tool.ruff]
 # Ruff doesn't enable pycodestyle warnings (`W`) or
