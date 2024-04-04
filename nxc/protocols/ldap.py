@@ -847,10 +847,10 @@ class ldap(connection):
             user_account_control = user.get("userAccountControl")
             if user_account_control is not None:  # Check if user_account_control is not None
                 if isinstance(user_account_control, list):  # If it's already a list
-                    y = ''.join(user_account_control)  # Just join it
+                    account_control = ''.join(user_account_control)  # Just join it
                 else:  # If it's a string, just assign it
-                    y = user_account_control
-                account_disabled = int(y) & 2
+                    account_control = user_account_control
+                account_disabled = int(account_control) & 2
                 if not account_disabled:
                     count += 1
                     activeusers.append(user.get("sAMAccountName").lower())
