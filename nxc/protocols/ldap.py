@@ -846,7 +846,7 @@ class ldap(connection):
         for user in allusers:
             user_account_control = user.get("userAccountControl")
             if user_account_control is not None:  # Check if user_account_control is not None
-                account_control = "".join(user_account_control) if isinstance(user_account_control, list) else user_account_control # If it's already a list
+                account_control = "".join(user_account_control) if isinstance(user_account_control, list) else user_account_control  # If it's already a list
                 account_disabled = int(account_control) & 2
                 if not account_disabled:
                     count += 1
@@ -866,9 +866,9 @@ class ldap(connection):
         self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
 
         for arguser in argsusers:
-            pwd_last_set = arguser.get("pwdLastSet", "") # Retrieves pwdLastSet directly and defaults to an empty string.
-            if pwd_last_set: # Checks if pwdLastSet is empty or not.
-                timestamp_seconds = int(pwd_last_set) / 10**7 # Converts pwdLastSet to an integer.
+            pwd_last_set = arguser.get("pwdLastSet", "")  # Retrieves pwdLastSet directly and defaults to an empty string.
+            if pwd_last_set:  # Checks if pwdLastSet is empty or not.
+                timestamp_seconds = int(pwd_last_set) / 10**7  # Converts pwdLastSet to an integer.
                 start_date = datetime(1601, 1, 1)
                 parsed_pw_last_set = (start_date + timedelta(seconds=timestamp_seconds)).replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
                 if parsed_pw_last_set == "1601-01-01 00:00:00":
