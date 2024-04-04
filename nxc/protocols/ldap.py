@@ -846,10 +846,7 @@ class ldap(connection):
         for user in allusers:
             user_account_control = user.get("userAccountControl")
             if user_account_control is not None:  # Check if user_account_control is not None
-                if isinstance(user_account_control, list):  # If it's already a list
-                    account_control = ''.join(user_account_control)  # Just join it
-                else:  # If it's a string, just assign it
-                    account_control = user_account_control
+                account_control = "".join(user_account_control) if isinstance(user_account_control, list) else user_account_control # If it's already a list
                 account_disabled = int(account_control) & 2
                 if not account_disabled:
                     count += 1
@@ -865,7 +862,7 @@ class ldap(connection):
                     continue
                 self.logger.highlight(f"{item['objectName']}")
             return
-        self.logger.display(f"Total records returned: {len(allusers)}, Total {len(allusers) - count:d} user(s) disabled") if not arg else self.logger.display(f"Total records returned: {len(argsusers)}, Total {len(allusers) - count:d} user(s) disabled")
+        self.logger.display(f"Total records returned: {count}, Total {len(allusers) - count:d} user(s) disabled") if not arg else self.logger.display(f"Total records returned: {len(argsusers)}, Total {len(allusers) - count:d} user(s) disabled")
         self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
 
         for arguser in argsusers:
