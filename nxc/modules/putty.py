@@ -11,14 +11,10 @@ import re
 
 
 class NXCModule:
-    """
-    Example:
-    -------
-    Module by @yomama
-    """
+    """Module by @NeffIsBack"""
 
     name = "putty"
-    description = "Query the registry for users with saved ssh private keys"
+    description = "Query the registry for users who saved ssh private keys in PuTTY. Download the private keys if found."
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
