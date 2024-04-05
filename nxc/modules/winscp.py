@@ -254,7 +254,8 @@ class NXCModule:
         finally:
             remote_ops.finish()
 
-    def check_masterpassword_set(self, connection, user_object):
+    def check_masterpassword_set(self, context, connection, user_object):
+        use_master_password = False
         try:
             remote_ops = RemoteOperations(connection.conn, connection.kerberos)
             remote_ops.enableRegistry()
@@ -265,6 +266,11 @@ class NXCModule:
             key_handle = ans["phkResult"]
             use_master_password = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "UseMasterPassword")[1]
             rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
+        except DCERPCException as e:
+            if str(e).find("ERROR_FILE_NOT_FOUND"):
+                context.log.debug("Security configuration registry not found, no master passwords set at all.")
+            else:
+                context.log.exception(e)
         finally:
             remote_ops.finish()
         return use_master_password
@@ -300,7 +306,7 @@ class NXCModule:
                     rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
                     session_names.remove("Default%20Settings")
 
-                    if self.check_masterpassword_set(connection, user_object):
+                    if self.check_masterpassword_set(context, connection, user_object):
                         context.log.fail("MasterPassword set! Aborting extraction...")
                         continue
                     # Extract stored Session infos
