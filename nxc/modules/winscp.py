@@ -56,12 +56,10 @@ class NXCModule:
             remote_ops = RemoteOperations(connection.conn, connection.kerberos)
             remote_ops.enableRegistry()
 
-            ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
-            reg_handle = ans["phKey"]
+            reg_handle = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)["phKey"]
 
             for user_object in all_user_objects:
-                ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\{user_object}")
-                key_handle = ans["phkResult"]
+                key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\{user_object}")["phkResult"]
 
                 user_profile_path = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "ProfileImagePath")[1].split("\x00")[:-1][0]
                 rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
@@ -123,10 +121,8 @@ class NXCModule:
             remote_ops = RemoteOperations(connection.conn, connection.kerberos)
             remote_ops.enableRegistry()
 
-            ans = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp)
-            reg_handle = ans["phKey"]
-            ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"{user_object}\\Software\\Martin Prikryl\\WinSCP 2\\Sessions\\{sessionName}")
-            key_handle = ans["phkResult"]
+            reg_handle = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp)["phKey"]
+            key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"{user_object}\\Software\\Martin Prikryl\\WinSCP 2\\Sessions\\{sessionName}")["phkResult"]
             host_name = unquote(rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "HostName")[1].split("\x00")[:-1][0])
             user_name = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "UserName")[1].split("\x00")[:-1][0]
             try:
@@ -156,12 +152,9 @@ class NXCModule:
             remote_ops.enableRegistry()
 
             # Enumerate all logged in and loaded Users on System
-            ans = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp)
-            reg_handle = ans["phKey"]
-            ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, "")
-            key_handle = ans["phkResult"]
-            data = rrp.hBaseRegQueryInfoKey(remote_ops._RemoteOperations__rrp, key_handle)
-            users = data["lpcSubKeys"]
+            reg_handle = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp)["phKey"]
+            key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, "")["phkResult"]
+            users = rrp.hBaseRegQueryInfoKey(remote_ops._RemoteOperations__rrp, key_handle)["lpcSubKeys"]
 
             # Get User Names
             user_names = [rrp.hBaseRegEnumKey(remote_ops._RemoteOperations__rrp, key_handle, i)["lpNameOut"].split("\x00")[:-1][0] for i in range(users)]
@@ -187,12 +180,9 @@ class NXCModule:
             remote_ops.enableRegistry()
 
             # Enumerate all Users on System
-            ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
-            reg_handle = ans["phKey"]
-            ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList")
-            key_handle = ans["phkResult"]
-            data = rrp.hBaseRegQueryInfoKey(remote_ops._RemoteOperations__rrp, key_handle)
-            users = data["lpcSubKeys"]
+            reg_handle = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)["phKey"]
+            key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList")["phkResult"]
+            users = rrp.hBaseRegQueryInfoKey(remote_ops._RemoteOperations__rrp, key_handle)["lpcSubKeys"]
 
             # Get User Names
             user_objects = [rrp.hBaseRegEnumKey(remote_ops._RemoteOperations__rrp, key_handle, i)["lpNameOut"].split("\x00")[:-1][0] for i in range(users)]
@@ -212,18 +202,14 @@ class NXCModule:
 
             for user_object in unloaded_user_objects:
                 # Extract profile Path of NTUSER.DAT
-                ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
-                reg_handle = ans["phKey"]
-                ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\" + user_object)
-                key_handle = ans["phkResult"]
+                reg_handle = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)["phKey"]
+                key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\{user_object}")["phkResult"]
                 user_profile_path = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "ProfileImagePath")[1].split("\x00")[:-1][0]
                 rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
 
                 # Load Profile
-                ans = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp)
-                reg_handle = ans["phKey"]
-                ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, "")
-                key_handle = ans["phkResult"]
+                reg_handle = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp)["phKey"]
+                key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, "")["phkResult"]
 
                 context.log.debug("LOAD USER INTO REGISTRY: " + user_object)
                 rrp.hBaseRegLoadKey(remote_ops._RemoteOperations__rrp, key_handle, user_object, f"{user_profile_path}\\NTUSER.DAT")
@@ -238,10 +224,8 @@ class NXCModule:
             remote_ops.enableRegistry()
 
             # Unload Profile
-            ans = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp)
-            reg_handle = ans["phKey"]
-            ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, "")
-            key_handle = ans["phkResult"]
+            reg_handle = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp)["phKey"]
+            key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, "")["phkResult"]
 
             for user_object in unloaded_user_objects:
                 context.log.debug("UNLOAD USER FROM REGISTRY: " + user_object)
@@ -260,10 +244,8 @@ class NXCModule:
             remote_ops = RemoteOperations(connection.conn, connection.kerberos)
             remote_ops.enableRegistry()
 
-            ans = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp)
-            reg_handle = ans["phKey"]
-            ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"{user_object}\\Software\\Martin Prikryl\\WinSCP 2\\Configuration\\Security")
-            key_handle = ans["phkResult"]
+            reg_handle = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp)["phKey"]
+            key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"{user_object}\\Software\\Martin Prikryl\\WinSCP 2\\Configuration\\Security")["phkResult"]
             use_master_password = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "UseMasterPassword")[1]
             rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
         except DCERPCException as e:
@@ -295,10 +277,8 @@ class NXCModule:
             reg_handle = ans["phKey"]
             for user_object in all_user_objects:
                 try:
-                    ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"{user_object}\\Software\\Martin Prikryl\\WinSCP 2\\Sessions")
-                    key_handle = ans["phkResult"]
-                    data = rrp.hBaseRegQueryInfoKey(remote_ops._RemoteOperations__rrp, key_handle)
-                    sessions = data["lpcSubKeys"]
+                    key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"{user_object}\\Software\\Martin Prikryl\\WinSCP 2\\Sessions")["phkResult"]
+                    sessions = rrp.hBaseRegQueryInfoKey(remote_ops._RemoteOperations__rrp, key_handle)["lpcSubKeys"]
                     context.log.success(f'Found {sessions - 1} sessions for user "{self.userDict[user_object]}" in registry!')
 
                     # Get Session Names
