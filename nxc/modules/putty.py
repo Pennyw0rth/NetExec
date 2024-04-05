@@ -33,12 +33,9 @@ class NXCModule:
 
     def get_logged_on_users(self):
         """Enumerate all logged in and loaded Users on System"""
-        ans = rrp.hOpenUsers(self.rrp._RemoteOperations__rrp)
-        reg_handle = ans["phKey"]
-        ans = rrp.hBaseRegOpenKey(self.rrp._RemoteOperations__rrp, reg_handle, "")
-        key_handle = ans["phkResult"]
-        data = rrp.hBaseRegQueryInfoKey(self.rrp._RemoteOperations__rrp, key_handle)
-        users = data["lpcSubKeys"]
+        reg_handle = rrp.hOpenUsers(self.rrp._RemoteOperations__rrp)["phKey"]
+        key_handle = rrp.hBaseRegOpenKey(self.rrp._RemoteOperations__rrp, reg_handle, "")["phkResult"]
+        users = rrp.hBaseRegQueryInfoKey(self.rrp._RemoteOperations__rrp, key_handle)["lpcSubKeys"]
 
         # Get User Names
         user_objects = [rrp.hBaseRegEnumKey(self.rrp._RemoteOperations__rrp, key_handle, i)["lpNameOut"].split("\x00")[:-1][0] for i in range(users)]
@@ -51,12 +48,9 @@ class NXCModule:
 
     def get_all_users(self):
         """Get all users that have logged in at some point in time"""
-        ans = rrp.hOpenLocalMachine(self.rrp._RemoteOperations__rrp)
-        reg_handle = ans["phKey"]
-        ans = rrp.hBaseRegOpenKey(self.rrp._RemoteOperations__rrp, reg_handle, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList")
-        key_handle = ans["phkResult"]
-        data = rrp.hBaseRegQueryInfoKey(self.rrp._RemoteOperations__rrp, key_handle)
-        users = data["lpcSubKeys"]
+        reg_handle = rrp.hOpenLocalMachine(self.rrp._RemoteOperations__rrp)["phKey"]
+        key_handle = rrp.hBaseRegOpenKey(self.rrp._RemoteOperations__rrp, reg_handle, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList")["phkResult"]
+        users = rrp.hBaseRegQueryInfoKey(self.rrp._RemoteOperations__rrp, key_handle)["lpcSubKeys"]
 
         # Get User Names
         user_objects = [rrp.hBaseRegEnumKey(self.rrp._RemoteOperations__rrp, key_handle, i)["lpNameOut"].split("\x00")[:-1][0] for i in range(users)]
@@ -64,48 +58,41 @@ class NXCModule:
         return user_objects
 
     def sid_to_name(self, all_users):
-        ans = rrp.hOpenLocalMachine(self.rrp._RemoteOperations__rrp)
-        reg_handle = ans["phKey"]
+        """Convert SID to Usernames for better readability"""
+        reg_handle = rrp.hOpenLocalMachine(self.rrp._RemoteOperations__rrp)["phKey"]
 
         user_dict = {}
         for user_object in all_users:
-            ans = rrp.hBaseRegOpenKey(self.rrp._RemoteOperations__rrp, reg_handle, f"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\{user_object}")
-            key_handle = ans["phkResult"]
+            key_handle = rrp.hBaseRegOpenKey(self.rrp._RemoteOperations__rrp, reg_handle, f"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\{user_object}")["phkResult"]
             user_profile_path = rrp.hBaseRegQueryValue(self.rrp._RemoteOperations__rrp, key_handle, "ProfileImagePath")[1].split("\x00")[:-1][0]
             rrp.hBaseRegCloseKey(self.rrp._RemoteOperations__rrp, key_handle)
             user_dict[user_object] = user_profile_path.split("\\")[-1]
         return user_dict
 
     def load_missing_users(self, unloaded_user_objects):
-        """Extract Information for not logged in Users and then loads them into registry."""
+        """Load missing users into registry to access their registry keys."""
         for user_object in unloaded_user_objects:
             # Extract profile Path of NTUSER.DAT
-            ans = rrp.hOpenLocalMachine(self.rrp._RemoteOperations__rrp)
-            reg_handle = ans["phKey"]
-            ans = rrp.hBaseRegOpenKey(self.rrp._RemoteOperations__rrp, reg_handle, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\" + user_object)
-            key_handle = ans["phkResult"]
+            reg_handle = rrp.hOpenLocalMachine(self.rrp._RemoteOperations__rrp)["phKey"]
+            key_handle = rrp.hBaseRegOpenKey(self.rrp._RemoteOperations__rrp, reg_handle, f"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\{user_object}")["phkResult"]
             user_profile_path = rrp.hBaseRegQueryValue(self.rrp._RemoteOperations__rrp, key_handle, "ProfileImagePath")[1].split("\x00")[:-1][0]
             rrp.hBaseRegCloseKey(self.rrp._RemoteOperations__rrp, key_handle)
 
             # Load Profile
-            ans = rrp.hOpenUsers(self.rrp._RemoteOperations__rrp)
-            reg_handle = ans["phKey"]
-            ans = rrp.hBaseRegOpenKey(self.rrp._RemoteOperations__rrp, reg_handle, "")
-            key_handle = ans["phkResult"]
+            reg_handle = rrp.hOpenUsers(self.rrp._RemoteOperations__rrp)["phKey"]
+            key_handle = rrp.hBaseRegOpenKey(self.rrp._RemoteOperations__rrp, reg_handle, "")["phkResult"]
 
-            self.context.log.debug("LOAD USER INTO REGISTRY: " + user_object)
+            self.context.log.debug(f"LOAD USER INTO REGISTRY: {user_object}")
             rrp.hBaseRegLoadKey(self.rrp._RemoteOperations__rrp, key_handle, user_object, f"{user_profile_path}\\NTUSER.DAT")
             rrp.hBaseRegCloseKey(self.rrp._RemoteOperations__rrp, key_handle)
 
     def unload_missing_users(self, unloaded_user_objects):
         """If some user were not logged in at the beginning we unload them from registry."""
-        ans = rrp.hOpenUsers(self.rrp._RemoteOperations__rrp)
-        reg_handle = ans["phKey"]
-        ans = rrp.hBaseRegOpenKey(self.rrp._RemoteOperations__rrp, reg_handle, "")
-        key_handle = ans["phkResult"]
+        reg_handle = rrp.hOpenUsers(self.rrp._RemoteOperations__rrp)["phKey"]
+        key_handle = rrp.hBaseRegOpenKey(self.rrp._RemoteOperations__rrp, reg_handle, "")["phkResult"]
 
         for user_object in unloaded_user_objects:
-            self.context.log.debug("UNLOAD USER FROM REGISTRY: " + user_object)
+            self.context.log.debug(f"UNLOAD USER FROM REGISTRY: {user_object}")
             try:
                 rrp.hBaseRegUnLoadKey(self.rrp._RemoteOperations__rrp, key_handle, user_object)
             except Exception as e:
@@ -116,9 +103,7 @@ class NXCModule:
     def get_private_key_paths(self, all_users):
         """Get all private key paths for all users"""
         sessions = []
-
         reg_handle = rrp.hOpenUsers(self.rrp._RemoteOperations__rrp)["phKey"]
-        key_handle = rrp.hBaseRegOpenKey(self.rrp._RemoteOperations__rrp, reg_handle, "")["phkResult"]
 
         for user in all_users:
             try:

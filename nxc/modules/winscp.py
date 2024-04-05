@@ -211,7 +211,7 @@ class NXCModule:
                 reg_handle = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp)["phKey"]
                 key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, "")["phkResult"]
 
-                context.log.debug("LOAD USER INTO REGISTRY: " + user_object)
+                context.log.debug(f"LOAD USER INTO REGISTRY: {user_object}")
                 rrp.hBaseRegLoadKey(remote_ops._RemoteOperations__rrp, key_handle, user_object, f"{user_profile_path}\\NTUSER.DAT")
                 rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
         finally:
