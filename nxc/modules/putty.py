@@ -162,13 +162,13 @@ class NXCModule:
                         self.connection.conn.getFile(share, file_path, buf.write)
                     except Exception as e:
                         if str(e).find("STATUS_OBJECT_NAME_NOT_FOUND") != -1:
-                            self.context.log.fail(f"Private key path found but file not found: {highlight(share + file_path)}")
+                            self.context.log.fail(f"Private key path found but file not found: {share + file_path}")
                         else:
                             self.context.log.exception(f"Error downloading private key: {e}")
                         continue
                     file.write(buf.getvalue())
-                self.context.log.success(f"Private key found for user {highlight(session['user'])}, saved to {highlight(download_path)}")
-                self.context.log.highlight(f"======={session['session_name']}=======")
+                self.context.log.success(f"Private key found for user \"{session['user']}\", saved to {highlight(download_path)}")
+                self.context.log.highlight(f"Sessionname: {session['session_name']}")
                 self.context.log.highlight(f"Host: {session['hostname']}:{session['port']}")
                 self.context.log.highlight(f"Protocol: {session['protocol']}")
 
