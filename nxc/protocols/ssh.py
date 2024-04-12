@@ -182,10 +182,9 @@ class ssh(connection):
                 self.logger.error("Command: 'mkfifo' unavailable, running command with 'sudo' failed")
                 return
 
-    def plaintext_login(self, username, password, private_key=None):
+    def plaintext_login(self, username, password, private_key=""):
         self.username = username
         self.password = password
-        private_key = ""
         stdout = None
         try:
             if self.args.key_file or private_key:
@@ -195,7 +194,7 @@ class ssh(connection):
                     with open(self.args.key_file) as f:
                         private_key = f.read()
 
-                pkey = paramiko.RSAKey.from_private_key(StringIO(private_key))
+                pkey = paramiko.RSAKey.from_private_key(StringIO(private_key), password)
                 self.conn.connect(
                     self.host,
                     port=self.port,
@@ -231,7 +230,7 @@ class ssh(connection):
         except Exception as e:
             if self.args.key_file:
                 password = f"{process_secret(password)} (keyfile: {self.args.key_file})"
-            if "OpenSSH private key file checkints do not match" in str(e):
+            if "OpenSSH private key file checkints do not match" in str(e) or "password and salt must not be empty" in str(e):
                 self.logger.fail(f"{username}:{password} - Could not decrypt key file, wrong password")
             else:
                 self.logger.fail(f"{username}:{password} {e}")
