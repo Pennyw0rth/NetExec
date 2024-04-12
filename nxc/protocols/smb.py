@@ -1035,7 +1035,6 @@ class smb(connection):
     def users(self):
         if len(self.args.users) > 0:
             self.logger.debug(f"Dumping users: {', '.join(self.args.users)}")
-             
         return UserSamrDump(self).dump(self.args.users)
 
     def hosts(self):
@@ -1512,12 +1511,14 @@ class smb(connection):
                 credential.url,
             )
 
-        if dump_cookies:
+        if dump_cookies and cookies:
             self.logger.display("Start Dumping Cookies")
             for cookie in cookies:
                 if cookie.cookie_value != "":
                     self.logger.highlight(f"[{credential.winuser}][{cookie.browser.upper()}] {cookie.host}{cookie.path} - {cookie.cookie_name}:{cookie.cookie_value}")
             self.logger.display("End Dumping Cookies")
+        elif dump_cookies:
+            self.logger.fail("No cookies found")
 
         vaults = []
         try:
@@ -1557,6 +1558,9 @@ class smb(connection):
                 credential.password,
                 credential.url,
             )
+
+        if not (credentials and system_credentials and browser_credentials and cookies and vaults and firefox_credentials):
+            self.logger.fail("No secrets found")
 
     @requires_admin
     def lsa(self):

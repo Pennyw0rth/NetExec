@@ -4,7 +4,6 @@ import sys
 from impacket.dcerpc.v5 import samr, epm, transport
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 
-
 class NXCModule:
     """
     Module by CyberCelt: @Cyb3rC3lt
@@ -42,6 +41,7 @@ class NXCModule:
 
         if "CHANGEPW" in module_options and ("NAME" not in module_options or "PASSWORD" not in module_options):
             context.log.error("NAME  and PASSWORD options are required!")
+            sys.exit(1)
         elif "CHANGEPW" in module_options:
             self.__noAdd = True
 
@@ -88,8 +88,7 @@ class NXCModule:
         # If SAMR fails now try over LDAPS
         if not self.noLDAPRequired:
             self.do_ldaps_add(connection, context)
-        else:
-            sys.exit(1)
+            
 
     def do_samr_add(self, context):
         """
@@ -177,7 +176,6 @@ class NXCModule:
                     samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
                     self.noLDAPRequired = True
                     context.log.highlight("{}".format('Computer account already exists with the name: "' + self.__computerName + '"'))
-                    sys.exit(1)
                 except samr.DCERPCSessionError as e:
                     if e.error_code != 0xC0000073:
                         raise
