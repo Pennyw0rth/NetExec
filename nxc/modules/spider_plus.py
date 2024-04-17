@@ -50,17 +50,7 @@ def get_list_from_option(opt):
 
 
 class SMBSpiderPlus:
-    def __init__(
-        self,
-        smb,
-        logger,
-        download_flag,
-        stats_flag,
-        exclude_exts,
-        exclude_filter,
-        max_file_size,
-        output_folder,
-    ):
+    def __init__(self, smb, logger, download_flag, stats_flag, exclude_exts, exclude_filter, max_file_size, output_folder):
         self.smb = smb
         self.host = self.smb.conn.getRemoteHost()
         self.max_connection_attempts = 5
@@ -112,21 +102,17 @@ class SMBSpiderPlus:
         filelist = []
         try:
             # Get file list for the current folder
-            filelist = self.smb.conn.listPath(share, subfolder + "*")
-
+            filelist = self.smb.conn.listPath(share, f"{subfolder}*")
         except SessionError as e:
-            self.logger.debug(f'Failed listing files on share "{share}" in folder "{subfolder}".')
+            self.logger.debug(f'Failed listing files on share "{share}" in folder "{subfolder}"')
             self.logger.debug(str(e))
 
             if "STATUS_ACCESS_DENIED" in str(e):
-                self.logger.debug(f'Cannot list files in folder "{subfolder}".')
-
+                self.logger.debug(f'Cannot list files in folder "{subfolder}"')
             elif "STATUS_OBJECT_PATH_NOT_FOUND" in str(e):
-                self.logger.debug(f"The folder {subfolder} does not exist.")
-
+                self.logger.debug(f"The folder {subfolder} does not exist")
             elif self.reconnect():
                 filelist = self.list_path(share, subfolder)
-
         return filelist
 
     def get_remote_file(self, share, path):
