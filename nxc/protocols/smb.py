@@ -1011,7 +1011,7 @@ class smb(connection):
             self.logger.debug(f"Dumping users: {', '.join(self.args.users)}")
         return UserSamrDump(self).dump(self.args.users)
 
-    def hosts(self):
+    def computers(self):
         hosts = []
         for dc_ip in self.get_dc_ips():
             try:
@@ -1033,7 +1033,7 @@ class smb(connection):
                     self.logger.highlight(f"{domain}\\{host_clean:<30}")
                 break
             except Exception as e:
-                self.logger.fail(f"Error enumerating domain hosts using dc ip {dc_ip}: {e}")
+                self.logger.fail(f"Error enumerating domain computers using dc ip {dc_ip}: {e}")
                 break
         return hosts
 
