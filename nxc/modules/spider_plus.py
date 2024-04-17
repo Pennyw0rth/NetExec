@@ -6,6 +6,7 @@ import traceback
 from nxc.protocols.smb.remotefile import RemoteFile
 from impacket.smb3structs import FILE_READ_DATA
 from impacket.smbconnection import SessionError
+from impacket.nmb import NetBIOSTimeout
 
 
 CHUNK_SIZE = 4096
@@ -103,7 +104,7 @@ class SMBSpiderPlus:
         try:
             # Get file list for the current folder
             filelist = self.smb.conn.listPath(share, f"{subfolder}*")
-        except SessionError as e:
+        except (SessionError, NetBIOSTimeout) as e:
             self.logger.debug(f'Failed listing files on share "{share}" in folder "{subfolder}"')
             self.logger.debug(str(e))
 
