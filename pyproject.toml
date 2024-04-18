@@ -36,7 +36,7 @@ nxcdb = 'nxc.nxcdb:main'
 python = "^3.8.0"
 requests = ">=2.27.1"
 beautifulsoup4 = ">=4.11,<5"
-lsassy = "3.1.6"    # Doubt that this will work though
+lsassy = ">=3.1.8"
 termcolor = "1.1.0"
 msgpack = "^1.0.0"
 neo4j = "^5.0.0"
@@ -63,6 +63,7 @@ rich = "^13.3.5"
 python-libnmap = "0.7.2"
 argcomplete = "^3.1.4"
 python-dateutil = ">=2.8.2"
+poetry-dynamic-versioning = "^1.2.0"
 
 [tool.poetry.group.dev.dependencies]
 flake8 = "*"
@@ -71,8 +72,13 @@ pytest = "^7.2.2"
 ruff = "=0.0.292"
 
 [build-system]
-requires = ["poetry-core>=1.2.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core>=1.2.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
+build-backend = "poetry_dynamic_versioning.backend"
+
+[tool.poetry-dynamic-versioning]
+enable = true
+pattern = "(?P<base>\\d+\\.\\d+\\.\\d+)"
+format = "{base}+{commit}"
 
 [tool.ruff]
 # Ruff doesn't enable pycodestyle warnings (`W`) or

@@ -11,7 +11,30 @@ from rich.text import Text
 from rich.logging import RichHandler
 import functools
 import inspect
+import argparse
 
+
+def parse_debug_args():
+    debug_parser = argparse.ArgumentParser(add_help=False)
+    debug_parser.add_argument("--debug", action="store_true")
+    debug_parser.add_argument("--verbose", action="store_true")
+    args, _ = debug_parser.parse_known_args()
+    return args
+
+def setup_debug_logging():
+    debug_args = parse_debug_args()
+    root_logger = logging.getLogger("root")
+    
+    if debug_args.verbose:
+        nxc_logger.logger.setLevel(logging.INFO)
+        root_logger.setLevel(logging.INFO)
+    elif debug_args.debug:
+        nxc_logger.logger.setLevel(logging.DEBUG)
+        root_logger.setLevel(logging.DEBUG)
+    else:
+        nxc_logger.logger.setLevel(logging.ERROR)
+        root_logger.setLevel(logging.ERROR)
+        
 
 def create_temp_logger(caller_frame, formatted_text, args, kwargs):
     """Create a temporary logger for emitting a log where we need to override the calling file & line number, since these are obfuscated"""
@@ -72,6 +95,7 @@ class NXCAdapter(logging.LoggerAdapter):
         logging.getLogger("pypykatz").disabled = True
         logging.getLogger("minidump").disabled = True
         logging.getLogger("lsassy").disabled = True
+        logging.getLogger("neo4j").setLevel(logging.ERROR)
 
     def format(self, msg, *args, **kwargs):  # noqa: A003
         """Format msg for output

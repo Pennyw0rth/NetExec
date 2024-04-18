@@ -660,6 +660,20 @@ files = [
 ]
 
 [[package]]
+name = "dunamai"
+version = "1.19.2"
+description = "Dynamic version generation"
+optional = false
+python-versions = ">=3.5"
+files = [
+    {file = "dunamai-1.19.2-py3-none-any.whl", hash = "sha256:bc126b17571a44d68ed826cec596e0f61dc01edca8b21486f70014936a5d44f2"},
+    {file = "dunamai-1.19.2.tar.gz", hash = "sha256:3be4049890763e19b8df1d52960dbea60b3e263eb0c96144a677ae0633734d2e"},
+]
+
+[package.dependencies]
+packaging = ">=20.9"
+
+[[package]]
 name = "exceptiongroup"
 version = "1.2.0"
 description = "Backport of PEP 654 (exception groups)"
@@ -933,19 +947,19 @@ ldap3 = ">2.5.0,<2.5.2 || >2.5.2,<2.6 || >2.6"
 
 [[package]]
 name = "lsassy"
-version = "3.1.6"
+version = "3.1.10"
 description = "Python library to extract credentials from lsass remotely"
 optional = false
 python-versions = ">=3.6"
 files = [
-    {file = "lsassy-3.1.6-py3-none-any.whl", hash = "sha256:d1a0e1d57ad5e969b09b5b039e367a189fad19d45ab7299aee4081d4abdf66a6"},
-    {file = "lsassy-3.1.6.tar.gz", hash = "sha256:50b6b44331b606e67087cd07edcb0e3f256dda32e59da633d068deb378df657a"},
+    {file = "lsassy-3.1.10-py3-none-any.whl", hash = "sha256:c25bc349f54d10329fae83a65b3c5a679e298883273e319a515916f362068b6c"},
+    {file = "lsassy-3.1.10.tar.gz", hash = "sha256:748ee7e49f792d4532155f3ef0467fe505e0c32386195c5ae6bcaafa699e28f3"},
 ]
 
 [package.dependencies]
 impacket = "*"
 netaddr = "*"
-pypykatz = ">=0.6.2"
+pypykatz = ">=0.6.3"
 rich = "*"
 
 [[package]]
@@ -1496,6 +1510,25 @@ files = [
 [package.extras]
 dev = ["pre-commit", "tox"]
 testing = ["pytest", "pytest-benchmark"]
+
+[[package]]
+name = "poetry-dynamic-versioning"
+version = "1.2.0"
+description = "Plugin for Poetry to enable dynamic versioning based on VCS tags"
+optional = false
+python-versions = ">=3.7,<4.0"
+files = [
+    {file = "poetry_dynamic_versioning-1.2.0-py3-none-any.whl", hash = "sha256:8dbef9728d866eb3d1a4edbb29c7ac8abdf96e3ca659473e950e2c016f3785ec"},
+    {file = "poetry_dynamic_versioning-1.2.0.tar.gz", hash = "sha256:1a7bbdba2530499e73dfc6ac0af19de29020ab4aaa3e507573877114e6b71ed6"},
+]
+
+[package.dependencies]
+dunamai = ">=1.18.0,<2.0.0"
+jinja2 = ">=2.11.1,<4"
+tomlkit = ">=0.4"
+
+[package.extras]
+plugin = ["poetry (>=1.2.0,<2.0.0)"]
 
 [[package]]
 name = "prompt-toolkit"
@@ -2153,6 +2186,17 @@ files = [
 ]
 
 [[package]]
+name = "tomlkit"
+version = "0.12.4"
+description = "Style preserving TOML library"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "tomlkit-0.12.4-py3-none-any.whl", hash = "sha256:5cd82d48a3dd89dee1f9d64420aa20ae65cfbd00668d6f094d7578a78efbb77b"},
+    {file = "tomlkit-0.12.4.tar.gz", hash = "sha256:7ca1cfc12232806517a8515047ba66a19369e71edf2439d0f5824f91032b6cc3"},
+]
+
+[[package]]
 name = "tqdm"
 version = "4.66.1"
 description = "Fast, Extensible Progress Meter"
@@ -2283,4 +2327,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.0"
-content-hash = "3cdc6000434a0894b1bd56175603b1722b6e8c56e29b4652891758ee8a603cd1"
+content-hash = "1b8271b530579cd4359489ca5cf526e711853ce33a24309ac4d8c8e72609e6ad"

