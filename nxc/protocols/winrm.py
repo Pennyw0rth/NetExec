@@ -25,7 +25,8 @@ urllib3.disable_warnings()
 
 class winrm(connection):
     def __init__(self, args, db, host):
-        self.domain = None
+        self.domain = ""
+        self.targedDomain = ""
         self.server_os = None
         self.output_filename = None
         self.endpoint = None
@@ -52,30 +53,24 @@ class winrm(connection):
 
     def enum_host_info(self):
         ntlm_info = parse_challenge(base64.b64decode(self.challenge_header.split(" ")[1].replace(",", "")))
-        self.domain = ntlm_info["domain"]
+        self.targetDomain = self.domain = ntlm_info["domain"]
         self.hostname = ntlm_info["hostname"]
         self.server_os = ntlm_info["os_version"]
         self.logger.extra["hostname"] = self.hostname
 
-        self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}")
-
-        self.db.add_host(self.host, self.port, self.hostname, self.domain, self.server_os)
+        self.db.add_host(self.host, self.port, self.hostname, self.targetDomain, self.server_os)
 
         if self.args.domain:
             self.domain = self.args.domain
-
         if self.args.local_auth:
             self.domain = self.hostname
-
-        if self.domain is None:
-            self.domain = ""
 
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
     def print_host_info(self):
         self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
         self.logger.extra["port"] = self.port
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain})")
 
         return True
 
@@ -167,7 +162,7 @@ class winrm(connection):
                 self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host)  # , user_id=user_id)
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             return True
         except Exception as e:
@@ -210,7 +205,7 @@ class winrm(connection):
                 self.db.add_admin_user("hash", domain, self.username, nthash, self.host)
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             return True
 
@@ -260,7 +255,7 @@ class winrm(connection):
     def sam(self):
         sam_storename = gen_random_string(6)
         system_storename = gen_random_string(6)
-        dump_command = f"reg save HKLM\SAM C:\\windows\\temp\\{sam_storename} && reg save HKLM\SYSTEM C:\\windows\\temp\\{system_storename}"
+        dump_command = f"reg save HKLM\\SAM C:\\windows\\temp\\{sam_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
         clean_command = f"del C:\\windows\\temp\\{sam_storename} && del C:\\windows\\temp\\{system_storename}"
         try:
             self.conn.execute_cmd(dump_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{dump_command}'")
@@ -289,7 +284,7 @@ class winrm(connection):
     def lsa(self):
         security_storename = gen_random_string(6)
         system_storename = gen_random_string(6)
-        dump_command = f"reg save HKLM\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\SYSTEM C:\\windows\\temp\\{system_storename}"
+        dump_command = f"reg save HKLM\\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
         clean_command = f"del C:\\windows\\temp\\{security_storename} && del C:\\windows\\temp\\{system_storename}"
         try:
             self.conn.execute_cmd(dump_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{dump_command}'")

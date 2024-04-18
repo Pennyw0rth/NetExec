@@ -24,7 +24,8 @@ MSRPC_UUID_PORTMAP = uuidtup_to_bin(("E1AF8308-5D1F-11C9-91A4-08002B14A0FA", "3.
 
 class wmi(connection):
     def __init__(self, args, db, host):
-        self.domain = None
+        self.domain = ""
+        self.targetDomain = ""
         self.hash = ""
         self.lmhash = ""
         self.nthash = ""
@@ -122,7 +123,7 @@ class wmi(connection):
             response = MSRPCHeader(buffer)
             bindResp = MSRPCBindAck(response.getData())
             ntlm_info = parse_challenge(bindResp["auth_data"])
-            self.domain = ntlm_info["domain"]
+            self.targetDomain = self.domain = ntlm_info["domain"]
             self.hostname = ntlm_info["hostname"]
             self.server_os = ntlm_info["os_version"]
             self.logger.extra["hostname"] = self.hostname
@@ -139,7 +140,7 @@ class wmi(connection):
     def print_host_info(self):
         self.logger.extra["protocol"] = "RPC"
         self.logger.extra["port"] = "135"
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain})")
         return True
 
     def check_if_admin(self):

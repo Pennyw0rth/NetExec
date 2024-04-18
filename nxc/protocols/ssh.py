@@ -4,7 +4,6 @@ import uuid
 import logging
 import time
 
-from io import StringIO
 from nxc.config import process_secret
 from nxc.connection import connection, highlight
 from nxc.logger import NXCAdapter
@@ -182,26 +181,20 @@ class ssh(connection):
                 self.logger.error("Command: 'mkfifo' unavailable, running command with 'sudo' failed")
                 return
 
-    def plaintext_login(self, username, password, private_key=None):
+    def plaintext_login(self, username, password, private_key=""):
         self.username = username
         self.password = password
-        private_key = ""
         stdout = None
         try:
             if self.args.key_file or private_key:
-                self.logger.debug("Logging in with key")
+                self.logger.debug(f"Logging {self.host} with username: {username}, keyfile: {self.args.key_file}")
 
-                if self.args.key_file:
-                    with open(self.args.key_file) as f:
-                        private_key = f.read()
-
-                pkey = paramiko.RSAKey.from_private_key(StringIO(private_key))
                 self.conn.connect(
                     self.host,
                     port=self.port,
                     username=username,
                     passphrase=password if password != "" else None,
-                    pkey=pkey,
+                    key_filename=private_key if private_key else self.args.key_file,
                     look_for_keys=False,
                     allow_agent=False,
                 )
@@ -228,13 +221,10 @@ class ssh(connection):
             # Some IOT devices will not raise exception in self.conn._transport.auth_password / self.conn._transport.auth_publickey
             _, stdout, _ = self.conn.exec_command("id")
             stdout = stdout.read().decode(self.args.codec, errors="ignore")
+        except SSHException as e:
+            self.logger.fail(f"{username}:{process_secret(password)} Could not decrypt private key, error: {e}")
         except Exception as e:
-            if self.args.key_file:
-                password = f"{process_secret(password)} (keyfile: {self.args.key_file})"
-            if "OpenSSH private key file checkints do not match" in str(e):
-                self.logger.fail(f"{username}:{password} - Could not decrypt key file, wrong password")
-            else:
-                self.logger.fail(f"{username}:{password} {e}")
+            self.logger.fail(f"{username}:{process_secret(password)} {e}")
             self.conn.close()
             return False
         else:
@@ -287,7 +277,7 @@ class ssh(connection):
                 self.server_os_platform,
                 "- Shell access!" if shell_access else ""
             )
-            self.logger.success(f"{username}:{password} {self.mark_pwned()} {highlight(display_shell_access)}")
+            self.logger.success(f"{username}:{process_secret(password)} {self.mark_pwned()} {highlight(display_shell_access)}")
 
             return True
 
