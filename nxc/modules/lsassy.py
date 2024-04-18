@@ -64,7 +64,7 @@ class NXCModule:
             context.log.fail("Unable to dump lsass")
             return False
 
-        parsed = Parser(file).parse()
+        parsed = Parser(host, file).parse()
         if parsed is None:
             context.log.fail("Unable to parse lsass dump")
             return False
