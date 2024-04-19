@@ -34,6 +34,10 @@ jobs:
       - name: Install libraries with dev group
         run: |
           poetry install --with dev
+      - name: Install with pipx
+        run: |
+          pipx ensurepath
+          pipx install git+https://github.com/Pennyw0rth/NetExec --python python${{ matrix.python-version }}
       - name: Load every protocol and module
         run: |
           poetry run netexec winrm 127.0.0.1
@@ -45,4 +49,5 @@ jobs:
           poetry run netexec mssql 127.0.0.1
           poetry run netexec ssh 127.0.0.1
           poetry run netexec ftp 127.0.0.1
+          netexec smb 127.0.0.1 -M veeam
           poetry run netexec smb 127.0.0.1 -M veeam
