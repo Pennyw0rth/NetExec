@@ -49,5 +49,4 @@ jobs:
           poetry run netexec mssql 127.0.0.1
           poetry run netexec ssh 127.0.0.1
           poetry run netexec ftp 127.0.0.1
-          netexec smb 127.0.0.1 -M veeam
           poetry run netexec smb 127.0.0.1 -M veeam
