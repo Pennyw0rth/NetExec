@@ -432,7 +432,7 @@ class connection:
     def login(self):
         """Try to login using the credentials specified in the command line or in the database.
 
-        :return: True if the login was successful and "--continue-on-success" was not specified, False otherwise.
+        :return: True if the login was successful False otherwise.
         """
         # domain[n] always corresponds to username[n] and owned [n]
         domain = []
@@ -489,10 +489,12 @@ class connection:
                 self.logger.error("Number provided of usernames and passwords/hashes do not match!")
                 return False
             for user_index, user in enumerate(username):
-                if self.try_credentials(domain[user_index], user, owned[user_index], secret[user_index], cred_type[user_index], data[user_index]) and not self.args.continue_on_success:
+                if self.try_credentials(domain[user_index], user, owned[user_index], secret[user_index], cred_type[user_index], data[user_index]):
                     owned[user_index] = True
                     if not self.args.continue_on_success:
                         return True
+
+        return True in owned
 
     def mark_pwned(self):
         return highlight(f"({pwned_label})" if self.admin_privs else "")
