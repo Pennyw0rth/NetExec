@@ -91,7 +91,7 @@ class SMBSpiderPlus:
         for i in range(self.connection_attempts, self.max_connection_attempts + 1):
             self.logger.display(f"Reconnection attempt #{i}/{self.max_connection_attempts} to server.")
             time.sleep(3)
-            self.logger.display(f"Creating new connection object and trying to login...")
+            self.logger.display("Creating new connection object and trying to login...")
             self.smb.create_conn_obj()
             self.smb.login()
             self.connection_attempts += 1
@@ -112,8 +112,8 @@ class SMBSpiderPlus:
                 self.logger.debug(f"The folder {subfolder} does not exist")
             elif self.reconnect():
                 filelist = self.list_path(share, subfolder)
-        except NetBIOSTimeout as e:
-            self.logger.debug(f"Received a NetBIOSTimeout, moving on....")
+        except NetBIOSTimeout:
+            self.logger.debug("Received a NetBIOSTimeout, moving on....")
             return []
         return filelist
 
