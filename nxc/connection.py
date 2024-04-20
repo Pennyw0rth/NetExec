@@ -15,6 +15,7 @@ from nxc.protocols.ldap.laps import laps_search
 
 from impacket.dcerpc.v5 import transport
 import sys
+import contextlib
 
 sem = BoundedSemaphore(1)
 global_failed_logins = 0
@@ -172,6 +173,10 @@ class connection:
                 self.logger.error(f"Exception while calling proto_flow() on target {self.host}: {e}")
             else:
                 self.logger.exception(f"Exception while calling proto_flow() on target {self.host}: {e}")
+        finally:
+            self.logger.debug(f"Closing connection to: {host}")
+            with contextlib.suppress(Exception):
+                self.conn.close()
 
     def resolver(self, hostname):
         try:
