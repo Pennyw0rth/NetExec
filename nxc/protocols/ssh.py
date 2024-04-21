@@ -19,7 +19,7 @@ class ssh(connection):
         self.protocol = "SSH"
         self.remote_version = "Unknown SSH Version"
         self.server_os_platform = "Linux"
-        self.user_principal = "root"
+        self.uac = ""
         super().__init__(args, db, host)
 
     def proto_flow(self):
@@ -240,15 +240,11 @@ class ssh(connection):
                 _, stdout, _ = self.conn.exec_command("whoami /priv")
                 stdout = stdout.read().decode(self.args.codec, errors="ignore")
                 self.server_os_platform = "Windows"
-                self.user_principal = "admin"
                 if "SeDebugPrivilege" in stdout:
                     self.admin_privs = True
                 elif "SeUndockPrivilege" in stdout:
                     self.admin_privs = True
-                    self.user_principal = "admin (UAC)"
-                else:
-                    # non admin (low priv)
-                    self.user_principal = "admin (low priv)"
+                    self.uac = "with UAC - "
 
             if not stdout:
                 self.logger.debug(f"User: {self.username} can't get a basic shell")
@@ -266,22 +262,12 @@ class ssh(connection):
                     if self.args.key_file:
                         self.db.add_admin_user("key", username, password, host_id=host_id, cred_id=cred_id)
                     else:
-                        self.db.add_admin_user(
-                            "plaintext",
-                            username,
-                            password,
-                            host_id=host_id,
-                            cred_id=cred_id,
-                        )
+                        self.db.add_admin_user("plaintext", username, password, host_id=host_id, cred_id=cred_id)
 
             if self.args.key_file:
                 password = f"{process_secret(password)} (keyfile: {self.args.key_file})"
 
-            display_shell_access = "{} {} {}".format(
-                f"({self.user_principal})" if self.admin_privs else f"(non {self.user_principal})",
-                self.server_os_platform,
-                "- Shell access!" if shell_access else ""
-            )
+            display_shell_access = f"{self.uac}{self.server_os_platform}{' - Shell access!' if shell_access else ''}"
             self.logger.success(f"{username}:{process_secret(password)} {self.mark_pwned()} {highlight(display_shell_access)}")
 
             return True
