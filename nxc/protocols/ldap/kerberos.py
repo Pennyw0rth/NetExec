@@ -1,18 +1,10 @@
 import random
 from binascii import hexlify, unhexlify
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from os import getenv
 
 from impacket.krb5 import constants
-from impacket.krb5.asn1 import (
-    TGS_REP,
-    AS_REQ,
-    KERB_PA_PAC_REQUEST,
-    KRB_ERROR,
-    AS_REP,
-    seq_set,
-    seq_set_iter,
-)
+from impacket.krb5.asn1 import TGS_REP, AS_REQ, AS_REP, KERB_PA_PAC_REQUEST, KRB_ERROR, seq_set, seq_set_iter
 from impacket.krb5.ccache import CCache
 from impacket.krb5.kerberosv5 import sendReceive, KerberosError, getKerberosTGT
 from impacket.krb5.types import KerberosTime, Principal
@@ -211,7 +203,7 @@ class KerberosAttacks:
             return None
 
         req_body["realm"] = domain
-        now = datetime.utcnow() + timedelta(days=1)
+        now = datetime.now(UTC) + timedelta(days=1)
         req_body["till"] = KerberosTime.to_asn1(now)
         req_body["rtime"] = KerberosTime.to_asn1(now)
         req_body["nonce"] = random.getrandbits(31)
@@ -235,10 +227,10 @@ class KerberosAttacks:
                 message = encoder.encode(as_req)
                 r = sendReceive(message, domain, self.kdcHost)
             elif e.getErrorCode() == constants.ErrorCodes.KDC_ERR_KEY_EXPIRED.value:
-                return "Password of user " + userName + " expired but user doesn't require pre-auth"
+                return f"Password of user {userName} expired but user doesn't require pre-auth"
             else:
-                nxc_logger.debug(e)
-                return False
+                nxc_logger.exception(e)
+                return None
 
         # This should be the PREAUTH_FAILED packet or the actual TGT if the target principal has the
         # 'Do not require Kerberos preauthentication' set
