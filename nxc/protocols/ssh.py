@@ -221,10 +221,15 @@ class ssh(connection):
             # Some IOT devices will not raise exception in self.conn._transport.auth_password / self.conn._transport.auth_publickey
             _, stdout, _ = self.conn.exec_command("id")
             stdout = stdout.read().decode(self.args.codec, errors="ignore")
+        except AuthenticationException:
+            self.logger.fail(f"{username}:{process_secret(password)}")
         except SSHException as e:
-            self.logger.fail(f"{username}:{process_secret(password)} Could not decrypt private key, error: {e}")
+            if "Invalid key" in str(e):
+                self.logger.fail(f"{username}:{process_secret(password)} Could not decrypt private key, error: {e}")
+            else:
+                self.logger.exception(e)
         except Exception as e:
-            self.logger.fail(f"{username}:{process_secret(password)} {e}")
+            self.logger.exception(e)
             self.conn.close()
             return False
         else:
