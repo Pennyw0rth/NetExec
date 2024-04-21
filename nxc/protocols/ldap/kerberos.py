@@ -1,6 +1,13 @@
 import random
 from binascii import hexlify, unhexlify
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta
+try:
+    # This is only available in python >= 3.11
+    # if we are in a lower version, we will use the deprecated utcnow() method
+    from datetime import UTC
+    utc_failed = False
+except ImportError:
+    utc_failed = True
 from os import getenv
 
 from impacket.krb5 import constants
@@ -203,7 +210,8 @@ class KerberosAttacks:
             return None
 
         req_body["realm"] = domain
-        now = datetime.now(UTC) + timedelta(days=1)
+        # When we drop python 3.10 support utcnow() can be removed, as it is deprecated
+        now = datetime.utcnow() + timedelta(days=1) if utc_failed else datetime.now(UTC) + timedelta(days=1)
         req_body["till"] = KerberosTime.to_asn1(now)
         req_body["rtime"] = KerberosTime.to_asn1(now)
         req_body["nonce"] = random.getrandbits(31)
