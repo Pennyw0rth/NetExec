@@ -844,10 +844,15 @@ class ldap(connection):
             argsusers = allusers
 
         for user in allusers:
-            account_disabled = int(user.get("userAccountControl")) & 2
-            if not account_disabled:
-                count += 1
-                activeusers.append(user.get("sAMAccountName").lower())
+            user_account_control = user.get("userAccountControl")
+            if user_account_control is not None:  # Check if user_account_control is not None
+                account_control = "".join(user_account_control) if isinstance(user_account_control, list) else user_account_control  # If it's already a list
+                account_disabled = int(account_control) & 2
+                if not account_disabled:
+                    count += 1
+                    activeusers.append(user.get("sAMAccountName").lower())
+            else:
+                self.logger.debug(f"userAccountControl for user {user.get('sAMAccountName')} is None")
 
         if self.username == "":
             self.logger.display(f"Total records returned: {len(resp):d}")
@@ -856,15 +861,17 @@ class ldap(connection):
                     continue
                 self.logger.highlight(f"{item['objectName']}")
             return
-        self.logger.display(f"Total records returned: {len(allusers)}, Total {len(allusers) - count:d} user(s) disabled") if not arg else self.logger.display(f"Total records returned: {len(argsusers)}, Total {len(allusers) - count:d} user(s) disabled")
+        self.logger.display(f"Total records returned: {count}, total {len(allusers) - count:d} user(s) disabled") if not arg else self.logger.display(f"Total records returned: {len(argsusers)}, Total {len(allusers) - count:d} user(s) disabled")
         self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
 
         for arguser in argsusers:
-            timestamp_seconds = int(arguser.get("pwdLastSet", "")) / 10**7
-            start_date = datetime(1601, 1, 1)
-            parsed_pw_last_set = (start_date + timedelta(seconds=timestamp_seconds)).replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
-            if parsed_pw_last_set == "1601-01-01 00:00:00":
-                parsed_pw_last_set = "<never>"
+            pwd_last_set = arguser.get("pwdLastSet", "")  # Retrieves pwdLastSet directly and defaults to an empty string.
+            if pwd_last_set:  # Checks if pwdLastSet is empty or not.
+                timestamp_seconds = int(pwd_last_set) / 10**7  # Converts pwdLastSet to an integer.
+                start_date = datetime(1601, 1, 1)
+                parsed_pw_last_set = (start_date + timedelta(seconds=timestamp_seconds)).replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
+                if parsed_pw_last_set == "1601-01-01 00:00:00":
+                    parsed_pw_last_set = "<never>"
 
             if arguser.get("sAMAccountName").lower() in activeusers and arg is False:
                 self.logger.highlight(f"{arguser.get('sAMAccountName', ''):<30}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
