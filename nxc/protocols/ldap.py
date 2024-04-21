@@ -930,9 +930,10 @@ class ldap(connection):
             if len(answers) > 0:
                 for user in answers:
                     hash_TGT = KerberosAttacks(self).get_tgt_asroast(user[0])
-                    self.logger.highlight(f"{hash_TGT}")
-                    with open(self.args.asreproast, "a+") as hash_asreproast:
-                        hash_asreproast.write(f"{hash_TGT}\n")
+                    if hash_TGT:
+                        self.logger.highlight(f"{hash_TGT}")
+                        with open(self.args.asreproast, "a+") as hash_asreproast:
+                            hash_asreproast.write(f"{hash_TGT}\n")
                 return True
             else:
                 self.logger.highlight("No entries found!")
