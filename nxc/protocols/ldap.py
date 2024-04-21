@@ -852,8 +852,7 @@ class ldap(connection):
                     count += 1
                     activeusers.append(user.get("sAMAccountName").lower())
             else:
-                # Handle the case where userAccountControl is None, if necessary
-                pass
+                self.logger.debug(f"userAccountControl for user {user.get('sAMAccountName')} is None")
 
         if self.username == "":
             self.logger.display(f"Total records returned: {len(resp):d}")
@@ -862,7 +861,7 @@ class ldap(connection):
                     continue
                 self.logger.highlight(f"{item['objectName']}")
             return
-        self.logger.display(f"Total records returned: {count}, Total {len(allusers) - count:d} user(s) disabled") if not arg else self.logger.display(f"Total records returned: {len(argsusers)}, Total {len(allusers) - count:d} user(s) disabled")
+        self.logger.display(f"Total records returned: {count}, total {len(allusers) - count:d} user(s) disabled") if not arg else self.logger.display(f"Total records returned: {len(argsusers)}, Total {len(allusers) - count:d} user(s) disabled")
         self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
 
         for arguser in argsusers:
