@@ -2,29 +2,28 @@
 
 [[package]]
 name = "aardwolf"
-version = "0.2.7"
+version = "0.2.8"
 description = "Asynchronous RDP protocol implementation"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "aardwolf-0.2.7-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:53543661b0b199dc879eaf06f96c65c0a177404e0b34ab1cd762a799a69394c5"},
-    {file = "aardwolf-0.2.7-cp310-cp310-win_amd64.whl", hash = "sha256:dc45f3315c40c7c262fc060c3d492d746a265fdc521bbbb075b5745bc6d82875"},
-    {file = "aardwolf-0.2.7-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f289556734a5c7c4cfbde23e125ee73b6f6815ce1381a9de62eb5f1d0273ed03"},
-    {file = "aardwolf-0.2.7-cp311-cp311-win_amd64.whl", hash = "sha256:a6242dd3d15ec6e2f7ee58e46a4bb441c025912adf2de33414281f25b04c646a"},
-    {file = "aardwolf-0.2.7-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ae81032a24aecf091e810b798196370833e073b25936f9bb6e3bfc1c49c7618b"},
-    {file = "aardwolf-0.2.7-cp38-cp38-win_amd64.whl", hash = "sha256:0582560a4596a16ac46bef7d496d1b73dbb6d17ef826e977c8c23c31510cac0a"},
-    {file = "aardwolf-0.2.7-cp39-cp39-linux_armv7l.whl", hash = "sha256:d6b819fd090bbe8463e8c011b4f031073aed329eb0b8f7521071212afff6ace3"},
-    {file = "aardwolf-0.2.7-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:579f95dc49b568210d929e6b766561f5d808e081f7133226645ae6b8c681c9fe"},
-    {file = "aardwolf-0.2.7-cp39-cp39-win_amd64.whl", hash = "sha256:ecd946b31c3047cdc397ce5744d80d3a8e4567189429a52f8a798dc7c42a1ca8"},
-    {file = "aardwolf-0.2.7.tar.gz", hash = "sha256:ced52fbe177813c6a40eb01457397d4752ede698017d7ed11b1f9e4ff462016b"},
+    {file = "aardwolf-0.2.8-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:1fd1b9e54ce6df904f6db3bd22e7e0aeb5b400991c973a823fa98b713e0fe672"},
+    {file = "aardwolf-0.2.8-cp310-cp310-win_amd64.whl", hash = "sha256:87a2bb7c01871567bf91655a143624d2d2a86c3f0688ac11ccf117197acbad25"},
+    {file = "aardwolf-0.2.8-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:8d1d5d99886266050537e9816c9d8fcf1171ef10f04aac89b057972d2fddd134"},
+    {file = "aardwolf-0.2.8-cp311-cp311-win_amd64.whl", hash = "sha256:8e8c9b18a66b4b283436f3680356ef99c567b4e6a4aa77d125191840efe8843e"},
+    {file = "aardwolf-0.2.8-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:51065eec8659f77f0cf444156724a8a9cc2e6d357f9a5ae0da0d0f9b30bbcfbc"},
+    {file = "aardwolf-0.2.8-cp38-cp38-win_amd64.whl", hash = "sha256:05057c42a968c1d6b60613475e8e998b359e5593dd1ee58a21d56868d0790c49"},
+    {file = "aardwolf-0.2.8-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:1199ad08f53b4c2880f6dceaae70f0b497c9aca943cdbf249ec5f8bac5256bf0"},
+    {file = "aardwolf-0.2.8-cp39-cp39-win_amd64.whl", hash = "sha256:9027a2c9c247b9cd920d0e4848ebef5e7abf32869c1c37fa73b3bca781253c36"},
+    {file = "aardwolf-0.2.8.tar.gz", hash = "sha256:b2f7d56730d33d45c3e4e6047c22360c618c628151ba4d426c275ded56a4c51d"},
 ]
 
 [package.dependencies]
 arc4 = ">=0.3.0"
 asn1crypto = "*"
 asn1tools = "*"
-asyauth = ">=0.0.13"
-asysocks = ">=0.2.5"
+asyauth = ">=0.0.16"
+asysocks = ">=0.2.9"
 colorama = "*"
 Pillow = ">=9.0.0"
 pyperclip = ">=1.8.2"
@@ -634,13 +633,13 @@ wmi = ["wmi (>=1.5.1,<2.0.0)"]
 
 [[package]]
 name = "dploot"
-version = "2.2.4"
+version = "2.7.1"
 description = "DPAPI looting remotely in Python"
 optional = false
-python-versions = ">=3.7,<4.0"
+python-versions = "<4.0,>=3.7"
 files = [
-    {file = "dploot-2.2.4-py3-none-any.whl", hash = "sha256:a70c8280972a1fb7150093560093e46a9bb5936396f563ae9050a20dcf1ad96e"},
-    {file = "dploot-2.2.4.tar.gz", hash = "sha256:e34ff928e94416f3cbf688427d1de4aa88a4a4a15f24edb6313a2adc685a98a3"},
+    {file = "dploot-2.7.1-py3-none-any.whl", hash = "sha256:4d557a88c4fd6f6a53f45333ccb853e4125f0bf101d5336937ac1f6c0afb7171"},
+    {file = "dploot-2.7.1.tar.gz", hash = "sha256:bcd2f9c6b6647d83b5d62f0446a0fdeb7eefacc6f71a49a8dd18ef43538d5db6"},
 ]
 
 [package.dependencies]
@@ -1877,12 +1876,12 @@ six = ">=1.5"
 
 [[package]]
 name = "python-libnmap"
-version = "0.7.2"
+version = "0.7.3"
 description = "Python NMAP library enabling you to start async nmap tasks, parse and compare/diff scan results"
 optional = false
 python-versions = "*"
 files = [
-    {file = "python-libnmap-0.7.2.tar.gz", hash = "sha256:73309abebc49881adc312b85d7169bb567ac259948d2b1ce7b962e21bc5f98ea"},
+    {file = "python-libnmap-0.7.3.tar.gz", hash = "sha256:d03629256c2ee9ab37390c28d4c4c2ae9637cd0861dd8ab9e0f32779545936c0"},
 ]
 
 [package.extras]
@@ -2327,4 +2326,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.0"
-content-hash = "844379bfa7ba16fab1d850d6e107091b1f68fe2045f94d4abd85dabc425fa148"
+content-hash = "a1b0e3494ccca15f740010686b8e98bdaf74a3c8c3e694efe22ff42588ff63dc"
