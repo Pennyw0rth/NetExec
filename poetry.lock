@@ -1299,13 +1299,13 @@ files = [
 
 [[package]]
 name = "msldap"
-version = "0.5.9"
+version = "0.5.10"
 description = "Python library to play with MS LDAP"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "msldap-0.5.9-py3-none-any.whl", hash = "sha256:26c0418086f788c1197341ee31d4ffbc69c057aef339cd91e882ca7c1fb10fcb"},
-    {file = "msldap-0.5.9.tar.gz", hash = "sha256:5f3c4e362296e0e1eba447eda9f230988a7b2a08826f7b3ed34ec9612ebcfe33"},
+    {file = "msldap-0.5.10-py3-none-any.whl", hash = "sha256:263a4bfa832f3b9f27163e5a752151608283745dba22ad8d7c560ae18e0e193b"},
+    {file = "msldap-0.5.10.tar.gz", hash = "sha256:65bfe0e502c94d26f45d366f567cdb62462f27f655bd0ae2f0228fe3c9f989b8"},
 ]
 
 [package.dependencies]
@@ -2351,4 +2351,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.0"
-content-hash = "efb6d4c73ebbe66037c11460f7323fdb8df3a07d2df07908a40ceea3dd833416"
+content-hash = "17488cfeacedee4367d181583c0f1e3ba0511f0ae37013cb1b65267c44722586"
