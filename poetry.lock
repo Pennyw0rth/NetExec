@@ -1298,25 +1298,25 @@ files = [
 
 [[package]]
 name = "msldap"
-version = "0.4.7"
+version = "0.5.10"
 description = "Python library to play with MS LDAP"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "msldap-0.4.7-py3-none-any.whl", hash = "sha256:665c9c661bdcb71622936814c5e8774ac45afd990f946f9b7f0956e33b1b0cf4"},
-    {file = "msldap-0.4.7.tar.gz", hash = "sha256:58c32a3524430703d0ff500282db92bc0e748fec4dca39f197bad36f1dee435c"},
+    {file = "msldap-0.5.10-py3-none-any.whl", hash = "sha256:263a4bfa832f3b9f27163e5a752151608283745dba22ad8d7c560ae18e0e193b"},
+    {file = "msldap-0.5.10.tar.gz", hash = "sha256:65bfe0e502c94d26f45d366f567cdb62462f27f655bd0ae2f0228fe3c9f989b8"},
 ]
 
 [package.dependencies]
 asn1crypto = ">=1.3.0"
-asyauth = ">=0.0.7"
-asysocks = ">=0.2.1"
-minikerberos = ">=0.3.1"
+asyauth = ">=0.0.18"
+asysocks = ">=0.2.11"
 prompt-toolkit = ">=3.0.2"
+tabulate = "*"
 tqdm = "*"
-unicrypto = ">=0.0.9"
+unicrypto = ">=0.0.10"
 wcwidth = "*"
-winacl = ">=0.1.4"
+winacl = ">=0.1.8"
 
 [[package]]
 name = "neo4j"
@@ -2153,6 +2153,20 @@ files = [
 ]
 
 [[package]]
+name = "tabulate"
+version = "0.9.0"
+description = "Pretty-print tabular data"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "tabulate-0.9.0-py3-none-any.whl", hash = "sha256:024ca478df22e9340661486f85298cff5f6dcdba14f3813e8830015b9ed1948f"},
+    {file = "tabulate-0.9.0.tar.gz", hash = "sha256:0095b12bf5966de529c0feb1fa08671671b3368eec77d7ef7ab114be2c068b3c"},
+]
+
+[package.extras]
+widechars = ["wcwidth"]
+
+[[package]]
 name = "termcolor"
 version = "1.1.0"
 description = "ANSII Color formatting for output in terminal."
@@ -2326,4 +2340,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.0"
-content-hash = "a1b0e3494ccca15f740010686b8e98bdaf74a3c8c3e694efe22ff42588ff63dc"
+content-hash = "9926a84b8b7af5447a82db8b1e6723a3cbd46c33f3ea0697a6f2edb69931e01c"
