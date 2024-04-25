@@ -1,6 +1,7 @@
 import random
 from binascii import hexlify, unhexlify
 from datetime import datetime, timedelta
+import traceback
 try:
     # This is only available in python >= 3.11
     # if we are in a lower version, we will use the deprecated utcnow() method
@@ -237,7 +238,8 @@ class KerberosAttacks:
             elif e.getErrorCode() == constants.ErrorCodes.KDC_ERR_KEY_EXPIRED.value:
                 return f"Password of user {userName} expired but user doesn't require pre-auth"
             else:
-                nxc_logger.exception(e)
+                nxc_logger.fail(e)
+                nxc_logger.debug(traceback.format_exc())
                 return None
 
         # This should be the PREAUTH_FAILED packet or the actual TGT if the target principal has the
