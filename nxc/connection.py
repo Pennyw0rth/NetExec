@@ -10,6 +10,7 @@ from nxc.config import pwned_label
 from nxc.helpers.logger import highlight
 from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
+from nxc.credentials import credentials
 from nxc.protocols.ldap.laps import laps_search
 
 from impacket.dcerpc.v5 import transport
@@ -269,131 +270,6 @@ class connection:
 
         return False
 
-    def query_db_creds(self):
-        """Queries the database for credentials to be used for authentication.
-
-        Valid cred_id values are:
-            - a single cred_id
-            - a range specified with a dash (ex. 1-5)
-            - 'all' to select all credentials
-
-        :return: domains[], usernames[], owned[], secrets[], cred_types[]
-        """
-        domains = []
-        usernames = []
-        owned = []
-        secrets = []
-        cred_types = []
-        creds = []  # list of tuples (cred_id, domain, username, secret, cred_type, pillaged_from) coming from the database
-        data = []  # Arbitrary data needed for the login, e.g. ssh_key
-
-        for cred_id in self.args.cred_id:
-            if cred_id.lower() == "all":
-                creds = self.db.get_credentials()
-            else:
-                if not self.db.get_credentials(filter_term=int(cred_id)):
-                    self.logger.error(f"Invalid database credential ID {cred_id}!")
-                    continue
-                creds.extend(self.db.get_credentials(filter_term=int(cred_id)))
-
-        for cred in creds:
-            c_id, domain, username, secret, cred_type, pillaged_from = cred
-            domains.append(domain)
-            usernames.append(username)
-            owned.append(False)  # As these are likely valid we still want to test them if they are specified in the command line
-            secrets.append(secret)
-            cred_types.append(cred_type)
-
-        if len(secrets) != len(data):
-            data = [None] * len(secrets)
-
-        return domains, usernames, owned, secrets, cred_types, data
-
-    def parse_credentials(self):
-        r"""Parse credentials from the command line or from a file specified.
-
-        Usernames can be specified with a domain (domain\\username) or without (username).
-        If the file contains domain\\username the domain specified will be overwritten by the one in the file.
-
-        :return: domain[], username[], owned[], secret[], cred_type[]
-        """
-        domain = []
-        username = []
-        owned = []
-        secret = []
-        cred_type = []
-
-        # Parse usernames
-        for user in self.args.username:
-            if isfile(user):
-                with open(user) as user_file:
-                    for line in user_file:
-                        if "\\" in line:
-                            domain_single, username_single = line.split("\\")
-                        else:
-                            domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain else self.domain
-                            username_single = line
-                        domain.append(domain_single)
-                        username.append(username_single.strip())
-                        owned.append(False)
-            else:
-                if "\\" in user:
-                    domain_single, username_single = user.split("\\")
-                else:
-                    domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain else self.domain
-                    username_single = user
-                domain.append(domain_single)
-                username.append(username_single)
-                owned.append(False)
-
-        # Parse passwords
-        for password in self.args.password:
-            if isfile(password):
-                try:
-                    with open(password, errors=("ignore" if self.args.ignore_pw_decoding else "strict")) as password_file:
-                        for line in password_file:
-                            secret.append(line.strip())
-                            cred_type.append("plaintext")
-                except UnicodeDecodeError as e:
-                    self.logger.error(f"{type(e).__name__}: Could not decode password file. Make sure the file only contains UTF-8 characters.")
-                    self.logger.error("You can ignore non UTF-8 characters with the option '--ignore-pw-decoding'")
-                    sys.exit(1)
-            else:
-                secret.append(password)
-                cred_type.append("plaintext")
-
-        # Parse NTLM-hashes
-        if hasattr(self.args, "hash") and self.args.hash:
-            for ntlm_hash in self.args.hash:
-                if isfile(ntlm_hash):
-                    with open(ntlm_hash) as ntlm_hash_file:
-                        for line in ntlm_hash_file:
-                            secret.append(line.strip())
-                            cred_type.append("hash")
-                else:
-                    secret.append(ntlm_hash)
-                    cred_type.append("hash")
-
-        # Parse AES keys
-        if self.args.aesKey:
-            for aesKey in self.args.aesKey:
-                if isfile(aesKey):
-                    with open(aesKey) as aesKey_file:
-                        for line in aesKey_file:
-                            secret.append(line.strip())
-                            cred_type.append("aesKey")
-                else:
-                    secret.append(aesKey)
-                    cred_type.append("aesKey")
-
-        # Allow trying multiple users with a single password
-        if len(username) > 1 and len(secret) == 1:
-            secret = secret * len(username)
-            cred_type = cred_type * len(username)
-            self.args.no_bruteforce = True
-
-        return domain, username, owned, secret, cred_type, [None] * len(secret)
-
     def try_credentials(self, domain, username, owned, secret, cred_type, data=None):
         """Try to login using the specified credentials and protocol.
 
@@ -432,64 +308,42 @@ class connection:
     def login(self):
         """Try to login using the credentials specified in the command line or in the database.
 
-        :return: True if the login was successful False otherwise.
+        :return: True if the login was successful, False otherwise.
         """
-        # domain[n] always corresponds to username[n] and owned [n]
-        domain = []
-        username = []
-        owned = []  # Determines whether we have found a valid credential for this user. Default: False
-        # secret[n] always corresponds to cred_type[n]
-        secret = []
-        cred_type = []
-        data = []  # Arbitrary data needed for the login, e.g. ssh_key
 
-        if self.args.cred_id:
-            db_domain, db_username, db_owned, db_secret, db_cred_type, db_data = self.query_db_creds()
-            domain.extend(db_domain)
-            username.extend(db_username)
-            owned.extend(db_owned)
-            secret.extend(db_secret)
-            cred_type.extend(db_cred_type)
-            data.extend(db_data)
-
-        if self.args.username:
-            parsed_domain, parsed_username, parsed_owned, parsed_secret, parsed_cred_type, parsed_data = self.parse_credentials()
-            domain.extend(parsed_domain)
-            username.extend(parsed_username)
-            owned.extend(parsed_owned)
-            secret.extend(parsed_secret)
-            cred_type.extend(parsed_cred_type)
-            data.extend(parsed_data)
+        creds = credentials(self.args, self.db)
 
         if self.args.use_kcache:
             self.logger.debug("Trying to authenticate using Kerberos cache")
             with sem:
-                username = self.args.username[0] if len(self.args.username) else ""
-                password = self.args.password[0] if len(self.args.password) else ""
-                self.kerberos_login(self.domain, username, password, "", "", self.kdcHost, True)
-                self.logger.info("Successfully authenticated using Kerberos cache")
-                return True
+                username = creds.usernames[0] if len(creds.usernames) else ""
+                password = creds.passwords[0] if len(creds.passwords) else ""
+                domain = creds.domains[0] if len(creds.domains) else ""
+                if (self.kerberos_login(domain, username, password, "", "", self.kdcHost, True)):
+                    self.logger.info("Successfully authenticated using Kerberos cache")
+                    return True
 
         if hasattr(self.args, "laps") and self.args.laps:
             self.logger.debug("Trying to authenticate using LAPS")
-            username[0], secret[0], domain[0], ntlm_hash = laps_search(self, username, secret, cred_type, domain)
+            creds.usernames[0], creds.secrets[0], creds.domains[0], ntlm_hash = laps_search(self, username, secret, cred_type, domain)
             cred_type = ["plaintext"]
             if not (username[0] or secret[0] or domain[0]):
                 return False
 
+        owned = [False]* len(creds.usernames)  # Determines whether we have found a valid credential for this user. Default: False
         if not self.args.no_bruteforce:
-            for secr_index, secr in enumerate(secret):
-                for user_index, user in enumerate(username):
-                    if self.try_credentials(domain[user_index], user, owned[user_index], secr, cred_type[secr_index], data[secr_index]):
+            for secr_index, secr in enumerate(creds.secrets):
+                for user_index, user in enumerate(creds.usernames):
+                    if self.try_credentials(creds.domains[user_index], user, owned[user_index], secr, creds.cred_types[secr_index], creds.data[secr_index]):
                         owned[user_index] = True
                         if not self.args.continue_on_success:
                             return True
         else:
-            if len(username) != len(secret):
+            if len(creds.usernames) != len(creds.secrets):
                 self.logger.error("Number provided of usernames and passwords/hashes do not match!")
                 return False
-            for user_index, user in enumerate(username):
-                if self.try_credentials(domain[user_index], user, owned[user_index], secret[user_index], cred_type[user_index], data[user_index]):
+            for user_index, user in enumerate(creds.usernames):
+                if self.try_credentials(creds.domains[user_index], user, owned[user_index], creds.secrets[user_index], creds.cred_types[user_index], creds.data[user_index]):
                     owned[user_index] = True
                     if not self.args.continue_on_success:
                         return True
