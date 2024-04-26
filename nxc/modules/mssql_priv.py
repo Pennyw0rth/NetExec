@@ -440,12 +440,9 @@ class NXCModule:
         :return: True if the username belongs to an admin user, False otherwise.
         :rtype: bool
         """
-        res = self.query_and_get_output(exec_as + "SELECT IS_SRVROLEMEMBER('sysadmin')")
-        self.revert_context(exec_as)
+        res = self.query_and_get_output(f"SELECT IS_SRVROLEMEMBER('sysadmin', '{username}')")
         is_admin = res[0][""]
-        self.context.log.debug(f"IsAdmin Result: {is_admin}")
         if is_admin:
-            self.context.log.debug("User is admin!")
             self.admin_privs = True
             return True
         else:
