@@ -42,12 +42,12 @@ class NXCModule:
             - rollback (remove sysadmin privilege)
         """
         self.action = None
-        self.context = context
 
         if "ACTION" in module_options:
             self.action = module_options["ACTION"]
 
     def on_login(self, context, connection):
+        self.context = context
         # get mssql connection
         self.mssql_conn = connection.conn
         # fetch the current user
@@ -441,13 +441,11 @@ class NXCModule:
         :rtype: bool
         """
         res = self.query_and_get_output(f"SELECT IS_SRVROLEMEMBER('sysadmin', '{username}')")
-        try:
-            if int(res):
-                self.admin_privs = True
-                return True
-            else:
-                return False
-        except Exception:
+        is_admin = res[0][""]
+        if is_admin:
+            self.admin_privs = True
+            return True
+        else:
             return False
 
     def revert_context(self, exec_as):
