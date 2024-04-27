@@ -27,7 +27,6 @@ class NXCModule:
         SERVER             PKI Enrollment Server to enumerate templates for. Default is None, use CN name
         BASE_DN            The base domain name for the LDAP query
         """
-        self.context = context
         self.regex = re.compile("(https?://.+)")
 
         self.server = None
@@ -39,6 +38,7 @@ class NXCModule:
 
     def on_login(self, context, connection):
         """On a successful LDAP login we perform a search for all PKI Enrollment Server or Certificate Templates Names."""
+        self.context = context
         if self.server is None:
             search_filter = "(objectClass=pKIEnrollmentService)"
         else:

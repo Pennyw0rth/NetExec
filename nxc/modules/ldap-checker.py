@@ -92,11 +92,12 @@ class NXCModule:
         def DoesLdapsCompleteHandshake(dcIp):
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.settimeout(5)
-            ssl_sock = ssl.wrap_socket(
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_sock = ssl_context.wrap_socket(
                 s,
-                cert_reqs=ssl.CERT_OPTIONAL,
-                suppress_ragged_eofs=False,
                 do_handshake_on_connect=False,
+                suppress_ragged_eofs=False,
             )
             ssl_sock.connect((dcIp, 636))
             try:
