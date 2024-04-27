@@ -8,6 +8,7 @@ from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
 
 from nxc.config import pwned_label
 from nxc.helpers.logger import highlight
+from nxc.loaders.moduleloader import ModuleLoader
 from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
 from nxc.protocols.ldap.laps import laps_search
@@ -150,16 +151,7 @@ class connection:
     def check_if_admin(self):
         return
 
-    def kerberos_login(
-        self,
-        domain,
-        username,
-        password="",
-        ntlm_hash="",
-        aesKey="",
-        kdcHost="",
-        useCache=False,
-    ):
+    def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         return
 
     def plaintext_login(self, domain, username, password):
@@ -178,6 +170,7 @@ class connection:
             self.enum_host_info()
             if self.print_host_info() and (self.login() or (self.username == "" and self.password == "")):
                 if hasattr(self.args, "module") and self.args.module:
+                    self.load_modules()
                     self.logger.debug("Calling modules")
                     self.call_modules()
                 else:
@@ -211,7 +204,7 @@ class connection:
         It iterates over the modules specified in the command line arguments.
         For each module, it loads the module and creates a context object, then calls functions based on the module's attributes.
         """
-        for module in self.module:
+        for module in self.modules:
             self.logger.debug(f"Loading module {module.name} - {module}")
             module_logger = NXCAdapter(
                 extra={
@@ -496,3 +489,12 @@ class connection:
 
     def mark_pwned(self):
         return highlight(f"({pwned_label})" if self.admin_privs else "")
+
+    def load_modules(self):
+        self.logger.info(f"Loading modules for target: {self.host}")
+        loader = ModuleLoader(self.args, self.db, self.logger)
+        self.modules = []
+
+        for module_path in self.module_paths:
+            module = loader.init_module(module_path)
+            self.modules.append(module)
