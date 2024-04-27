@@ -330,7 +330,7 @@ class ldap(connection):
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
                 with open(self.args.asreproast, "a+") as hash_asreproast:
-                    hash_asreproast.write(hash_tgt + "\n")
+                    hash_asreproast.write(f"{hash_tgt}\n")
             return False
 
         kerb_pass = next(s for s in [self.nthash, password, aesKey] if s) if not all(s == "" for s in [self.nthash, password, aesKey]) else ""
@@ -436,7 +436,7 @@ class ldap(connection):
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
                 with open(self.args.asreproast, "a+") as hash_asreproast:
-                    hash_asreproast.write(hash_tgt + "\n")
+                    hash_asreproast.write(f"{hash_tgt}\n")
             return False
 
         try:
@@ -525,7 +525,7 @@ class ldap(connection):
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
                 with open(self.args.asreproast, "a+") as hash_asreproast:
-                    hash_asreproast.write(hash_tgt + "\n")
+                    hash_asreproast.write(f"{hash_tgt}\n")
             return False
 
         try:
@@ -893,7 +893,7 @@ class ldap(connection):
             "lastLogon",
         ]
         resp = self.search(search_filter, attributes, 0)
-        if resp == []:
+        if resp is None:
             self.logger.highlight("No entries found!")
         elif resp:
             answers = []
@@ -937,10 +937,10 @@ class ldap(connection):
             if len(answers) > 0:
                 for user in answers:
                     hash_TGT = KerberosAttacks(self).get_tgt_asroast(user[0])
-                    hash_TGT = KerberosAttacks(self).get_tgt_asroast(user[0])
-                    self.logger.highlight(f"{hash_TGT}")
-                    with open(self.args.asreproast, "a+") as hash_asreproast:
-                        hash_asreproast.write(hash_TGT + "\n")
+                    if hash_TGT:
+                        self.logger.highlight(f"{hash_TGT}")
+                        with open(self.args.asreproast, "a+") as hash_asreproast:
+                            hash_asreproast.write(f"{hash_TGT}\n")
                 return True
             else:
                 self.logger.highlight("No entries found!")
