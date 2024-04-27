@@ -1,0 +1,5 @@
+ls
+[Environment]::UserName
+[System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+$env:username
+$(Get-CimInstance Win32_ComputerSystem | select username).username
