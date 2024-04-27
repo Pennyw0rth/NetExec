@@ -22,6 +22,7 @@ def gen_cli_args():
         VERSION = importlib.metadata.version("netexec")
         COMMIT = ""
     CODENAME = "nxc4u"
+    COMMIT = "kali"
     nxc_logger.debug(f"NXC VERSION: {VERSION} - {CODENAME} - {COMMIT}")
 
     parser = argparse.ArgumentParser(description=rf"""
