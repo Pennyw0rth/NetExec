@@ -221,7 +221,6 @@ class NXCModule:
 
         Based on the work of @_nwodtuhs and @BlWasp_.
         """
-
         context.log.debug(f"module_options: {module_options}")
 
         if not module_options:
