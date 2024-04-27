@@ -42,12 +42,12 @@ class NXCModule:
             - rollback (remove sysadmin privilege)
         """
         self.action = None
-        self.context = context
 
         if "ACTION" in module_options:
             self.action = module_options["ACTION"]
 
     def on_login(self, context, connection):
+        self.context = context
         # get mssql connection
         self.mssql_conn = connection.conn
         # fetch the current user
