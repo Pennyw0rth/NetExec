@@ -385,24 +385,30 @@ class NXCModule:
         xml_to_dict = parse(to_string)
         dump = json.dumps(xml_to_dict)
         obj = json.loads(dump)
-
-        if len(obj["KeePassFile"]["Root"]["Group"]["Entry"]):
-            for obj2 in obj["KeePassFile"]["Root"]["Group"]["Entry"]:
-                for password in obj2["String"]:
-                    if password["Key"] == "Password":
-                        context.log.highlight(str(password["Key"]) + " : " + str(password["Value"]["#text"]))
-                    else:
-                        context.log.highlight(str(password["Key"]) + " : " + str(password["Value"]))
-                context.log.highlight("")
-        if len(obj["KeePassFile"]["Root"]["Group"]["Group"]):
-            for obj2 in obj["KeePassFile"]["Root"]["Group"]["Group"]:
-                try:
-                    for obj3 in obj2["Entry"]:
-                        for password in obj3["String"]:
-                            if password["Key"] == "Password":
-                                context.log.highlight(str(password["Key"]) + " : " + str(password["Value"]["#text"]))
-                            else:
-                                context.log.highlight(str(password["Key"]) + " : " + str(password["Value"]))
-                        context.log.highlight("")
-                except KeyError:
-                    pass
+        
+        root_entries = root.find("./Root/Entry")
+        if root_entries is not None:
+            for entry in root_entries:
+                if entry is not None:
+                    password = entry.find("./String[Key='Password']/Value")
+                    self.print_password(context, entry)
+                else:
+                    context.log.highlight("")
+        
+        objects = root.findall("./Root/Group")
+        while objects:
+            current_object = objects.pop(0)
+            for entry in current_object.findall("./Entry"):
+                self.print_password(context, entry)
+                for history in entry.findall("./History"):
+                    for history_entry in history.findall("./Entry"):
+                        self.print_password(context, history_entry)
+            objects.extend(current_object.findall("./Group"))
+    
+    def print_password(self, context, entry):
+        context.log.highlight(str("-------------------------------------"))
+        context.log.highlight(str("Title") + " : " + str(entry.find("./String[Key='Title']/Value").text))
+        context.log.highlight(str("UserName") + " : " + str(entry.find("./String[Key='UserName']/Value").text))
+        context.log.highlight(str("URL") + " : " + str(entry.find("./String[Key='URL']/Value").text))
+        context.log.highlight(str("Password") + " : " + str(entry.find("./String[Key='Password']/Value").text))
+        context.log.highlight(str("Notes") + " : " + str(entry.find("./String[Key='Notes']/Value").text))
