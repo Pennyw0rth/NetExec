@@ -189,13 +189,13 @@ shell = ["prompt_toolkit"]
 
 [[package]]
 name = "asyauth"
-version = "0.0.18"
+version = "0.0.20"
 description = "Unified authentication library"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "asyauth-0.0.18-py3-none-any.whl", hash = "sha256:1fff4333d5db8c6c4a897efdf5e95a41a44cd257638d8296003f1a7a4a9e95a1"},
-    {file = "asyauth-0.0.18.tar.gz", hash = "sha256:b7602894fd0667cf1bd3e16a1d71c83f557a4c857ad41bddf30557a59665b4ad"},
+    {file = "asyauth-0.0.20-py3-none-any.whl", hash = "sha256:b4697c5be28869bb5df8ff217564e77a863385ef9495da7cb215deac4ebe9fac"},
+    {file = "asyauth-0.0.20.tar.gz", hash = "sha256:41056020f7689cf5f0a559759c7f02a6ce2719bda84df783bd1058d5781e514b"},
 ]
 
 [package.dependencies]
@@ -634,13 +634,13 @@ wmi = ["wmi (>=1.5.1,<2.0.0)"]
 
 [[package]]
 name = "dploot"
-version = "2.2.4"
+version = "2.7.1"
 description = "DPAPI looting remotely in Python"
 optional = false
-python-versions = ">=3.7,<4.0"
+python-versions = "<4.0,>=3.7"
 files = [
-    {file = "dploot-2.2.4-py3-none-any.whl", hash = "sha256:a70c8280972a1fb7150093560093e46a9bb5936396f563ae9050a20dcf1ad96e"},
-    {file = "dploot-2.2.4.tar.gz", hash = "sha256:e34ff928e94416f3cbf688427d1de4aa88a4a4a15f24edb6313a2adc685a98a3"},
+    {file = "dploot-2.7.1-py3-none-any.whl", hash = "sha256:4d557a88c4fd6f6a53f45333ccb853e4125f0bf101d5336937ac1f6c0afb7171"},
+    {file = "dploot-2.7.1.tar.gz", hash = "sha256:bcd2f9c6b6647d83b5d62f0446a0fdeb7eefacc6f71a49a8dd18ef43538d5db6"},
 ]
 
 [package.dependencies]
@@ -1299,13 +1299,13 @@ files = [
 
 [[package]]
 name = "msldap"
-version = "0.5.9"
+version = "0.5.10"
 description = "Python library to play with MS LDAP"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "msldap-0.5.9-py3-none-any.whl", hash = "sha256:26c0418086f788c1197341ee31d4ffbc69c057aef339cd91e882ca7c1fb10fcb"},
-    {file = "msldap-0.5.9.tar.gz", hash = "sha256:5f3c4e362296e0e1eba447eda9f230988a7b2a08826f7b3ed34ec9612ebcfe33"},
+    {file = "msldap-0.5.10-py3-none-any.whl", hash = "sha256:263a4bfa832f3b9f27163e5a752151608283745dba22ad8d7c560ae18e0e193b"},
+    {file = "msldap-0.5.10.tar.gz", hash = "sha256:65bfe0e502c94d26f45d366f567cdb62462f27f655bd0ae2f0228fe3c9f989b8"},
 ]
 
 [package.dependencies]
@@ -2175,13 +2175,13 @@ widechars = ["wcwidth"]
 
 [[package]]
 name = "termcolor"
-version = "2.0.1"
+version = "2.4.0"
 description = "ANSI color formatting for output in terminal"
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=3.8"
 files = [
-    {file = "termcolor-2.0.1-py3-none-any.whl", hash = "sha256:7e597f9de8e001a3208c4132938597413b9da45382b6f1d150cff8d062b7aaa3"},
-    {file = "termcolor-2.0.1.tar.gz", hash = "sha256:6b2cf769e93364a2676e1de56a7c0cff2cf5bd07f37e9cc80b0dd6320ebfe388"},
+    {file = "termcolor-2.4.0-py3-none-any.whl", hash = "sha256:9297c0df9c99445c2412e832e882a7884038a25617c60cea2ad69488d4040d63"},
+    {file = "termcolor-2.4.0.tar.gz", hash = "sha256:aab9e56047c8ac41ed798fa36d892a37aca6b3e9159f3e0c24bc64a9b3ac7b7a"},
 ]
 
 [package.extras]
@@ -2351,4 +2351,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.0"
-content-hash = "10aa4808e56fd71b438e074ae1a328290ec06b6e3e674b6cdc7e8bcf7eb9646e"
+content-hash = "17488cfeacedee4367d181583c0f1e3ba0511f0ae37013cb1b65267c44722586"
