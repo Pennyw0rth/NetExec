@@ -60,7 +60,7 @@ def proto_args(parser, std_parser, module_parser):
 
     tgroup = smb_parser.add_argument_group("Files", "Options for put and get remote files")
     tgroup.add_argument("--put-file", action="append", nargs=2, metavar="FILE", help="Put a local file into remote target, ex: whoami.txt \\\\Windows\\\\Temp\\\\whoami.txt")
-    tgroup.add_argument("--get-file", nargs=2, metavar="FILE", help="Get a remote file, ex: \\\\Windows\\\\Temp\\\\whoami.txt whoami.txt")
+    tgroup.add_argument("--get-file", action="append", nargs=2, metavar="FILE", help="Get a remote file, ex: \\\\Windows\\\\Temp\\\\whoami.txt whoami.txt")
     tgroup.add_argument("--append-host", action="store_true", help="append the host to the get-file filename")
 
     cgroup = smb_parser.add_argument_group("Command Execution", "Options for executing commands")

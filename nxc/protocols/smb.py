@@ -1263,10 +1263,8 @@ class smb(connection):
         else:
             self.put_file_single(*files)
 
-    def get_file(self):
+    def get_file_single(self, remote_path, download_path):
         share_name = self.args.share
-        remote_path = self.args.get_file[0]
-        download_path = self.args.get_file[1]
         self.logger.display(f'Copying "{remote_path}" to "{download_path}"')
         if self.args.append_host:
             download_path = f"{self.hostname}-{remote_path}"
@@ -1278,6 +1276,14 @@ class smb(connection):
                 self.logger.fail(f'Error writing file "{remote_path}" from share "{share_name}": {e}')
                 if os.path.getsize(download_path) == 0:
                     os.remove(download_path)
+
+    def get_file(self):
+        files = self.args.get_file
+        if isinstance(files, list):
+            for src, dest in files:
+                self.get_file_single(src, dest)
+        else:
+            self.get_file_single(*files)
 
     def enable_remoteops(self):
         try:
