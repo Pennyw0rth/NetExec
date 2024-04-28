@@ -1246,14 +1246,22 @@ class smb(connection):
         dce.disconnect()
         return entries
 
-    def put_file(self):
-        self.logger.display(f"Copying {self.args.put_file[0]} to {self.args.put_file[1]}")
-        with open(self.args.put_file[0], "rb") as file:
+    def put_file_single(self, src, dst):
+        self.logger.display(f"Copying {src} to {dst}")
+        with open(src, "rb") as file:
             try:
-                self.conn.putFile(self.args.share, self.args.put_file[1], file.read)
-                self.logger.success(f"Created file {self.args.put_file[0]} on \\\\{self.args.share}\\{self.args.put_file[1]}")
+                self.conn.putFile(self.args.share, dst, file.read)
+                self.logger.success(f"Created file {src} on \\\\{self.args.share}\\{dst}")
             except Exception as e:
                 self.logger.fail(f"Error writing file to share {self.args.share}: {e}")
+    
+    def put_file(self):
+        files = self.args.put_file
+        if isinstance(files, list):
+            for src, dest in files:
+                self.put_file_single(src, dest)
+        else:
+            self.put_file_single(*files)
 
     def get_file(self):
         share_name = self.args.share
