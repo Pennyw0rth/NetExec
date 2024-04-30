@@ -42,6 +42,7 @@ a = Analysis(
         'nxc.helpers.bash',
         'nxc.helpers.bloodhound',
         'nxc.helpers.msada_guids',
+        'nxc.helpers.ntlm_parser',
         'paramiko',
         'pypsrp.client',
         'pywerview.cli.helpers',
