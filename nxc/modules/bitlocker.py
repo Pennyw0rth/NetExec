@@ -14,7 +14,7 @@ class NXCModule:
 	def on_admin_login(self, context, connection):
 	
 		# PowerShell command to check BitLocker volumes status.
-		check_bitlocker_command_str = 'powershell.exe "Get-BitLockerVolume | Select-Object MountPoint, ProtectionStatus"'
+		check_bitlocker_command_str = 'powershell.exe "Get-CimInstance -Namespace "root/CIMV2/Security/MicrosoftVolumeEncryption" -ClassName "Win32_EncryptableVolume" | Select-Object DriveLetter, ProtectionStatus"'
 
 		try:
 			# Executing the PowerShell command to get BitLocker volumes status.
@@ -28,13 +28,13 @@ class NXCModule:
 			# Analyzing data lines.
 			for line in data_lines:
 				parts = re.split(r"\s{2,}", line.strip())  # Stripping spaces and splitting the line.
-				MountPoint = parts[0]  # Getting the mount point of the drive.
+				drive_letter = parts[0]  # Getting the mount point of the drive.
 				protection_status = parts[1]  # Getting the protection status.
 				
 				# Checking if BitLocker is enabled.
-				if protection_status == "On":
-					context.log.success(f"BitLocker is enabled on {MountPoint} drive!")
+				if protection_status == "1":
+					context.log.success(f"BitLocker is enabled on {drive_letter} drive!")
 				else:
-					context.log.highlight(f"BitLocker is disabled on {MountPoint} drive!")
+					context.log.highlight(f"BitLocker is disabled on {drive_letter} drive!")
 		except Exception as e:
 			context.log.exception(f"Exception occurred: {e}")
