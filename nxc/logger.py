@@ -53,12 +53,14 @@ class SmartDebugRichHandler(RichHandler):
             
     def emit(self, record):
         """Overrides the emit method of the RichHandler class so we can set the proper pathname and lineno"""
+        # for some reason in RDP, the exc_text is None which leads to a KeyError in Python logging
+        record.exc_text = record.getMessage() if record.exc_text is None else record.exc_text
+        
         if hasattr(record, "caller_frame"):
             frame_info = inspect.getframeinfo(record.caller_frame)
             record.pathname = frame_info.filename
             record.lineno = frame_info.lineno
         super().emit(record)
-
 
 def no_debug(func):
     """Stops logging non-debug messages when we are in debug mode
