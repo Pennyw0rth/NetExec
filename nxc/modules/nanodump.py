@@ -39,7 +39,6 @@ class NXCModule:
         NANO_EXE_NAME       Name of the nano executable (default: nano.exe)
         DIR_RESULT          Location where the dmp are stored (default: DIR_RESULT = NANO_PATH)
         """
-        self.context = context
         self.remote_tmp_dir = "C:\\Windows\\Temp\\"
         self.share = "C$"
         self.tmp_share = self.remote_tmp_dir.split(":")[1]
