@@ -108,18 +108,6 @@ class connection:
             self.logger.info(f"Error resolving hostname {self.hostname}: {e}")
             return
 
-        if args.jitter:
-            jitter = args.jitter
-            if "-" in jitter:
-                start, end = jitter.split("-")
-                jitter = (int(start), int(end))
-            else:
-                jitter = (0, int(jitter))
-
-            value = random.choice(range(jitter[0], jitter[1]))
-            self.logger.debug(f"Doin' the jitterbug for {value} second(s)")
-            sleep(value)
-
         try:
             self.proto_flow()
         except Exception as e:
@@ -401,6 +389,17 @@ class connection:
             return False
         if hasattr(self.args, "delegate") and self.args.delegate:
             self.args.kerberos = True
+
+        if self.args.jitter:
+            jitter = self.args.jitter
+            if "-" in jitter:
+                start, end = jitter.split("-")
+                jitter = (int(start), int(end))
+            else:
+                jitter = (0, int(jitter))
+            value = jitter[0] if jitter[0] == jitter[1] else random.choice(range(jitter[0], jitter[1]))
+            self.logger.debug(f"Throttle authentications: sleeping {value} second(s)")
+            sleep(value)
         with sem:
             if cred_type == "plaintext":
                 if self.args.kerberos:

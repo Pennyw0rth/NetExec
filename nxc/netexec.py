@@ -214,6 +214,9 @@ def main():
         if ans.lower() not in ["y", "yes", ""]:
             exit(1)
 
+    if args.jitter and len(targets) > 1:
+        nxc_logger.highlight(highlight("[!] Jitter is only throttling authentications per target!", "red"))
+
     try:
         asyncio.run(start_run(protocol_object, args, db, targets))
     except KeyboardInterrupt:
