@@ -376,7 +376,9 @@ class connection:
         return domain, username, owned, secret, cred_type, [None] * len(secret)
 
     def try_credentials(self, domain, username, owned, secret, cred_type, data=None):
-        """Try to login using the specified credentials and protocol.
+        """
+        Try to login using the specified credentials and protocol.
+        With  --jitter an authentication throttle can be applied.
 
         Possible login methods are:
             - plaintext (/kerberos)
@@ -400,6 +402,7 @@ class connection:
             value = jitter[0] if jitter[0] == jitter[1] else random.choice(range(jitter[0], jitter[1]))
             self.logger.debug(f"Throttle authentications: sleeping {value} second(s)")
             sleep(value)
+
         with sem:
             if cred_type == "plaintext":
                 if self.args.kerberos:
