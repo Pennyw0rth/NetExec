@@ -150,7 +150,6 @@ class NXCModule:
                 value = self.reg_query_value(remote_ops, path, password).encode().rstrip(b"\x00").decode()
                 value = unhexlify(value)
             except Exception as e:
-                print(e)
                 if "ERROR_FILE_NOT_FOUND" not in str(e):
                     self.context.log.debug(f"Error while RegQueryValue {path}\\{user}: {e}")
                 continue
@@ -169,7 +168,7 @@ class NXCModule:
     def split_len(self, seq, length):
         return [seq[i:i + length] for i in range(0, len(seq), length)]
 
-    def recover_vncpassword(self, cipher):
+    def recover_vncpassword(self, cipher: bytes):
         encpasswd = cipher.hex()
         pwd = None
         if encpasswd:
@@ -189,11 +188,13 @@ class NXCModule:
                 pwd = self.decrypt_password(cipher)
         return pwd
 
-    def decrypt_password(self, password):
+    def decrypt_password(self, password: bytes):
+        length = len(password)
         try:
-            password = (password + b"\x00" * 8)[:8]
+            if length <= 16:
+                password += b"\x00" * (16 - length)
             cipher = DES.new(key=self.vnc_decryption_key, mode=DES.MODE_ECB)
-            return cipher.decrypt(password)
+            return cipher.decrypt(password)[:length]
         except Exception as ex:
             self.context.log.debug(f"Error while decrypting VNC password {password}: {ex}")
 
@@ -213,5 +214,5 @@ class NXCModule:
                     passwds_encrypted = re.findall(regex, file_content)
                     for passwd_encrypted in passwds_encrypted:
                         passwd_encrypted = passwd_encrypted.split(b"=")[-1]
-                        password = self.decrypt_password(unhexlify(passwd_encrypted))
+                        password = self.recover_vncpassword(unhexlify(passwd_encrypted))[:8]
                         self.context.log.highlight(f"[{vnc_name}] Password: {password.decode('latin-1')}")
