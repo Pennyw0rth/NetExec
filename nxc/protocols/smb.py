@@ -680,26 +680,20 @@ class smb(connection):
             return False
 
     @requires_admin
-    def ps_execute(
-        self,
-        payload=None,
-        get_output=False,
-        methods=None,
-        force_ps32=False,
-        dont_obfs=False,
-    ):
+    def ps_execute(self, payload=None, get_output=False, methods=None, force_ps32=False, dont_obfs=False):
         response = []
         if not payload and self.args.ps_execute:
             payload = self.args.ps_execute
             if not self.args.no_output:
                 get_output = True
+        
 
         amsi_bypass = self.args.amsi_bypass[0] if self.args.amsi_bypass else None
         if os.path.isfile(payload):
             with open(payload) as commands:
-                response = [self.execute(create_ps_command(c.strip(), force_ps32=force_ps32, dont_obfs=dont_obfs, custom_amsi=amsi_bypass), get_output, methods) for c in commands]
+                response = [self.execute(create_ps_command(c.strip(), force_ps32=force_ps32, dont_obfs=not self.args.obfs, custom_amsi=amsi_bypass), get_output, methods) for c in commands]
         else:
-            response = [self.execute(create_ps_command(payload, force_ps32=force_ps32, dont_obfs=dont_obfs, custom_amsi=amsi_bypass), get_output, methods)]
+            response = [self.execute(create_ps_command(payload, force_ps32=force_ps32, dont_obfs=not self.args.obfs, custom_amsi=amsi_bypass), get_output, methods)]
         return response
 
     def shares(self):
