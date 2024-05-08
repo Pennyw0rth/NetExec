@@ -115,11 +115,8 @@ def create_ps_command(ps_command, force_ps32=False, dont_obfs=False, custom_amsi
     Args:
     ----
         ps_command (str): The PowerShell command to be executed.
-
         force_ps32 (bool, optional): Whether to force PowerShell to run in 32-bit mode. Defaults to False.
-
         dont_obfs (bool, optional): Whether to obfuscate the generated command. Defaults to False.
-
         custom_amsi (str, optional): Path to a custom AMSI bypass script. Defaults to None.
 
     Returns:
