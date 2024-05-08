@@ -22,7 +22,7 @@ class NXCModule:
         pass
 
 
-    def on_login(self, context, connection):
+    def on_admin_login(self, context, connection):
         self.__domain = connection.domain
         self.__domainNetbios = connection.domain
         self.__kdcHost = connection.hostname + "." + connection.domain
