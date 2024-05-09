@@ -687,8 +687,9 @@ class smb(connection):
     @requires_admin
     def ps_execute(self, payload=None, get_output=False, methods=None, force_ps32=False, obfs=False, encode=False):
         response = []
-        obfs = obfs if obfs else not self.args.obfs
+        obfs = obfs if obfs else self.args.obfs
         encode = encode if encode else not self.args.no_encode
+        force_ps32 = force_ps32 if force_ps32 else self.args.force_ps32
         if not payload and self.args.ps_execute:
             payload = self.args.ps_execute
             if not self.args.no_output:

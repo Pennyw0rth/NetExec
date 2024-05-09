@@ -130,26 +130,30 @@ def create_ps_command(ps_command, force_ps32=False, obfs=False, custom_amsi=None
         nxc_logger.debug(f"Using custom AMSI bypass script: {custom_amsi}")
         with open(custom_amsi) as file_in:
             lines = list(file_in)
-            amsi_bypass = "".join(lines) + " "  # need a space between bypass & command
+            amsi_bypass = "".join(lines)
     else:
         amsi_bypass = ""
 
-    command = amsi_bypass + f"\n$functions = {{\n    function Command-ToExecute\n    {{\n{amsi_bypass + ps_command}\n    }}\n}}\nif ($Env:PROCESSOR_ARCHITECTURE -eq 'AMD64')\n{{\n    $job = Start-Job -InitializationScript $functions -ScriptBlock {{Command-ToExecute}} -RunAs32\n    $job | Wait-Job\n}}\nelse\n{{\n    IEX \"$functions\"\n    Command-ToExecute\n}}\n" if force_ps32 else amsi_bypass + ps_command
-
+    # https://stackoverflow.com/a/60155248
+    command = amsi_bypass + f"$functions = {{function Command-ToExecute{{{amsi_bypass + ps_command}}}}}; if ($Env:PROCESSOR_ARCHITECTURE -eq 'AMD64'){{$job = Start-Job -InitializationScript $functions -ScriptBlock {{Command-ToExecute}} -RunAs32; $job | Wait-Job | Receive-Job }} else {{IEX '$functions'; Command-ToExecute}}" if force_ps32 else f"{amsi_bypass} {ps_command}"
+    
     nxc_logger.debug(f"Generated PS command:\n {command}\n")
 
     if obfs:
+        nxc_logger.debug("Obfuscating PowerShell command")
         obfs_attempts = 0
         while True:
+            nxc_logger.debug(f"Obfuscation attempt: {obfs_attempts + 1}")
             command = f'powershell.exe -exec bypass -noni -nop -w 1 -C "{invoke_obfuscation(command)}"'
             if len(command) <= 8191:
+                nxc_logger.debug(f"Obfuscation length too long with {len(command)}, trying again...")
                 break
             if obfs_attempts == 4:
                 nxc_logger.error(f"Command exceeds maximum length of 8191 chars (was {len(command)}). exiting.")
                 exit(1)
             obfs_attempts += 1
     else:
-        command = f"-enc {encode_ps_command(command)}" if encode else command
+        command = f"-enc {encode_ps_command(command)}" if encode else f'"{command}"'
         command = f"powershell.exe -noni -nop -w 1 {command}"
         
         if len(command) > 8191:
