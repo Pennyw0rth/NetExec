@@ -90,7 +90,7 @@ class NXCModule:
 
                 for user in resp['Buffer']['Buffer']:
                     r = samr.hSamrOpenUser(dce, domainHandle, samr.MAXIMUM_ALLOWED, user['RelativeId'])
-                    info = samr.hSamrQueryInformationUser2(dce, r['UserHandle'], samr.USER_INFORMATION_CLASS.UserResetInformation) # 30 = UserResetInformation
+                    info = samr.hSamrQueryInformationUser2(dce, r['UserHandle'], samr.USER_INFORMATION_CLASS.UserResetInformation)
 
                     resetData = info['Buffer']['Reset']['ResetData']
                     if resetData == b'':
