@@ -1,4 +1,4 @@
-from argparse import _StoreTrueAction
+from argparse import _StoreTrueAction, FileType
 
 
 def proto_args(parser, std_parser, module_parser):
@@ -70,13 +70,16 @@ def proto_args(parser, std_parser, module_parser):
     cgroup.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output (default: utf-8). If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
     cgroup.add_argument("--force-ps32", action="store_true", help="force the PowerShell command to run in a 32-bit process")
     cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
+    
     cegroup = cgroup.add_mutually_exclusive_group()
     cegroup.add_argument("-x", metavar="COMMAND", dest="execute", help="execute the specified CMD command")
     cegroup.add_argument("-X", metavar="PS_COMMAND", dest="ps_execute", help="execute the specified PowerShell command")
+    
     psgroup = smb_parser.add_argument_group("Powershell Obfuscation", "Options for PowerShell script obfuscation")
-    psgroup.add_argument("--obfs", action="store_true", help="Obfuscate PowerShell scripts")
-    psgroup.add_argument("--amsi-bypass", nargs=1, metavar="FILE", help="File with a custom AMSI bypass")
+    psgroup.add_argument("--obfs", action="store_true", default="false", help="Obfuscate PowerShell ran on target")
+    psgroup.add_argument("--amsi-bypass", nargs=1, metavar="FILE", type=FileType("r"), help="File with a custom AMSI bypass")
     psgroup.add_argument("--clear-obfscripts", action="store_true", help="Clear all cached obfuscated PowerShell scripts")
+    psgroup.add_argument("--no-encode", action="store_true", default="true", help="Do not encode the PowerShell command ran on target")
 
     return parser
 

@@ -665,9 +665,14 @@ class smb(connection):
             except UnicodeDecodeError:
                 self.logger.debug("Decoding error detected, consider running chcp.com at the target, map the result with https://docs.python.org/3/library/codecs.html#standard-encodings")
                 output = output.decode("cp437")
-
-            output = output.strip()
-            self.logger.debug(f"Output: {output}")
+                
+            self.logger.debug(f"Raw Output: {output}")
+            output = "\n".join([ll.rstrip() for ll in output.splitlines() if ll.strip()])
+            self.logger.debug(f"Cleaned Output: {output}")
+            
+            if "This script contains malicious content" in output:
+                self.logger.fail("Script blocked by AMSI")
+                return None
 
             if (self.args.execute or self.args.ps_execute) and output:
                 self.logger.success(f"Executed command via {current_method}")
@@ -680,20 +685,28 @@ class smb(connection):
             return False
 
     @requires_admin
-    def ps_execute(self, payload=None, get_output=False, methods=None, force_ps32=False, dont_obfs=False):
+    def ps_execute(self, payload=None, get_output=False, methods=None, force_ps32=False, obfs=False, encode=False):
         response = []
+        obfs = obfs if obfs else not self.args.obfs
+        encode = encode if encode else not self.args.no_encode
         if not payload and self.args.ps_execute:
             payload = self.args.ps_execute
             if not self.args.no_output:
                 get_output = True
-        
+                
+        self.logger.debug(f"Starting PS execute: {payload=} {get_output=} {methods=} {force_ps32=} {obfs=} {encode=}")
 
         amsi_bypass = self.args.amsi_bypass[0] if self.args.amsi_bypass else None
+        self.logger.debug(f"AMSI Bypass: {amsi_bypass}")
+        
         if os.path.isfile(payload):
+            self.logger.debug(f"File payload set: {payload}")
             with open(payload) as commands:
-                response = [self.execute(create_ps_command(c.strip(), force_ps32=force_ps32, dont_obfs=not self.args.obfs, custom_amsi=amsi_bypass), get_output, methods) for c in commands]
+                response = [self.execute(create_ps_command(c.strip(), force_ps32=force_ps32, obfs=obfs, custom_amsi=amsi_bypass, encode=encode), get_output, methods) for c in commands]
         else:
-            response = [self.execute(create_ps_command(payload, force_ps32=force_ps32, dont_obfs=not self.args.obfs, custom_amsi=amsi_bypass), get_output, methods)]
+            response = [self.execute(create_ps_command(payload, force_ps32=force_ps32, obfs=obfs, custom_amsi=amsi_bypass, encode=encode), get_output, methods)]
+            
+        self.logger.debug(f"ps_execute response: {response}")
         return response
 
     def shares(self):

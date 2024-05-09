@@ -108,7 +108,7 @@ def obfs_ps_script(path_to_script):
 
 
 
-def create_ps_command(ps_command, force_ps32=False, dont_obfs=False, custom_amsi=None):
+def create_ps_command(ps_command, force_ps32=False, obfs=False, custom_amsi=None, encode=True):
     """
     Generates a PowerShell command based on the provided `ps_command` parameter.
 
@@ -116,17 +116,21 @@ def create_ps_command(ps_command, force_ps32=False, dont_obfs=False, custom_amsi
     ----
         ps_command (str): The PowerShell command to be executed.
         force_ps32 (bool, optional): Whether to force PowerShell to run in 32-bit mode. Defaults to False.
-        dont_obfs (bool, optional): Whether to obfuscate the generated command. Defaults to False.
+        obfs (bool, optional): Whether to obfuscate the generated command. Defaults to False.
         custom_amsi (str, optional): Path to a custom AMSI bypass script. Defaults to None.
+        encode (bool, optional): Whether to encode the generated command (executed via -enc in PS). Defaults to True.
 
     Returns:
     -------
         str: The generated PowerShell command.
     """
+    nxc_logger.debug(f"Creating PS command parameters: {ps_command=}, {force_ps32=}, {obfs=}, {custom_amsi=}, {encode=}")
+    
     if custom_amsi:
+        nxc_logger.debug(f"Using custom AMSI bypass script: {custom_amsi}")
         with open(custom_amsi) as file_in:
             lines = list(file_in)
-            amsi_bypass = "".join(lines)
+            amsi_bypass = "".join(lines) + " "  # need a space between bypass & command
     else:
         amsi_bypass = ""
 
@@ -134,24 +138,25 @@ def create_ps_command(ps_command, force_ps32=False, dont_obfs=False, custom_amsi
 
     nxc_logger.debug(f"Generated PS command:\n {command}\n")
 
-    if not dont_obfs:
+    if obfs:
         obfs_attempts = 0
         while True:
             command = f'powershell.exe -exec bypass -noni -nop -w 1 -C "{invoke_obfuscation(command)}"'
             if len(command) <= 8191:
                 break
-
             if obfs_attempts == 4:
                 nxc_logger.error(f"Command exceeds maximum length of 8191 chars (was {len(command)}). exiting.")
                 exit(1)
-
             obfs_attempts += 1
     else:
-        command = f"powershell.exe -noni -nop -w 1 -enc {encode_ps_command(command)}"
+        command = f"-enc {encode_ps_command(command)}" if encode else command
+        command = f"powershell.exe -noni -nop -w 1 {command}"
+        
         if len(command) > 8191:
             nxc_logger.error(f"Command exceeds maximum length of 8191 chars (was {len(command)}). exiting.")
             exit(1)
-
+            
+    nxc_logger.debug(f"Final command: {command}")
     return command
 
 
