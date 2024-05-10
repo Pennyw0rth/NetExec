@@ -1,6 +1,6 @@
 ---
 name: Pull request
-about: Updating code to fix a bug or add an enhancement/feature
+about: Update code to fix a bug or add an enhancement/feature
 title: ''
 labels: ''
 assignees: ''
