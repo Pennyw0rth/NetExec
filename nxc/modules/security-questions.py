@@ -98,10 +98,13 @@ class NXCModule:
                     resetData = json.loads(resetData)
                     questions = resetData['questions']
 
-                    for qna in questions:
-                        question = qna['question']
-                        answer = qna['answer']
-                        context.log.highlight(f"{user['Name']} - {question}: {answer}")
+                    if len(questions) == 0:
+                        context.log.highlight(f"User {user['Name']} has no security questions")
+                    else:
+                        for qna in questions:
+                            question = qna['question']
+                            answer = qna['answer']
+                            context.log.highlight(f"{user['Name']} - {question}: {answer}")
 
                     samr.hSamrCloseHandle(dce, r['UserHandle'])
                 enumerationContext = resp['EnumerationContext']
