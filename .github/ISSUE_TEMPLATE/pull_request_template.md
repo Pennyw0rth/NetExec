@@ -28,6 +28,10 @@ If you are using poetry, you can easily run tests via:
 `poetry run python tests/e2e_tests.py -t $TARGET -u $USER -p $PASSWORD`
 There are additional options like `--errors` to display ALL errors (some may not be failures), `--poetry` (output will include the poetry run prepended), `--line-num $START-$END $SINGLE` for only running a subset
 
+## Screenshots (if appropriate):
+Screenshots are always nice to have and can give a visual representation of the change.
+If appropriate include before and after screenshot(s) to show which results are to be expected.
+
 ## Checklist:
 
 - [ ] I have ran Ruff against my changes (via poetry: `poetry run python -m ruff check . --preview`, use `--fix` to automatically fix what it can)
