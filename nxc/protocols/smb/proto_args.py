@@ -1,4 +1,4 @@
-from argparse import _StoreTrueAction, FileType
+from argparse import _StoreTrueAction
 
 
 def proto_args(parser, std_parser, module_parser):
@@ -77,9 +77,9 @@ def proto_args(parser, std_parser, module_parser):
     psgroup = smb_parser.add_argument_group("Powershell Options", "Options for PowerShell execution")
     psgroup.add_argument("--force-ps32", action="store_true", default=False, help="Force the PowerShell command to run in a 32-bit process via a job; WARNING: depends on the job completing quickly, so you may have to increase the timeout")
     psgroup.add_argument("--obfs", action="store_true", default=False, help="Obfuscate PowerShell ran on target; WARNING: Defender will almost certainly trigger on this")
-    psgroup.add_argument("--amsi-bypass", nargs=1, metavar="FILE", type=FileType("r"), help="File with a custom AMSI bypass")
+    psgroup.add_argument("--amsi-bypass", nargs=1, metavar="FILE", type=str, help="File with a custom AMSI bypass")
     psgroup.add_argument("--clear-obfscripts", action="store_true", help="Clear all cached obfuscated PowerShell scripts")
-    psgroup.add_argument("--no-encode", action="store_true", default=True, help="Do not encode the PowerShell command ran on target")
+    psgroup.add_argument("--no-encode", action="store_true", default=False, help="Do not encode the PowerShell command ran on target")
 
     return parser
 

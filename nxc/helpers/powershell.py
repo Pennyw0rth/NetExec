@@ -12,6 +12,20 @@ import random
 
 obfuscate_ps_scripts = False
 
+def replace_singles(s):
+    """Replaces single quotes with a double quote
+    We do this because quoting is very important in PowerShell, and we are doing multiple layers:
+    Python, MSSQL, and PowerShell. We want to make sure that the command is properly quoted at each layer.
+
+    Args:
+    ----
+        s (str): The string to replace single quotes in.
+
+    Returns:
+    -------
+        str: Original string with single quotes replaced with double.
+    """
+    return s.replace("'", r"\"")
 
 def get_ps_script(path):
     """Generates a full path to a PowerShell script given a relative path.
@@ -144,15 +158,18 @@ def create_ps_command(ps_command, force_ps32=False, obfs=False, custom_amsi=None
         obfs_attempts = 0
         while True:
             nxc_logger.debug(f"Obfuscation attempt: {obfs_attempts + 1}")
-            command = f'powershell.exe -exec bypass -noni -nop -w 1 -C "{invoke_obfuscation(command)}"'
+            obfs_command = invoke_obfuscation(command)
+            
+            command = f'powershell.exe -exec bypass -noni -nop -w 1 -C "{replace_singles(obfs_command)}"'
             if len(command) <= 8191:
-                nxc_logger.debug(f"Obfuscation length too long with {len(command)}, trying again...")
                 break
             if obfs_attempts == 4:
                 nxc_logger.error(f"Command exceeds maximum length of 8191 chars (was {len(command)}). exiting.")
                 exit(1)
+            nxc_logger.debug(f"Obfuscation length too long with {len(command)}, trying again...")
             obfs_attempts += 1
     else:
+        # if we arent encoding or obfuscating anything, we quote the entire powershell in double quotes, otherwise the final powershell command will syntax error
         command = f"-enc {encode_ps_command(command)}" if encode else f'"{command}"'
         command = f"powershell.exe -noni -nop -w 1 {command}"
         
@@ -288,6 +305,7 @@ def invoke_obfuscation(script_string):
     -------
         str: The obfuscated payload for execution.
     """
+    nxc_logger.debug(f"Command before obfuscation: {script_string}")
     random_alphabet = "".join(random.choice([i.upper(), i]) for i in ascii_lowercase)
     random_delimiters = ["_", "-", ",", "{", "}", "~", "!", "@", "%", "&", "<", ">", ";", ":", *list(random_alphabet)]
 
@@ -404,5 +422,7 @@ def invoke_obfuscation(script_string):
         choice(["", " "]) + new_script + choice(["", " "]) + "|" + choice(["", " "]) + invoke_expression,
     ]
 
-    return choice(invoke_options)
+    obfuscated_script = choice(invoke_options)
+    nxc_logger.debug(f"Script after obfuscation: {obfuscated_script}")
+    return obfuscated_script
 

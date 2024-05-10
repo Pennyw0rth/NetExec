@@ -686,17 +686,18 @@ class smb(connection):
 
     @requires_admin
     def ps_execute(self, payload=None, get_output=False, methods=None, force_ps32=False, obfs=False, encode=False):
+        payload = self.args.ps_execute if not payload and self.args.ps_execute else payload
+        if not payload:
+            self.logger.error("No command to execute specified!")
+            return None
+        
         response = []
         obfs = obfs if obfs else self.args.obfs
         encode = encode if encode else not self.args.no_encode
         force_ps32 = force_ps32 if force_ps32 else self.args.force_ps32
-        if not payload and self.args.ps_execute:
-            payload = self.args.ps_execute
-            if not self.args.no_output:
-                get_output = True
+        get_output = True if not self.args.no_output else get_output
                 
         self.logger.debug(f"Starting PS execute: {payload=} {get_output=} {methods=} {force_ps32=} {obfs=} {encode=}")
-
         amsi_bypass = self.args.amsi_bypass[0] if self.args.amsi_bypass else None
         self.logger.debug(f"AMSI Bypass: {amsi_bypass}")
         

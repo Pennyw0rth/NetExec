@@ -146,16 +146,20 @@ class WMIEXEC:
                 break
             except Exception as e:
                 if tries >= self.__tries:
-                    self.logger.fail("WMIEXEC: Could not retrieve output file, it may have been detected by AV. If it is still failing, try the 'wmi' protocol or another exec method")
+                    self.logger.fail("wmiexec: Could not retrieve output file, it may have been detected by AV. If it is still failing, try the 'wmi' protocol or another exec method")
                     break
-                if str(e).find("STATUS_BAD_NETWORK_NAME") > 0:
+                elif str(e).find("STATUS_BAD_NETWORK_NAME") > 0:
                     self.logger.fail(f"SMB connection: target has blocked {self.__share} access (maybe command executed!)")
                     break
+                elif str(e).find("STATUS_VIRUS_INFECTED") >= 0:
+                    self.logger.fail("Command did not run because a virus was detected")
+                    break
+                
                 if str(e).find("STATUS_SHARING_VIOLATION") >= 0 or str(e).find("STATUS_OBJECT_NAME_NOT_FOUND") >= 0:
                     sleep(2)
-                    tries += 1
                 else:
-                    self.logger.debug(str(e))
+                    self.logger.debug(f"Exception when trying to read output file: {e}")
+                tries += 1
 
         if self.__outputBuffer:
             self.logger.debug(f"Deleting file {self.__share}\\{self.__output}")
