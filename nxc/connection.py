@@ -23,7 +23,7 @@ global_failed_logins = 0
 user_failed_logins = {}
 
 
-def gethost_addrinfo(hostname, force_ipv6, dns_server, dns_tcp, dns_timeout):
+def get_host_addr_info(hostname, force_ipv6, dns_server, dns_tcp, dns_timeout):
     result = {
         "host": "",
         "is_ipv6": False,
@@ -37,6 +37,7 @@ def gethost_addrinfo(hostname, force_ipv6, dns_server, dns_tcp, dns_timeout):
         else:
             address_info["AF_INET6"] = hostname
     except Exception:
+        # If the hostname is not an IP address, we need to resolve it
         if not (dns_server or dns_tcp):
             for res in getaddrinfo(hostname, None, AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
                 af, _, _, canonname, sa = res
@@ -58,7 +59,7 @@ def gethost_addrinfo(hostname, force_ipv6, dns_server, dns_tcp, dns_timeout):
                 address_info["AF_INET"] = answers_ipv4[0].address
             except Exception:
                 pass
-                
+
             try:
                 answers_ipv6 = dnsresolver.resolve(hostname, rdatatype.AAAA, raise_on_no_answer=False, tcp=dns_tcp)
                 address_info["AF_INET6"] = answers_ipv6[0].address
@@ -123,11 +124,8 @@ def dcom_FirewallChecker(iInterface, remoteHost, timeout):
 
 class connection:
     def __init__(self, args, db, host):
-        self.domain = None
         self.args = args
         self.db = db
-        self.hostname = host
-        self.port = self.args.port
         self.conn = None
         self.admin_privs = False
         self.password = ""
@@ -135,12 +133,18 @@ class connection:
         self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey)
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.kdcHost = None if not self.args.kdcHost else self.args.kdcHost
-        self.remoteHost = None
-        self.remoteName = None
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
         self.failed_logins = 0
-        self.local_ip = None
         self.logger = nxc_logger
+
+        # Network info
+        self.domain = None
+        self.host = None
+        self.hostname = host
+        self.remoteHost = None
+        self.remoteName = None
+        self.port = self.args.port
+        self.local_ip = None
 
         dns_result = self.resolver(self.hostname)
         if dns_result:
@@ -181,12 +185,12 @@ class connection:
 
     def resolver(self, hostname):
         try:
-            return gethost_addrinfo(
-            hostname=hostname,
-            force_ipv6=self.args.force_ipv6,
-            dns_server=self.args.dns_server,
-            dns_tcp=self.args.dns_tcp,
-            dns_timeout=self.args.dns_timeout
+            return get_host_addr_info(
+                hostname=hostname,
+                force_ipv6=self.args.force_ipv6,
+                dns_server=self.args.dns_server,
+                dns_tcp=self.args.dns_tcp,
+                dns_timeout=self.args.dns_timeout
             )
         except Exception as e:
             self.logger.info(f"Error resolving hostname {self.hostname}: {e}")
