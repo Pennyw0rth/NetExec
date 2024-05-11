@@ -23,7 +23,7 @@ global_failed_logins = 0
 user_failed_logins = {}
 
 
-def get_host_addr_info(hostname, force_ipv6, dns_server, dns_tcp, dns_timeout):
+def get_host_addr_info(target, force_ipv6, dns_server, dns_tcp, dns_timeout):
     result = {
         "host": "",
         "is_ipv6": False,
@@ -32,14 +32,14 @@ def get_host_addr_info(hostname, force_ipv6, dns_server, dns_tcp, dns_timeout):
     address_info = {"AF_INET6": "", "AF_INET": ""}
 
     try:
-        if ip_address(hostname).version == 4:
-            address_info["AF_INET"] = hostname
+        if ip_address(target).version == 4:
+            address_info["AF_INET"] = target
         else:
-            address_info["AF_INET6"] = hostname
+            address_info["AF_INET6"] = target
     except Exception:
-        # If the hostname is not an IP address, we need to resolve it
+        # If the target is not an IP address, we need to resolve it
         if not (dns_server or dns_tcp):
-            for res in getaddrinfo(hostname, None, AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
+            for res in getaddrinfo(target, None, AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
                 af, _, _, canonname, sa = res
                 address_info[af.name] = sa[0]
 
@@ -55,13 +55,13 @@ def get_host_addr_info(hostname, force_ipv6, dns_server, dns_tcp, dns_timeout):
                 dnsresolver.nameservers = [dns_server]
 
             try:
-                answers_ipv4 = dnsresolver.resolve(hostname, rdatatype.A, raise_on_no_answer=False, tcp=dns_tcp)
+                answers_ipv4 = dnsresolver.resolve(target, rdatatype.A, raise_on_no_answer=False, tcp=dns_tcp)
                 address_info["AF_INET"] = answers_ipv4[0].address
             except Exception:
                 pass
 
             try:
-                answers_ipv6 = dnsresolver.resolve(hostname, rdatatype.AAAA, raise_on_no_answer=False, tcp=dns_tcp)
+                answers_ipv6 = dnsresolver.resolve(target, rdatatype.AAAA, raise_on_no_answer=False, tcp=dns_tcp)
                 address_info["AF_INET6"] = answers_ipv6[0].address
 
                 if address_info["AF_INET6"] and ip_address(address_info["AF_INET6"]).is_link_local:
@@ -70,7 +70,7 @@ def get_host_addr_info(hostname, force_ipv6, dns_server, dns_tcp, dns_timeout):
                 pass
 
     if not (address_info["AF_INET"] or address_info["AF_INET6"]):
-        raise Exception(f"The DNS query name does not exist: {hostname}")
+        raise Exception(f"The DNS query name does not exist: {target}")
 
     # IPv4 preferred
     if address_info["AF_INET"] and not force_ipv6:
@@ -179,14 +179,14 @@ class connection:
             else:
                 self.logger.exception(f"Exception while calling proto_flow() on target {self.host}: {e}")
         finally:
-            self.logger.debug(f"Closing connection to: {host}")
+            self.logger.debug(f"Closing connection to: {target}")
             with contextlib.suppress(Exception):
                 self.conn.close()
 
-    def resolver(self, hostname):
+    def resolver(self, target):
         try:
             return get_host_addr_info(
-                hostname=hostname,
+                target=target,
                 force_ipv6=self.args.force_ipv6,
                 dns_server=self.args.dns_server,
                 dns_tcp=self.args.dns_tcp,
