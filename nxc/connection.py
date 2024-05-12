@@ -159,18 +159,6 @@ class connection:
 
         self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
 
-        if args.jitter:
-            jitter = args.jitter
-            if "-" in jitter:
-                start, end = jitter.split("-")
-                jitter = (int(start), int(end))
-            else:
-                jitter = (0, int(jitter))
-
-            value = random.choice(range(jitter[0], jitter[1]))
-            self.logger.debug(f"Doin' the jitterbug for {value} second(s)")
-            sleep(value)
-
         try:
             self.proto_flow()
         except Exception as e:
@@ -452,7 +440,9 @@ class connection:
         return domain, username, owned, secret, cred_type, [None] * len(secret)
 
     def try_credentials(self, domain, username, owned, secret, cred_type, data=None):
-        """Try to login using the specified credentials and protocol.
+        """
+        Try to login using the specified credentials and protocol.
+        With  --jitter an authentication throttle can be applied.
 
         Possible login methods are:
             - plaintext (/kerberos)
@@ -465,6 +455,18 @@ class connection:
             return False
         if hasattr(self.args, "delegate") and self.args.delegate:
             self.args.kerberos = True
+
+        if self.args.jitter:
+            jitter = self.args.jitter
+            if "-" in jitter:
+                start, end = jitter.split("-")
+                jitter = (int(start), int(end))
+            else:
+                jitter = (0, int(jitter))
+            value = jitter[0] if jitter[0] == jitter[1] else random.choice(range(jitter[0], jitter[1]))
+            self.logger.debug(f"Throttle authentications: sleeping {value} second(s)")
+            sleep(value)
+
         with sem:
             if cred_type == "plaintext":
                 if self.args.kerberos:

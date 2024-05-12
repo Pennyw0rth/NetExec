@@ -2,6 +2,7 @@ import argparse
 import os
 import subprocess
 from rich.console import Console
+import platform
 
 
 def get_cli_args():
@@ -61,14 +62,35 @@ def get_cli_args():
         help="Protocols to test",
     )
     parser.add_argument(
+        "--line-nums",
+        nargs="+",
+        type=parse_line_nums,
+        required=False,
+        help="Specify line numbers or ranges to run commands from",
+    )
+    parser.add_argument(
+        "--print-failures",
+        action="store_true",
+        required=False,
+        help="Prints all the commands of failed tests at the end"
+    )
+    parser.add_argument(
         "--dns-server",
         action="store",
         required=False,
         help="Specify DNS server",
     )
-
     return parser.parse_args()
 
+def parse_line_nums(value):
+    line_nums = []
+    for item in value.split():
+        if "-" in item:
+            start, end = item.split("-")
+            line_nums.extend(range(int(start), int(end) + 1))
+        else:
+            line_nums.append(int(item))
+    return line_nums
 
 def generate_commands(args):
     lines = []
@@ -76,15 +98,28 @@ def generate_commands(args):
     commands_file = os.path.join(file_loc, "e2e_commands.txt")
 
     with open(commands_file) as file:
-        for line in file:
-            if line.startswith("#"):
-                continue
-            line = line.strip()
-            if args.protocols:
-                if line.split()[1] in args.protocols:
+        if args.line_nums:
+            flattened_list = list({num for sublist in args.line_nums for num in sublist})
+            for i, line in enumerate(file):
+                if i + 1 in flattened_list:
+                    if line.startswith("#"):
+                        continue
+                    line = line.strip()
+                    if args.protocols:
+                        if line.split()[1] in args.protocols:
+                            lines.append(replace_command(args, line))
+                    else:
+                        lines.append(replace_command(args, line))
+        else:
+            for line in file:
+                if line.startswith("#"):
+                    continue
+                line = line.strip()
+                if args.protocols:
+                    if line.split()[1] in args.protocols:
+                        lines.append(replace_command(args, line))
+                else:
                     lines.append(replace_command(args, line))
-            else:
-                lines.append(replace_command(args, line))
     return lines
 
 def replace_command(args, line):
@@ -100,6 +135,7 @@ def replace_command(args, line):
 def run_e2e_tests(args):
     console = Console()
     tasks = generate_commands(args)
+    failures = []
 
     result = subprocess.Popen(
         "netexec --version",
@@ -114,10 +150,13 @@ def run_e2e_tests(args):
         failed = 0
 
         while tasks:
-            task = tasks.pop(0)
-            console.log(f"Running command: {task!s}")
+            task = str(tasks.pop(0))
+            # replace double quotes with single quotes for Linux due to special chars/escaping
+            if platform.system() == "Linux":
+                task = task.replace('"', "'")
+            console.log(f"Running command: {task}")
             result = subprocess.Popen(
-                str(task),
+                task,
                 shell=True,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
@@ -132,6 +171,7 @@ def run_e2e_tests(args):
                 passed += 1
             else:
                 console.log(f"[bold red]{task.strip()} :cross_mark:[/]")
+                failures.append(task.strip())
                 failed += 1
 
             if args.errors:
@@ -143,6 +183,11 @@ def run_e2e_tests(args):
             if args.verbose:
                 # this prints sorta janky, but it does its job
                 console.log(f"[*] Results:\n{text.decode('utf-8')}")
+        
+        if args.print_failures and failures:
+            console.log("[bold red]Failed Commands:")
+            for failure in failures:
+                console.log(f"[bold red]{failure}")
         console.log(f"Tests [bold green] Passed: {passed} [bold red] Failed: {failed}")
 
 
