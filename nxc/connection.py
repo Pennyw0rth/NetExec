@@ -140,7 +140,7 @@ class connection:
 
         # Network info
         self.domain = None
-        self.host = None            # IP address of the target
+        self.host = None            # IP address of the target. If kerberos this is the hostname
         self.hostname = target      # Target info supplied by the user, may be an IP address or a hostname
         self.remoteName = target    # hostname + domain, defaults to target if domain could not be resolved/not specified
         self.kdcHost = self.args.kdcHost
