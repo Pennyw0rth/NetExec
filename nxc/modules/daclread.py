@@ -221,8 +221,6 @@ class NXCModule:
 
         Based on the work of @_nwodtuhs and @BlWasp_.
         """
-        self.context = context
-
         context.log.debug(f"module_options: {module_options}")
 
         if not module_options:
@@ -273,6 +271,7 @@ class NXCModule:
         self.filename = None
 
     def on_login(self, context, connection):
+        self.context = context
         """On a successful LDAP login we perform a search for the targets' SID, their Security Descriptors and the principal's SID if there is one specified"""
         context.log.highlight("Be careful, this module cannot read the DACLS recursively.")
         self.baseDN = connection.ldapConnection._baseDN
