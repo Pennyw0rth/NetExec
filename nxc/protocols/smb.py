@@ -1246,19 +1246,21 @@ class smb(connection):
         dce.disconnect()
         return entries
 
-    def put_file(self):
-        self.logger.display(f"Copying {self.args.put_file[0]} to {self.args.put_file[1]}")
-        with open(self.args.put_file[0], "rb") as file:
+    def put_file_single(self, src, dst):
+        self.logger.display(f"Copying {src} to {dst}")
+        with open(src, "rb") as file:
             try:
-                self.conn.putFile(self.args.share, self.args.put_file[1], file.read)
-                self.logger.success(f"Created file {self.args.put_file[0]} on \\\\{self.args.share}\\{self.args.put_file[1]}")
+                self.conn.putFile(self.args.share, dst, file.read)
+                self.logger.success(f"Created file {src} on \\\\{self.args.share}\\{dst}")
             except Exception as e:
                 self.logger.fail(f"Error writing file to share {self.args.share}: {e}")
+    
+    def put_file(self):
+        for src, dest in self.args.put_file:
+            self.put_file_single(src, dest)
 
-    def get_file(self):
+    def get_file_single(self, remote_path, download_path):
         share_name = self.args.share
-        remote_path = self.args.get_file[0]
-        download_path = self.args.get_file[1]
         self.logger.display(f'Copying "{remote_path}" to "{download_path}"')
         if self.args.append_host:
             download_path = f"{self.hostname}-{remote_path}"
@@ -1270,6 +1272,10 @@ class smb(connection):
                 self.logger.fail(f'Error writing file "{remote_path}" from share "{share_name}": {e}')
                 if os.path.getsize(download_path) == 0:
                     os.remove(download_path)
+
+    def get_file(self):
+        for src, dest in self.args.get_file:
+            self.get_file_single(src, dest)
 
     def enable_remoteops(self):
         try:
