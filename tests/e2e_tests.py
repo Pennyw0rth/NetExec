@@ -177,7 +177,8 @@ def run_e2e_tests(args):
                 # this prints sorta janky, but it does its job
                 console.log(f"[*] Results:\n{text.decode('utf-8')}")
         
-        if args.print_failures:
+
+        if args.print_failures and failures:
             console.log("[bold red]Failed Commands:")
             for failure in failures:
                 console.log(f"[bold red]{failure}")
