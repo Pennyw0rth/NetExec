@@ -26,7 +26,7 @@ class NXCModule:
 
     def on_login(self, context, connection):
         self.context = context
-        if self.perform_attack("\\\\" + connection.hostname, connection.host, connection.hostname, connection.remoteHost):
+        if self.perform_attack("\\\\" + connection.hostname, connection.host, connection.hostname, connection.host):
             self.context.log.highlight("VULNERABLE")
             self.context.log.highlight("Next step: https://github.com/dirkjanm/CVE-2020-1472")
             try:

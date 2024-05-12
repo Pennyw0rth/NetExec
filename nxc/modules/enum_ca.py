@@ -66,7 +66,7 @@ class NXCModule:
             rpctransport.set_credentials(self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash)
             rpctransport.set_auth_type(AUTH_NTLM)
         else:
-            rpctransport.setRemoteHost(connection.remoteHost)
+            rpctransport.setRemoteHost(connection.host)
 
         try:
             entries = self.__fetchList(connection.kerberos, rpctransport)

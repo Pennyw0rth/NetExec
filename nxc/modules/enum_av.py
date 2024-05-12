@@ -51,7 +51,7 @@ class NXCModule:
                 password=connection.password,
                 remote_name=target,
                 do_kerberos=connection.kerberos,
-                remoteHost=connection.remoteHost,
+                remoteHost=connection.host,
                 kdcHost=connection.kdcHost,
                 lmhash=connection.lmhash,
                 nthash=connection.nthash,

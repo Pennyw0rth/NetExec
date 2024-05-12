@@ -23,7 +23,7 @@ class NXCModule:
 
         stringBinding = r"ncacn_ip_tcp:%s" % connection.host
         rpctransport = transport.DCERPCTransportFactory(stringBinding)
-        rpctransport.setRemoteHost(connection.remoteHost)
+        rpctransport.setRemoteHost(connection.host)
 
         portmap = rpctransport.get_dce_rpc()
         portmap.set_auth_level(authLevel)

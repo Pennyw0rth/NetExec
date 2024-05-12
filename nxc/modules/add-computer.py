@@ -63,10 +63,9 @@ class NXCModule:
         self.__domain = connection.domain
         self.__domainNetbios = connection.domain
         self.__kdcHost = connection.kdcHost
-        self.__target = connection.host
         self.__username = connection.username
         self.__password = connection.password
-        self.__remoteHost = connection.remoteHost
+        self.__host = connection.host
         self.__port = context.smb_server_port
         self.__aesKey = context.aesKey
         self.__hashes = context.hash
@@ -102,10 +101,10 @@ class NXCModule:
         -------
             None
         """
-        string_binding = epm.hept_map(self.__remoteHost, samr.MSRPC_UUID_SAMR, protocol="ncacn_np")
+        string_binding = epm.hept_map(self.__host, samr.MSRPC_UUID_SAMR, protocol="ncacn_np")
 
-        rpc_transport = transport.DCERPCTransportFactory(string_binding.replace(self.__remoteHost, self.__target))
-        rpc_transport.setRemoteHost(self.__remoteHost)
+        rpc_transport = transport.DCERPCTransportFactory(string_binding.replace(self.__host, self.__kdcHost))
+        rpc_transport.sethost(self.__host)
 
         if hasattr(rpc_transport, "set_credentials"):
             # This method exists only for selected protocol sequences.
@@ -120,7 +119,7 @@ class NXCModule:
         dce.connect()
         dce.bind(samr.MSRPC_UUID_SAMR)
 
-        samr_connect_response = samr.hSamrConnect5(dce, f"\\\\{self.__target}\x00", samr.SAM_SERVER_ENUMERATE_DOMAINS | samr.SAM_SERVER_LOOKUP_DOMAIN)
+        samr_connect_response = samr.hSamrConnect5(dce, f"\\\\{self.__kdcHost}\x00", samr.SAM_SERVER_ENUMERATE_DOMAINS | samr.SAM_SERVER_LOOKUP_DOMAIN)
         serv_handle = samr_connect_response["ServerHandle"]
 
         samr_enum_response = samr.hSamrEnumerateDomainsInSamServer(dce, serv_handle)

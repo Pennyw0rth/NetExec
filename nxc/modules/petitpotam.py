@@ -44,11 +44,11 @@ class NXCModule:
             lmhash=connection.lmhash,
             nthash=connection.nthash,
             aesKey=connection.aesKey,
-            target=connection.host,
+            target=connection.host if not connection.kerberos else connection.remoteName,
             pipe=self.pipe,
             do_kerberos=connection.kerberos,
             kdcHost=connection.kdcHost,
-            remoteHost=connection.remoteHost,
+            remoteHost=connection.host,
             context=context,
         )
         if efs_rpc_open_file_raw(dce, self.listener, context):

@@ -52,12 +52,10 @@ class mssql(connection):
         )
 
     def create_conn_obj(self):
-        if not self.remoteName:
-            self.remoteName = self.host
         try:
-            self.conn = tds.MSSQL(self.remoteHost, self.port, self.remoteName)
+            self.conn = tds.MSSQL(self.host, self.port, self.remoteName)
             # Default has not timeout option in tds.MSSQL.connect() function, let rewrite it.
-            af, socktype, proto, canonname, sa = socket.getaddrinfo(self.remoteHost, self.port, 0, socket.SOCK_STREAM)[0]
+            af, socktype, proto, canonname, sa = socket.getaddrinfo(self.host, self.port, 0, socket.SOCK_STREAM)[0]
             sock = socket.socket(af, socktype, proto)
             sock.settimeout(self.args.mssql_timeout)
             sock.connect(sa)
@@ -132,9 +130,6 @@ class mssql(connection):
             self.domain = self.args.domain
         if self.args.local_auth:
             self.domain = self.hostname
-
-        if self.domain is None:
-            self.domain = ""
 
         self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
 

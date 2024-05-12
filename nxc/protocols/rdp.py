@@ -115,7 +115,7 @@ class rdp(connection):
         return True
 
     def create_conn_obj(self):
-        self.target = RDPTarget(ip=self.remoteHost, hostname=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout)
+        self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout)
         self.auth = NTLMCredential(secret="pass", username="user", domain="FAKE", stype=asyauthSecret.PASS)
 
         self.check_nla()
@@ -150,7 +150,6 @@ class rdp(connection):
 
         if self.args.domain:
             self.domain = self.args.domain
-
         if self.args.local_auth:
             self.domain = self.hostname
 
@@ -162,7 +161,7 @@ class rdp(connection):
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
         self.target = RDPTarget(
-            ip=self.remoteHost,
+            ip=self.host,
             hostname=self.hostname,
             port=self.port,
             domain=self.domain,
@@ -228,7 +227,7 @@ class rdp(connection):
                 stype = asyauthSecret.PASS if not nthash else asyauthSecret.NT
 
             kerberos_target = UniTarget(
-                self.remoteHost,
+                self.host,
                 88,
                 UniProto.CLIENT_TCP,
                 timeout=self.args.rdp_timeout,

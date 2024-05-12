@@ -256,11 +256,6 @@ class smb(connection):
             self.conn.logoff()
         except Exception as e:
             self.logger.debug(f"Error logging off system: {e}")
-
-        if self.args.domain:
-            self.domain = self.args.domain
-        if self.args.local_auth:
-            self.domain = self.hostname
         
         # DCOM connection with kerberos needed
         self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
@@ -283,6 +278,7 @@ class smb(connection):
         self.create_conn_obj()
         lmhash = ""
         nthash = ""
+
         try:
             self.password = password
             self.username = username
@@ -356,11 +352,7 @@ class smb(connection):
                 used_ccache = f" through S4U with {username}"
             self.logger.fail(f"{domain}\\{self.username}{used_ccache} {e}")
         except (SessionError, Exception) as e:
-            if not hasattr(e, "getErrorString"):
-                error = str(e)
-                desc = ""
-            else:
-                error, desc = e.getErrorString()
+            error, desc = e.getErrorString()
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             if self.args.delegate:
                 used_ccache = f" through S4U with {username}"
@@ -494,7 +486,7 @@ class smb(connection):
         try:
             self.conn = SMBConnection(
                 self.remoteName,
-                self.remoteHost,
+                self.host,
                 None,
                 self.port,
                 preferredDialect=SMB_DIALECT,
@@ -515,7 +507,7 @@ class smb(connection):
         try:
             self.conn = SMBConnection(
                 self.remoteName,
-                self.remoteHost,
+                self.host,
                 None,
                 self.port,
                 timeout=self.args.smb_timeout,
@@ -535,8 +527,6 @@ class smb(connection):
         return True
 
     def create_conn_obj(self):
-        if not self.remoteName:
-            self.remoteName = self.host
         return bool(self.create_smbv1_conn() or self.create_smbv3_conn())
 
     def check_if_admin(self):
@@ -590,7 +580,7 @@ class smb(connection):
                         self.kerberos,
                         self.aesKey,
                         self.kdcHost,
-                        self.remoteHost,
+                        self.host,
                         self.hash,
                         self.args.share,
                         logger=self.logger,
@@ -618,7 +608,7 @@ class smb(connection):
                         self.kerberos,
                         self.aesKey,
                         self.kdcHost,
-                        self.remoteHost,
+                        self.host,
                         self.hash,
                         self.args.share,
                         logger=self.logger,
@@ -641,7 +631,7 @@ class smb(connection):
                         self.domain,
                         self.kerberos,
                         self.aesKey,
-                        self.remoteHost,
+                        self.host,
                         self.kdcHost,
                         self.hash,
                         self.logger,
@@ -665,7 +655,7 @@ class smb(connection):
                         self.domain,
                         self.kerberos,
                         self.aesKey,
-                        self.remoteHost,
+                        self.host,
                         self.kdcHost,
                         self.hash,
                         self.args.share,
@@ -1099,9 +1089,9 @@ class smb(connection):
             namespace = self.args.wmi_namespace
 
         try:
-            dcom = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.kerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.remoteHost)
+            dcom = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.kerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.host)
             iInterface = dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
-            flag, stringBinding = dcom_FirewallChecker(iInterface, self.remoteHost, self.args.dcom_timeout)
+            flag, stringBinding = dcom_FirewallChecker(iInterface, self.host, self.args.dcom_timeout)
             if not flag or not stringBinding:
                 error_msg = f"WMI Query: Dcom initialization failed on connection with stringbinding: '{stringBinding}', please increase the timeout with the option '--dcom-timeout'. If it's still failing maybe something is blocking the RPC connection, try another exec method"
 
@@ -1190,7 +1180,7 @@ class smb(connection):
             string_binding = KNOWN_PROTOCOLS[self.port]["bindstr"]
             logging.debug(f"StringBinding {string_binding}")
             rpc_transport = transport.DCERPCTransportFactory(string_binding)
-            rpc_transport.setRemoteHost(self.remoteHost)
+            rpc_transport.setRemoteHost(self.host)
 
             if hasattr(rpc_transport, "set_credentials"):
                 # This method exists only for selected protocol sequences.

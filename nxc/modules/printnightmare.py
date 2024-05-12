@@ -55,7 +55,8 @@ class NXCModule:
         )
 
         rpctransport.set_kerberos(connection.kerberos, kdcHost=connection.kdcHost)
-        rpctransport.setRemoteHost(connection.remoteHost)
+        rpctransport.setRemoteHost(connection.host)
+        rpctransport.set_dport(self.port)
 
         try:
             dce = rpctransport.get_dce_rpc()

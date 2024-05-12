@@ -123,41 +123,41 @@ def dcom_FirewallChecker(iInterface, remoteHost, timeout):
 
 
 class connection:
-    def __init__(self, args, db, host):
+    def __init__(self, args, db, target):
         self.args = args
         self.db = db
+        self.logger = nxc_logger
         self.conn = None
-        self.admin_privs = False
+
+        # Authentication info
         self.password = ""
         self.username = ""
         self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey)
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
-        self.kdcHost = None if not self.args.kdcHost else self.args.kdcHost
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
+        self.admin_privs = False
         self.failed_logins = 0
-        self.logger = nxc_logger
 
         # Network info
         self.domain = None
-        self.host = None
-        self.hostname = host
-        self.remoteHost = None
-        self.remoteName = None
+        self.host = None            # IP address of the target
+        self.hostname = target      # Target info supplied by the user, may be an IP address or a hostname
+        self.remoteName = target    # hostname + domain, defaults to target if domain could not be resolved/not specified
+        self.kdcHost = self.args.kdcHost
         self.port = self.args.port
         self.local_ip = None
 
-        dns_result = self.resolver(self.hostname)
+        # DNS resolution
+        dns_result = self.resolver(target)
         if dns_result:
             self.host, self.is_ipv6, self.is_link_local_ipv6 = dns_result["host"], dns_result["is_ipv6"], dns_result["is_link_local_ipv6"]
         else:
             return
 
-        self.remoteHost = self.host
-
         if self.args.kerberos:
             self.host = self.hostname
 
-        self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, remoteHost={self.remoteHost}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
+        self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
 
         if args.jitter:
             jitter = args.jitter
@@ -175,9 +175,9 @@ class connection:
             self.proto_flow()
         except Exception as e:
             if "ERROR_DEPENDENT_SERVICES_RUNNING" in str(e):
-                self.logger.error(f"Exception while calling proto_flow() on target {self.host}: {e}")
+                self.logger.error(f"Exception while calling proto_flow() on target {target}: {e}")
             else:
-                self.logger.exception(f"Exception while calling proto_flow() on target {self.host}: {e}")
+                self.logger.exception(f"Exception while calling proto_flow() on target {target}: {e}")
         finally:
             self.logger.debug(f"Closing connection to: {target}")
             with contextlib.suppress(Exception):
@@ -193,7 +193,7 @@ class connection:
                 dns_timeout=self.args.dns_timeout
             )
         except Exception as e:
-            self.logger.info(f"Error resolving hostname {self.hostname}: {e}")
+            self.logger.info(f"Error resolving hostname {target}: {e}")
             return None
 
     @staticmethod

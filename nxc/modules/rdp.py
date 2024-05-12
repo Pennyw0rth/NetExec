@@ -218,7 +218,7 @@ class RdpWmi:
         self.__target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
         self.__doKerberos = connection.kerberos
         self.__kdcHost = connection.kdcHost
-        self.__remoteHost = connection.remoteHost
+        self.__remoteHost = connection.host
         self.__aesKey = connection.aesKey
         self.__timeout = timeout
 

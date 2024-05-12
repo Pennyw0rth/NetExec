@@ -43,11 +43,11 @@ class NXCModule:
             lmhash=connection.lmhash,
             nthash=connection.nthash,
             aesKey=connection.aesKey,
-            target=connection.host,
+            target=connection.host if not connection.kerberos else connection.remoteName,
             pipe="FssagentRpc",
             doKerberos=connection.kerberos,
             dcHost=connection.kdcHost,
-            remoteHost=connection.remoteHost,
+            remoteHost=connection.host,
         )
 
         # If pipe not available, try again. "TL;DR: run the command twice if it doesn't work." - @Shutdown
@@ -62,9 +62,9 @@ class NXCModule:
                 lmhash=connection.lmhash,
                 nthash=connection.nthash,
                 aesKey=connection.aesKey,
-                target=connection.host,
+                target=connection.host if not connection.kerberos else connection.remoteName,
                 pipe="FssagentRpc",
-                remoteHost=connection.remoteHost,
+                remoteHost=connection.host,
             )
 
         if self.ipsc:

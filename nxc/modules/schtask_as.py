@@ -52,7 +52,7 @@ class NXCModule:
                 self.cmd,
                 connection.kerberos,
                 connection.aesKey,
-                connection.remoteHost,
+                connection.host,
                 connection.kdcHost,
                 connection.hash,
                 self.logger,

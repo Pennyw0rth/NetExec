@@ -35,7 +35,6 @@ class NXCModule:
             nthash=connection.nthash,
             target=connection.host,
             doKerberos=connection.kerberos,
-            remoteHost=connection.remoteHost,
             kdcHost=connection.kdcHost,
             aesKey=connection.aesKey,
         )
@@ -96,9 +95,9 @@ class NetrDfsAddRootResponse(NDRCALL):
 
 
 class TriggerAuth:
-    def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, remoteHost, kdcHost):
+    def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, kdcHost):
         rpctransport = transport.DCERPCTransportFactory(r"ncacn_np:%s[\PIPE\netdfs]" % target)
-        rpctransport.setRemoteHost(remoteHost)
+        rpctransport.setRemoteHost(target)
         if hasattr(rpctransport, "set_credentials"):
             rpctransport.set_credentials(
                 username=username,

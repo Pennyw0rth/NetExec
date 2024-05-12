@@ -173,7 +173,7 @@ class LDAPConnect:
 
 
 class LAPSv2Extract:
-    def __init__(self, data, username, password, domain, ntlm_hash, do_kerberos, kdcHost, port, host, remoteHost):
+    def __init__(self, data, username, password, domain, ntlm_hash, do_kerberos, kdcHost, port):
         if ntlm_hash.find(":") != -1:
             self.lmhash, self.nthash = ntlm_hash.split(":")
         else:
@@ -187,8 +187,6 @@ class LAPSv2Extract:
         self.do_kerberos = do_kerberos
         self.kdcHost = kdcHost
         self.logger = None
-        self.host = host
-        self.remoteHost = remoteHost
         self.proto_logger(self.domain, port, self.domain)
 
     def proto_logger(self, host, port, hostname):
@@ -220,8 +218,8 @@ class LAPSv2Extract:
             gke = kds_cache[key_id["RootKeyId"]]
         else:
             # Connect on RPC over TCP to MS-GKDI to call opnum 0 GetKey
-            string_binding = hept_map(destHost=self.remoteHost, remoteIf=MSRPC_UUID_GKDI, protocol="ncacn_ip_tcp")
-            rpc_transport = transport.DCERPCTransportFactory(string_binding.replace(self.remoteHost, self.host))
+            string_binding = hept_map(destHost=self.domain, remoteIf=MSRPC_UUID_GKDI, protocol="ncacn_ip_tcp")
+            rpc_transport = transport.DCERPCTransportFactory(string_binding)
             if hasattr(rpc_transport, "set_credentials"):
                 rpc_transport.set_credentials(username=self.username, password=self.password, domain=self.domain, lmhash=self.lmhash, nthash=self.nthash)
             if self.do_kerberos:
@@ -327,9 +325,7 @@ def laps_search(self, username, password, cred_type, domain):
                     password[0] if cred_type[0] == "hash" else "",
                     self.kerberos,
                     self.kdcHost,
-                    339,
-                    self.host,
-                    self.remoteHost,
+                    339
                 )
                 try:
                     data = d.run()
