@@ -71,12 +71,12 @@ class NXCModule:
 
                         context.log.highlight(self.output.format(interface[subKey]['Name'], interface[subKey]['IPAddress'], interface[subKey]['SubnetMask'], interface[subKey]['DefaultGateway']))
 
-                    except DCERPCException as e:
+                    except DCERPCException:
                         continue
 
             try:
                 remoteOps.finish()
-            except:
+            except Exception:
                 pass
 
         except DCERPCException as e:
