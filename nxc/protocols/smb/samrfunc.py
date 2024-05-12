@@ -9,7 +9,7 @@ from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.nmb import NetBIOSError
 from impacket.smbconnection import SessionError
-from nxc.logger import logger
+from nxc.logger import nxc_logger
 
 
 class SamrFunc:
@@ -36,7 +36,7 @@ class SamrFunc:
         if self.password is None:
             self.password = ""
 
-        self.samr_query = SAMRQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.addr, remote_host=self.host, kerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, logger=self.logger)
+        self.samr_query = SAMRQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.addr, remote_host=self.host, kerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey)
         self.lsa_query = LSAQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.addr, remote_host=self.host, kdcHost=self.kdcHost, kerberos=self.doKerberos, aesKey=self.aesKey, logger=self.logger)
 
     def get_builtin_groups(self):
@@ -93,7 +93,6 @@ class SAMRQuery:
         kerberos=None,
         kdcHost="",
         aesKey="",
-        logger=None,
     ):
         self.__username = username
         self.__password = password
@@ -111,7 +110,7 @@ class SAMRQuery:
 
     def get_transport(self):
         string_binding = rf"ncacn_np:{self.__port}[\pipe\samr]"
-        logger.debug(f"Binding to {string_binding}")
+        nxc_logger.debug(f"Binding to {string_binding}")
         # using a direct SMBTransport instead of DCERPCTransportFactory since we need the filename to be '\samr'
         return transport.SMBTransport(
             self.__remote_name,
@@ -147,11 +146,11 @@ class SAMRQuery:
             try:
                 resp = samr.hSamrConnect(self.dce)
             except samr.DCERPCException as e:
-                logger.debug(f"Error while connecting with Samr: {e}")
+                nxc_logger.debug(f"Error while connecting with Samr: {e}")
                 return None
             return resp["ServerHandle"]
         else:
-            logger.debug("Error creating Samr handle")
+            nxc_logger.debug("Error creating Samr handle")
 
     def get_domains(self):
         """Calls the hSamrEnumerateDomainsInSamServer() method directly with list comprehension and extracts the "Name" value from each element in the "Buffer" list."""
