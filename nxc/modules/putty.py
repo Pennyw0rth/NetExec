@@ -1,3 +1,4 @@
+from datetime import datetime
 from io import BytesIO
 import traceback
 from urllib.parse import unquote
@@ -154,7 +155,7 @@ class NXCModule:
                 makedirs(f"{NXC_PATH}/modules/PuTTY", exist_ok=True)
                 share = session["private_key_path"].split(":")[0] + "$"
                 file_path = session["private_key_path"].split(":")[1]
-                download_path = f"{NXC_PATH}/modules/PuTTY/putty_{session['user']}_{session['session_name']}.sec"
+                download_path = f"{NXC_PATH}/modules/PuTTY/putty_{session['user']}_{session['session_name']}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.sec".replace(":", "-")
 
                 buf = BytesIO()
                 with open(download_path, "wb") as file:
