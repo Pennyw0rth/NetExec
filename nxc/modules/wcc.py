@@ -194,7 +194,16 @@ class HostChecker:
             ConfigCheck("BitLocker configuration", "Checks the BitLocker configuration (based on https://www.stigviewer.com/stig/windows_10/2020-06-15/finding/V-94859)", checker_args=[[self, ("HKLM\\SOFTWARE\\Policies\\Microsoft\\FVE", "UseAdvancedStartup", 1), ("HKLM\\SOFTWARE\\Policies\\Microsoft\\FVE", "UseTPMPIN", 1)]]),
             ConfigCheck("Guest account disabled", "Checks if the guest account is disabled", checkers=[self.check_guest_account_disabled]),
             ConfigCheck("Automatic session lock enabled", "Checks if the session is automatically locked on after a period of inactivity", checker_args=[[self, ("HKCU\\Control Panel\\Desktop", "ScreenSaverIsSecure", 1), ("HKCU\\Control Panel\\Desktop", "ScreenSaveTimeOut", 300, le)]]),
-            ConfigCheck('Powershell Execution Policy == "Restricted"', 'Checks if the Powershell execution policy is set to "Restricted"', checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\PowerShell\\1\\ShellIds\\Microsoft.Powershell", "ExecutionPolicy", "Restricted\x00"), ("HKCU\\SOFTWARE\\Microsoft\\PowerShell\\1\\ShellIds\\Microsoft.Powershell", "ExecutionPolicy", "Restricted\x00")]], checker_kwargs=[{"options": {"KOIfMissing": False, "lastWins": True}}])
+            ConfigCheck('Powershell Execution Policy == "Restricted"', 'Checks if the Powershell execution policy is set to "Restricted"', checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\PowerShell\\1\\ShellIds\\Microsoft.Powershell", "ExecutionPolicy", "Restricted\x00"), ("HKCU\\SOFTWARE\\Microsoft\\PowerShell\\1\\ShellIds\\Microsoft.Powershell", "ExecutionPolicy", "Restricted\x00")]], checker_kwargs=[{"options": {"KOIfMissing": False, "lastWins": True}}]),
+            ConfigCheck("Defender service running", "Checks if defender service is enabled", checkers=[self.check_defender_service]),
+            ConfigCheck("Defender Tamper Protection enabled", "Check if Defender Tamper Protection is enabled", checker_args=[[self, ("HKLM\\Software\\Microsoft\\Windows Defender\\Features", "TamperProtection", 5)]]),
+            ConfigCheck("Defender RealTime Monitoring enabled", "Check if Defender RealTime Monitoring is enabled", checker_args=[[self, ("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableRealtimeMonitoring", 0), ("HKLM\\Software\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableRealtimeMonitoring", 0)]], checker_kwargs=[{"options": {"KOIfMissing": False, "lastWins": True}}]),
+            ConfigCheck("Defender IOAV Protection enabled", "Check if Defender IOAV Protection is enabled", checker_args=[[self, ("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableIOAVProtection", 0), ("HKLM\\Software\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableIOAVProtection", 0)]], checker_kwargs=[{"options": {"KOIfMissing": False, "lastWins": True}}]),
+            ConfigCheck("Defender Behaviour Monitoring enabled", "Check if Defender Behaviour Monitoring is enabled", checker_args=[[self, ("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableBehaviourMonitoring", 0), ("HKLM\\Software\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableBehaviourMonitoring", 0)]], checker_kwargs=[{"options": {"KOIfMissing": False, "lastWins": True}}]),
+            ConfigCheck("Defender Script Scanning enabled", "Check if Defender Script Scanning is enabled", checker_args=[[self, ("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableScriptScanning", 0), ("HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableScriptScanning", 0)]], checker_kwargs=[{"options": {"KOIfMissing": False, "lastWins": True}}]),
+            ConfigCheck("Defender path exlusion path", "Checks Defender path exlusion", checkers=[self.check_defender_exclusion_path]),
+            ConfigCheck("Defender extension exlusion", "Checks Defender extension exlusion", checkers=[self.check_defender_exclusion_extension])
+
         ]
 
         # Add check to conf_checks table if missing
@@ -483,6 +492,80 @@ class HostChecker:
 
         return success, reasons
 
+    def check_defender_exclusion_path(self):
+        key_name = "HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Paths"
+        values = self.reg_query_value(self.dce, self.connection, key_name, valueName=None, all=True)
+        success = True
+        reasons = []
+        for value_type, value_name, value_data in values:
+            reasons.append(value_name)
+        key_name = "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Exclusions\\Paths"
+        try: 
+            values = self.reg_query_value(self.dce, self.connection, key_name, valueName=None, all=True)
+            for value_type, value_name, value_data in values:
+                reasons.append(value_name) 
+        except Exception:
+            self.context.log.debug("No defender path exclusion policies")
+     
+        if len(reasons) > 0:
+            success = False
+
+        return success, reasons
+
+    def check_defender_exclusion_extension(self):
+        key_name = "HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Extensions"
+        values = self.reg_query_value(self.dce, self.connection, key_name, valueName=None, all=True)
+        success = True
+        reasons = []
+        for value_type, value_name, value_data in values:
+            reasons.append(value_name)
+        key_name = "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Exclusions\\Extensions"
+        try: 
+            values = self.reg_query_value(self.dce, self.connection, key_name, valueName=None, all=True)
+            for value_type, value_name, value_data in values:
+                reasons.append(value_name) 
+        except Exception:
+            self.context.log.debug("No defender extension exclusion policies")
+        if len(reasons) > 0:
+            success = False
+
+        return success, reasons
+
+    def check_defender_service(self):
+        ok = True
+        raised = False
+        reasons = []
+        try: 
+            service_config, service_status = self.get_service("windefend", self.connection)
+            if service_status == scmr.SERVICE_RUNNING:
+                reasons.append("windefend service running")
+            elif service_status == scmr.SERVICE_STOPPED:
+                ok = False
+                reasons.append("windefend service not running")
+        except DCERPCException as e:
+            ok = True
+            raised = True
+            reasons = [f"windefend service check error({e})"]
+        if ok is False or raised is True:
+            try: 
+                service_config, service_status = self.get_service("sense", self.connection)
+                if service_status == scmr.SERVICE_RUNNING:
+                    reasons.append("sense service running")
+                elif service_status == scmr.SERVICE_STOPPED:
+                    ok = False
+                    reasons.append("sense service not running")
+            except DCERPCException as e:
+                ok = True
+                raised = True
+                reasons.append(f"sense service check error({e})")
+        if raised is True:
+            reasons_save = reasons
+            args = ("HKLM\\SOFTWARE\\Microsoft\\Windows Defender", "IsServiceRunning", 1)
+            ok, reasons = self.check_registry(args)
+            reasons.extend(reasons_save)
+   
+        return ok, reasons
+
     # Methods for getting values from the remote registry #
     #######################################################
 
@@ -534,7 +617,7 @@ class HostChecker:
                 break
         return subkeys
 
-    def reg_query_value(self, dce, connection, keyName, valueName=None):
+    def reg_query_value(self, dce, connection, keyName, valueName=None, all=False):
         """Query remote registry data for a given registry value"""
 
         def subkey_values(subkey_handle):
@@ -587,8 +670,10 @@ class HostChecker:
 
         subkey_handle = ans["phkResult"]
 
-        if valueName is None:
+        if valueName is None and all is False:
             return get_value(subkey_handle)[2]
+        elif valueName is None and all is True:
+            return subkey_values(subkey_handle)
         else:
             for _, name, data in subkey_values(subkey_handle):
                 if name.upper() == valueName.upper():
