@@ -1,5 +1,4 @@
 import re
-import sys
 from impacket.dcerpc.v5.dcom import wmi
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
@@ -40,35 +39,31 @@ class BitLockerSMB:
 
     def check_bitlocker_status(self):
         # PowerShell command to check BitLocker volumes status.
-        check_bitlocker_command_str = 'powershell.exe "Get-BitLockerVolume | Select-Object MountPoint, EncryptionMethod, ProtectionStatus"'
+        check_bitlocker_command_str = "Get-BitLockerVolume | Select-Object MountPoint, EncryptionMethod, ProtectionStatus"
 
         try:
             # Executing the PowerShell command to get BitLocker volumes status.
-            check_bitlocker_command_str_output = self.connection.execute(check_bitlocker_command_str, True)
+            check_bitlocker_command_str_output = self.connection.ps_execute(check_bitlocker_command_str, True)
             
             if "'Get-BitLockerVolume' is not recognized" in check_bitlocker_command_str_output:
                 self.context.log.fail("BitLockerVolume not found on target.")
-                sys.exit(1)
+                return
 
             # Splitting the output into lines.
-            lines = check_bitlocker_command_str_output.strip().split("\n")
-
-            # Getting data lines.
-            data_lines = lines[2:]
-
-            # Analyzing data lines.
+            lines = str(check_bitlocker_command_str_output).split("\\n")
+            data_lines = [line for line in lines if re.match(r"\w:", line)]
+            
             for line in data_lines:
-                
-                parts = re.split(r"\s{2,}", line.strip())  # Stripping spaces and splitting the line.
-                MountPoint = parts[0]  # Getting the mount point of the drive.
-                EncryptionMethod = parts[1]  # Getting the mount point of the drive.
-                protection_status = parts[2]  # Getting the protection status.
+                # Checking every line for starting with drive
+                if line[1] == ":": 
+                    parts = line.split()
+                    MountPoint, EncryptionMethod, protection_status = parts[0], parts[1], parts[2]
 
-                # Checking if BitLocker is enabled.
-                if protection_status == "On":
-                    self.context.log.highlight(f"BitLocker is enabled on drive {MountPoint} (Encryption Method: {EncryptionMethod})")
-                else:
-                    self.context.log.highlight(f"BitLocker is disabled on drive {MountPoint}")
+                    # Checking if BitLocker is enabled.
+                    if protection_status == "On":
+                        self.context.log.highlight(f"BitLocker is enabled on drive {MountPoint} (Encryption Method: {EncryptionMethod})")
+                    else:
+                        self.context.log.highlight(f"BitLocker is disabled on drive {MountPoint}")
         except Exception as e:
             self.context.log.exception(f"Exception occurred: {e}")
 
@@ -90,11 +85,9 @@ class BitLockerWMI:
                 self.connection.nthash,
                 oxidResolver=True,
                 doKerberos=self.connection.kerberos,
-                kdcHost=self.connection.kdcHost,
-            )
-            
+                kdcHost=self.connection.kdcHost)
+                
             try:
-
                 # CoCreateInstanceEx for WMI login
                 i_interface = dcom_conn.CoCreateInstanceEx(wmi.CLSID_WbemLevel1Login, wmi.IID_IWbemLevel1Login)
                 iWbemLevel1Login = wmi.IWbemLevel1Login(i_interface)
@@ -120,8 +113,8 @@ class BitLockerWMI:
                         if iWbemClassObject[0].ProtectionStatus == 1:
                             self.context.log.highlight(f"BitLocker is enabled on drive {iWbemClassObject[0].DriveLetter} (Encryption Method: {encryptionTypeMapping.get(encryptionMethod, 'Unknown')})")
                         else:
-                            assert (encryptionMethod == 0)  # Should be 0 if disabled
-                            self.context.log.highlight(f"BitLocker is disabled on drive {iWbemClassObject[0].DriveLetter}")
+                            if encryptionMethod == 0:  # Should be 0 if disabled
+                                self.context.log.highlight(f"BitLocker is disabled on drive {iWbemClassObject[0].DriveLetter}")
                 except Exception:
                     pass  # Using pass because if try to log or printing, getting "WMI Session Error: code: 0x1 - WBEM_S_FALSE"
 
