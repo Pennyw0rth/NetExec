@@ -197,13 +197,12 @@ class HostChecker:
             ConfigCheck('Powershell Execution Policy == "Restricted"', 'Checks if the Powershell execution policy is set to "Restricted"', checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\PowerShell\\1\\ShellIds\\Microsoft.Powershell", "ExecutionPolicy", "Restricted\x00"), ("HKCU\\SOFTWARE\\Microsoft\\PowerShell\\1\\ShellIds\\Microsoft.Powershell", "ExecutionPolicy", "Restricted\x00")]], checker_kwargs=[{"options": {"KOIfMissing": False, "lastWins": True}}]),
             ConfigCheck("Defender service running", "Checks if defender service is enabled", checkers=[self.check_defender_service]),
             ConfigCheck("Defender Tamper Protection enabled", "Check if Defender Tamper Protection is enabled", checker_args=[[self, ("HKLM\\Software\\Microsoft\\Windows Defender\\Features", "TamperProtection", 5)]]),
-            ConfigCheck("Defender RealTime Monitoring enabled", "Check if Defender RealTime Monitoring is enabled", checker_args=[[self, ("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableRealtimeMonitoring", 0), ("HKLM\\Software\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableRealtimeMonitoring", 0)]], checker_kwargs=[{"options": {"KOIfMissing": False, "lastWins": True}}]),
-            ConfigCheck("Defender IOAV Protection enabled", "Check if Defender IOAV Protection is enabled", checker_args=[[self, ("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableIOAVProtection", 0), ("HKLM\\Software\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableIOAVProtection", 0)]], checker_kwargs=[{"options": {"KOIfMissing": False, "lastWins": True}}]),
-            ConfigCheck("Defender Behaviour Monitoring enabled", "Check if Defender Behaviour Monitoring is enabled", checker_args=[[self, ("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableBehaviourMonitoring", 0), ("HKLM\\Software\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableBehaviourMonitoring", 0)]], checker_kwargs=[{"options": {"KOIfMissing": False, "lastWins": True}}]),
-            ConfigCheck("Defender Script Scanning enabled", "Check if Defender Script Scanning is enabled", checker_args=[[self, ("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableScriptScanning", 0), ("HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableScriptScanning", 0)]], checker_kwargs=[{"options": {"KOIfMissing": False, "lastWins": True}}]),
-            ConfigCheck("Defender path exlusion path", "Checks Defender path exlusion", checkers=[self.check_defender_exclusion_path]),
-            ConfigCheck("Defender extension exlusion", "Checks Defender extension exlusion", checkers=[self.check_defender_exclusion_extension])
-
+            ConfigCheck("Defender RealTime Monitoring enabled", "Check if Defender RealTime Monitoring is enabled", checkers=[self.check_single_registry_with_policy], checker_args=[("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "HKLM\\Software\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableRealtimeMonitoring", 0, True)]),
+            ConfigCheck("Defender IOAV Protection enabled", "Check if Defender IOAV Protection is enabled", checkers=[self.check_single_registry_with_policy], checker_args=[("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "HKLM\\Software\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableIOAVProtection", 0, True)]),
+            ConfigCheck("Defender Behaviour Monitoring enabled", "Check if Defender Behaviour Monitoring is enabled", checkers=[self.check_single_registry_with_policy], checker_args=[("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "HKLM\\Software\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableBehaviourMonitoring", 0, True)]),
+            ConfigCheck("Defender Script Scanning enabled", "Check if Defender Script Scanning is enabled", checkers=[self.check_single_registry_with_policy], checker_args=[("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "HKLM\\Software\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableScriptScanning", 0, True)]),
+            ConfigCheck("Defender path exlusion path", "Checks Defender path exlusion", checkers=[self.check_defender_exclusion], checker_args=[("HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Exclusions\\Paths", "HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Paths")]),
+            ConfigCheck("Defender extension exlusion", "Checks Defender extension exlusion", checkers=[self.check_defender_exclusion], checker_args=[("HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Exclusions\\Extensions", "HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Extensions")])
         ]
 
         # Add check to conf_checks table if missing
@@ -256,7 +255,7 @@ class HostChecker:
             if host_id is not None:
                 self.connection.db.add_check_result(host_id, check.check_id, check.ok, ", ".join(check.reasons).replace("\x00", ""))
 
-    def check_registry(self, *specs, options=None):
+    def check_registry(self, *specs, options=None, stop_on_error=False):
         """
         Perform checks that only require to compare values in the registry with expected values, according to the specs
         a spec may be either a 3-tuple: (key name, value name, expected value), or a 4-tuple (key name, value name, expected value, operation), where operation is a function that implements a comparison operator
@@ -274,6 +273,7 @@ class HostChecker:
             try:
                 if len(spec) == 3:
                     (key, value_name, expected_value) = spec
+                    op = operator.eq
                 elif len(spec) == 4:
                     (key, value_name, expected_value, op) = spec
                 else:
@@ -321,6 +321,9 @@ class HostChecker:
                 else:
                     ok = False
                     reasons.append(f"Error while retrieving value of {key}\\{value_name}: {value}")
+                if stop_on_error:
+                    ok = None
+                    return ok, reasons
                 continue
 
             if op(value, expected_value):
@@ -336,6 +339,37 @@ class HostChecker:
                 break
 
         return ok, reasons
+
+
+    def check_single_registry_with_policy(self, *spec, options=None):
+        """
+        Perform checks that only require to compare values in the registry with expected values, according to the spec
+        The spec may be either a 5-tuple: (key name, policy key name, value name, expected value, default result), or a 6-tuple (key name, policy key name, value name, expected value, default result, operation), where operation is a function that implements a comparison operator
+        """        
+        try:
+            if len(spec) == 5:
+                (key, policy_key, value_name, expected_value, default_result) = spec
+                op = operator.eq
+            elif len(spec) == 6:
+                (key, policy_key, value_name, expected_value, default_result, op) = spec
+            else:
+                ok = False
+                reasons = ["Check could not be performed (invalid specification provided)"]
+                return ok, reasons
+        except Exception as e:
+            ok, reasons = self.module.log.error(f"Check could not be performed. Details: specs={specs}, dce={self.dce}, error: {e}")
+            return ok, reasons
+
+        ok, reasons_p = self.check_registry((policy_key, value_name, expected_value, op), stop_on_error=True)
+        reasons = [f"Policy: [{', '.join(reasons_p)}]"] 
+        if ok is not None:
+            return ok, reasons
+        ok, reasons_k = self.check_registry((key, value_name, expected_value, op), stop_on_error=True)
+        reasons.append(f"Specific: [{', '.join(reasons_k)}]") 
+        if ok is not None:
+            return ok, reasons
+
+        return default_result, reasons
 
     def check_laps(self):
         reasons = []
@@ -492,41 +526,39 @@ class HostChecker:
 
         return success, reasons
 
-    def check_defender_exclusion_path(self):
-        key_name = "HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Paths"
-        values = self.reg_query_value(self.dce, self.connection, key_name, valueName=None, all=True)
-        success = True
-        reasons = []
-        for value_type, value_name, value_data in values:
-            reasons.append(value_name)
-        key_name = "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Exclusions\\Paths"
+    def get_exclusions(self, key_name):
+        exclusions = []
         try: 
             values = self.reg_query_value(self.dce, self.connection, key_name, valueName=None, all=True)
             for value_type, value_name, value_data in values:
-                reasons.append(value_name) 
+                exclusions.append(value_name)
         except Exception:
-            self.context.log.debug("No defender path exclusion policies")
-     
-        if len(reasons) > 0:
-            success = False
+            self.context.log.debug("No defender exclusion policies")
 
-        return success, reasons
+        return len(exclusions), exclusions
 
-    def check_defender_exclusion_extension(self):
-        key_name = "HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Extensions"
-        values = self.reg_query_value(self.dce, self.connection, key_name, valueName=None, all=True)
-        success = True
+    def check_defender_exclusion(self, *spec, options=None):
+        try:
+            if len(spec) == 2:
+                (policy_key_name, key_name) = spec
+            else:
+                ok = False
+                reasons = ["Check could not be performed (invalid specification provided)"]
+                return ok, reasons
+        except Exception as e:
+            ok, reasons = self.module.log.error(f"Check could not be performed. Details: specs={specs}, dce={self.dce}, error: {e}")
+            return ok, reasons
+
         reasons = []
-        for value_type, value_name, value_data in values:
-            reasons.append(value_name)
-        key_name = "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Exclusions\\Extensions"
-        try: 
-            values = self.reg_query_value(self.dce, self.connection, key_name, valueName=None, all=True)
-            for value_type, value_name, value_data in values:
-                reasons.append(value_name) 
-        except Exception:
-            self.context.log.debug("No defender extension exclusion policies")
-        if len(reasons) > 0:
+        success = True
+
+        count, exclusions_p = self.get_exclusions(policy_key_name)
+        reasons = [f"Policy: [{', '.join(exclusions_p)}]"]
+        count_k, exclusions_k = self.get_exclusions(key_name)
+        reasons.append(f"Specific: [{', '.join(exclusions_k)}]")
+        count += count_k
+
+        if count > 0:
             success = False
 
         return success, reasons
