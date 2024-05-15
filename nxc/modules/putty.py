@@ -150,6 +150,7 @@ class NXCModule:
         return sessions
 
     def extract_session(self, sessions):
+        proxycreds_file = f"{NXC_PATH}/modules/PuTTY/putty_proxycreds_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
         for session in sessions:
             if session["private_key_path"]:
                 makedirs(f"{NXC_PATH}/modules/PuTTY", exist_ok=True)
@@ -180,6 +181,16 @@ class NXCModule:
                 self.context.log.highlight(f"Proxy Host: {session['proxy_host']}:{session['proxy_port']}")
                 self.context.log.highlight(f"Proxy Username: {session['proxy_username']}")
                 self.context.log.highlight(f"Proxy Password: {session['proxy_password']}")
+                with open(proxycreds_file, "a") as f:
+                    f.write("================\n")
+                    f.write(f"User: {session['user']}\n")
+                    f.write(f"Sessionname: {session['session_name']}\n")
+                    f.write(f"Host: {session['hostname']}:{session['port']}\n")
+                    f.write(f"Protocol: {session['protocol']}\n")
+                    f.write(f"Proxy Host: {session['proxy_host']}:{session['proxy_port']}\n")
+                    f.write(f"Proxy Username: {session['proxy_username']}\n")
+                    f.write(f"Proxy Password: {session['proxy_password']}\n")
+                self.context.log.display(f"Proxy credentials saved to {highlight(proxycreds_file)}")
 
     def on_admin_login(self, context, connection):
         self.connection = connection
