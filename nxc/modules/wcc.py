@@ -152,7 +152,7 @@ class HostChecker:
 
     def __init__(self, context, connection):
         self.context = context
-        self.connection = connection       
+        self.connection = connection
         remoteOps = RemoteOperations(smbConnection=connection.conn, doKerberos=False)
         remoteOps.enableRegistry()
         self.dce = remoteOps._RemoteOperations__rrp
@@ -480,9 +480,6 @@ class HostChecker:
 
         return success, reasons
 
-    # Methods for getting values from the remote registry #
-    #######################################################
-
     def _open_root_key(self, dce, connection, root_key):
         ans = None
         retries = 1
@@ -592,9 +589,6 @@ class HostChecker:
                     return data
             return DCERPCSessionError(error_code=ERROR_OBJECT_NOT_FOUND)
 
-    # Methods for getting values from SAMR and SCM #
-    ################################################
-
     def get_service(self, service_name, connection):
         """Get the service status and configuration for specified service"""
         remoteOps = RemoteOperations(smbConnection=connection.conn, doKerberos=False)
@@ -642,22 +636,14 @@ class HostChecker:
             self.context.log.error(f"ls(): C:\\{path} {e}\n")
         return file_listing
 
-
-# Comparison operators #
-########################
-
-
 def le(reg_sz_string, number):
     return int(reg_sz_string[:-1]) <= number
-
 
 def in_(obj, seq):
     return obj in seq
 
-
 def startswith(string, start):
     return string.startswith(start)
-
 
 def not_(boolean_operator):
     def wrapper(*args, **kwargs):
