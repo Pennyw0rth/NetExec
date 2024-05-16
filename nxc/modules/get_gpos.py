@@ -1,5 +1,5 @@
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
-
+from nxc.helpers.modules import get_loot_data_filepath
 
 class NXCModule:
     """Module by @Marshall-Hallenbeck
@@ -19,13 +19,17 @@ class NXCModule:
         self.fuzzy_search = False
         self.all_props = False
         self.download = False
+        self.report = True
+        self.report_file = get_loot_data_filepath(self.name, "gpos.txt")
 
     def options(self, context, module_options):
         """
-        NAME        Name of the GPO
+        NAME        Name of the GPO (default retrieve all GPOs)
         FUZZY       Fuzzy search for name of GPOs (using wildcards)
-        ALL_PROPS   Retrieve all properties of the GPO
-        DOWNLOAD    Attempt to download GPOs retrieved
+        ALL_PROPS   Retrieve all properties of the GPO (default is name, guid, and sysfile path)
+        REPORT      Save GPO information to a file (default True)
+        REPORT_FILE File to save GPO information to (by default saves to loot directory)
+        DOWNLOAD    Attempt to download GPOs retrieved (default)
         """
         self.gpo_name = module_options.get("NAME")
         self.fuzzy_search = module_options.get("FUZZY")
@@ -47,7 +51,7 @@ class NXCModule:
 
         results = connection.search(search_filter, attributes, 10000)
         results = [r for r in results if isinstance(r, ldapasn1_impacket.SearchResultEntry)]
-        context.log.success(f"GPOs found: {len(results)}")
+        context.log.success(f"GPOs Found: {len(results)}")
         
         if results:
             for gpo in results:
