@@ -1,7 +1,7 @@
 from impacket.dcerpc.v5 import samr, transport
 from impacket.nt_errors import STATUS_MORE_ENTRIES
 from impacket.dcerpc.v5.rpcrt import DCERPCException
-import json
+from json import loads
 
 
 class NXCModule:
@@ -98,7 +98,7 @@ class NXCModule:
                     resetData = info["Buffer"]["Reset"]["ResetData"]
                     if resetData == b"":
                         break
-                    resetData = json.loads(resetData)
+                    resetData = loads(resetData)
                     questions = resetData["questions"]
 
                     if len(questions) == 0:
