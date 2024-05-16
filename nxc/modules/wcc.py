@@ -161,7 +161,6 @@ class HostChecker:
         self.init_checks()
         self.check_config()
         
-
     def init_checks(self):
         # Declare the checks to do and how to do them
         self.checks = [
