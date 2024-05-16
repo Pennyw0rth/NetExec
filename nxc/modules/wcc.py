@@ -28,17 +28,6 @@ REG_VALUE_TYPE_32BIT_BE = 5
 REG_VALUE_TYPE_UNICODE_STRING_SEQUENCE = 7
 REG_VALUE_TYPE_64BIT_LE = 11
 
-# Setup file logger
-if "wcc_logger" not in globals():
-    wcc_logger = logging.getLogger("WCC")
-    wcc_logger.propagate = False
-    log_filename = nxc_logger.init_log_file()
-    log_filename = log_filename.replace("log_", "wcc_")
-    wcc_logger.setLevel(logging.INFO)
-    wcc_file_handler = logging.FileHandler(log_filename)
-    wcc_file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
-    wcc_logger.addHandler(wcc_file_handler)
-
 
 class ConfigCheck:
     """Class for performing the checks and holding the results"""
@@ -75,7 +64,7 @@ class ConfigCheck:
     def log(self, context):
         result = "passed" if self.ok else "did not pass"
         reasons = ", ".join(self.reasons)
-        wcc_logger.info(f'{self.connection.host}: Check "{self.name}" {result} because: {reasons}')
+        self.module.wcc_logger.info(f'{self.connection.host}: Check "{self.name}" {result} because: {reasons}')
         if self.module.quiet:
             return
 
@@ -99,6 +88,19 @@ class NXCModule:
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
+    
+    def __init__(self):
+        self.context = None
+        self.module_options = None
+        
+        self.wcc_logger = logging.getLogger("WCC")
+        self.wcc_logger.propagate = False
+        log_filename = nxc_logger.init_log_file()
+        log_filename = log_filename.replace("log_", "wcc_")
+        self.wcc_logger.setLevel(logging.INFO)
+        wcc_file_handler = logging.FileHandler(log_filename)
+        wcc_file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+        self.wcc_logger.addHandler(wcc_file_handler)
 
     def options(self, context, module_options):
         """
@@ -150,20 +152,15 @@ class HostChecker:
 
     def __init__(self, context, connection):
         self.context = context
-        self.connection = connection
+        self.connection = connection       
         remoteOps = RemoteOperations(smbConnection=connection.conn, doKerberos=False)
         remoteOps.enableRegistry()
         self.dce = remoteOps._RemoteOperations__rrp
 
     def run(self):
-        # Prepare checks
         self.init_checks()
-
-        # Perform checks
         self.check_config()
-
-    # Check methods #
-    #################
+        
 
     def init_checks(self):
         # Declare the checks to do and how to do them
