@@ -1,7 +1,7 @@
 from argparse import _StoreAction
 
-def proto_args(parser, std_parser, module_parser):
-    ssh_parser = parser.add_parser("ssh", help="own stuff using SSH", parents=[std_parser, module_parser])
+def proto_args(parser, parents):
+    ssh_parser = parser.add_parser("ssh", help="own stuff using SSH", parents=parents)
     ssh_parser.add_argument("--key-file", type=str, help="Authenticate using the specified private key. Treats the password parameter as the key's passphrase.")
     ssh_parser.add_argument("--port", type=int, default=22, help="SSH port (default: 22)")
     ssh_parser.add_argument("--ssh-timeout", help="SSH connection timeout, default is %(default)s secondes", type=int, default=15)

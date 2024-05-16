@@ -1,5 +1,5 @@
-def proto_args(parser, std_parser, module_parser):
-    rdp_parser = parser.add_parser("rdp", help="own stuff using RDP", parents=[std_parser, module_parser])
+def proto_args(parser, parents):
+    rdp_parser = parser.add_parser("rdp", help="own stuff using RDP", parents=parents)
     rdp_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
     rdp_parser.add_argument("--port", type=int, default=3389, help="Custom RDP port")
     rdp_parser.add_argument("--rdp-timeout", type=int, default=5, help="RDP timeout on socket connection, defalut is %(default)ss")

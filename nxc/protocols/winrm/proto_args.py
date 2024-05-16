@@ -1,5 +1,5 @@
-def proto_args(parser, std_parser, module_parser):
-    winrm_parser = parser.add_parser("winrm", help="own stuff using WINRM", parents=[std_parser, module_parser])
+def proto_args(parser, parents):
+    winrm_parser = parser.add_parser("winrm", help="own stuff using WINRM", parents=parents)
     winrm_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
     winrm_parser.add_argument("--port", nargs="+", default=["5985", "5986"], help="Custom WinRM port, default is %(default)s, format: 'http-port https-port'(with space separated) or 'single-port'"
                               "(http & https will use same port when given single port)")

@@ -1,5 +1,5 @@
-def proto_args(parser, std_parser, module_parser):
-    vnc_parser = parser.add_parser("vnc", help="own stuff using VNC", parents=[std_parser, module_parser])
+def proto_args(parser, parents):
+    vnc_parser = parser.add_parser("vnc", help="own stuff using VNC", parents=parents)
     vnc_parser.add_argument("--port", type=int, default=5900, help="Custom VNC port")
     vnc_parser.add_argument("--vnc-sleep", type=int, default=5, help="VNC Sleep on socket connection to avoid rate limit")
 

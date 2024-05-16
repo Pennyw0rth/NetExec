@@ -1,5 +1,5 @@
-def proto_args(parser, std_parser, module_parser):
-    ldap_parser = parser.add_parser("ldap", help="own stuff using LDAP", parents=[std_parser, module_parser])
+def proto_args(parser, parents):
+    ldap_parser = parser.add_parser("ldap", help="own stuff using LDAP", parents=parents)
     ldap_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
     ldap_parser.add_argument("--port", type=int, choices={389, 636}, default=389, help="LDAP port (default: 389)")
     ldap_parser.add_argument("--no-smb", action="store_true", help="No smb connection")

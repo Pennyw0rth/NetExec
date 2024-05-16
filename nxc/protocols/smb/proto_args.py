@@ -1,8 +1,8 @@
 from argparse import _StoreTrueAction
 
 
-def proto_args(parser, std_parser, module_parser):
-    smb_parser = parser.add_parser("smb", help="own stuff using SMB", parents=[std_parser, module_parser])
+def proto_args(parser, parents):
+    smb_parser = parser.add_parser("smb", help="own stuff using SMB", parents=parents)
     smb_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
     delegate_arg = smb_parser.add_argument("--delegate", action="store", help="Impersonate user with S4U2Self + S4U2Proxy")
     self_delegate_arg = smb_parser.add_argument("--self", dest="no_s4u2proxy", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Only do S4U2Self, no S4U2Proxy (use with delegate)")
@@ -22,12 +22,10 @@ def proto_args(parser, std_parser, module_parser):
     cgroup.add_argument("--lsa", action="store_true", help="dump LSA secrets from target systems")
     cgroup.add_argument("--ntds", choices={"vss", "drsuapi"}, nargs="?", const="drsuapi", help="dump the NTDS.dit from target DCs using the specifed method\n(default: drsuapi)")
     cgroup.add_argument("--dpapi", choices={"cookies", "nosystem"}, nargs="*", help='dump DPAPI secrets from target systems, can dump cookies if you add "cookies", will not dump SYSTEM dpapi if you add nosystem\n')
-
-    ngroup = smb_parser.add_argument_group("Credential Gathering", "Options for gathering credentials")
-    ngroup.add_argument("--mkfile", action="store", help="DPAPI option. File with masterkeys in form of {GUID}:SHA1")
-    ngroup.add_argument("--pvk", action="store", help="DPAPI option. File with domain backupkey")
-    ngroup.add_argument("--enabled", action="store_true", help="Only dump enabled targets from DC")
-    ngroup.add_argument("--user", dest="userntds", type=str, help="Dump selected user from DC")
+    cgroup.add_argument("--mkfile", action="store", help="DPAPI option. File with masterkeys in form of {GUID}:SHA1")
+    cgroup.add_argument("--pvk", action="store", help="DPAPI option. File with domain backupkey")
+    cgroup.add_argument("--enabled", action="store_true", help="Only dump enabled targets from DC")
+    cgroup.add_argument("--user", dest="userntds", type=str, help="Dump selected user from DC")
 
     egroup = smb_parser.add_argument_group("Mapping/Enumeration", "Options for Mapping/Enumerating")
     egroup.add_argument("--shares", action="store_true", help="enumerate shares and access")
@@ -63,16 +61,18 @@ def proto_args(parser, std_parser, module_parser):
     tgroup.add_argument("--get-file", action="append", nargs=2, metavar="FILE", help="Get a remote file, ex: \\\\Windows\\\\Temp\\\\whoami.txt whoami.txt")
     tgroup.add_argument("--append-host", action="store_true", help="append the host to the get-file filename")
 
-    cgroup = smb_parser.add_argument_group("Command Execution", "Options for executing commands")
-    cgroup.add_argument("--exec-method", choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default=None, help="method to execute the command. Ignored if in MSSQL mode (default: wmiexec)")
-    cgroup.add_argument("--dcom-timeout", help="DCOM connection timeout, default is 5 secondes", type=int, default=5)
-    cgroup.add_argument("--get-output-tries", help="Number of times atexec/smbexec/mmcexec tries to get results, default is 5", type=int, default=5)
-    cgroup.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output (default: utf-8). If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
-    cgroup.add_argument("--force-ps32", action="store_true", help="force the PowerShell command to run in a 32-bit process")
-    cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
-    cegroup = cgroup.add_mutually_exclusive_group()
-    cegroup.add_argument("-x", metavar="COMMAND", dest="execute", help="execute the specified CMD command")
-    cegroup.add_argument("-X", metavar="PS_COMMAND", dest="ps_execute", help="execute the specified PowerShell command")
+    cegroup = smb_parser.add_argument_group("Command Execution", "Options for executing commands")
+    cegroup.add_argument("--exec-method", choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default=None, help="method to execute the command. Ignored if in MSSQL mode (default: wmiexec)")
+    cegroup.add_argument("--dcom-timeout", help="DCOM connection timeout, default is 5 secondes", type=int, default=5)
+    cegroup.add_argument("--get-output-tries", help="Number of times atexec/smbexec/mmcexec tries to get results, default is 5", type=int, default=5)
+    cegroup.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output (default: utf-8). If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
+    cegroup.add_argument("--force-ps32", action="store_true", help="force the PowerShell command to run in a 32-bit process")
+    cegroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
+    # command execution method
+    cemgroup = cgroup.add_mutually_exclusive_group()
+    cemgroup.add_argument("-x", metavar="COMMAND", dest="execute", help="execute the specified CMD command")
+    cemgroup.add_argument("-X", metavar="PS_COMMAND", dest="ps_execute", help="execute the specified PowerShell command")
+    
     psgroup = smb_parser.add_argument_group("Powershell Obfuscation", "Options for PowerShell script obfuscation")
     psgroup.add_argument("--obfs", action="store_true", help="Obfuscate PowerShell scripts")
     psgroup.add_argument("--amsi-bypass", nargs=1, metavar="FILE", help="File with a custom AMSI bypass")
