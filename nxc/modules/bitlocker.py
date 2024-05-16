@@ -39,7 +39,7 @@ class BitLockerSMB:
 
     def check_bitlocker_status(self):
         # PowerShell command to check BitLocker volumes status.
-        check_bitlocker_command_str = "Get-BitLockerVolume -EA SilentlyContinue | Select-Object MountPoint, EncryptionMethod, ProtectionStatus"
+        check_bitlocker_command_str = "Get-BitLockerVolume | Select-Object MountPoint, EncryptionMethod, ProtectionStatus"
 
         try:
             # Executing the PowerShell command to get BitLocker volumes status.
