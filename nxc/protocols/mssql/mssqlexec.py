@@ -26,7 +26,7 @@ class MSSQLEXEC:
                     self.logger.error("Error when executing PowerShell (received 'preparing modules for first use'), try prepending $ProgressPreference = 'SilentlyContinue'; to your command")
         except Exception as e:
             self.logger.error(f"Error when attempting to execute command via xp_cmdshell: {e}")
-            
+
         try:
             self.logger.debug("Attempting to disable xp cmd shell")
             self.disable_xp_cmdshell()
