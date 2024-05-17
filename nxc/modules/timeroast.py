@@ -59,6 +59,8 @@ class NXCModule:
         if self.target is None:
             self.target = connection.host
 
+        context.log.display("Starting Timeroasting...")
+        
         for rid, hash, salt in self.run_ntp_roast(context, self.target, self.rids, self.rate, self.timeout, self.old_hashes, self.src_port):
             context.log.highlight(hashcat_format(rid, hash, salt))
 
@@ -82,7 +84,6 @@ class NXCModule:
             except PermissionError:
                 context.log.exception(f'No permission to listen on port {src_port}. May need to run as root.')
 
-            context.log.display("Starting Timeroasting...")
 
             query_interval = 1 / rate
             last_ok_time = time()
