@@ -13,7 +13,7 @@ def proto_args(parser, parents):
     dgroup.add_argument("-d", "--domain", metavar="DOMAIN", dest="domain", type=str, help="domain to authenticate to")
     dgroup.add_argument("--local-auth", action="store_true", help="authenticate locally to each target")
     
-    smb_parser.add_argument("--port", type=int, choices={445, 139}, default=445, help="SMB port")
+    smb_parser.add_argument("--port", type=int, default=445, help="SMB port")
     smb_parser.add_argument("--share", metavar="SHARE", default="C$", help="specify a share")
     smb_parser.add_argument("--smb-server-port", default="445", help="specify a server port for SMB", type=int)
     smb_parser.add_argument("--gen-relay-list", metavar="OUTPUT_FILE", help="outputs all hosts that don't require SMB signing to the specified file")
