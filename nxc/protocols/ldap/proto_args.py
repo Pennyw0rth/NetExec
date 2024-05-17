@@ -1,7 +1,10 @@
+from nxc.helpers.args import DisplayDefaultsNotNone
+
+
 def proto_args(parser, parents):
-    ldap_parser = parser.add_parser("ldap", help="own stuff using LDAP", parents=parents)
+    ldap_parser = parser.add_parser("ldap", help="own stuff using LDAP", parents=parents, formatter_class=DisplayDefaultsNotNone)
     ldap_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
-    ldap_parser.add_argument("--port", type=int, choices={389, 636}, default=389, help="LDAP port (default: 389)")
+    ldap_parser.add_argument("--port", type=int, choices={389, 636}, default=389, help="LDAP port")
     ldap_parser.add_argument("--no-smb", action="store_true", help="No smb connection")
 
     dgroup = ldap_parser.add_mutually_exclusive_group()
@@ -30,7 +33,7 @@ def proto_args(parser, parents):
     bgroup = ldap_parser.add_argument_group("Bloodhound Scan", "Options to play with Bloodhoud")
     bgroup.add_argument("--bloodhound", action="store_true", help="Perform a Bloodhound scan")
     bgroup.add_argument("-ns", "--nameserver", help="Custom DNS IP")
-    bgroup.add_argument("-c", "--collection", help="Which information to collect. Supported: Group, LocalAdmin, Session, Trusts, Default, DCOnly, DCOM, RDP, PSRemote, LoggedOn, Container, ObjectProps, ACL, All. You can specify more than one by separating them with a comma. (default: Default)'")
+    bgroup.add_argument("-c", "--collection", default="Collection", help="Which information to collect. Supported: Group, LocalAdmin, Session, Trusts, Default, DCOnly, DCOM, RDP, PSRemote, LoggedOn, Container, ObjectProps, ACL, All. You can specify more than one by separating them with a comma")
 
     return parser
 
