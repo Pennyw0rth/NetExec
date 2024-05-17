@@ -28,6 +28,7 @@ from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError
 from impacket.krb5.types import Principal, KerberosException
 from impacket.ldap import ldap as ldap_impacket
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
+from impacket.ldap.ldap import LDAPFilterSyntaxError
 from impacket.smb import SMB_DIALECT
 from impacket.smbconnection import SMBConnection, SessionError
 
@@ -1051,6 +1052,36 @@ class ldap(connection):
             else:
                 self.logger.highlight("No entries found!")
         self.logger.fail("Error with the LDAP account used")
+
+    def query(self):
+        """
+        Query the LDAP server with the specified filter and attributes.
+        Example usage:
+            --query "(sAMAccountName=Administrator)" "sAMAccountName pwdLastSet memberOf"
+        """
+        search_filter = self.args.query[0]
+        attributes = [attr.strip() for attr in self.args.query[1].split(" ")]
+        if len(attributes) == 1 and attributes[0] == "":
+            attributes = None
+        if not search_filter:
+            self.logger.fail("No filter specified")
+            return
+        self.logger.debug(f"Querying LDAP server with filter: {search_filter} and attributes: {attributes}")
+        try:
+            resp = self.search(search_filter, attributes, 0)
+        except LDAPFilterSyntaxError as e:
+            self.logger.fail(f"LDAP Filter Syntax Error: {e}")
+            return
+        for item in resp:
+            if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
+                continue
+            self.logger.success(f"Response for object: {item['objectName']}")
+            for attribute in item["attributes"]:
+                attr = f"{attribute['type']}:"
+                vals = str(attribute["vals"]).replace("\n", "")
+                if "SetOf: " in vals:
+                    vals = vals.replace("SetOf: ", "")
+                self.logger.highlight(f"{attr:<20} {vals}")
 
     def trusted_for_delegation(self):
         # Building the search filter
