@@ -12,9 +12,9 @@ class NXCModule:
     opsec_safe = True  # Does the module touch disk?
     multiple_hosts = True  # Does it make sense to run this module on multiple hosts at a time?
 
-    def __init__(self, context=None, module_options=None):
-        self.context = context
-        self.module_options = module_options
+    def __init__(self):
+        self.context = None
+        self.module_options = None
 
     def options(self, context, module_options):
         """Required.
