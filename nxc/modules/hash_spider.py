@@ -202,7 +202,7 @@ class NXCModule:
         if file is None:
             context.log.fail("Unable to dump lsass")
             return False
-        credentials, tickets, masterkeys = Parser(file).parse()
+        credentials, tickets, masterkeys = Parser(host, file).parse()
         file.close()
         ImpacketFile.delete(session, file.get_file_path())
         if credentials is None:
