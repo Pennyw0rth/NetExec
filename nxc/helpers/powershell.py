@@ -148,8 +148,12 @@ def create_ps_command(ps_command, force_ps32=False, obfs=False, custom_amsi=None
     else:
         amsi_bypass = ""
 
-    # https://stackoverflow.com/a/60155248
-    command = amsi_bypass + f"$functions = {{function Command-ToExecute{{{amsi_bypass + ps_command}}}}}; if ($Env:PROCESSOR_ARCHITECTURE -eq 'AMD64'){{$job = Start-Job -InitializationScript $functions -ScriptBlock {{Command-ToExecute}} -RunAs32; $job | Wait-Job | Receive-Job }} else {{IEX '$functions'; Command-ToExecute}}" if force_ps32 else f"{amsi_bypass} {ps_command}"
+    # for readability purposes, we do not do a one-liner
+    if force_ps32:
+        # https://stackoverflow.com/a/60155248
+        command = amsi_bypass + f"$functions = {{function Command-ToExecute{{{amsi_bypass + ps_command}}}}}; if ($Env:PROCESSOR_ARCHITECTURE -eq 'AMD64'){{$job = Start-Job -InitializationScript $functions -ScriptBlock {{Command-ToExecute}} -RunAs32; $job | Wait-Job | Receive-Job }} else {{IEX '$functions'; Command-ToExecute}}"
+    else:
+        command = f"{amsi_bypass} {ps_command}"
     
     nxc_logger.debug(f"Generated PS command:\n {command}\n")
 
