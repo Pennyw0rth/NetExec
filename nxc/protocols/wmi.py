@@ -155,8 +155,11 @@ class wmi(connection):
             if "dcom" in locals():
                 dcom.disconnect()
 
-            if "access_denied" not in str(e).lower():
+            if "KDC_ERR_PREAUTH_FAILED" in str(e):
+                self.logger.fail("KDC_ERR_PREAUTH_FAILED returned - check if Kerberos and DNS are working!")
+            elif "access_denied" not in str(e).lower():
                 self.logger.fail(str(e))
+            return False
         else:
             if not flag or not self.stringBinding:
                 dcom.disconnect()
@@ -175,6 +178,7 @@ class wmi(connection):
 
                     if "access_denied" not in str(e).lower():
                         self.logger.fail(str(e))
+                        return False
                 else:
                     dcom.disconnect()
                     self.logger.extra["protocol"] = "WMI"
@@ -253,11 +257,12 @@ class wmi(connection):
                 return False
             else:
                 self.doKerberos = True
-                self.check_if_admin()
+                if self.check_if_admin():
+                    out = f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}"
+                    self.logger.success(out)
+                    return True
                 dce.disconnect()
-                out = f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}"
-                self.logger.success(out)
-                return True
+                return False
 
     def plaintext_login(self, domain, username, password):
         self.password = password
