@@ -1,9 +1,9 @@
-from argparse import _StoreTrueAction, HelpFormatter
+from argparse import _StoreTrueAction
 from nxc.helpers.args import DisplayDefaultsNotNone
 
 
 def proto_args(parser, parents):
-    smb_parser = parser.add_parser("smb", help="own stuff using SMB", parents=parents)
+    smb_parser = parser.add_parser("smb", help="own stuff using SMB", parents=parents, formatter_class=DisplayDefaultsNotNone)
     smb_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
     
     delegate_arg = smb_parser.add_argument("--delegate", action="store", help="Impersonate user with S4U2Self + S4U2Proxy")
@@ -13,19 +13,19 @@ def proto_args(parser, parents):
     dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, help="domain to authenticate to")
     dgroup.add_argument("--local-auth", action="store_true", help="authenticate locally to each target")
     
-    smb_parser.add_argument("--port", type=int, choices={445, 139}, default=445, help="SMB port (default: 445)")
-    smb_parser.add_argument("--share", metavar="SHARE", default="C$", help="specify a share (default: C$)")
+    smb_parser.add_argument("--port", type=int, choices={445, 139}, default=445, help="SMB port")
+    smb_parser.add_argument("--share", metavar="SHARE", default="C$", help="specify a share")
     smb_parser.add_argument("--smb-server-port", default="445", help="specify a server port for SMB", type=int)
     smb_parser.add_argument("--gen-relay-list", metavar="OUTPUT_FILE", help="outputs all hosts that don't require SMB signing to the specified file")
-    smb_parser.add_argument("--smb-timeout", help="SMB connection timeout, default 2 secondes", type=int, default=2)
+    smb_parser.add_argument("--smb-timeout", help="SMB connection timeout", type=int, default=2)
     smb_parser.add_argument("--laps", dest="laps", metavar="LAPS", type=str, help="LAPS authentification", nargs="?", const="administrator")
     self_delegate_arg.make_required = [delegate_arg]
 
     cred_gathering_group = smb_parser.add_argument_group("Credential Gathering", "Options for gathering credentials")
     cred_gathering_group.add_argument("--sam", action="store_true", help="dump SAM hashes from target systems")
     cred_gathering_group.add_argument("--lsa", action="store_true", help="dump LSA secrets from target systems")
-    cred_gathering_group.add_argument("--ntds", choices={"vss", "drsuapi"}, nargs="?", const="drsuapi", help="dump the NTDS.dit from target DCs using the specifed method\n(default: drsuapi)")
-    cred_gathering_group.add_argument("--dpapi", choices={"cookies", "nosystem"}, nargs="*", help='dump DPAPI secrets from target systems, can dump cookies if you add "cookies", will not dump SYSTEM dpapi if you add nosystem\n')
+    cred_gathering_group.add_argument("--ntds", choices={"vss", "drsuapi"}, nargs="?", const="drsuapi", help="dump the NTDS.dit from target DCs using the specifed method")
+    cred_gathering_group.add_argument("--dpapi", choices={"cookies", "nosystem"}, nargs="*", help="dump DPAPI secrets from target systems, can dump cookies if you add 'cookies', will not dump SYSTEM dpapi if you add nosystem")
     cred_gathering_group.add_argument("--mkfile", action="store", help="DPAPI option. File with masterkeys in form of {GUID}:SHA1")
     cred_gathering_group.add_argument("--pvk", action="store", help="DPAPI option. File with domain backupkey")
     cred_gathering_group.add_argument("--enabled", action="store_true", help="Only dump enabled targets from DC")
@@ -44,18 +44,18 @@ def proto_args(parser, parents):
     mapping_enum_group.add_argument("--computers", nargs="?", const="", metavar="COMPUTER", help="enumerate computer users")
     mapping_enum_group.add_argument("--local-groups", nargs="?", const="", metavar="GROUP", help="enumerate local groups, if a group is specified then its members are enumerated")
     mapping_enum_group.add_argument("--pass-pol", action="store_true", help="dump password policy")
-    mapping_enum_group.add_argument("--rid-brute", nargs="?", type=int, const=4000, metavar="MAX_RID", help="enumerate users by bruteforcing RID's (default: 4000)")
+    mapping_enum_group.add_argument("--rid-brute", nargs="?", type=int, const=4000, metavar="MAX_RID", help="enumerate users by bruteforcing RIDs")
     
     wmi_group = smb_parser.add_argument_group("WMI", "Options for WMI Queries")
     wmi_group.add_argument("--wmi", metavar="QUERY", type=str, help="issues the specified WMI query")
-    wmi_group.add_argument("--wmi-namespace", metavar="NAMESPACE", default="root\\cimv2", help="WMI Namespace (default: root\\cimv2)")
+    wmi_group.add_argument("--wmi-namespace", metavar="NAMESPACE", default="root\\cimv2", help="WMI Namespace")
 
     spidering_group = smb_parser.add_argument_group("Spidering", "Options for spidering shares")
     spidering_group.add_argument("--spider", metavar="SHARE", type=str, help="share to spider")
-    spidering_group.add_argument("--spider-folder", metavar="FOLDER", default=".", type=str, help="folder to spider (default: root share directory)")
+    spidering_group.add_argument("--spider-folder", metavar="FOLDER", default=".", type=str, help="folder to spider")
     spidering_group.add_argument("--content", action="store_true", help="enable file content searching")
     spidering_group.add_argument("--exclude-dirs", type=str, metavar="DIR_LIST", default="", help="directories to exclude from spidering")
-    spidering_group.add_argument("--depth", type=int, default=None, help="max spider recursion depth (default: infinity & beyond)")
+    spidering_group.add_argument("--depth", type=int, help="max spider recursion depth")
     spidering_group.add_argument("--only-files", action="store_true", help="only spider files")
     segroup = spidering_group.add_mutually_exclusive_group()
     segroup.add_argument("--pattern", nargs="+", help="pattern(s) to search for in folders, filenames and file content")
@@ -67,10 +67,10 @@ def proto_args(parser, parents):
     files_group.add_argument("--append-host", action="store_true", help="append the host to the get-file filename")
 
     cmd_exec_group = smb_parser.add_argument_group("Command Execution", "Options for executing commands")
-    cmd_exec_group.add_argument("--exec-method", choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default=None, help="method to execute the command. Ignored if in MSSQL mode (default: wmiexec)")
-    cmd_exec_group.add_argument("--dcom-timeout", help="DCOM connection timeout, default is 5 secondes", type=int, default=5)
-    cmd_exec_group.add_argument("--get-output-tries", help="Number of times atexec/smbexec/mmcexec tries to get results, default is 5", type=int, default=5)
-    cmd_exec_group.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output (default: utf-8). If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
+    cmd_exec_group.add_argument("--exec-method", choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default="wmiexec", help="method to execute the command. Ignored if in MSSQL mode")
+    cmd_exec_group.add_argument("--dcom-timeout", help="DCOM connection timeout", type=int, default=5)
+    cmd_exec_group.add_argument("--get-output-tries", help="Number of times atexec/smbexec/mmcexec tries to get results", type=int, default=5)
+    cmd_exec_group.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output. If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
     cmd_exec_group.add_argument("--no-output", action="store_true", help="do not retrieve command output")
     # command execution method
     cemgroup = cmd_exec_group.add_mutually_exclusive_group()
