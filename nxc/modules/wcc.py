@@ -9,6 +9,7 @@ from termcolor import colored
 from nxc.logger import nxc_logger
 from impacket.dcerpc.v5 import rrp, samr, scmr
 from impacket.dcerpc.v5.rrp import DCERPCSessionError
+from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.smbconnection import SessionError as SMBSessionError
 from impacket.examples.secretsdump import RemoteOperations
 
@@ -357,7 +358,7 @@ class HostChecker:
                 reasons = ["Check could not be performed (invalid specification provided)"]
                 return ok, reasons
         except Exception as e:
-            ok, reasons = self.module.log.error(f"Check could not be performed. Details: specs={specs}, dce={self.dce}, error: {e}")
+            ok, reasons = self.module.log.error(f"Check could not be performed. Details: spec={spec}, dce={self.dce}, error: {e}")
             return ok, reasons
 
         ok, reasons_p = self.check_registry((policy_key, value_name, expected_value, op), stop_on_error=True)
@@ -529,8 +530,8 @@ class HostChecker:
     def get_exclusions(self, key_name):
         exclusions = []
         try: 
-            values = self.reg_query_value(self.dce, self.connection, key_name, valueName=None, all=True)
-            for value_type, value_name, value_data in values:
+            values = self.reg_query_value(self.dce, self.connection, key_name, valueName=None, all_value=True)
+            for _, value_name, _ in values:
                 exclusions.append(value_name)
         except Exception:
             self.context.log.debug("No defender exclusion policies")
@@ -546,7 +547,7 @@ class HostChecker:
                 reasons = ["Check could not be performed (invalid specification provided)"]
                 return ok, reasons
         except Exception as e:
-            ok, reasons = self.module.log.error(f"Check could not be performed. Details: specs={specs}, dce={self.dce}, error: {e}")
+            ok, reasons = self.module.log.error(f"Check could not be performed. Details: spec={spec}, dce={self.dce}, error: {e}")
             return ok, reasons
 
         reasons = []
@@ -649,7 +650,7 @@ class HostChecker:
                 break
         return subkeys
 
-    def reg_query_value(self, dce, connection, keyName, valueName=None, all=False):
+    def reg_query_value(self, dce, connection, keyName, valueName=None, all_value=False):
         """Query remote registry data for a given registry value"""
 
         def subkey_values(subkey_handle):
@@ -702,9 +703,9 @@ class HostChecker:
 
         subkey_handle = ans["phkResult"]
 
-        if valueName is None and all is False:
+        if valueName is None and all_value is False:
             return get_value(subkey_handle)[2]
-        elif valueName is None and all is True:
+        elif valueName is None and all_value is True:
             return subkey_values(subkey_handle)
         else:
             for _, name, data in subkey_values(subkey_handle):
