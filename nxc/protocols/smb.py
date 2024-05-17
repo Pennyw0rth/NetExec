@@ -697,7 +697,7 @@ class smb(connection):
         force_ps32 = force_ps32 if force_ps32 else self.args.force_ps32
         get_output = True if not self.args.no_output else get_output
                 
-        self.logger.debug(f"Starting PS execute: {payload=} {get_output=} {methods=} {force_ps32=} {obfs=} {encode=}")
+        self.logger.debug(f"Starting ps_execute(): {payload=} {get_output=} {methods=} {force_ps32=} {obfs=} {encode=}")
         amsi_bypass = self.args.amsi_bypass[0] if self.args.amsi_bypass else None
         self.logger.debug(f"AMSI Bypass: {amsi_bypass}")
         
