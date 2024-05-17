@@ -671,7 +671,7 @@ class smb(connection):
             self.logger.debug(f"Cleaned Output: {output}")
             
             if "This script contains malicious content" in output:
-                self.logger.fail("Script blocked by AMSI")
+                self.logger.fail("Command execution blocked by AMSI")
                 return None
 
             if (self.args.execute or self.args.ps_execute) and output:
@@ -1285,6 +1285,7 @@ class smb(connection):
     def get_file(self):
         for src, dest in self.args.get_file:
             self.get_file_single(src, dest)
+
 
     def enable_remoteops(self):
         try:
