@@ -10,7 +10,7 @@ def proto_args(parser, parents):
     self_delegate_arg = smb_parser.add_argument("--self", dest="no_s4u2proxy", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Only do S4U2Self, no S4U2Proxy (use with delegate)")
     
     dgroup = smb_parser.add_mutually_exclusive_group()
-    dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, help="domain to authenticate to")
+    dgroup.add_argument("-d", "--domain", metavar="DOMAIN", dest="domain", type=str, help="domain to authenticate to")
     dgroup.add_argument("--local-auth", action="store_true", help="authenticate locally to each target")
     
     smb_parser.add_argument("--port", type=int, choices={445, 139}, default=445, help="SMB port")
@@ -82,7 +82,6 @@ def proto_args(parser, parents):
     posh_group.add_argument("--amsi-bypass", nargs=1, metavar="FILE", help="File with a custom AMSI bypass")
     posh_group.add_argument("--clear-obfscripts", action="store_true", help="Clear all cached obfuscated PowerShell scripts")
     posh_group.add_argument("--force-ps32", action="store_true", help="force PowerShell commands to run in a 32-bit process (may not apply to modules)")
-
 
     return parser
 
