@@ -198,6 +198,7 @@ class ssh(connection):
                     timeout=self.args.ssh_timeout,
                     look_for_keys=False,
                     allow_agent=False,
+                    banner_timeout=self.args.ssh_timeout,
                 )
 
                 cred_id = self.db.add_credential(
@@ -217,6 +218,7 @@ class ssh(connection):
                     timeout=self.args.ssh_timeout,
                     look_for_keys=False,
                     allow_agent=False,
+                    banner_timeout=self.args.ssh_timeout,
                 )
                 cred_id = self.db.add_credential("plaintext", username, password)
 
