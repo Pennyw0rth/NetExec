@@ -1,6 +1,7 @@
 import argparse
 import os
 import subprocess
+from time import time
 from rich.console import Console
 import platform
 
@@ -70,11 +71,12 @@ def get_cli_args():
     )
     parser.add_argument(
         "--print-failures",
-        action="store_true",
+        action="store_false",
         required=False,
-        help="Prints all the commands of failed tests at the end"
+        help="Prints all the commands of failed tests at the end (default: True)",
     )
     return parser.parse_args()
+
 
 def parse_line_nums(value):
     line_nums = []
@@ -85,6 +87,7 @@ def parse_line_nums(value):
         else:
             line_nums.append(int(item))
     return line_nums
+
 
 def generate_commands(args):
     lines = []
@@ -116,6 +119,7 @@ def generate_commands(args):
                     lines.append(replace_command(args, line))
     return lines
 
+
 def replace_command(args, line):
     kerberos = "-k " if args.kerberos else ""
 
@@ -125,9 +129,25 @@ def replace_command(args, line):
     return line
 
 
+def execute_task(console, task):
+    result = subprocess.Popen(
+        task,
+        shell=True,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+
+    # pass in a "y" for things that prompt for it (--ndts, etc)
+    text = result.communicate(input=b"y")[0]
+    return_code = result.returncode
+    return text, return_code
+
+
 def run_e2e_tests(args):
     console = Console()
     tasks = generate_commands(args)
+    tasks_len = len(tasks)
     failures = []
 
     result = subprocess.Popen(
@@ -138,50 +158,49 @@ def run_e2e_tests(args):
     )
     version = result.communicate()[0].decode().strip()
 
-    with console.status(f"[bold green] :brain: Running {len(tasks)} test commands for nxc v{version}..."):
+    with console.status(f"[bold green] :brain: Running {tasks_len} test commands for nxc v{version}..."):
+        start_time = time()
         passed = 0
         failed = 0
+        tries = 3
 
         while tasks:
             task = str(tasks.pop(0))
             # replace double quotes with single quotes for Linux due to special chars/escaping
             if platform.system() == "Linux":
                 task = task.replace('"', "'")
-            console.log(f"Running command: {task}")
-            result = subprocess.Popen(
-                task,
-                shell=True,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-            )
-            # pass in a "y" for things that prompt for it (--ndts, etc)
-            text = result.communicate(input=b"y")[0]
-            return_code = result.returncode
 
-            if return_code == 0:
-                console.log(f"{task.strip()} :heavy_check_mark:")
-                passed += 1
-            else:
-                console.log(f"[bold red]{task.strip()} :cross_mark:[/]")
+            console.log(f"Running command: {task}")
+            failure = True
+            for i in range(tries):
+                text, return_code = execute_task(console, task)
+                if return_code == 0 and "Traceback (most recent call last)" not in text.decode("utf-8"):
+                    console.log(f"└─$ {task.strip()} [bold green]:heavy_check_mark:[/]")
+                    failure = False
+                    passed += 1
+                    break
+                else:
+                    console.log(f"[bold red]{task.strip()} :cross_mark: Try {i + 1}/3[/]")
+            if failure:
+                console.log(f"[bold red]TASK FAILED {tries} TIMES, CONTINUING[/]")
                 failures.append(task.strip())
                 failed += 1
 
             if args.errors:
                 raw_text = text.decode("utf-8")
-                if "error" in raw_text.lower() or "failure" in raw_text.lower():
+                if "error" in raw_text.lower() or "failure" in raw_text.lower() or "Traceback (most recent call last)" in raw_text:
                     console.log("[bold red]Error Detected:")
                     console.log(f"{raw_text}")
 
             if args.verbose:
                 # this prints sorta janky, but it does its job
                 console.log(f"[*] Results:\n{text.decode('utf-8')}")
-        
+
         if args.print_failures and failures:
             console.log("[bold red]Failed Commands:")
             for failure in failures:
                 console.log(f"[bold red]{failure}")
-        console.log(f"Tests [bold green] Passed: {passed} [bold red] Failed: {failed}")
+        console.log(f"Ran {tasks_len} tests in {int((time() - start_time) / 60)} mins and {int((time() - start_time) % 60)} seconds - [bold green] Passed: {passed} [bold red] Failed: {failed}")
 
 
 if __name__ == "__main__":
