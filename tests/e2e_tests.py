@@ -195,7 +195,6 @@ def run_e2e_tests(args):
             if return_code == 0 and "Traceback (most recent call last)" not in text.decode("utf-8"):
                 console.log(f"└─$ {task.strip()} [bold green]:heavy_check_mark:[/]")
                 passed += 1
-                break
             else:
                 console.log(f"[bold red]{task.strip()} :cross_mark:[/]")
                 failures.append(task.strip())
