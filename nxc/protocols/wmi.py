@@ -1,5 +1,4 @@
 import os
-import logging
 
 from io import StringIO
 from datetime import datetime
@@ -62,8 +61,10 @@ class wmi(connection):
         )
 
     def create_conn_obj(self):
+        connection_target = fr"ncacn_ip_tcp:{self.remoteName}[{self.port!s}]"
+        self.logger.debug(f"Creating WMI connection object to {connection_target}")
         try:
-            rpctansport = transport.DCERPCTransportFactory(fr"ncacn_ip_tcp:{self.remoteName}[{self.port!s}]")
+            rpctansport = transport.DCERPCTransportFactory(connection_target)
             rpctansport.set_credentials(username="", password="", domain="", lmhash="", nthash="", aesKey="")
             rpctansport.setRemoteHost(self.host)
             rpctansport.set_connect_timeout(self.args.rpc_timeout)
@@ -73,9 +74,10 @@ class wmi(connection):
             dce.bind(MSRPC_UUID_PORTMAP)
             dce.disconnect()
         except Exception as e:
-            self.logger.debug(str(e))
+            self.logger.debug(f"Received error creating WMI connection object: {e}")
             return False
         else:
+            self.logger.debug(f"Successfully created WMI connection object to {connection_target}")
             self.conn = rpctansport
             return True
 
@@ -152,14 +154,11 @@ class wmi(connection):
             iInterface = dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
             flag, self.stringBinding = dcom_FirewallChecker(iInterface, self.host, self.args.rpc_timeout)
         except Exception as e:
+            self.logger.debug(f"Received error while checking admin: {e}")
             if "dcom" in locals():
                 dcom.disconnect()
-
-            if "KDC_ERR_PREAUTH_FAILED" in str(e):
-                self.logger.fail("KDC_ERR_PREAUTH_FAILED returned - check if Kerberos and DNS are working!")
-            elif "access_denied" not in str(e).lower():
+            if "access_denied" not in str(e).lower():
                 self.logger.fail(str(e))
-            return False
         else:
             if not flag or not self.stringBinding:
                 dcom.disconnect()
@@ -185,7 +184,7 @@ class wmi(connection):
                     self.admin_privs = True
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
-        logging.getLogger("impacket").disabled = True
+        self.logger.debug("Starting WMI login with Kerberos")
         lmhash = ""
         nthash = ""
         self.password = password
@@ -205,37 +204,39 @@ class wmi(connection):
 
         if useCache and kerb_pass == "":
             ccache = CCache.loadFile(os.getenv("KRB5CCNAME"))
+            self.logger.debug(f"Using ccache from {ccache}")
             username = ccache.credentials[0].header["client"].prettyPrint().decode().split("@")[0]
             self.username = username
-
         used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
+        
         try:
+            self.logger.debug(f"Attempting to connect via WMI to {self.host}")
             self.conn.set_credentials(username=username, password=password, domain=domain, lmhash=lmhash, nthash=nthash, aesKey=self.aesKey)
             self.conn.setRemoteHost(self.host)
             self.conn.set_kerberos(True, kdcHost)
             dce = self.conn.get_dce_rpc()
             dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+            dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
             dce.connect()
             dce.bind(MSRPC_UUID_PORTMAP)
         except Exception as e:
             dce.disconnect()
             error_msg = str(e).lower()
-            self.logger.debug(error_msg)
+            self.logger.debug(f"WMI errored while connecting: {error_msg}")
             if "unpack requires a buffer of 4 bytes" in error_msg:
                 error_msg = "Kerberos authentication failure"
                 out = f"{self.domain}\\{self.username}{used_ccache} {error_msg}"
                 self.logger.fail(out)
-            elif "kerberos sessionerror" in str(e).lower():
+            elif "kerberos sessionerror" in error_msg:
                 out = f"{self.domain}\\{self.username}{used_ccache} {next(iter(e.getErrorString()))}"
                 self.logger.fail(out, color="magenta")
-                return False
             else:
                 out = f"{self.domain}\\{self.username}{used_ccache} {e!s}"
                 self.logger.fail(out, color="red")
                 return False
         else:
             try:
-                # Get data from rpc connection if got vaild creds
+                self.logger.debug("Got valid creds, trying to get data from RPC connection")
                 entry_handle = epm.ept_lookup_handle_t()
                 request = epm.ept_lookup()
                 request["inquiry_type"] = 0x0
@@ -257,12 +258,11 @@ class wmi(connection):
                 return False
             else:
                 self.doKerberos = True
-                if self.check_if_admin():
-                    out = f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}"
-                    self.logger.success(out)
-                    return True
+                self.check_if_admin()
+                out = f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}"
+                self.logger.success(out)
                 dce.disconnect()
-                return False
+                return True
 
     def plaintext_login(self, domain, username, password):
         self.password = password
