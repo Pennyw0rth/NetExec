@@ -129,22 +129,6 @@ def replace_command(args, line):
     return line
 
 
-def execute_task(task):
-    result = subprocess.Popen(
-        task,
-        shell=True,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        cwd=os.path.dirname(__file__),
-    )
-
-    # pass in a "y" for things that prompt for it (--ndts, etc)
-    text = result.communicate(input=b"y")[0]
-    return_code = result.returncode
-    return text, return_code
-
-
 def run_e2e_tests(args):
     console = Console()
     tasks = generate_commands(args)
@@ -163,7 +147,6 @@ def run_e2e_tests(args):
         start_time = time()
         passed = 0
         failed = 0
-        tries = 3
 
         while tasks:
             task = str(tasks.pop(0))
@@ -172,18 +155,25 @@ def run_e2e_tests(args):
                 task = task.replace('"', "'")
 
             console.log(f"Running command: {task}")
-            failure = True
-            for i in range(tries):
-                text, return_code = execute_task(task)
-                if return_code == 0 and "Traceback (most recent call last)" not in text.decode("utf-8"):
-                    console.log(f"└─$ {task.strip()} [bold green]:heavy_check_mark:[/]")
-                    failure = False
-                    passed += 1
-                    break
-                else:
-                    console.log(f"[bold red]{task.strip()} :cross_mark: Try {i + 1}/3[/]")
-            if failure:
-                console.log(f"[bold red]TASK FAILED {tries} TIMES, CONTINUING[/]")
+            result = subprocess.Popen(
+                task,
+                shell=True,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                cwd=os.path.dirname(__file__),
+            )
+
+            # pass in a "y" for things that prompt for it (--ndts, etc)
+            text = result.communicate(input=b"y")[0]
+            return_code = result.returncode
+
+            if return_code == 0 and "Traceback (most recent call last)" not in text.decode("utf-8"):
+                console.log(f"└─$ {task.strip()} [bold green]:heavy_check_mark:[/]")
+                passed += 1
+                break
+            else:
+                console.log(f"[bold red]{task.strip()} :cross_mark:[/]")
                 failures.append(task.strip())
                 failed += 1
 
