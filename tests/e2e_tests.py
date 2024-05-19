@@ -129,13 +129,14 @@ def replace_command(args, line):
     return line
 
 
-def execute_task(console, task):
+def execute_task(task):
     result = subprocess.Popen(
         task,
         shell=True,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
+        cwd=os.path.dirname(__file__),
     )
 
     # pass in a "y" for things that prompt for it (--ndts, etc)
@@ -173,7 +174,7 @@ def run_e2e_tests(args):
             console.log(f"Running command: {task}")
             failure = True
             for i in range(tries):
-                text, return_code = execute_task(console, task)
+                text, return_code = execute_task(task)
                 if return_code == 0 and "Traceback (most recent call last)" not in text.decode("utf-8"):
                     console.log(f"└─$ {task.strip()} [bold green]:heavy_check_mark:[/]")
                     failure = False
