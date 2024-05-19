@@ -182,6 +182,7 @@ class ssh(connection):
                 return
 
     def plaintext_login(self, username, password, private_key=""):
+        self.create_conn_obj()
         self.username = username
         self.password = password
         stdout = None
