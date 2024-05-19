@@ -182,7 +182,6 @@ class ssh(connection):
                 return
 
     def plaintext_login(self, username, password, private_key=""):
-        self.create_conn_obj()
         self.username = username
         self.password = password
         stdout = None
@@ -231,6 +230,8 @@ class ssh(connection):
         except SSHException as e:
             if "Invalid key" in str(e):
                 self.logger.fail(f"{username}:{process_secret(password)} Could not decrypt private key, error: {e}")
+            if "Error reading SSH protocol banner" in str(e):
+                self.logger.error(f"Internal Paramiko error for {username}:{process_secret(password)}, {e}")
             else:
                 self.logger.exception(e)
         except Exception as e:
