@@ -150,9 +150,9 @@ netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M spooler 
 netexec smb TARGET_HOST -u '' -p '' -M zerologon
 netexec smb TARGET_HOST -u '' -p '' -M petitpotam
 ##### SMB Auth File
-netexec smb TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt --no-bruteforce
-netexec smb TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt --no-bruteforce --continue-on-success
-netexec smb TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt
+netexec smb TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE--no-bruteforce
+netexec smb TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE--no-bruteforce --continue-on-success
+netexec smb TARGET_HOST -u TEST_USER_FILE -p data/test_passwords.txt
 ##### WMI
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --wmi-namespace root/cimv2
@@ -163,7 +163,9 @@ netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M spooler
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M zerologon 
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M enum_dns
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M get_netconnections
-netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M rdp
+netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M rdp --options
+#netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M rdp -o ACTION=enable
+#netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M rdp -o ACTION=disable
 ##### LDAP
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --users
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --groups
@@ -217,7 +219,7 @@ netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --port 59
 netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --check-proto http --port 5985
 netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --check-proto https --port 5986
 ##### MSSQL
-netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS
+netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # Need a space at the end for kerb regex
 ##### MSSQL Modules
 # netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M empire_exec
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -L
@@ -237,22 +239,22 @@ netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M web_de
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --nla-screenshot
 ##### SSH - Default test passwords and random key; switch these out if you want correct authentication
-netexec ssh TARGET_HOST -u USERNAME -p PASSWORD
-netexec ssh TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt --no-bruteforce
-netexec ssh TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt --no-bruteforce --continue-on-success
-netexec ssh TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt
-netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --key-file data/test_key.priv
-netexec ssh TARGET_HOST -u USERNAME -p '' --key-file data/test_key.priv
-netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --sudo-check
-netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --sudo-check --sudo-check-method sudo-stdin
-netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --sudo-check --sudo-check-method sudo-stdin --get-output-tries 10
-netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --sudo-check --sudo-check-method mkfifo
-netexec ssh TARGET_HOST -u USERNAME -p PASSWORD --sudo-check --sudo-check-method mkfifo --get-output-tries 10
+netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
+netexec ssh TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE--no-bruteforce
+netexec ssh TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE--no-bruteforce --continue-on-success
+netexec ssh TARGET_HOST -u TEST_USER_FILE -p data/test_passwords.txt
+netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --key-file data/test_key.priv
+netexec ssh TARGET_HOST -u LOGIN_USERNAME -p '' --key-file data/test_key.priv
+netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sudo-check
+netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sudo-check --sudo-check-method sudo-stdin
+netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sudo-check --sudo-check-method sudo-stdin --get-output-tries 10
+netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sudo-check --sudo-check-method mkfifo
+netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sudo-check --sudo-check-method mkfifo --get-output-tries 10
 ##### FTP- Default test passwords and random key; switch these out if you want correct authentication
-netexec ftp TARGET_HOST -u USERNAME -p PASSWORD
-netexec ftp TARGET_HOST -u USERNAME -p PASSWORD --ls
-netexec ftp TARGET_HOST -u USERNAME -p PASSWORD --put data/test_file.txt test_file.txt
-netexec ftp TARGET_HOST -u USERNAME -p PASSWORD --get test_file.txt
-netexec ftp TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt --no-bruteforce
-netexec ftp TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt --no-bruteforce --continue-on-success
-netexec ftp TARGET_HOST -u data/test_users.txt -p data/test_passwords.txt
+netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
+netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --ls
+netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --put data/test_file.txt test_file.txt
+netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --get test_file.txt
+netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce
+netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce --continue-on-success
+netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE
