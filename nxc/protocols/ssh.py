@@ -195,6 +195,7 @@ class ssh(connection):
                     username=username,
                     passphrase=password if password != "" else None,
                     key_filename=private_key if private_key else self.args.key_file,
+                    timeout=self.args.ssh_timeout,
                     look_for_keys=False,
                     allow_agent=False,
                 )
@@ -213,6 +214,7 @@ class ssh(connection):
                     port=self.port,
                     username=username,
                     password=password,
+                    timeout=self.args.ssh_timeout,
                     look_for_keys=False,
                     allow_agent=False,
                 )
