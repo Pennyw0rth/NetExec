@@ -5,6 +5,9 @@ from time import time
 from rich.console import Console
 import platform
 
+script_dir = os.path.dirname(os.path.abspath(__file__))
+run_dir = os.path.dirname(os.path.abspath(__file__))
+
 
 def get_cli_args():
     parser = argparse.ArgumentParser(description="Script for running end to end tests for nxc")
@@ -75,6 +78,20 @@ def get_cli_args():
         required=False,
         help="Prints all the commands of failed tests at the end (default: True)",
     )
+    parser.add_argument(
+        "--test-user-file",
+        dest="test_user_file",
+        required=False,
+        default="data/test_usernames.txt",
+        help="Path to the file containing test usernames",
+    )
+    parser.add_argument(
+        "--test-password-file",
+        dest="test_password_file",
+        required=False,
+        default="data/test_passwords.txt",
+        help="Path to the file containing test passwords",
+    )
     return parser.parse_args()
 
 
@@ -123,7 +140,13 @@ def generate_commands(args):
 def replace_command(args, line):
     kerberos = "-k " if args.kerberos else ""
 
-    line = line.replace("TARGET_HOST", args.target).replace("LOGIN_USERNAME", f'"{args.username}"').replace("LOGIN_PASSWORD", f'"{args.password}"').replace("KERBEROS ", kerberos)
+    line = line\
+        .replace("TARGET_HOST", args.target)\
+        .replace("LOGIN_USERNAME", f'"{args.username}"')\
+        .replace("LOGIN_PASSWORD", f'"{args.password}"')\
+        .replace("KERBEROS ", kerberos)\
+        .replace("TEST_USER_FILE", args.test_user_file)\
+        .replace("TEST_PASSWORD_FILE", args.test_password_file)
     if args.poetry:
         line = f"poetry run {line}"
     return line
@@ -154,6 +177,7 @@ def run_e2e_tests(args):
             if platform.system() == "Linux":
                 task = task.replace('"', "'")
 
+            # we print the command before running because very often things will timeout and we want the last thing ran
             console.log(f"Running command: {task}")
             result = subprocess.Popen(
                 task,
@@ -179,6 +203,7 @@ def run_e2e_tests(args):
 
             if args.errors:
                 raw_text = text.decode("utf-8")
+                # this is not a good way to detect errors, but it does catch a lot of things
                 if "error" in raw_text.lower() or "failure" in raw_text.lower() or "Traceback (most recent call last)" in raw_text:
                     console.log("[bold red]Error Detected:")
                     console.log(f"{raw_text}")
