@@ -152,10 +152,10 @@ class WMIEXEC:
                 if tries > self.__tries:
                     self.logger.fail("wmiexec: Could not retrieve output file, it may have been detected by AV. If it is still failing, try the 'wmi' protocol or another exec method")
                     break
-                elif str(e).find("STATUS_BAD_NETWORK_NAME") > 0:
+                elif "STATUS_BAD_NETWORK_NAME" in str(e):
                     self.logger.fail(f"SMB connection: target has blocked {self.__share} access (maybe command executed!)")
                     break
-                elif str(e).find("STATUS_VIRUS_INFECTED") >= 0:
+                elif "STATUS_VIRUS_INFECTED" in str(e):
                     self.logger.fail("Command did not run because a virus was detected")
                     break
                 # When executing powershell and the command is still running, we get a sharing violation
@@ -163,13 +163,13 @@ class WMIEXEC:
                 elif "STATUS_SHARING_VIOLATION" in str(e):
                     self.logger.info(f"File {self.__share}\\{self.__output} is still in use with {self.__tries - tries} left, retrying...")
                     sleep(1)
+                    tries += 1
                 elif "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
                     self.logger.info(f"File {self.__share}\\{self.__output} not found with {self.__tries - tries} left, deducting 10 tries and retrying...")
                     tries += 10
                     sleep(1)
                 else:
                     self.logger.debug(f"Exception when trying to read output file: {e}")
-                tries += 1
 
         if self.__outputBuffer:
             self.logger.debug(f"Deleting file {self.__share}\\{self.__output}")

@@ -149,8 +149,11 @@ class SMBEXEC:
                 if tries > self.__tries:
                     self.logger.fail("SMBEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
                     break
-                if str(e).find("STATUS_BAD_NETWORK_NAME") > 0:
+                if "STATUS_BAD_NETWORK_NAME" in str(e):
                     self.logger.fail(f"SMBEXEC: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
+                    break
+                elif "STATUS_VIRUS_INFECTED" in str(e):
+                    self.logger.fail("Command did not run because a virus was detected")
                     break
                 # When executing powershell and the command is still running, we get a sharing violation
                 # We can use that information to wait longer than if the file is not found (probably av or something)
