@@ -104,7 +104,7 @@ class NXCModule:
         string_binding = epm.hept_map(self.__host, samr.MSRPC_UUID_SAMR, protocol="ncacn_np")
 
         rpc_transport = transport.DCERPCTransportFactory(string_binding.replace(self.__host, self.__kdcHost))
-        rpc_transport.sethost(self.__host)
+        rpc_transport.setRemoteHost(self.__host)
 
         if hasattr(rpc_transport, "set_credentials"):
             # This method exists only for selected protocol sequences.
