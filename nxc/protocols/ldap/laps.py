@@ -323,8 +323,8 @@ def laps_search(self, username, password, cred_type, domain):
                     password[0] if cred_type[0] == "plaintext" else "",
                     domain[0],
                     password[0] if cred_type[0] == "hash" else "",
-                    self.args.kerberos,
-                    self.args.kdcHost,
+                    self.kerberos,
+                    self.kdcHost,
                     339
                 )
                 try:

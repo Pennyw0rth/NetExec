@@ -52,6 +52,7 @@ class NXCModule:
                 self.cmd,
                 connection.kerberos,
                 connection.aesKey,
+                connection.host,
                 connection.kdcHost,
                 connection.hash,
                 self.logger,
@@ -77,7 +78,7 @@ class NXCModule:
 
 
 class TSCH_EXEC:
-    def __init__(self, target, share_name, username, password, domain, user, cmd, doKerberos=False, aesKey=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
+    def __init__(self, target, share_name, username, password, domain, user, cmd, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -89,6 +90,7 @@ class TSCH_EXEC:
         self.__retOutput = False
         self.__aesKey = aesKey
         self.__doKerberos = doKerberos
+        self.__remoteHost = remoteHost
         self.__kdcHost = kdcHost
         self.__tries = tries
         self.__output_filename = None
@@ -108,6 +110,7 @@ class TSCH_EXEC:
 
         stringbinding = f"ncacn_np:{self.__target}[\\pipe\\atsvc]"
         self.__rpctransport = transport.DCERPCTransportFactory(stringbinding)
+        self.__rpctransport.setRemoteHost(self.__remoteHost)
 
         if hasattr(self.__rpctransport, "set_credentials"):
             # This method exists only for selected protocol sequences.

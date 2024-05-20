@@ -52,6 +52,12 @@ def gen_cli_args():
     parser.add_argument("--debug", action="store_true", help="enable debug level information")
     parser.add_argument("--version", action="store_true", help="Display nxc version")
 
+    dns_parser = parser.add_argument_group("DNS")
+    dns_parser.add_argument("-6", dest="force_ipv6", action="store_true", help="Enable force IPv6")
+    dns_parser.add_argument("--dns-server", action="store", help="Specify DNS server (default: Use hosts file & System DNS)")
+    dns_parser.add_argument("--dns-tcp", action="store_true", help="Use TCP instead of UDP for DNS queries")
+    dns_parser.add_argument("--dns-timeout", action="store", type=int, default=3, help="DNS query timeout in seconds (default: %(default)s)")
+
     # we do module arg parsing here so we can reference the module_list attribute below
     module_parser = argparse.ArgumentParser(add_help=False)
     mgroup = module_parser.add_mutually_exclusive_group()
@@ -78,7 +84,7 @@ def gen_cli_args():
     std_parser.add_argument("--use-kcache", action="store_true", help="Use Kerberos authentication from ccache file (KRB5CCNAME)")
     std_parser.add_argument("--log", metavar="LOG", help="Export result into a custom file")
     std_parser.add_argument("--aesKey", metavar="AESKEY", nargs="+", help="AES key to use for Kerberos Authentication (128 or 256 bits)")
-    std_parser.add_argument("--kdcHost", metavar="KDCHOST", help="FQDN of the domain controller. If omitted it will use the domain part (FQDN) specified in the target parameter")
+    std_parser.add_argument("--kdcHost", metavar="KDCHOST", help="IP Address of the domain controller. If omitted it will use the domain part (FQDN) specified in the target parameter")
 
     fail_group = std_parser.add_mutually_exclusive_group()
     fail_group.add_argument("--gfail-limit", metavar="LIMIT", type=int, help="max number of global failed login attempts")

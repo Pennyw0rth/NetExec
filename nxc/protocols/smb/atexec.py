@@ -7,7 +7,7 @@ from time import sleep
 
 
 class TSCH_EXEC:
-    def __init__(self, target, share_name, username, password, domain, doKerberos=False, aesKey=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
+    def __init__(self, target, share_name, username, password, domain, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -19,6 +19,7 @@ class TSCH_EXEC:
         self.__retOutput = False
         self.__aesKey = aesKey
         self.__doKerberos = doKerberos
+        self.__remoteHost = remoteHost
         self.__kdcHost = kdcHost
         self.__tries = tries
         self.__output_filename = None
@@ -37,6 +38,7 @@ class TSCH_EXEC:
 
         stringbinding = r"ncacn_np:%s[\pipe\atsvc]" % self.__target
         self.__rpctransport = transport.DCERPCTransportFactory(stringbinding)
+        self.__rpctransport.setRemoteHost(self.__remoteHost)
 
         if hasattr(self.__rpctransport, "set_credentials"):
             # This method exists only for selected protocol sequences.

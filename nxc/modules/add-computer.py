@@ -1,7 +1,8 @@
 import ssl
 import ldap3
-from impacket.dcerpc.v5 import samr, epm, transport
 import sys
+from impacket.dcerpc.v5 import samr, epm, transport
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 
 class NXCModule:
     """
@@ -61,11 +62,10 @@ class NXCModule:
     def on_login(self, context, connection):
         self.__domain = connection.domain
         self.__domainNetbios = connection.domain
-        self.__kdcHost = connection.hostname + "." + connection.domain
-        self.__target = self.__kdcHost
+        self.__kdcHost = connection.kdcHost
         self.__username = connection.username
         self.__password = connection.password
-        self.__targetIp = connection.host
+        self.__host = connection.host
         self.__port = context.smb_server_port
         self.__aesKey = context.aesKey
         self.__hashes = context.hash
@@ -101,15 +101,10 @@ class NXCModule:
         -------
             None
         """
-        target = self.__targetIp or self.__target
-        string_binding = epm.hept_map(target, samr.MSRPC_UUID_SAMR, protocol="ncacn_np")
+        string_binding = epm.hept_map(self.__host, samr.MSRPC_UUID_SAMR, protocol="ncacn_np")
 
-        rpc_transport = transport.DCERPCTransportFactory(string_binding)
-        rpc_transport.set_dport(self.__port)
-
-        if self.__targetIp is not None:
-            rpc_transport.setRemoteHost(self.__targetIp)
-            rpc_transport.setRemoteName(self.__target)
+        rpc_transport = transport.DCERPCTransportFactory(string_binding.replace(self.__host, self.__kdcHost))
+        rpc_transport.setRemoteHost(self.__host)
 
         if hasattr(rpc_transport, "set_credentials"):
             # This method exists only for selected protocol sequences.
@@ -118,10 +113,13 @@ class NXCModule:
         rpc_transport.set_kerberos(self.__doKerberos, self.__kdcHost)
 
         dce = rpc_transport.get_dce_rpc()
+        if self.__doKerberos:
+            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+
         dce.connect()
         dce.bind(samr.MSRPC_UUID_SAMR)
 
-        samr_connect_response = samr.hSamrConnect5(dce, f"\\\\{self.__target}\x00", samr.SAM_SERVER_ENUMERATE_DOMAINS | samr.SAM_SERVER_LOOKUP_DOMAIN)
+        samr_connect_response = samr.hSamrConnect5(dce, f"\\\\{self.__kdcHost}\x00", samr.SAM_SERVER_ENUMERATE_DOMAINS | samr.SAM_SERVER_LOOKUP_DOMAIN)
         serv_handle = samr_connect_response["ServerHandle"]
 
         samr_enum_response = samr.hSamrEnumerateDomainsInSamServer(dce, serv_handle)
