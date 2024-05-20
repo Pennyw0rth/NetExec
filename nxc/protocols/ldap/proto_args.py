@@ -33,18 +33,3 @@ def proto_args(parser, std_parser, module_parser):
     bgroup.add_argument("-c", "--collection", help="Which information to collect. Supported: Group, LocalAdmin, Session, Trusts, Default, DCOnly, DCOM, RDP, PSRemote, LoggedOn, Container, ObjectProps, ACL, All. You can specify more than one by separating them with a comma. (default: Default)'")
 
     return parser
-
-
-def get_conditional_action(baseAction):
-    class ConditionalAction(baseAction):
-        def __init__(self, option_strings, dest, **kwargs):
-            x = kwargs.pop("make_required", [])
-            super().__init__(option_strings, dest, **kwargs)
-            self.make_required = x
-
-        def __call__(self, parser, namespace, values, option_string=None):
-            for x in self.make_required:
-                x.required = True
-            super().__call__(parser, namespace, values, option_string)
-
-    return ConditionalAction
