@@ -43,7 +43,7 @@ def proto_args(parser, std_parser, module_parser):
     egroup.add_argument("--computers", nargs="?", const="", metavar="COMPUTER", help="enumerate computer users")
     egroup.add_argument("--local-groups", nargs="?", const="", metavar="GROUP", help="enumerate local groups, if a group is specified then its members are enumerated")
     egroup.add_argument("--pass-pol", action="store_true", help="dump password policy")
-    egroup.add_argument("--rid-brute", nargs="?", type=int, default=4000, metavar="MAX_RID", help="enumerate users by bruteforcing RID's (default: %(default)s)")
+    egroup.add_argument("--rid-brute", nargs="?", type=int, const=4000, metavar="MAX_RID", help="enumerate users by bruteforcing RID's (default: 4000)")
     egroup.add_argument("--wmi", metavar="QUERY", type=str, help="issues the specified WMI query")
     egroup.add_argument("--wmi-namespace", metavar="NAMESPACE", default="root\\cimv2", help="WMI Namespace (default: %(default)s)")
 
@@ -66,7 +66,7 @@ def proto_args(parser, std_parser, module_parser):
     cgroup = smb_parser.add_argument_group("Command Execution", "Options for executing commands")
     cgroup.add_argument("--exec-method", choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default=None, help="method to execute the command. Ignored if in MSSQL mode (default: wmiexec)")
     cgroup.add_argument("--dcom-timeout", help="DCOM connection timeout, default is %(default)s secondes", type=int, default=5)
-    cgroup.add_argument("--get-output-tries", help="Number of times atexec/smbexec/mmcexec tries to get results, default is %(default)s", type=int, default=5)
+    cgroup.add_argument("--get-output-tries", help="Number of times atexec/smbexec/mmcexec tries to get results, default is %(default)s", type=int, default=10)
     cgroup.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output (default: %(default)s). If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
     cgroup.add_argument("--force-ps32", action="store_true", help="force the PowerShell command to run in a 32-bit process")
     cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")

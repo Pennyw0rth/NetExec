@@ -106,6 +106,10 @@ def gen_cli_args():
         print(f"{VERSION} - {CODENAME} - {COMMIT}")
         sys.exit(1)
 
+    # Multiply output_tries by 10 to enable more fine granural control, see exec methods
+    if hasattr(args, "get_output_tries"):
+        args.get_output_tries = args.get_output_tries * 10
+
     return args
 
 
