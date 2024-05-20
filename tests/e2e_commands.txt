@@ -240,9 +240,9 @@ netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an e
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --nla-screenshot
 ##### SSH - Default test passwords and random key; switch these out if you want correct authentication
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
-netexec ssh TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE--no-bruteforce
-netexec ssh TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE--no-bruteforce --continue-on-success
-netexec ssh TARGET_HOST -u TEST_USER_FILE -p data/test_passwords.txt
+netexec ssh TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce
+netexec ssh TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce --continue-on-success
+netexec ssh TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --key-file data/test_key.priv
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p '' --key-file data/test_key.priv
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sudo-check
