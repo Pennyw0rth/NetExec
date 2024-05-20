@@ -2,6 +2,7 @@ import os
 import random
 import socket
 import contextlib
+from io import StringIO
 
 from nxc.config import process_secret
 from nxc.connection import connection
@@ -317,8 +318,9 @@ class mssql(connection):
             return False
         else:
             self.logger.success("Executed command via mssqlexec")   
-            if get_output:
-                self.logger.highlight(output)
+            output_lines = StringIO(output).readlines()
+            for line in output_lines:
+                self.logger.highlight(line.strip())
         return output
 
     @requires_admin
