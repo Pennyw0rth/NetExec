@@ -4,6 +4,19 @@ import subprocess
 from rich.console import Console
 import platform
 
+script_dir = os.path.dirname(os.path.abspath(__file__))
+run_dir = os.path.dirname(os.path.abspath(__file__))
+possible_locations = [
+    os.path.join(run_dir, "tests/data/test_users.txt"),
+    os.path.join(run_dir, "data/test_users.txt"),
+]
+test_user_file = next((loc for loc in possible_locations if os.path.isfile(loc)), None)
+possible_locations = [
+os.path.join(script_dir, "tests/data/test_passwords.txt"),
+os.path.join(script_dir, "data/test_passwords.txt"),
+]
+test_password_file = next((loc for loc in possible_locations if os.path.isfile(loc)), None)
+
 
 def get_cli_args():
     parser = argparse.ArgumentParser(description="Script for running end to end tests for nxc")
@@ -72,7 +85,27 @@ def get_cli_args():
         "--print-failures",
         action="store_true",
         required=False,
-        help="Prints all the commands of failed tests at the end"
+        help="Prints all the commands of failed tests at the end",
+    )
+    parser.add_argument(
+        "--test-user-file",
+        dest="test_user_file",
+        required=False,
+        default=test_user_file,
+        help="Path to the file containing test usernames",
+    )
+    parser.add_argument(
+        "--test-password-file",
+        dest="test_password_file",
+        required=False,
+        default=test_password_file,
+        help="Path to the file containing test passwords",
+    )
+    parser.add_argument(
+        "--dns-server",
+        action="store",
+        required=False,
+        help="Specify DNS server",
     )
     return parser.parse_args()
 
@@ -118,8 +151,16 @@ def generate_commands(args):
 
 def replace_command(args, line):
     kerberos = "-k " if args.kerberos else ""
+    dns_server = f"--dns-server {args.dns_server}" if args.dns_server else ""
 
-    line = line.replace("TARGET_HOST", args.target).replace("LOGIN_USERNAME", f'"{args.username}"').replace("LOGIN_PASSWORD", f'"{args.password}"').replace("KERBEROS ", kerberos)
+    line = line\
+        .replace("TARGET_HOST", args.target)\
+        .replace("LOGIN_USERNAME", f'"{args.username}"')\
+        .replace("LOGIN_PASSWORD", f'"{args.password}"')\
+        .replace("KERBEROS ", kerberos)\
+        .replace("TEST_USER_FILE", args.test_user_file)\
+        .replace("TEST_PASSWORD_FILE", args.test_password_file)\
+        .replace("{DNS}", dns_server)
     if args.poetry:
         line = f"poetry run {line}"
     return line
@@ -147,6 +188,7 @@ def run_e2e_tests(args):
             # replace double quotes with single quotes for Linux due to special chars/escaping
             if platform.system() == "Linux":
                 task = task.replace('"', "'")
+            # we print the command before running because very often things will timeout and we want the last thing ran
             console.log(f"Running command: {task}")
             result = subprocess.Popen(
                 task,
@@ -169,6 +211,7 @@ def run_e2e_tests(args):
 
             if args.errors:
                 raw_text = text.decode("utf-8")
+                # this is not a good way to detect errors, but it does catch a lot of things
                 if "error" in raw_text.lower() or "failure" in raw_text.lower():
                     console.log("[bold red]Error Detected:")
                     console.log(f"{raw_text}")

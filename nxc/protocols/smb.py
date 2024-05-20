@@ -255,6 +255,14 @@ class smb(connection):
             self.conn.logoff()
         except Exception as e:
             self.logger.debug(f"Error logging off system: {e}")
+        
+        # DCOM connection with kerberos needed
+        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
+
+        if not self.kdcHost and self.domain:
+            result = self.resolver(self.domain)
+            self.kdcHost = result["host"] if result else None
+            self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
@@ -265,9 +273,8 @@ class smb(connection):
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         logging.getLogger("impacket").disabled = True
         # Re-connect since we logged off
-        kdc_host = f"{self.hostname}.{self.domain}" if not self.no_ntlm else f"{self.host}"
-        self.logger.debug(f"KDC set to: {kdc_host}")
-        self.create_conn_obj(kdc_host)
+        self.logger.debug(f"KDC set to: {kdcHost}")
+        self.create_conn_obj()
         lmhash = ""
         nthash = ""
 
@@ -474,11 +481,11 @@ class smb(connection):
             self.logger.fail("Broken Pipe Error while attempting to login")
             return False
 
-    def create_smbv1_conn(self, kdc=""):
+    def create_smbv1_conn(self):
         try:
             self.conn = SMBConnection(
-                kdc if kdc else self.host,
-                kdc if kdc else self.host,
+                self.remoteName,
+                self.host,
                 None,
                 self.port,
                 preferredDialect=SMB_DIALECT,
@@ -487,19 +494,19 @@ class smb(connection):
             self.smbv1 = True
         except OSError as e:
             if str(e).find("Connection reset by peer") != -1:
-                self.logger.info(f"SMBv1 might be disabled on {kdc if kdc else self.host}")
+                self.logger.info(f"SMBv1 might be disabled on {self.host}")
             return False
         except (Exception, NetBIOSTimeout) as e:
-            self.logger.info(f"Error creating SMBv1 connection to {kdc if kdc else self.host}: {e}")
+            self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
             return False
 
         return True
 
-    def create_smbv3_conn(self, kdc=""):
+    def create_smbv3_conn(self):
         try:
             self.conn = SMBConnection(
-                kdc if kdc else self.host,
-                kdc if kdc else self.host,
+                self.remoteName,
+                self.host,
                 None,
                 self.port,
                 timeout=self.args.smb_timeout,
@@ -511,15 +518,15 @@ class smb(connection):
                 if not self.logger:
                     print("DEBUG ERROR: logger not set, please open an issue on github: " + str(self) + str(self.logger))
                     self.proto_logger()
-                self.logger.fail(f"SMBv3 connection error on {kdc if kdc else self.host}: {e}")
+                self.logger.fail(f"SMBv3 connection error on {self.host}: {e}")
             return False
         except (Exception, NetBIOSTimeout) as e:
-            self.logger.info(f"Error creating SMBv3 connection to {kdc if kdc else self.host}: {e}")
+            self.logger.info(f"Error creating SMBv3 connection to {self.host}: {e}")
             return False
         return True
 
-    def create_conn_obj(self, kdc_host=None):
-        return bool(self.create_smbv1_conn(kdc_host) or self.create_smbv3_conn(kdc_host))
+    def create_conn_obj(self):
+        return bool(self.create_smbv1_conn() or self.create_smbv3_conn())
 
     def check_if_admin(self):
         rpctransport = SMBTransport(self.conn.getRemoteHost(), 445, r"\svcctl", smb_connection=self.conn)
@@ -563,7 +570,7 @@ class smb(connection):
             if method == "wmiexec":
                 try:
                     exec_method = WMIEXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
+                        self.remoteName,
                         self.smb_share_name,
                         self.username,
                         self.password,
@@ -572,6 +579,7 @@ class smb(connection):
                         self.kerberos,
                         self.aesKey,
                         self.kdcHost,
+                        self.host,
                         self.hash,
                         self.args.share,
                         logger=self.logger,
@@ -586,18 +594,25 @@ class smb(connection):
                     continue
             elif method == "mmcexec":
                 try:
+                    # https://github.com/fortra/impacket/issues/1611
+                    if self.kerberos:
+                        raise Exception("MMCExec current is buggly with kerberos")
                     exec_method = MMCEXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
+                        self.remoteName,
                         self.smb_share_name,
                         self.username,
                         self.password,
                         self.domain,
                         self.conn,
-                        self.args.share,
+                        self.kerberos,
+                        self.aesKey,
+                        self.kdcHost,
+                        self.host,
                         self.hash,
-                        self.logger,
-                        self.args.get_output_tries,
-                        self.args.dcom_timeout
+                        self.args.share,
+                        logger=self.logger,
+                        timeout=self.args.dcom_timeout,
+                        tries=self.args.get_output_tries
                     )
                     self.logger.info("Executed command via mmcexec")
                     break
@@ -615,6 +630,7 @@ class smb(connection):
                         self.domain,
                         self.kerberos,
                         self.aesKey,
+                        self.host,
                         self.kdcHost,
                         self.hash,
                         self.logger,
@@ -633,12 +649,12 @@ class smb(connection):
                         self.host if not self.kerberos else self.hostname + "." + self.domain,
                         self.smb_share_name,
                         self.conn,
-                        self.port,
                         self.username,
                         self.password,
                         self.domain,
                         self.kerberos,
                         self.aesKey,
+                        self.host,
                         self.kdcHost,
                         self.hash,
                         self.args.share,
@@ -1080,9 +1096,9 @@ class smb(connection):
             namespace = self.args.wmi_namespace
 
         try:
-            dcom = DCOMConnection(self.host if not self.kerberos else self.hostname + "." + self.domain, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.kerberos, kdcHost=self.kdcHost, aesKey=self.aesKey)
+            dcom = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.kerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.host)
             iInterface = dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
-            flag, stringBinding = dcom_FirewallChecker(iInterface, self.args.dcom_timeout)
+            flag, stringBinding = dcom_FirewallChecker(iInterface, self.host, self.args.dcom_timeout)
             if not flag or not stringBinding:
                 error_msg = f"WMI Query: Dcom initialization failed on connection with stringbinding: '{stringBinding}', please increase the timeout with the option '--dcom-timeout'. If it's still failing maybe something is blocking the RPC connection, try another exec method"
 
@@ -1162,20 +1178,16 @@ class smb(connection):
             max_rid = int(self.args.rid_brute)
 
         KNOWN_PROTOCOLS = {
-            135: {"bindstr": r"ncacn_ip_tcp:%s", "set_host": False},
-            139: {"bindstr": r"ncacn_np:{}[\pipe\lsarpc]", "set_host": True},
-            445: {"bindstr": r"ncacn_np:{}[\pipe\lsarpc]", "set_host": True},
+            135: {"bindstr": rf"ncacn_ip_tcp:{self.host}"},
+            139: {"bindstr": rf"ncacn_np:{self.host}[\pipe\lsarpc]"},
+            445: {"bindstr": rf"ncacn_np:{self.host}[\pipe\lsarpc]"},
         }
 
         try:
-            full_hostname = self.host if not self.kerberos else self.hostname + "." + self.domain
             string_binding = KNOWN_PROTOCOLS[self.port]["bindstr"]
             logging.debug(f"StringBinding {string_binding}")
             rpc_transport = transport.DCERPCTransportFactory(string_binding)
-            rpc_transport.set_dport(self.port)
-
-            if KNOWN_PROTOCOLS[self.port]["set_host"]:
-                rpc_transport.setRemoteHost(full_hostname)
+            rpc_transport.setRemoteHost(self.host)
 
             if hasattr(rpc_transport, "set_credentials"):
                 # This method exists only for selected protocol sequences.

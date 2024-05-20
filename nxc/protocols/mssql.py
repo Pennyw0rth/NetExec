@@ -53,7 +53,7 @@ class mssql(connection):
 
     def create_conn_obj(self):
         try:
-            self.conn = tds.MSSQL(self.host, self.port)
+            self.conn = tds.MSSQL(self.host, self.port, self.remoteName)
             # Default has not timeout option in tds.MSSQL.connect() function, let rewrite it.
             af, socktype, proto, canonname, sa = socket.getaddrinfo(self.host, self.port, 0, socket.SOCK_STREAM)[0]
             sock = socket.socket(af, socktype, proto)
@@ -73,9 +73,6 @@ class mssql(connection):
         def wrapper(self, *args, **kwargs):
             with contextlib.suppress(Exception):
                 self.conn.disconnect()
-            # When using ccache file, we must need to set target host to hostname when creating connection object.
-            if self.kerberos:
-                self.host = self.hostname
             self.create_conn_obj()
             return func(self, *args, **kwargs)
         return wrapper
@@ -134,6 +131,13 @@ class mssql(connection):
         if self.args.local_auth:
             self.domain = self.hostname
 
+        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
+
+        if not self.kdcHost and self.domain:
+            result = self.resolver(self.domain)
+            self.kdcHost = result["host"] if result else None
+            self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
+
     def print_host_info(self):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain})")
         return True
@@ -170,7 +174,6 @@ class mssql(connection):
             self.username = username
 
         used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
-
         try:
             res = self.conn.kerberosLogin(
                 None,
