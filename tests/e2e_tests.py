@@ -1,12 +1,13 @@
 import argparse
-import os
+from os import getcwd
+from os.path import dirname, abspath, join, realpath
 import subprocess
 from time import time
 from rich.console import Console
 import platform
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
-run_dir = os.path.dirname(os.path.abspath(__file__))
+script_dir = dirname(abspath(__file__))
+run_dir = dirname(abspath(__file__))
 
 
 def get_cli_args():
@@ -82,14 +83,14 @@ def get_cli_args():
         "--test-user-file",
         dest="test_user_file",
         required=False,
-        default="data/test_usernames.txt",
+        default="tests/data/test_usernames.txt",
         help="Path to the file containing test usernames",
     )
     parser.add_argument(
         "--test-password-file",
         dest="test_password_file",
         required=False,
-        default="data/test_passwords.txt",
+        default="tests/data/test_passwords.txt",
         help="Path to the file containing test passwords",
     )
     parser.add_argument(
@@ -114,8 +115,8 @@ def parse_line_nums(value):
 
 def generate_commands(args):
     lines = []
-    file_loc = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
-    commands_file = os.path.join(file_loc, "e2e_commands.txt")
+    file_loc = realpath(join(getcwd(), dirname(__file__)))
+    commands_file = join(file_loc, "e2e_commands.txt")
 
     with open(commands_file) as file:
         if args.line_nums:
@@ -193,7 +194,7 @@ def run_e2e_tests(args):
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                cwd=os.path.dirname(__file__),
+                cwd=abspath(join(dirname(__file__), "..")),
             )
 
             # pass in a "y" for things that prompt for it (--ndts, etc)
