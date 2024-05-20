@@ -101,6 +101,12 @@ def get_cli_args():
         default=test_password_file,
         help="Path to the file containing test passwords",
     )
+    parser.add_argument(
+        "--dns-server",
+        action="store",
+        required=False,
+        help="Specify DNS server",
+    )
     return parser.parse_args()
 
 def parse_line_nums(value):
@@ -145,6 +151,7 @@ def generate_commands(args):
 
 def replace_command(args, line):
     kerberos = "-k " if args.kerberos else ""
+    dns_server = f"--dns-server {args.dns_server}" if args.dns_server else ""
 
     line = line\
         .replace("TARGET_HOST", args.target)\
@@ -152,7 +159,8 @@ def replace_command(args, line):
         .replace("LOGIN_PASSWORD", f'"{args.password}"')\
         .replace("KERBEROS ", kerberos)\
         .replace("TEST_USER_FILE", args.test_user_file)\
-        .replace("TEST_PASSWORD_FILE", args.test_password_file)
+        .replace("TEST_PASSWORD_FILE", args.test_password_file)\
+        .replace("{DNS}", dns_server)
     if args.poetry:
         line = f"poetry run {line}"
     return line

@@ -1,5 +1,6 @@
 ##### SMB
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
+netexec {DNS} smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --shares
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --shares --filter-shares READ WRITE
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --pass-pol
@@ -167,6 +168,7 @@ netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M rdp --op
 #netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M rdp -o ACTION=enable
 #netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M rdp -o ACTION=disable
 ##### LDAP
+netexec {DNS} ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --users
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --groups
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --get-sid
@@ -220,6 +222,7 @@ netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --check-p
 netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --check-proto https --port 5986
 ##### MSSQL
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # Need a space at the end for kerb regex
+netexec {DNS} mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS
 ##### MSSQL Modules
 # netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M empire_exec
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -L
@@ -237,6 +240,7 @@ netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M web_de
 #netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M rdp -o ACTION=enable
 ##### RDP
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
+netexec {DNS} rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --nla-screenshot
 ##### SSH - Default test passwords and random key; switch these out if you want correct authentication
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
