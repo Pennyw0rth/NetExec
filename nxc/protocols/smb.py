@@ -2,7 +2,6 @@ import ntpath
 import binascii
 import os
 import re
-from io import StringIO
 from Cryptodome.Hash import MD4
 
 from impacket.smbconnection import SMBConnection, SessionError
@@ -676,9 +675,8 @@ class smb(connection):
 
             if (self.args.execute or self.args.ps_execute) and output:
                 self.logger.success(f"Executed command via {current_method}")
-                buf = StringIO(output).readlines()
-                for line in buf:
-                    self.logger.highlight(line.strip())
+                if output:
+                    self.logger.highlight(output)
             return output
         else:
             self.logger.fail(f"Execute command failed with {current_method}")
