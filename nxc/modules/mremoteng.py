@@ -58,10 +58,6 @@ class NXCModule:
         """
         self.context = context
         
-        self.share = "C$"
-        if "SHARE" in module_options:
-            self.share = module_options["SHARE"]
-
         self.password = "mR3m"
         if "PASSWORD" in module_options:
             self.password = module_options["PASSWORD"]
@@ -74,8 +70,9 @@ class NXCModule:
         # 1. Evole conn into dploot conn
         self.context = context
         self.connection = connection
+        self.share = connection.args.share
 
-        host = connection.hostname + "." + connection.domain
+        host =  f"{connection.hostname}.{connection.domain}"
         domain = connection.domain
         username = connection.username
         kerberos = connection.kerberos
@@ -114,10 +111,9 @@ class NXCModule:
             for path in self.custom_user_path:
                 user_path = path.format(username=user)
                 self.dig_confCons_in_files(conn=dploot_conn, directory_path=user_path, recurse_level=0, recurse_max=self.recurse_max)
-            if self.custom_path is not None:
-                content = dploot_conn.readFile(self.share, self.custom_path)
-                if content is None:
-                    continue
+        if self.custom_path is not None:
+            content = dploot_conn.readFile(self.share, self.custom_path)
+            if content is not None:
                 self.context.log.info(f"Found confCons.xml file: {self.custom_path}")
                 self.handle_confCons_file(content)
 
@@ -159,7 +155,7 @@ class NXCModule:
             username = node_attribute["Username"]
             protocol = node_attribute["Protocol"]
             port = node_attribute["Port"]
-            host = f" {protocol}://{hostname}:{port}" if node_attribute["Hostname"] != "" else "" 
+            host = f" {protocol}://{hostname}:{port}" if node_attribute["Hostname"] != "" else " " 
             self.context.log.highlight(f"{name}:{host} - {domain}\\{username}:{password}")
 
     def parse_xml_nodes(self, main):

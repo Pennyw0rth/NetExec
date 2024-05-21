@@ -30,7 +30,6 @@ class NXCModule:
         self.context = context
         self.module_options = module_options
         self.vnc_decryption_key = b"\xe8\x4a\xd6\x60\xc4\x72\x1a\xe0"
-        self.share = "C$"
         self.false_positive = (
             ".",
             "..",
@@ -50,6 +49,7 @@ class NXCModule:
     def on_admin_login(self, context, connection):
         self.context = context
         self.connection = connection
+        self.share = self.connection.args.share
 
         host = connection.hostname + "." + connection.domain
         domain = connection.domain
