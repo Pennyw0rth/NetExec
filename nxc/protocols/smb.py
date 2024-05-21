@@ -55,7 +55,7 @@ from dploot.triage.masterkeys import MasterkeysTriage, parse_masterkey_file
 from dploot.triage.backupkey import BackupkeyTriage
 from dploot.lib.target import Target
 from dploot.lib.smb import DPLootSMBConnection
-from dploot.triage.sccm import SCCMTriage, SCCMCollection, SCCMCred, SCCMSecret
+from dploot.triage.sccm import SCCMTriage
 
 from pywerview.cli.helpers import get_localdisks, get_netsession, get_netgroupmember, get_netgroup, get_netcomputer, get_netloggedon, get_netlocalgroup
 
