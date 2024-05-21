@@ -1371,20 +1371,19 @@ class smb(connection):
             self.logger.fail("No masterkeys looted")
             return
         
-        self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting SCCM Credentials")
+        self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting SCCM Credentials through {self.args.sccm}")
         try:
             # Collect Chrome Based Browser stored secrets
-            sccm_triage = SCCMTriage(target=target, conn=conn, masterkeys=masterkeys)
-            sccm_creds = sccm_triage.triage_sccm()
-            for credential in sccm_creds:
-                if isinstance(credential, SCCMCred):
-                    self.logger.highlight(f"[NAA Account] {credential.username.decode('latin-1')}:{credential.password.decode('latin-1')}")
-                elif isinstance(credential, SCCMSecret):
-                    self.logger.highlight(f"[Task sequences secret] {credential.secret.decode('latin-1')}")
-                elif isinstance(credential, SCCMCollection):
-                    self.logger.highlight(f"[Collection Variable] {credential.variable.decode('latin-1')}:{credential.value.decode('latin-1')}")
+            sccm_triage = SCCMTriage(target=target, conn=conn, masterkeys=masterkeys, use_wmi=self.args.sccm == "wmi")
+            sccmcreds, sccmtasks, sccmcollections = sccm_triage.triage_sccm()
+            for sccmcred in sccmcreds:
+                self.logger.highlight(f"[NAA Account] {sccmcred.username.decode('latin-1')}:{sccmcred.password.decode('latin-1')}")
+            for sccmtask in sccmtasks:
+                self.logger.highlight(f"[Task sequences secret] {sccmtask.secret.decode('latin-1')}")
+            for sccmcollection in sccmcollections:
+                self.logger.highlight(f"[Collection Variable] {sccmcollection.variable.decode('latin-1')}:{sccmcollection.value.decode('latin-1')}")
         except Exception as e:
-            self.logger.debug(f"Error while looting wifi: {e}")
+            self.logger.debug(f"Error while looting sccm: {e}")
 
     @requires_admin
     def dpapi(self):
