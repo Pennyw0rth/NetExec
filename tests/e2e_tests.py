@@ -5,9 +5,11 @@ import subprocess
 from time import time
 from rich.console import Console
 import platform
+import os
+from nxc.paths import TMP_PATH
 
 script_dir = dirname(abspath(__file__))
-run_dir = dirname(abspath(__file__))
+run_dir = os.getcwd()
 
 
 def get_cli_args():
@@ -74,24 +76,32 @@ def get_cli_args():
         help="Specify line numbers or ranges to run commands from",
     )
     parser.add_argument(
-        "--print-failures",
-        action="store_false",
-        required=False,
-        help="Prints all the commands of failed tests at the end (default: True)",
-    )
-    parser.add_argument(
         "--test-user-file",
         dest="test_user_file",
         required=False,
-        default="tests/data/test_usernames.txt",
+        default=f"{script_dir}/data/test_usernames.txt",
         help="Path to the file containing test usernames",
     )
     parser.add_argument(
         "--test-password-file",
         dest="test_password_file",
         required=False,
-        default="tests/data/test_passwords.txt",
+        default=f"{script_dir}/data/test_passwords.txt",
         help="Path to the file containing test passwords",
+    )
+    parser.add_argument(
+        "--amsi-bypass-file",
+        dest="amsi_bypass_file",
+        required=False,
+        default=f"{script_dir}/data/test_amsi_bypass.txt",
+        help="Path to the file containing AMSI bypasses",
+    )
+    parser.add_argument(
+        "--test-normal-file",
+        dest="test_normal_file",
+        required=False,
+        default=f"{script_dir}/data/test_file.txt",
+        help="Path to file to upload/download"
     )
     parser.add_argument(
         "--dns-server",
@@ -155,7 +165,10 @@ def replace_command(args, line):
         .replace("KERBEROS ", kerberos)\
         .replace("TEST_USER_FILE", args.test_user_file)\
         .replace("TEST_PASSWORD_FILE", args.test_password_file)\
-        .replace("{DNS}", dns_server)
+        .replace("AMSI_BYPASS_FILE", args.amsi_bypass_file)\
+        .replace("TEST_NORMAL_FILE", args.test_normal_file)\
+        .replace("{DNS}", dns_server)\
+        .replace("/tmp", TMP_PATH)
     if args.poetry:
         line = f"poetry run {line}"
     return line
@@ -220,7 +233,7 @@ def run_e2e_tests(args):
                 # this prints sorta janky, but it does its job
                 console.log(f"[*] Results:\n{text.decode('utf-8')}")
 
-        if args.print_failures and failures:
+        if failures:
             console.log("[bold red]Failed Commands:")
             for failure in failures:
                 console.log(f"[bold red]{failure}")
