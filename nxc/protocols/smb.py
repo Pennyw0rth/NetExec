@@ -1637,7 +1637,7 @@ class smb(connection):
                 credential.url,
             )
 
-        if not (credentials and system_credentials and browser_credentials and cookies and vaults and firefox_credentials):
+        if not (credentials or system_credentials or browser_credentials or cookies or vaults or firefox_credentials):
             self.logger.fail("No secrets found")
 
     @requires_admin
