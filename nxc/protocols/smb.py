@@ -1356,7 +1356,6 @@ class smb(connection):
 
     @requires_admin
     def sccm(self):
-        logging.getLogger("dploot").disabled = True
         masterkeys = []
         if self.args.mkfile is not None:
             try:
@@ -1389,7 +1388,7 @@ class smb(connection):
             masterkeys_triage = MasterkeysTriage(
                 target=target,
                 conn=conn,
-                pvkbytes=self.pvkbytes,
+                dpapiSystem={},
             )
             masterkeys += masterkeys_triage.triage_system_masterkeys()
         except Exception as e:
@@ -1416,7 +1415,6 @@ class smb(connection):
     @requires_admin
     def dpapi(self):
         dump_system = "nosystem" not in self.args.dpapi
-        logging.getLogger("dploot").disabled = True
 
         if self.args.pvk is not None:
             try:
@@ -1507,6 +1505,7 @@ class smb(connection):
                 pvkbytes=self.pvkbytes,
                 passwords=plaintexts,
                 nthashes=nthashes,
+                dpapiSystem={},
             )
             self.logger.debug(f"Masterkeys Triage: {masterkeys_triage}")
             masterkeys += masterkeys_triage.triage_masterkeys()

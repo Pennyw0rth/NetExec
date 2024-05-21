@@ -103,6 +103,7 @@ class NXCModule:
                     pvkbytes=self.pvkbytes,
                     passwords=plaintexts,
                     nthashes=nthashes,
+                    dpapiSystem={},
                 )
                 self.masterkeys = masterkeys_triage.triage_masterkeys()
             except Exception as e:
