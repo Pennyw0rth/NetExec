@@ -115,16 +115,9 @@ class NXCModule:
             ("RealVNC 4.x", "HKLM\\SOFTWARE\\Wow6432Node\\RealVNC\\WinVNC4", "Password"),
             ("RealVNC 3.x", "HKLM\\SOFTWARE\\RealVNC\\vncserver", "Password"),
             ("RealVNC 4.x", "HKLM\\SOFTWARE\\RealVNC\\WinVNC4", "Password"),
-            ("RealVNC 4.x", "HKCU\\SOFTWARE\\RealVNC\\WinVNC4", "Password"),
-            ("RealVNC 3.x", "HKCU\\Software\\ORL\\WinVNC3", "Password"),
-            ("TightVNC", "HKCU\\Software\\TightVNC\\Server", "Password"),
-            ("TightVNC", "HKCU\\Software\\TightVNC\\Server", "PasswordViewOnly"),
             ("TightVNC", "HKLM\\Software\\TightVNC\\Server", "Password"),
             ("TightVNC ControlPassword", "HKLM\\Software\\TightVNC\\Server", "ControlPassword"),
             ("TightVNC", "HKLM\\Software\\TightVNC\\Server", "PasswordViewOnly"),
-            ("TigerVNC", "HKLM\\Software\\TigerVNC\\Server", "Password"),
-            ("TigerVNC", "HKCU\\Software\\TigerVNC\\Server", "Password"),
-            ("TigerVNC", "HKCU\\Software\\TigerVNC\\WinVNC4", "Password"),
         )
         for vnc_name, path, key in vncs:
             try:
