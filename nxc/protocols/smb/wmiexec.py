@@ -9,7 +9,7 @@ from impacket.dcerpc.v5.dtypes import NULL
 
 
 class WMIEXEC:
-    def __init__(self, target, share_name, username, password, domain, smbconnection, doKerberos=False, aesKey=None, kdcHost=None, hashes=None, share=None, logger=None, timeout=None, tries=None):
+    def __init__(self, target, share_name, username, password, domain, smbconnection, doKerberos=False, aesKey=None, kdcHost=None, remoteHost=None, hashes=None, share=None, logger=None, timeout=None, tries=None):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -26,6 +26,7 @@ class WMIEXEC:
         self.__pwd = "C:\\"
         self.__aesKey = aesKey
         self.__kdcHost = kdcHost
+        self.__remoteHost = remoteHost
         self.__doKerberos = doKerberos
         self.__retOutput = True
         self.__stringBinding = ""
@@ -52,9 +53,10 @@ class WMIEXEC:
             oxidResolver=True,
             doKerberos=self.__doKerberos,
             kdcHost=self.__kdcHost,
+            remoteHost=self.__remoteHost,
         )
         iInterface = self.__dcom.CoCreateInstanceEx(wmi.CLSID_WbemLevel1Login, wmi.IID_IWbemLevel1Login)
-        flag, self.__stringBinding = dcom_FirewallChecker(iInterface, self.__timeout)
+        flag, self.__stringBinding = dcom_FirewallChecker(iInterface, self.__remoteHost, self.__timeout)
         if not flag or not self.__stringBinding:
             error_msg = f'WMIEXEC: Dcom initialization failed on connection with stringbinding: "{self.__stringBinding}", please increase the timeout with the option "--dcom-timeout". If it\'s still failing maybe something is blocking the RPC connection, try another exec method'
 
@@ -146,16 +148,20 @@ class WMIEXEC:
                 break
             except Exception as e:
                 if tries >= self.__tries:
-                    self.logger.fail("WMIEXEC: Could not retrieve output file, it may have been detected by AV. If it is still failing, try the 'wmi' protocol or another exec method")
+                    self.logger.fail("wmiexec: Could not retrieve output file, it may have been detected by AV. If it is still failing, try the 'wmi' protocol or another exec method")
                     break
-                if str(e).find("STATUS_BAD_NETWORK_NAME") > 0:
+                elif str(e).find("STATUS_BAD_NETWORK_NAME") > 0:
                     self.logger.fail(f"SMB connection: target has blocked {self.__share} access (maybe command executed!)")
                     break
+                elif str(e).find("STATUS_VIRUS_INFECTED") >= 0:
+                    self.logger.fail("Command did not run because a virus was detected")
+                    break
+                
                 if str(e).find("STATUS_SHARING_VIOLATION") >= 0 or str(e).find("STATUS_OBJECT_NAME_NOT_FOUND") >= 0:
                     sleep(2)
-                    tries += 1
                 else:
-                    self.logger.debug(str(e))
+                    self.logger.debug(f"Exception when trying to read output file: {e}")
+                tries += 1
 
         if self.__outputBuffer:
             self.logger.debug(f"Deleting file {self.__share}\\{self.__output}")
