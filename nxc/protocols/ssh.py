@@ -195,8 +195,10 @@ class ssh(connection):
                     username=username,
                     passphrase=password if password != "" else None,
                     key_filename=private_key if private_key else self.args.key_file,
+                    timeout=self.args.ssh_timeout,
                     look_for_keys=False,
                     allow_agent=False,
+                    banner_timeout=self.args.ssh_timeout,
                 )
 
                 cred_id = self.db.add_credential(
@@ -213,8 +215,10 @@ class ssh(connection):
                     port=self.port,
                     username=username,
                     password=password,
+                    timeout=self.args.ssh_timeout,
                     look_for_keys=False,
                     allow_agent=False,
+                    banner_timeout=self.args.ssh_timeout,
                 )
                 cred_id = self.db.add_credential("plaintext", username, password)
 
@@ -226,6 +230,8 @@ class ssh(connection):
         except SSHException as e:
             if "Invalid key" in str(e):
                 self.logger.fail(f"{username}:{process_secret(password)} Could not decrypt private key, error: {e}")
+            if "Error reading SSH protocol banner" in str(e):
+                self.logger.error(f"Internal Paramiko error for {username}:{process_secret(password)}, {e}")
             else:
                 self.logger.exception(e)
         except Exception as e:

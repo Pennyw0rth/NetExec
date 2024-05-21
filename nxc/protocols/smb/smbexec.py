@@ -7,9 +7,9 @@ from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 
 
 class SMBEXEC:
-    def __init__(self, host, share_name, smbconnection, protocol, username="", password="", domain="", doKerberos=False, aesKey=None, kdcHost=None, hashes=None, share=None, port=445, logger=None, tries=None):
+    def __init__(self, host, share_name, smbconnection, username="", password="", domain="", doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, share=None, port=445, logger=None, tries=None):
         self.__host = host
-        self.__share_name = "C$"
+        self.__share_name = share_name
         self.__port = port
         self.__username = username
         self.__password = password
@@ -26,9 +26,9 @@ class SMBEXEC:
         self.__retOutput = False
         self.__rpctransport = None
         self.__scmr = None
-        self.__conn = None
         self.__aesKey = aesKey
         self.__doKerberos = doKerberos
+        self.__remoteHost = remoteHost
         self.__kdcHost = kdcHost
         self.__tries = tries
         self.logger = logger
@@ -49,7 +49,8 @@ class SMBEXEC:
         self.__rpctransport.set_dport(self.__port)
 
         if hasattr(self.__rpctransport, "setRemoteHost"):
-            self.__rpctransport.setRemoteHost(self.__host)
+            self.__rpctransport.setRemoteHost(self.__remoteHost)
+
         if hasattr(self.__rpctransport, "set_credentials"):
             # This method exists only for selected protocol sequences.
             self.__rpctransport.set_credentials(
@@ -92,7 +93,7 @@ class SMBEXEC:
         self.__output = gen_random_string(6)
         self.__batchFile = gen_random_string(6) + ".bat"
 
-        command = self.__shell + "echo " + data + f" ^> \\\\127.0.0.1\\{self.__share_name}\\{self.__output} 2^>^&1 > %TEMP%\\{self.__batchFile} & %COMSPEC% /Q /c %TEMP%\\{self.__batchFile} & %COMSPEC% /Q /c del %TEMP%\\{self.__batchFile}" if self.__retOutput else self.__shell + data
+        command = self.__shell + "echo " + data + f" ^> \\\\%COMPUTERNAME%\\{self.__share}\\{self.__output} 2^>^&1 > %TEMP%\\{self.__batchFile} & %COMSPEC% /Q /c %TEMP%\\{self.__batchFile} & %COMSPEC% /Q /c del %TEMP%\\{self.__batchFile}" if self.__retOutput else self.__shell + data
 
         with open(path_join("/tmp", "nxc_hosted", self.__batchFile), "w") as batch_file:
             batch_file.write(command)

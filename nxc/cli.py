@@ -64,6 +64,12 @@ def gen_cli_args():
 
     parser.add_argument("--version", action="store_true", help="Display nxc version")
 
+    dns_parser = parser.add_argument_group("DNS")
+    dns_parser.add_argument("-6", dest="force_ipv6", action="store_true", help="Enable force IPv6")
+    dns_parser.add_argument("--dns-server", action="store", help="Specify DNS server (default: Use hosts file & System DNS)")
+    dns_parser.add_argument("--dns-tcp", action="store_true", help="Use TCP instead of UDP for DNS queries")
+    dns_parser.add_argument("--dns-timeout", action="store", type=int, default=3, help="DNS query timeout in seconds (default: %(default)s)")
+
     # we do module arg parsing here so we can reference the module_list attribute below
     module_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     mgroup = module_parser.add_argument_group("Modules", "Options for nxc modules")
@@ -76,7 +82,6 @@ def gen_cli_args():
 
     std_parser = argparse.ArgumentParser(add_help=False, parents=[generic_parser, output_parser], formatter_class=DisplayDefaultsNotNone)
     std_parser.add_argument("target", nargs="+" if not (module_parser.parse_known_args()[0].list_modules or module_parser.parse_known_args()[0].show_module_options) else "*", type=str, help="the target IP(s), range(s), CIDR(s), hostname(s), FQDN(s), file(s) containing a list of targets, NMap XML or .Nessus file(s)")
-    
     credential_group = std_parser.add_argument_group("Authentication", "Options for authenticating")
     credential_group.add_argument("-u", "--username", metavar="USERNAME", dest="username", nargs="+", default=[], help="username(s) or file(s) containing usernames")
     credential_group.add_argument("-p", "--password", metavar="PASSWORD", dest="password", nargs="+", default=[], help="password(s) or file(s) containing passwords")
