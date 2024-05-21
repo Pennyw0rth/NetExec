@@ -22,6 +22,7 @@ def proto_args(parser, std_parser, module_parser):
     cgroup.add_argument("--lsa", action="store_true", help="dump LSA secrets from target systems")
     cgroup.add_argument("--ntds", choices={"vss", "drsuapi"}, nargs="?", const="drsuapi", help="dump the NTDS.dit from target DCs using the specifed method\n(default: drsuapi)")
     cgroup.add_argument("--dpapi", choices={"cookies", "nosystem"}, nargs="*", help='dump DPAPI secrets from target systems, can dump cookies if you add "cookies", will not dump SYSTEM dpapi if you add nosystem\n')
+    cgroup.add_argument("--sccm", action="store_true", help="dump SCCM secrets from target systems")
 
     ngroup = smb_parser.add_argument_group("Credential Gathering", "Options for gathering credentials")
     ngroup.add_argument("--mkfile", action="store", help="DPAPI option. File with masterkeys in form of {GUID}:SHA1")
