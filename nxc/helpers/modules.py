@@ -33,3 +33,6 @@ def add_loot_data(module_name, filename, data):
          
 def get_loot_data_filepath(module_name, filename):
     return f"{NXC_PATH}/loot/{module_name}/{filename}"
+
+def get_loot_data_folder(module_name):
+    return f"{NXC_PATH}/loot/{module_name}"
