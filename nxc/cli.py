@@ -25,18 +25,25 @@ def gen_cli_args():
     CODENAME = "nxc4u"
     nxc_logger.debug(f"NXC VERSION: {VERSION} - {CODENAME} - {COMMIT}")
     
-    generic_parser = argparse.ArgumentParser(add_help=False)
+    generic_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     generic_group = generic_parser.add_argument_group("Generic", "Generic options for nxc across protocols")
     generic_group.add_argument("-t", "--threads", type=int, dest="threads", default=256, help="set how many concurrent threads to use")
     generic_group.add_argument("--timeout", default=None, type=int, help="max timeout in seconds of each thread")
     generic_group.add_argument("--jitter", metavar="INTERVAL", type=str, help="sets a random delay between each authentication")
     
-    output_parser = argparse.ArgumentParser(add_help=False)
+    output_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     output_group = output_parser.add_argument_group("Output", "Options to set verbosity levels and control output")
     output_group.add_argument("--verbose", action="store_true", help="enable verbose output")
     output_group.add_argument("--debug", action="store_true", help="enable debug level information")
     output_group.add_argument("--no-progress", action="store_true", help="do not displaying progress bar during scan")
     output_group.add_argument("--log", metavar="LOG", help="export result into a custom file")
+    
+    dns_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
+    dns_group = dns_parser.add_argument_group("DNS")
+    dns_group.add_argument("-6", dest="force_ipv6", action="store_true", help="Enable force IPv6")
+    dns_group.add_argument("--dns-server", action="store", help="Specify DNS server (default: Use hosts file & System DNS)")
+    dns_group.add_argument("--dns-tcp", action="store_true", help="Use TCP instead of UDP for DNS queries")
+    dns_group.add_argument("--dns-timeout", action="store", type=int, default=3, help="DNS query timeout in seconds")
     
     parser = argparse.ArgumentParser(
         description=rf"""
@@ -59,16 +66,10 @@ def gen_cli_args():
     {highlight('Commit', 'red')}  : {highlight(COMMIT)}
     """,
         formatter_class=RawTextHelpFormatter,
-        parents=[generic_parser, output_parser]
+        parents=[generic_parser, output_parser, dns_parser]
     )
 
     parser.add_argument("--version", action="store_true", help="Display nxc version")
-
-    dns_parser = parser.add_argument_group("DNS")
-    dns_parser.add_argument("-6", dest="force_ipv6", action="store_true", help="Enable force IPv6")
-    dns_parser.add_argument("--dns-server", action="store", help="Specify DNS server (default: Use hosts file & System DNS)")
-    dns_parser.add_argument("--dns-tcp", action="store_true", help="Use TCP instead of UDP for DNS queries")
-    dns_parser.add_argument("--dns-timeout", action="store", type=int, default=3, help="DNS query timeout in seconds (default: %(default)s)")
 
     # we do module arg parsing here so we can reference the module_list attribute below
     module_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
@@ -80,7 +81,7 @@ def gen_cli_args():
 
     subparsers = parser.add_subparsers(title="Available Protocols", dest="protocol")
 
-    std_parser = argparse.ArgumentParser(add_help=False, parents=[generic_parser, output_parser], formatter_class=DisplayDefaultsNotNone)
+    std_parser = argparse.ArgumentParser(add_help=False, parents=[generic_parser, output_parser, dns_parser], formatter_class=DisplayDefaultsNotNone)
     std_parser.add_argument("target", nargs="+" if not (module_parser.parse_known_args()[0].list_modules or module_parser.parse_known_args()[0].show_module_options) else "*", type=str, help="the target IP(s), range(s), CIDR(s), hostname(s), FQDN(s), file(s) containing a list of targets, NMap XML or .Nessus file(s)")
     credential_group = std_parser.add_argument_group("Authentication", "Options for authenticating")
     credential_group.add_argument("-u", "--username", metavar="USERNAME", dest="username", nargs="+", default=[], help="username(s) or file(s) containing usernames")
