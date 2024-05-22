@@ -99,9 +99,7 @@ class SMBEXEC:
             batch_file.write(command)
 
         self.logger.debug("Hosting batch file with command: " + command)
-
         self.logger.debug("Command to execute: " + command)
-
         self.logger.debug(f"Remote service {self.__serviceName} created.")
 
         try:
@@ -138,23 +136,35 @@ class SMBEXEC:
         if self.__retOutput is False:
             self.__outputBuffer = ""
             return
-        tries = 1
+
+        # TODO: It looks like the service is hanging anyway until the command is finished, so all this timeout logic is likely not needed
+        # Still adding this for now to keep the structure similar until we can confirm the above
+        tries = 0
         while True:
             try:
                 self.logger.info(f"Attempting to read {self.__share}\\{self.__output}")
                 self.__smbconnection.getFile(self.__share, self.__output, self.output_callback)
                 break
             except Exception as e:
-                if tries >= self.__tries:
+                if tries > self.__tries:
                     self.logger.fail("SMBEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
                     break
-                if str(e).find("STATUS_BAD_NETWORK_NAME") > 0:
+                if "STATUS_BAD_NETWORK_NAME" in str(e):
                     self.logger.fail(f"SMBEXEC: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
                     break
-                if str(e).find("STATUS_SHARING_VIOLATION") >= 0 or str(e).find("STATUS_OBJECT_NAME_NOT_FOUND") >= 0:
-                    # Output not finished, let's wait
-                    sleep(2)
+                elif "STATUS_VIRUS_INFECTED" in str(e):
+                    self.logger.fail("Command did not run because a virus was detected")
+                    break
+                # When executing powershell and the command is still running, we get a sharing violation
+                # We can use that information to wait longer than if the file is not found (probably av or something)
+                if "STATUS_SHARING_VIOLATION" in str(e):
+                    self.logger.info(f"File {self.__share}\\{self.__output} is still in use with {self.__tries - tries} left, retrying...")
                     tries += 1
+                    sleep(1)
+                elif "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
+                    self.logger.info(f"File {self.__share}\\{self.__output} not found with {self.__tries - tries} left, deducting 10 tries and retrying...")
+                    tries += 10
+                    sleep(1)
                 else:
                     self.logger.debug(str(e))
 

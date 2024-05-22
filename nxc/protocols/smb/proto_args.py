@@ -69,7 +69,7 @@ def proto_args(parser, parents):
     cmd_exec_group = smb_parser.add_argument_group("Command Execution", "Options for executing commands")
     cmd_exec_group.add_argument("--exec-method", choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default="wmiexec", help="method to execute the command. Ignored if in MSSQL mode")
     cmd_exec_group.add_argument("--dcom-timeout", help="DCOM connection timeout", type=int, default=5)
-    cmd_exec_group.add_argument("--get-output-tries", help="Number of times atexec/smbexec/mmcexec tries to get results", type=int, default=5)
+    cmd_exec_group.add_argument("--get-output-tries", help="Number of times atexec/smbexec/mmcexec tries to get results", type=int, default=10)
     cmd_exec_group.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output. If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
     cmd_exec_group.add_argument("--no-output", action="store_true", help="do not retrieve command output")
 

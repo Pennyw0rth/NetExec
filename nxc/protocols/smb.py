@@ -1126,7 +1126,8 @@ class smb(connection):
                     record = wmi_results.getProperties()
                     records.append(record)
                     for k, v in record.items():
-                        self.logger.highlight(f"{k} => {v['value']}")
+                        if k != "TimeGenerated":  # from the wcc module, but this is a small hack to get it to stop spamming - TODO: add in method to disable output for this function
+                            self.logger.highlight(f"{k} => {v['value']}")
                 except Exception as e:
                     if str(e).find("S_FALSE") < 0:
                         raise e
