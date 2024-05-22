@@ -737,7 +737,8 @@ class ldap(connection):
             search_filter = "(sAMAccountType=805306368)" if self.username != "" else "(objectclass=*)"
 
         # default to these attributes to mirror the SMB --users functionality
-        request_attributes = ["sAMAccountName", "description", "badPwdCount", "pwdLastSet"]
+        # https://serverfault.com/a/959783 lastLogon/lastLogonTimestamp
+        request_attributes = ["sAMAccountName", "description", "badPwdCount", "pwdLastSet", "lastLogonTimestamp"]
         resp = self.search(search_filter, request_attributes, sizeLimit=0)
 
         if resp:
@@ -753,19 +754,25 @@ class ldap(connection):
             users = parse_result_attributes(resp)
             # we print the total records after we parse the results since often SearchResultReferences are returned
             self.logger.display(f"Total records returned: {len(users):d}")
-            self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
+            self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-Last Login-':<20}{'-BadPW-':<8}{'-Description-':<60}")
             for user in users:
                 # TODO: functionize this - we do this calculation in a bunch of places, different, including in the `pso` module
-                parsed_pw_last_set = ""
-                pwd_last_set = user.get("pwdLastSet", "")
+                parsed_pw_last_set, parsed_last_login = ("", "")
+                pwd_last_set, last_login = (user.get("pwdLastSet", ""), user.get("lastLogonTimestamp", ""))
                 if pwd_last_set != "":
                     timestamp_seconds = int(pwd_last_set) / 10**7
                     start_date = datetime(1601, 1, 1)
                     parsed_pw_last_set = (start_date + timedelta(seconds=timestamp_seconds)).replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
                     if parsed_pw_last_set == "1601-01-01 00:00:00":
                         parsed_pw_last_set = "<never>"
+                if last_login != "":
+                    timestamp_seconds = int(last_login) / 10**7
+                    start_date = datetime(1601, 1, 1)
+                    parsed_last_login = (start_date + timedelta(seconds=timestamp_seconds)).replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
+                    if parsed_last_login == "1601-01-01 00:00:00":
+                        parsed_last_login = "<never>"
                 # we default attributes to blank strings if they don't exist in the dict
-                self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{parsed_pw_last_set:<20}{user.get('badPwdCount', ''):<8}{user.get('description', ''):<60}")
+                self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{parsed_pw_last_set:<20}{parsed_last_login:<20}{user.get('badPwdCount', ''):<8}{user.get('description', ''):<60}")
 
     def groups(self):
         # Building the search filter
