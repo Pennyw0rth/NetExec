@@ -9,11 +9,11 @@ def proto_args(parser, std_parser, module_parser):
     dgroup = smb_parser.add_mutually_exclusive_group()
     dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, help="domain to authenticate to")
     dgroup.add_argument("--local-auth", action="store_true", help="authenticate locally to each target")
-    smb_parser.add_argument("--port", type=int, choices={445, 139}, default=445, help="SMB port (default: 445)")
-    smb_parser.add_argument("--share", metavar="SHARE", default="C$", help="specify a share (default: C$)")
+    smb_parser.add_argument("--port", type=int, choices={445, 139}, default=445, help="SMB port (default: %(default)s)")
+    smb_parser.add_argument("--share", metavar="SHARE", default="C$", help="specify a share (default: %(default)s)")
     smb_parser.add_argument("--smb-server-port", default="445", help="specify a server port for SMB", type=int)
     smb_parser.add_argument("--gen-relay-list", metavar="OUTPUT_FILE", help="outputs all hosts that don't require SMB signing to the specified file")
-    smb_parser.add_argument("--smb-timeout", help="SMB connection timeout, default 2 secondes", type=int, default=2)
+    smb_parser.add_argument("--smb-timeout", help="SMB connection timeout, default %(default)s secondes", type=int, default=2)
     smb_parser.add_argument("--laps", dest="laps", metavar="LAPS", type=str, help="LAPS authentification", nargs="?", const="administrator")
     self_delegate_arg.make_required = [delegate_arg]
 
@@ -45,7 +45,7 @@ def proto_args(parser, std_parser, module_parser):
     egroup.add_argument("--pass-pol", action="store_true", help="dump password policy")
     egroup.add_argument("--rid-brute", nargs="?", type=int, const=4000, metavar="MAX_RID", help="enumerate users by bruteforcing RID's (default: 4000)")
     egroup.add_argument("--wmi", metavar="QUERY", type=str, help="issues the specified WMI query")
-    egroup.add_argument("--wmi-namespace", metavar="NAMESPACE", default="root\\cimv2", help="WMI Namespace (default: root\\cimv2)")
+    egroup.add_argument("--wmi-namespace", metavar="NAMESPACE", default="root\\cimv2", help="WMI Namespace (default: %(default)s)")
 
     sgroup = smb_parser.add_argument_group("Spidering", "Options for spidering shares")
     sgroup.add_argument("--spider", metavar="SHARE", type=str, help="share to spider")
@@ -65,9 +65,9 @@ def proto_args(parser, std_parser, module_parser):
 
     cgroup = smb_parser.add_argument_group("Command Execution", "Options for executing commands")
     cgroup.add_argument("--exec-method", choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default=None, help="method to execute the command. Ignored if in MSSQL mode (default: wmiexec)")
-    cgroup.add_argument("--dcom-timeout", help="DCOM connection timeout, default is 5 secondes", type=int, default=5)
-    cgroup.add_argument("--get-output-tries", help="Number of times atexec/smbexec/mmcexec tries to get results, default is 5", type=int, default=5)
-    cgroup.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output (default: utf-8). If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
+    cgroup.add_argument("--dcom-timeout", help="DCOM connection timeout, default is %(default)s secondes", type=int, default=5)
+    cgroup.add_argument("--get-output-tries", help="Number of times atexec/smbexec/mmcexec tries to get results, default is %(default)s", type=int, default=10)
+    cgroup.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output (default: %(default)s). If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
     cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
     
     cegroup = cgroup.add_mutually_exclusive_group()
