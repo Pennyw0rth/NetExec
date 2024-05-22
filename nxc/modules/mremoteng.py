@@ -72,7 +72,7 @@ class NXCModule:
         self.connection = connection
         self.share = connection.args.share
 
-        host =  f"{connection.hostname}.{connection.domain}"
+        host = f"{connection.hostname}.{connection.domain}"
         domain = connection.domain
         username = connection.username
         kerberos = connection.kerberos
