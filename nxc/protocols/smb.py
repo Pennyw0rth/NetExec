@@ -1304,33 +1304,31 @@ class smb(connection):
         normalized_folder = ntpath.normpath(folder)
         base_folder = os.path.basename(normalized_folder)
         self.logger.debug(f"Base folder: {base_folder}")
-        folder_wildcard = ntpath.join(folder, "*")
-        self.logger.debug(f"Requesting folder '{normalized_folder}' from share {self.args.share}")
-        items = self.conn.listPath(self.args.share, folder_wildcard)
+
+        items = self.conn.listPath(self.args.share, ntpath.join(folder, "*"))
         self.logger.debug(f"{len(items)} items in folder: {items}")
 
         for item in items:
-            if item.get_longname() not in [".", ".."]:
-                if item.is_directory():
-                    dir_path = ntpath.normpath(os.path.join(normalized_folder, item.get_longname()))
-                    if recursive:
-                        self.download_folder(dir_path, dest, recursive, base_dir or folder)
-                else:
-                    filename = item.get_longname()
-                    remote_file_path = ntpath.join(folder, filename)
-                    self.logger.debug(f"File found: {remote_file_path}")
-                    relative_path = folder.replace(base_dir or folder, "").lstrip("\\")
-                    relative_path = os.path.join(*relative_path.split("\\"))
+            item_name = item.get_longname()
+            if item_name not in [".", ".."]:
+                dir_path = ntpath.normpath(ntpath.join(normalized_folder, item_name))
+                if item.is_directory() and recursive:
+                    self.download_folder(dir_path, dest, recursive, base_dir or folder)
+                elif not item.is_directory():
+                    remote_file_path = ntpath.join(folder, item_name)
+                    # change the Windows path to Linux and then join it with the base directory to get our actual save path
+                    relative_path = os.path.join(*folder.replace(base_dir or folder, "").lstrip("\\").split("\\"))
                     local_folder_path = os.path.join(dest, relative_path)
-                    local_file_path = os.path.join(local_folder_path, filename)
-                    self.logger.debug(f"Saving {remote_file_path} to {local_file_path}")
+                    local_file_path = os.path.join(local_folder_path, item_name)
+                    self.logger.debug(f"{dest=} {remote_file_path=} {relative_path=} {local_folder_path=} {local_file_path=}")
+                    
                     os.makedirs(local_folder_path, exist_ok=True)
                     self.get_file_single(remote_file_path, local_file_path)
-            
+
     def get_folder(self):
         recursive = self.args.recursive        
         for folder, dest in self.args.get_folder:
-            self.download_folder(folder, dest, recursive, None)
+            self.download_folder(folder, dest, recursive)
 
     def enable_remoteops(self):
         try:
