@@ -1402,7 +1402,7 @@ class ldap(connection):
         ad = AD(
             auth=auth,
             domain=self.domain,
-            nameserver=self.args.nameserver,
+            nameserver=self.args.dns_server,
             dns_tcp=self.args.dns_tcp,
             dns_timeout=self.args.dns_timeout,
         )
