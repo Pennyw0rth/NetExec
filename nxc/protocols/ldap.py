@@ -1403,8 +1403,8 @@ class ldap(connection):
             auth=auth,
             domain=self.domain,
             nameserver=self.args.nameserver,
-            dns_tcp=False,
-            dns_timeout=3,
+            dns_tcp=self.args.dns_tcp,
+            dns_timeout=self.args.dns_timeout,
         )
         collect = resolve_collection_methods("Default" if not self.args.collection else self.args.collection)
         if not collect:
