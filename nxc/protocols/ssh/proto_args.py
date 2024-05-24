@@ -1,22 +1,19 @@
 from argparse import _StoreAction
+from nxc.helpers.args import DisplayDefaultsNotNone
 
-def proto_args(parser, std_parser, module_parser):
-    ssh_parser = parser.add_parser("ssh", help="own stuff using SSH", parents=[std_parser, module_parser])
+
+def proto_args(parser, parents):
+    ssh_parser = parser.add_parser("ssh", help="own stuff using SSH", parents=parents, formatter_class=DisplayDefaultsNotNone)
     ssh_parser.add_argument("--key-file", type=str, help="Authenticate using the specified private key. Treats the password parameter as the key's passphrase.")
-    ssh_parser.add_argument("--port", type=int, default=22, help="SSH port (default: 22)")
-    ssh_parser.add_argument("--ssh-timeout", help="SSH connection timeout, default is %(default)s secondes", type=int, default=15)
+    ssh_parser.add_argument("--port", type=int, default=22, help="SSH port")
+    ssh_parser.add_argument("--ssh-timeout", help="SSH connection timeout", type=int, default=15)
     sudo_check_arg = ssh_parser.add_argument("--sudo-check", action="store_true", help="Check user privilege with sudo")
-    sudo_check_method_arg = ssh_parser.add_argument("--sudo-check-method", action=get_conditional_action(_StoreAction), make_required=[], choices={"sudo-stdin", "mkfifo"}, default="sudo-stdin", help="method to do with sudo check, default is '%(default)s (mkfifo is non-stable, probably you need to execute once again if it failed)'")
-    ssh_parser.add_argument("--get-output-tries", help="Number of times with sudo command tries to get results, default is %(default)s", type=int, default=5)
+    sudo_check_method_arg = ssh_parser.add_argument("--sudo-check-method", action=get_conditional_action(_StoreAction), make_required=[], choices={"sudo-stdin", "mkfifo"}, default="sudo-stdin", help="method to do with sudo check (mkfifo is non-stable, probably you need to execute once again if it failed)'")
+    ssh_parser.add_argument("--get-output-tries", type=int, default=5, help="Number of times with sudo command tries to get results")
     sudo_check_method_arg.make_required.append(sudo_check_arg)
 
     cgroup = ssh_parser.add_argument_group("Command Execution", "Options for executing commands")
-    cgroup.add_argument("--codec", default="utf-8",
-                            help="Set encoding used (codec) from the target's output (default "
-                                 "'utf-8'). If errors are detected, run chcp.com at the target, "
-                                 "map the result with "
-                                 "https://docs.python.org/3/library/codecs.html#standard-encodings and then execute "
-                                 "again with --codec and the corresponding codec")
+    cgroup.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output. If errors are detected, run chcp.com at the target, map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
     cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
     cgroup.add_argument("-x", metavar="COMMAND", dest="execute", help="execute the specified command")
 
