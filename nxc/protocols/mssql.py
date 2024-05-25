@@ -318,9 +318,10 @@ class mssql(connection):
             return False
         else:
             self.logger.success("Executed command via mssqlexec")   
-            output_lines = StringIO(output).readlines()
-            for line in output_lines:
-                self.logger.highlight(line.strip())
+            if output:
+                output_lines = StringIO(output).readlines()
+                for line in output_lines:
+                    self.logger.highlight(line.strip())
         return output
 
     @requires_admin
