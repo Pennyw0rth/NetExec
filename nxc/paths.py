@@ -3,9 +3,7 @@ import sys
 import nxc
 
 NXC_PATH = os.path.expanduser("~/.nxc")
-TMP_PATH = os.path.join("/tmp", "nxc_hosted")
-if os.name == "nt":
-    TMP_PATH = os.getenv("LOCALAPPDATA") + "\\Temp\\nxc_hosted"
+TMP_PATH = os.getenv("LOCALAPPDATA") + "\\Temp\\nxc_hosted" if os.name == "nt" else os.path.join("/tmp", "nxc_hosted")
 if hasattr(sys, "getandroidapilevel"):
     TMP_PATH = os.path.join("/data", "data", "com.termux", "files", "usr", "tmp", "nxc_hosted")
 
