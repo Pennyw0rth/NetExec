@@ -390,10 +390,9 @@ class NXCModule:
         if root_entries is not None:
             for entry in root_entries:
                 if entry is not None:
-                    password = entry.find("./String[Key='Password']/Value")
                     self.print_password(context, entry)
                 else:
-                    context.log.highlight("")
+                    context.log.highlight("None")
         
         objects = root.findall("./Root/Group")
         while objects:
@@ -406,9 +405,10 @@ class NXCModule:
             objects.extend(current_object.findall("./Group"))
     
     def print_password(self, context, entry):
+        for entry in entries.findall("./String"):
+            key = entry.find("./Key")
+            value = entry.find("./Value")
+            key_text = key.text if key is not None else "None"
+            value_text = value.text if value is not None and value.text is not None else "None"
+            context.log.highlight((f"{key_text} : {value_text}"))     
         context.log.highlight(str("-------------------------------------"))
-        context.log.highlight(str("Title") + " : " + str(entry.find("./String[Key='Title']/Value").text))
-        context.log.highlight(str("UserName") + " : " + str(entry.find("./String[Key='UserName']/Value").text))
-        context.log.highlight(str("URL") + " : " + str(entry.find("./String[Key='URL']/Value").text))
-        context.log.highlight(str("Password") + " : " + str(entry.find("./String[Key='Password']/Value").text))
-        context.log.highlight(str("Notes") + " : " + str(entry.find("./String[Key='Notes']/Value").text))
