@@ -404,7 +404,7 @@ class NXCModule:
                         self.print_password(context, history_entry)
             objects.extend(current_object.findall("./Group"))
     
-    def print_password(self, context, entry):
+    def print_password(self, context, entries):
         for entry in entries.findall("./String"):
             key = entry.find("./Key")
             value = entry.find("./Value")
