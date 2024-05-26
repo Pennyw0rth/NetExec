@@ -1,6 +1,6 @@
 import argparse
 from os import getcwd
-from os.path import dirname, abspath, join, realpath
+from os.path import dirname, abspath, join, realpath, isfile
 import subprocess
 from time import time
 from rich.console import Console
@@ -15,9 +15,12 @@ run_dir = os.getcwd()
 def get_cli_args():
     parser = argparse.ArgumentParser(description="Script for running end to end tests for nxc")
     parser.add_argument(
+        "--executable",
+        default="netexec"
+    )
+    parser.add_argument(
         "-t",
         "--target",
-        dest="target",
         required=True
     )
     parser.add_argument(
@@ -77,28 +80,24 @@ def get_cli_args():
     )
     parser.add_argument(
         "--test-user-file",
-        dest="test_user_file",
         required=False,
         default=f"{script_dir}/data/test_usernames.txt",
         help="Path to the file containing test usernames",
     )
     parser.add_argument(
         "--test-password-file",
-        dest="test_password_file",
         required=False,
         default=f"{script_dir}/data/test_passwords.txt",
         help="Path to the file containing test passwords",
     )
     parser.add_argument(
         "--amsi-bypass-file",
-        dest="amsi_bypass_file",
         required=False,
         default=f"{script_dir}/data/test_amsi_bypass.txt",
         help="Path to the file containing AMSI bypasses",
     )
     parser.add_argument(
         "--test-normal-file",
-        dest="test_normal_file",
         required=False,
         default=f"{script_dir}/data/test_file.txt",
         help="Path to file to upload/download"
@@ -155,10 +154,14 @@ def generate_commands(args):
 
 
 def replace_command(args, line):
+    if isfile(join(getcwd(), args.executable)):
+        args.executable = abspath(join(getcwd(), args.executable))
+
     kerberos = "-k " if args.kerberos else ""
     dns_server = f"--dns-server {args.dns_server}" if args.dns_server else ""
 
     line = line\
+        .replace("netexec", args.executable)\
         .replace("TARGET_HOST", args.target)\
         .replace("LOGIN_USERNAME", f'"{args.username}"')\
         .replace("LOGIN_PASSWORD", f'"{args.password}"')\
@@ -181,7 +184,7 @@ def run_e2e_tests(args):
     failures = []
 
     result = subprocess.Popen(
-        "netexec --version",
+        f"{args.executable} --version",
         shell=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
