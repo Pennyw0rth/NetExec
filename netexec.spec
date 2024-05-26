@@ -69,6 +69,7 @@ a = Analysis(
         'dploot.triage.masterkeys',
         'dploot.triage.backupkey',
         'dploot.triage.wifi',
+        'dploot.triage.sccm',
         'dploot.lib.target',
         'dploot.lib.smb',
         'pyasn1_modules.rfc5652',
