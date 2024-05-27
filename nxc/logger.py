@@ -30,7 +30,7 @@ def setup_debug_logging():
         root_logger.setLevel(logging.INFO)
     elif debug_args.debug:
         nxc_logger.logger.setLevel(logging.DEBUG)
-        root_logger.setLevel(logging.DEBUG)
+        root_logger.setLevel(logging.INFO)
     else:
         nxc_logger.logger.setLevel(logging.ERROR)
         root_logger.setLevel(logging.ERROR)
@@ -53,12 +53,14 @@ class SmartDebugRichHandler(RichHandler):
             
     def emit(self, record):
         """Overrides the emit method of the RichHandler class so we can set the proper pathname and lineno"""
+        # for some reason in RDP, the exc_text is None which leads to a KeyError in Python logging
+        record.exc_text = record.getMessage() if record.exc_text is None else record.exc_text
+        
         if hasattr(record, "caller_frame"):
             frame_info = inspect.getframeinfo(record.caller_frame)
             record.pathname = frame_info.filename
             record.lineno = frame_info.lineno
         super().emit(record)
-
 
 def no_debug(func):
     """Stops logging non-debug messages when we are in debug mode
@@ -91,10 +93,12 @@ class NXCAdapter(logging.LoggerAdapter):
         self.logger = logging.getLogger("nxc")
         self.extra = extra
         self.output_file = None
-
+        
+        logging.getLogger("impacket").disabled = True
         logging.getLogger("pypykatz").disabled = True
         logging.getLogger("minidump").disabled = True
         logging.getLogger("lsassy").disabled = True
+        logging.getLogger("dploot").disabled = True
         logging.getLogger("neo4j").setLevel(logging.ERROR)
 
     def format(self, msg, *args, **kwargs):  # noqa: A003

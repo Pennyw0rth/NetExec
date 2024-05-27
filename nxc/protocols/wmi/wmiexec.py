@@ -24,8 +24,8 @@ from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Lo
 
 
 class WMIEXEC:
-    def __init__(self, host, username, password, domain, lmhash, nthash, doKerberos, kdcHost, aesKey, logger, exec_timeout, codec):
-        self.__host = host
+    def __init__(self, target, username, password, domain, lmhash, nthash, doKerberos, kdcHost, remoteHost, aesKey, logger, exec_timeout, codec):
+        self.__target = target
         self.__username = username
         self.__password = password
         self.__domain = domain
@@ -33,6 +33,7 @@ class WMIEXEC:
         self.__nthash = nthash
         self.__doKerberos = doKerberos
         self.__kdcHost = kdcHost
+        self.__remoteHost = remoteHost
         self.__aesKey = aesKey
         self.logger = logger
         self.__exec_timeout = exec_timeout
@@ -44,7 +45,7 @@ class WMIEXEC:
         self.__pwd = "C:\\"
         self.__codec = codec
 
-        self.__dcom = DCOMConnection(self.__host, self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, oxidResolver=True, doKerberos=self.__doKerberos, kdcHost=self.__kdcHost, aesKey=self.__aesKey)
+        self.__dcom = DCOMConnection(self.__target, self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, oxidResolver=True, doKerberos=self.__doKerberos, kdcHost=self.__kdcHost, aesKey=self.__aesKey, remoteHost=self.__remoteHost)
         iInterface = self.__dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
         iWbemLevel1Login = IWbemLevel1Login(iInterface)
         self.__iWbemServices = iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
@@ -98,4 +99,4 @@ class WMIEXEC:
             self.logger.debug(f"Removing temporary registry path: HKLM\\{self.__registry_Path}")
             retVal = descriptor.DeleteKey(2147483650, self.__registry_Path)
         except Exception as e:
-            self.logger.debug(f"Target: {self.__host} removing temporary registry path error: {e!s}")
+            self.logger.debug(f"Target: {self.__target} removing temporary registry path error: {e!s}")

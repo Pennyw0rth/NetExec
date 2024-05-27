@@ -1,8 +1,10 @@
 import json
 import errno
-import os
+from os.path import abspath, join, split, exists, splitext, getsize, sep
+from os import makedirs, remove, stat
 import time
 import traceback
+from nxc.paths import TMP_PATH
 from nxc.protocols.smb.remotefile import RemoteFile
 from impacket.smb3structs import FILE_READ_DATA
 from impacket.smbconnection import SessionError
@@ -36,7 +38,7 @@ def human_time(timestamp):
 def make_dirs(path):
     """Creates directories at the given path. It handles the exception `os.errno.EEXIST` that may occur if the directories already exist."""
     try:
-        os.makedirs(path)
+        makedirs(path)
     except OSError as e:
         if e.errno != errno.EEXIST:
             raise
@@ -170,13 +172,13 @@ class SMBSpiderPlus:
         The folder path and filename are then obtained separately.
         """
         # Remove the backslash before the remote host part and replace slashes with the appropriate path separator
-        remote_file_path = str(remote_file)[2:].replace("/", os.path.sep).replace("\\", os.path.sep)
+        remote_file_path = str(remote_file)[2:].replace("/", sep).replace("\\", sep)
 
         # Split the path to obtain the folder path and the filename
-        folder, filename = os.path.split(remote_file_path)
+        folder, filename = split(remote_file_path)
 
         # Join the output folder with the folder path to get the final local folder path
-        folder = os.path.join(self.output_folder, folder)
+        folder = join(self.output_folder, folder)
 
         return folder, filename
 
@@ -283,7 +285,7 @@ class SMBSpiderPlus:
             return
 
         # Check file extension filter.
-        _, file_extension = os.path.splitext(file_path)
+        _, file_extension = splitext(file_path)
         if file_extension:
             self.stats["file_exts"].add(file_extension.lower())
             if file_extension.lower() in self.exclude_exts:
@@ -306,10 +308,10 @@ class SMBSpiderPlus:
 
         # Check if the file is already downloaded and up-to-date.
         file_dir, file_name = self.get_file_save_path(remote_file)
-        download_path = os.path.join(file_dir, file_name)
+        download_path = join(file_dir, file_name)
         needs_update_flag = False
-        if os.path.exists(download_path):
-            if file_modified_time <= os.stat(download_path).st_mtime and os.path.getsize(download_path) == file_size:
+        if exists(download_path):
+            if file_modified_time <= stat(download_path).st_mtime and getsize(download_path) == file_size:
                 self.logger.info(f'File already downloaded "{file_path}" => "{download_path}".')
                 self.stats["num_files_unmodified"] += 1
                 return
@@ -348,7 +350,7 @@ class SMBSpiderPlus:
         remote_file.seek(0, 0)
 
         folder, filename = self.get_file_save_path(remote_file)
-        download_path = os.path.join(folder, filename)
+        download_path = join(folder, filename)
 
         # Create the subdirectories based on the share name and file path.
         self.logger.debug(f"Creating folder '{folder}'")
@@ -365,8 +367,8 @@ class SMBSpiderPlus:
             self.logger.fail(f'Error writing file "{download_path}" from share "{share_name}": {e}')
 
         # Check if the file is empty and should not be.
-        if os.path.getsize(download_path) == 0 and remote_file.get_filesize() > 0:
-            os.remove(download_path)
+        if getsize(download_path) == 0 and remote_file.get_filesize() > 0:
+            remove(download_path)
             remote_path = str(remote_file)[2:]
             self.logger.fail(f'Unable to download file "{remote_path}".')
 
@@ -375,7 +377,7 @@ class SMBSpiderPlus:
         
         The results are formatted with indentation and sorted keys before being written to the file.
         """
-        metadata_path = os.path.join(self.output_folder, f"{self.host}.json")
+        metadata_path = join(self.output_folder, f"{self.host}.json")
         try:
             with open(metadata_path, "w", encoding="utf-8") as fd:
                 fd.write(json.dumps(results, indent=4, sort_keys=True))
@@ -498,7 +500,7 @@ class NXCModule:
         self.exclude_filter = get_list_from_option(module_options.get("EXCLUDE_FILTER", "print$,ipc$"))
         self.exclude_filter = [d.lower() for d in self.exclude_filter]  # force case-insensitive
         self.max_file_size = int(module_options.get("MAX_FILE_SIZE", 50 * 1024))
-        self.output_folder = module_options.get("OUTPUT_FOLDER", os.path.join("/tmp", "nxc_spider_plus"))
+        self.output_folder = module_options.get("OUTPUT_FOLDER", abspath(join(TMP_PATH, "nxc_spider_plus")))
 
     def on_login(self, context, connection):
         context.log.display("Started module spidering_plus with the following options:")
