@@ -8,7 +8,8 @@ import platform
 import os
 from nxc.paths import TMP_PATH
 import sys
-sys.stdout.reconfigure(encoding="utf-8")
+if sys.stdout.encoding == "cp1252":
+    sys.stdout.reconfigure(encoding="utf-8")
 
 script_dir = dirname(abspath(__file__))
 run_dir = os.getcwd()
