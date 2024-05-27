@@ -84,7 +84,7 @@ def get_cli_args():
     parser.add_argument(
         "--test-user-file",
         required=False,
-        default=f"{script_dir}/data/test_usernames.txt",
+        default=f"{script_dir}/data/test_users.txt",
         help="Path to the file containing test usernames",
     )
     parser.add_argument(
