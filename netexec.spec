@@ -67,6 +67,7 @@ a = Analysis(
         'dploot.triage.browser',
         'dploot.triage.credentials',
         'dploot.triage.masterkeys',
+        'dploot.triage.mobaxterm',
         'dploot.triage.backupkey',
         'dploot.triage.wifi',
         'dploot.triage.sccm',

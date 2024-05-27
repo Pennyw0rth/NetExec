@@ -84,25 +84,25 @@ def get_cli_args():
     parser.add_argument(
         "--test-user-file",
         required=False,
-        default=f"{script_dir}/data/test_users.txt",
+        default=abspath(f"{script_dir}/data/test_users.txt"),
         help="Path to the file containing test usernames",
     )
     parser.add_argument(
         "--test-password-file",
         required=False,
-        default=f"{script_dir}/data/test_passwords.txt",
+        default=abspath(f"{script_dir}/data/test_passwords.txt"),
         help="Path to the file containing test passwords",
     )
     parser.add_argument(
         "--amsi-bypass-file",
         required=False,
-        default=f"{script_dir}/data/test_amsi_bypass.txt",
+        default=abspath(f"{script_dir}/data/test_amsi_bypass.txt"),
         help="Path to the file containing AMSI bypasses",
     )
     parser.add_argument(
         "--test-normal-file",
         required=False,
-        default=f"{script_dir}/data/test_file.txt",
+        default=abspath(f"{script_dir}/data/test_file.txt"),
         help="Path to file to upload/download"
     )
     parser.add_argument(
@@ -137,6 +137,8 @@ def generate_commands(args):
                 if i + 1 in flattened_list:
                     if line.startswith("#"):
                         continue
+                    if "#" in line:
+                        line = line.split("#")[0]
                     line = line.strip()
                     if args.protocols:
                         if line.split()[1] in args.protocols:
@@ -147,6 +149,8 @@ def generate_commands(args):
             for line in file:
                 if line.startswith("#"):
                     continue
+                if "#" in line:
+                    line = line.split("#")[0]
                 line = line.strip()
                 if args.protocols:
                     if line.split()[1] in args.protocols:
