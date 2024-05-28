@@ -1,7 +1,6 @@
 import ntpath
 import binascii
 import os
-from os.path import abspath
 import re
 from io import StringIO
 from Cryptodome.Hash import MD4
@@ -1281,7 +1280,7 @@ class smb(connection):
     
     def put_file(self):
         for src, dest in self.args.put_file:
-            self.put_file_single(abspath(src), dest)
+            self.put_file_single(src, dest)
 
     def get_file_single(self, remote_path, download_path):
         share_name = self.args.share
@@ -1299,7 +1298,7 @@ class smb(connection):
 
     def get_file(self):
         for src, dest in self.args.get_file:
-            self.get_file_single(src, abspath(dest))
+            self.get_file_single(src, dest)
 
 
     def enable_remoteops(self):
