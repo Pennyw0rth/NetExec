@@ -1,6 +1,6 @@
 import argparse
 from os import getcwd
-from os.path import dirname, abspath, join, realpath, isfile
+from os.path import dirname, abspath, join, realpath, isfile, normpath
 import subprocess
 from time import time
 from rich.console import Console
@@ -84,25 +84,25 @@ def get_cli_args():
     parser.add_argument(
         "--test-user-file",
         required=False,
-        default=abspath(join(script_dir, "data", "test_users.txt")),
+        default=normpath(join(script_dir, "data", "test_users.txt")),
         help="Path to the file containing test usernames",
     )
     parser.add_argument(
         "--test-password-file",
         required=False,
-        default=abspath(join(script_dir, "data", "test_passwords.txt")),
+        default=normpath(join(script_dir, "data", "test_passwords.txt")),
         help="Path to the file containing test passwords",
     )
     parser.add_argument(
         "--amsi-bypass-file",
         required=False,
-        default=abspath(join(script_dir, "data", "test_amsi_bypass.txt")),
+        default=normpath(join(script_dir, "data", "test_amsi_bypass.txt")),
         help="Path to the file containing AMSI bypasses",
     )
     parser.add_argument(
         "--test-normal-file",
         required=False,
-        default=abspath(join(script_dir, "data", "test_file.txt")),
+        default=normpath(join(script_dir, "data", "test_file.txt")),
         help="Path to file to upload/download"
     )
     parser.add_argument(
