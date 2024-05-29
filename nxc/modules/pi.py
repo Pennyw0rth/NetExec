@@ -1,8 +1,8 @@
 from base64 import b64decode
 from sys import exit
-from os import path
+from os.path import abspath, join, isfile
 
-from nxc.paths import DATA_PATH
+from nxc.paths import DATA_PATH, TMP_PATH
 
 
 class NXCModule:
@@ -25,7 +25,7 @@ class NXCModule:
         self.pi = "pi.exe"
         self.useembeded = True
         self.pid = self.cmd = ""
-        with open(path.join(DATA_PATH, ("pi_module/pi.bs64"))) as pi_file:
+        with open(join(DATA_PATH, ("pi_module/pi.bs64"))) as pi_file:
             self.pi_embedded = b64decode(pi_file.read())
 
         if "EXEC" in module_options:
@@ -36,11 +36,11 @@ class NXCModule:
 
     def on_admin_login(self, context, connection):
         if self.useembeded:
-            file_to_upload = "/tmp/pi.exe"
+            file_to_upload = abspath(join(TMP_PATH, "pi.exe"))
             with open(file_to_upload, "wb") as pm:
                 pm.write(self.pi_embedded)
         else:
-            if path.isfile(self.imp_exe):
+            if isfile(self.imp_exe):
                 file_to_upload = self.imp_exe
             else:
                 context.log.error(f"Cannot open {self.imp_exe}")

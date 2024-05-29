@@ -28,9 +28,9 @@ netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x ipconfig
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x ipconfig --exec-method atexec
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x ipconfig --exec-method smbexec
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x ipconfig --exec-method mmcexec
-netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --put-file TEST_NORMAL_FILE C:\Windows\Temp\test_file.txt
-netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --put-file TEST_NORMAL_FILE C:\Windows\Temp\test_file.txt --put-file TEST_NORMAL_FILE C:\Windows\Temp\test_file2.txt
-netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --get-file C:\Windows\Temp\test_file.txt /tmp/test_file.txt 
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --put-file TEST_NORMAL_FILE \\Windows\\Temp\\test_file.txt
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --put-file TEST_NORMAL_FILE \\Windows\\Temp\\test_file.txt --put-file TEST_NORMAL_FILE \\Windows\\Temp\\test_file2.txt
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --get-file \\Windows\\Temp\\test_file.txt /tmp/test_file.txt
 ##### SMB PowerShell
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig --exec-method atexec
@@ -135,9 +135,9 @@ netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M spooler 
 netexec smb TARGET_HOST -u '' -p '' -M zerologon
 netexec smb TARGET_HOST -u '' -p '' -M petitpotam
 ##### SMB Auth File
-netexec smb TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE--no-bruteforce
-netexec smb TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE--no-bruteforce --continue-on-success
-netexec smb TARGET_HOST -u TEST_USER_FILE -p data/test_passwords.txt
+netexec smb TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce
+netexec smb TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce --continue-on-success
+netexec smb TARGET_HOST -u TEST_USER_FILE -p tests/data/test_passwords.txt
 ##### WMI
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --wmi-namespace root/cimv2
@@ -227,8 +227,8 @@ netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
 netexec ssh TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce
 netexec ssh TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce --continue-on-success
 netexec ssh TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE
-netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --key-file data/test_key.priv
-netexec ssh TARGET_HOST -u LOGIN_USERNAME -p '' --key-file data/test_key.priv
+netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --key-file tests/data/test_key.priv
+netexec ssh TARGET_HOST -u LOGIN_USERNAME -p '' --key-file tests/data/test_key.priv
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sudo-check
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sudo-check --sudo-check-method sudo-stdin
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sudo-check --sudo-check-method sudo-stdin --get-output-tries 10
@@ -237,7 +237,7 @@ netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sudo-check --sudo-
 ##### FTP- Default test passwords and random key; switch these out if you want correct authentication
 netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
 netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --ls
-netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --put data/test_file.txt test_file.txt
+netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --put tests/data/test_file.txt test_file.txt
 netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --get test_file.txt
 netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce
 netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce --continue-on-success
