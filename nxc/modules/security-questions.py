@@ -2,6 +2,7 @@ from impacket.dcerpc.v5 import samr, transport
 from impacket.nt_errors import STATUS_MORE_ENTRIES
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from json import loads
+from traceback import format_exc as traceback_format_exc
 
 
 class NXCModule:
@@ -114,7 +115,9 @@ class NXCModule:
                 status = resp["ErrorCode"]
 
         except Exception as e:
-            print(str(e))
+            context.log.fail(f"Error: {e}")
+            context.log.debug(traceback_format_exc())
+
 
         finally:
             if domainHandle is not None:
