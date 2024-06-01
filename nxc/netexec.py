@@ -23,6 +23,8 @@ from os.path import join as path_join
 from sys import exit
 from rich.progress import Progress
 import platform
+if sys.stdout.encoding == "cp1252":
+    sys.stdout.reconfigure(encoding="utf-8")
 
 # Increase file_limit to prevent error "Too many open files"
 if platform.system() != "Windows":

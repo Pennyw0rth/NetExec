@@ -93,10 +93,12 @@ class NXCAdapter(logging.LoggerAdapter):
         self.logger = logging.getLogger("nxc")
         self.extra = extra
         self.output_file = None
-
+        
+        logging.getLogger("impacket").disabled = True
         logging.getLogger("pypykatz").disabled = True
         logging.getLogger("minidump").disabled = True
         logging.getLogger("lsassy").disabled = True
+        logging.getLogger("dploot").disabled = True
         logging.getLogger("neo4j").setLevel(logging.ERROR)
 
     def format(self, msg, *args, **kwargs):  # noqa: A003

