@@ -412,12 +412,21 @@ class connection:
             for ntlm_hash in self.args.hash:
                 if isfile(ntlm_hash):
                     with open(ntlm_hash) as ntlm_hash_file:
-                        for line in ntlm_hash_file:
-                            secret.append(line.strip())
-                            cred_type.append("hash")
+                        for i, line in enumerate(ntlm_hash_file):
+                            if len(line) != 16 and len(line) != 32:
+                                self.logger.fail(f"Invalid NTLM hash length on line {i+1}: {line}")
+                                continue
+                            else:
+                                secret.append(line.strip())
+                                cred_type.append("hash")
                 else:
-                    secret.append(ntlm_hash)
-                    cred_type.append("hash")
+                    if len(ntlm_hash) != 16 and len(ntlm_hash) != 32:
+                        self.logger.fail(f"Invalid NTLM hash length {len(ntlm_hash)}, authentication not sent")
+                        exit(1)
+                    else:
+                        secret.append(ntlm_hash)
+                        cred_type.append("hash")
+            self.logger.debug(secret)
 
         # Parse AES keys
         if self.args.aesKey:
@@ -554,7 +563,7 @@ class connection:
                         return True
 
     def mark_pwned(self):
-        return highlight(f"({pwned_label})" if self.admin_privs else "")
+        return highlight(f" ({pwned_label})" if self.admin_privs else "")
 
     def load_modules(self):
         self.logger.info(f"Loading modules for target: {self.host}")

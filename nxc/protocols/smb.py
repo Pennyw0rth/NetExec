@@ -162,6 +162,7 @@ class smb(connection):
         self.no_da = None
         self.no_ntlm = False
         self.protocol = "SMB"
+        self.is_guest = None
 
         connection.__init__(self, args, db, host)
 
@@ -376,7 +377,9 @@ class smb(connection):
             self.domain = domain
 
             self.conn.login(self.username, self.password, domain)
-
+            self.logger.debug(f"Logged in with password to SMB with {domain}/{self.username}")
+            self.is_guest = bool(self.conn.isGuestSession())
+            self.logger.debug(f"{self.is_guest=}")
             self.check_if_admin()
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
             self.db.add_credential("plaintext", domain, self.username, self.password)
@@ -385,7 +388,7 @@ class smb(connection):
 
             self.db.add_loggedin_relation(user_id, host_id)
 
-            out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}"
+            out = f"{domain}\\{self.username}:{process_secret(self.password)}{self.mark_guest()}{self.mark_pwned()}"
             self.logger.success(out)
 
             if not self.args.local_auth and self.username != "":
@@ -445,14 +448,16 @@ class smb(connection):
                 self.nthash = nthash
 
             self.conn.login(self.username, "", domain, lmhash, nthash)
-
+            self.logger.debug(f"Logged in with hash to SMB with {domain}/{self.username}")
+            self.is_guest = bool(self.conn.isGuestSession())
+            self.logger.debug(f"{self.is_guest=}")
             self.check_if_admin()
-            user_id = self.db.add_credential("hash", domain, self.username, nthash)
+            user_id = self.db.add_credential("hash", domain, self.username, self.hash)
             host_id = self.db.get_hosts(self.host)[0].id
 
             self.db.add_loggedin_relation(user_id, host_id)
 
-            out = f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_pwned()}"
+            out = f"{domain}\\{self.username}:{process_secret(self.hash)}{self.mark_guest()}{self.mark_pwned()}"
             self.logger.success(out)
 
             if not self.args.local_auth and self.username != "":
@@ -532,6 +537,7 @@ class smb(connection):
         return bool(self.create_smbv1_conn() or self.create_smbv3_conn())
 
     def check_if_admin(self):
+        self.logger.debug(f"Checking if user is admin on {self.host}")
         rpctransport = SMBTransport(self.conn.getRemoteHost(), 445, r"\svcctl", smb_connection=self.conn)
         dce = rpctransport.get_dce_rpc()
         try:
@@ -545,6 +551,7 @@ class smb(connection):
                 # 0xF003F - SC_MANAGER_ALL_ACCESS
                 # http://msdn.microsoft.com/en-us/library/windows/desktop/ms685981(v=vs.85).aspx
                 scmr.hROpenSCManagerW(dce, f"{self.host}\x00", "ServicesActive\x00", 0xF003F)
+                self.logger.debug(f"User is admin on {self.host}!")
                 self.admin_privs = True
             except scmr.DCERPCException:
                 self.admin_privs = False
@@ -1825,3 +1832,6 @@ class smb(connection):
         except Exception as e:
             self.logger.debug(f"Error calling remote_ops.finish(): {e}")
         NTDS.finish()
+
+    def mark_guest(self):
+        return highlight(f" {highlight('(Guest)')}" if self.is_guest else "")
