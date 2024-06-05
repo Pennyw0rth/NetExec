@@ -563,7 +563,7 @@ class connection:
                         return True
 
     def mark_pwned(self):
-        return highlight(f" ({pwned_label})" if self.admin_privs else "")
+        return highlight(f"({pwned_label})" if self.admin_privs else "")
 
     def load_modules(self):
         self.logger.info(f"Loading modules for target: {self.host}")
