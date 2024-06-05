@@ -414,7 +414,7 @@ class connection:
                     with open(ntlm_hash) as ntlm_hash_file:
                         for i, line in enumerate(ntlm_hash_file):
                             if len(line) != 16 and len(line) != 32:
-                                self.logger.fail(f"Invalid NTLM hash length on line {i+1}: {line}")
+                                self.logger.fail(f"Invalid NTLM hash length on line {i + 1}: {line}")
                                 continue
                             else:
                                 secret.append(line.strip())
