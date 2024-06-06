@@ -1,8 +1,9 @@
 from impacket import smb, smb3
 import ntpath
 from os import rename
-from os.path import split, join, splitext
+from os.path import split, join, splitext, dirname, abspath
 from glob import glob
+from sqlite3 import connect
 
 class NXCModule:
     """
@@ -54,11 +55,55 @@ class NXCModule:
                 self.logger.debug(f"Folder {full_path} not found!")
                 
             self.logger.success(f"Recall folder for user {folder_name} downloaded to {user_output_dir}")
-                
-        self.logger.debug(f"Renaming screenshots at {output_path}")
-        files = glob(f"{output_path}/*/ImageStore/*")
+            self.rename_screenshots(user_output_dir)
+        
+        self.logger.debug("Parsing Recall DB files...")
+        db_files = glob(f"{output_path}/*/*/ukg.db")
+        for db in db_files:
+            self.parse_recall_db(db)
+
+    def parse_recall_db(self, db_path):
+        self.logger.debug(f"Parsing Recall database {db_path}")
+        parent = abspath(dirname(dirname(db_path)))
+        self.logger.debug(f"Parent: {parent}")
+        conn = connect(db_path)
+        c = conn.cursor()
+
+        win_text_cap_tab = "WindowCaptureTextIndex_content"
+        joined_q = f"""
+        SELECT t1.c1, t2.c2
+        FROM {win_text_cap_tab} AS t1
+        JOIN {win_text_cap_tab} AS t2 ON t1.c0 = t2.c0
+        WHERE t1.c1 IS NOT NULL AND t2.c2 IS NOT NULL;
+        """
+        c.execute(joined_q)
+        window_content = c.fetchall()
+
+        window_q = f"SELECT c1 FROM {win_text_cap_tab} WHERE c1 IS NOT NULL;"
+        c.execute(window_q)
+        windows = c.fetchall()
+
+        content_q = f"SELECT c2 FROM {win_text_cap_tab} WHERE c2 IS NOT NULL;"
+        c.execute(content_q)
+        content = c.fetchall()
+
+        with open(join(parent, "window_content.txt"), "w") as file:
+            file.writelines(f"{row[0]}, {row[1]}\n" for row in window_content)
+
+        with open(join(parent, "windows.txt"), "w") as file:
+            file.writelines(f"{row[0]}\n" for row in windows)
+
+        with open(join(parent, "content.txt"), "w") as file:
+            file.writelines(f"{row[0]}\n" for row in content)
+            
+    def rename_screenshots(self, path):
+        self.logger.debug(f"Renaming screenshots at {path}")
+        files = glob(f"{path}/*/ImageStore/*")
         self.logger.debug(f"Files to rename: {files}")
         for file in files:
             directory, filename = split(file)
             if not splitext(filename)[1]:
                 rename(file, join(directory, f"{filename}.jpg"))
+    
+    def writelines(self, file, lines):
+        file.writelines(lines)
