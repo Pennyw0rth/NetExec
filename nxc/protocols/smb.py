@@ -7,7 +7,7 @@ from Cryptodome.Hash import MD4
 
 from impacket.smbconnection import SMBConnection, SessionError
 from impacket.smb import SMB_DIALECT
-from impacket.smb3structs import FILE_SHARE_READ, FILE_SHARE_WRITE
+from impacket.smb3structs import FILE_READ_DATA, FILE_WRITE_DATA
 from impacket.examples.secretsdump import (
     RemoteOperations,
     SAMHashes,
@@ -1283,16 +1283,14 @@ class smb(connection):
         for src, dest in self.args.put_file:
             self.put_file_single(src, dest)
             
-    def download_file(self, share_name, remote_path, dest_file, dest_path, access_mode=FILE_SHARE_READ):
+    def download_file(self, share_name, remote_path, dest_file, access_mode=FILE_READ_DATA):
         try:
-            self.logger.debug(f"Getting file from {share_name} {remote_path} to {dest_path} with access mode {access_mode}")
+            self.logger.debug(f"Getting file from {share_name}:{remote_path} with access mode {access_mode}")
             self.conn.getFile(share_name, remote_path, dest_file, shareAccessMode=access_mode)
             return True
         except SessionError as e:
             if "STATUS_SHARING_VIOLATION" in str(e):
-                self.logger.debug(f"Sharing violation on {remote_path}")
-            if os.path.getsize(dest_path) == 0:
-                os.remove(dest_path)
+                self.logger.debug(f"Sharing violation on {remote_path}: {e}")
             return False
         except Exception as e:
             self.logger.debug(f"Other error when attempting to download file {remote_path}: {e}")
@@ -1304,14 +1302,15 @@ class smb(connection):
         if self.args.append_host:
             download_path = f"{self.hostname}-{remote_path}"
         with open(download_path, "wb+") as file:
-            if self.download_file(share_name, remote_path, file.write, download_path):
+            if self.download_file(share_name, remote_path, file.write):
                 self.logger.success(f"File '{remote_path}' was downloaded to '{download_path}'")
             else:
                 self.logger.debug("Opening with READ alone failed, trying to open file with READ/WRITE access")
-                if not self.download_file(share_name, remote_path, file.write, download_path, FILE_SHARE_READ | FILE_SHARE_WRITE):
+                if self.download_file(share_name, remote_path, file.write, FILE_READ_DATA | FILE_WRITE_DATA):
+                    self.logger.success(f"File '{remote_path}' was downloaded to '{download_path}'")
+                else:
                     self.logger.fail(f"Error downloading file '{remote_path}' from share '{share_name}'")
-            
-
+                    
     def get_file(self):
         for src, dest in self.args.get_file:
             self.get_file_single(src, dest)
