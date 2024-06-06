@@ -9,11 +9,11 @@ class NXCModule:
     Recall
     -------
     Module by @Marshall-Hallenbeck (@mjhallenbeck on Twitter)
-    Inspired by https://github.com/xaitax/TotalRecall
+    Inspired by https://github.com/xaitax/TotalRecall (code my own)
     """
 
     name = "recall"
-    description = "Grab all Microsoft Recall"
+    description = "Downloads Microsoft Recall folders for all users"
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
@@ -26,8 +26,6 @@ class NXCModule:
         self.context = context
         self.logger = context.log
         self.recall_path = "\\AppData\\Local\\CoreAIPlatform.00\\UKP\\"
-        
-
 
     def on_admin_login(self, context, connection):
         output_path = f"recall_{connection.host}"
