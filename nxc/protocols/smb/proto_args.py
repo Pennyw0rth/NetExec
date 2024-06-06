@@ -61,8 +61,6 @@ def proto_args(parser, parents):
     segroup = spidering_group.add_mutually_exclusive_group()
     segroup.add_argument("--pattern", nargs="+", help="pattern(s) to search for in folders, filenames and file content")
     segroup.add_argument("--regex", nargs="+", help="regex(s) to search for in folders, filenames and file content")
-    segroup.add_argument("--depth", type=int, default=None, help="max spider recursion depth (default: infinity & beyond)")
-    segroup.add_argument("--only-files", action="store_true", help="only spider files")
 
     files_group = smb_parser.add_argument_group("Files", "Options for remote file interaction")
     files_group.add_argument("--put-file", action="append", nargs=2, metavar="FILE", help="Put a local file into remote target, ex: whoami.txt \\\\Windows\\\\Temp\\\\whoami.txt")

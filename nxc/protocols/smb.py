@@ -7,6 +7,7 @@ from Cryptodome.Hash import MD4
 
 from impacket.smbconnection import SMBConnection, SessionError
 from impacket.smb import SMB_DIALECT
+from impacket.smb3structs import FILE_SHARE_READ, FILE_SHARE_WRITE
 from impacket.examples.secretsdump import (
     RemoteOperations,
     SAMHashes,
@@ -1281,20 +1282,35 @@ class smb(connection):
     def put_file(self):
         for src, dest in self.args.put_file:
             self.put_file_single(src, dest)
-
+            
+    def download_file(self, share_name, remote_path, dest_file, dest_path, access_mode=FILE_SHARE_READ):
+        try:
+            self.logger.debug(f"Getting file from {share_name} {remote_path} to {dest_path} with access mode {access_mode}")
+            self.conn.getFile(share_name, remote_path, dest_file, shareAccessMode=access_mode)
+            return True
+        except SessionError as e:
+            if "STATUS_SHARING_VIOLATION" in str(e):
+                self.logger.debug(f"Sharing violation on {remote_path}")
+            if os.path.getsize(dest_path) == 0:
+                os.remove(dest_path)
+            return False
+        except Exception as e:
+            self.logger.debug(f"Other error when attempting to download file {remote_path}: {e}")
+            return False
+            
     def get_file_single(self, remote_path, download_path):
         share_name = self.args.share
-        self.logger.display(f'Copying "{remote_path}" to "{download_path}"')
+        self.logger.display(f"Copying '{remote_path}' to '{download_path}'")
         if self.args.append_host:
             download_path = f"{self.hostname}-{remote_path}"
         with open(download_path, "wb+") as file:
-            try:
-                self.conn.getFile(share_name, remote_path, file.write)
-                self.logger.success(f'File "{remote_path}" was downloaded to "{download_path}"')
-            except Exception as e:
-                self.logger.fail(f'Error writing file "{remote_path}" from share "{share_name}": {e}')
-                if os.path.getsize(download_path) == 0:
-                    os.remove(download_path)
+            if self.download_file(share_name, remote_path, file.write, download_path):
+                self.logger.success(f"File '{remote_path}' was downloaded to '{download_path}'")
+            else:
+                self.logger.debug("Opening with READ alone failed, trying to open file with READ/WRITE access")
+                if not self.download_file(share_name, remote_path, file.write, download_path, FILE_SHARE_READ | FILE_SHARE_WRITE):
+                    self.logger.fail(f"Error downloading file '{remote_path}' from share '{share_name}'")
+            
 
     def get_file(self):
         for src, dest in self.args.get_file:
@@ -1323,7 +1339,10 @@ class smb(connection):
                     self.logger.debug(f"{dest=} {remote_file_path=} {relative_path=} {local_folder_path=} {local_file_path=}")
                     
                     os.makedirs(local_folder_path, exist_ok=True)
-                    self.get_file_single(remote_file_path, local_file_path)
+                    try:
+                        self.get_file_single(remote_file_path, local_file_path)
+                    except FileNotFoundError:
+                        self.logger.fail(f"Error downloading file '{remote_file_path}' due to file not found (probably a race condition between listing and downloading)")
 
     def get_folder(self):
         recursive = self.args.recursive        
