@@ -24,9 +24,13 @@ class NXCModule:
         self.module_options = None
 
     def options(self, context, module_options):
+        """
+        USERS           Download only specified user(s); format: -o USERS=user1,user2,user3
+        """
         self.context = context
         self.logger = context.log
         self.recall_path_stub = "\\AppData\\Local\\CoreAIPlatform.00\\UKP\\"
+        self.users = module_options["USERS"].split() if "USER" in module_options else None
 
     def on_admin_login(self, context, connection):
         output_path = f"recall_{connection.host}"
@@ -44,6 +48,9 @@ class NXCModule:
             folder_name = user_folder.get_longname()
             self.logger.debug(f"Folder: {folder_name}")
             if folder_name in [".", "..", "All Users", "Default", "Default User", "Public"]:
+                continue
+            if self.users and folder_name not in self.users:
+                self.logger.debug(f"Specific users are specified and {folder_name} is not one of them")
                 continue
             
             recall_path = ntpath.normpath(join(r"Users", folder_name, self.recall_path_stub))
