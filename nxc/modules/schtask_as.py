@@ -19,13 +19,15 @@ class NXCModule:
         CMD            Command to execute
         USER           User to execute command as
         """
-        self.cmd = self.user = self.time = None
+        self.cmd = self.user = self.task = self.time = None
         if "CMD" in module_options:
             self.cmd = module_options["CMD"]
 
         if "USER" in module_options:
             self.user = module_options["USER"]
-
+        if "TASK" in module_options:
+            self.task = module_options["TASK"]
+            
     name = "schtask_as"
     description = "Remotely execute a scheduled task as a logged on user"
     supported_protocols = ["smb"]
@@ -51,6 +53,7 @@ class NXCModule:
                 connection.domain,
                 self.user,
                 self.cmd,
+                self.task,
                 connection.kerberos,
                 connection.aesKey,
                 connection.host,
@@ -79,7 +82,7 @@ class NXCModule:
 
 
 class TSCH_EXEC:
-    def __init__(self, target, share_name, username, password, domain, user, cmd, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
+    def __init__(self, target, share_name, username, password, domain, user, cmd, task2, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -99,6 +102,7 @@ class TSCH_EXEC:
         self.logger = logger
         self.cmd = cmd
         self.user = user
+        self.task = task2
 
         if hashes is not None:
             if hashes.find(":") != -1:
@@ -181,7 +185,13 @@ class TSCH_EXEC:
       <Command>cmd.exe</Command>
 """
         if self.__retOutput:
-            self.__output_filename = f"\\Windows\\Temp\\{gen_random_string(6)}"
+            if self.task is None:
+              self.__output_filename = f"\\Windows\\Temp\\{gen_random_string(6)}"
+            else: 	
+              self.__output_filename = f"\\Windows\\Temp\\{self.task}"
+            
+            
+            #self.__output_filename = f"\\Windows\\Temp\\{gen_random_string(6)}"
             if fileless:
                 local_ip = self.__rpctransport.get_socket().getsockname()[0]
                 argument_xml = f"      <Arguments>/C {command} &gt; \\\\{local_ip}\\{self.__share_name}\\{self.__output_filename} 2&gt;&amp;1</Arguments>"
@@ -208,13 +218,16 @@ class TSCH_EXEC:
         dce.set_credentials(*self.__rpctransport.get_credentials())
         dce.connect()
 
-        tmpName = gen_random_string(8)
-
+        #tmpName = gen_random_string(8)
+        if self.task is None:
+            tmpName = f"{gen_random_string(8)}"
+        else: 	
+            tmpName = f"{self.task}"
         xml = self.gen_xml(command, fileless)
 
         self.logger.info(f"Task XML: {xml}")
         taskCreated = False
-        self.logger.info(f"Creating task \\{tmpName}")
+        self.logger.display(f"Creating task \\{tmpName}")
         try:
             # windows server 2003 has no MSRPC_UUID_TSCHS, if it bind, it will return abstract_syntax_not_supported
             dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
@@ -266,7 +279,7 @@ class TSCH_EXEC:
                 tries = 1
                 while True:
                     try:
-                        self.logger.info(f"Attempting to read {self.__share}\\{self.__output_filename}")
+                        self.logger.display(f"Attempting to read {self.__share}\\{self.__output_filename}")
                         smbConnection.getFile(self.__share, self.__output_filename, self.output_callback)
                         break
                     except Exception as e:
