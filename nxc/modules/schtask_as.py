@@ -220,7 +220,7 @@ class TSCH_EXEC:
 
         #tmpName = gen_random_string(8)
         if self.task is None:
-            tmpName = f"{gen_random_string(8)}"
+            tmpName = gen_random_string(8)}
         else: 	
             tmpName = f"{self.task}"
         xml = self.gen_xml(command, fileless)
