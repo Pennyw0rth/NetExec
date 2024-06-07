@@ -104,6 +104,3 @@ class NXCModule:
             directory, filename = split(file)
             if not splitext(filename)[1]:
                 rename(file, join(directory, f"{filename}.jpg"))
-    
-    def writelines(self, file, lines):
-        file.writelines(lines)
