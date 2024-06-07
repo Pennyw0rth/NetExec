@@ -214,10 +214,7 @@ class TSCH_EXEC:
 
         dce.set_credentials(*self.__rpctransport.get_credentials())
         dce.connect()
-        if self.task is None:
-            tmpName = gen_random_string(8)
-        else: 	
-            tmpName = self.task
+        tmpName = gen_random_string(8) if self.task is None else self.task
         xml = self.gen_xml(command, fileless)
 
         self.logger.info(f"Task XML: {xml}")
