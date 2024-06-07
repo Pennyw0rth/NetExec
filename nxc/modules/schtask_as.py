@@ -186,12 +186,9 @@ class TSCH_EXEC:
 """
         if self.__retOutput:
             if self.task is None:
-              self.__output_filename = f"\\Windows\\Temp\\{gen_random_string(6)}"
+                self.__output_filename = f"\\Windows\\Temp\\{gen_random_string(6)}"
             else: 	
-              self.__output_filename = f"\\Windows\\Temp\\{self.task}"
-            
-            
-            #self.__output_filename = f"\\Windows\\Temp\\{gen_random_string(6)}"
+                self.__output_filename = f"\\Windows\\Temp\\{self.task}"
             if fileless:
                 local_ip = self.__rpctransport.get_socket().getsockname()[0]
                 argument_xml = f"      <Arguments>/C {command} &gt; \\\\{local_ip}\\{self.__share_name}\\{self.__output_filename} 2&gt;&amp;1</Arguments>"
@@ -217,8 +214,6 @@ class TSCH_EXEC:
 
         dce.set_credentials(*self.__rpctransport.get_credentials())
         dce.connect()
-
-        #tmpName = gen_random_string(8)
         if self.task is None:
             tmpName = gen_random_string(8)
         else: 	
