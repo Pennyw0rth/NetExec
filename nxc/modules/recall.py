@@ -78,24 +78,40 @@ class NXCModule:
         """
         c.execute(joined_q)
         window_content = c.fetchall()
+        with open(join(parent, "window_content.txt"), "w") as file:
+            file.writelines(f"{row[0]}, {row[1]}\n" for row in window_content)
 
         window_q = f"SELECT c1 FROM {win_text_cap_tab} WHERE c1 IS NOT NULL;"
         c.execute(window_q)
         windows = c.fetchall()
+        with open(join(parent, "windows.txt"), "w") as file:
+            file.writelines(f"{row[0]}\n" for row in windows)
 
         content_q = f"SELECT c2 FROM {win_text_cap_tab} WHERE c2 IS NOT NULL;"
         c.execute(content_q)
         content = c.fetchall()
-
-        with open(join(parent, "window_content.txt"), "w") as file:
-            file.writelines(f"{row[0]}, {row[1]}\n" for row in window_content)
-
-        with open(join(parent, "windows.txt"), "w") as file:
-            file.writelines(f"{row[0]}\n" for row in windows)
-
         with open(join(parent, "content.txt"), "w") as file:
             file.writelines(f"{row[0]}\n" for row in content)
+        
+        web_tab = "Web"
+        web_q = f"""
+        SELECT Uri FROM {web_tab};
+        """
+        c.execute(web_q)
+        uris = c.fetchall()
+        with open(join(parent, "uris.txt"), "w") as file:
+            file.writelines(f"{row[0]}\n" for row in uris)
             
+        app_tab = "App"
+        app_q = f"""
+        SELECT Name, WindowsAppId, Path FROM {app_tab};
+        """
+        c.execute(app_q)
+        apps = c.fetchall()
+        with open(join(parent, "apps.txt"), "w") as file:
+            file.writelines(f"{row[0]}, {row[1]}, {row[2]}\n" for row in apps)
+
+    
     def rename_screenshots(self, path):
         self.logger.debug(f"Renaming screenshots at {path}")
         files = glob(f"{path}/*/ImageStore/*")
