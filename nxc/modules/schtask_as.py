@@ -222,7 +222,7 @@ class TSCH_EXEC:
         if self.task is None:
             tmpName = gen_random_string(8)
         else: 	
-            tmpName = f"{self.task}"
+            tmpName = self.task
         xml = self.gen_xml(command, fileless)
 
         self.logger.info(f"Task XML: {xml}")
