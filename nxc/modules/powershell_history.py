@@ -11,7 +11,7 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """Export all the history with -o export=enable"""
+        """Define module options."""
         context.log.info(f"Received module options: {module_options}")
         self.export = module_options.get('EXPORT', 'disable').lower()
         context.log.info(f"Option export set to: {self.export}")
@@ -36,7 +36,7 @@ class NXCModule:
             "password", "passwd", "secret", "credential", "key",
             "get-credential", "convertto-securestring", "set-localuser",
             "new-localuser", "set-adaccountpassword", "new-object system.net.webclient",
-            "invoke-webrequest", "invoke-restmethod", "pass"
+            "invoke-webrequest", "invoke-restmethod"
         ]
         sensitive_commands = []
         for command in history:
@@ -72,6 +72,9 @@ class NXCModule:
                         for cmd in history:
                             file.write(cmd + "\n")
                     context.log.info(f"History written to {filename}")
+                    # Print the full path to the file
+                    full_path = os.path.abspath(filename)
+                    print(f"PowerShell history written to: {full_path}")
                 except Exception as e:
                     context.log.fail(f"Failed to write history to {filename}: {e}")
 
