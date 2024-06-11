@@ -251,6 +251,7 @@ conf = {
             "name": "Cortex",
             "services": [{"name": "xdrhealth", "description": "Cortex XDR Health Helper"}],
             "services": [{"name": "cyserver", "description": " Cortex XDR"}],
+            "pipes": []
         },
         {
             "name": "Cybereason",
