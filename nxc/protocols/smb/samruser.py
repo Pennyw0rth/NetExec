@@ -166,6 +166,7 @@ class UserSamrDump:
         return users
 
     def print_user_info(self, users):
+        self.logger.success("Enumerated local users")
         self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
         for user in users:
             self.logger.debug(f"Full user info: {user}")
