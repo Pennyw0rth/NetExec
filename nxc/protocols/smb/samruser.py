@@ -78,10 +78,11 @@ class UserSamrDump:
         if resp2["ErrorCode"] != 0:
             raise Exception("Connect error")
 
+        domain_name = resp2["Buffer"]["Buffer"][0]["Name"]
         resp3 = samr.hSamrLookupDomainInSamServer(
             self.dce,
             serverHandle=resp["ServerHandle"],
-            name=resp2["Buffer"]["Buffer"][0]["Name"],
+            name=domain_name,
         )
         if resp3["ErrorCode"] != 0:
             raise Exception("Connect error")
@@ -132,7 +133,7 @@ class UserSamrDump:
                 # set these for the while loop
                 enumerationContext = enumerate_users_resp["EnumerationContext"]
                 status = enumerate_users_resp["ErrorCode"]
-        self.print_user_info(users)
+        self.print_user_info(users, domain_name)
         self.dce.disconnect()
 
     def get_user_info(self, domain_handle, user_ids):
@@ -165,8 +166,8 @@ class UserSamrDump:
             samr.hSamrCloseHandle(self.dce, open_user_resp["UserHandle"])
         return users
 
-    def print_user_info(self, users):
-        self.logger.display(f"Enumerated {len(users):d} local users")
+    def print_user_info(self, users, domain_name):
+        self.logger.display(f"Enumerated {len(users):d} local users: {domain_name}")
         self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
         for user in users:
             self.logger.debug(f"Full user info: {user}")
