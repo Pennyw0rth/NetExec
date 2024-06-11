@@ -18,9 +18,9 @@ class NXCModule:
         """
         CMD            Command to execute
         USER           User to execute command as
-        TASK           Set a name for the scheduled task name
-        FILE           Set a name for the command output file
-        LOCATION       Set a location for the command output file
+        TASK           OPTIONAL: Set a name for the scheduled task name
+        FILE           OPTIONAL: Set a name for the command output file
+        LOCATION       OPTIONAL: Set a location for the command output file
         """
         self.cmd = self.user = self.task = self.file = self.location = self.time = None
         if "CMD" in module_options:
@@ -94,7 +94,7 @@ class NXCModule:
 
 
 class TSCH_EXEC:
-    def __init__(self, target, share_name, username, password, domain, user, cmd, file2, task2, location, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
+    def __init__(self, target, share_name, username, password, domain, user, cmd, file, task, location, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -114,8 +114,8 @@ class TSCH_EXEC:
         self.logger = logger
         self.cmd = cmd
         self.user = user
-        self.file = file2
-        self.task = task2
+        self.file = file
+        self.task = task
         self.location = location
         
 
@@ -235,7 +235,7 @@ class TSCH_EXEC:
 
         self.logger.info(f"Task XML: {xml}")
         taskCreated = False
-        self.logger.display(f"Creating task \\{tmpName}")
+        self.logger.info(f"Creating task \\{tmpName}")
         try:
             # windows server 2003 has no MSRPC_UUID_TSCHS, if it bind, it will return abstract_syntax_not_supported
             dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
@@ -287,7 +287,7 @@ class TSCH_EXEC:
                 tries = 1
                 while True:
                     try:
-                        self.logger.display(f"Attempting to read {self.__share}\\{self.__output_filename}")
+                        self.logger.info(f"Attempting to read {self.__share}\\{self.__output_filename}")
                         smbConnection.getFile(self.__share, self.__output_filename, self.output_callback)
                         break
                     except Exception as e:
