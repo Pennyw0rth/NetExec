@@ -752,7 +752,7 @@ class ldap(connection):
 
             users = parse_result_attributes(resp)
             # we print the total records after we parse the results since often SearchResultReferences are returned
-            self.logger.success(f"Enumerated {len(users):d} domain users: {self.domain}")
+            self.logger.display(f"Enumerated {len(users):d} domain users: {self.domain}")
             self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
             for user in users:
                 # TODO: functionize this - we do this calculation in a bunch of places, different, including in the `pso` module
