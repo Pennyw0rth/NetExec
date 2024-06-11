@@ -11,8 +11,10 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """Define module options."""
-        pass
+        """Export all the history with -o export=enable"""
+        context.log.info(f"Received module options: {module_options}")
+        self.export = module_options.get('EXPORT', 'disable').lower()
+        context.log.info(f"Option export set to: {self.export}")
 
     def execute_command(self, connection, command):
         """Execute a command on the remote system and return the output."""
@@ -34,7 +36,7 @@ class NXCModule:
             "password", "passwd", "secret", "credential", "key",
             "get-credential", "convertto-securestring", "set-localuser",
             "new-localuser", "set-adaccountpassword", "new-object system.net.webclient",
-            "invoke-webrequest", "invoke-restmethod"
+            "invoke-webrequest", "invoke-restmethod", "pass"
         ]
         sensitive_commands = []
         for command in history:
@@ -58,12 +60,20 @@ class NXCModule:
                     context.log.info("No sensitive commands found in PowerShell history.")
             else:
                 context.log.info("No PowerShell history found.")
-            
-            # Write history to file in current directory
-            with open("powershell_history.txt", "w") as file:
-                for cmd in history:
-                    file.write(cmd + "\n")
-            print("History written to powershell_history.txt")
+
+            # Check if export is enabled
+            context.log.info(f"Export option is set to: {self.export}")
+            if self.export == 'enable':
+                host = connection.host  # Assuming 'host' contains the target IP or hostname
+                filename = f"{host}.powershell_history.txt"
+                context.log.info(f"Export enabled, writing history to {filename}")
+                try:
+                    with open(filename, "w") as file:
+                        for cmd in history:
+                            file.write(cmd + "\n")
+                    context.log.info(f"History written to {filename}")
+                except Exception as e:
+                    context.log.fail(f"Failed to write history to {filename}: {e}")
 
         except Exception as e:
             context.log.fail(f"UNEXPECTED ERROR: {e}")
