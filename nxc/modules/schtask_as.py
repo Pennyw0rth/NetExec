@@ -200,10 +200,7 @@ class TSCH_EXEC:
       <Command>cmd.exe</Command>
 """
         if self.__retOutput:
-            if self.location is None:
-                fileLocation = "\\Windows\\Temp\\"
-            else:
-                fileLocation = self.location
+            fileLocation = "\\Windows\\Temp\\" if self.location is None else self.location
             if self.file is None:
                 self.__output_filename = f"{fileLocation}{gen_random_string(6)}"
             else: 	
