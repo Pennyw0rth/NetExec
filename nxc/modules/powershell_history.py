@@ -1,4 +1,5 @@
 import traceback
+import os
 from impacket.examples.secretsdump import RemoteOperations
 
 class NXCModule:
@@ -11,7 +12,7 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """Define module options."""
+        """To export all the history you can add the following option: -o export=enable"""
         context.log.info(f"Received module options: {module_options}")
         self.export = module_options.get('EXPORT', 'disable').lower()
         context.log.info(f"Option export set to: {self.export}")
