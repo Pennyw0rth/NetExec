@@ -7,24 +7,20 @@ import re
 
 class nfs(connection):
     def __init__(self, args, db, host):
-        # Setting up NFS protocol attributes
         self.protocol = "nfs"
         self.port = 111
         self.portmap = None
         self.mnt_port = None
         self.mount = None
         self.auth = {"flavor": 1,
-        "machine_name": "host1",
-        "uid": 0,
-        "gid": 0,
-        "aux_gid": [],
+            "machine_name": "host1",
+            "uid": 0,
+            "gid": 0,
+            "aux_gid": [],
         }
-
         connection.__init__(self, args, db, host)
 
-
     def proto_logger(self):
-        # Initializing logger for NFS protocol
         self.logger = NXCAdapter(
             extra={
                 "protocol": "NFS",
@@ -35,7 +31,7 @@ class nfs(connection):
         )
     
     def plaintext_login(self, username, password):
-        # Doing as Anonymously now.
+        # Uses Anonymous access for now
         try:
             if self.initialization():
                 self.logger.success("Initialization is successfull!")
@@ -46,7 +42,7 @@ class nfs(connection):
             self.disconnection()
     
     def create_conn_obj(self):
-        # Creating and connecting socket to NFS host
+        """Creates and connects a socket to the NFS host"""
         try:
             self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.client.connect((self.host, self.port))
@@ -58,7 +54,6 @@ class nfs(connection):
         
     def enum_host_info(self):
         self.initialization()
-        # Enumerating host information
         try:
             # Dump all registered programs
             programs = self.portmap.dump()
@@ -76,13 +71,12 @@ class nfs(connection):
             self.disconnection()
         
     def print_host_info(self):
-        # Printing host banner information
         self.logger.display(f"Target supported NFS versions {self.nfs_versions}")
         return True
         
     def disconnection(self):
+        """Disconnect mount and portmap if they are connected"""
         try:
-            # Disconnecting from NFS host
             if self.mount():
                 self.mount.disconnect()
             if self.portmap():
@@ -92,6 +86,7 @@ class nfs(connection):
             self.logger.debug(f"Error during disconnection: {e}")
         
     def initialization(self):
+        """Initializes and connects to the portmap and mounted folder"""
         try:
             # Portmap Initialization
             self.portmap = Portmap(self.host, timeout=3600)
@@ -106,10 +101,9 @@ class nfs(connection):
         except Exception as e:
             self.logger.debug(f"Error during Initialization: {e}")
         
-    def listdir(self, nfs, file_handle, path, recurse=1):
-        # Process entries in NFS directory recursively.
+    def list_dir(self, nfs, file_handle, path, recurse=1):
+        """Process entries in NFS directory recursively"""
         def process_entries(entries, path, recurse):
-        
             try:
                 contents = []
                 for entry in entries:
@@ -119,7 +113,7 @@ class nfs(connection):
                             entry_type = entry["name_attributes"]["attributes"].get("type")                    
                             if entry_type == 2 and recurse > 0:  # Recursive directory listing. Entry type shows file format. 1 is file, 2 is folder.
                                 dir_handle = entry["name_handle"]["handle"]["data"]
-                                contents += self.listdir(nfs, dir_handle, item_path, recurse=recurse - 1)
+                                contents += self.list_dir(nfs, dir_handle, item_path, recurse=recurse - 1)
                             else:
                                 contents.append(item_path)
                     
@@ -129,10 +123,8 @@ class nfs(connection):
                         contents += process_entries(entry["nextentry"], path, recurse)
                 
                 return contents
-                
             except Exception as e:
                 self.logger.debug(f"Error on Listing Entries for NFS Shares: {self.host}:{self.port} {e}")
-
         try:
             if recurse == 0:
                 return [path + "/"]
@@ -145,8 +137,7 @@ class nfs(connection):
             self.logger.debug(f"Error on Listing NFS Shares Directories: {self.host}:{self.port} {e}")
 
     def export_info(self, export_nodes):
-        # This func for finding filtering all NFS shares and their access range. Using for shares func.
-        
+        """Filters all NFS shares and their access range"""
         result = []
         for node in export_nodes:
             ex_dir = node.ex_dir.decode()
@@ -157,12 +148,10 @@ class nfs(connection):
             # If there are more export nodes, process them recursively. More than one share.
             if node.ex_next:
                 result.extend(self.export_info(node.ex_next))
-        
         return result
 
     def group_names(self, groups):
-        # This func for finding all access range of the share(s). Using for shares func.
-        
+        """Findings all access range of the share(s)"""
         result = []
         for group in groups:
             result.append(group.gr_name.decode())
@@ -175,13 +164,9 @@ class nfs(connection):
     
     def shares(self):
         try:
-            # Initializing NFS services
             self.initialization()
-            
-            # Exporting NFS Shares
             for mount in self.export_info(self.mount.export()):
                 self.logger.highlight(mount)
-
         except Exception as e:
             self.logger.debug(f"Error on Enumeration NFS Shares: {self.host}:{self.port} {e}")
         finally:
@@ -190,8 +175,6 @@ class nfs(connection):
     def shares_list(self):
         try:
             self.initialization()
-            
-            # NFS Initialization
             nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
             self.nfs3 = NFSv3(self.host, nfs_port, 3600, self.auth)
             self.nfs3.connect()
@@ -207,16 +190,14 @@ class nfs(connection):
             for export in output_name:
                 try:
                     mount_info = self.mount.mnt(export, self.auth)
-                    contents += self.listdir(self.nfs3, mount_info["mountinfo"]["fhandle"], export)
+                    contents += self.list_dir(self.nfs3, mount_info["mountinfo"]["fhandle"], export)
                 except Exception as e:
                     self.logger.fail(f"Can not reaching file(s) on {export}")
                     self.logger.debug(f"Error on Enum NFS Share {export}: {self.host}:{self.port} {e}")
                     self.logger.debug("It is probably unknown format or can not access as anonymously.")
                     continue
-                
             for shares in contents:
                 self.logger.highlight(shares)
-                
         except Exception as e:
             self.logger.debug(f"Error on Listing NFS Shares: {self.host}:{self.port} {e}")
         finally:
