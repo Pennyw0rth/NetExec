@@ -14,16 +14,17 @@ class database:
     def __init__(self, db_engine):
         self.CredentialsTable = None
         self.HostsTable = None
+        self.LoggedinRelationsTable = None
+        self.SharesTable = None
 
         self.db_engine = db_engine
         self.db_path = self.db_engine.url.database
         self.protocol = Path(self.db_path).stem.upper()
         self.metadata = MetaData()
         self.reflect_tables()
+        
         session_factory = sessionmaker(bind=self.db_engine, expire_on_commit=True)
-
         Session = scoped_session(session_factory)
-        # this is still named "conn" when it is the session object; TODO: rename
         self.sess = Session()
 
     @staticmethod
