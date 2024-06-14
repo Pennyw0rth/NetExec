@@ -1,5 +1,6 @@
 data/nxc.db
 hash_spider_default.sqlite3
+hash_spider_testing.sqlite3
 *.bak
 *.log
 .venv

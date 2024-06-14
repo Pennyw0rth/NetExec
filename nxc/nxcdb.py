@@ -513,6 +513,11 @@ class NXCDBMenu(cmd.Cmd):
         sys.exit()
 
     @staticmethod
+    def do_EOF(line):
+        sys.exit()
+
+
+    @staticmethod
     def help_exit():
         help_string = """
         Exits

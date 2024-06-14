@@ -25,6 +25,8 @@ class UserSamrDump:
         self.nthash = ""
         self.aesKey = connection.aesKey
         self.doKerberos = connection.kerberos
+        self.host = connection.host
+        self.kdcHost = connection.kdcHost
         self.protocols = UserSamrDump.KNOWN_PROTOCOLS.keys()
         self.users = []
         self.rpc_transport = None
@@ -49,8 +51,7 @@ class UserSamrDump:
                 self.logger.debug(f"Invalid Protocol: {protocol}")
 
             self.logger.debug(f"Trying protocol {protocol}")
-            self.rpc_transport = transport.SMBTransport(self.addr, port, r"\samr", self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey, doKerberos=self.doKerberos)
-
+            self.rpc_transport = transport.SMBTransport(self.addr, port, r"\samr", self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey, doKerberos=self.doKerberos, kdcHost=self.kdcHost, remote_host=self.host)
             try:
                 self.fetch_users(requested_users)
                 break
@@ -77,10 +78,11 @@ class UserSamrDump:
         if resp2["ErrorCode"] != 0:
             raise Exception("Connect error")
 
+        domain_name = resp2["Buffer"]["Buffer"][0]["Name"]
         resp3 = samr.hSamrLookupDomainInSamServer(
             self.dce,
             serverHandle=resp["ServerHandle"],
-            name=resp2["Buffer"]["Buffer"][0]["Name"],
+            name=domain_name,
         )
         if resp3["ErrorCode"] != 0:
             raise Exception("Connect error")
@@ -131,7 +133,7 @@ class UserSamrDump:
                 # set these for the while loop
                 enumerationContext = enumerate_users_resp["EnumerationContext"]
                 status = enumerate_users_resp["ErrorCode"]
-        self.print_user_info(users)
+        self.print_user_info(users, domain_name)
         self.dce.disconnect()
 
     def get_user_info(self, domain_handle, user_ids):
@@ -164,7 +166,8 @@ class UserSamrDump:
             samr.hSamrCloseHandle(self.dce, open_user_resp["UserHandle"])
         return users
 
-    def print_user_info(self, users):
+    def print_user_info(self, users, domain_name):
+        self.logger.display(f"Enumerated {len(users):d} local users: {domain_name}")
         self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
         for user in users:
             self.logger.debug(f"Full user info: {user}")

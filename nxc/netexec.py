@@ -23,6 +23,8 @@ from os.path import join as path_join
 from sys import exit
 from rich.progress import Progress
 import platform
+if sys.stdout.encoding == "cp1252":
+    sys.stdout.reconfigure(encoding="utf-8")
 
 # Increase file_limit to prevent error "Too many open files"
 if platform.system() != "Windows":
@@ -213,6 +215,9 @@ def main():
         ans = input(highlight("[!] Dumping the ntds can crash the DC on Windows Server 2019. Use the option --user <user> to dump a specific user safely or the module -M ntdsutil [Y/n] ", "red"))
         if ans.lower() not in ["y", "yes", ""]:
             exit(1)
+
+    if args.jitter and len(targets) > 1:
+        nxc_logger.highlight(highlight("[!] Jitter is only throttling authentications per target!", "red"))
 
     try:
         asyncio.run(start_run(protocol_object, args, db, targets))
