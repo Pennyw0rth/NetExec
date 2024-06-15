@@ -273,7 +273,7 @@ class smb(connection):
             self.conn.logoff()
         except Exception as e:
             self.logger.debug(f"Error logging off system: {e}")
-        
+
         # DCOM connection with kerberos needed
         self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
 
@@ -707,11 +707,11 @@ class smb(connection):
             except UnicodeDecodeError:
                 self.logger.debug("Decoding error detected, consider running chcp.com at the target, map the result with https://docs.python.org/3/library/codecs.html#standard-encodings")
                 output = output.decode("cp437")
-                
+
             self.logger.debug(f"Raw Output: {output}")
             output = "\n".join([ll.rstrip() for ll in output.splitlines() if ll.strip()])
             self.logger.debug(f"Cleaned Output: {output}")
-            
+
             if "This script contains malicious content" in output:
                 self.logger.fail("Command execution blocked by AMSI")
                 return None
@@ -732,24 +732,24 @@ class smb(connection):
         if not payload:
             self.logger.error("No command to execute specified!")
             return None
-        
+
         response = []
         obfs = obfs if obfs else self.args.obfs
         encode = encode if encode else not self.args.no_encode
         force_ps32 = force_ps32 if force_ps32 else self.args.force_ps32
         get_output = True if not self.args.no_output else get_output
-                
+
         self.logger.debug(f"Starting ps_execute(): {payload=} {get_output=} {methods=} {force_ps32=} {obfs=} {encode=}")
         amsi_bypass = self.args.amsi_bypass[0] if self.args.amsi_bypass else None
         self.logger.debug(f"AMSI Bypass: {amsi_bypass}")
-        
+
         if os.path.isfile(payload):
             self.logger.debug(f"File payload set: {payload}")
             with open(payload) as commands:
                 response = [self.execute(create_ps_command(c.strip(), force_ps32=force_ps32, obfs=obfs, custom_amsi=amsi_bypass, encode=encode), get_output, methods) for c in commands]
         else:
             response = [self.execute(create_ps_command(payload, force_ps32=force_ps32, obfs=obfs, custom_amsi=amsi_bypass, encode=encode), get_output, methods)]
-            
+
         self.logger.debug(f"ps_execute response: {response}")
         return response
 
@@ -833,7 +833,7 @@ class smb(connection):
                 continue
             self.logger.highlight(f"{name:<15} {','.join(perms):<15} {remark}")
         return permissions
-    
+
     def interfaces(self):
         """
         Retrieve the list of network interfaces info (Name, IP Address, Subnet Mask, Default Gateway) from remote Windows registry'
@@ -1370,7 +1370,7 @@ class smb(connection):
                 self.logger.success(f"Created file {src} on \\\\{self.args.share}\\{dst}")
             except Exception as e:
                 self.logger.fail(f"Error writing file to share {self.args.share}: {e}")
-    
+
     def put_file(self):
         for src, dest in self.args.put_file:
             self.put_file_single(src, dest)
@@ -1392,7 +1392,6 @@ class smb(connection):
     def get_file(self):
         for src, dest in self.args.get_file:
             self.get_file_single(src, dest)
-
 
     def enable_remoteops(self):
         try:
@@ -1476,7 +1475,7 @@ class smb(connection):
         except Exception as e:
             self.logger.debug(f"Could not upgrade connection: {e}")
             return
-        
+
         try:
             self.logger.display("Collecting Machine masterkeys, grab a coffee and be patient...")
             masterkeys_triage = MasterkeysTriage(
@@ -1491,7 +1490,7 @@ class smb(connection):
         if len(masterkeys) == 0:
             self.logger.fail("No masterkeys looted")
             return
-        
+
         self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting SCCM Credentials through {self.args.sccm}")
         try:
             # Collect Chrome Based Browser stored secrets
@@ -1680,7 +1679,6 @@ class smb(connection):
                     credential.token,
                     "Google Refresh Token",
                 )
-
 
         if dump_cookies and cookies:
             self.logger.display("Start Dumping Cookies")
