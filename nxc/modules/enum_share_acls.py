@@ -41,19 +41,12 @@ from winacl.functions.constants import SE_OBJECT_TYPE
 from winacl.dtyp.ace import FILE_ACCESS_MASK
 from termcolor import colored
 
-def get_dce_from_smb(smb_connection):
-    remote_name = smb_connection._remoteName
-    string_binding = rf"ncacn_np:{remote_name}[\pipe\lsarpc]"
+def get_dce_from_smb(conn):
+    string_binding = rf"ncacn_np:{conn.remoteName}[\pipe\lsarpc]"
     rpctransport = transport.DCERPCTransportFactory(string_binding)
-    rpctransport.set_dport(smb_connection._sess_port)
-    rpctransport.setRemoteHost(smb_connection._remoteHost)
-    rpctransport.set_credentials(
-        smb_connection._SMBConnection._SMB__userName,
-        smb_connection._SMBConnection._SMB__password,
-        smb_connection._SMBConnection._SMB__domain,
-        smb_connection._SMBConnection._SMB__lmhash,
-        smb_connection._SMBConnection._SMB__nthash
-    )
+    rpctransport.set_dport(conn.port)
+    rpctransport.setRemoteHost(conn.host)
+    rpctransport.set_credentials(conn.username, conn.password, conn.domain, conn.lmhash, conn.nthash)
     return rpctransport.get_dce_rpc()
 
 def lookup_sid(dce, sid):
@@ -204,10 +197,10 @@ def log_security_descriptor(context, file_path, descriptor_obj):
             else:
                 context.log.highlight(f"\t\t {ace_str}")
 
-def get_security_descriptor(file, smb_connection, context, share_name, file_path, filters=None):
+def get_security_descriptor(conn, file, smb_connection, context, share_name, file_path, filters=None):
     """Retrieving the security descriptor of a certain file on a share"""
     tree_id = smb_connection.connectTree(share_name)
-    dce = get_dce_from_smb(smb_connection)
+    dce = get_dce_from_smb(conn)
     desired_access = 0x00020000 # READ_CONTROL
     share_mode = 0x00000001 # FILE_SHARE_READ
     create_options = 0x00000040 # FILE_NON_DIRECTORY_FILE
@@ -259,7 +252,7 @@ def get_security_descriptor(file, smb_connection, context, share_name, file_path
         
         owner = lookup_sid(dce, str(security_descriptor_obj.Owner))
         if owner == username:
-            owner = owner + colored("Own3d!", "red")
+            owner = owner + colored("Pwn3d!", "red")
         group = lookup_sid(dce, str(security_descriptor_obj.Group))
         context.log.highlight(f"\t Owner: {owner}")
         context.log.highlight(f"\t Group: {group}")
@@ -277,9 +270,10 @@ def get_security_descriptor(file, smb_connection, context, share_name, file_path
     except SessionError as e:
         context.log.debug(e)
 
-def enumerate_files(smb_connection, share_name, current_path, context, filters=None):
+def enumerate_files(conn, smb_connection, share_name, current_path, context, filters=None):
     """Recursive function that enumerates the directories"""
     try:
+        print(f"{smb_connection=} {share_name=} {current_path=}")
         file_list = smb_connection.listPath(share_name, current_path + "*")
         for file in file_list:
             if (
@@ -289,12 +283,12 @@ def enumerate_files(smb_connection, share_name, current_path, context, filters=N
             ):
                 next_path = current_path + file.get_longname() + "/"
                 context.log.debug(f"Trying to enumrate files in {next_path}")
-                enumerate_files(smb_connection, share_name, next_path, context, filters)
+                enumerate_files(conn, smb_connection, share_name, next_path, context, filters)
             if not file.is_directory() and not file.is_system():
                 context.log.debug(f"File Found {file.get_longname()}")
-                get_security_descriptor(file, smb_connection, context, share_name, current_path, filters)
+                get_security_descriptor(conn, file, smb_connection, context, share_name, current_path, filters)
     except SessionError as e:
-        context.log.debug(e)
+        context.log.error(e)
 
 
 class NXCModule:
@@ -368,4 +362,4 @@ class NXCModule:
         for share in shares:
             share_name = share["name"]
             context.log.display(f"Enumerating ACLs on share: {share_name}")
-            enumerate_files(smb_connection, share_name, "/", context, filters)
+            enumerate_files(connection, smb_connection, share_name, "/", context, filters)
