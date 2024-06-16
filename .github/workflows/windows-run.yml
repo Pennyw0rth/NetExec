@@ -6,8 +6,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
+  lint:
+    uses: ./.github/workflows/lint.yml
+  nxc-smb:
     runs-on: windows-latest
+    needs: [lint]
     # technique stolen from @Hackndo my best friend for life <3
     steps:
       - name: Create new user
@@ -35,10 +38,64 @@ jobs:
       - name: Install libraries without dev group
         run: |
           poetry install
-      - name: Dumping some credzzzzz
+      - name: Dumping sam
         run: |
-          poetry run netexec smb 127.0.0.1 -u nxc -p Pwn3d!!! --sam
-          poetry run netexec smb 127.0.0.1 -u nxc -p Pwn3d!!! --lsa
-          poetry run netexec smb 127.0.0.1 -u nxc -p Pwn3d!!! --dpapi
-          poetry run netexec smb 127.0.0.1 -u nxc -p Pwn3d!!! -M lsassy
-          poetry run netexec smb 127.0.0.1 -u nxc -p Pwn3d!!! -M procdump
+          poetry run netexec smb %COMPUTERNAME% -u nxc -p Pwn3d!!! --sam
+      - name: Dumping lsa
+        run: |
+          poetry run netexec smb %COMPUTERNAME% -u nxc -p Pwn3d!!! --lsa
+      - name: Dumping dpapi
+        run: |
+          poetry run netexec smb %COMPUTERNAME% -u nxc -p Pwn3d!!! --dpapi
+      - name: Dumping with lsassy
+        run: |
+          poetry run netexec smb %COMPUTERNAME% -u nxc -p Pwn3d!!! -M lsassy
+      - name: Exec command
+        run: |
+          poetry run netexec smb %COMPUTERNAME% -u nxc -p Pwn3d!!! -x whoami --exec-method=smbexec
+          poetry run netexec smb %COMPUTERNAME% -u nxc -p Pwn3d!!! -x whoami --exec-method=wmiexec
+          poetry run netexec smb %COMPUTERNAME% -u nxc -p Pwn3d!!! -x whoami --exec-method=atexec
+          poetry run netexec smb %COMPUTERNAME% -u nxc -p Pwn3d!!! -x whoami --exec-method=mmcexec
+      - name: Dumping with procdump
+        run: |
+          poetry run netexec --verbose smb %COMPUTERNAME% %COMPUTERNAME% %COMPUTERNAME% -u nxc -p Pwn3d!!! -M procdump
+
+  nxc-winrm:
+    runs-on: windows-latest
+    needs: [lint]
+    # technique stolen from @Hackndo my best friend for life <3
+    steps:
+      - name: Create new user
+        run: |
+          net user nxc Pwn3d!!! /add
+      - name: Add to local admin
+        run: |
+          net localgroup Administrators nxc /add
+      - name: Update registry key
+        run: |
+          REG ADD HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\system /v LocalAccountTokenFilterPolicy /t REG_DWORD /d 1 /f
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.11'
+      - name: Install poetry
+        run: |
+          pipx install poetry --python python${{ matrix.python-version }}
+          poetry --version
+          poetry env info
+      - name: Install libraries without dev group
+        run: |
+          poetry install
+      - name: Dumping sam
+        run: |
+          poetry run netexec winrm 127.0.0.1 -u nxc -p Pwn3d!!! --sam
+      - name: Dumping lsa
+        run: |
+          poetry run netexec winrm 127.0.0.1 -u nxc -p Pwn3d!!! --lsa
+      - name: Exec command
+        run: |
+          poetry run netexec winrm 127.0.0.1 -u nxc -p Pwn3d!!! -x whoami
