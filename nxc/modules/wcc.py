@@ -28,17 +28,6 @@ REG_VALUE_TYPE_32BIT_BE = 5
 REG_VALUE_TYPE_UNICODE_STRING_SEQUENCE = 7
 REG_VALUE_TYPE_64BIT_LE = 11
 
-# Setup file logger
-if "wcc_logger" not in globals():
-    wcc_logger = logging.getLogger("WCC")
-    wcc_logger.propagate = False
-    log_filename = nxc_logger.init_log_file()
-    log_filename = log_filename.replace("log_", "wcc_")
-    wcc_logger.setLevel(logging.INFO)
-    wcc_file_handler = logging.FileHandler(log_filename)
-    wcc_file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
-    wcc_logger.addHandler(wcc_file_handler)
-
 
 class ConfigCheck:
     """Class for performing the checks and holding the results"""
@@ -75,7 +64,7 @@ class ConfigCheck:
     def log(self, context):
         result = "passed" if self.ok else "did not pass"
         reasons = ", ".join(self.reasons)
-        wcc_logger.info(f'{self.connection.host}: Check "{self.name}" {result} because: {reasons}')
+        self.module.wcc_logger.info(f'{self.connection.host}: Check "{self.name}" {result} because: {reasons}')
         if self.module.quiet:
             return
 
@@ -99,6 +88,19 @@ class NXCModule:
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
+    
+    def __init__(self):
+        self.context = None
+        self.module_options = None
+        
+        self.wcc_logger = logging.getLogger("WCC")
+        self.wcc_logger.propagate = False
+        log_filename = nxc_logger.init_log_file()
+        log_filename = log_filename.replace("log_", "wcc_")
+        self.wcc_logger.setLevel(logging.INFO)
+        wcc_file_handler = logging.FileHandler(log_filename)
+        wcc_file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+        self.wcc_logger.addHandler(wcc_file_handler)
 
     def options(self, context, module_options):
         """
@@ -156,45 +158,39 @@ class HostChecker:
         self.dce = remoteOps._RemoteOperations__rrp
 
     def run(self):
-        # Prepare checks
         self.init_checks()
-
-        # Perform checks
         self.check_config()
-
-    # Check methods #
-    #################
-
+        
     def init_checks(self):
         # Declare the checks to do and how to do them
         self.checks = [
-            ConfigCheck("Last successful update", "Checks how old is the last successful update", checkers=[self.check_last_successful_update]),
-            ConfigCheck("LAPS", "Checks if LAPS is installed", checkers=[self.check_laps]),
-            ConfigCheck("Administrator's name", "Checks if Administror user name has been changed", checkers=[self.check_administrator_name]),
+            ConfigCheck("Last successful update age", "Checks how old is the last successful update", checkers=[self.check_last_successful_update]),
+            ConfigCheck("LAPS installed", "Checks if LAPS is installed", checkers=[self.check_laps]),
+            ConfigCheck("Administrator account renamed", "Checks if Administror user name has been changed", checkers=[self.check_administrator_name]),
             ConfigCheck("UAC configuration", "Checks if UAC configuration is secure", checker_args=[[self, ("HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System", "EnableLUA", 1), ("HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System", "LocalAccountTokenFilterPolicy", 0)]]),
-            ConfigCheck("Hash storage format", "Checks if storing  hashes in LM format is disabled", checker_args=[[self, ("HKLM\\System\\CurrentControlSet\\Control\\Lsa", "NoLMHash", 1)]]),
-            ConfigCheck("Always install elevated", "Checks if AlwaysInstallElevated is disabled", checker_args=[[self, ("HKCU\\SOFTWARE\\Policies\\Microsoft\\Windows\\Installer", "AlwaysInstallElevated", 0)]]),
-            ConfigCheck("IPv6 preference", "Checks if IPv6 is preferred over IPv4", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters", "DisabledComponents", (32, 255), in_)]]),
-            ConfigCheck("Spooler service", "Checks if the spooler service is disabled", checkers=[self.check_spooler_service]),
-            ConfigCheck("WDigest authentication", "Checks if WDigest authentication is disabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest", "UseLogonCredential", 0)]]),
+            ConfigCheck("LM hash storage disabled", "Checks if storing  hashes in LM format is disabled", checker_args=[[self, ("HKLM\\System\\CurrentControlSet\\Control\\Lsa", "NoLMHash", 1)]]),
+            ConfigCheck("Always install elevated disabled", "Checks if AlwaysInstallElevated is disabled", checker_args=[[self, ("HKCU\\SOFTWARE\\Policies\\Microsoft\\Windows\\Installer", "AlwaysInstallElevated", 0)]]),
+            ConfigCheck("IPv4 preferred over IPv6", "Checks if IPv4 is preferred over IPv6", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters", "DisabledComponents", (32, 255), in_)]]),
+            ConfigCheck("Spooler service disabled", "Checks if the spooler service is disabled", checkers=[self.check_spooler_service]),
+            ConfigCheck("WDigest authentication disabled", "Checks if WDigest authentication is disabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest", "UseLogonCredential", 0)]]),
             ConfigCheck("WSUS configuration", "Checks if WSUS configuration uses HTTPS", checkers=[self.check_wsus_running, None], checker_args=[[], [self, ("HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate", "WUServer", "https://", startswith), ("HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate", "UseWUServer", 0, operator.eq)]], checker_kwargs=[{}, {"options": {"lastWins": True}}]),
-            ConfigCheck("LSA cache", "Checks how many logons are kept in the LSA cache", checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon", "CachedLogonsCount", 2, le)]]),
-            ConfigCheck("AppLocker", "Checks if there are AppLocker rules defined", checkers=[self.check_applocker]),
+            ConfigCheck("Small LSA cache", "Checks how many logons are kept in the LSA cache", checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon", "CachedLogonsCount", 2, le)]]),
+            ConfigCheck("AppLocker rules defined", "Checks if there are AppLocker rules defined", checkers=[self.check_applocker]),
             ConfigCheck("RDP expiration time", "Checks RDP session timeout", checker_args=[[self, ("HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services", "MaxDisconnectionTime", 0, operator.gt), ("HKCU\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services", "MaxDisconnectionTime", 0, operator.gt)]]),
-            ConfigCheck("CredentialGuard", "Checks if CredentialGuard is enabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard", "EnableVirtualizationBasedSecurity", 1), ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "LsaCfgFlags", 1)]]),
-            ConfigCheck("PPL", "Checks if lsass runs as a protected process", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "RunAsPPL", 1)]]),
-            ConfigCheck("Powershell v2 availability", "Checks if powershell v2 is available", checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\PowerShell\\3\\PowerShellEngine", "PSCompatibleVersion", "2.0", not_(operator.contains))]]),
-            ConfigCheck("LmCompatibilityLevel", "Checks if LmCompatibilityLevel is set to 5", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "LmCompatibilityLevel", 5, operator.ge)]]),
-            ConfigCheck("NBTNS", "Checks if NBTNS is disabled on all interfaces", checkers=[self.check_nbtns]),
-            ConfigCheck("mDNS", "Checks if mDNS is disabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\DNScache\\Parameters", "EnableMDNS", 0)]]),
-            ConfigCheck("SMB signing", "Checks if SMB signing is enabled", checker_args=[[self, ("HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters", "requiresecuritysignature", 1)]]),
-            ConfigCheck("LDAP signing", "Checks if LDAP signing is enabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\NTDS\\Parameters", "LDAPServerIntegrity", 2), ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\NTDS", "LdapEnforceChannelBinding", 2)]]),
-            ConfigCheck("SMB encryption", "Checks if SMB encryption is enabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters", "EncryptData", 1)]]),
+            ConfigCheck("CredentialGuard enabled", "Checks if CredentialGuard is enabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard", "EnableVirtualizationBasedSecurity", 1), ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "LsaCfgFlags", 1)]]),
+            ConfigCheck("Lsass run as PPL", "Checks if lsass runs as a protected process", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "RunAsPPL", 1)]]),
+            ConfigCheck("No Powershell v2", "Checks if powershell v2 is available", checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\PowerShell\\3\\PowerShellEngine", "PSCompatibleVersion", "2.0", not_(operator.contains))]]),
+            ConfigCheck("LmCompatibilityLevel == 5", "Checks if LmCompatibilityLevel is set to 5", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "LmCompatibilityLevel", 5, operator.ge)]]),
+            ConfigCheck("NBTNS disabled", "Checks if NBTNS is disabled on all interfaces", checkers=[self.check_nbtns]),
+            ConfigCheck("mDNS disabled", "Checks if mDNS is disabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\DNScache\\Parameters", "EnableMDNS", 0)]]),
+            ConfigCheck("SMB signing enabled", "Checks if SMB signing is enabled", checker_args=[[self, ("HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters", "requiresecuritysignature", 1)]]),
+            ConfigCheck("LDAP signing enabled", "Checks if LDAP signing is enabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\NTDS\\Parameters", "LDAPServerIntegrity", 2), ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\NTDS", "LdapEnforceChannelBinding", 2)]]),
+            ConfigCheck("SMB encryption enabled", "Checks if SMB encryption is enabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters", "EncryptData", 1)]]),
             ConfigCheck("RDP authentication", "Checks RDP authentication configuration (NLA auth and restricted admin mode)", checker_args=[[self, ("HKLM\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp\\", "UserAuthentication", 1), ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\LSA", "RestrictedAdminMode", 1)]]),
             ConfigCheck("BitLocker configuration", "Checks the BitLocker configuration (based on https://www.stigviewer.com/stig/windows_10/2020-06-15/finding/V-94859)", checker_args=[[self, ("HKLM\\SOFTWARE\\Policies\\Microsoft\\FVE", "UseAdvancedStartup", 1), ("HKLM\\SOFTWARE\\Policies\\Microsoft\\FVE", "UseTPMPIN", 1)]]),
             ConfigCheck("Guest account disabled", "Checks if the guest account is disabled", checkers=[self.check_guest_account_disabled]),
-            ConfigCheck("Automatic session lock", "Checks if the session is automatically locked on after a period of inactivity", checker_args=[[self, ("HKCU\\Control Panel\\Desktop", "ScreenSaverIsSecure", 1), ("HKCU\\Control Panel\\Desktop", "ScreenSaveTimeOut", 300, le)]]),
-            ConfigCheck("Powershell Execution Policy", 'Checks if the Powershell execution policy is set to "Restricted"', checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\PowerShell\\1\ShellIds\Microsoft.Powershell", "ExecutionPolicy", "Restricted\x00"), ("HKCU\\SOFTWARE\\Microsoft\\PowerShell\\1\ShellIds\Microsoft.Powershell", "ExecutionPolicy", "Restricted\x00")]], checker_kwargs=[{"options": {"KOIfMissing": False, "lastWins": True}}])
+            ConfigCheck("Automatic session lock enabled", "Checks if the session is automatically locked on after a period of inactivity", checker_args=[[self, ("HKCU\\Control Panel\\Desktop", "ScreenSaverIsSecure", 1), ("HKCU\\Control Panel\\Desktop", "ScreenSaveTimeOut", 300, le)]]),
+            ConfigCheck('Powershell Execution Policy == "Restricted"', 'Checks if the Powershell execution policy is set to "Restricted"', checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\PowerShell\\1\\ShellIds\\Microsoft.Powershell", "ExecutionPolicy", "Restricted\x00"), ("HKCU\\SOFTWARE\\Microsoft\\PowerShell\\1\\ShellIds\\Microsoft.Powershell", "ExecutionPolicy", "Restricted\x00")]], checker_kwargs=[{"options": {"KOIfMissing": False, "lastWins": True}}])
         ]
 
         # Add check to conf_checks table if missing
@@ -483,9 +479,6 @@ class HostChecker:
 
         return success, reasons
 
-    # Methods for getting values from the remote registry #
-    #######################################################
-
     def _open_root_key(self, dce, connection, root_key):
         ans = None
         retries = 1
@@ -595,9 +588,6 @@ class HostChecker:
                     return data
             return DCERPCSessionError(error_code=ERROR_OBJECT_NOT_FOUND)
 
-    # Methods for getting values from SAMR and SCM #
-    ################################################
-
     def get_service(self, service_name, connection):
         """Get the service status and configuration for specified service"""
         remoteOps = RemoteOperations(smbConnection=connection.conn, doKerberos=False)
@@ -645,22 +635,14 @@ class HostChecker:
             self.context.log.error(f"ls(): C:\\{path} {e}\n")
         return file_listing
 
-
-# Comparison operators #
-########################
-
-
 def le(reg_sz_string, number):
     return int(reg_sz_string[:-1]) <= number
-
 
 def in_(obj, seq):
     return obj in seq
 
-
 def startswith(string, start):
     return string.startswith(start)
-
 
 def not_(boolean_operator):
     def wrapper(*args, **kwargs):

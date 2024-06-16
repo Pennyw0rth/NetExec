@@ -1,92 +1,111 @@
+from dateutil.relativedelta import relativedelta as rd
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
-from impacket.ldap import ldap as ldap_impacket
-from math import fabs
 
 
 class NXCModule:
     """
-    Created by fplazar and wanetty
-    Module by @gm_eduard and @ferranplaza
-    Based on: https://github.com/juliourena/CrackMapExec/blob/master/cme/modules/get_description.py
-    """
+    Initial FGPP/PSO script written by @n00py: https://github.com/n00py/GetFGPP
 
+    Module by @_sandw1ch
+    """
     name = "pso"
-    description = "Query to get PSO from LDAP"
+    description = "Module to get the Fine Grained Password Policy/PSOs"
     supported_protocols = ["ldap"]
     opsec_safe = True
-    multiple_hosts = True
+    multiple_hosts = False
 
-    pso_fields = [
-        "cn",
-        "msDS-PasswordReversibleEncryptionEnabled",
-        "msDS-PasswordSettingsPrecedence",
-        "msDS-MinimumPasswordLength",
-        "msDS-PasswordHistoryLength",
-        "msDS-PasswordComplexityEnabled",
-        "msDS-LockoutObservationWindow",
-        "msDS-LockoutDuration",
-        "msDS-LockoutThreshold",
-        "msDS-MinimumPasswordAge",
-        "msDS-MaximumPasswordAge",
-        "msDS-PSOAppliesTo",
-    ]
+    def __init__(self, context=None, module_options=None):
+        self.context = context
+        self.module_options = module_options
 
     def options(self, context, module_options):
         """No options available."""
 
-    def convert_time_field(self, field, value):
-        time_fields = {"msDS-LockoutObservationWindow": (60, "mins"), "msDS-MinimumPasswordAge": (86400, "days"), "msDS-MaximumPasswordAge": (86400, "days"), "msDS-LockoutDuration": (60, "mins")}
-
-        if field in time_fields:
-            value = f"{int(fabs(float(value)) / (10000000 * time_fields[field][0]))} {time_fields[field][1]}"
-
-        return value
-
     def on_login(self, context, connection):
-        """Concurrent. Required if on_admin_login is not present. This gets called on each authenticated connection"""
-        # Building the search filter
-        search_filter = "(objectClass=msDS-PasswordSettings)"
+        # Are there even any FGPPs?
+        context.log.success("Attempting to enumerate policies...")
+        resp = connection.ldapConnection.search(searchBase=f"CN=Password Settings Container,CN=System,{''.join([f'DC={dc},' for dc in connection.domain.split('.')]).rstrip(',')}", searchFilter="(objectclass=*)")
+        if len(resp) > 1:
+            context.log.highlight(f"{len(resp) - 1} PSO Objects found!")
+            context.log.highlight("")
+            context.log.success("Attempting to enumerate objects with an applied policy...")
 
-        try:
-            context.log.debug(f"Search Filter={search_filter}")
-            resp = connection.ldapConnection.search(searchFilter=search_filter, attributes=self.pso_fields, sizeLimit=0)
-        except ldap_impacket.LDAPSearchError as e:
-            if e.getErrorString().find("sizeLimitExceeded") >= 0:
-                context.log.debug("sizeLimitExceeded exception caught, giving up and processing the data received")
-                # We reached the sizeLimit, process the answers we have already and that's it. Until we implement
-                # paged queries
-                resp = e.getAnswers()
-            else:
-                context.log.debug(e)
-                return False
-
-        pso_list = []
-
-        context.log.debug(f"Total of records returned {len(resp)}")
-        for item in resp:
-            if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
+        # Who do they apply to?
+        resp = connection.search(searchFilter="(objectclass=*)", attributes=["DistinguishedName", "msDS-PSOApplied"])
+        for attrs in resp:
+            if isinstance(attrs, ldapasn1_impacket.SearchResultEntry) is not True:
                 continue
+            for attr in attrs["attributes"]:
+                if str(attr["type"]) in "msDS-PSOApplied":
+                    context.log.highlight(f"Object: {attrs['objectName']}")
+                    context.log.highlight("Applied Policy: ")
+                    for value in attr["vals"]:
+                        context.log.highlight(f"\t{value}")
+                    context.log.highlight("")
 
-            pso_info = {}
+        # Let"s find out even more details!
+        context.log.success("Attempting to enumerate details...\n")
+        resp = connection.search(searchFilter="(objectclass=msDS-PasswordSettings)",
+                                 attributes=["name", "msds-lockoutthreshold", "msds-psoappliesto", "msds-minimumpasswordlength",
+                                             "msds-passwordhistorylength", "msds-lockoutobservationwindow", "msds-lockoutduration",
+                                             "msds-passwordsettingsprecedence", "msds-passwordcomplexityenabled", "Description",
+                                             "msds-passwordreversibleencryptionenabled", "msds-minimumpasswordage", "msds-maximumpasswordage"])
+        for attrs in resp:
+            if not isinstance(attrs, ldapasn1_impacket.SearchResultEntry):
+                continue
+            policyName, description, passwordLength, passwordhistorylength, lockoutThreshold, obersationWindow, lockoutDuration, complexity, minPassAge, maxPassAge, reverseibleEncryption, precedence, policyApplies = ("",) * 13
+            for attr in attrs["attributes"]:
+                if str(attr["type"]) == "name":
+                    policyName = attr["vals"][0]
+                elif str(attr["type"]) == "msDS-LockoutThreshold":
+                    lockoutThreshold = attr["vals"][0]
+                elif str(attr["type"]) == "msDS-MinimumPasswordLength":
+                    passwordLength = attr["vals"][0]
+                elif str(attr["type"]) == "msDS-PasswordHistoryLength":
+                    passwordhistorylength = attr["vals"][0]
+                elif str(attr["type"]) == "msDS-LockoutObservationWindow":
+                    observationWindow = attr["vals"][0]
+                elif str(attr["type"]) == "msDS-LockoutDuration":
+                    lockoutDuration = attr["vals"][0]
+                elif str(attr["type"]) == "msDS-PasswordSettingsPrecedence":
+                    precedence = attr["vals"][0]
+                elif str(attr["type"]) == "msDS-PasswordComplexityEnabled":
+                    complexity = attr["vals"][0]
+                elif str(attr["type"]) == "msDS-PasswordReversibleEncryptionEnabled":
+                    reverseibleEncryption = attr["vals"][0]
+                elif str(attr["type"]) == "msDS-MinimumPasswordAge":
+                    minPassAge = attr["vals"][0]
+                elif str(attr["type"]) == "msDS-MaximumPasswordAge":
+                    maxPassAge = attr["vals"][0]
+                elif str(attr["type"]) == "description":
+                    description = attr["vals"][0]
+                elif str(attr["type"]) == "msDS-PSOAppliesTo":
+                    policyApplies = ""
+                    for value in attr["vals"]:
+                        policyApplies += f"{value};"
+            context.log.highlight(f"Policy Name: {policyName}")
+            if description:
+                context.log.highlight(f"Description: {description}")
+            context.log.highlight(f"Minimum Password Length: {passwordLength}")
+            context.log.highlight(f"Minimum Password History Length: {passwordhistorylength}")
+            context.log.highlight(f"Lockout Threshold: {lockoutThreshold}")
+            context.log.highlight(f"Observation Window: {mins(observationWindow)}")
+            context.log.highlight(f"Lockout Duration: {mins(lockoutDuration)}")
+            context.log.highlight(f"Complexity Enabled: {complexity}")
+            context.log.highlight(f"Minimum Password Age: {days(minPassAge)}")
+            context.log.highlight(f"Maximum Password Age: {days(maxPassAge)}")
+            context.log.highlight(f"Reversible Encryption: {reverseibleEncryption}")
+            context.log.highlight(f"Precedence: {precedence} (Lower is Higher Priority)")
+            context.log.highlight("Policy Applies to:")
+            for value in str(policyApplies)[:-1].split(";"):
+                if value:
+                    context.log.highlight(f"\t{value}")
+            context.log.highlight("")
 
-            try:
-                for attribute in item["attributes"]:
-                    attr_name = str(attribute["type"])
-                    if attr_name in self.pso_fields:
-                        pso_info[attr_name] = attribute["vals"][0]._value.decode("utf-8")
 
-                pso_list.append(pso_info)
+def days(ldap_time):
+    return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).days} days"
 
-            except Exception as e:
-                context.log.debug("Exception:", exc_info=True)
-                context.log.debug(f"Skipping item, cannot process due to error {e}")
-        if len(pso_list) > 0:
-            context.log.success("Password Settings Objects (PSO) found:")
-            for pso in pso_list:
-                for field in self.pso_fields:
-                    if field in pso:
-                        value = self.convert_time_field(field, pso[field])
-                        context.log.highlight(f"{field}: {value}")
-                context.log.highlight("-----")
-        else:
-            context.log.info("No Password Settings Objects (PSO) found.")
+
+def mins(ldap_time):
+    return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).minutes} minutes"

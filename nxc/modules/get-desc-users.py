@@ -31,7 +31,7 @@ class NXCModule:
             self.MINLENGTH = module_options["MINLENGTH"]
         if "PASSWORDPOLICY" in module_options:
             self.PASSWORDPOLICY = True
-            self.regex = re.compile("((?=[^ ]*[A-Z])(?=[^ ]*[a-z])(?=[^ ]*\d)|(?=[^ ]*[a-z])(?=[^ ]*\d)(?=[^ ]*[^\w \n])|(?=[^ ]*[A-Z])(?=[^ ]*\d)(?=[^ ]*[^\w \n])|(?=[^ ]*[A-Z])(?=[^ ]*[a-z])(?=[^ ]*[^\w \n]))[^ \n]{" + self.MINLENGTH + ",}")  # Credit : https://stackoverflow.com/questions/31191248/regex-password-must-have-at-least-3-of-the-4-of-the-following
+            self.regex = re.compile(r"((?=[^ ]*[A-Z])(?=[^ ]*[a-z])(?=[^ ]*\d)|(?=[^ ]*[a-z])(?=[^ ]*\d)(?=[^ ]*[^\w \n])|(?=[^ ]*[A-Z])(?=[^ ]*\d)(?=[^ ]*[^\w \n])|(?=[^ ]*[A-Z])(?=[^ ]*[a-z])(?=[^ ]*[^\w \n]))[^ \n]{" + self.MINLENGTH + ",}$")  # Credit : https://stackoverflow.com/questions/31191248/regex-password-must-have-at-least-3-of-the-4-of-the-following
 
     def on_login(self, context, connection):
         """Concurrent. Required if on_admin_login is not present. This gets called on each authenticated connection"""
@@ -102,6 +102,11 @@ class NXCModule:
                     if self.regex.search(description):
                         conditionPasswordPolicy = True
 
-                if (conditionFilter == self.FILTER) and (conditionPasswordPolicy == self.PASSWORDPOLICY):
+                if conditionFilter and not self.PASSWORDPOLICY:
+                    context.log.highlight(f"'{self.FILTER}' found in description: '{description}'")
+                elif (self.FILTER == "" and (conditionPasswordPolicy == self.PASSWORDPOLICY)):
                     answersFiltered.append([answer[0], description])
+                elif (self.FILTER != "" and conditionFilter) and (conditionPasswordPolicy == self.PASSWORDPOLICY):
+                    context.log.highlight(f"'{self.FILTER}' found in user: '{answer[0]}' description: '{description}'")
+                    
         return answersFiltered

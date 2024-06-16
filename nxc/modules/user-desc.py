@@ -37,7 +37,6 @@ class NXCModule:
         """
         self.log_file = None
         self.desc_count = 0
-        self.context = context
         self.account_names = set()
         self.keywords = {"pass", "creds", "creden", "key", "secret", "default"}
 
@@ -71,6 +70,7 @@ class NXCModule:
         On successful LDAP login we perform a search for all user objects that have a description.
         Users can specify additional LDAP filters that are applied to the query.
         """
+        self.context = context
         self.create_log_file(connection.conn.getRemoteHost(), datetime.now().strftime("%Y%m%d_%H%M%S"))
         context.log.info(f"Starting LDAP search with search filter '{self.search_filter}'")
 

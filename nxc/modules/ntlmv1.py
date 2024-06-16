@@ -7,10 +7,11 @@ class NXCModule:
     """
     Detect if the target's LmCompatibilityLevel will allow NTLMv1 authentication
     Module by @Tw1sm
+    Modified by Deft (08/02/2024)
     """
 
     name = "ntlmv1"
-    description = "Detect if lmcompatibilitylevel on the target is set to 0 or 1"
+    description = "Detect if lmcompatibilitylevel on the target is set to lower than 3 (which means ntlmv1 is enabled)"
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
@@ -32,19 +33,22 @@ class NXCModule:
                     "SYSTEM\\CurrentControlSet\\Control\\Lsa",
                 )
                 key_handle = ans["phkResult"]
-                rtype = None
-                data = None
+                rtype = data = None
                 try:
                     rtype, data = rrp.hBaseRegQueryValue(
                         remote_ops._RemoteOperations__rrp,
                         key_handle,
                         "lmcompatibilitylevel\x00",
                     )
+
                 except rrp.DCERPCSessionError:
                     context.log.debug("Unable to reference lmcompatabilitylevel, which probably means ntlmv1 is not set")
 
-                if rtype and data and int(data) in [0, 1, 2]:
+                # Changed by Defte
+                # Unless this keys is set to 3 or higher, NTLMv1 can be used
+                if data in [0, 1, 2]:
                     context.log.highlight(self.output.format(connection.conn.getRemoteHost(), data))
+
         except DCERPCSessionError as e:
             context.log.debug(f"Error connecting to RemoteRegistry: {e}")
         finally:

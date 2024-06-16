@@ -1,5 +1,5 @@
-def proto_args(parser, std_parser, module_parser):
-    wmi_parser = parser.add_parser("wmi", help="own stuff using WMI", parents=[std_parser, module_parser], conflict_handler="resolve")
+def proto_args(parser, parents):
+    wmi_parser = parser.add_parser("wmi", help="own stuff using WMI", conflict_handler="resolve", parents=parents)
     wmi_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
     wmi_parser.add_argument("--port", type=int, choices={135}, default=135, help="WMI port (default: 135)")
     wmi_parser.add_argument("--rpc-timeout", help="RPC/DCOM(WMI) connection timeout, default is %(default)s seconds", type=int, default=2)
