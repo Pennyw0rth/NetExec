@@ -41,4 +41,4 @@ jobs:
           poetry run netexec smb 127.0.0.1 -u nxc -p Pwn3d!!! --lsa
           poetry run netexec smb 127.0.0.1 -u nxc -p Pwn3d!!! --dpapi
           poetry run netexec smb 127.0.0.1 -u nxc -p Pwn3d!!! -M lsassy
-          poetry run netexec smb 127.0.0.1 -u nxc -p Pwn3d!!! -M prodcump
+          poetry run netexec smb 127.0.0.1 -u nxc -p Pwn3d!!! -M procdump
