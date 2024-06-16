@@ -1,4 +1,4 @@
-name: lsassy Tests & Build
+name: NetExec Tests Windows
 
 on:
   pull_request:
