@@ -1,0 +1,44 @@
+name: lsassy Tests & Build
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    # technique stolen from @Hackndo my best friend for life <3
+    steps:
+      - name: Create new user
+        run: |
+          net user nxc Pwn3d!!! /add
+      - name: Add to local admin
+        run: |
+          net localgroup Administrators nxc /add
+      - name: Update registry key
+        run: |
+          REG ADD HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\system /v LocalAccountTokenFilterPolicy /t REG_DWORD /d 1 /f
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.11'
+      - name: Install poetry
+        run: |
+          pipx install poetry --python python${{ matrix.python-version }}
+          poetry --version
+          poetry env info
+      - name: Install libraries with dev group
+        run: |
+          poetry install --with dev
+      - name: Dumping some credzzzzz
+        run: |
+          poetry run netexec smb 127.0.0.1 -u nxc -p Pwn3d!!! --sam
+          poetry run netexec smb 127.0.0.1 -u nxc -p Pwn3d!!! --lsa
+          poetry run netexec smb 127.0.0.1 -u nxc -p Pwn3d!!! --dpapi
+          poetry run netexec smb 127.0.0.1 -u nxc -p Pwn3d!!! -M lsassy
+          poetry run netexec smb 127.0.0.1 -u nxc -p Pwn3d!!! -M prodcump
