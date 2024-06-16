@@ -32,9 +32,9 @@ jobs:
           pipx install poetry --python python${{ matrix.python-version }}
           poetry --version
           poetry env info
-      - name: Install libraries with dev group
+      - name: Install libraries without dev group
         run: |
-          poetry install --with dev
+          poetry install
       - name: Dumping some credzzzzz
         run: |
           poetry run netexec smb 127.0.0.1 -u nxc -p Pwn3d!!! --sam
