@@ -140,7 +140,10 @@ netexec smb TARGET_HOST -u '' -p '' -M petitpotam
 ##### SMB Auth File
 netexec smb TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce
 netexec smb TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce --continue-on-success
-netexec smb TARGET_HOST -u TEST_USER_FILE -p tests/data/test_passwords.txt
+netexec smb TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE
+##### SMB Hash File
+netexec smb TARGET_HOST -u LOGIN_USERNAME -H tests/data/test_hashes.txt
+netexec smb TARGET_HOST -u TEST_USER_FILE -H tests/data/test_hashes.txt
 ##### WMI
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --wmi-namespace root/cimv2

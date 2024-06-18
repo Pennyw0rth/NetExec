@@ -148,6 +148,9 @@ class smb(connection):
     def __init__(self, args, db, host):
         self.domain = None
         self.server_os = None
+        self.server_os_major = None
+        self.server_os_minor = None
+        self.server_os_build = None
         self.os_arch = 0
         self.hash = None
         self.lmhash = ""
@@ -231,7 +234,19 @@ class smb(connection):
             self.domain = self.hostname
             self.targetDomain = self.hostname
 
+        # As of June 2024 Samba will always report the version as "Windows 6.1", apparently due to a bug https://stackoverflow.com/a/67577401/17395725
+        # Together with the reported build version "0" by Samba we can assume that it is a Samba server. Windows should always report a build version > 0
+        # Also only on Windows we should get an OS arch as for that we would need MSRPC
         self.server_os = self.conn.getServerOS()
+        self.server_os_major = self.conn.getServerOSMajor()
+        self.server_os_minor = self.conn.getServerOSMinor()
+        self.server_os_build = self.conn.getServerOSBuild()
+        if "Windows 6.1" in self.server_os and self.server_os_build == 0 and self.os_arch == 0:
+            self.server_os = "Unix - Samba"
+        elif self.server_os_build == 0 and self.os_arch == 0:
+            self.server_os = "Unix"
+        self.logger.debug(f"Server OS: {self.server_os} {self.server_os_major}.{self.server_os_minor} build {self.server_os_build}")
+
         self.logger.extra["hostname"] = self.hostname
 
         if isinstance(self.server_os.lower(), bytes):
@@ -312,7 +327,8 @@ class smb(connection):
                 self.logger.debug(f"Got TGS for {self.args.delegate} through S4U")
 
             self.conn.kerberosLogin(self.username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache=useCache, TGS=tgs)
-            self.check_if_admin()
+            if "Unix" not in self.server_os:
+                self.check_if_admin()
 
             if username == "":
                 self.username = self.conn.getCredentials()[0]
@@ -380,7 +396,9 @@ class smb(connection):
             self.logger.debug(f"Logged in with password to SMB with {domain}/{self.username}")
             self.is_guest = bool(self.conn.isGuestSession())
             self.logger.debug(f"{self.is_guest=}")
-            self.check_if_admin()
+            
+            if "Unix" not in self.server_os:
+                self.check_if_admin()
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
             self.db.add_credential("plaintext", domain, self.username, self.password)
             user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
@@ -451,7 +469,9 @@ class smb(connection):
             self.logger.debug(f"Logged in with hash to SMB with {domain}/{self.username}")
             self.is_guest = bool(self.conn.isGuestSession())
             self.logger.debug(f"{self.is_guest=}")
-            self.check_if_admin()
+
+            if "Unix" not in self.server_os:
+                self.check_if_admin()
             user_id = self.db.add_credential("hash", domain, self.username, self.hash)
             host_id = self.db.get_hosts(self.host)[0].id
 
