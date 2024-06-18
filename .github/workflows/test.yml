@@ -1,32 +1,51 @@
 name: NetExec Tests
 
 on:
+  workflow_dispatch:
   pull_request_review:
     types: [submitted]
 
 jobs:
   build:
-    name: NetExec Tests for Py${{ matrix.python-version }}
+    name: Test for Py${{ matrix.python-version }}
+    if: github.event.review.state == 'APPROVED'
     runs-on: ${{ matrix.os }}
     strategy:
       max-parallel: 5
       matrix:
         os: [ubuntu-latest]
-        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
     steps:
-    - uses: actions/checkout@v3
-    - name: NetExec set up python on ${{ matrix.os }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install poetry
-      run: |
-        pipx install poetry --python python${{ matrix.python-version }}
-        poetry --version
-        poetry env info
-    - name: Install libraries with dev group
-      run: |
-        poetry install --with dev
-    - name: Run the e2e test
-      run: |
-        poetry run pytest tests
+      - uses: actions/checkout@v3
+      - name: Install poetry
+        run: |
+          pipx install poetry
+      - name: NetExec set up python ${{ matrix.python-version }} on ${{ matrix.os }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: poetry
+          cache-dependency-path: poetry.lock
+      - name: Install with pipx
+        run: |
+          pipx install . --python python${{ matrix.python-version }}
+      - name: Install poetry
+        run: |
+          pipx install poetry --python python${{ matrix.python-version }}
+          poetry --version
+          poetry env info
+      - name: Install libraries with dev group
+        run: |
+          poetry install --with dev
+      - name: Load every protocol and module
+        run: |
+          poetry run netexec winrm 127.0.0.1
+          poetry run netexec vnc 127.0.0.1
+          poetry run netexec smb 127.0.0.1
+          poetry run netexec ldap 127.0.0.1
+          poetry run netexec wmi 127.0.0.1
+          poetry run netexec rdp 127.0.0.1
+          poetry run netexec mssql 127.0.0.1
+          poetry run netexec ssh 127.0.0.1
+          poetry run netexec ftp 127.0.0.1
+          poetry run netexec smb 127.0.0.1 -M veeam

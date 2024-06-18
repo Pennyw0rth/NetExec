@@ -52,14 +52,12 @@ def add_user_bh(user, domain, logger, config):
                         _add_with_domain(user_info, domain, tx, logger)
         except AuthError:
             logger.fail(f"Provided Neo4J credentials ({config.get('BloodHound', 'bh_user')}:{config.get('BloodHound', 'bh_pass')}) are not valid.")
-            return
         except ServiceUnavailable:
             logger.fail(f"Neo4J does not seem to be available on {uri}.")
-            return
         except Exception as e:
             logger.fail(f"Unexpected error with Neo4J: {e}")
-            return
-        driver.close()
+        finally:
+            driver.close()
 
 
 def _add_with_domain(user_info, domain, tx, logger):

@@ -150,9 +150,15 @@ class rdp(connection):
 
         if self.args.domain:
             self.domain = self.args.domain
-
         if self.args.local_auth:
             self.domain = self.hostname
+
+        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
+
+        if not self.kdcHost and self.domain:
+            result = self.resolver(self.domain)
+            self.kdcHost = result["host"] if result else None
+            self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
         self.target = RDPTarget(
             ip=self.host,
@@ -220,7 +226,17 @@ class rdp(connection):
             else:
                 stype = asyauthSecret.PASS if not nthash else asyauthSecret.NT
 
-            kerberos_target = UniTarget(self.domain, 88, UniProto.CLIENT_TCP, proxies=None, dns=None, dc_ip=self.domain, domain=self.domain)
+            kerberos_target = UniTarget(
+                self.host,
+                88,
+                UniProto.CLIENT_TCP,
+                timeout=self.args.rdp_timeout,
+                hostname=self.remoteName,
+                dc_ip=self.kdcHost,
+                domain=self.domain,
+                proxies=None,
+                dns=None,
+            )
             self.auth = KerberosCredential(
                 target=kerberos_target,
                 secret=password,
@@ -243,7 +259,7 @@ class rdp(connection):
                     self.mark_pwned(),
                 )
             )
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -289,7 +305,7 @@ class rdp(connection):
 
             self.admin_privs = True
             self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -323,7 +339,7 @@ class rdp(connection):
 
             self.admin_privs = True
             self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
-            if not self.args.local_auth:
+            if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)

@@ -51,7 +51,7 @@ class NXCModule:
 
         masterkeys = []
         try:
-            masterkeys_triage = MasterkeysTriage(target=target, conn=conn)
+            masterkeys_triage = MasterkeysTriage(target=target, conn=conn, dpapiSystem={})
             masterkeys += masterkeys_triage.triage_system_masterkeys()
         except Exception as e:
             context.log.debug(f"Could not get masterkeys: {e}")

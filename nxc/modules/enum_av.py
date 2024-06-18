@@ -5,6 +5,7 @@
 
 from impacket.dcerpc.v5 import lsat, lsad, transport
 from impacket.dcerpc.v5.dtypes import NULL, MAXIMUM_ALLOWED, RPC_UNICODE_STRING
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 import pathlib
 
 
@@ -35,7 +36,7 @@ class NXCModule:
         results = self._detect_installed_services(context, connection, target)
         self.detect_running_processes(context, connection, results)
 
-        self.dump_results(results, connection.hostname, context)
+        self.dump_results(results, context)
 
     def _get_target(self, connection):
         return connection.host if not connection.kerberos else f"{connection.hostname}.{connection.domain}"
@@ -50,7 +51,8 @@ class NXCModule:
                 password=connection.password,
                 remote_name=target,
                 do_kerberos=connection.kerberos,
-                kdcHost=connection.domain,
+                remoteHost=connection.host,
+                kdcHost=connection.kdcHost,
                 lmhash=connection.lmhash,
                 nthash=connection.nthash,
                 aesKey=connection.aesKey
@@ -58,18 +60,16 @@ class NXCModule:
 
             dce, _ = lsa.connect()
             policyHandle = lsa.open_policy(dce)
-            try:
-                for product in conf["products"]:
-                    for service in product["services"]:
+            for product in conf["products"]:
+                for service in product["services"]:
+                    try:
                         lsa.LsarLookupNames(dce, policyHandle, service["name"])
                         context.log.info(f"Detected installed service on {connection.host}: {product['name']} {service['description']}")
                         results.setdefault(product["name"], {"services": []})["services"].append(service)
-            except Exception:
-                pass
-
+                    except Exception:
+                        pass
         except Exception as e:
             context.log.fail(str(e))
-
         return results
 
     def detect_running_processes(self, context, connection, results):
@@ -80,13 +80,16 @@ class NXCModule:
                 for product in conf["products"]:
                     for pipe in product["pipes"]:
                         if pathlib.PurePath(fl).match(pipe["name"]):
-                            context.log.debug(f"{product['name']} running claim found on {connection.host} by existing pipe {fl} (likely processes: {pipe['processes']})")
+                            context.log.info(f"{product['name']} running claim found on {connection.host} by existing pipe {fl} (likely processes: {pipe['processes']})")
                             prod_results = results.setdefault(product["name"], {})
                             prod_results.setdefault("pipes", []).append(pipe)
         except Exception as e:
-            context.log.debug(str(e))
+            if "STATUS_ACCESS_DENIED" in str(e):
+                context.log.fail("Error STATUS_ACCESS_DENIED while enumerating pipes, probably due to using SMBv1")
+            else:
+                context.log.fail(str(e))
 
-    def dump_results(self, results, remoteName, context):
+    def dump_results(self, results, context):
         if not results:
             context.log.highlight("Found NOTHING!")
             return
@@ -119,6 +122,7 @@ class LsaLookupNames:
         password="",
         remote_name="",
         do_kerberos=False,
+        remoteHost="",
         kdcHost="",
         lmhash="",
         nthash="",
@@ -133,7 +137,8 @@ class LsaLookupNames:
         self.lmhash = lmhash
         self.nthash = nthash
         self.aesKey = aesKey
-        self.dcHost = kdcHost
+        self.kdcHost = kdcHost
+        self.remoteHost = remoteHost
 
     def connect(self, string_binding=None, iface_uuid=None):
         """Obtains a RPC Transport and a DCE interface according to the bindings and
@@ -146,6 +151,7 @@ class LsaLookupNames:
             raise NotImplementedError("String binding must be defined")
 
         rpc_transport = transport.DCERPCTransportFactory(string_binding)
+        rpc_transport.setRemoteHost(self.remoteHost)
 
         # Set timeout if defined
         if self.timeout:
@@ -157,14 +163,13 @@ class LsaLookupNames:
             rpc_transport.set_credentials(self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey)
 
         if self.doKerberos:
-            rpc_transport.set_kerberos(self.doKerberos, kdcHost=self.dcHost)
+            rpc_transport.set_kerberos(self.doKerberos, kdcHost=self.kdcHost)
 
         # Gets the DCE RPC object
         dce = rpc_transport.get_dce_rpc()
 
-        # Set the authentication level
-        if self.authn_level:
-            dce.set_auth_level(self.authn_level)
+        if self.doKerberos:
+            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
 
         # Connect
         dce.connect()
@@ -243,6 +248,14 @@ conf = {
             "pipes": [{"name": "CrowdStrike\\{*", "processes": ["CSFalconContainer.exe", "CSFalconService.exe"]}]
         },
         {
+            "name": "Cortex",
+            "services": [
+                {"name": "xdrhealth", "description": "Cortex XDR Health Helper"},
+                {"name": "cyserver", "description": " Cortex XDR"}
+            ],
+            "pipes": []
+        },
+        {
             "name": "Cybereason",
             "services": [
                 {"name": "CybereasonActiveProbe", "description": "Cybereason Active Probe"},
@@ -261,7 +274,10 @@ conf = {
                 {"name": "epfw", "description": "ESET"},
                 {"name": "epfwlwf", "description": "ESET"},
                 {"name": "epfwwfp", "description": "ESET"},
-                {"name": "EraAgentSvc", "description": "ESET"},
+                {"name": "EraAgentSvc", "description": "ESET Management Agent service"},
+                {"name": "ERAAgent", "description": "ESET Management Agent service"},
+                {"name": "efwd", "description": "ESET Communication Forwarding Service"},
+                {"name": "ehttpsrv", "description": "ESET HTTP Server"},
             ],
             "pipes": [{"name": "nod_scriptmon_pipe", "processes": [""]}],
         },
