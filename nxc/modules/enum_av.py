@@ -248,6 +248,14 @@ conf = {
             "pipes": [{"name": "CrowdStrike\\{*", "processes": ["CSFalconContainer.exe", "CSFalconService.exe"]}]
         },
         {
+            "name": "Cortex",
+            "services": [
+                {"name": "xdrhealth", "description": "Cortex XDR Health Helper"},
+                {"name": "cyserver", "description": " Cortex XDR"}
+            ],
+            "pipes": []
+        },
+        {
             "name": "Cybereason",
             "services": [
                 {"name": "CybereasonActiveProbe", "description": "Cybereason Active Probe"},

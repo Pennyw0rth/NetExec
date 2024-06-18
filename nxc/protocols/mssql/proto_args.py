@@ -1,8 +1,11 @@
-def proto_args(parser, std_parser, module_parser):
-    mssql_parser = parser.add_parser("mssql", help="own stuff using MSSQL", parents=[std_parser, module_parser])
+from nxc.helpers.args import DisplayDefaultsNotNone
+
+
+def proto_args(parser, parents):
+    mssql_parser = parser.add_parser("mssql", help="own stuff using MSSQL", parents=parents, formatter_class=DisplayDefaultsNotNone)
     mssql_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
-    mssql_parser.add_argument("--port", default=1433, type=int, metavar="PORT", help="MSSQL port (default: 1433)")
-    mssql_parser.add_argument("--mssql-timeout", help="SQL server connection timeout, default is %(default)s seconds", type=int, default=5)
+    mssql_parser.add_argument("--port", default=1433, type=int, metavar="PORT", help="MSSQL port")
+    mssql_parser.add_argument("--mssql-timeout", help="SQL server connection timeout", type=int, default=5)
     mssql_parser.add_argument("-q", "--query", dest="mssql_query", metavar="QUERY", type=str, help="execute the specified query against the MSSQL DB")
 
     dgroup = mssql_parser.add_mutually_exclusive_group()
@@ -23,7 +26,7 @@ def proto_args(parser, std_parser, module_parser):
     psgroup.add_argument("--no-encode", action="store_true", default=False, help="Do not encode the PowerShell command ran on target")
 
     tgroup = mssql_parser.add_argument_group("Files", "Options for put and get remote files")
-    tgroup.add_argument("--put-file", nargs=2, metavar=("SRC_FILE", "DEST_FILE"), help="Put a local file into remote target, ex: whoami.txt C:\\Windows\\Temp\\whoami.txt")
-    tgroup.add_argument("--get-file", nargs=2, metavar=("SRC_FILE", "DEST_FILE"), help="Get a remote file, ex: C:\\Windows\\Temp\\whoami.txt whoami.txt")
+    tgroup.add_argument("--put-file", nargs=2, metavar=("SRC_FILE", "DEST_FILE"), help="Put a local file into remote target, ex: whoami.txt C:\\\\Windows\\\\Temp\\\\whoami.txt")
+    tgroup.add_argument("--get-file", nargs=2, metavar=("SRC_FILE", "DEST_FILE"), help="Get a remote file, ex: C:\\\\Windows\\\\Temp\\\\whoami.txt whoami.txt")
 
     return parser
