@@ -92,12 +92,15 @@ jobs:
       - name: Install libraries without dev group
         run: |
           poetry install
-      - name: Checking rdp
+      - name: Dumping sam
         run: |
-          poetry run netexec winrm 127.0.0.1
-      - name: Checking auth
+          poetry run netexec winrm 127.0.0.1 -u nxc -p Pwn3d!!! --sam
+      - name: Dumping lsa
         run: |
-          poetry run netexec winrm 127.0.0.1 -u nxc -p Pwn3d!!!
+          poetry run netexec winrm 127.0.0.1 -u nxc -p Pwn3d!!! --lsa
+      - name: Exec command
+        run: |
+          poetry run netexec winrm 127.0.0.1 -u nxc -p Pwn3d!!! -x whoami
 
   nxc-rdp:
     runs-on: windows-latest
@@ -131,15 +134,12 @@ jobs:
       - name: Install libraries without dev group
         run: |
           poetry install
-      - name: Dumping sam
+      - name: Checking rdp
         run: |
-          poetry run netexec rdp 127.0.0.1 -u nxc -p Pwn3d!!! --sam
-      - name: Dumping lsa
+          poetry run netexec winrm 127.0.0.1
+      - name: Checking auth
         run: |
-          poetry run netexec rdp 127.0.0.1 -u nxc -p Pwn3d!!! --lsa
-      - name: Exec command
-        run: |
-          poetry run netexec rdp 127.0.0.1 -u nxc -p Pwn3d!!! -x whoami
+          poetry run netexec winrm 127.0.0.1 -u nxc -p Pwn3d!!!
 
   nxc-ssh:
     runs-on: ubuntu-latest
