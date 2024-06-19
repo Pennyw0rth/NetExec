@@ -74,7 +74,9 @@ jobs:
       - name: Update registry key
         run: |
           REG ADD HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\system /v LocalAccountTokenFilterPolicy /t REG_DWORD /d 1 /f
-
+      - name: Enable WinRM
+        run: |
+          winrm quickconfig -quiet
       - name: Checkout code
         uses: actions/checkout@v2
 
