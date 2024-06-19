@@ -130,19 +130,31 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install poetry
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.11'
         run: |
           pipx install poetry --python python${{ matrix.python-version }}
           poetry --version
           poetry env info
       - name: Install libraries without dev group
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.11'
         run: |
           poetry install
       - name: Checking rdp
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.11'
         run: |
-          poetry run netexec rdp %COMPUTERNAME%
+          poetry run netexec rdp 127.0.0.1
       - name: Checking auth
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.11'
         run: |
-          poetry run netexec rdp %COMPUTERNAME% -u nxc -p Pwn3d!!!
+          poetry run netexec rdp 127.0.0.1 -u nxc -p Pwn3d!!!
 
   nxc-ssh:
     runs-on: ubuntu-latest
