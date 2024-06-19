@@ -139,10 +139,10 @@ jobs:
           poetry install
       - name: Checking rdp
         run: |
-          poetry run netexec rdp 127.0.0.1
+          poetry run netexec rdp %COMPUTERNAME%
       - name: Checking auth
         run: |
-          poetry run netexec rdp 127.0.0.1 -u nxc -p Pwn3d!!!
+          poetry run netexec rdp %COMPUTERNAME% -u nxc -p Pwn3d!!!
 
   nxc-ssh:
     runs-on: ubuntu-latest
