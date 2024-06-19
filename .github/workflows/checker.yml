@@ -115,6 +115,9 @@ jobs:
           net localgroup Administrators nxc /add
       - name: Update registry key
         run: |
+          REG ADD HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\system /v LocalAccountTokenFilterPolicy /t REG_DWORD /d 1 /f
+      - name: Update registry key rdo
+        run: |
           reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f
       - name: Open Firewall
         run: |
@@ -136,10 +139,10 @@ jobs:
           poetry install
       - name: Checking rdp
         run: |
-          poetry run netexec winrm 127.0.0.1
+          poetry run netexec rdp 127.0.0.1
       - name: Checking auth
         run: |
-          poetry run netexec winrm 127.0.0.1 -u nxc -p Pwn3d!!!
+          poetry run netexec rdp 127.0.0.1 -u nxc -p Pwn3d!!!
 
   nxc-ssh:
     runs-on: ubuntu-latest
