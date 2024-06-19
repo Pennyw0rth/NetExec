@@ -1,4 +1,4 @@
-name: NetExec Tests Windows
+name: NetExec Checker
 
 on:
   pull_request:
@@ -92,15 +92,54 @@ jobs:
       - name: Install libraries without dev group
         run: |
           poetry install
+      - name: Checking rdp
+        run: |
+          poetry run netexec winrm 127.0.0.1
+      - name: Checking auth
+        run: |
+          poetry run netexec winrm 127.0.0.1 -u nxc -p Pwn3d!!!
+
+  nxc-rdp:
+    runs-on: windows-latest
+    needs: [lint]
+    # technique stolen from @Hackndo my best friend for life <3
+    steps:
+      - name: Create new user
+        run: |
+          net user nxc Pwn3d!!! /add
+      - name: Add to local admin
+        run: |
+          net localgroup Administrators nxc /add
+      - name: Update registry key
+        run: |
+          reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f
+      - name: Open Firewall
+        run: |
+          netsh advfirewall firewall set rule group=" remote desktop" new enable=yes
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.11'
+      - name: Install poetry
+        run: |
+          pipx install poetry --python python${{ matrix.python-version }}
+          poetry --version
+          poetry env info
+      - name: Install libraries without dev group
+        run: |
+          poetry install
       - name: Dumping sam
         run: |
-          poetry run netexec winrm 127.0.0.1 -u nxc -p Pwn3d!!! --sam
+          poetry run netexec rdp 127.0.0.1 -u nxc -p Pwn3d!!! --sam
       - name: Dumping lsa
         run: |
-          poetry run netexec winrm 127.0.0.1 -u nxc -p Pwn3d!!! --lsa
+          poetry run netexec rdp 127.0.0.1 -u nxc -p Pwn3d!!! --lsa
       - name: Exec command
         run: |
-          poetry run netexec winrm 127.0.0.1 -u nxc -p Pwn3d!!! -x whoami
+          poetry run netexec rdp 127.0.0.1 -u nxc -p Pwn3d!!! -x whoami
 
   nxc-ssh:
     runs-on: ubuntu-latest
@@ -127,6 +166,6 @@ jobs:
       - name: Install libraries without dev group
         run: |
           poetry install
-      - name: Dumping sam
+      - name: Connection with user
         run: |
           poetry run netexec ssh 127.0.0.1
