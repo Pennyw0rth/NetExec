@@ -22,7 +22,9 @@ jobs:
       - name: Update registry key
         run: |
           REG ADD HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\system /v LocalAccountTokenFilterPolicy /t REG_DWORD /d 1 /f
-
+      - name: 👾 Disable defender   
+        run: start-process -filepath powershell -ArgumentList '/c','Set-MpPreference -DisableRealtimeMonitoring $true' -verb RunAs
+        shell: powershell
       - name: Checkout code
         uses: actions/checkout@v2
 
@@ -77,6 +79,9 @@ jobs:
       - name: Enable WinRM
         run: |
           winrm quickconfig -quiet
+      - name: 👾 Disable defender   
+        run: start-process -filepath powershell -ArgumentList '/c','Set-MpPreference -DisableRealtimeMonitoring $true' -verb RunAs
+        shell: powershell
       - name: Checkout code
         uses: actions/checkout@v2
 
