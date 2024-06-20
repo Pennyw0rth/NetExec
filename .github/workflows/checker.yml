@@ -34,7 +34,7 @@ jobs:
           python-version: '3.11'
       - name: Install poetry
         run: |
-          pipx install poetry --python python${{ matrix.python-version }}
+          pipx install poetry --python python3.11
           poetry --version
           poetry env info
       - name: Install libraries without dev group
@@ -91,7 +91,7 @@ jobs:
           python-version: '3.11'
       - name: Install poetry
         run: |
-          pipx install poetry --python python${{ matrix.python-version }}
+          pipx install poetry --python python3.11
           poetry --version
           poetry env info
       - name: Install libraries without dev group
@@ -168,7 +168,7 @@ jobs:
           python-version: '3.11'
       - name: Install poetry
         run: |
-          pipx install poetry --python python${{ matrix.python-version }}
+          pipx install poetry --python python3.11
           poetry --version
           poetry env info
       - name: Install libraries without dev group
