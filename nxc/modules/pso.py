@@ -53,7 +53,7 @@ class NXCModule:
         for attrs in resp:
             if not isinstance(attrs, ldapasn1_impacket.SearchResultEntry):
                 continue
-            policyName, description, passwordLength, passwordhistorylength, lockoutThreshold, obersationWindow, lockoutDuration, complexity, minPassAge, maxPassAge, reverseibleEncryption, precedence, policyApplies = ("",) * 13
+            policyName, description, passwordLength, passwordhistorylength, lockoutThreshold, observationWindow, lockoutDuration, complexity, minPassAge, maxPassAge, reverseibleEncryption, precedence, policyApplies = ("",) * 13
             for attr in attrs["attributes"]:
                 if str(attr["type"]) == "name":
                     policyName = attr["vals"][0]
