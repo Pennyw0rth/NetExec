@@ -4,6 +4,7 @@ from datetime import datetime
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5 import tsch, transport
 from nxc.helpers.misc import gen_random_string
+from nxc.paths import TMP_PATH
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 
 
@@ -52,6 +53,7 @@ class NXCModule:
                 self.cmd,
                 connection.kerberos,
                 connection.aesKey,
+                connection.host,
                 connection.kdcHost,
                 connection.hash,
                 self.logger,
@@ -77,7 +79,7 @@ class NXCModule:
 
 
 class TSCH_EXEC:
-    def __init__(self, target, share_name, username, password, domain, user, cmd, doKerberos=False, aesKey=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
+    def __init__(self, target, share_name, username, password, domain, user, cmd, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -89,6 +91,7 @@ class TSCH_EXEC:
         self.__retOutput = False
         self.__aesKey = aesKey
         self.__doKerberos = doKerberos
+        self.__remoteHost = remoteHost
         self.__kdcHost = kdcHost
         self.__tries = tries
         self.__output_filename = None
@@ -108,6 +111,7 @@ class TSCH_EXEC:
 
         stringbinding = f"ncacn_np:{self.__target}[\\pipe\\atsvc]"
         self.__rpctransport = transport.DCERPCTransportFactory(stringbinding)
+        self.__rpctransport.setRemoteHost(self.__remoteHost)
 
         if hasattr(self.__rpctransport, "set_credentials"):
             # This method exists only for selected protocol sequences.
@@ -252,7 +256,7 @@ class TSCH_EXEC:
             if fileless:
                 while True:
                     try:
-                        with open(os.path.join("/tmp", "nxc_hosted", self.__output_filename)) as output:
+                        with open(os.path.join(TMP_PATH, self.__output_filename)) as output:
                             self.output_callback(output.read())
                         break
                     except OSError:
