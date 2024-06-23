@@ -39,18 +39,18 @@ class BitLockerSMB:
 
     def check_bitlocker_status(self):
         # PowerShell command to check BitLocker volumes status.
-        check_bitlocker_command_str = "Get-BitLockerVolume | Select-Object MountPoint, EncryptionMethod, ProtectionStatus"
+        check_bitlocker_command_str = 'powershell.exe "Get-BitLockerVolume | Select-Object MountPoint, EncryptionMethod, ProtectionStatus"'
 
         try:
             # Executing the PowerShell command to get BitLocker volumes status.
-            check_bitlocker_command_str_output = self.connection.ps_execute(check_bitlocker_command_str, True)
+            check_bitlocker_command_str_output = self.connection.execute(check_bitlocker_command_str, True)
             
-            if any("'Get-BitLockerVolume' is not recognized" in line for line in check_bitlocker_command_str_output):
+            if "'Get-BitLockerVolume' is not recognized" in check_bitlocker_command_str_output:
                 self.context.log.fail("BitLockerVolume not found on target.")
                 return
 
             # Splitting the output into lines.
-            lines = str(check_bitlocker_command_str_output).split("\\n")
+            lines = str(check_bitlocker_command_str_output).splitlines()
             data_lines = [line for line in lines if re.match(r"\w:", line)]
             
             for line in data_lines:
