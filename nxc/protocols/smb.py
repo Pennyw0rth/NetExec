@@ -34,6 +34,7 @@ from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
 from nxc.protocols.smb.firefox import FirefoxTriage
 from nxc.protocols.smb.kerberos import kerberos_login_with_S4U
+from nxc.protocols.smb.smb_share import SMB_Share_Enumeration
 from nxc.servers.smb import NXCSMBServer
 from nxc.protocols.smb.wmiexec import WMIEXEC
 from nxc.protocols.smb.atexec import TSCH_EXEC
@@ -754,6 +755,10 @@ class smb(connection):
         return response
 
     def shares(self):
+        if self.args.shares != True:
+            smb_enumeration = SMB_Share_Enumeration(self, self.conn)
+            return smb_enumeration.enumerate_path(self.args.shares)
+
         temp_dir = ntpath.normpath("\\" + gen_random_string())
         permissions = []
 

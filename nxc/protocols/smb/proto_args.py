@@ -33,7 +33,7 @@ def proto_args(parser, parents):
     cred_gathering_group.add_argument("--user", dest="userntds", type=str, help="Dump selected user from DC")
 
     mapping_enum_group = smb_parser.add_argument_group("Mapping/Enumeration", "Options for Mapping/Enumerating")
-    mapping_enum_group.add_argument("--shares", action="store_true", help="enumerate shares and access")
+    mapping_enum_group.add_argument("--shares", nargs="?", default=False, const=True, help="enumerate shares and access")
     mapping_enum_group.add_argument("--no-write-check", action="store_true", help="Skip write check on shares (avoid leaving traces when missing delete permissions)")
     mapping_enum_group.add_argument("--filter-shares", nargs="+", help="Filter share by access, option 'read' 'write' or 'read,write'")
     mapping_enum_group.add_argument("--sessions", action="store_true", help="enumerate active sessions")

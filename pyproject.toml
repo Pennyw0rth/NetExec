@@ -64,6 +64,7 @@ rich = "^13.3.5"
 sqlalchemy = "^2.0.4"
 termcolor = ">=2.4.0"
 terminaltables = "^3.1.0"
+winacl = "^0.1.9"
 xmltodict = "^0.13.0"
 
 [tool.poetry.group.dev.dependencies]
