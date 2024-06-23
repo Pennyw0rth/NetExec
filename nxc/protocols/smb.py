@@ -14,7 +14,7 @@ from impacket.examples.secretsdump import (
     NTDSHashes,
 )
 from impacket.nmb import NetBIOSError, NetBIOSTimeout
-from impacket.dcerpc.v5 import transport, lsat, lsad, scmr
+from impacket.dcerpc.v5 import transport, lsat, lsad, scmr, rrp
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5.transport import DCERPCTransportFactory, SMBTransport
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
@@ -273,7 +273,7 @@ class smb(connection):
             self.conn.logoff()
         except Exception as e:
             self.logger.debug(f"Error logging off system: {e}")
-        
+
         # DCOM connection with kerberos needed
         self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
 
@@ -707,11 +707,11 @@ class smb(connection):
             except UnicodeDecodeError:
                 self.logger.debug("Decoding error detected, consider running chcp.com at the target, map the result with https://docs.python.org/3/library/codecs.html#standard-encodings")
                 output = output.decode("cp437")
-                
+
             self.logger.debug(f"Raw Output: {output}")
             output = "\n".join([ll.rstrip() for ll in output.splitlines() if ll.strip()])
             self.logger.debug(f"Cleaned Output: {output}")
-            
+
             if "This script contains malicious content" in output:
                 self.logger.fail("Command execution blocked by AMSI")
                 return None
@@ -732,24 +732,24 @@ class smb(connection):
         if not payload:
             self.logger.error("No command to execute specified!")
             return None
-        
+
         response = []
         obfs = obfs if obfs else self.args.obfs
         encode = encode if encode else not self.args.no_encode
         force_ps32 = force_ps32 if force_ps32 else self.args.force_ps32
         get_output = True if not self.args.no_output else get_output
-                
+
         self.logger.debug(f"Starting ps_execute(): {payload=} {get_output=} {methods=} {force_ps32=} {obfs=} {encode=}")
         amsi_bypass = self.args.amsi_bypass[0] if self.args.amsi_bypass else None
         self.logger.debug(f"AMSI Bypass: {amsi_bypass}")
-        
+
         if os.path.isfile(payload):
             self.logger.debug(f"File payload set: {payload}")
             with open(payload) as commands:
                 response = [self.execute(create_ps_command(c.strip(), force_ps32=force_ps32, obfs=obfs, custom_amsi=amsi_bypass, encode=encode), get_output, methods) for c in commands]
         else:
             response = [self.execute(create_ps_command(payload, force_ps32=force_ps32, obfs=obfs, custom_amsi=amsi_bypass, encode=encode), get_output, methods)]
-            
+
         self.logger.debug(f"ps_execute response: {response}")
         return response
 
@@ -833,6 +833,74 @@ class smb(connection):
                 continue
             self.logger.highlight(f"{name:<15} {','.join(perms):<15} {remark}")
         return permissions
+
+    def interfaces(self):
+        """
+        Retrieve the list of network interfaces info (Name, IP Address, Subnet Mask, Default Gateway) from remote Windows registry'
+        Made by: @Sant0rryu, @NeffIsBack
+        """
+        try:
+            remoteOps = RemoteOperations(self.conn, False)
+            remoteOps.enableRegistry()
+
+            if remoteOps._RemoteOperations__rrp:
+                reg_handle = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)["phKey"]
+                key_handle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, reg_handle, "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces")["phkResult"]
+                sub_key_list = rrp.hBaseRegQueryInfoKey(remoteOps._RemoteOperations__rrp, key_handle)["lpcSubKeys"]
+                sub_keys = [rrp.hBaseRegEnumKey(remoteOps._RemoteOperations__rrp, key_handle, i)["lpNameOut"][:-1] for i in range(sub_key_list)]
+
+                self.logger.highlight(f"{'-Name-':<11} | {'-IP Address-':<15} | {'-SubnetMask-':<15} | {'-Gateway-':<15} | -DHCP-")
+                for sub_key in sub_keys:
+                    interface = {}
+                    try:
+                        interface_key = f"SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\{sub_key}"
+                        interface_handle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, reg_handle, interface_key)["phkResult"]
+
+                        # Retrieve Interace Name
+                        interface_name_key = f"SYSTEM\\ControlSet001\\Control\\Network\\{{4D36E972-E325-11CE-BFC1-08002BE10318}}\\{sub_key}\\Connection"
+                        interface_name_handle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, reg_handle, interface_name_key)["phkResult"]
+                        interface_name = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, interface_name_handle, "Name")[1].rstrip("\x00")
+                        interface["Name"] = str(interface_name)
+                        if "Kernel" in interface_name:
+                            continue
+
+                        # Retrieve DHCP
+                        try:
+                            dhcp_enabled = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, interface_handle, "EnableDHCP")[1]
+                        except DCERPCException:
+                            dhcp_enabled = False
+                        interface["DHCP"] = bool(dhcp_enabled)
+
+                        # Retrieve IPAddress
+                        try:
+                            ip_address = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, interface_handle, "DhcpIPAddress" if dhcp_enabled else "IPAddress")[1].rstrip("\x00").replace("\x00", ", ")
+                        except DCERPCException:
+                            ip_address = None
+                        interface["IPAddress"] = ip_address if ip_address else None
+
+                        # Retrieve SubnetMask
+                        try:
+                            subnetmask = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, interface_handle, "SubnetMask")[1].rstrip("\x00").replace("\x00", ", ")
+                        except DCERPCException:
+                            subnetmask = None
+                        interface["SubnetMask"] = subnetmask if subnetmask else None
+
+                        # Retrieve DefaultGateway
+                        try:
+                            default_gateway = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, interface_handle, "DhcpDefaultGateway")[1].rstrip("\x00").replace("\x00", ", ")
+                        except DCERPCException:
+                            default_gateway = None
+                        interface["DefaultGateway"] = default_gateway if default_gateway else None
+
+                        self.logger.highlight(f"{interface['Name']:<11} | {interface['IPAddress']!s:<15} | {interface['SubnetMask']!s:<15} | {interface['DefaultGateway']!s:<15} | {interface['DHCP']}")
+
+                    except DCERPCException as e:
+                        self.logger.info(f"Failed to retrieve the network interface info for {sub_key}: {e!s}")
+
+            with contextlib.suppress(Exception):
+                remoteOps.finish()
+        except DCERPCException as e:
+            self.logger.error(f"Failed to connect to the target: {e!s}")
 
     def get_dc_ips(self):
         dc_ips = [dc[1] for dc in self.db.get_domain_controllers(domain=self.domain)]
@@ -1302,7 +1370,7 @@ class smb(connection):
                 self.logger.success(f"Created file {src} on \\\\{self.args.share}\\{dst}")
             except Exception as e:
                 self.logger.fail(f"Error writing file to share {self.args.share}: {e}")
-    
+
     def put_file(self):
         for src, dest in self.args.put_file:
             self.put_file_single(src, dest)
@@ -1324,7 +1392,6 @@ class smb(connection):
     def get_file(self):
         for src, dest in self.args.get_file:
             self.get_file_single(src, dest)
-
 
     def enable_remoteops(self):
         try:
@@ -1408,7 +1475,7 @@ class smb(connection):
         except Exception as e:
             self.logger.debug(f"Could not upgrade connection: {e}")
             return
-        
+
         try:
             self.logger.display("Collecting Machine masterkeys, grab a coffee and be patient...")
             masterkeys_triage = MasterkeysTriage(
@@ -1423,7 +1490,7 @@ class smb(connection):
         if len(masterkeys) == 0:
             self.logger.fail("No masterkeys looted")
             return
-        
+
         self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting SCCM Credentials through {self.args.sccm}")
         try:
             # Collect Chrome Based Browser stored secrets
@@ -1612,7 +1679,6 @@ class smb(connection):
                     credential.token,
                     "Google Refresh Token",
                 )
-
 
         if dump_cookies and cookies:
             self.logger.display("Start Dumping Cookies")
