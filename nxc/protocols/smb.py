@@ -572,6 +572,9 @@ class smb(connection):
                 self.admin_privs = True
             except scmr.DCERPCException:
                 self.admin_privs = False
+            except Exception as e:
+                self.logger.fail(f"Error checking if user is admin on {self.host}: {e}")
+                self.admin_privs = False
 
     def gen_relay_list(self):
         if self.server_os.lower().find("windows") != -1 and self.signing is False:
