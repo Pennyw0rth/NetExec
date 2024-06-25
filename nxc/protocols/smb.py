@@ -763,6 +763,11 @@ class smb(connection):
         try:
             self.logger.debug(f"domain: {self.domain}")
             user_id = self.db.get_user(self.domain.upper(), self.username)[0][0]
+        except IndexError as e:
+            if self.use_kcache:
+                pass
+            else
+                self.logger.fail(f"IndexError: {str(e)}")
         except Exception as e:
             error = get_error_string(e)
             self.logger.fail(f"Error getting user: {error}")
