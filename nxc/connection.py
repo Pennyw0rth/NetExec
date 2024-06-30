@@ -84,7 +84,7 @@ def get_host_addr_info(target, force_ipv6, dns_server, dns_tcp, dns_timeout):
 
 def requires_admin(func):
     def _decorator(self, *args, **kwargs):
-        if self.admin_privs is False:
+        if self.admin_privs is False and self.args.exec_method != "mmcexec":
             return None
         return func(self, *args, **kwargs)
 

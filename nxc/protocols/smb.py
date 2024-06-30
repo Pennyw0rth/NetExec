@@ -719,11 +719,12 @@ class smb(connection):
                 self.logger.fail("Command execution blocked by AMSI")
                 return None
 
-            if (self.args.execute or self.args.ps_execute) and output:
+            if (self.args.execute or self.args.ps_execute):
                 self.logger.success(f"Executed command via {current_method}")
-                output_lines = StringIO(output).readlines()
-                for line in output_lines:
-                    self.logger.highlight(line.strip())
+                if output:
+                    output_lines = StringIO(output).readlines()
+                    for line in output_lines:
+                        self.logger.highlight(line.strip())
             return output
         else:
             self.logger.fail(f"Execute command failed with {current_method}")
