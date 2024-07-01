@@ -4,7 +4,6 @@ from impacket.dcerpc.v5.rpcrt import DCERPCException
 from json import loads
 from traceback import format_exc as traceback_format_exc
 
-
 class NXCModule:
     """
     Module by Adamkadaban: @Adamkadaban
@@ -49,42 +48,42 @@ class NXCModule:
         self.getSAMRResetInfo(context)
 
     def getSAMRResetInfo(self, context):
-        stringbinding = f"ncacn_np:{self.__targetIp}[\\pipe\\samr]"
-        rpctransport = transport.DCERPCTransportFactory(stringbinding)
-        rpctransport.set_dport(445)
-        rpctransport.setRemoteHost(self.__targetIp)
+        string_binding = f"ncacn_np:{self.__targetIp}[\\pipe\\samr]"
+        rpc_transport = transport.DCErpc_transportFactory(string_binding)
+        rpc_transport.set_dport(445)
+        rpc_transport.setRemoteHost(self.__targetIp)
 
-        if hasattr(rpctransport, "set_credentials"):
+        if hasattr(rpc_transport, "set_credentials"):
             # This method exists only for selected protocol sequences.
-            rpctransport.set_credentials(self.__username, self.__password, self.__domain, self.__lmhash,
+            rpc_transport.set_credentials(self.__username, self.__password, self.__domain, self.__lmhash,
                                          self.__nthash, self.__aesKey)
-        rpctransport.set_kerberos(self.__doKerberos, self.__kdcHost)
+        rpc_transport.set_kerberos(self.__doKerberos, self.__kdcHost)
 
         try:
-            dce = rpctransport.get_dce_rpc()
+            dce = rpc_transport.get_dce_rpc()
             dce.connect()
             dce.bind(samr.MSRPC_UUID_SAMR)
 
             # obtain server handle for samr connection
             resp = samr.hSamrConnect(dce)
-            serverHandle = resp["ServerHandle"]
+            server_handle = resp["server_handle"]
 
-            resp = samr.hSamrEnumerateDomainsInSamServer(dce, serverHandle)
+            resp = samr.hSamrEnumerateDomainsInSamServer(dce, server_handle)
             domains = resp["Buffer"]["Buffer"]
 
-            resp = samr.hSamrLookupDomainInSamServer(dce, serverHandle, domains[0]["Name"])
+            resp = samr.hSamrLookupDomainInSamServer(dce, server_handle, domains[0]["Name"])
 
             # obtain domain handle for samr connection
-            resp = samr.hSamrOpenDomain(dce, serverHandle=serverHandle, domainId=resp["DomainId"])
-            domainHandle = resp["DomainHandle"]
+            resp = samr.hSamrOpenDomain(dce, server_handle=server_handle, domainId=resp["DomainId"])
+            domain_handle = resp["domain_handle"]
 
             status = STATUS_MORE_ENTRIES
-            enumerationContext = 0
+            enumeration_context = 0
 
             # try to iterate through users in domain entries for connection
             while status == STATUS_MORE_ENTRIES:
                 try:
-                    resp = samr.hSamrEnumerateUsersInDomain(dce, domainHandle, enumerationContext=enumerationContext)
+                    resp = samr.hSamrEnumerateUsersInDomain(dce, domain_handle, enumeration_context=enumeration_context)
                 except DCERPCException as e:
                     if str(e).find("STATUS_MORE_ENTRIES") < 0:
                         raise 
@@ -93,14 +92,14 @@ class NXCModule:
                 for user in resp["Buffer"]["Buffer"]:
                     # request SAMR ID 30
                     # https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-samr/6b0dff90-5ac0-429a-93aa-150334adabf6
-                    r = samr.hSamrOpenUser(dce, domainHandle, samr.MAXIMUM_ALLOWED, user["RelativeId"])
+                    r = samr.hSamrOpenUser(dce, domain_handle, samr.MAXIMUM_ALLOWED, user["RelativeId"])
                     info = samr.hSamrQueryInformationUser2(dce, r["UserHandle"], samr.USER_INFORMATION_CLASS.UserResetInformation)
 
-                    resetData = info["Buffer"]["Reset"]["ResetData"]
-                    if resetData == b"":
+                    reset_data = info["Buffer"]["Reset"]["reset_data"]
+                    if reset_data == b"":
                         break
-                    resetData = loads(resetData)
-                    questions = resetData["questions"]
+                    reset_data = loads(reset_data)
+                    questions = reset_data["questions"]
 
                     if len(questions) == 0:
                         context.log.highlight(f"User {user['Name']} has no security questions")
@@ -111,17 +110,16 @@ class NXCModule:
                             context.log.highlight(f"{user['Name']} - {question}: {answer}")
 
                     samr.hSamrCloseHandle(dce, r["UserHandle"])
-                enumerationContext = resp["EnumerationContext"]
+                enumeration_context = resp["enumeration_context"]
                 status = resp["ErrorCode"]
 
         except Exception as e:
             context.log.fail(f"Error: {e}")
             context.log.debug(traceback_format_exc())
 
-
         finally:
-            if domainHandle is not None:
-                samr.hSamrCloseHandle(dce, domainHandle)
-            if serverHandle is not None:
-                samr.hSamrCloseHandle(dce, serverHandle)
+            if domain_handle is not None:
+                samr.hSamrCloseHandle(dce, domain_handle)
+            if server_handle is not None:
+                samr.hSamrCloseHandle(dce, server_handle)
             dce.disconnect()
