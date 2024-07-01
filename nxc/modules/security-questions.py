@@ -49,7 +49,7 @@ class NXCModule:
 
     def getSAMRResetInfo(self, context):
         string_binding = f"ncacn_np:{self.__targetIp}[\\pipe\\samr]"
-        rpc_transport = transport.DCErpc_transportFactory(string_binding)
+        rpc_transport = transport.DCERPCTransportFactory(string_binding)
         rpc_transport.set_dport(445)
         rpc_transport.setRemoteHost(self.__targetIp)
 
@@ -66,7 +66,7 @@ class NXCModule:
 
             # obtain server handle for samr connection
             resp = samr.hSamrConnect(dce)
-            server_handle = resp["server_handle"]
+            server_handle = resp["ServerHandle"]
 
             resp = samr.hSamrEnumerateDomainsInSamServer(dce, server_handle)
             domains = resp["Buffer"]["Buffer"]
@@ -74,8 +74,8 @@ class NXCModule:
             resp = samr.hSamrLookupDomainInSamServer(dce, server_handle, domains[0]["Name"])
 
             # obtain domain handle for samr connection
-            resp = samr.hSamrOpenDomain(dce, server_handle=server_handle, domainId=resp["DomainId"])
-            domain_handle = resp["domain_handle"]
+            resp = samr.hSamrOpenDomain(dce, serverHandle=server_handle, domainId=resp["DomainId"])
+            domain_handle = resp["DomainHandle"]
 
             status = STATUS_MORE_ENTRIES
             enumeration_context = 0
@@ -83,7 +83,7 @@ class NXCModule:
             # try to iterate through users in domain entries for connection
             while status == STATUS_MORE_ENTRIES:
                 try:
-                    resp = samr.hSamrEnumerateUsersInDomain(dce, domain_handle, enumeration_context=enumeration_context)
+                    resp = samr.hSamrEnumerateUsersInDomain(dce, domain_handle, enumerationContext=enumeration_context)
                 except DCERPCException as e:
                     if str(e).find("STATUS_MORE_ENTRIES") < 0:
                         raise 
@@ -95,7 +95,7 @@ class NXCModule:
                     r = samr.hSamrOpenUser(dce, domain_handle, samr.MAXIMUM_ALLOWED, user["RelativeId"])
                     info = samr.hSamrQueryInformationUser2(dce, r["UserHandle"], samr.USER_INFORMATION_CLASS.UserResetInformation)
 
-                    reset_data = info["Buffer"]["Reset"]["reset_data"]
+                    reset_data = info["Buffer"]["Reset"]["ResetData"]
                     if reset_data == b"":
                         break
                     reset_data = loads(reset_data)
@@ -110,7 +110,7 @@ class NXCModule:
                             context.log.highlight(f"{user['Name']} - {question}: {answer}")
 
                     samr.hSamrCloseHandle(dce, r["UserHandle"])
-                enumeration_context = resp["enumeration_context"]
+                enumeration_context = resp["EnumerationContext"]
                 status = resp["ErrorCode"]
 
         except Exception as e:
