@@ -766,7 +766,7 @@ class smb(connection):
         except IndexError as e:
             if self.use_kcache:
                 pass
-            else
+            else:
                 self.logger.fail(f"IndexError: {str(e)}")
         except Exception as e:
             error = get_error_string(e)
