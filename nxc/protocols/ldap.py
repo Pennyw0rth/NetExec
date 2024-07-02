@@ -1418,6 +1418,7 @@ class ldap(connection):
             self.logger.highlight("Using kerberos auth without ccache, getting TGT")
             auth.get_tgt()
         if self.args.use_kcache:
+            auth.load_ccache()
             self.logger.highlight("Using kerberos auth from ccache")
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S") + "_"
