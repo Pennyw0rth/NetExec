@@ -1419,6 +1419,7 @@ class ldap(connection):
             auth.get_tgt()
         if self.args.use_kcache:
             self.logger.highlight("Using kerberos auth from ccache")
+            auth.load_ccache()
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S") + "_"
         bloodhound = BloodHound(ad, self.hostname, self.host, self.port)
