@@ -78,6 +78,7 @@ class NXCModule:
             dump = True
         else:
             context.log.fail("Process lsass.exe error un dump, try with verbose")
+            sys.exit(1)
 
         if dump:
             regex = r"([A-Za-z0-9-]*.dmp)"

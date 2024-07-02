@@ -1,14 +1,11 @@
-name: Lint Python code with ruff
+name: lint
 # Caching source: https://gist.github.com/gh640/233a6daf68e9e937115371c0ecd39c61?permalink_comment_id=4529233#gistcomment-4529233
 
-on:
-  push:
+on: [workflow_call]
 
 jobs:
   lint:
     runs-on: ubuntu-latest
-    if:
-      github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
 
     steps:
       - uses: actions/checkout@v3
