@@ -236,10 +236,14 @@ class smb(connection):
         # As of June 2024 Samba will always report the version as "Windows 6.1", apparently due to a bug https://stackoverflow.com/a/67577401/17395725
         # Together with the reported build version "0" by Samba we can assume that it is a Samba server. Windows should always report a build version > 0
         # Also only on Windows we should get an OS arch as for that we would need MSRPC
-        self.server_os = self.conn.getServerOS()
-        self.server_os_major = self.conn.getServerOSMajor()
-        self.server_os_minor = self.conn.getServerOSMinor()
-        self.server_os_build = self.conn.getServerOSBuild()
+        try:
+            self.server_os = self.conn.getServerOS()
+            self.server_os_major = self.conn.getServerOSMajor()
+            self.server_os_minor = self.conn.getServerOSMinor()
+            self.server_os_build = self.conn.getServerOSBuild()
+        except:
+            self.logger.debug("Error getting server information...")
+
         if "Windows 6.1" in self.server_os and self.server_os_build == 0 and self.os_arch == 0:
             self.server_os = "Unix - Samba"
         elif self.server_os_build == 0 and self.os_arch == 0:
