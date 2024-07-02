@@ -49,8 +49,8 @@ class NXCModule:
                     try:
                         data = d.run()
                     except Exception as e:
-                        self.logger.fail(str(e))
-                        return
+                        context.log.fail(str(e))
+                        continue
                     r = json.loads(data)
                     laps_computers.append((str(values["samaccountname"]), r["n"], str(r["p"])))
                 elif "mslaps-password" in values:

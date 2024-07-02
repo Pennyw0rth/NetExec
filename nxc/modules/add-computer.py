@@ -102,8 +102,9 @@ class NXCModule:
             None
         """
         string_binding = epm.hept_map(self.__host, samr.MSRPC_UUID_SAMR, protocol="ncacn_np")
+        string_binding = string_binding.replace(self.__host, self.__kdcHost) if self.__kdcHost is not None else string_binding
 
-        rpc_transport = transport.DCERPCTransportFactory(string_binding.replace(self.__host, self.__kdcHost))
+        rpc_transport = transport.DCERPCTransportFactory(string_binding)
         rpc_transport.setRemoteHost(self.__host)
 
         if hasattr(rpc_transport, "set_credentials"):
