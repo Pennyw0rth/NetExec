@@ -241,7 +241,7 @@ class smb(connection):
             self.server_os_major = self.conn.getServerOSMajor()
             self.server_os_minor = self.conn.getServerOSMinor()
             self.server_os_build = self.conn.getServerOSBuild()
-        except:
+        except KeyError:
             self.logger.debug("Error getting server information...")
 
         if "Windows 6.1" in self.server_os and self.server_os_build == 0 and self.os_arch == 0:
