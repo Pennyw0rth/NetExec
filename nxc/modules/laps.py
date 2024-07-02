@@ -49,7 +49,7 @@ class NXCModule:
                     try:
                         data = d.run()
                     except Exception as e:
-                        self.logger.fail(str(e))
+                        context.log.fail(str(e))
                         return
                     r = json.loads(data)
                     laps_computers.append((str(values["samaccountname"]), r["n"], str(r["p"])))
