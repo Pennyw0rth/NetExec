@@ -397,11 +397,11 @@ class smb(connection):
             self.logger.debug(f"{self.is_guest=}")
             if "Unix" not in self.server_os:
                 self.check_if_admin()
+
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
             self.db.add_credential("plaintext", domain, self.username, self.password)
             user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
             host_id = self.db.get_hosts(self.host)[0].id
-
             self.db.add_loggedin_relation(user_id, host_id)
 
             out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_guest()}{self.mark_pwned()}"
@@ -411,14 +411,7 @@ class smb(connection):
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 self.logger.debug(f"Adding admin user: {self.domain}/{self.username}:{self.password}@{self.host}")
-                self.db.add_admin_user(
-                    "plaintext",
-                    domain,
-                    self.username,
-                    self.password,
-                    self.host,
-                    user_id=user_id,
-                )
+                self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
             # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
@@ -469,9 +462,10 @@ class smb(connection):
             self.logger.debug(f"{self.is_guest=}")
             if "Unix" not in self.server_os:
                 self.check_if_admin()
-            user_id = self.db.add_credential("hash", domain, self.username, self.hash)
-            host_id = self.db.get_hosts(self.host)[0].id
 
+            self.db.add_credential("hash", domain, self.username, self.hash)
+            user_id = self.db.get_credential("hash", domain, self.username, self.hash)
+            host_id = self.db.get_hosts(self.host)[0].id
             self.db.add_loggedin_relation(user_id, host_id)
 
             out = f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_guest()}{self.mark_pwned()}"
@@ -764,10 +758,10 @@ class smb(connection):
             self.logger.debug(f"domain: {self.domain}")
             user_id = self.db.get_user(self.domain.upper(), self.username)[0][0]
         except IndexError as e:
-            if self.use_kcache:
+            if self.kerberos:
                 pass
             else:
-                self.logger.fail(f"IndexError: {str(e)}")
+                self.logger.fail(f"IndexError: {e!s}")
         except Exception as e:
             error = get_error_string(e)
             self.logger.fail(f"Error getting user: {error}")
