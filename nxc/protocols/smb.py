@@ -224,7 +224,7 @@ class smb(connection):
             if not self.targetDomain:   # Not sure if that can even happen but now we are safe
                 self.targetDomain = self.hostname
         else:
-            self.hostname = self.host
+            self.hostname = self.host.split(".")[0]
             self.targetDomain = self.hostname
 
         self.domain = self.targetDomain if not self.args.domain else self.args.domain
