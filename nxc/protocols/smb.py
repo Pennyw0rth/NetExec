@@ -263,14 +263,18 @@ class smb(connection):
         self.os_arch = self.get_os_arch()
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
-        self.db.add_host(
-            self.host,
-            self.hostname,
-            self.domain,
-            self.server_os,
-            self.smbv1,
-            self.signing,
-        )
+        try:
+            self.db.add_host(
+                self.host,
+                self.hostname,
+                self.domain,
+                self.server_os,
+                self.smbv1,
+                self.signing,
+            )
+        except Exception as e:
+            self.logger.debug(f"Error adding host {self.host} into db")
+            self.logger.debug(str(e))
 
         try:
             # DCs seem to want us to logoff first, windows workstations sometimes reset the connection
