@@ -482,7 +482,7 @@ class connection:
 
         with sem:
             if cred_type == "plaintext":
-                if self.args.kerberos and not hasattr(self.args, "laps"):
+                if self.args.kerberos:
                     self.logger.debug("Trying to authenticate using Kerberos")
                     return self.kerberos_login(domain, username, secret, "", "", self.kdcHost, False)
                 elif hasattr(self.args, "domain"):  # Some protocols don't use domain for login
