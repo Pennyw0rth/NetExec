@@ -59,7 +59,7 @@ class LDAPConnect:
         baseDN = baseDN[:-1]
 
         try:
-            ldap_connection = ldap_impacket.LDAPConnection(f"ldap://{kdcHost}", baseDN, domain if not dns_server else dns_server)
+            ldap_connection = ldap_impacket.LDAPConnection(f"ldap://{kdcHost}", baseDN, dns_server if dns_server else domain)
             ldap_connection.kerberosLogin(
                 username,
                 password,
@@ -78,7 +78,7 @@ class LDAPConnect:
             if str(e).find("strongerAuthRequired") >= 0:
                 # We need to try SSL
                 try:
-                    ldap_connection = ldap_impacket.LDAPConnection(f"ldaps://{kdcHost}", baseDN, domain if not dns_server else dns_server)
+                    ldap_connection = ldap_impacket.LDAPConnection(f"ldaps://{kdcHost}", baseDN, dns_server if dns_server else domain)
                     ldap_connection.login(
                         username,
                         password,
@@ -135,7 +135,7 @@ class LDAPConnect:
         base_dn = base_dn[:-1]
 
         try:
-            ldap_connection = ldap_impacket.LDAPConnection(f"ldap://{domain}", base_dn, domain if not dns_server else dns_server)
+            ldap_connection = ldap_impacket.LDAPConnection(f"ldap://{domain}", base_dn, dns_server if dns_server else domain)
             ldap_connection.login(username, password, domain, lmhash, nthash)
 
             # Connect to LDAP
@@ -148,7 +148,7 @@ class LDAPConnect:
             if str(e).find("strongerAuthRequired") >= 0:
                 # We need to try SSL
                 try:
-                    ldap_connection = ldap_impacket.LDAPConnection(f"ldaps://{domain}", base_dn, domain if not dns_server else dns_server)
+                    ldap_connection = ldap_impacket.LDAPConnection(f"ldaps://{domain}", base_dn, dns_server if dns_server else domain)
                     ldap_connection.login(username, password, domain, lmhash, nthash)
                     self.logger.extra["protocol"] = "LDAPS"
                     self.logger.extra["port"] = "636"
