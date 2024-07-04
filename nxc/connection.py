@@ -148,6 +148,7 @@ class connection:
         self.kdcHost = self.args.kdcHost
         self.port = self.args.port
         self.local_ip = None
+        self.dns_server = self.args.dns_server
 
         # DNS resolution
         dns_result = self.resolver(target)
@@ -481,7 +482,7 @@ class connection:
 
         with sem:
             if cred_type == "plaintext":
-                if self.args.kerberos:
+                if self.args.kerberos and not hasattr(self.args, "laps"):
                     self.logger.debug("Trying to authenticate using Kerberos")
                     return self.kerberos_login(domain, username, secret, "", "", self.kdcHost, False)
                 elif hasattr(self.args, "domain"):  # Some protocols don't use domain for login
@@ -543,7 +544,7 @@ class connection:
 
         if hasattr(self.args, "laps") and self.args.laps:
             self.logger.debug("Trying to authenticate using LAPS")
-            username[0], secret[0], domain[0], ntlm_hash = laps_search(self, username, secret, cred_type, domain)
+            username[0], secret[0], domain[0] = laps_search(self, username, secret, cred_type, domain, self.dns_server)
             cred_type = ["plaintext"]
             if not (username[0] or secret[0] or domain[0]):
                 return False
