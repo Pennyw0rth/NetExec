@@ -162,7 +162,7 @@ class UserSamrDump:
             last_pw_set = old_large_int_to_datetime(user_info["PasswordLastSet"])
             if last_pw_set == "1601-01-01 00:00:00":
                 last_pw_set = "<never>"
-            users = users + 1
+            users += + 1
             self.logger.highlight(f"{user_name:<30}{last_pw_set:<20}{bad_pwd_count:<8}{user_description} ")
             samr.hSamrCloseHandle(self.dce, open_user_resp["UserHandle"])
         return users

@@ -1,5 +1,3 @@
-import binascii
-import hashlib
 from json import loads
 from pyasn1.codec.der import decoder
 from pyasn1_modules import rfc5652
