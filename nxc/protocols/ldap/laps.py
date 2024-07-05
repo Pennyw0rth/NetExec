@@ -39,8 +39,9 @@ class LDAPConnect:
         lmhash = ""
         nthash = ""
 
-        if kdcHost is None:
-            kdcHost = domain
+        if kdcHost is None or domain not in kdcHost:
+            self.logger.fail("Please provide the FQDN of the domain controller with --kdcHost")
+            exit(1)
 
         # This checks to see if we didn't provide the LM Hash
         if ntlm_hash and ntlm_hash.find(":") != -1:
@@ -52,11 +53,12 @@ class LDAPConnect:
         baseDN = ""
         domainParts = domain.split(".")
         for i in domainParts:
-            baseDN += f"dc={i},"
+            baseDN += f"DC={i},"
         # Remove last ','
         baseDN = baseDN[:-1]
 
         try:
+            self.logger.info(f"Connecting to ldap://{kdcHost} - {baseDN} - {domain} [1]")
             ldap_connection = ldap_impacket.LDAPConnection(f"ldap://{kdcHost}", baseDN, dns_server if dns_server else domain)
             ldap_connection.kerberosLogin(
                 username,
@@ -103,15 +105,11 @@ class LDAPConnect:
                     color="magenta" if error_code in ldap_error_status else "red",
                 )
             return False
-
         except OSError:
             self.logger.debug(f"{domain}\\{username}:{password if password else ntlm_hash} {'Error connecting to the domain, please add option --kdcHost with the FQDN of the domain controller'}")
             return False
         except KerberosError as e:
-            self.logger.fail(
-                f"{domain}\\{username}:{password if password else ntlm_hash} {e!s}",
-                color="red",
-            )
+            self.logger.fail(f"{domain}\\{username}:{password if password else ntlm_hash} {e!s}", color="red")
             return False
 
     def auth_login(self, domain, username, password, ntlm_hash, dns_server):
@@ -273,7 +271,7 @@ def laps_search(self, username, password, cred_type, domain, dns_server):
     if self.kerberos:
         if self.kdcHost is None:
             self.logger.fail("Add --kdcHost parameter to use laps with kerberos")
-            return None, None, None, None
+            return None, None, None
 
         connection = ldapco.kerberos_login(
             domain[0],
