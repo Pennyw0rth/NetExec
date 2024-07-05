@@ -273,8 +273,7 @@ class smb(connection):
                 self.signing,
             )
         except Exception as e:
-            self.logger.debug(f"Error adding host {self.host} into db")
-            self.logger.debug(str(e))
+            self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
 
         try:
             # DCs seem to want us to logoff first, windows workstations sometimes reset the connection
