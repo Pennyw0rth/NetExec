@@ -215,6 +215,7 @@ class smb(connection):
             if "STATUS_NOT_SUPPORTED" in str(e):
                 # no ntlm supported
                 self.no_ntlm = True
+                self.logger.debug("NTLM not supported")
 
         # self.domain is the attribute we authenticate with
         # self.targetDomain is the attribute which gets displayed as host domain
@@ -224,8 +225,20 @@ class smb(connection):
             if not self.targetDomain:   # Not sure if that can even happen but now we are safe
                 self.targetDomain = self.hostname
         else:
-            self.hostname = self.host
-            self.targetDomain = self.hostname
+            # If we can't authenticate with NTLM and the target is supplied as a FQDN we must parse it
+            try:
+                import socket
+                socket.inet_aton(self.host)
+                self.logger.fail("NTLM authentication not available! Authentication will fail without a valid hostname and domain name")
+                self.hostname = self.host
+                self.targetDomain = self.host
+            except OSError:
+                if self.host.count(".") >= 1:
+                    self.hostname = self.host.split(".")[0]
+                    self.targetDomain = ".".join(self.host.split(".")[1:])
+                else:
+                    self.hostname = self.host
+                    self.targetDomain = self.host
 
         self.domain = self.targetDomain if not self.args.domain else self.args.domain
 
@@ -236,10 +249,14 @@ class smb(connection):
         # As of June 2024 Samba will always report the version as "Windows 6.1", apparently due to a bug https://stackoverflow.com/a/67577401/17395725
         # Together with the reported build version "0" by Samba we can assume that it is a Samba server. Windows should always report a build version > 0
         # Also only on Windows we should get an OS arch as for that we would need MSRPC
-        self.server_os = self.conn.getServerOS()
-        self.server_os_major = self.conn.getServerOSMajor()
-        self.server_os_minor = self.conn.getServerOSMinor()
-        self.server_os_build = self.conn.getServerOSBuild()
+        try:
+            self.server_os = self.conn.getServerOS()
+            self.server_os_major = self.conn.getServerOSMajor()
+            self.server_os_minor = self.conn.getServerOSMinor()
+            self.server_os_build = self.conn.getServerOSBuild()
+        except KeyError:
+            self.logger.debug("Error getting server information...")
+
         if "Windows 6.1" in self.server_os and self.server_os_build == 0 and self.os_arch == 0:
             self.server_os = "Unix - Samba"
         elif self.server_os_build == 0 and self.os_arch == 0:
@@ -259,14 +276,17 @@ class smb(connection):
         self.os_arch = self.get_os_arch()
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
-        self.db.add_host(
-            self.host,
-            self.hostname,
-            self.domain,
-            self.server_os,
-            self.smbv1,
-            self.signing,
-        )
+        try:
+            self.db.add_host(
+                self.host,
+                self.hostname,
+                self.domain,
+                self.server_os,
+                self.smbv1,
+                self.signing,
+            )
+        except Exception as e:
+            self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
 
         try:
             # DCs seem to want us to logoff first, windows workstations sometimes reset the connection
@@ -713,11 +733,12 @@ class smb(connection):
                 self.logger.fail("Command execution blocked by AMSI")
                 return None
 
-            if (self.args.execute or self.args.ps_execute) and output:
+            if (self.args.execute or self.args.ps_execute):
                 self.logger.success(f"Executed command via {current_method}")
-                output_lines = StringIO(output).readlines()
-                for line in output_lines:
-                    self.logger.highlight(line.strip())
+                if output:
+                    output_lines = StringIO(output).readlines()
+                    for line in output_lines:
+                        self.logger.highlight(line.strip())
             return output
         else:
             self.logger.fail(f"Execute command failed with {current_method}")
