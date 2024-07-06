@@ -215,6 +215,7 @@ class smb(connection):
             if "STATUS_NOT_SUPPORTED" in str(e):
                 # no ntlm supported
                 self.no_ntlm = True
+                self.logger.debug("NTLM not supported")
 
         # self.domain is the attribute we authenticate with
         # self.targetDomain is the attribute which gets displayed as host domain
@@ -224,8 +225,20 @@ class smb(connection):
             if not self.targetDomain:   # Not sure if that can even happen but now we are safe
                 self.targetDomain = self.hostname
         else:
-            self.hostname = self.host.split(".")[0]
-            self.targetDomain = self.hostname
+            # If we can't authenticate with NTLM and the target is supplied as a FQDN we must parse it
+            try:
+                import socket
+                socket.inet_aton(self.host)
+                self.logger.fail("NTLM authentication not available! Authentication will fail without a valid hostname and domain name")
+                self.hostname = self.host
+                self.targetDomain = self.host
+            except OSError:
+                if self.host.count(".") >= 1:
+                    self.hostname = self.host.split(".")[0]
+                    self.targetDomain = ".".join(self.host.split(".")[1:])
+                else:
+                    self.hostname = self.host
+                    self.targetDomain = self.host
 
         self.domain = self.targetDomain if not self.args.domain else self.args.domain
 
