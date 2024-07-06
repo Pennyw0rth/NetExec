@@ -229,7 +229,6 @@ class smb(connection):
             try:
                 import socket
                 socket.inet_aton(self.host)
-                self.logger.fail("NTLM authentication not available! Authentication will fail without a valid hostname and domain name")
                 self.hostname = self.host
                 self.targetDomain = self.host
             except OSError:
