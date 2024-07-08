@@ -250,3 +250,4 @@ netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE
 ##### NFS
 netexec nfs TARGETHOST -u "" -p "" --shares
 netexec nfs TARGETHOST -u "" -p "" --shares-list
+netexec nfs TARGETHOST -u "" -p "" --bruteforce-uid 2000
