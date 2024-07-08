@@ -85,6 +85,8 @@ def get_host_addr_info(target, force_ipv6, dns_server, dns_tcp, dns_timeout):
 def requires_admin(func):
     def _decorator(self, *args, **kwargs):
         if self.admin_privs is False:
+            if hasattr(self.args, "exec_method") and self.args.exec_method == "mmcexec":
+                return func(self, *args, **kwargs)
             return None
         return func(self, *args, **kwargs)
 
@@ -146,6 +148,7 @@ class connection:
         self.kdcHost = self.args.kdcHost
         self.port = self.args.port
         self.local_ip = None
+        self.dns_server = self.args.dns_server
 
         # DNS resolution
         dns_result = self.resolver(target)
@@ -541,7 +544,7 @@ class connection:
 
         if hasattr(self.args, "laps") and self.args.laps:
             self.logger.debug("Trying to authenticate using LAPS")
-            username[0], secret[0], domain[0], ntlm_hash = laps_search(self, username, secret, cred_type, domain)
+            username[0], secret[0], domain[0] = laps_search(self, username, secret, cred_type, domain, self.dns_server)
             cred_type = ["plaintext"]
             if not (username[0] or secret[0] or domain[0]):
                 return False

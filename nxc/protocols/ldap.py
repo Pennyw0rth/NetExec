@@ -172,12 +172,12 @@ class ldap(connection):
                     self.logger.debug(f"ldap_connection: {ldap_connection}")
             except SysCallError as e:
                 if proto == "ldaps":
-                    self.logger.debug(f"LDAPs connection to {ldap_url} failed - {e}")
+                    self.logger.fail(f"LDAPs connection to {ldap_url} failed - {e}")
                     # https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/enable-ldap-over-ssl-3rd-certification-authority
-                    self.logger.debug("Even if the port is open, LDAPS may not be configured")
+                    self.logger.fail("Even if the port is open, LDAPS may not be configured")
                 else:
-                    self.logger.debug(f"LDAP connection to {ldap_url} failed: {e}")
-                return [None, None, None]
+                    self.logger.fail(f"LDAP connection to {ldap_url} failed: {e}")
+                exit(1)
 
             resp = ldap_connection.search(
                 scope=ldapasn1_impacket.Scope("baseObject"),
@@ -1419,6 +1419,7 @@ class ldap(connection):
             auth.get_tgt()
         if self.args.use_kcache:
             self.logger.highlight("Using kerberos auth from ccache")
+            auth.load_ccache()
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S") + "_"
         bloodhound = BloodHound(ad, self.hostname, self.host, self.port)

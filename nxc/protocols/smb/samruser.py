@@ -133,12 +133,13 @@ class UserSamrDump:
                 # set these for the while loop
                 enumerationContext = enumerate_users_resp["EnumerationContext"]
                 status = enumerate_users_resp["ErrorCode"]
-        self.print_user_info(users, domain_name)
+        self.logger.display(f"Enumerated {users:d} local users: {domain_name}")
         self.dce.disconnect()
 
     def get_user_info(self, domain_handle, user_ids):
         self.logger.debug(f"Getting user info for users: {user_ids}")
-        users = []
+        self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
+        users = 0
 
         for user in user_ids:
             self.logger.debug(f"Calling hSamrOpenUser for RID {user}")
@@ -161,18 +162,10 @@ class UserSamrDump:
             last_pw_set = old_large_int_to_datetime(user_info["PasswordLastSet"])
             if last_pw_set == "1601-01-01 00:00:00":
                 last_pw_set = "<never>"
-            users.append({"name": user_name, "description": user_description, "bad_pwd_count": bad_pwd_count, "last_pw_set": last_pw_set})
-
+            users += + 1
+            self.logger.highlight(f"{user_name:<30}{last_pw_set:<20}{bad_pwd_count:<8}{user_description} ")
             samr.hSamrCloseHandle(self.dce, open_user_resp["UserHandle"])
         return users
-
-    def print_user_info(self, users, domain_name):
-        self.logger.display(f"Enumerated {len(users):d} local users: {domain_name}")
-        self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
-        for user in users:
-            self.logger.debug(f"Full user info: {user}")
-            self.logger.highlight(f"{user['name']:<30}{user['last_pw_set']:<20}{user['bad_pwd_count']:<8}{user['description']} ")
-
 
 def old_large_int_to_datetime(large_int):
     combined = (large_int["HighPart"] << 32) | large_int["LowPart"]
