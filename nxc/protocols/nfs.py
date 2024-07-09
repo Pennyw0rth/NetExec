@@ -213,7 +213,7 @@ class nfs(connection):
             self.nfs3.disconnect()
             self.disconnection()
 
-    def bruteforce_uid(self, max_uid=None):
+    def uid_brute(self, max_uid=None):
         if not max_uid:
-            max_uid = int(self.args.bruteforce_uid)
+            max_uid = int(self.args.uid_brute)
         self.shares_list(max_uid)
