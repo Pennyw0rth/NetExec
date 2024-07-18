@@ -90,27 +90,35 @@ class NXCModule:
                     resp = e.get_packet()
 
                 for user in resp["Buffer"]["Buffer"]:
-                    context.log.info(f"Querying security questions for User: {user['Name']}")
-                    # request SAMR ID 30
-                    # https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-samr/6b0dff90-5ac0-429a-93aa-150334adabf6
-                    r = samr.hSamrOpenUser(dce, domain_handle, samr.MAXIMUM_ALLOWED, user["RelativeId"])
-                    info = samr.hSamrQueryInformationUser2(dce, r["UserHandle"], samr.USER_INFORMATION_CLASS.UserResetInformation)
+                    try:
+                        context.log.info(f"Querying security questions for User: {user['Name']}")
+                        # request SAMR ID 30
+                        # https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-samr/6b0dff90-5ac0-429a-93aa-150334adabf6
+                        r = samr.hSamrOpenUser(dce, domain_handle, samr.MAXIMUM_ALLOWED, user["RelativeId"])
+                        info = samr.hSamrQueryInformationUser2(dce, r["UserHandle"], samr.USER_INFORMATION_CLASS.UserResetInformation)
 
-                    reset_data = info["Buffer"]["Reset"]["ResetData"]
-                    if reset_data == b"":
-                        continue
-                    reset_data = loads(reset_data)
-                    questions = reset_data["questions"]
+                        reset_data = info["Buffer"]["Reset"]["ResetData"]
+                        if reset_data == b"":
+                            continue
+                        reset_data = loads(reset_data)
+                        questions = reset_data["questions"]
 
-                    if len(questions) == 0:
-                        context.log.highlight(f"User {user['Name']} has no security questions")
-                    else:
-                        for qna in questions:
-                            question = qna["question"]
-                            answer = qna["answer"]
-                            context.log.highlight(f"{user['Name']} - {question}: {answer}")
+                        if len(questions) == 0:
+                            context.log.highlight(f"User {user['Name']} has no security questions")
+                        else:
+                            for qna in questions:
+                                question = qna["question"]
+                                answer = qna["answer"]
+                                context.log.highlight(f"{user['Name']} - {question}: {answer}")
 
-                    samr.hSamrCloseHandle(dce, r["UserHandle"])
+                        samr.hSamrCloseHandle(dce, r["UserHandle"])
+                    except samr.DCERPCException as e:
+                        if "STATUS_INVALID_INFO_CLASS" in str(e):
+                            context.log.debug(f"Failed to query security questions for User: {user['Name']}: {e!s}")
+                            continue
+                        else:
+                            context.log.fail(f"Failed to query security questions for User: {user['Name']}: {e!s}")
+                            context.log.debug(traceback_format_exc())
                 enumeration_context = resp["EnumerationContext"]
                 status = resp["ErrorCode"]
 
