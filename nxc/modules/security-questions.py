@@ -90,6 +90,7 @@ class NXCModule:
                     resp = e.get_packet()
 
                 for user in resp["Buffer"]["Buffer"]:
+                    context.log.info(f"Querying security questions for User: {user['Name']}")
                     # request SAMR ID 30
                     # https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-samr/6b0dff90-5ac0-429a-93aa-150334adabf6
                     r = samr.hSamrOpenUser(dce, domain_handle, samr.MAXIMUM_ALLOWED, user["RelativeId"])
@@ -97,7 +98,7 @@ class NXCModule:
 
                     reset_data = info["Buffer"]["Reset"]["ResetData"]
                     if reset_data == b"":
-                        break
+                        continue
                     reset_data = loads(reset_data)
                     questions = reset_data["questions"]
 
