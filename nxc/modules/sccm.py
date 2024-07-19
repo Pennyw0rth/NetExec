@@ -9,84 +9,6 @@ from nxc.parsers.ldap_results import parse_result_attributes
 SAM_MACHINE_ACCOUNT = 0x30000001
 SAM_GROUP_OBJECT = 0x10000000
 
-# Universal SIDs
-WELL_KNOWN_SIDS = {
-    "S-1-0": "Null Authority",
-    "S-1-0-0": "Nobody",
-    "S-1-1": "World Authority",
-    "S-1-1-0": "Everyone",
-    "S-1-2": "Local Authority",
-    "S-1-2-0": "Local",
-    "S-1-2-1": "Console Logon",
-    "S-1-3": "Creator Authority",
-    "S-1-3-0": "Creator Owner",
-    "S-1-3-1": "Creator Group",
-    "S-1-3-2": "Creator Owner Server",
-    "S-1-3-3": "Creator Group Server",
-    "S-1-3-4": "Owner Rights",
-    "S-1-5-80-0": "All Services",
-    "S-1-4": "Non-unique Authority",
-    "S-1-5": "NT Authority",
-    "S-1-5-1": "Dialup",
-    "S-1-5-2": "Network",
-    "S-1-5-3": "Batch",
-    "S-1-5-4": "Interactive",
-    "S-1-5-6": "Service",
-    "S-1-5-7": "Anonymous",
-    "S-1-5-8": "Proxy",
-    "S-1-5-9": "Enterprise Domain Controllers",
-    "S-1-5-10": "Principal Self",
-    "S-1-5-11": "Authenticated Users",
-    "S-1-5-12": "Restricted Code",
-    "S-1-5-13": "Terminal Server Users",
-    "S-1-5-14": "Remote Interactive Logon",
-    "S-1-5-15": "This Organization",
-    "S-1-5-17": "This Organization",
-    "S-1-5-18": "Local System",
-    "S-1-5-19": "NT Authority",
-    "S-1-5-20": "NT Authority",
-    "S-1-5-32-544": "Administrators",
-    "S-1-5-32-545": "Users",
-    "S-1-5-32-546": "Guests",
-    "S-1-5-32-547": "Power Users",
-    "S-1-5-32-548": "Account Operators",
-    "S-1-5-32-549": "Server Operators",
-    "S-1-5-32-550": "Print Operators",
-    "S-1-5-32-551": "Backup Operators",
-    "S-1-5-32-552": "Replicators",
-    "S-1-5-64-10": "NTLM Authentication",
-    "S-1-5-64-14": "SChannel Authentication",
-    "S-1-5-64-21": "Digest Authority",
-    "S-1-5-80": "NT Service",
-    "S-1-5-83-0": "NT VIRTUAL MACHINE\\Virtual Machines",
-    "S-1-16-0": "Untrusted Mandatory Level",
-    "S-1-16-4096": "Low Mandatory Level",
-    "S-1-16-8192": "Medium Mandatory Level",
-    "S-1-16-8448": "Medium Plus Mandatory Level",
-    "S-1-16-12288": "High Mandatory Level",
-    "S-1-16-16384": "System Mandatory Level",
-    "S-1-16-20480": "Protected Process Mandatory Level",
-    "S-1-16-28672": "Secure Process Mandatory Level",
-    "S-1-5-32-554": "BUILTIN\\Pre-Windows 2000 Compatible Access",
-    "S-1-5-32-555": "BUILTIN\\Remote Desktop Users",
-    "S-1-5-32-557": "BUILTIN\\Incoming Forest Trust Builders",
-    "S-1-5-32-556": "BUILTIN\\Network Configuration Operators",
-    "S-1-5-32-558": "BUILTIN\\Performance Monitor Users",
-    "S-1-5-32-559": "BUILTIN\\Performance Log Users",
-    "S-1-5-32-560": "BUILTIN\\Windows Authorization Access Group",
-    "S-1-5-32-561": "BUILTIN\\Terminal Server License Servers",
-    "S-1-5-32-562": "BUILTIN\\Distributed COM Users",
-    "S-1-5-32-569": "BUILTIN\\Cryptographic Operators",
-    "S-1-5-32-573": "BUILTIN\\Event Log Readers",
-    "S-1-5-32-574": "BUILTIN\\Certificate Service DCOM Access",
-    "S-1-5-32-575": "BUILTIN\\RDS Remote Access Servers",
-    "S-1-5-32-576": "BUILTIN\\RDS Endpoint Servers",
-    "S-1-5-32-577": "BUILTIN\\RDS Management Servers",
-    "S-1-5-32-578": "BUILTIN\\Hyper-V Administrators",
-    "S-1-5-32-579": "BUILTIN\\Access Control Assistance Operators",
-    "S-1-5-32-580": "BUILTIN\\Remote Management Users",
-}
-
 
 class NXCModule:
     """
@@ -103,7 +25,7 @@ class NXCModule:
     multiple_hosts = True
 
     def __init__(self):
-        self.sAMAccountNames = []
+        self.sccm_sites = []
         self.base_dn = ""
 
     def options(self, context, module_options):
@@ -137,35 +59,31 @@ class NXCModule:
                     principal_security_descriptor = ldaptypes.SR_SECURITY_DESCRIPTOR(data=raw_sec_descriptor)
                     context.log.highlight(f"Found SCCM object: {item[0]}")
                     self.parse_dacl(principal_security_descriptor["Dacl"])
-                    self.context.log.highlight(f"Found sAMAccountNames: {self.sAMAccountNames}")
-
+                    self.context.log.highlight(f"Found sccm_sites: {self.sccm_sites}")
 
         except LDAPSearchError as e:
             context.log.fail(f"Obtained unexpected exception: {e}")
 
     def parse_dacl(self, dacl):
-        """Parses a DACL and extracts the sAMAccountNames with full control."""
-        parsed_dacl = []
+        """Parses a DACL and extracts the dns host names with full control over the SCCM object."""
         self.context.log.debug("Parsing DACL")
         for ace in dacl["Data"]:
-            parsed_ace = self.parse_ace(ace)
-            parsed_dacl.append(parsed_ace)
+            self.parse_ace(ace)
 
     def parse_ace(self, ace):
-        """Parses an ACE and appends the sAMAccountName to the list of known sAMAccountNames if the SID of the ACE has full control."""
+        """Parses an ACE and resolves the SID if the SID of the ACE has full control."""
         if ace["TypeName"] in ["ACCESS_ALLOWED_ACE", "ACCESS_ALLOWED_OBJECT_ACE"]:
             ace = ace["Ace"]
             sid = ace["Sid"].formatCanonical()
             mask = ace["Mask"]
             fullcontrol = 0xf01ff
             if mask.hasPriv(fullcontrol):
-                self.context.log.debug(f"Full control for {sid}")
-                print(f"SID: {sid}, sAMAccountName: {self.resolveSID(sid)}")
-                self.sAMAccountNames.append(str(self.resolveSID(sid)))
+                self.resolve_SID(sid)
 
-    def resolveSID(self, sid) -> str:
-        """Tries to resolve a SID and returns the corresponding sAMAccountName if found."""
+    def resolve_SID(self, sid):
+        """Tries to resolve a SID and add the dNSHostName to the sccm site list."""
         try:
+            self.context.log.debug(f"Resolving SID: {sid}")
             result = self.connection.ldapConnection.search(
                 searchBase=self.base_dn,
                 searchFilter=f"(objectSid={sid})",
@@ -173,20 +91,43 @@ class NXCModule:
             )
             parsed_result = parse_result_attributes(result)
             if not parsed_result:
+                return None
+            else:
+                parsed_result = parsed_result[0]    # We only have one result as we always query a single SID
+
+            if int(parsed_result["sAMAccountType"]) == SAM_MACHINE_ACCOUNT:
+                self.context.log.debug(f"Found object with full control over SCCM object. SID: {sid}, dns_hostname: {parsed_result['dNSHostName']}")
+                self.sccm_sites.append(parsed_result["dNSHostName"])
+            elif int(parsed_result["sAMAccountType"]) == SAM_GROUP_OBJECT:
+                if isinstance(parsed_result["member"], list):
+                    for member in parsed_result["member"]:
+                        member_sid = self.dn_to_sid(member)
+                        if member_sid:
+                            self.resolve_SID(member_sid)
+                else:   # Group has only one member
+                    member_sid = self.dn_to_sid(parsed_result["member"])
+                    if member_sid:
+                        self.resolve_SID(member_sid)
+
+        except Exception as e:
+            self.context.log.debug(f"SID not found in LDAP: {sid}, {e}")
+            return ""
+
+    def dn_to_sid(self, dn) -> str:
+        """Tries to resolve a DN to a SID."""
+        try:
+            result = self.connection.ldapConnection.search(
+                searchBase=self.base_dn,
+                searchFilter=f"(distinguishedName={dn})",
+                attributes=["sAMAccountName", "objectSid"],
+            )
+            parsed_result = parse_result_attributes(result)[0]
+            self.context.log.highlight(f"Found object for DN {dn}: {parsed_result[0]}")
+            if not parsed_result:
                 return ""
             else:
                 parsed_result = parsed_result[0]
-
-            if int(parsed_result["sAMAccountType"]) == SAM_MACHINE_ACCOUNT:
-                print(f"{parsed_result['sAMAccountName']} IS MACHINE ACCOUNT")
-                return parsed_result["sAMAccountName"]
-            elif int(parsed_result["sAMAccountType"]) == SAM_GROUP_OBJECT:
-                print(f"{parsed_result['sAMAccountName']} IS GROUP OBJECT")
-                print(parsed_result["member"])
-            return ""
-
-
+            return parsed_result["objectSid"]
         except Exception as e:
-            print(e.with_traceback())
-            self.context.log.debug(f"SID not found in LDAP: {sid}, {e}")
+            self.context.log.debug(f"DN not found in LDAP: {dn}, {e}")
             return ""
