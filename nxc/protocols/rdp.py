@@ -181,7 +181,7 @@ class rdp(connection):
                     credentials=self.auth,
                 )
                 asyncio.run(self.connect_rdp())
-                if proto.value == SUPP_PROTOCOLS.RDP or proto.value == SUPP_PROTOCOLS.SSL or proto.value == SUPP_PROTOCOLS.SSL|SUPP_PROTOCOLS.RDP:
+                if proto.value == SUPP_PROTOCOLS.RDP or proto.value == SUPP_PROTOCOLS.SSL or proto.value == SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.RDP:
                     self.nla = False
                     return
             except Exception:
