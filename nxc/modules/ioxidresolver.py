@@ -1,10 +1,11 @@
 # Credit to https://airbus-cyber-security.com/fr/the-oxid-resolver-part-1-remote-enumeration-of-network-interfaces-without-any-authentication/
 # Airbus CERT
 # module by @mpgn_x64
+# updated by @NeffIsBack
 
 from ipaddress import ip_address
 from impacket.dcerpc.v5 import transport
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_NONE
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_NONE, DCERPCException
 from impacket.dcerpc.v5.dcomrt import IObjectExporter
 
 
@@ -13,31 +14,31 @@ class NXCModule:
     description = "This module helps you to identify hosts that have additional active interfaces"
     supported_protocols = ["smb", "wmi"]
     opsec_safe = True
-    multiple_hosts = False
+    multiple_hosts = True
 
     def options(self, context, module_options):
-        """ """
+        """No module options"""
 
     def on_login(self, context, connection):
-        authLevel = RPC_C_AUTHN_LEVEL_NONE
+        try:
+            rpctransport = transport.DCERPCTransportFactory(f"ncacn_ip_tcp:{connection.host}")
+            rpctransport.setRemoteHost(connection.host)
 
-        stringBinding = r"ncacn_ip_tcp:%s" % connection.host
-        rpctransport = transport.DCERPCTransportFactory(stringBinding)
-        rpctransport.setRemoteHost(connection.host)
+            portmap = rpctransport.get_dce_rpc()
+            portmap.set_auth_level(RPC_C_AUTHN_LEVEL_NONE)
+            portmap.connect()
 
-        portmap = rpctransport.get_dce_rpc()
-        portmap.set_auth_level(authLevel)
-        portmap.connect()
+            objExporter = IObjectExporter(portmap)
+            bindings = objExporter.ServerAlive2()
 
-        objExporter = IObjectExporter(portmap)
-        bindings = objExporter.ServerAlive2()
+            context.log.debug(f"Retrieving network interface of {connection.host}")
 
-        context.log.debug("[*] Retrieving network interface of " + connection.host)
-
-        for binding in bindings:
-            NetworkAddr = binding["aNetworkAddr"]
-            try:
-                ip_address(NetworkAddr[:-1])
-                context.log.highlight("Address: " + NetworkAddr)
-            except Exception as e:
-                context.log.debug(e)
+            for binding in bindings:
+                NetworkAddr = binding["aNetworkAddr"]
+                try:
+                    ip_address(NetworkAddr[:-1])
+                    context.log.highlight(f"Address: {NetworkAddr}")
+                except Exception as e:
+                    context.log.debug(e)
+        except DCERPCException as e:
+            context.log.error(f"DCERPCException error: {e}")
