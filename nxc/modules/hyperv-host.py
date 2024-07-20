@@ -45,9 +45,9 @@ class NXCModule:
 
             rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
         except DCERPCException as e:
-            self.context.log.fail(f"DCERPC Error while querying or modifying registry: {e}")
+            self.context.log.fail(f"DCERPC Error while querying registry: {e}")
         except Exception as e:
-            self.context.log.fail(f"Error while querying or modifying registry: {e}")
+            self.context.log.fail(f"Error while querying registry: {e}")
         finally:
             remote_ops.finish()
 
