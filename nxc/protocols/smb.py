@@ -581,7 +581,8 @@ class smb(connection):
             try:
                 # 0xF003F - SC_MANAGER_ALL_ACCESS
                 # http://msdn.microsoft.com/en-us/library/windows/desktop/ms685981(v=vs.85).aspx
-                scmr.hROpenSCManagerW(dce, f"{self.host}\x00", "ServicesActive\x00", 0xF003F)
+                scmrobj = scmr.hROpenSCManagerW(dce, f"{self.host}\x00", "ServicesActive\x00", 0xF003F)
+                scmr.hREnumServicesStatusW(dce, scmrobj["lpScHandle"])
                 self.logger.debug(f"User is admin on {self.host}!")
                 self.admin_privs = True
             except scmr.DCERPCException:
