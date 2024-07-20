@@ -1,8 +1,5 @@
-import json
-import re
 from impacket.ldap import ldap, ldaptypes, ldapasn1 as ldapasn1_impacket
 from impacket.ldap.ldap import LDAPSearchError
-from impacket.ldap.ldaptypes import SR_SECURITY_DESCRIPTOR
 from ldap3.protocol.microsoft import security_descriptor_control
 from nxc.parsers.ldap_results import parse_result_attributes
 
@@ -25,7 +22,8 @@ class NXCModule:
     multiple_hosts = True
 
     def __init__(self):
-        self.sccm_sites = []
+        self.sccm_site_servers = []    # List of dns host names of the SCCM site servers
+        self.sccm_sites = {}
         self.base_dn = ""
 
     def options(self, context, module_options):
@@ -40,12 +38,10 @@ class NXCModule:
         self.base_dn = connection.ldapConnection._baseDN if not self.base_dn else self.base_dn
         self.sc = ldap.SimplePagedResultsControl()
 
-        search_filter = f"(distinguishedName=CN=System Management,CN=System,{self.base_dn})"
-        controls = security_descriptor_control(sdflags=0x04)
-        context.log.display(f"Starting LDAP search with search filter '{search_filter}'")
-
         try:
-
+            search_filter = f"(distinguishedName=CN=System Management,CN=System,{self.base_dn})"
+            controls = security_descriptor_control(sdflags=0x04)
+            context.log.display(f"Looking for the SCCM container with filter: '{search_filter}'")
             result = connection.ldapConnection.search(
                 searchFilter=search_filter,
                 attributes=["nTSecurityDescriptor"],
@@ -55,14 +51,76 @@ class NXCModule:
             )
             for item in result:
                 if isinstance(item, ldapasn1_impacket.SearchResultEntry):
-                    raw_sec_descriptor = str(item[1][0][1][0]).encode("latin-1")
-                    principal_security_descriptor = ldaptypes.SR_SECURITY_DESCRIPTOR(data=raw_sec_descriptor)
-                    context.log.highlight(f"Found SCCM object: {item[0]}")
-                    self.parse_dacl(principal_security_descriptor["Dacl"])
-                    self.context.log.highlight(f"Found sccm_sites: {self.sccm_sites}")
+                    self.context.log.success(f"Found SCCM object: {item[0]}")
+                    self.get_site_servers(item)
+                    self.get_sites()
+                    self.get_management_points()
+
+                    self.context.log.success("Site Servers:")
+                    for site in self.sccm_site_servers:
+                        ip = self.connection.resolver(site)
+                        self.context.log.highlight(f"{site} - {ip['host'] if ip else 'unknown'}")
+                    self.context.log.success("SCCM Sites:")
+                    for site in self.sccm_sites:
+                        self.context.log.highlight(f"{self.sccm_sites[site]['cn']}")
+                        self.context.log.highlight(f"  Site Code: {site.rjust(14)}")
+                        self.context.log.highlight(f"  Assignment Site Code: {self.sccm_sites[site]['AssignmentSiteCode'].rjust(3)}")
+                        self.context.log.highlight("  Management Points:")
+                        for mp in self.sccm_sites[site]["ManagementPoints"]:
+                            self.context.log.highlight(f"\t  CN:{' ':<12}{mp['cn']}")
+                            self.context.log.highlight(f"\t  DNS Hostname:{' ':<2}{mp['dNSHostName']}")
+                            self.context.log.highlight(f"\t  IP Address:{' ':<4}{mp['IPAddress']}")
+                            self.context.log.highlight(f"\t  Default MP:{' ':<4}{mp['mSSMSDefaultMP']}")
+                    self.context.log.highlight("")
 
         except LDAPSearchError as e:
-            context.log.fail(f"Obtained unexpected exception: {e}")
+            context.log.fail(f"Got unexpected exception: {e}")
+
+    def get_management_points(self):
+        """Searches for all SCCM management points in the Active Directory and maps them to their SCCM site."""
+        try:
+            response = self.connection.ldapConnection.search(
+                searchFilter="(objectClass=mSSMSManagementPoint)",
+                attributes="*",
+            )
+            response_parsed = parse_result_attributes(response)
+            self.context.log.success("SCCM Management Points:")
+            for mp in response_parsed:
+                ip = self.connection.resolver(mp["dNSHostName"])
+                self.sccm_sites[mp["mSSMSSiteCode"]]["ManagementPoints"].append({
+                    "cn": mp["cn"],
+                    "dNSHostName": mp["dNSHostName"],
+                    "IPAddress": ip if ip else "-",
+                    "mSSMSDefaultMP": mp["mSSMSDefaultMP"],
+                })
+
+        except LDAPSearchError as e:
+            self.context.log.error(f"Error searching for management points: {e}")
+
+    def get_sites(self):
+        """Searches for all SCCM sites in the Active Directory."""
+        try:
+            response = self.connection.ldapConnection.search(
+                searchFilter="(objectClass=mSSMSSite)",
+                attributes=["cn", "mSSMSSiteCode", "mSSMSAssignmentSiteCode"],
+            )
+            response_parsed = parse_result_attributes(response)
+            for site in response_parsed:
+                self.sccm_sites[site["mSSMSSiteCode"]] = {
+                    "cn": site["cn"],
+                    "AssignmentSiteCode": site["mSSMSAssignmentSiteCode"],
+                    "ManagementPoints": []
+                }
+
+        except LDAPSearchError as e:
+            self.context.log.error(f"Error searching for sites: {e}")
+
+    def get_site_servers(self, item):
+        """Extracts the site servers from the SCCM object."""
+        raw_sec_descriptor = str(item[1][0][1][0]).encode("latin-1")
+        principal_security_descriptor = ldaptypes.SR_SECURITY_DESCRIPTOR(data=raw_sec_descriptor)
+        self.parse_dacl(principal_security_descriptor["Dacl"])
+        self.sccm_site_servers = set(self.sccm_site_servers)    # Make list unique
 
     def parse_dacl(self, dacl):
         """Parses a DACL and extracts the dns host names with full control over the SCCM object."""
@@ -97,7 +155,7 @@ class NXCModule:
 
             if int(parsed_result["sAMAccountType"]) == SAM_MACHINE_ACCOUNT:
                 self.context.log.debug(f"Found object with full control over SCCM object. SID: {sid}, dns_hostname: {parsed_result['dNSHostName']}")
-                self.sccm_sites.append(parsed_result["dNSHostName"])
+                self.sccm_site_servers.append(parsed_result["dNSHostName"])
             elif int(parsed_result["sAMAccountType"]) == SAM_GROUP_OBJECT:
                 if isinstance(parsed_result["member"], list):
                     for member in parsed_result["member"]:
@@ -115,19 +173,11 @@ class NXCModule:
 
     def dn_to_sid(self, dn) -> str:
         """Tries to resolve a DN to a SID."""
-        try:
-            result = self.connection.ldapConnection.search(
-                searchBase=self.base_dn,
-                searchFilter=f"(distinguishedName={dn})",
-                attributes=["sAMAccountName", "objectSid"],
-            )
-            parsed_result = parse_result_attributes(result)[0]
-            self.context.log.highlight(f"Found object for DN {dn}: {parsed_result[0]}")
-            if not parsed_result:
-                return ""
-            else:
-                parsed_result = parsed_result[0]
-            return parsed_result["objectSid"]
-        except Exception as e:
-            self.context.log.debug(f"DN not found in LDAP: {dn}, {e}")
-            return ""
+        result = self.connection.ldapConnection.search(
+            searchBase=self.base_dn,
+            searchFilter=f"(distinguishedName={dn})",
+            attributes=["sAMAccountName", "objectSid"],
+        )
+
+        sid_raw = bytes(result[0][1][0][1].components[0])
+        return ldaptypes.LDAP_SID(data=sid_raw).formatCanonical()
