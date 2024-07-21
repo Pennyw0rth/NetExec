@@ -38,6 +38,7 @@ class NXCModule:
         self.base_dn = connection.ldapConnection._baseDN if not self.base_dn else self.base_dn
         self.sc = ldap.SimplePagedResultsControl()
 
+        # Basic SCCM enumeration
         try:
             # Search for SCCM root object
             search_filter = f"(distinguishedName=CN=System Management,CN=System,{self.base_dn})"
@@ -69,13 +70,33 @@ class NXCModule:
                         self.context.log.highlight(f"{self.sccm_sites[site]['cn']}")
                         self.context.log.highlight(f"  Site Code: {site.rjust(14)}")
                         self.context.log.highlight(f"  Assignment Site Code: {self.sccm_sites[site]['AssignmentSiteCode'].rjust(3)}")
-                        self.context.log.highlight("  Management Points:")
-                        for mp in self.sccm_sites[site]["ManagementPoints"]:
-                            self.context.log.highlight(f"\t  CN:{' ':<12}{mp['cn']}")
-                            self.context.log.highlight(f"\t  DNS Hostname:{' ':<2}{mp['dNSHostName']}")
-                            self.context.log.highlight(f"\t  IP Address:{' ':<4}{mp['IPAddress']}")
-                            self.context.log.highlight(f"\t  Default MP:{' ':<4}{mp['mSSMSDefaultMP']}")
+
+                        # If there aren't Management Points, it's a Central Administration Site
+                        if self.sccm_sites[site]["ManagementPoints"]:
+                            self.context.log.highlight(f"  CAS: {' ':<17}{False}")
+                            self.context.log.highlight("  Management Points:")
+                            for mp in self.sccm_sites[site]["ManagementPoints"]:
+                                self.context.log.highlight(f"\t  CN:{' ':<12}{mp['cn']}")
+                                self.context.log.highlight(f"\t  DNS Hostname:{' ':<2}{mp['dNSHostName']}")
+                                self.context.log.highlight(f"\t  IP Address:{' ':<4}{mp['IPAddress']}")
+                                self.context.log.highlight(f"\t  Default MP:{' ':<4}{mp['mSSMSDefaultMP']}")
+                        else:
+                            self.context.log.highlight(f"  CAS: {' ':<17}{True}")
                     self.context.log.highlight("")
+        except LDAPSearchError as e:
+            context.log.fail(f"Got unexpected exception: {e}")
+
+        # Enumerate users/groups/computers with "SCCM" in their name
+        # hippity hoppity your code is now my property, filter stolen from the awesome sccmhunter repository
+        # https://github.com/garrettfoster13/sccmhunter
+        try:
+            yoinkers = '(|(samaccountname=*sccm*)(samaccountname=*mecm*)(description=*sccm*)(description=*mecm*)(name=*sccm*)(name=*mecm*))'
+            context.log.display("Searching for SCCM related objects")
+            result = connection.ldapConnection.search(
+                searchFilter=yoinkers,
+                searchBase=self.base_dn,
+                attributes=["sAMAccountName", "distinguishedName"],
+            )
         except LDAPSearchError as e:
             context.log.fail(f"Got unexpected exception: {e}")
 
