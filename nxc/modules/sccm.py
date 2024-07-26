@@ -12,7 +12,9 @@ LDAP_MATCHING_RULE_IN_CHAIN = "1.2.840.113556.1.4.1941"
 class NXCModule:
     """
     Implementation of the SCCM RECON-1 technique to find SCCM related objects in Active Directory.
-    See: https://github.com/subat0mik/Misconfiguration-Manager/blob/main/attack-techniques/RECON/RECON-1/recon-1_description.md
+    See:
+    https://github.com/subat0mik/Misconfiguration-Manager/blob/main/attack-techniques/RECON/RECON-1/recon-1_description.md
+    https://github.com/garrettfoster13/sccmhunter
 
     Module by @NeffIsBack
     """
@@ -187,7 +189,7 @@ class NXCModule:
                 self.sccm_sites[mp["mSSMSSiteCode"]]["ManagementPoints"].append({
                     "cn": mp["cn"],
                     "dNSHostName": mp["dNSHostName"],
-                    "IPAddress": ip if ip else "-",
+                    "IPAddress": ip["host"] if ip else "-",
                     "mSSMSDefaultMP": mp["mSSMSDefaultMP"],
                 })
 
