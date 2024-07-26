@@ -167,6 +167,7 @@ class connection:
         except Exception as e:
             if "ERROR_DEPENDENT_SERVICES_RUNNING" in str(e):
                 self.logger.error(f"Exception while calling proto_flow() on target {target}: {e}")
+            # Catching impacket SMB specific exceptions, which should not be imported due to performance reasons
             elif e.__class__.__name__ in ["NetBIOSTimeout", "NetBIOSError"]:
                 self.logger.error(f"{e.__class__.__name__} on target {target}: {e}")
             else:
