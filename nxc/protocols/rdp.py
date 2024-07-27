@@ -109,7 +109,7 @@ class rdp(connection):
     def print_host_info(self):
         nla = colored(f"nla:{self.nla}", host_info_colors[3], attrs=["bold"]) if self.nla else colored(f"nla:{self.nla}", host_info_colors[2], attrs=["bold"])
         if self.domain is None:
-            self.logger.display("Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
+            self.logger.display(f"Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
         else:
             self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({nla})")
         return True
@@ -150,9 +150,15 @@ class rdp(connection):
 
         if self.args.domain:
             self.domain = self.args.domain
-
         if self.args.local_auth:
             self.domain = self.hostname
+
+        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
+
+        if not self.kdcHost and self.domain:
+            result = self.resolver(self.domain)
+            self.kdcHost = result["host"] if result else None
+            self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
         self.target = RDPTarget(
             ip=self.host,
@@ -175,7 +181,7 @@ class rdp(connection):
                     credentials=self.auth,
                 )
                 asyncio.run(self.connect_rdp())
-                if str(proto) == "SUPP_PROTOCOLS.RDP" or str(proto) == "SUPP_PROTOCOLS.SSL" or str(proto) == "SUPP_PROTOCOLS.SSL|SUPP_PROTOCOLS.RDP":
+                if proto.value == SUPP_PROTOCOLS.RDP or proto.value == SUPP_PROTOCOLS.SSL or proto.value == SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.RDP:
                     self.nla = False
                     return
             except Exception:
@@ -220,7 +226,17 @@ class rdp(connection):
             else:
                 stype = asyauthSecret.PASS if not nthash else asyauthSecret.NT
 
-            kerberos_target = UniTarget(self.domain, 88, UniProto.CLIENT_TCP, proxies=None, dns=None, dc_ip=self.domain, domain=self.domain)
+            kerberos_target = UniTarget(
+                self.host,
+                88,
+                UniProto.CLIENT_TCP,
+                timeout=self.args.rdp_timeout,
+                hostname=self.remoteName,
+                dc_ip=self.kdcHost,
+                domain=self.domain,
+                proxies=None,
+                dns=None,
+            )
             self.auth = KerberosCredential(
                 target=kerberos_target,
                 secret=password,

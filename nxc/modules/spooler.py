@@ -7,6 +7,7 @@ from impacket.dcerpc.v5.rpch import (
     RPC_PROXY_CONN_A1_404_ERR,
     RPC_PROXY_RPC_OUT_DATA_404_ERR,
 )
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 
 KNOWN_PROTOCOLS = {
     135: {"bindstr": r"ncacn_ip_tcp:%s[135]"},
@@ -47,14 +48,14 @@ class NXCModule:
         context.log.debug(f"StringBinding {self.__stringbinding}")
         rpctransport = transport.DCERPCTransportFactory(self.__stringbinding)
         rpctransport.set_credentials(connection.username, connection.password, connection.domain, lmhash, nthash)
-        rpctransport.setRemoteHost(connection.host if not connection.kerberos else connection.hostname + "." + connection.domain)
+        rpctransport.setRemoteHost(connection.host)
         rpctransport.set_dport(self.port)
 
         if connection.kerberos:
             rpctransport.set_kerberos(connection.kerberos, connection.kdcHost)
 
         try:
-            entries = self.__fetch_list(rpctransport)
+            entries = self.__fetch_list(connection.kerberos, rpctransport)
         except Exception as e:
             error_text = f"Protocol failed: {e}"
             context.log.critical(error_text)
@@ -112,8 +113,10 @@ class NXCModule:
         else:
             context.log.debug("[Spooler] No endpoints found")
 
-    def __fetch_list(self, rpctransport):
+    def __fetch_list(self, doKerberos, rpctransport):
         dce = rpctransport.get_dce_rpc()
+        if doKerberos:
+            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
         dce.connect()
         resp = epm.hept_lookup(None, dce=dce)
         dce.disconnect()

@@ -80,6 +80,8 @@ class PassPolDump:
         self.nthash = ""
         self.aesKey = connection.aesKey
         self.doKerberos = connection.kerberos
+        self.host = connection.host
+        self.kdcHost = connection.kdcHost
         self.protocols = PassPolDump.KNOWN_PROTOCOLS.keys()
         self.pass_pol = {}
 
@@ -112,6 +114,8 @@ class PassPolDump:
                 self.nthash,
                 self.aesKey,
                 doKerberos=self.doKerberos,
+                kdcHost=self.kdcHost,
+                remote_host=self.host,
             )
             try:
                 self.fetchList(rpctransport)

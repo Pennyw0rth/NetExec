@@ -1,7 +1,5 @@
 import os
 import sys
-import json
-from xmltodict import parse
 from time import sleep
 from csv import reader
 from base64 import b64encode
@@ -381,28 +379,30 @@ class NXCModule:
         xml_doc_path = os.path.abspath(self.local_export_path + "/" + self.export_name)
         xml_tree = ElementTree.parse(xml_doc_path)
         root = xml_tree.getroot()
-        to_string = ElementTree.tostring(root, encoding="UTF-8", method="xml")
-        xml_to_dict = parse(to_string)
-        dump = json.dumps(xml_to_dict)
-        obj = json.loads(dump)
 
-        if len(obj["KeePassFile"]["Root"]["Group"]["Entry"]):
-            for obj2 in obj["KeePassFile"]["Root"]["Group"]["Entry"]:
-                for password in obj2["String"]:
-                    if password["Key"] == "Password":
-                        context.log.highlight(str(password["Key"]) + " : " + str(password["Value"]["#text"]))
-                    else:
-                        context.log.highlight(str(password["Key"]) + " : " + str(password["Value"]))
-                context.log.highlight("")
-        if len(obj["KeePassFile"]["Root"]["Group"]["Group"]):
-            for obj2 in obj["KeePassFile"]["Root"]["Group"]["Group"]:
-                try:
-                    for obj3 in obj2["Entry"]:
-                        for password in obj3["String"]:
-                            if password["Key"] == "Password":
-                                context.log.highlight(str(password["Key"]) + " : " + str(password["Value"]["#text"]))
-                            else:
-                                context.log.highlight(str(password["Key"]) + " : " + str(password["Value"]))
-                        context.log.highlight("")
-                except KeyError:
-                    pass
+        root_entries = root.find("./Root/Entry")
+        if root_entries is not None:
+            for entry in root_entries:
+                if entry is not None:
+                    self.print_password(context, entry)
+                else:
+                    context.log.highlight("None")
+
+        objects = root.findall("./Root/Group")
+        while objects:
+            current_object = objects.pop(0)
+            for entry in current_object.findall("./Entry"):
+                self.print_password(context, entry)
+                for history in entry.findall("./History"):
+                    for history_entry in history.findall("./Entry"):
+                        self.print_password(context, history_entry)
+            objects.extend(current_object.findall("./Group"))
+
+    def print_password(self, context, entries):
+        for entry in entries.findall("./String"):
+            key = entry.find("./Key")
+            value = entry.find("./Value")
+            key_text = key.text if key is not None else "None"
+            value_text = value.text if value is not None and value.text is not None else "None"
+            context.log.highlight(f"{key_text} : {value_text}")
+        context.log.highlight("-------------------------------------")
