@@ -4,6 +4,8 @@ from impacket.examples.secretsdump import RemoteOperations
 
 
 class NXCModule:
+    """Module by @joaovarelas"""
+
     name = "hyperv-host"
     description = "Performs a registry query on the VM to lookup its HyperV Host"
     supported_protocols = ["smb"]
@@ -25,25 +27,28 @@ class NXCModule:
         path = "SOFTWARE\Microsoft\Virtual Machine\Guest\Parameters"
         key = "HostName"
 
-        remote_ops = RemoteOperations(connection.conn, False)
-        remote_ops.enableRegistry()
-
         try:
+            remote_ops = RemoteOperations(connection.conn, False)
+            remote_ops.enableRegistry()
+     
             ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
             reg_handle = ans["phKey"]
 
-            ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, path)
-            key_handle = ans["phkResult"]
-
             # Query
             try:
+                ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, path)
+                key_handle = ans["phkResult"]
+
                 data_type, reg_value = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, key)
                 self.context.log.highlight(f"{key}: {reg_value}")
-            except Exception:
-                self.context.log.fail(f"Registry key {path}\\{key} does not exist")
-                return
 
-            rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
+                rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
+        
+            except Exception:
+                #self.context.log.fail(f"Registry key {path}\\{key} does not exist")  
+                pass # Muted
+
+
         except DCERPCException as e:
             self.context.log.fail(f"DCERPC Error while querying registry: {e}")
         except Exception as e:
