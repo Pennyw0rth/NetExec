@@ -7,7 +7,7 @@ import re
 import sys
 
 from nxc.helpers.bloodhound import add_user_bh
-import pypykatz
+from pypykatz.pypykatz import pypykatz
 
 
 class NXCModule:
