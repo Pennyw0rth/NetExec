@@ -905,7 +905,6 @@ class PrinterBugTrigger:
 
 
 class MSEvenTrigger:
-
     def __init__(self, context):
         self.context = context
 
