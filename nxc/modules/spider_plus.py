@@ -255,7 +255,7 @@ class SMBSpiderPlus:
             # Check file-dir exclusion filter.
             if any(d in next_filedir.lower() for d in self.exclude_filter):
                 self.logger.info(f'The {result_type} "{next_filedir}" has been excluded')
-                self.stats[f"{result_type}s_filtered"] += 1
+                self.stats[f"num_{result_type}s_filtered"] += 1
                 continue
 
             if result_type == "folder":
