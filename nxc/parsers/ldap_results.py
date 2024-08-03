@@ -8,6 +8,7 @@ def parse_result_attributes(ldap_response):
             continue
         attribute_map = {}
         for attribute in entry["attributes"]:
-            attribute_map[str(attribute["type"])] = str(attribute["vals"][0])
+            val = [str(val) for val in attribute["vals"].components]
+            attribute_map[str(attribute["type"])] = val if len(val) > 1 else val[0]
         parsed_response.append(attribute_map)
     return parsed_response
