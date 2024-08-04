@@ -27,6 +27,7 @@ from impacket.krb5 import constants
 from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError
 from impacket.krb5.types import Principal, KerberosException
 from impacket.ldap import ldap as ldap_impacket
+from impacket.ldap import ldaptypes
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ldap.ldap import LDAPFilterSyntaxError
 from impacket.smb import SMB_DIALECT
@@ -1085,6 +1086,111 @@ class ldap(connection):
                     vals = vals.replace("SetOf: ", "")
                 self.logger.highlight(f"{attr:<20} {vals}")
 
+    def find_delegation(self):
+        def printTable(items, header):
+            colLen = []
+            for i, col in enumerate(header):
+                rowMaxLen = max(len(str(row[i])) for row in items)
+                colLen.append(max(rowMaxLen, len(col)))
+
+            # Create the format string for each row
+            outputFormat = " ".join([f"{{{num}:{width}s}}" for num, width in enumerate(colLen)])
+
+            # Print header
+            self.logger.highlight(outputFormat.format(*header))
+            self.logger.highlight(" ".join(["-" * itemLen for itemLen in colLen]))
+
+            # Print rows
+            for row in items:
+                self.logger.highlight(outputFormat.format(*row))
+                
+        # Building the search filter
+        search_filter = ("(&(|(UserAccountControl:1.2.840.113556.1.4.803:=16777216)(UserAccountControl:1.2.840.113556.1.4.803:="
+                         "524288)(msDS-AllowedToDelegateTo=*)(msDS-AllowedToActOnBehalfOfOtherIdentity=*))"
+                         "(!(UserAccountControl:1.2.840.113556.1.4.803:=2))(!(UserAccountControl:1.2.840.113556.1.4.803:=8192)))"
+                        )
+        attributes = ["sAMAccountName", 
+                      "pwdLastSet", 
+                      "userAccountControl", 
+                      "objectCategory", 
+                      "msDS-AllowedToActOnBehalfOfOtherIdentity", 
+                      "msDS-AllowedToDelegateTo"]
+        
+        resp = self.search(search_filter, attributes, 0)
+
+        answers = []
+        self.logger.debug(f"Total of records returned {len(resp):d}")
+
+        for item in resp:
+            if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
+                continue
+            mustCommit = False
+            sAMAccountName = ""
+            userAccountControl = 0
+            delegation = ""
+            objectType = ""
+            rightsTo = []
+            protocolTransition = 0
+            
+            # After receiving responses we parse through to determine the type of delegation configured on each object
+            try:
+                for attribute in item["attributes"]:
+                    if str(attribute["type"]) == "sAMAccountName":
+                        sAMAccountName = str(attribute["vals"][0])
+                        mustCommit = True
+                    elif str(attribute["type"]) == "userAccountControl":
+                        userAccountControl = str(attribute["vals"][0])
+                        if int(userAccountControl) & UF_TRUSTED_FOR_DELEGATION:
+                            delegation = "Unconstrained"
+                            rightsTo.append("N/A")
+                        elif int(userAccountControl) & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
+                            delegation = "Constrained w/ Protocol Transition"
+                            protocolTransition = 1
+                    elif str(attribute["type"]) == "objectCategory":
+                        objectType = str(attribute["vals"][0]).split("=")[1].split(",")[0]
+                    elif str(attribute["type"]) == "msDS-AllowedToDelegateTo":
+                        if protocolTransition == 0:
+                            delegation = "Constrained"
+                        rightsTo = list(attribute["vals"])
+             
+                    # Not an elif as an object could both have rbcd and another type of delegation configured for the same object
+                    if str(attribute["type"]) == "msDS-AllowedToActOnBehalfOfOtherIdentity":
+                        rbcdRights = []
+                        rbcdObjType = []
+                        search_filter = "(&(|"
+                        sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(attribute["vals"][0]))
+                        for ace in sd["Dacl"].aces:
+                            search_filter = search_filter + "(objectSid=" + ace["Ace"]["Sid"].formatCanonical() + ")"
+                        search_filter = search_filter + ")(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))"
+                        delegUserResp = self.search(search_filter, attributes=["sAMAccountName", "objectCategory"], sizeLimit=999)
+                        for item2 in delegUserResp:
+                            if isinstance(item2, ldapasn1_impacket.SearchResultEntry) is not True:
+                                continue
+                            rbcdRights.append(str(item2["attributes"][0]["vals"][0]))
+                            rbcdObjType.append(str(item2["attributes"][1]["vals"][0]).split("=")[1].split(",")[0])
+                            
+                        if mustCommit is True:
+                            if int(userAccountControl) & UF_ACCOUNTDISABLE:
+                                self.logger.debug("Bypassing disabled account %s " % sAMAccountName)
+                            else:
+                                for rights, objType in zip(rbcdRights, rbcdObjType):
+                                    answers.append([rights, objType, "Resource-Based Constrained", sAMAccountName])
+                        
+                # Print unconstrained + constrained delegation relationships
+                if (delegation in ["Unconstrained", "Constrained", "Constrained w/ Protocol Transition"] and mustCommit):
+                    if int(userAccountControl) & UF_ACCOUNTDISABLE:
+                        self.logger.debug("Bypassing disabled account %s " % sAMAccountName)
+                    else:
+                        answers = [sAMAccountName, objectType, delegation, rightsTo]
+
+            except Exception as e:
+                self.logger.error("Skipping item, cannot process due to error %s" % str(e))
+                
+        if len(answers) > 0:
+            printTable(answers, header=["AccountName", "AccountType", "DelegationType", "DelegationRightsTo"])
+        else:
+            self.logger.fail("No entries found!")
+    
     def trusted_for_delegation(self):
         # Building the search filter
         searchFilter = "(userAccountControl:1.2.840.113556.1.4.803:=524288)"
