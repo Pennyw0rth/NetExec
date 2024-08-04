@@ -356,7 +356,7 @@ def laps_search(self, username, password, cred_type, domain, dns_server):
     password = msMCSAdmPwd
     domain = self.hostname
     self.args.local_auth = True
-    self.args.kerberos = False
+    self.kerberos = False
     self.logger.extra["protocol"] = prev_protocol
     self.logger.extra["port"] = prev_port
     return username, password, domain
