@@ -356,7 +356,6 @@ class DFSCoerceTrigger:
         dce = rpctransport.get_dce_rpc()
         if doKerberos:
             dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-        dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
         self.context.log.debug("Connecting to {}".format(binding_params[pipe]["stringBinding"]))
         try:
             dce.connect()
