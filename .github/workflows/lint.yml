@@ -3,6 +3,7 @@ name: Lint Python code with ruff
 
 on:
   push:
+  workflow_dispatch:
 
 jobs:
   lint:
