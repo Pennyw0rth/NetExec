@@ -389,7 +389,7 @@ class DFSCoerceTrigger:
 
             dce.request(request)
         except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0:
+            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
                 self.context.log.debug("NetrDfsAddStdRootForced Success")
                 self.context.log.highlight(f"Exploit Success, {pipe}\\NetrDfsAddStdRootForced")
                 if not always_continue:
@@ -421,7 +421,7 @@ class DFSCoerceTrigger:
             self.context.log.debug("NetrDfsAddRootTarget Success")
             return True
         except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0:
+            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
                 self.context.log.debug("NetrDfsAddRootTarget Success")
                 self.context.log.highlight(f"Exploit Success, {pipe}\\NetrDfsAddRootTarget")
                 if not always_continue:
@@ -448,7 +448,7 @@ class DFSCoerceTrigger:
             self.context.log.debug("NetrDfsRemoveRootTarget Success")
             return True
         except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0:
+            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
                 self.context.log.debug("NetrDfsRemoveRootTarget Success")
                 self.context.log.highlight(f"Exploit Success, {pipe}\\NetrDfsRemoveRootTarget")
                 if not always_continue:
@@ -469,7 +469,7 @@ class DFSCoerceTrigger:
 
             dce.request(request)
         except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0:
+            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
                 self.context.log.debug("NetrDfsAdd Success")
                 self.context.log.highlight(f"Exploit Success, {pipe}\\NetrDfsAdd")
                 if not always_continue:
@@ -492,7 +492,7 @@ class DFSCoerceTrigger:
 
             dce.request(request)
         except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0:
+            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
                 self.context.log.debug("NetrDfsAdd Success")
                 self.context.log.highlight(f"Exploit Success, {pipe}\\NetrDfsAdd")
                 if not always_continue:
@@ -511,7 +511,7 @@ class DFSCoerceTrigger:
             request["ApiFlags"] = 0
             dce.request(request)
         except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0:
+            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
                 self.context.log.debug("NetrDfsAddStdRoot Success")
                 self.context.log.highlight(f"Exploit Success, {pipe}\\NetrDfsAddStdRoot")
                 if not always_continue:
@@ -527,7 +527,7 @@ class DFSCoerceTrigger:
             request["ApiFlags"] = 0
             dce.request(request)
         except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0:
+            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
                 self.context.log.debug("NetrDfsRemoveStdRoot Success")
                 self.context.log.highlight(f"Exploit Success, {pipe}\\NetrDfsRemoveStdRoot")
                 if not always_continue:
