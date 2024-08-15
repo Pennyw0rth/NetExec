@@ -15,22 +15,20 @@ class NXCModule:
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options
-  
 
     def options(self, context, module_options):
         """"""
-  
-      
+
     def on_admin_login(self, context, connection):
         self.context = context
-      
+
         path = "SOFTWARE\Microsoft\Virtual Machine\Guest\Parameters"
         key = "HostName"
 
         try:
             remote_ops = RemoteOperations(connection.conn, False)
             remote_ops.enableRegistry()
-     
+
             ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
             reg_handle = ans["phKey"]
 
@@ -43,11 +41,9 @@ class NXCModule:
                 self.context.log.highlight(f"{key}: {reg_value}")
 
                 rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
-        
-            except Exception:
-                #self.context.log.fail(f"Registry key {path}\\{key} does not exist")  
-                pass # Muted
 
+            except DCERPCException as e:
+                self.context.log.debug(f"Registry key {path}\\{key} does not exist: {e}")
 
         except DCERPCException as e:
             self.context.log.fail(f"DCERPC Error while querying registry: {e}")
@@ -55,4 +51,3 @@ class NXCModule:
             self.context.log.fail(f"Error while querying registry: {e}")
         finally:
             remote_ops.finish()
-
