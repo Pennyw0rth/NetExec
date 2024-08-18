@@ -1,13 +1,19 @@
-import sys
 import configparser
 import shutil
-from sqlalchemy import create_engine
-from sqlite3 import connect
+import sys
 from os import mkdir
 from os.path import exists
 from os.path import join as path_join
+from pathlib import Path
+from sqlite3 import connect
+from threading import Lock
+
+from sqlalchemy import create_engine, MetaData
+from sqlalchemy.exc import IllegalStateChangeError
+from sqlalchemy.orm import sessionmaker, scoped_session
 
 from nxc.loaders.protocolloader import ProtocolLoader
+from nxc.logger import nxc_logger
 from nxc.paths import WORKSPACE_DIR
 
 
@@ -62,7 +68,7 @@ def create_workspace(workspace_name, p_loader=None):
     else:
         print(f"[*] Creating {workspace_name} workspace")
         mkdir(path_join(WORKSPACE_DIR, workspace_name))
-    
+
     if p_loader is None:
         p_loader = ProtocolLoader()
     protocols = p_loader.get_protocols()
@@ -95,3 +101,39 @@ def delete_workspace(workspace_name):
 def initialize_db():
     if not exists(path_join(WORKSPACE_DIR, "default")):
         create_workspace("default")
+
+
+class BaseDB:
+    def __init__(self, db_engine):
+        self.db_engine = db_engine
+        self.db_path = self.db_engine.url.database
+        self.protocol = Path(self.db_path).stem.upper()
+        self.metadata = MetaData()
+        self.reflect_tables()
+        session_factory = sessionmaker(bind=self.db_engine, expire_on_commit=True)
+
+        session = scoped_session(session_factory)
+        self.sess = session()
+        self.lock = Lock()
+
+    def reflect_tables(self):
+        raise NotImplementedError("Reflect tables not implemented")
+
+    def shutdown_db(self):
+        try:
+            self.sess.close()
+        # due to the async nature of nxc, sometimes session state is a bit messy and this will throw:
+        # Method 'close()' can't be called here; method '_connection_for_bind()' is already in progress and
+        # this would cause an unexpected state change to <SessionTransactionState.CLOSED: 5>
+        except IllegalStateChangeError as e:
+            nxc_logger.debug(f"Error while closing session db object: {e}")
+
+    def clear_database(self):
+        for table in self.metadata.sorted_tables:
+            self.db_execute(table.delete())
+
+    def db_execute(self, *args):
+        self.lock.acquire()
+        res = self.sess.execute(*args)
+        self.lock.release()
+        return res
