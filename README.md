@@ -44,7 +44,7 @@ pipx ensurepath
 pipx install git+https://github.com/Pennyw0rth/NetExec
 ```
 
-## Availability on other Unix distributions
+## Availability on Unix distributions
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/netexec.svg)](https://repology.org/project/netexec/versions)
 
