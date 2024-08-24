@@ -30,7 +30,7 @@ def setup_debug_logging():
         root_logger.setLevel(logging.INFO)
     elif debug_args.debug:
         nxc_logger.logger.setLevel(logging.DEBUG)
-        root_logger.setLevel(logging.INFO)
+        root_logger.setLevel(logging.DEBUG)
     else:
         nxc_logger.logger.setLevel(logging.ERROR)
         root_logger.setLevel(logging.ERROR)
