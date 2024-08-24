@@ -27,6 +27,7 @@ from impacket.krb5 import constants
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login
+from impacket.smb3structs import FILE_SHARE_WRITE, FILE_SHARE_DELETE
 
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
@@ -774,6 +775,7 @@ class smb(connection):
 
     def shares(self):
         temp_dir = ntpath.normpath("\\" + gen_random_string())
+        temp_file = ntpath.normpath("\\" + gen_random_string()+ ".txt")
         permissions = []
 
         try:
@@ -825,16 +827,35 @@ class smb(connection):
                     self.conn.createDirectory(share_name, temp_dir)
                     write = True
                     share_info["access"].append("WRITE")
-                except SessionError as e:
-                    error = get_error_string(e)
-                    self.logger.debug(f"Error checking WRITE access on share {share_name}: {error}")
-
-                if write:
                     try:
                         self.conn.deleteDirectory(share_name, temp_dir)
                     except SessionError as e:
                         error = get_error_string(e)
-                        self.logger.debug(f"Error DELETING created temp dir {temp_dir} on share {share_name}: {error}")
+                        if error == 'STATUS_OBJECT_NAME_NOT_FOUND':
+                            pass
+                        else:
+                            self.logger.debug(f"Error DELETING created temp dir {temp_dir} on share {share_name}: {error}")
+                except SessionError as e:
+                    error = get_error_string(e)
+                    self.logger.debug(f"Error checking WRITE access on share {share_name}: {error}")
+
+                try:
+                    tid = self.conn.connectTree(share_name)
+                    fid = self.conn.createFile(tid, temp_file, desiredAccess=FILE_SHARE_WRITE, shareMode=FILE_SHARE_DELETE)
+                    self.conn.closeFile(tid, fid)
+                    write = True
+                    share_info["access"].append("WRITE")
+                    try:
+                        self.conn.deleteFile(share_name, temp_file)
+                    except SessionError as e:
+                        error = get_error_string(e)
+                        if error == 'STATUS_OBJECT_NAME_NOT_FOUND':
+                            pass
+                        else:
+                            self.logger.debug(f"Error DELETING created temp file {temp_file} on share {share_name}")
+                except SessionError as e:
+                    error = get_error_string(e)
+                    self.logger.debug(f"Error checking WRITE access with file on share {share_name}: {error}")
 
             permissions.append(share_info)
 
