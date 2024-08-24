@@ -29,6 +29,7 @@ class MSSQLEXEC:
             if result:
                 result = "\n".join(line["output"] for line in result if line["output"] != "NULL")
                 self.logger.debug(f"Concatenated result together for easier parsing: {result}")
+                # if you prepend SilentlyContinue it will still output the error, but it will still continue on (so it's not silent...)
                 if "Preparing modules for first use" in result and "Completed" not in result:
                     self.logger.error("Error when executing PowerShell (received 'preparing modules for first use'), try prepending $ProgressPreference = 'SilentlyContinue'; to your command")
         except Exception as e:
