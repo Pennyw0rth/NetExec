@@ -1,6 +1,6 @@
 class NXCModule:
     name = "shadowcoerce"
-    description = "[DEPRECATED] Module to check if the target is vulnerable to ShadowCoerce, credit to @Shutdown and @topotam"
+    description = "[REMOVED] Module to check if the target is vulnerable to ShadowCoerce, credit to @Shutdown and @topotam"
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
@@ -19,4 +19,4 @@ class NXCModule:
             self.ipsc = bool(module_options["IPSC"])
 
     def on_login(self, context, connection):
-        context.log.fail('[DEPRECATED] This module moved to the new module "coerce_plus"')
+        context.log.fail('[REMOVED] This module moved to the new module "coerce_plus"')

@@ -1,6 +1,6 @@
 class NXCModule:
     name = "petitpotam"
-    description = "[DEPRECATED] Module to check if the DC is vulnerable to PetitPotam, credit to @topotam"
+    description = "[REMOVED] Module to check if the DC is vulnerable to PetitPotam, credit to @topotam"
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
@@ -18,4 +18,4 @@ class NXCModule:
             self.pipe = module_options["PIPE"]
 
     def on_login(self, context, connection):
-        context.log.fail('[DEPRECATED] This module moved to the new module "coerce_plus"')
+        context.log.fail('[REMOVED] This module moved to the new module "coerce_plus"')

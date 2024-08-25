@@ -1,6 +1,6 @@
 class NXCModule:
     name = "printerbug"
-    description = "[DEPRECATED] Module to check if the Target is vulnerable to PrinterBug. Set LISTENER IP for coercion."
+    description = "[REMOVED] Module to check if the Target is vulnerable to PrinterBug. Set LISTENER IP for coercion."
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
@@ -17,4 +17,4 @@ class NXCModule:
             self.listener = module_options["LISTENER"]
 
     def on_login(self, context, connection):
-        context.log.fail('[DEPRECATED] This module moved to the new module "coerce_plus"')
+        context.log.fail('[REMOVED] This module moved to the new module "coerce_plus"')
