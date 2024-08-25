@@ -41,7 +41,7 @@ argcomplete = "^3.1.4"
 asyauth = ">=0.0.20"
 beautifulsoup4 = ">=4.11,<5"
 bloodhound = "^1.7.2"
-dploot = "^2.7.1"
+dploot = "^2.7.4"
 dsinternals = "^1.2.4"
 impacket =  { git = "https://github.com/fortra/impacket.git" }
 lsassy = ">=3.1.11"

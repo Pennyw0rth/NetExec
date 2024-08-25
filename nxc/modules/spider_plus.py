@@ -3,7 +3,6 @@ import errno
 from os.path import abspath, join, split, exists, splitext, getsize, sep
 from os import makedirs, remove, stat
 import time
-import traceback
 from nxc.paths import TMP_PATH
 from nxc.protocols.smb.remotefile import RemoteFile
 from impacket.smb3structs import FILE_READ_DATA
@@ -159,8 +158,8 @@ class SMBSpiderPlus:
                     remote_file.__smbConnection = self.smb.conn
                     return self.read_chunk(remote_file)
 
-            except Exception:
-                traceback.print_exc()
+            except Exception as e:
+                self.logger.exception(e)
                 break
 
         return chunk
@@ -214,13 +213,13 @@ class SMBSpiderPlus:
                     # Start the spider at the root of the share folder
                     self.results[share_name] = {}
                     self.spider_folder(share_name, "")
-                except SessionError:
-                    traceback.print_exc()
+                except SessionError as e:
+                    self.logger.exception(e)
                     self.logger.fail("Got a session error while spidering.")
                     self.reconnect()
 
         except Exception as e:
-            traceback.print_exc()
+            self.logger.exception(e)
             self.logger.fail(f"Error enumerating shares: {e!s}")
 
         # Save the metadata.
@@ -255,7 +254,7 @@ class SMBSpiderPlus:
             # Check file-dir exclusion filter.
             if any(d in next_filedir.lower() for d in self.exclude_filter):
                 self.logger.info(f'The {result_type} "{next_filedir}" has been excluded')
-                self.stats[f"{result_type}s_filtered"] += 1
+                self.stats[f"num_{result_type}s_filtered"] += 1
                 continue
 
             if result_type == "folder":
@@ -412,8 +411,7 @@ class SMBSpiderPlus:
         self.logger.display(f"Total folders found:  {num_folders}")
         num_folders_filtered = self.stats.get("num_folders_filtered", 0)
         if num_folders_filtered:
-            num_filtered_folders = len(num_folders_filtered)
-            self.logger.display(f"Folders Filtered:     {num_filtered_folders}")
+            self.logger.display(f"Folders Filtered:     {num_folders_filtered}")
 
         # File statistics.
         num_files = self.stats.get("num_files", 0)
