@@ -126,7 +126,7 @@ class NXCModule:
                 _, err = await ldapsClientConn.connect()
                 if err is not None:
                     context.log.fail(str(err))
-                    return False
+                    return None
                 
                 _, err = await ldapsClientConn.bind()
                 if err is not None:
