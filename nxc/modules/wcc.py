@@ -89,11 +89,11 @@ class NXCModule:
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
-    
+
     def __init__(self):
         self.context = None
         self.module_options = None
-        
+
         self.wcc_logger = logging.getLogger("WCC")
         self.wcc_logger.propagate = False
         log_filename = nxc_logger.init_log_file()
@@ -161,7 +161,7 @@ class HostChecker:
     def run(self):
         self.init_checks()
         self.check_config()
-        
+
     def init_checks(self):
         # Declare the checks to do and how to do them
         self.checks = [
@@ -494,7 +494,7 @@ class HostChecker:
 
     def get_exclusions(self, key_name):
         exclusions = []
-        try: 
+        try:
             values = self.reg_query_value(self.dce, self.connection, key_name, valueName=None, all_value=True)
             for _, value_name, _ in values:
                 exclusions.append(value_name)
@@ -533,7 +533,7 @@ class HostChecker:
         ok = True
         raised = False
         reasons = []
-        try: 
+        try:
             service_config, service_status = self.get_service("windefend", self.connection)
             if service_status == scmr.SERVICE_RUNNING:
                 reasons.append("windefend service running")
@@ -545,7 +545,7 @@ class HostChecker:
             raised = True
             reasons = [f"windefend service check error({e})"]
         if ok is False or raised is True:
-            try: 
+            try:
                 service_config, service_status = self.get_service("sense", self.connection)
                 if service_status == scmr.SERVICE_RUNNING:
                     reasons.append("sense service running")
@@ -561,7 +561,7 @@ class HostChecker:
             args = ("HKLM\\SOFTWARE\\Microsoft\\Windows Defender", "IsServiceRunning", 1)
             ok, reasons = self.check_registry(args)
             reasons.extend(reasons_save)
-   
+
         return ok, reasons
 
     def _open_root_key(self, dce, connection, root_key):
@@ -722,14 +722,18 @@ class HostChecker:
             self.context.log.error(f"ls(): C:\\{path} {e}\n")
         return file_listing
 
+
 def le(reg_sz_string, number):
     return int(reg_sz_string[:-1]) <= number
+
 
 def in_(obj, seq):
     return obj in seq
 
+
 def startswith(string, start):
     return string.startswith(start)
+
 
 def not_(boolean_operator):
     def wrapper(*args, **kwargs):
