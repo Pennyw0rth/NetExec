@@ -278,7 +278,7 @@ class HostChecker:
                     reasons = ["Check could not be performed (invalid specification provided)"]
                     return ok, reasons
             except Exception as e:
-                self.module.log.error(f"Check could not be performed. Details: specs={specs}, dce={self.dce}, error: {e}")
+                self.context.log.error(f"Check could not be performed. Details: specs={specs}, dce={self.dce}, error: {e}")
                 return ok, reasons
 
             if op == operator.eq:
@@ -512,7 +512,7 @@ class HostChecker:
                 reasons = ["Check could not be performed (invalid specification provided)"]
                 return ok, reasons
         except Exception as e:
-            ok, reasons = self.module.log.error(f"Check could not be performed. Details: spec={spec}, dce={self.dce}, error: {e}")
+            self.context.log.error(f"Check could not be performed. Details: spec={spec}, dce={self.dce}, error: {e}")
             return ok, reasons
 
         reasons = []
@@ -521,7 +521,7 @@ class HostChecker:
         count, exclusions_p = self.get_exclusions(policy_key_name)
         reasons = [f"Policy: [{', '.join(exclusions_p)}]"]
         count_k, exclusions_k = self.get_exclusions(key_name)
-        reasons.append(f"Specific: [{', '.join(exclusions_k)}]")
+        reasons.append(f"Manual: [{', '.join(exclusions_k)}]")
         count += count_k
 
         if count > 0:
