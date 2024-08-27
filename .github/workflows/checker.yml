@@ -1,0 +1,179 @@
+name: NetExec Checker
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    uses: ./.github/workflows/lint.yml
+  nxc-smb:
+    runs-on: windows-latest
+    needs: [lint]
+    # technique stolen from @Hackndo my best friend for life <3
+    steps:
+      - name: Create new user
+        run: |
+          net user nxc Pwn3d!!! /add
+      - name: Add to local admin
+        run: |
+          net localgroup Administrators nxc /add
+      - name: Update registry key
+        run: |
+          REG ADD HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\system /v LocalAccountTokenFilterPolicy /t REG_DWORD /d 1 /f
+      - name: 👾 Disable defender   
+        run: start-process -filepath powershell -ArgumentList '/c','Set-MpPreference -DisableRealtimeMonitoring $true' -verb RunAs
+        shell: powershell
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.11'
+      - name: Install poetry
+        run: |
+          pipx install poetry --python python3.11
+          poetry --version
+          poetry env info
+      - name: Install libraries without dev group
+        run: |
+          poetry install
+      - name: Dumping sam
+        run: |
+          poetry run netexec smb %COMPUTERNAME% -u nxc -p Pwn3d!!! --sam
+      - name: Dumping lsa
+        run: |
+          poetry run netexec smb %COMPUTERNAME% -u nxc -p Pwn3d!!! --lsa
+      - name: Dumping dpapi
+        run: |
+          poetry run netexec smb %COMPUTERNAME% -u nxc -p Pwn3d!!! --dpapi
+      - name: Dumping with lsassy
+        run: |
+          poetry run netexec smb %COMPUTERNAME% -u nxc -p Pwn3d!!! -M lsassy
+      - name: Exec command
+        run: |
+          poetry run netexec smb %COMPUTERNAME% -u nxc -p Pwn3d!!! -x whoami --exec-method=smbexec
+          poetry run netexec smb %COMPUTERNAME% -u nxc -p Pwn3d!!! -x whoami --exec-method=wmiexec
+          poetry run netexec smb %COMPUTERNAME% -u nxc -p Pwn3d!!! -x whoami --exec-method=atexec
+          poetry run netexec smb %COMPUTERNAME% -u nxc -p Pwn3d!!! -x whoami --exec-method=mmcexec
+      - name: Dumping with procdump
+        run: |
+          poetry run netexec --verbose smb %COMPUTERNAME% %COMPUTERNAME% %COMPUTERNAME% -u nxc -p Pwn3d!!! -M procdump
+
+  nxc-winrm:
+    runs-on: windows-latest
+    needs: [lint]
+    # technique stolen from @Hackndo my best friend for life <3
+    steps:
+      - name: Create new user
+        run: |
+          net user nxc Pwn3d!!! /add
+      - name: Add to local admin
+        run: |
+          net localgroup Administrators nxc /add
+      - name: Update registry key
+        run: |
+          REG ADD HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\system /v LocalAccountTokenFilterPolicy /t REG_DWORD /d 1 /f
+      - name: Enable WinRM
+        run: |
+          winrm quickconfig -quiet
+      - name: 👾 Disable defender   
+        run: start-process -filepath powershell -ArgumentList '/c','Set-MpPreference -DisableRealtimeMonitoring $true' -verb RunAs
+        shell: powershell
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.11'
+      - name: Install poetry
+        run: |
+          pipx install poetry --python python3.11
+          poetry --version
+          poetry env info
+      - name: Install libraries without dev group
+        run: |
+          poetry install
+      - name: Dumping sam
+        run: |
+          poetry run netexec winrm 127.0.0.1 -u nxc -p Pwn3d!!! --sam
+      - name: Dumping lsa
+        run: |
+          poetry run netexec winrm 127.0.0.1 -u nxc -p Pwn3d!!! --lsa
+      - name: Exec command
+        run: |
+          poetry run netexec winrm 127.0.0.1 -u nxc -p Pwn3d!!! -x whoami
+
+  nxc-rdp:
+    runs-on: windows-latest
+    needs: [lint]
+    # technique stolen from @Hackndo my best friend for life <3
+    steps:
+      - name: Create new user
+        run: |
+          net user nxc Pwn3d!!! /add
+      - name: Add to local admin
+        run: |
+          net localgroup Administrators nxc /add
+      - name: Update registry key
+        run: |
+          REG ADD HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\system /v LocalAccountTokenFilterPolicy /t REG_DWORD /d 1 /f
+      - name: Update registry key rdo
+        run: |
+          reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f
+      - name: Open Firewall
+        run: |
+          netsh advfirewall firewall add rule name="Open Remote Desktop" protocol=TCP dir=in localport=3389 action=allow
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.11'
+      - name: Install poetry
+        run: |
+          pipx install poetry --python python3.11
+          poetry --version
+          poetry env info
+      - name: Install libraries without dev group
+        run: |
+          poetry install
+      - name: Checking rdp
+        run: |
+          poetry run netexec rdp 127.0.0.1
+      - name: Checking auth
+        run: |
+          poetry run netexec rdp 127.0.0.1 -u nxc -p Pwn3d!!!
+
+  nxc-ssh:
+    runs-on: ubuntu-latest
+    needs: [lint]
+    # technique stolen from @Hackndo my best friend for life <3
+    steps:
+      - name: Enable ssh
+        run: |
+          sudo apt update
+          sudo apt install openssh-server
+          sudo systemctl status ssh
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.11'
+      - name: Install poetry
+        run: |
+          pipx install poetry --python python3.11
+          poetry --version
+          poetry env info
+      - name: Install libraries without dev group
+        run: |
+          poetry install
+      - name: Connection with user
+        run: |
+          poetry run netexec ssh 127.0.0.1
