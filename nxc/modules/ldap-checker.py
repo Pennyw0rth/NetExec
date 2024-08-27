@@ -142,7 +142,7 @@ class NXCModule:
                     # because LDAP server signing requirements are not enforced
             except Exception as e:
                 context.log.debug(str(e))
-                return False
+                return None
               
 
         # Run trough all our code blocks to determine LDAP signing and channel binding settings.
