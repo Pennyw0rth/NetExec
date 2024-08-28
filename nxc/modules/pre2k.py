@@ -1,15 +1,17 @@
 import os
-from impacket.ldap import ldap, ldapasn1
 from impacket.krb5.kerberosv5 import getKerberosTGT
 from impacket.krb5.ccache import CCache
 from impacket.krb5.types import Principal
 from impacket.krb5 import constants
 
+from nxc.parsers.ldap_results import parse_result_attributes
+from nxc.paths import NXC_PATH
+
+
 class NXCModule:
     """
     Identify pre-created computer accounts, save the results to a file, and obtain TGTs for each pre-created computer account.
-    Module by : @shad0wcntr0ller
-    
+    Module by: @shad0wcntr0ller
     """
     name = "pre2k"
     description = "Identify pre-created computer accounts, save the results to a file, and obtain TGTs for each"
@@ -22,15 +24,7 @@ class NXCModule:
 
     def on_login(self, context, connection):
         try:
-            # Initialize connection to LDAP
-            context.log.info(f"Connecting to LDAP server at ldap://{connection.host}")
-
-            if connection.kerberos:
-                ldap_connection = ldap.LDAPConnection(f"ldap://{connection.host}", connection.baseDN, None)
-                ldap_connection.kerberosLogin(connection.username, connection.password, connection.domain, lmhash=connection.lmhash, nthash=connection.nthash, aesKey=connection.aesKey, kdcHost=connection.kdcHost)
-            else:
-                ldap_connection = ldap.LDAPConnection(f"ldap://{connection.host}", connection.baseDN, None)
-                ldap_connection.login(connection.username, connection.password, connection.domain, lmhash=connection.lmhash, nthash=connection.nthash)
+            ldap_connection = connection.ldapConnection
 
             # Define the search filter for pre-created computer accounts
             search_filter = "(&(objectClass=computer)(userAccountControl=4128))"
@@ -43,36 +37,19 @@ class NXCModule:
 
             try:
                 # Use paged search to retrieve all computer accounts with specific flags
-                paged_search_control = ldapasn1.SimplePagedResultsControl(criticality=True, size=1000)
-                search_results = ldap_connection.search(searchFilter=search_filter, attributes=attributes, searchControls=[paged_search_control])
+                search_results = connection.search(search_filter, attributes)
+                results = parse_result_attributes(search_results)
+                context.log.debug(f"Search results: {results}")
 
-                for item in search_results:
-                    if isinstance(item, ldapasn1.SearchResultEntry):
-                        context.log.debug(f"Raw item: {item.prettyPrint()}")
-
-                        sam_account_name = None
-                        user_account_control = None
-
-                        for attribute in item["attributes"]:
-                            context.log.debug(f"Attribute: {attribute.prettyPrint()}")
-                            if str(attribute["type"]) == "sAMAccountName":
-                                sam_account_name = str(attribute["vals"][0])
-                            elif str(attribute["type"]) == "userAccountControl":
-                                user_account_control = str(attribute["vals"][0])
-
-                        context.log.debug(f"Processing computer: {sam_account_name}, UAC: {user_account_control}")
-
-                        if sam_account_name and user_account_control is not None:
-                            user_account_control = int(user_account_control)
-
-                            # Check if the account is a pre-created computer account
-                            if user_account_control == 4128:  # 4096 | 32
-                                computers.append(sam_account_name)
-                                context.log.debug(f"Added computer: {sam_account_name}")
+                for computer in results:
+                    context.log.debug(f"Processing computer: {computer['sAMAccountName']}, UAC: {computer['userAccountControl']}")
+                    # Check if the account is a pre-created computer account
+                    if int(computer["userAccountControl"]) == 4128:  # 4096 | 32
+                        computers.append(computer["sAMAccountName"])
+                        context.log.debug(f"Added computer: {computer['sAMAccountName']}")
 
                 # Save computers to file
-                base_dir = "/root/.nxc/DiscoveredComputers"
-                domain_dir = os.path.join(base_dir, connection.domain)
+                domain_dir = os.path.join(f"{NXC_PATH}/modules/pre2k", connection.domain)
                 output_file = os.path.join(domain_dir, "precreated_computers.txt")
 
                 # Create directories if they do not exist
@@ -91,7 +68,7 @@ class NXCModule:
                     context.log.info("No pre-created computer accounts found.")
 
                 # Obtain TGTs and save to ccache
-                ccache_base_dir = "/root/.nxc/ccache"
+                ccache_base_dir = f"{NXC_PATH}/modules/pre2k/ccache"
                 os.makedirs(ccache_base_dir, exist_ok=True)
 
                 successful_tgts = 0
@@ -147,4 +124,3 @@ class NXCModule:
             context.log.info(f"Saved ticket in {ccache_filename}")
         except Exception as e:
             context.log.fail(f"Failed to save ticket for {username}: {e}")
-
