@@ -482,6 +482,7 @@ class connection:
             value = jitter[0] if jitter[0] == jitter[1] else random.choice(range(jitter[0], jitter[1]))
             self.logger.debug(f"Throttle authentications: sleeping {value} second(s)")
             sleep(value)
+        
 
         with sem:
             if cred_type == "plaintext":
