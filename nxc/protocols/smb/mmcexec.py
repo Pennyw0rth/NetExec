@@ -103,7 +103,8 @@ class MMCEXEC:
         )
         try:
             iInterface = self.__dcom.CoCreateInstanceEx(string_to_bin("49B2791A-B1AE-4C90-9B8E-E860BA07F889"), IID_IDispatch)
-        except Exception:
+        except Exception as e:
+            self.logger.info(f"Got Exception while connecting with DCOM: {e}")
             # Make it force break function
             self.__dcom.disconnect()
         flag, self.__stringBinding = dcom_FirewallChecker(iInterface, self.__remoteHost, self.__timeout)
