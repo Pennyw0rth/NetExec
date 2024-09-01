@@ -15,12 +15,12 @@ class NXCModule:
     """
 
     def options(self, context, module_options):
-        """
+        r"""
         CMD            Command to execute
         USER           User to execute command as
         TASK           OPTIONAL: Set a name for the scheduled task name
         FILE           OPTIONAL: Set a name for the command output file
-        LOCATION       OPTIONAL: Set a location for the command output file
+        LOCATION       OPTIONAL: Set a location for the command output file (e.g. '\tmp\')
         """
         self.cmd = self.user = self.task = self.file = self.location = self.time = None
         if "CMD" in module_options:
@@ -28,16 +28,16 @@ class NXCModule:
 
         if "USER" in module_options:
             self.user = module_options["USER"]
-            
+
         if "TASK" in module_options:
             self.task = module_options["TASK"]
-            
+
         if "FILE" in module_options:
             self.file = module_options["FILE"]
- 
+
         if "LOCATION" in module_options:
             self.location = module_options["LOCATION"]
-           
+
     name = "schtask_as"
     description = "Remotely execute a scheduled task as a logged on user"
     supported_protocols = ["smb"]
@@ -117,7 +117,6 @@ class TSCH_EXEC:
         self.file = file
         self.task = task
         self.location = location
-        
 
         if hashes is not None:
             if hashes.find(":") != -1:
@@ -202,9 +201,9 @@ class TSCH_EXEC:
         if self.__retOutput:
             fileLocation = "\\Windows\\Temp\\" if self.location is None else self.location
             if self.file is None:
-                self.__output_filename = f"{fileLocation}{gen_random_string(6)}"
-            else: 	
-                self.__output_filename = f"{fileLocation}{self.file}"
+                self.__output_filename = os.path.join(fileLocation, gen_random_string(6))
+            else:
+                self.__output_filename = os.path.join(fileLocation, self.file)
             if fileless:
                 local_ip = self.__rpctransport.get_socket().getsockname()[0]
                 argument_xml = f"      <Arguments>/C {command} &gt; \\\\{local_ip}\\{self.__share_name}\\{self.__output_filename} 2&gt;&amp;1</Arguments>"
