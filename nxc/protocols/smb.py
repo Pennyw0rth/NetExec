@@ -302,6 +302,10 @@ class smb(connection):
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
+        # If we want to authenticate we should create another connection object, because we already logged in
+        if self.args.username or self.args.cred_id or self.kerberos:
+            self.create_conn_obj()
+
     def print_host_info(self):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
         smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
