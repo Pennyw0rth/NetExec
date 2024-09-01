@@ -58,8 +58,3 @@ class NXCModule:
         except Exception as e:
             self.context.log.fail(f"Error while connecting to host: {e}")
             return False
-
-def fail(msg):
-    nxc_logger.debug(msg)
-    nxc_logger.fail("This might have been caused by invalid arguments or network issues.")
-    sys.exit(2)
