@@ -313,8 +313,6 @@ class smb(connection):
         return True
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
-        # Re-connect since we logged off
-        self.create_conn_obj()
         self.logger.debug(f"KDC set to: {kdcHost}")
         lmhash = ""
         nthash = ""
@@ -373,6 +371,7 @@ class smb(connection):
             if self.args.continue_on_success and self.signing:
                 with contextlib.suppress(Exception):
                     self.conn.logoff()
+                self.create_conn_obj()
             return True
         except SessionKeyDecryptionError:
             # success for now, since it's a vulnerability - previously was an error
