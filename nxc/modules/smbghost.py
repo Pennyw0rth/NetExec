@@ -12,7 +12,7 @@ SMBGHOST_PKT = b'\x00\x00\x00\xc0\xfeSMB@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x1
 
 class NXCModule:
     name = "smbghost"
-    description = "Module to check if the machine is vulnerable to SmbGhost"
+    description = "Module to check for the SMB dialect 3.1.1 and compression capability of the host, which is an indicator for the SMBGhost vulnerability (CVE-2020-0796)."
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
@@ -28,7 +28,7 @@ class NXCModule:
     def on_login(self, context, connection):
         self.context = context
         if self.perform_attack(connection.host):
-            self.context.log.highlight("VULNERABLE to SMBGhost (CVE-2020-0796)")
+            self.context.log.highlight("Potentially vulnerable to SMBGhost (CVE-2020-0796)")
 
     def perform_attack(self, target_ip):
         self.context.log.debug("Performing SMBGhost check...")
