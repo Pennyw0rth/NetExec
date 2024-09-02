@@ -1,10 +1,8 @@
 # everything is comming from https://github.com/ly4k/SMBGhost
 # credit to @ly4k_
 # module by : @r4vanan
-import sys
 import socket
 import struct
-from nxc.logger import nxc_logger
 
 # Constants
 MAX_ATTEMPTS = 2000  # False negative chance: 0.04%
