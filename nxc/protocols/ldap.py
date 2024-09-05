@@ -1090,22 +1090,22 @@ class ldap(connection):
         def printTable(items, header):
             colLen = []
             try:
-				for i, col in enumerate(header):
-					rowMaxLen = max(len(str(row[i])) for row in items)
-					colLen.append(max(rowMaxLen, len(col)))
+                for i, col in enumerate(header):
+                    rowMaxLen = max(len(str(row[i])) for row in items)
+                    colLen.append(max(rowMaxLen, len(col)))
 
-				# Create the format string for each row
-				outputFormat = " ".join([f"{{{num}:{width}s}}" for num, width in enumerate(colLen)])
+                # Create the format string for each row
+                outputFormat = " ".join([f"{{{num}:{width}s}}" for num, width in enumerate(colLen)])
 
-				# Print header
-				self.logger.highlight(outputFormat.format(*header))
-				self.logger.highlight(" ".join(["-" * itemLen for itemLen in colLen]))
+                # Print header
+                self.logger.highlight(outputFormat.format(*header))
+                self.logger.highlight(" ".join(["-" * itemLen for itemLen in colLen]))
 
-				# Print rows
-				for row in items:
-					self.logger.highlight(outputFormat.format(*row))
-			except Exception as e:
-				self.logger.fail("Header Index error " + str(e))  # Seen in line rowMaxlen and highlight row variable
+                # Print rows
+                for row in items:
+                    self.logger.highlight(outputFormat.format(*row))
+            except Exception as e:
+                self.logger.fail("Header Index error " + str(e))    
                 
         # Building the search filter
         search_filter = ("(&(|(UserAccountControl:1.2.840.113556.1.4.803:=16777216)(UserAccountControl:1.2.840.113556.1.4.803:="
