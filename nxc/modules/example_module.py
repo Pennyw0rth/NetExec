@@ -1,4 +1,4 @@
-
+from nxc.helpers.modules import add_loot_data
 class NXCModule:
     """
     Example:
@@ -6,7 +6,7 @@ class NXCModule:
     Module by @yomama
     """
 
-    name = "example module"
+    name = "example_module"  # Make sure this is unique and one word (no spaces)
     description = "I do something"
     supported_protocols = []  # Example: ['smb', 'mssql']
     opsec_safe = True  # Does the module touch disk?
@@ -46,8 +46,10 @@ class NXCModule:
     def on_admin_login(self, context, connection):
         """Concurrent.
         Required if on_login is not present
-        This gets called on each authenticated connection with  Administrative privileges
+        This gets called on each authenticated connection with Administrative privileges
         """
+        # Use this function to add loot data you want to save to $NXC_PATH/loot/$MODULE_NAME/$FILENAME
+        add_loot_data(self.name, "custom_loot_file.txt", "Data can be anything you want, passwords, hashes, or anything")
 
     def on_request(self, context, request):
         """Optional.
