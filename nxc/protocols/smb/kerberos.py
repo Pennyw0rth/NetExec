@@ -88,7 +88,7 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
     client_name = Principal(impersonate, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
 
     s4u_byte_array = struct.pack("<I", constants.PrincipalNameType.NT_PRINCIPAL.value)
-    s4u_byte_array += b(impersonate) + b(domain) + b"Kerberos"
+    s4u_byte_array += impersonate.encode() + b(domain) + b"Kerberos"
 
     # Finally cksum is computed by calling the KERB_CHECKSUM_HMAC_MD5 hash
     # with the following three parameters: the session key of the TGT of
