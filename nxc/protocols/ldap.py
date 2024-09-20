@@ -302,7 +302,7 @@ class ldap(connection):
     def print_host_info(self):
         self.logger.debug("Printing host info for LDAP")
         if self.args.no_smb:
-            self.logger.extra["protocol"] = "LDAP" if self.port == "389" else "LDAPS"
+            self.logger.extra["protocol"] = "LDAP" if self.port == 389 else "LDAPS"
             self.logger.extra["port"] = self.port
             self.logger.display(f'{self.baseDN} (Hostname: {self.hostname.split(".")[0]}) (domain: {self.domain})')
         else:
