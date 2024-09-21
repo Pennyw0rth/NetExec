@@ -3,6 +3,8 @@ from nxc.logger import NXCAdapter
 from pyNfsClient import Portmap, Mount, NFSv3, NFS_PROGRAM, NFS_V3
 import socket
 import re
+import uuid
+
 
 class nfs(connection):
     def __init__(self, args, db, host):
@@ -13,7 +15,7 @@ class nfs(connection):
         self.mount = None
         self.auth = {
             "flavor": 1,
-            "machine_name": "host1",
+            "machine_name": uuid.uuid4().hex.upper()[0:6],
             "uid": 0,
             "gid": 0,
             "aux_gid": [],
@@ -29,29 +31,31 @@ class nfs(connection):
                 "hostname": self.hostname,
             }
         )
-    
+
     def plaintext_login(self, username, password):
         # Uses Anonymous access for now
         try:
             if self.initialization():
-                self.logger.success("Initialization is successfull!")
+                self.logger.success("Initialization successfull!")
         except Exception as e:
-            self.logger.fail("Initialization is failed.")
+            self.logger.fail("Initialization failed.")
             self.logger.debug(f"Error Plaintext login: {self.host}:{self.port} {e}")
         finally:
             self.disconnect()
-    
+
     def create_conn_obj(self):
-        """Creates and connects a socket to the NFS host"""
+        """Creates a socket and connects to the NFS host"""
+        if self.is_ipv6:
+            self.logger.error("IPv6 is not supported for NFS")
         try:
             self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.client.connect((self.host, self.port))
-            self.logger.info(f"Connection target successful: {self.host}:{self.port}")
+            self.logger.info(f"Connection to target successful: {self.host}:{self.port}")
         except Exception as e:
             self.logger.debug(f"Error connecting to NFS host: {self.host}:{self.port} {e}")
             return False
         return True
-        
+
     def enum_host_info(self):
         self.initialization()
         try:
@@ -62,18 +66,16 @@ class nfs(connection):
             for program in programs:
                 if program["program"] == NFS_PROGRAM:
                     self.nfs_versions.add(program["version"])
-
             return self.nfs_versions
-
         except Exception as e:
             self.logger.debug(f"Error checking NFS version: {self.host} {e}")
         finally:
             self.disconnect()
-        
+
     def print_host_info(self):
         self.logger.display(f"Target supported NFS versions {self.nfs_versions}")
         return True
-        
+
     def disconnect(self):
         """Disconnect mount and portmap if they are connected"""
         try:
@@ -82,23 +84,23 @@ class nfs(connection):
             self.logger.info(f"Disconnect successful: {self.host}:{self.port}")
         except Exception as e:
             self.logger.debug(f"Error during disconnect: {e}")
-        
+
     def initialization(self):
         """Initializes and connects to the portmap and mounted folder"""
         try:
             # Portmap Initialization
             self.portmap = Portmap(self.host, timeout=3600)
             self.portmap.connect()
-            
+
             # Mount Initialization
             self.mnt_port = self.portmap.getport(Mount.program, Mount.program_version)
             self.mount = Mount(host=self.host, port=self.mnt_port, timeout=3600, auth=self.auth)
             self.mount.connect()
-            
+
             return self.portmap, self.mnt_port, self.mount
         except Exception as e:
             self.logger.debug(f"Error during Initialization: {e}")
-        
+
     def list_dir(self, nfs, file_handle, path, recurse=1):
         """Process entries in NFS directory recursively"""
         def process_entries(entries, path, recurse):
@@ -108,18 +110,18 @@ class nfs(connection):
                     if "name" in entry and entry["name"] not in [b".", b".."]:
                         item_path = f'{path}/{entry["name"].decode("utf-8")}'  # Constructing file path
                         if entry.get("name_attributes", {}).get("present", False):
-                            entry_type = entry["name_attributes"]["attributes"].get("type")                    
+                            entry_type = entry["name_attributes"]["attributes"].get("type")
                             if entry_type == 2 and recurse > 0:  # Recursive directory listing. Entry type shows file format. 1 is file, 2 is folder.
                                 dir_handle = entry["name_handle"]["handle"]["data"]
                                 contents += self.list_dir(nfs, dir_handle, item_path, recurse=recurse - 1)
                             else:
                                 contents.append(item_path)
-                    
+
                     if entry["nextentry"]:
                         # Processing next entries recursively
                         recurse += 1
                         contents += process_entries(entry["nextentry"], path, recurse)
-                
+
                 return contents
             except Exception as e:
                 self.logger.debug(f"Error on Listing Entries for NFS Shares: {self.host}:{self.port} {e}")
@@ -142,7 +144,7 @@ class nfs(connection):
             # Collect the names of the groups associated with this export node
             group_names = self.group_names(node.ex_groups)
             result.append(f"{ex_dir} {', '.join(group_names)}")
-            
+
             # If there are more export nodes, process them recursively. More than one share.
             if node.ex_next:
                 result.extend(self.export_info(node.ex_next))
@@ -153,13 +155,13 @@ class nfs(connection):
         result = []
         for group in groups:
             result.append(group.gr_name.decode())
-            
+
             # If there are more IP's, process them recursively.
             if group.gr_next:
                 result.extend(self.group_names(group.gr_next))
 
         return result
-    
+
     def shares(self):
         try:
             self.initialization()
@@ -190,24 +192,23 @@ class nfs(connection):
                     except Exception:
                         if not max_uid:  # To avoid mess in the debug logs
                             self.logger.fail(f"Can not reach file(s) on {export} with UID: {uid}")
-        
+
         try:
             self.initialization()
             nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
             self.nfs3 = NFSv3(self.host, nfs_port, 3600, self.auth)
             self.nfs3.connect()
-            
+
             contents = []
             # Mounting NFS Shares
             output_export = str(self.mount.export())
             pattern_name = re.compile(r"ex_dir=b'([^']*)'")
-            matches_name = pattern_name.findall(output_export)      
+            matches_name = pattern_name.findall(output_export)
             output_name = list(matches_name)
-            
+
             export_list(max_uid)
 
         except Exception as e:
-            
             self.logger.debug(f"Error on Listing NFS Shares Directories: {self.host}:{self.port} {e}")
             self.logger.debug("It is probably unknown format or can not access as anonymously.")
         finally:
