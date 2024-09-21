@@ -34,7 +34,6 @@ def proto_args(parser, parents):
 
     mapping_enum_group = smb_parser.add_argument_group("Mapping/Enumeration", "Options for Mapping/Enumerating")
     mapping_enum_group.add_argument("--shares", action="store_true", help="enumerate shares and access")
-    mapping_enum_group.add_argument("--interfaces", action="store_true", help="enumerate network interfaces")
     mapping_enum_group.add_argument("--no-write-check", action="store_true", help="Skip write check on shares (avoid leaving traces when missing delete permissions)")
     mapping_enum_group.add_argument("--filter-shares", nargs="+", help="Filter share by access, option 'read' 'write' or 'read,write'")
     mapping_enum_group.add_argument("--sessions", action="store_true", help="enumerate active sessions")
@@ -47,7 +46,8 @@ def proto_args(parser, parents):
     mapping_enum_group.add_argument("--local-groups", nargs="?", const="", metavar="GROUP", help="enumerate local groups, if a group is specified then its members are enumerated")
     mapping_enum_group.add_argument("--pass-pol", action="store_true", help="dump password policy")
     mapping_enum_group.add_argument("--rid-brute", nargs="?", type=int, const=4000, metavar="MAX_RID", help="enumerate users by bruteforcing RIDs")
-    
+    mapping_enum_group.add_argument("--qwinsta", action="store_true", help="Enumerate RDP connections")
+
     wmi_group = smb_parser.add_argument_group("WMI", "Options for WMI Queries")
     wmi_group.add_argument("--wmi", metavar="QUERY", type=str, help="issues the specified WMI query")
     wmi_group.add_argument("--wmi-namespace", metavar="NAMESPACE", default="root\\cimv2", help="WMI Namespace")
