@@ -14,7 +14,7 @@ from impacket.examples.secretsdump import (
     NTDSHashes,
 )
 from impacket.nmb import NetBIOSError, NetBIOSTimeout
-from impacket.dcerpc.v5 import transport, lsat, lsad, scmr, rrp
+from impacket.dcerpc.v5 import transport, lsat, lsad, scmr
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5.transport import DCERPCTransportFactory, SMBTransport
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
@@ -66,6 +66,8 @@ from traceback import format_exc
 import logging
 from termcolor import colored
 import contextlib
+
+from impacket.dcerpc.v5 import tsts as TSTS
 
 smb_share_name = gen_random_string(5).upper()
 smb_server = None
@@ -147,9 +149,6 @@ class smb(connection):
     def __init__(self, args, db, host):
         self.domain = None
         self.server_os = None
-        self.server_os_major = None
-        self.server_os_minor = None
-        self.server_os_build = None
         self.os_arch = 0
         self.hash = None
         self.lmhash = ""
@@ -164,7 +163,6 @@ class smb(connection):
         self.no_da = None
         self.no_ntlm = False
         self.protocol = "SMB"
-        self.is_guest = None
 
         connection.__init__(self, args, db, host)
 
@@ -215,7 +213,6 @@ class smb(connection):
             if "STATUS_NOT_SUPPORTED" in str(e):
                 # no ntlm supported
                 self.no_ntlm = True
-                self.logger.debug("NTLM not supported")
 
         # self.domain is the attribute we authenticate with
         # self.targetDomain is the attribute which gets displayed as host domain
@@ -225,20 +222,8 @@ class smb(connection):
             if not self.targetDomain:   # Not sure if that can even happen but now we are safe
                 self.targetDomain = self.hostname
         else:
-            # If we can't authenticate with NTLM and the target is supplied as a FQDN we must parse it
-            try:
-                import socket
-                socket.inet_aton(self.host)
-                self.logger.debug("NTLM authentication not available! Authentication will fail without a valid hostname and domain name")
-                self.hostname = self.host
-                self.targetDomain = self.host
-            except OSError:
-                if self.host.count(".") >= 1:
-                    self.hostname = self.host.split(".")[0]
-                    self.targetDomain = ".".join(self.host.split(".")[1:])
-                else:
-                    self.hostname = self.host
-                    self.targetDomain = self.host
+            self.hostname = self.host
+            self.targetDomain = self.hostname
 
         self.domain = self.targetDomain if not self.args.domain else self.args.domain
 
@@ -246,23 +231,7 @@ class smb(connection):
             self.domain = self.hostname
             self.targetDomain = self.hostname
 
-        # As of June 2024 Samba will always report the version as "Windows 6.1", apparently due to a bug https://stackoverflow.com/a/67577401/17395725
-        # Together with the reported build version "0" by Samba we can assume that it is a Samba server. Windows should always report a build version > 0
-        # Also only on Windows we should get an OS arch as for that we would need MSRPC
-        try:
-            self.server_os = self.conn.getServerOS()
-            self.server_os_major = self.conn.getServerOSMajor()
-            self.server_os_minor = self.conn.getServerOSMinor()
-            self.server_os_build = self.conn.getServerOSBuild()
-        except KeyError:
-            self.logger.debug("Error getting server information...")
-
-        if "Windows 6.1" in self.server_os and self.server_os_build == 0 and self.os_arch == 0:
-            self.server_os = "Unix - Samba"
-        elif self.server_os_build == 0 and self.os_arch == 0:
-            self.server_os = "Unix"
-        self.logger.debug(f"Server OS: {self.server_os} {self.server_os_major}.{self.server_os_minor} build {self.server_os_build}")
-
+        self.server_os = self.conn.getServerOS()
         self.logger.extra["hostname"] = self.hostname
 
         if isinstance(self.server_os.lower(), bytes):
@@ -276,24 +245,21 @@ class smb(connection):
         self.os_arch = self.get_os_arch()
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
-        try:
-            self.db.add_host(
-                self.host,
-                self.hostname,
-                self.domain,
-                self.server_os,
-                self.smbv1,
-                self.signing,
-            )
-        except Exception as e:
-            self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
+        self.db.add_host(
+            self.host,
+            self.hostname,
+            self.domain,
+            self.server_os,
+            self.smbv1,
+            self.signing,
+        )
 
         try:
             # DCs seem to want us to logoff first, windows workstations sometimes reset the connection
             self.conn.logoff()
         except Exception as e:
             self.logger.debug(f"Error logging off system: {e}")
-
+        
         # DCOM connection with kerberos needed
         self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
 
@@ -346,8 +312,7 @@ class smb(connection):
                 self.logger.debug(f"Got TGS for {self.args.delegate} through S4U")
 
             self.conn.kerberosLogin(self.username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache=useCache, TGS=tgs)
-            if "Unix" not in self.server_os:
-                self.check_if_admin()
+            self.check_if_admin()
 
             if username == "":
                 self.username = self.conn.getCredentials()[0]
@@ -412,26 +377,30 @@ class smb(connection):
             self.domain = domain
 
             self.conn.login(self.username, self.password, domain)
-            self.logger.debug(f"Logged in with password to SMB with {domain}/{self.username}")
-            self.is_guest = bool(self.conn.isGuestSession())
-            self.logger.debug(f"{self.is_guest=}")
-            if "Unix" not in self.server_os:
-                self.check_if_admin()
 
+            self.check_if_admin()
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
             self.db.add_credential("plaintext", domain, self.username, self.password)
             user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
             host_id = self.db.get_hosts(self.host)[0].id
+
             self.db.add_loggedin_relation(user_id, host_id)
 
-            out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_guest()}{self.mark_pwned()}"
+            out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}"
             self.logger.success(out)
 
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 self.logger.debug(f"Adding admin user: {self.domain}/{self.username}:{self.password}@{self.host}")
-                self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host, user_id=user_id)
+                self.db.add_admin_user(
+                    "plaintext",
+                    domain,
+                    self.username,
+                    self.password,
+                    self.host,
+                    user_id=user_id,
+                )
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
             # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
@@ -477,18 +446,14 @@ class smb(connection):
                 self.nthash = nthash
 
             self.conn.login(self.username, "", domain, lmhash, nthash)
-            self.logger.debug(f"Logged in with hash to SMB with {domain}/{self.username}")
-            self.is_guest = bool(self.conn.isGuestSession())
-            self.logger.debug(f"{self.is_guest=}")
-            if "Unix" not in self.server_os:
-                self.check_if_admin()
 
-            self.db.add_credential("hash", domain, self.username, self.hash)
-            user_id = self.db.get_credential("hash", domain, self.username, self.hash)
+            self.check_if_admin()
+            user_id = self.db.add_credential("hash", domain, self.username, nthash)
             host_id = self.db.get_hosts(self.host)[0].id
+
             self.db.add_loggedin_relation(user_id, host_id)
 
-            out = f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_guest()}{self.mark_pwned()}"
+            out = f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_pwned()}"
             self.logger.success(out)
 
             if not self.args.local_auth and self.username != "":
@@ -568,7 +533,6 @@ class smb(connection):
         return bool(self.create_smbv1_conn() or self.create_smbv3_conn())
 
     def check_if_admin(self):
-        self.logger.debug(f"Checking if user is admin on {self.host}")
         rpctransport = SMBTransport(self.conn.getRemoteHost(), 445, r"\svcctl", smb_connection=self.conn)
         dce = rpctransport.get_dce_rpc()
         try:
@@ -581,14 +545,9 @@ class smb(connection):
             try:
                 # 0xF003F - SC_MANAGER_ALL_ACCESS
                 # http://msdn.microsoft.com/en-us/library/windows/desktop/ms685981(v=vs.85).aspx
-                scmrobj = scmr.hROpenSCManagerW(dce, f"{self.host}\x00", "ServicesActive\x00", 0xF003F)
-                scmr.hREnumServicesStatusW(dce, scmrobj["lpScHandle"])
-                self.logger.debug(f"User is admin on {self.host}!")
+                scmr.hROpenSCManagerW(dce, f"{self.host}\x00", "ServicesActive\x00", 0xF003F)
                 self.admin_privs = True
             except scmr.DCERPCException:
-                self.admin_privs = False
-            except Exception as e:
-                self.logger.fail(f"Error checking if user is admin on {self.host}: {e}")
                 self.admin_privs = False
 
     def gen_relay_list(self):
@@ -725,21 +684,20 @@ class smb(connection):
             except UnicodeDecodeError:
                 self.logger.debug("Decoding error detected, consider running chcp.com at the target, map the result with https://docs.python.org/3/library/codecs.html#standard-encodings")
                 output = output.decode("cp437")
-
+                
             self.logger.debug(f"Raw Output: {output}")
             output = "\n".join([ll.rstrip() for ll in output.splitlines() if ll.strip()])
             self.logger.debug(f"Cleaned Output: {output}")
-
+            
             if "This script contains malicious content" in output:
                 self.logger.fail("Command execution blocked by AMSI")
                 return None
 
-            if (self.args.execute or self.args.ps_execute):
+            if (self.args.execute or self.args.ps_execute) and output:
                 self.logger.success(f"Executed command via {current_method}")
-                if output:
-                    output_lines = StringIO(output).readlines()
-                    for line in output_lines:
-                        self.logger.highlight(line.strip())
+                output_lines = StringIO(output).readlines()
+                for line in output_lines:
+                    self.logger.highlight(line.strip())
             return output
         else:
             self.logger.fail(f"Execute command failed with {current_method}")
@@ -751,26 +709,163 @@ class smb(connection):
         if not payload:
             self.logger.error("No command to execute specified!")
             return None
-
+        
         response = []
         obfs = obfs if obfs else self.args.obfs
         encode = encode if encode else not self.args.no_encode
         force_ps32 = force_ps32 if force_ps32 else self.args.force_ps32
         get_output = True if not self.args.no_output else get_output
-
+                
         self.logger.debug(f"Starting ps_execute(): {payload=} {get_output=} {methods=} {force_ps32=} {obfs=} {encode=}")
         amsi_bypass = self.args.amsi_bypass[0] if self.args.amsi_bypass else None
         self.logger.debug(f"AMSI Bypass: {amsi_bypass}")
-
+        
         if os.path.isfile(payload):
             self.logger.debug(f"File payload set: {payload}")
             with open(payload) as commands:
                 response = [self.execute(create_ps_command(c.strip(), force_ps32=force_ps32, obfs=obfs, custom_amsi=amsi_bypass, encode=encode), get_output, methods) for c in commands]
         else:
             response = [self.execute(create_ps_command(payload, force_ps32=force_ps32, obfs=obfs, custom_amsi=amsi_bypass, encode=encode), get_output, methods)]
-
+            
         self.logger.debug(f"ps_execute response: {response}")
         return response
+
+    def get_session_list(self):
+        with TSTS.TermSrvEnumeration(self.conn, self.host) as lsm:
+            handle = lsm.hRpcOpenEnum()
+            rsessions = lsm.hRpcGetEnumResult(handle, Level=1)['ppSessionEnumResult']
+            lsm.hRpcCloseEnum(handle)
+            self.sessions = {}
+            for i in rsessions:
+                sess = i['SessionInfo']['SessionEnum_Level1']
+                state = TSTS.enum2value(TSTS.WINSTATIONSTATECLASS, sess['State']).split('_')[-1]
+                self.sessions[sess['SessionId']] = { 'state'         :state,
+                                                'SessionName'   :sess['Name'],
+                                                'RemoteIp'      :'',
+                                                'ClientName'    :'',
+                                                'Username'      :'',
+                                                'Domain'        :'',
+                                                'Resolution'    :'',
+                                                'ClientTimeZone':''
+                                            }
+
+    def enumerate_sessions_config(self):
+        if len(self.sessions):
+            with TSTS.RCMPublic(self.conn, self.host) as termsrv:
+                for SessionId in self.sessions:
+                    resp = termsrv.hRpcGetClientData(SessionId)
+                    if resp is not None:
+                        self.sessions[SessionId]['RemoteIp']       = resp['ppBuff']['ClientAddress']
+                        self.sessions[SessionId]['ClientName']     = resp['ppBuff']['ClientName']
+                        if len(resp['ppBuff']['UserName']) and not len(self.sessions[SessionId]['Username']):
+                            self.sessions[SessionId]['Username']       = resp['ppBuff']['UserName']
+                        if len(resp['ppBuff']['Domain']) and not len(self.sessions[SessionId]['Domain']):
+                            self.sessions[SessionId]['Domain']         = resp['ppBuff']['Domain']
+                        self.sessions[SessionId]['Resolution']     = '{}x{}'.format(
+                                                                    resp['ppBuff']['HRes'],
+                                                                    resp['ppBuff']['VRes']
+                                                                )
+                        self.sessions[SessionId]['ClientTimeZone'] = resp['ppBuff']['ClientTimeZone']['StandardName']
+
+    def enumerate_sessions_info(self):
+        if len(self.sessions):
+            with TSTS.TermSrvSession(self.conn, self.host) as TermSrvSession:
+                for SessionId in self.sessions.keys():
+                    sessdata = TermSrvSession.hRpcGetSessionInformationEx(SessionId)
+                    sessflags = TSTS.enum2value(TSTS.SESSIONFLAGS, sessdata['LSMSessionInfoExPtr']['LSM_SessionInfo_Level1']['SessionFlags'])
+                    self.sessions[SessionId]['flags']    = sessflags
+                    domain = sessdata['LSMSessionInfoExPtr']['LSM_SessionInfo_Level1']['DomainName']
+                    if not len(self.sessions[SessionId]['Domain']) and len(domain):
+                        self.sessions[SessionId]['Domain'] = domain
+                    username = sessdata['LSMSessionInfoExPtr']['LSM_SessionInfo_Level1']['UserName']
+                    if not len(self.sessions[SessionId]['Username']) and len(username):
+                        self.sessions[SessionId]['Username'] = username
+                    self.sessions[SessionId]['ConnectTime'] = sessdata['LSMSessionInfoExPtr']['LSM_SessionInfo_Level1']['ConnectTime']
+                    self.sessions[SessionId]['DisconnectTime'] = sessdata['LSMSessionInfoExPtr']['LSM_SessionInfo_Level1']['DisconnectTime']
+                    self.sessions[SessionId]['LogonTime'] = sessdata['LSMSessionInfoExPtr']['LSM_SessionInfo_Level1']['LogonTime']
+                    self.sessions[SessionId]['LastInputTime'] = sessdata['LSMSessionInfoExPtr']['LSM_SessionInfo_Level1']['LastInputTime']
+
+
+    def qwinsta(self):
+        desktop_states = {
+            'WTS_SESSIONSTATE_UNKNOWN': '',
+            'WTS_SESSIONSTATE_LOCK'   : 'Locked',
+            'WTS_SESSIONSTATE_UNLOCK' : 'Unlocked',
+        }
+        self.get_session_list()
+        if not len(self.sessions):
+            return
+        self.enumerate_sessions_info()
+        self.enumerate_sessions_config()
+        maxSessionNameLen = max([len(self.sessions[i]['SessionName'])+1 for i in self.sessions])
+        maxSessionNameLen = maxSessionNameLen if len('SESSIONNAME') < maxSessionNameLen else len('SESSIONNAME')+1
+        maxUsernameLen = max([len(self.sessions[i]['Username']+self.sessions[i]['Domain'])+1 for i in self.sessions])+1
+        maxUsernameLen = maxUsernameLen if len('Username') < maxUsernameLen else len('Username')+1
+        maxIdLen = max([len(str(i)) for i in self.sessions])
+        maxIdLen = maxIdLen if len('ID') < maxIdLen else len('ID')+1
+        maxStateLen = max([len(self.sessions[i]['state'])+1 for i in self.sessions])
+        maxStateLen = maxStateLen if len('STATE') < maxStateLen else len('STATE')+1
+        maxRemoteIp = max([len(self.sessions[i]['RemoteIp'])+1 for i in self.sessions])
+        maxRemoteIp = maxRemoteIp if len('RemoteAddress') < maxRemoteIp else len('RemoteAddress')+1
+        maxClientName = max([len(self.sessions[i]['ClientName'])+1 for i in self.sessions])
+        maxClientName = maxClientName if len('ClientName') < maxClientName else len('ClientName')+1
+        template = ('{SESSIONNAME: <%d} '
+                    '{USERNAME: <%d} '
+                    '{ID: <%d} '
+                    '{STATE: <%d} '
+                    '{DSTATE: <9} '
+                    '{CONNTIME: <20} '
+                    '{DISCTIME: <20} ') % (maxSessionNameLen, maxUsernameLen, maxIdLen, maxStateLen)
+
+        result = []
+        header = template.format(
+                SESSIONNAME = 'SESSIONNAME',
+                USERNAME    = 'USERNAME',
+                ID          = 'ID',
+                STATE       = 'STATE',
+                DSTATE      = 'Desktop',
+                CONNTIME    = 'ConnectTime',
+                DISCTIME    = 'DisconnectTime',
+            )
+        
+        header2 = template.replace(' <','=<').format(
+                SESSIONNAME = '',
+                USERNAME    = '',
+                ID          = '',
+                STATE       = '',
+                DSTATE      = '',
+                CONNTIME    = '',
+                DISCTIME    = '',
+            )
+
+        header_verbose = ''
+        header2_verbose = ''
+        result.append(header+header_verbose)
+        result.append(header2+header2_verbose+'\n')
+        
+        for i in self.sessions:
+            connectTime = self.sessions[i]['ConnectTime']
+            connectTime = connectTime.strftime(r'%Y/%m/%d %H:%M:%S') if connectTime.year > 1601 else 'None'
+
+            disconnectTime = self.sessions[i]['DisconnectTime']
+            disconnectTime = disconnectTime.strftime(r'%Y/%m/%d %H:%M:%S') if disconnectTime.year > 1601 else 'None'
+            userName = self.sessions[i]['Domain'] + '\\' + self.sessions[i]['Username'] if len(self.sessions[i]['Username']) else ''
+
+            row = template.format(
+                SESSIONNAME = self.sessions[i]['SessionName'],
+                USERNAME    = userName,
+                ID          = i,
+                STATE       = self.sessions[i]['state'],
+                DSTATE      = desktop_states[self.sessions[i]['flags']],
+                CONNTIME    = connectTime,
+                DISCTIME    = disconnectTime,
+            )
+            row_verbose = ''        
+            result.append(row+row_verbose)
+
+        for row in result:
+            self.logger.highlight(row)
+
 
     def shares(self):
         temp_dir = ntpath.normpath("\\" + gen_random_string())
@@ -779,11 +874,6 @@ class smb(connection):
         try:
             self.logger.debug(f"domain: {self.domain}")
             user_id = self.db.get_user(self.domain.upper(), self.username)[0][0]
-        except IndexError as e:
-            if self.kerberos:
-                pass
-            else:
-                self.logger.fail(f"IndexError: {e!s}")
         except Exception as e:
             error = get_error_string(e)
             self.logger.fail(f"Error getting user: {error}")
@@ -857,75 +947,6 @@ class smb(connection):
                 continue
             self.logger.highlight(f"{name:<15} {','.join(perms):<15} {remark}")
         return permissions
-
-    @requires_admin
-    def interfaces(self):
-        """
-        Retrieve the list of network interfaces info (Name, IP Address, Subnet Mask, Default Gateway) from remote Windows registry'
-        Made by: @Sant0rryu, @NeffIsBack
-        """
-        try:
-            remoteOps = RemoteOperations(self.conn, False)
-            remoteOps.enableRegistry()
-
-            if remoteOps._RemoteOperations__rrp:
-                reg_handle = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)["phKey"]
-                key_handle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, reg_handle, "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces")["phkResult"]
-                sub_key_list = rrp.hBaseRegQueryInfoKey(remoteOps._RemoteOperations__rrp, key_handle)["lpcSubKeys"]
-                sub_keys = [rrp.hBaseRegEnumKey(remoteOps._RemoteOperations__rrp, key_handle, i)["lpNameOut"][:-1] for i in range(sub_key_list)]
-
-                self.logger.highlight(f"{'-Name-':<11} | {'-IP Address-':<15} | {'-SubnetMask-':<15} | {'-Gateway-':<15} | -DHCP-")
-                for sub_key in sub_keys:
-                    interface = {}
-                    try:
-                        interface_key = f"SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\{sub_key}"
-                        interface_handle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, reg_handle, interface_key)["phkResult"]
-
-                        # Retrieve Interace Name
-                        interface_name_key = f"SYSTEM\\ControlSet001\\Control\\Network\\{{4D36E972-E325-11CE-BFC1-08002BE10318}}\\{sub_key}\\Connection"
-                        interface_name_handle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, reg_handle, interface_name_key)["phkResult"]
-                        interface_name = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, interface_name_handle, "Name")[1].rstrip("\x00")
-                        interface["Name"] = str(interface_name)
-                        if "Kernel" in interface_name:
-                            continue
-
-                        # Retrieve DHCP
-                        try:
-                            dhcp_enabled = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, interface_handle, "EnableDHCP")[1]
-                        except DCERPCException:
-                            dhcp_enabled = False
-                        interface["DHCP"] = bool(dhcp_enabled)
-
-                        # Retrieve IPAddress
-                        try:
-                            ip_address = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, interface_handle, "DhcpIPAddress" if dhcp_enabled else "IPAddress")[1].rstrip("\x00").replace("\x00", ", ")
-                        except DCERPCException:
-                            ip_address = None
-                        interface["IPAddress"] = ip_address if ip_address else None
-
-                        # Retrieve SubnetMask
-                        try:
-                            subnetmask = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, interface_handle, "SubnetMask")[1].rstrip("\x00").replace("\x00", ", ")
-                        except DCERPCException:
-                            subnetmask = None
-                        interface["SubnetMask"] = subnetmask if subnetmask else None
-
-                        # Retrieve DefaultGateway
-                        try:
-                            default_gateway = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, interface_handle, "DhcpDefaultGateway")[1].rstrip("\x00").replace("\x00", ", ")
-                        except DCERPCException:
-                            default_gateway = None
-                        interface["DefaultGateway"] = default_gateway if default_gateway else None
-
-                        self.logger.highlight(f"{interface['Name']:<11} | {interface['IPAddress']!s:<15} | {interface['SubnetMask']!s:<15} | {interface['DefaultGateway']!s:<15} | {interface['DHCP']}")
-
-                    except DCERPCException as e:
-                        self.logger.info(f"Failed to retrieve the network interface info for {sub_key}: {e!s}")
-
-            with contextlib.suppress(Exception):
-                remoteOps.finish()
-        except DCERPCException as e:
-            self.logger.error(f"Failed to connect to the target: {e!s}")
 
     def get_dc_ips(self):
         dc_ips = [dc[1] for dc in self.db.get_domain_controllers(domain=self.domain)]
@@ -1395,7 +1416,7 @@ class smb(connection):
                 self.logger.success(f"Created file {src} on \\\\{self.args.share}\\{dst}")
             except Exception as e:
                 self.logger.fail(f"Error writing file to share {self.args.share}: {e}")
-
+    
     def put_file(self):
         for src, dest in self.args.put_file:
             self.put_file_single(src, dest)
@@ -1417,6 +1438,7 @@ class smb(connection):
     def get_file(self):
         for src, dest in self.args.get_file:
             self.get_file_single(src, dest)
+
 
     def enable_remoteops(self):
         try:
@@ -1500,7 +1522,7 @@ class smb(connection):
         except Exception as e:
             self.logger.debug(f"Could not upgrade connection: {e}")
             return
-
+        
         try:
             self.logger.display("Collecting Machine masterkeys, grab a coffee and be patient...")
             masterkeys_triage = MasterkeysTriage(
@@ -1515,7 +1537,7 @@ class smb(connection):
         if len(masterkeys) == 0:
             self.logger.fail("No masterkeys looted")
             return
-
+        
         self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting SCCM Credentials through {self.args.sccm}")
         try:
             # Collect Chrome Based Browser stored secrets
@@ -1705,6 +1727,7 @@ class smb(connection):
                     "Google Refresh Token",
                 )
 
+
         if dump_cookies and cookies:
             self.logger.display("Start Dumping Cookies")
             for cookie in cookies:
@@ -1890,6 +1913,3 @@ class smb(connection):
         except Exception as e:
             self.logger.debug(f"Error calling remote_ops.finish(): {e}")
         NTDS.finish()
-
-    def mark_guest(self):
-        return highlight(f"{highlight('(Guest)')}" if self.is_guest else "")
