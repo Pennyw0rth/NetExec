@@ -11,7 +11,8 @@ class nfs(connection):
         self.portmap = None
         self.mnt_port = None
         self.mount = None
-        self.auth = {"flavor": 1,
+        self.auth = {
+            "flavor": 1,
             "machine_name": "host1",
             "uid": 0,
             "gid": 0,
@@ -38,7 +39,7 @@ class nfs(connection):
             self.logger.fail("Initialization is failed.")
             self.logger.debug(f"Error Plaintext login: {self.host}:{self.port} {e}")
         finally:
-            self.disconnection()
+            self.disconnect()
     
     def create_conn_obj(self):
         """Creates and connects a socket to the NFS host"""
@@ -67,20 +68,20 @@ class nfs(connection):
         except Exception as e:
             self.logger.debug(f"Error checking NFS version: {self.host} {e}")
         finally:
-            self.disconnection()
+            self.disconnect()
         
     def print_host_info(self):
         self.logger.display(f"Target supported NFS versions {self.nfs_versions}")
         return True
         
-    def disconnection(self):
+    def disconnect(self):
         """Disconnect mount and portmap if they are connected"""
         try:
             self.mount.disconnect()
             self.portmap.disconnect()
-            self.logger.info(f"Disconnection successful: {self.host}:{self.port}")
+            self.logger.info(f"Disconnect successful: {self.host}:{self.port}")
         except Exception as e:
-            self.logger.debug(f"Error during disconnection: {e}")
+            self.logger.debug(f"Error during disconnect: {e}")
         
     def initialization(self):
         """Initializes and connects to the portmap and mounted folder"""
@@ -167,7 +168,7 @@ class nfs(connection):
         except Exception as e:
             self.logger.debug(f"Error on Enumeration NFS Shares: {self.host}:{self.port} {e}")
         finally:
-            self.disconnection()
+            self.disconnect()
 
     def shares_list(self, max_uid=0):
         def export_list(max_uid):
@@ -211,7 +212,7 @@ class nfs(connection):
             self.logger.debug("It is probably unknown format or can not access as anonymously.")
         finally:
             self.nfs3.disconnect()
-            self.disconnection()
+            self.disconnect()
 
     def uid_brute(self, max_uid=None):
         if not max_uid:
