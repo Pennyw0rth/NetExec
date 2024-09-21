@@ -20,7 +20,7 @@ class NXCModule:
     def analyze_history(self, history):
         """Analyze PowerShell history for sensitive information."""
         sensitive_keywords = [
-            "password", "passwd", "secret", "credential", "key",
+            "password", "passwd", "passw", "secret", "credential", "key",
             "get-credential", "convertto-securestring", "set-localuser",
             "new-localuser", "set-adaccountpassword", "new-object system.net.webclient",
             "invoke-webrequest", "invoke-restmethod"
