@@ -53,7 +53,7 @@ class NXCModule:
 
             # Check if export is enabled
             context.log.info(f"Export option is set to: {self.export}")
-            if self.export:
+            if self.export and history:
                 host = connection.host  # Assuming 'host' contains the target IP or hostname
                 filename = f"{host}_powershell_history.txt"
                 export_path = join(NXC_PATH, "modules", "powershell_history")
@@ -68,7 +68,6 @@ class NXCModule:
                     context.log.highlight(f"PowerShell history written to: {path}")
                 except Exception as e:
                     context.log.fail(f"Failed to write history to {filename}: {e}")
-
         except Exception as e:
             context.log.fail(f"UNEXPECTED ERROR: {e}")
             context.log.debug(traceback.format_exc())
