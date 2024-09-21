@@ -862,7 +862,8 @@ class smb(connection):
             )
             row_verbose = ''        
             result.append(row+row_verbose)
-
+            
+        self.logger.success("Enumerated Qwinsta sessions")
         for row in result:
             self.logger.highlight(row)
 
