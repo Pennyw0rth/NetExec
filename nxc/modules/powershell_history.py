@@ -1,5 +1,7 @@
 import traceback
-import os
+from os import makedirs
+from os.path import join, abspath
+from nxc.paths import NXC_PATH
 
 
 class NXCModule:
@@ -12,9 +14,9 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """To export all the history you can add the following option: -o export=enable"""
+        """To export all the history you can add the following option: -o export=True"""
         context.log.info(f"Received module options: {module_options}")
-        self.export = module_options.get("EXPORT", "disable").lower()
+        self.export = bool(module_options.get("EXPORT", False))
         context.log.info(f"Option export set to: {self.export}")
 
     def analyze_history(self, history):
@@ -51,18 +53,19 @@ class NXCModule:
 
             # Check if export is enabled
             context.log.info(f"Export option is set to: {self.export}")
-            if self.export == "enable":
+            if self.export:
                 host = connection.host  # Assuming 'host' contains the target IP or hostname
-                filename = f"{host}.powershell_history.txt"
-                context.log.info(f"Export enabled, writing history to {filename}")
+                filename = f"{host}_powershell_history.txt"
+                export_path = join(NXC_PATH, "modules", "powershell_history")
+                path = abspath(join(export_path, filename))
+                makedirs(export_path, exist_ok=True)
+
+                context.log.info(f"Export enabled, writing history to {path}")
                 try:
-                    with open(filename, "w") as file:
+                    with open(path, "w") as file:
                         for cmd in history:
                             file.write(cmd + "\n")
-                    context.log.info(f"History written to {filename}")
-                    # Print the full path to the file
-                    full_path = os.path.abspath(filename)
-                    print(f"PowerShell history written to: {full_path}")
+                    context.log.highlight(f"PowerShell history written to: {path}")
                 except Exception as e:
                     context.log.fail(f"Failed to write history to {filename}: {e}")
 
