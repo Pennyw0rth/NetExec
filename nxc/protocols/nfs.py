@@ -35,7 +35,7 @@ class nfs(connection):
     def plaintext_login(self, username, password):
         # Uses Anonymous access for now
         try:
-            if self.initialization():
+            if self.init():
                 self.logger.success("Initialization successfull!")
         except Exception as e:
             self.logger.fail("Initialization failed.")
@@ -57,7 +57,7 @@ class nfs(connection):
         return True
 
     def enum_host_info(self):
-        self.initialization()
+        self.init()
         try:
             # Dump all registered programs
             programs = self.portmap.dump()
@@ -85,7 +85,7 @@ class nfs(connection):
         except Exception as e:
             self.logger.debug(f"Error during disconnect: {e}")
 
-    def initialization(self):
+    def init(self):
         """Initializes and connects to the portmap and mounted folder"""
         try:
             # Portmap Initialization
@@ -125,16 +125,17 @@ class nfs(connection):
                 return contents
             except Exception as e:
                 self.logger.debug(f"Error on Listing Entries for NFS Shares: {self.host}:{self.port} {e}")
-        try:
-            if recurse == 0:
-                return [path + "/"]
 
-            items = self.nfs3.readdirplus(file_handle, auth=self.auth)
+        if recurse == 0:
+            return [path + "/"]
+
+        items = self.nfs3.readdirplus(file_handle, auth=self.auth)
+        if "resfail" in items:
+            raise Exception("Insufficient Permissions")
+        else:
             entries = items["resok"]["reply"]["entries"]
 
-            return process_entries(entries, path, recurse)
-        except Exception:
-            pass  # To avoid mess in the debug logs
+        return process_entries(entries, path, recurse)
 
     def export_info(self, export_nodes):
         """Filters all NFS shares and their access range"""
@@ -164,7 +165,7 @@ class nfs(connection):
 
     def shares(self):
         try:
-            self.initialization()
+            self.init()
             for mount in self.export_info(self.mount.export()):
                 self.logger.highlight(mount)
         except Exception as e:
@@ -172,29 +173,9 @@ class nfs(connection):
         finally:
             self.disconnect()
 
-    def shares_list(self, max_uid=0):
-        def export_list(max_uid):
-            white_list = []
-            for uid in range(max_uid + 1):
-                self.auth["uid"] = uid
-                for export in output_name:
-                    try:
-                        if export in white_list:
-                            continue
-                        else:
-                            mount_info = self.mount.mnt(export, self.auth)
-                            nonlocal contents  # The nonlocal keyword allows a variable defined in an outer (non-global) scope. To be referenced and modified in an inner scope.
-                            contents += self.list_dir(self.nfs3, mount_info["mountinfo"]["fhandle"], export)
-                            white_list.append(export)
-                            for shares in contents:
-                                self.logger.highlight(f"UID: {uid} {shares}")
-                            contents = []
-                    except Exception:
-                        if not max_uid:  # To avoid mess in the debug logs
-                            self.logger.fail(f"Can not reach file(s) on {export} with UID: {uid}")
-
+    def enum_shares(self, max_uid=0):
         try:
-            self.initialization()
+            self.init()
             nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
             self.nfs3 = NFSv3(self.host, nfs_port, 3600, self.auth)
             self.nfs3.connect()
@@ -206,8 +187,7 @@ class nfs(connection):
             matches_name = pattern_name.findall(output_export)
             output_name = list(matches_name)
 
-            export_list(max_uid)
-
+            self.list_exported_shares(max_uid, contents, output_name, recurse_depth=self.args.enum_shares)
         except Exception as e:
             self.logger.debug(f"Error on Listing NFS Shares Directories: {self.host}:{self.port} {e}")
             self.logger.debug("It is probably unknown format or can not access as anonymously.")
@@ -215,7 +195,34 @@ class nfs(connection):
             self.nfs3.disconnect()
             self.disconnect()
 
+    def list_exported_shares(self, max_uid, contents, output_name, recurse_depth):
+        self.logger.display(f"Enumerating NFS Shares with UID {max_uid}")
+        white_list = []
+        for uid in range(max_uid + 1):
+            self.auth["uid"] = uid
+            for export in output_name:
+                try:
+                    if export in white_list:
+                        self.logger.debug(f"Skipping {export} as it is already listed.")
+                        continue
+                    else:
+                        mount_info = self.mount.mnt(export, self.auth)
+                        contents = self.list_dir(self.nfs3, mount_info["mountinfo"]["fhandle"], export, recurse_depth)
+                        white_list.append(export)
+                        self.logger.success(export)
+                        for content in contents:
+                            self.logger.highlight(f"\t{content}")
+                except Exception as e:
+                    if "RPC_AUTH_ERROR: AUTH_REJECTEDCRED" in str(e):
+                        self.logger.fail(f"{export} - RPC Access denied")
+                    elif "RPC_AUTH_ERROR: AUTH_TOOWEAK" in str(e):
+                        self.logger.fail(f"{export} - Kerberos authentication required")
+                    elif "Insufficient Permissions" in str(e):
+                        self.logger.fail(f"{export} - Insufficient Permissions for share listing")
+                    else:
+                        self.logger.exception(f"{export} - {e}")
+
     def uid_brute(self, max_uid=None):
         if not max_uid:
             max_uid = int(self.args.uid_brute)
-        self.shares_list(max_uid)
+        self.enum_shares(max_uid)
