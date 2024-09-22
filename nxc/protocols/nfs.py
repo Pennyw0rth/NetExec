@@ -73,7 +73,7 @@ class nfs(connection):
             self.disconnect()
 
     def print_host_info(self):
-        self.logger.display(f"Target supported NFS versions {self.nfs_versions}")
+        self.logger.display(f"Target supported NFS versions: ({', '.join(str(x) for x in self.nfs_versions)})")
         return True
 
     def disconnect(self):
@@ -119,7 +119,6 @@ class nfs(connection):
 
                     if entry["nextentry"]:
                         # Processing next entries recursively
-                        recurse += 1
                         contents += process_entries(entry["nextentry"], path, recurse)
 
                 return contents
