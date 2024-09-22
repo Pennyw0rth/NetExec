@@ -1735,15 +1735,19 @@ docs = ["sphinx (>=1.6.5)", "sphinx-rtd-theme"]
 tests = ["hypothesis (>=3.27.0)", "pytest (>=3.2.1,!=3.3.0)"]
 
 [[package]]
-name = "pynfsclient"
+name = "pyNfsClient"
 version = "0.1.5"
 description = "Pure python NFS client"
 optional = false
 python-versions = ">=2.7"
-files = [
-    {file = "pyNfsClient-0.1.5-py2.py3-none-any.whl", hash = "sha256:d988029d0b86ae2897bfb17162e47a81943a72508ccb37566ef23615c533cc59"},
-    {file = "pyNfsClient-0.1.5.tar.gz", hash = "sha256:c6064bd3c365302a529002d0c24961ed7ab5e9b2b64a6da10329dbac85ac81a5"},
-]
+files = []
+develop = false
+
+[package.source]
+type = "git"
+url = "https://github.com/Pennyw0rth/NfsClient"
+reference = "HEAD"
+resolved_reference = "bb29a22433882677ad68cb5bd9eb7ae32c18e972"
 
 [[package]]
 name = "pyopenssl"
@@ -2362,4 +2366,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.0"
-content-hash = "8e5309a710ccf009d98d60b25f99c6866e5821804601bde027cfee4753739807"
+content-hash = "1cf32ce29adfdbe31288e1343d4856e5c465ea99a6dc960f6f3b3fe495518b48"
