@@ -195,7 +195,10 @@ class nfs(connection):
             self.disconnect()
 
     def list_exported_shares(self, max_uid, contents, output_name, recurse_depth):
-        self.logger.display(f"Enumerating NFS Shares with UID {max_uid}")
+        if max_uid:
+            self.logger.display(f"Enumerating NFS Shares to UID {max_uid}")
+        else:
+            self.logger.display(f"Enumerating NFS Shares with UID {max_uid}")
         white_list = []
         for uid in range(max_uid + 1):
             self.auth["uid"] = uid
@@ -210,16 +213,17 @@ class nfs(connection):
                         white_list.append(export)
                         self.logger.success(export)
                         for content in contents:
-                            self.logger.highlight(f"\t{content}")
+                            self.logger.highlight(f"\tUID: {self.auth['uid']} {content}")
                 except Exception as e:
-                    if "RPC_AUTH_ERROR: AUTH_REJECTEDCRED" in str(e):
-                        self.logger.fail(f"{export} - RPC Access denied")
-                    elif "RPC_AUTH_ERROR: AUTH_TOOWEAK" in str(e):
-                        self.logger.fail(f"{export} - Kerberos authentication required")
-                    elif "Insufficient Permissions" in str(e):
-                        self.logger.fail(f"{export} - Insufficient Permissions for share listing")
-                    else:
-                        self.logger.exception(f"{export} - {e}")
+                    if not max_uid:  # To avoid mess in the debug logs
+                        if "RPC_AUTH_ERROR: AUTH_REJECTEDCRED" in str(e):
+                            self.logger.fail(f"{export} - RPC Access denied")
+                        elif "RPC_AUTH_ERROR: AUTH_TOOWEAK" in str(e):
+                            self.logger.fail(f"{export} - Kerberos authentication required")
+                        elif "Insufficient Permissions" in str(e):
+                            self.logger.fail(f"{export} - Insufficient Permissions for share listing")
+                        else:
+                            self.logger.exception(f"{export} - {e}")
 
     def uid_brute(self, max_uid=None):
         if not max_uid:
