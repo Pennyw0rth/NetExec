@@ -22,7 +22,7 @@ class NXCModule:
     def on_admin_login(self, context, connection):
         self.context = context
 
-        path = "SOFTWARE\Microsoft\Virtual Machine\Guest\Parameters"
+        path = "SOFTWARE\\Microsoft\\Virtual Machine\\Guest\\Parameters"
         key = "HostName"
 
         try:
