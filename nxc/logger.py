@@ -163,15 +163,16 @@ class NXCAdapter(logging.LoggerAdapter):
         If debug or info logging is not enabled, we still want display/success/fail logged to the file specified,
         so we create a custom LogRecord and pass it to all the additional handlers (which will be all the file handlers)
         """
+        caller_frame = inspect.currentframe().f_back.f_back.f_back
         if len(self.logger.handlers):  # will be 0 if it's just the console output, so only do this if we actually have file loggers
             try:
                 for handler in self.logger.handlers:
-                    handler.handle(LogRecord("nxc", 20, "", kwargs, msg=text, args=args, exc_info=None))
+                    handler.handle(LogRecord("nxc", 20, pathname=caller_frame.f_code.co_filename, lineno=caller_frame.f_lineno, msg=text, args=args, exc_info=None))
             except Exception as e:
                 self.logger.fail(f"Issue while trying to custom print handler: {e}")
 
     def add_file_log(self, log_file=None):
-        file_formatter = TermEscapeCodeFormatter("%(asctime)s - %(levelname)s - %(message)s")
+        file_formatter = TermEscapeCodeFormatter("%(asctime)s | %(filename)s:%(lineno)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
         output_file = self.init_log_file() if log_file is None else log_file
         file_creation = False
 
