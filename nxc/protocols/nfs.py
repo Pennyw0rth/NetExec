@@ -77,7 +77,7 @@ class nfs(connection):
         except Exception as e:
             self.logger.fail(f"Error during disconnect: {e}")
 
-    def list_dir(self, nfs, file_handle, path, recurse=1):
+    def list_dir(self, file_handle, path, recurse=1):
         """Process entries in NFS directory recursively"""
         def process_entries(entries, path, recurse):
             try:
@@ -89,7 +89,7 @@ class nfs(connection):
                             entry_type = entry["name_attributes"]["attributes"].get("type")
                             if entry_type == 2 and recurse > 0:  # Recursive directory listing. Entry type shows file format. 1 is file, 2 is folder.
                                 dir_handle = entry["name_handle"]["handle"]["data"]
-                                contents += self.list_dir(nfs, dir_handle, item_path, recurse=recurse - 1)
+                                contents += self.list_dir(dir_handle, item_path, recurse=recurse - 1)
                             else:
                                 contents.append(item_path)
 
@@ -193,52 +193,48 @@ class nfs(connection):
             self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
             self.nfs3.connect()
 
-            contents = []
             # Mounting NFS Shares
             output_export = str(self.mount.export())
-            pattern_name = re.compile(r"ex_dir=b'([^']*)'")
-            matches_name = pattern_name.findall(output_export)
-            output_name = list(matches_name)
+            reg = re.compile(r"ex_dir=b'([^']*)'")
+            shares = list(reg.findall(output_export))
 
-            self.list_exported_shares(max_uid, contents, output_name, recurse_depth=self.args.enum_shares)
+            self.list_exported_shares(max_uid, shares, recurse_depth=self.args.enum_shares)
         except Exception as e:
             self.logger.debug(f"Error on Listing NFS Shares Directories: {self.host}:{self.port} {e}")
             self.logger.debug("It is probably unknown format or can not access as anonymously.")
         finally:
             self.nfs3.disconnect()
 
-    def list_exported_shares(self, max_uid, contents, output_name, recurse_depth):
-        if max_uid:
-            self.logger.display(f"Enumerating NFS Shares to UID {max_uid}")
+    def list_exported_shares(self, max_uid, shares, recurse_depth):
+        if self.args.uid_brute:
+            self.logger.display(f"Enumerating NFS Shares up to UID {max_uid}")
         else:
             self.logger.display(f"Enumerating NFS Shares with UID {max_uid}")
         white_list = []
         for uid in range(max_uid + 1):
             self.auth["uid"] = uid
-            for export in output_name:
+            for share in shares:
                 try:
-                    if export in white_list:
-                        self.logger.debug(f"Skipping {export} as it is already listed.")
+                    if share in white_list:
+                        self.logger.debug(f"Skipping {share} as it is already listed.")
                         continue
                     else:
-                        mount_info = self.mount.mnt(export, self.auth)
-                        contents = self.list_dir(self.nfs3, mount_info["mountinfo"]["fhandle"], export, recurse_depth)
-                        white_list.append(export)
-                        self.logger.success(export)
+                        mount_info = self.mount.mnt(share, self.auth)
+                        contents = self.list_dir(mount_info["mountinfo"]["fhandle"], share, recurse_depth)
+                        white_list.append(share)
+                        self.logger.success(share)
                         for content in contents:
                             self.logger.highlight(f"\tUID: {self.auth['uid']} {content}")
                 except Exception as e:
                     if not max_uid:  # To avoid mess in the debug logs
                         if "RPC_AUTH_ERROR: AUTH_REJECTEDCRED" in str(e):
-                            self.logger.fail(f"{export} - RPC Access denied")
+                            self.logger.fail(f"{share} - RPC Access denied")
                         elif "RPC_AUTH_ERROR: AUTH_TOOWEAK" in str(e):
-                            self.logger.fail(f"{export} - Kerberos authentication required")
+                            self.logger.fail(f"{share} - Kerberos authentication required")
                         elif "Insufficient Permissions" in str(e):
-                            self.logger.fail(f"{export} - Insufficient Permissions for share listing")
+                            self.logger.fail(f"{share} - Insufficient Permissions for share listing")
                         else:
-                            self.logger.exception(f"{export} - {e}")
+                            self.logger.exception(f"{share} - {e}")
 
-    def uid_brute(self, max_uid=None):
-        if not max_uid:
-            max_uid = int(self.args.uid_brute)
-        self.enum_shares(max_uid)
+    def uid_brute(self):
+        self.enum_shares(self.args.uid_brute)
