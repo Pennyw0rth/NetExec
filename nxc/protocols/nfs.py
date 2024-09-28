@@ -12,10 +12,11 @@ class nfs(connection):
         self.portmap = None
         self.mnt_port = None
         self.mount = None
+        self.uid = args.uid
         self.auth = {
             "flavor": 1,
             "machine_name": uuid.uuid4().hex.upper()[0:6],
-            "uid": 0,
+            "uid": self.uid,
             "gid": 0,
             "aux_gid": [],
         }
@@ -86,12 +87,12 @@ class nfs(connection):
                     if "name" in entry and entry["name"] not in [b".", b".."]:
                         item_path = f'{path}/{entry["name"].decode("utf-8")}'  # Constructing file path
                         if entry.get("name_attributes", {}).get("present", False):
-                            entry_type = entry["name_attributes"]["attributes"].get("type")
-                            if entry_type == 2 and recurse > 0:  # Recursive directory listing. Entry type shows file format. 1 is file, 2 is folder.
+                            if entry["name_attributes"]["attributes"]["type"] == 2 and recurse > 0:  # Recursive directory listing. Entry type shows file format. 1 is file, 2 is folder.
                                 dir_handle = entry["name_handle"]["handle"]["data"]
                                 contents += self.list_dir(dir_handle, item_path, recurse=recurse - 1)
                             else:
-                                contents.append(item_path)
+                                read_perm, write_perm, exec_perm = self.get_permissions(entry["name_handle"]["handle"]["data"])
+                                contents.append({"path": item_path, "read": read_perm, "write": write_perm, "execute": exec_perm})
 
                     if entry["nextentry"]:
                         # Processing next entries recursively
@@ -102,7 +103,8 @@ class nfs(connection):
                 self.logger.debug(f"Error on Listing Entries for NFS Shares: {self.host}:{self.port} {e}")
 
         if recurse == 0:
-            return [path + "/"]
+            read_perm, write_perm, exec_perm = self.get_permissions(file_handle)
+            return [{"path": f"{path}/", "read": read_perm, "write": write_perm, "execute": exec_perm}]
 
         items = self.nfs3.readdirplus(file_handle, auth=self.auth)
         if "resfail" in items:
@@ -139,8 +141,7 @@ class nfs(connection):
         return result
 
     def shares(self):
-        self.auth["uid"] = self.args.shares
-        self.logger.display(f"Enumerating NFS Shares with UID {self.args.shares}")
+        self.logger.display(f"Enumerating NFS Shares with UID {self.uid}")
         try:
             # Connect to NFS
             nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
@@ -198,13 +199,14 @@ class nfs(connection):
             reg = re.compile(r"ex_dir=b'([^']*)'")
             shares = list(reg.findall(output_export))
 
+            self.logger.display(f"Enumerating NFS Shares Directories with UID {self.uid}")
             for share in shares:
                 try:
                     mount_info = self.mount.mnt(share, self.auth)
                     contents = self.list_dir(mount_info["mountinfo"]["fhandle"], share, self.args.enum_shares)
                     self.logger.success(share)
                     for content in contents:
-                        self.logger.highlight(f"\tUID: {self.auth['uid']} {content}")
+                        self.logger.highlight(f"{'r' if content['read'] else '-'}{'w' if content['write'] else '-'}{'x' if content['execute'] else '-'} {content['path']}")
                 except Exception as e:
                     if "RPC_AUTH_ERROR: AUTH_REJECTEDCRED" in str(e):
                         self.logger.fail(f"{share} - RPC Access denied")
