@@ -1,6 +1,6 @@
 def proto_args(parser, parents):
     nfs_parser = parser.add_parser("nfs", help="NFS", parents=parents)
-    nfs_parser.add_argument("--port", type=int, default=111, help="NFS port (default: %(default)s)")
+    nfs_parser.add_argument("--port", type=int, default=111, help="NFS portmapper port (default: %(default)s)")
 
     dgroup = nfs_parser.add_argument_group("NFS Mapping/Enumeration", "Options for Mapping/Enumerating NFS")
     dgroup.add_argument("--shares", action="store_true", help="List NFS shares with UID 0")
