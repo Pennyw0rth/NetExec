@@ -35,12 +35,12 @@ class nfs(connection):
         """Initializes and connects to the portmap and mounted folder"""
         try:
             # Portmap Initialization
-            self.portmap = Portmap(self.host, timeout=3600)
+            self.portmap = Portmap(self.host, timeout=self.args.nfs_timeout)
             self.portmap.connect()
 
             # Mount Initialization
             self.mnt_port = self.portmap.getport(Mount.program, Mount.program_version)
-            self.mount = Mount(host=self.host, port=self.mnt_port, timeout=3600, auth=self.auth)
+            self.mount = Mount(host=self.host, port=self.mnt_port, timeout=self.args.nfs_timeout, auth=self.auth)
             self.mount.connect()
 
             # Change logging port to the NFS port
@@ -113,7 +113,7 @@ class nfs(connection):
         return process_entries(entries, path, recurse)
 
     def export_info(self, export_nodes):
-        """Filters all NFS shares and their access range"""
+        """Enumerates all NFS shares and their access range"""
         result = []
         for node in export_nodes:
             ex_dir = node.ex_dir.decode()
@@ -127,7 +127,7 @@ class nfs(connection):
         return result
 
     def group_names(self, groups):
-        """Findings all access range of the share(s)"""
+        """Enumerates all access range of the share(s)"""
         result = []
         for group in groups:
             result.append(group.gr_name.decode())
@@ -148,7 +148,7 @@ class nfs(connection):
     def enum_shares(self, max_uid=0):
         try:
             nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
-            self.nfs3 = NFSv3(self.host, nfs_port, 3600, self.auth)
+            self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
             self.nfs3.connect()
 
             contents = []
