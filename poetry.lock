@@ -1747,7 +1747,7 @@ develop = false
 type = "git"
 url = "https://github.com/Pennyw0rth/NfsClient"
 reference = "HEAD"
-resolved_reference = "12afb1eb8f39e0c9932e4c3e62a9e1a23577bb88"
+resolved_reference = "a94a3254b279dc49395caecf27ec097a71eea91b"
 
 [[package]]
 name = "pyopenssl"

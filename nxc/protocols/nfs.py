@@ -1,7 +1,6 @@
 from nxc.connection import connection
 from nxc.logger import NXCAdapter
 from pyNfsClient import Portmap, Mount, NFSv3, NFS_PROGRAM, NFS_V3
-import socket
 import re
 import uuid
 
@@ -35,29 +34,33 @@ class nfs(connection):
     def plaintext_login(self, username, password):
         # Uses Anonymous access for now
         try:
-            if self.init():
+            if self.create_conn_obj():
                 self.logger.success("Initialization successfull!")
         except Exception as e:
             self.logger.fail("Initialization failed.")
             self.logger.debug(f"Error Plaintext login: {self.host}:{self.port} {e}")
-        finally:
-            self.disconnect()
 
     def create_conn_obj(self):
-        """Creates a socket and connects to the NFS host"""
-        if self.is_ipv6:
-            self.logger.error("IPv6 is not supported for NFS")
+        """Initializes and connects to the portmap and mounted folder"""
         try:
-            self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.client.connect((self.host, self.port))
-            self.logger.info(f"Connection to target successful: {self.host}:{self.port}")
+            # Portmap Initialization
+            self.portmap = Portmap(self.host, timeout=3600)
+            self.portmap.connect()
+
+            # Mount Initialization
+            self.mnt_port = self.portmap.getport(Mount.program, Mount.program_version)
+            self.mount = Mount(host=self.host, port=self.mnt_port, timeout=3600, auth=self.auth)
+            self.mount.connect()
+
+            # Change logging port to the NFS port
+            self.port = self.mnt_port
+            self.proto_logger()
         except Exception as e:
-            self.logger.debug(f"Error connecting to NFS host: {self.host}:{self.port} {e}")
+            self.logger.fail(f"Error during Initialization: {e}")
             return False
         return True
 
     def enum_host_info(self):
-        self.init()
         try:
             # Dump all registered programs
             programs = self.portmap.dump()
@@ -69,8 +72,6 @@ class nfs(connection):
             return self.nfs_versions
         except Exception as e:
             self.logger.debug(f"Error checking NFS version: {self.host} {e}")
-        finally:
-            self.disconnect()
 
     def print_host_info(self):
         self.logger.display(f"Target supported NFS versions: ({', '.join(str(x) for x in self.nfs_versions)})")
@@ -83,23 +84,7 @@ class nfs(connection):
             self.portmap.disconnect()
             self.logger.info(f"Disconnect successful: {self.host}:{self.port}")
         except Exception as e:
-            self.logger.debug(f"Error during disconnect: {e}")
-
-    def init(self):
-        """Initializes and connects to the portmap and mounted folder"""
-        try:
-            # Portmap Initialization
-            self.portmap = Portmap(self.host, timeout=3600)
-            self.portmap.connect()
-
-            # Mount Initialization
-            self.mnt_port = self.portmap.getport(Mount.program, Mount.program_version)
-            self.mount = Mount(host=self.host, port=self.mnt_port, timeout=3600, auth=self.auth)
-            self.mount.connect()
-
-            return self.portmap, self.mnt_port, self.mount
-        except Exception as e:
-            self.logger.debug(f"Error during Initialization: {e}")
+            self.logger.fail(f"Error during disconnect: {e}")
 
     def list_dir(self, nfs, file_handle, path, recurse=1):
         """Process entries in NFS directory recursively"""
@@ -164,17 +149,13 @@ class nfs(connection):
 
     def shares(self):
         try:
-            self.init()
             for mount in self.export_info(self.mount.export()):
                 self.logger.highlight(mount)
         except Exception as e:
-            self.logger.debug(f"Error on Enumeration NFS Shares: {self.host}:{self.port} {e}")
-        finally:
-            self.disconnect()
+            self.logger.fail(f"Error on Enumeration NFS Shares: {self.host}:{self.port} {e}")
 
     def enum_shares(self, max_uid=0):
         try:
-            self.init()
             nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
             self.nfs3 = NFSv3(self.host, nfs_port, 3600, self.auth)
             self.nfs3.connect()
@@ -192,7 +173,6 @@ class nfs(connection):
             self.logger.debug("It is probably unknown format or can not access as anonymously.")
         finally:
             self.nfs3.disconnect()
-            self.disconnect()
 
     def list_exported_shares(self, max_uid, contents, output_name, recurse_depth):
         if max_uid:
