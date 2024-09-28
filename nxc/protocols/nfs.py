@@ -1,6 +1,6 @@
 from nxc.connection import connection
 from nxc.logger import NXCAdapter
-from pyNfsClient import Portmap, Mount, NFSv3, NFS_PROGRAM, NFS_V3
+from pyNfsClient import Portmap, Mount, NFSv3, NFS_PROGRAM, NFS_V3, ACCESS3_READ, ACCESS3_MODIFY, ACCESS3_EXECUTE
 import re
 import uuid
 
@@ -139,11 +139,53 @@ class nfs(connection):
         return result
 
     def shares(self):
+        self.auth["uid"] = self.args.shares
+        self.logger.display(f"Enumerating NFS Shares with UID {self.args.shares}")
         try:
-            for mount in self.export_info(self.mount.export()):
-                self.logger.highlight(mount)
+            # Connect to NFS
+            nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
+            self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
+            self.nfs3.connect()
+
+            output_export = str(self.mount.export())
+            reg = re.compile(r"ex_dir=b'([^']*)'")
+            shares = list(reg.findall(output_export))
+
+            # Mount shares and check permissions
+            self.logger.highlight(f"{'Permissions':<15}{'Share':<15}")
+            self.logger.highlight(f"{'-----------':<15}{'-----':<15}")
+            for share in shares:
+                try:
+                    mnt_info = self.mount.mnt(share, self.auth)
+                    file_handle = mnt_info["mountinfo"]["fhandle"]
+
+                    read_perm, write_perm, exec_perm = self.get_permissions(file_handle)
+                    self.mount.umnt(self.auth)
+                    self.logger.highlight(f"{'r' if read_perm else '-'}{'w' if write_perm else '-'}{('x' if exec_perm else '-'):<12} {share:<15}")
+                except Exception as e:
+                    self.logger.fail(f"{share} - {e}")
+                    self.logger.highlight(f"{'---':<15}{share:<15}")
+
         except Exception as e:
             self.logger.fail(f"Error on Enumeration NFS Shares: {self.host}:{self.port} {e}")
+        finally:
+            self.nfs3.disconnect()
+
+    def get_permissions(self, file_handle):
+        """Check permissions for the file handle"""
+        try:
+            read_perm = self.nfs3.access(file_handle, ACCESS3_READ, self.auth).get("resok", {}).get("access", 0) is ACCESS3_READ
+        except Exception:
+            read_perm = False
+        try:
+            write_perm = self.nfs3.access(file_handle, ACCESS3_MODIFY, self.auth).get("resok", {}).get("access", 0) is ACCESS3_MODIFY
+        except Exception:
+            write_perm = False
+        try:
+            exec_perm = self.nfs3.access(file_handle, ACCESS3_EXECUTE, self.auth).get("resok", {}).get("access", 0) is ACCESS3_EXECUTE
+        except Exception:
+            exec_perm = False
+        return read_perm, write_perm, exec_perm
 
     def enum_shares(self, max_uid=0):
         try:
