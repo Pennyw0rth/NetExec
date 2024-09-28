@@ -31,15 +31,6 @@ class nfs(connection):
             }
         )
 
-    def plaintext_login(self, username, password):
-        # Uses Anonymous access for now
-        try:
-            if self.create_conn_obj():
-                self.logger.success("Initialization successfull!")
-        except Exception as e:
-            self.logger.fail("Initialization failed.")
-            self.logger.debug(f"Error Plaintext login: {self.host}:{self.port} {e}")
-
     def create_conn_obj(self):
         """Initializes and connects to the portmap and mounted folder"""
         try:
