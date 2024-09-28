@@ -187,7 +187,7 @@ class nfs(connection):
             exec_perm = False
         return read_perm, write_perm, exec_perm
 
-    def enum_shares(self, max_uid=0):
+    def enum_shares(self):
         try:
             nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
             self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
@@ -198,12 +198,39 @@ class nfs(connection):
             reg = re.compile(r"ex_dir=b'([^']*)'")
             shares = list(reg.findall(output_export))
 
-            self.list_exported_shares(max_uid, shares, recurse_depth=self.args.enum_shares)
+            for share in shares:
+                try:
+                    mount_info = self.mount.mnt(share, self.auth)
+                    contents = self.list_dir(mount_info["mountinfo"]["fhandle"], share, self.args.enum_shares)
+                    self.logger.success(share)
+                    for content in contents:
+                        self.logger.highlight(f"\tUID: {self.auth['uid']} {content}")
+                except Exception as e:
+                    if "RPC_AUTH_ERROR: AUTH_REJECTEDCRED" in str(e):
+                        self.logger.fail(f"{share} - RPC Access denied")
+                    elif "RPC_AUTH_ERROR: AUTH_TOOWEAK" in str(e):
+                        self.logger.fail(f"{share} - Kerberos authentication required")
+                    elif "Insufficient Permissions" in str(e):
+                        self.logger.fail(f"{share} - Insufficient Permissions for share listing")
+                    else:
+                        self.logger.exception(f"{share} - {e}")
         except Exception as e:
             self.logger.debug(f"Error on Listing NFS Shares Directories: {self.host}:{self.port} {e}")
             self.logger.debug("It is probably unknown format or can not access as anonymously.")
         finally:
             self.nfs3.disconnect()
+
+    def uid_brute(self):
+        nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
+        self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
+        self.nfs3.connect()
+
+        # Mounting NFS Shares
+        output_export = str(self.mount.export())
+        reg = re.compile(r"ex_dir=b'([^']*)'")
+        shares = list(reg.findall(output_export))
+
+        self.list_exported_shares(self.args.uid_brute, shares, 1)
 
     def list_exported_shares(self, max_uid, shares, recurse_depth):
         if self.args.uid_brute:
@@ -235,6 +262,3 @@ class nfs(connection):
                             self.logger.fail(f"{share} - Insufficient Permissions for share listing")
                         else:
                             self.logger.exception(f"{share} - {e}")
-
-    def uid_brute(self):
-        self.enum_shares(self.args.uid_brute)
