@@ -203,6 +203,9 @@ class connection:
     def create_conn_obj(self):
         return
 
+    def disconnect(self):
+        return
+
     def check_if_admin(self):
         return
 
@@ -231,6 +234,7 @@ class connection:
                 else:
                     self.logger.debug("Calling command arguments")
                     self.call_cmd_args()
+            self.disconnect()
 
     def call_cmd_args(self):
         """Calls all the methods specified by the command line arguments
