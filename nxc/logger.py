@@ -5,6 +5,7 @@ import os.path
 import sys
 import re
 from nxc.console import nxc_console
+from nxc.paths import NXC_PATH
 from termcolor import colored
 from datetime import datetime
 from rich.text import Text
@@ -194,11 +195,10 @@ class NXCAdapter(logging.LoggerAdapter):
 
     @staticmethod
     def init_log_file():
-        newpath = os.path.expanduser("~/.nxc") + "/logs/" + datetime.now().strftime("%Y-%m-%d")
-        if not os.path.exists(newpath):
-            os.makedirs(newpath)
+        newpath = NXC_PATH + "/logs/" + datetime.now().strftime("%Y-%m-%d")
+        os.makedirs(newpath, exist_ok=True)
         return os.path.join(
-            os.path.expanduser("~/.nxc"),
+            NXC_PATH,
             "logs",
             datetime.now().strftime("%Y-%m-%d"),
             f"log_{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.log",
