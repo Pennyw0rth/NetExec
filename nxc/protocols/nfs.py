@@ -163,8 +163,8 @@ class nfs(connection):
             shares = list(reg.findall(output_export))
 
             # Mount shares and check permissions
-            self.logger.highlight(f"{'UID':<11}{'Perms':<9}{'Storage Usage':<17}{'Share':<30} {'Reachable Network(s)':<15}")
-            self.logger.highlight(f"{'---':<11}{'-----':<9}{'-------------':<17}{'-----':<30} {'-----------------':<15}")
+            self.logger.highlight(f"{'UID':<11}{'Perms':<9}{'Storage Usage':<17}{'Share':<30} {'Access List':<15}")
+            self.logger.highlight(f"{'---':<11}{'-----':<9}{'-------------':<17}{'-----':<30} {'-----------':<15}")
             for share, network in zip(shares, networks):
                 try:
                     mnt_info = self.mount.mnt(share, self.auth)
@@ -226,8 +226,8 @@ class nfs(connection):
 
                     self.logger.success(share)
                     if contents:
-                        self.logger.highlight(f"{'UID':<11}{'Perms':<9}{'File Size':<15}{'File Path':<45} {'Reachable Network(s)':<15}")
-                        self.logger.highlight(f"{'---':<11}{'-----':<9}{'---------':<15}{'---------':<45} {'-----------------':<15}")
+                        self.logger.highlight(f"{'UID':<11}{'Perms':<9}{'File Size':<15}{'File Path':<45} {'Access List':<15}")
+                        self.logger.highlight(f"{'---':<11}{'-----':<9}{'---------':<15}{'---------':<45} {'-----------':<15}")
                     for content in contents:
                         self.logger.highlight(f"{self.auth['uid']:<11}{'r' if content['read'] else '-'}{'w' if content['write'] else '-'}{'x' if content['execute'] else '-':<7}{content['filesize']:<14} {content['path']:<45} {', '.join(network) if network else 'No network':<15}")
                 except Exception as e:
