@@ -3,6 +3,7 @@ from nxc.logger import NXCAdapter
 from pyNfsClient import Portmap, Mount, NFSv3, NFS_PROGRAM, NFS_V3, ACCESS3_READ, ACCESS3_MODIFY, ACCESS3_EXECUTE
 import re
 import uuid
+import math
 
 
 class nfs(connection):
@@ -153,16 +154,20 @@ class nfs(connection):
             shares = list(reg.findall(output_export))
 
             # Mount shares and check permissions
-            self.logger.highlight(f"{'Permissions':<15}{'Share':<15}")
-            self.logger.highlight(f"{'-----------':<15}{'-----':<15}")
+            self.logger.highlight(f"{'Perms':<9}{'Usage':<9}{'Share':<15}")
+            self.logger.highlight(f"{'-----':<9}{'-----':<9}{'-----':<15}")
             for share in shares:
                 try:
                     mnt_info = self.mount.mnt(share, self.auth)
                     file_handle = mnt_info["mountinfo"]["fhandle"]
 
+                    info = self.nfs3.fsstat(file_handle, self.auth)
+                    free_space = info["resok"]["fbytes"]
+                    total_space = info["resok"]["tbytes"]
+                    used_space = total_space - free_space
                     read_perm, write_perm, exec_perm = self.get_permissions(file_handle)
                     self.mount.umnt(self.auth)
-                    self.logger.highlight(f"{'r' if read_perm else '-'}{'w' if write_perm else '-'}{('x' if exec_perm else '-'):<12} {share:<15}")
+                    self.logger.highlight(f"{'r' if read_perm else '-'}{'w' if write_perm else '-'}{('x' if exec_perm else '-'):<3}{convert_size(used_space)} / {convert_size(total_space)} {share:<15}")
                 except Exception as e:
                     self.logger.fail(f"{share} - {e}")
                     self.logger.highlight(f"{'---':<15}{share:<15}")
@@ -264,3 +269,13 @@ class nfs(connection):
                             self.logger.fail(f"{share} - Insufficient Permissions for share listing")
                         else:
                             self.logger.exception(f"{share} - {e}")
+
+
+def convert_size(size_bytes):
+    if size_bytes == 0:
+        return "0B"
+    size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+    i = int(math.floor(math.log(size_bytes, 1024)))
+    p = math.pow(1024, i)
+    s = int(round(size_bytes / p, 0))
+    return f"{s}{size_name[i]}"
