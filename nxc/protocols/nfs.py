@@ -91,9 +91,13 @@ class nfs(connection):
                             if entry["name_attributes"]["attributes"]["type"] == 2 and recurse > 0:  # Recursive directory listing. Entry type shows file format. 1 is file, 2 is folder.
                                 dir_handle = entry["name_handle"]["handle"]["data"]
                                 contents += self.list_dir(dir_handle, item_path, recurse=recurse - 1)
-                            else:
+                            else:                        
+                                file_handle = entry["name_handle"]["handle"]["data"]
+                                attrs = self.nfs3.getattr(file_handle, auth=self.auth)
+                                file_size = attrs["attributes"]["size"]
+                                file_size = convert_size(file_size)
                                 read_perm, write_perm, exec_perm = self.get_permissions(entry["name_handle"]["handle"]["data"])
-                                contents.append({"path": item_path, "read": read_perm, "write": write_perm, "execute": exec_perm})
+                                contents.append({"path": item_path, "read": read_perm, "write": write_perm, "execute": exec_perm, "filesize": file_size})
 
                     if entry["nextentry"]:
                         # Processing next entries recursively
@@ -117,17 +121,18 @@ class nfs(connection):
 
     def export_info(self, export_nodes):
         """Enumerates all NFS shares and their access range"""
-        result = []
+        networks = []
         for node in export_nodes:
-            ex_dir = node.ex_dir.decode()
+
             # Collect the names of the groups associated with this export node
             group_names = self.group_names(node.ex_groups)
-            result.append(f"{ex_dir} {', '.join(group_names)}")
+            networks.append(group_names)
 
             # If there are more export nodes, process them recursively. More than one share.
             if node.ex_next:
-                result.extend(self.export_info(node.ex_next))
-        return result
+                networks.extend(self.export_info(node.ex_next))
+        
+        return networks
 
     def group_names(self, groups):
         """Enumerates all access range of the share(s)"""
@@ -140,7 +145,7 @@ class nfs(connection):
                 result.extend(self.group_names(group.gr_next))
 
         return result
-
+  
     def shares(self):
         self.logger.display(f"Enumerating NFS Shares with UID {self.uid}")
         try:
@@ -150,27 +155,30 @@ class nfs(connection):
             self.nfs3.connect()
 
             output_export = str(self.mount.export())
-            reg = re.compile(r"ex_dir=b'([^']*)'")
-            shares = list(reg.findall(output_export))
+            networks = self.export_info(self.mount.export())
 
+            reg = re.compile(r"ex_dir=b'([^']*)'")  # Get share names
+            shares = list(reg.findall(output_export))
+            
             # Mount shares and check permissions
-            self.logger.highlight(f"{'Perms':<9}{'Storage Usage':<17}{'Share':<15}")
-            self.logger.highlight(f"{'-----':<9}{'-------------':<17}{'-----':<15}")
-            for share in shares:
+            self.logger.highlight(f"{'Perms':<9}{'Storage Usage':<17}{'Share':<30}{'Reachable Network(s)':<15}")
+            self.logger.highlight(f"{'-----':<9}{'-------------':<17}{'-----':<30}{'-----------------':15}")
+            for share, network in zip(shares, networks):
                 try:
                     mnt_info = self.mount.mnt(share, self.auth)
                     file_handle = mnt_info["mountinfo"]["fhandle"]
-
+                    
                     info = self.nfs3.fsstat(file_handle, self.auth)
                     free_space = info["resok"]["fbytes"]
                     total_space = info["resok"]["tbytes"]
                     used_space = total_space - free_space
+
                     read_perm, write_perm, exec_perm = self.get_permissions(file_handle)
                     self.mount.umnt(self.auth)
-                    self.logger.highlight(f"{'r' if read_perm else '-'}{'w' if write_perm else '-'}{('x' if exec_perm else '-'):<7}{convert_size(used_space)}/{convert_size(total_space):<9} {share:<15}")
+                    self.logger.highlight(f"{'r' if read_perm else '-'}{'w' if write_perm else '-'}{('x' if exec_perm else '-'):<7}{convert_size(used_space)}/{convert_size(total_space):<9}  {share:<30}{', '.join(network) if network else 'No network':<15}")
                 except Exception as e:
                     self.logger.fail(f"{share} - {e}")
-                    self.logger.highlight(f"{'---':<15}{share:<15}")
+                    self.logger.highlight(f"{'---':<15}{share[0]:<15}")
 
         except Exception as e:
             self.logger.fail(f"Error on Enumeration NFS Shares: {self.host}:{self.port} {e}")
@@ -203,15 +211,19 @@ class nfs(connection):
             output_export = str(self.mount.export())
             reg = re.compile(r"ex_dir=b'([^']*)'")
             shares = list(reg.findall(output_export))
+            networks = self.export_info(self.mount.export())
 
             self.logger.display(f"Enumerating NFS Shares Directories with UID {self.uid}")
-            for share in shares:
+            for share, network in zip(shares, networks):
                 try:
                     mount_info = self.mount.mnt(share, self.auth)
                     contents = self.list_dir(mount_info["mountinfo"]["fhandle"], share, self.args.enum_shares)
+                    
                     self.logger.success(share)
+                    self.logger.highlight(f"{'Perms':<9}{'File Size':<15}{'File Path':<45}{'Reachable Network(s)':<15}")
+                    self.logger.highlight(f"{'-----':<9}{'---------':<15}{'---------':<45}{'-----------------':<15}")
                     for content in contents:
-                        self.logger.highlight(f"{'r' if content['read'] else '-'}{'w' if content['write'] else '-'}{'x' if content['execute'] else '-'} {content['path']}")
+                        self.logger.highlight(f"{'r' if content['read'] else '-'}{'w' if content['write'] else '-'}{'x' if content['execute'] else '-':<7}{content['filesize']:<14} {content['path']:<45}{', '.join(network) if network else 'No network':<15}")
                 except Exception as e:
                     if "RPC_AUTH_ERROR: AUTH_REJECTEDCRED" in str(e):
                         self.logger.fail(f"{share} - RPC Access denied")
@@ -258,7 +270,7 @@ class nfs(connection):
                         white_list.append(share)
                         self.logger.success(share)
                         for content in contents:
-                            self.logger.highlight(f"\tUID: {self.auth['uid']} {content}")
+                            self.logger.highlight(f"UID: {self.auth['uid']} {content['path']}")
                 except Exception as e:
                     if not max_uid:  # To avoid mess in the debug logs
                         if "RPC_AUTH_ERROR: AUTH_REJECTEDCRED" in str(e):
@@ -269,7 +281,6 @@ class nfs(connection):
                             self.logger.fail(f"{share} - Insufficient Permissions for share listing")
                         else:
                             self.logger.exception(f"{share} - {e}")
-
 
 def convert_size(size_bytes):
     if size_bytes == 0:
