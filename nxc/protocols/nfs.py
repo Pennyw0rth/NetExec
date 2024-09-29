@@ -154,8 +154,8 @@ class nfs(connection):
             shares = list(reg.findall(output_export))
 
             # Mount shares and check permissions
-            self.logger.highlight(f"{'Perms':<9}{'Usage':<9}{'Share':<15}")
-            self.logger.highlight(f"{'-----':<9}{'-----':<9}{'-----':<15}")
+            self.logger.highlight(f"{'Perms':<9}{'Storage Usage':<17}{'Share':<15}")
+            self.logger.highlight(f"{'-----':<9}{'-------------':<17}{'-----':<15}")
             for share in shares:
                 try:
                     mnt_info = self.mount.mnt(share, self.auth)
@@ -167,7 +167,7 @@ class nfs(connection):
                     used_space = total_space - free_space
                     read_perm, write_perm, exec_perm = self.get_permissions(file_handle)
                     self.mount.umnt(self.auth)
-                    self.logger.highlight(f"{'r' if read_perm else '-'}{'w' if write_perm else '-'}{('x' if exec_perm else '-'):<3}{convert_size(used_space)} / {convert_size(total_space)} {share:<15}")
+                    self.logger.highlight(f"{'r' if read_perm else '-'}{'w' if write_perm else '-'}{('x' if exec_perm else '-'):<7}{convert_size(used_space)}/{convert_size(total_space):<9} {share:<15}")
                 except Exception as e:
                     self.logger.fail(f"{share} - {e}")
                     self.logger.highlight(f"{'---':<15}{share:<15}")
@@ -277,5 +277,5 @@ def convert_size(size_bytes):
     size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
     i = int(math.floor(math.log(size_bytes, 1024)))
     p = math.pow(1024, i)
-    s = int(round(size_bytes / p, 0))
+    s = round(size_bytes / p, 1)
     return f"{s}{size_name[i]}"
