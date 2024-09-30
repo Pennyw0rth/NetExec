@@ -80,7 +80,7 @@ class nfs(connection):
 
     def list_dir(self, file_handle, path, recurse=1):
         """Process entries in NFS directory recursively with UID autodection"""
-        def process_entries(entries, path, recurse):
+        def process_entries(entries, path, uid, recurse):
             try:
                 contents = []
                 for entry in entries:
@@ -96,11 +96,11 @@ class nfs(connection):
                                 file_size = attrs["attributes"]["size"]
                                 file_size = convert_size(file_size)
                                 read_perm, write_perm, exec_perm = self.get_permissions(entry["name_handle"]["handle"]["data"])
-                                contents.append({"path": item_path, "read": read_perm, "write": write_perm, "execute": exec_perm, "filesize": file_size})
+                                contents.append({"path": item_path, "read": read_perm, "write": write_perm, "execute": exec_perm, "filesize": file_size, "uid": uid})
 
                     if entry["nextentry"]:
                         # Processing next entries recursively
-                        contents += process_entries(entry["nextentry"], path, recurse)
+                        contents += process_entries(entry["nextentry"], path, uid, recurse)
 
                 return contents
             except Exception as e:
@@ -119,7 +119,7 @@ class nfs(connection):
         else:
             entries = items["resok"]["reply"]["entries"]
 
-        return process_entries(entries, path, recurse)
+        return process_entries(entries, path, self.auth["uid"], recurse)
 
     def export_info(self, export_nodes):
         """Enumerates all NFS shares and their access range"""
@@ -216,7 +216,7 @@ class nfs(connection):
             output_export = str(self.mount.export())
             reg = re.compile(r"ex_dir=b'([^']*)'")
             shares = list(reg.findall(output_export))
-            networks = self.export_info(self.mount.export())
+            networks = self.export_info(self.mount.export())   
 
             self.logger.display("Enumerating NFS Shares Directories")
             for share, network in zip(shares, networks):
@@ -229,7 +229,7 @@ class nfs(connection):
                         self.logger.highlight(f"{'UID':<11}{'Perms':<9}{'File Size':<15}{'File Path':<45} {'Access List':<15}")
                         self.logger.highlight(f"{'---':<11}{'-----':<9}{'---------':<15}{'---------':<45} {'-----------':<15}")
                     for content in contents:
-                        self.logger.highlight(f"{self.auth['uid']:<11}{'r' if content['read'] else '-'}{'w' if content['write'] else '-'}{'x' if content['execute'] else '-':<7}{content['filesize']:<14} {content['path']:<45} {', '.join(network) if network else 'No network':<15}")
+                        self.logger.highlight(f"{content['uid']:<11}{'r' if content['read'] else '-'}{'w' if content['write'] else '-'}{'x' if content['execute'] else '-':<7}{content['filesize']:<14} {content['path']:<45} {', '.join(network) if network else 'No network':<15}")
                 except Exception as e:
                     if "RPC_AUTH_ERROR: AUTH_REJECTEDCRED" in str(e):
                         self.logger.fail(f"{share} - RPC Access denied")
