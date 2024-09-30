@@ -297,8 +297,7 @@ class nfs(connection):
         file_name = ""
 
         # Do a bit of smart handling for the file paths
-        if "/" in local_file_path:
-            file_name = local_file_path.split("/")[-1]
+        file_name = local_file_path.split("/")[-1] if "/" in local_file_path else local_file_path
         if not remote_file_path.endswith("/"):
             remote_file_path += "/"
 
