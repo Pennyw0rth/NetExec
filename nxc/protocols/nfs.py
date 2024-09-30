@@ -271,7 +271,7 @@ class nfs(connection):
     def get_file_single(self, remote_file, local_file):
         local_file_path = local_file
         remote_file_path = remote_file
-        self.logger.display(f"Downloading {local_file_path} to {remote_file_path}")
+        self.logger.display(f"Downloading {remote_file_path} to {local_file_path}")
         try:
             # Connect to NFS
             nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
