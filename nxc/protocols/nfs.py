@@ -218,7 +218,7 @@ class nfs(connection):
             output_export = str(self.mount.export())
             reg = re.compile(r"ex_dir=b'([^']*)'")
             shares = list(reg.findall(output_export))
-            networks = self.export_info(self.mount.export())   
+            networks = self.export_info(self.mount.export())
 
             self.logger.display("Enumerating NFS Shares Directories")
             for share, network in zip(shares, networks):
@@ -247,114 +247,108 @@ class nfs(connection):
         finally:
             self.nfs3.disconnect()
 
-    def list_exported_shares(self, max_uid, shares):
-        self.logger.display(f"Enumerating NFS Shares up to UID {max_uid}")
-        white_list = []
-        for uid in range(max_uid + 1):
-            self.auth["uid"] = uid
-            for share in shares:
-                try:
-                    if share in white_list:
-                        self.logger.debug(f"Skipping {share} as it is already listed.")
-                        continue
-                    else:
-                        mount_info = self.mount.mnt(share, self.auth)
-                        contents = self.list_dir(mount_info["mountinfo"]["fhandle"], share, 1)  # Try to list the share with depth 1
-                        white_list.append(share)
-                        self.logger.success(share)
-                        for content in contents:
-                            self.logger.highlight(f"UID: {self.auth['uid']} {content['path']}")
-                except Exception as e:
-                    if "Insufficient Permissions" in str(e):
-                        continue
-                    self.logger.exception(f"{share} - {e}")
+    def get_file(self):
+        """Downloads a file from the NFS share"""
+        remote_file_path = self.args.get_file[0]
+        local_file_path = self.args.get_file[1]
 
-    def get_file_single(self, remote_file, local_file):
-        local_file_path = local_file
-        remote_file_path = remote_file
+        # Do a bit of smart handling for the local file path
+        if local_file_path.endswith("/"):
+            local_file_path += remote_file_path.split("/")[-1]
+
         self.logger.display(f"Downloading {remote_file_path} to {local_file_path}")
         try:
             # Connect to NFS
             nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
             self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
             self.nfs3.connect()
-            
+
             # Mount the NFS share
             mnt_info = self.mount.mnt(remote_file_path, self.auth)
+            # Update the UID for the file
+            attrs = self.nfs3.getattr(mnt_info["mountinfo"]["fhandle"], auth=self.auth)
+            self.auth["uid"] = attrs["attributes"]["uid"]
             file_handle = mnt_info["mountinfo"]["fhandle"]
+            # Read the file data
             file_data = self.nfs3.read(file_handle, auth=self.auth)
 
             if "resfail" in file_data:
                 raise Exception("Insufficient Permissions")
             else:
-                entries = file_data["resok"]["data"]
-            
+                data = file_data["resok"]["data"]
+
             # Write the data to the local file
             with open(local_file_path, "wb+") as local_file:
-                local_file.write(entries)
+                local_file.write(data)
 
             self.logger.highlight(f"File successfully downloaded to {local_file_path} from {remote_file_path}")
 
             # Unmount the share
             self.mount.umnt(self.auth)
-    
         except Exception as e:
             self.logger.fail(f'Error writing file "{remote_file_path}" from share "{local_file_path}": {e}')
-            if os.path.getsize(local_file_path) == 0:
+            if os.path.exists(local_file_path) and os.path.getsize(local_file_path) == 0:
                 os.remove(local_file_path)
-            
-    def get_file(self):
-        self.get_file_single(self.args.get_file[0], self.args.get_file[1])
-        
-    def put_file_single(self, local_file, remote_file):
-        local_file_path = local_file
-        remote_file_path = remote_file
+
+    def put_file(self):
+        """Uploads a file to the NFS share"""
+        local_file_path = self.args.put_file[0]
+        remote_file_path = self.args.put_file[1]
+        file_name = ""
+
+        # Do a bit of smart handling for the file paths
+        if "/" in local_file_path:
+            file_name = local_file_path.split("/")[-1]
         if not remote_file_path.endswith("/"):
             remote_file_path += "/"
-        self.logger.display(f"Uploading {local_file_path} to {remote_file_path}")
+
+        self.logger.display(f"Uploading from {local_file_path} to {remote_file_path}")
         try:
             # Connect to NFS
             nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
             self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
             self.nfs3.connect()
-            
+
             try:
-                # Mount the NFS share for create file
+                # Mount the NFS share to create the file
                 mnt_info = self.mount.mnt(remote_file_path, self.auth)
                 dir_handle = mnt_info["mountinfo"]["fhandle"]
+                # Update the UID from the directory
                 attrs = self.nfs3.getattr(dir_handle, auth=self.auth)
                 self.auth["uid"] = attrs["attributes"]["uid"]
-                self.logger.display(f"Trying to create {remote_file_path}{local_file_path}")
-                self.nfs3.create(dir_handle, local_file_path, 1, auth=self.auth)
-                self.logger.success(f"{local_file_path} successfully created.")
+
+                # Create file
+                self.logger.display(f"Trying to create {remote_file_path}{file_name}")
+                self.nfs3.create(dir_handle, file_name, 1, auth=self.auth)
+                self.logger.success(f"{file_name} successfully created.")
             except Exception as e:
-                self.logger.fail(f"{local_file_path} was not created.")
+                self.logger.fail(f"{file_name} was not created.")
                 self.logger.debug(f"Error while creating remote file: {e}")
-            
+
             try:
-                # Mount the NFS share for mount created file
-                mnt_info = self.mount.mnt(remote_file_path + local_file, self.auth)
+                # Mount the NFS share to write the file
+                mnt_info = self.mount.mnt(remote_file_path, self.auth)
                 file_handle = mnt_info["mountinfo"]["fhandle"]
                 attrs = self.nfs3.getattr(file_handle, auth=self.auth)
                 self.auth["uid"] = attrs["attributes"]["uid"]
                 with open(local_file_path, "rb") as file:
                     file_data = file.read().decode()
-                
-                self.logger.display(f"Trying to write data from {local_file_path}")
-                self.nfs3.write(file_handle, 0, len(file_data), file_data, 1, auth=self.auth)
 
-                self.logger.highlight(f"File {local_file_path} successfully uploaded on {remote_file_path}")
+                # Write the data to the remote file
+                self.logger.display(f"Trying to write data from {local_file_path} to {remote_file_path}")
+                self.nfs3.write(file_handle, 0, len(file_data), file_data, 1, auth=self.auth)
+                self.logger.success(f"Data from {local_file_path} successfully written to {remote_file_path}")
             except Exception as e:
                 self.logger.fail(f"{local_file_path} was not writed.")
                 self.logger.debug(f"Error while creating remote file: {e}")
-            
+
             # Unmount the share
             self.mount.umnt(self.auth)
         except Exception as e:
             self.logger.fail(f"Error writing file to share {remote_file_path}: {e}")
+        else:
+            self.logger.highlight(f"File {local_file_path} successfully uploaded to {remote_file_path}")
 
-    def put_file(self):
-        self.put_file_single(self.args.put_file[0], self.args.put_file[1])
 
 def convert_size(size_bytes):
     if size_bytes == 0:
