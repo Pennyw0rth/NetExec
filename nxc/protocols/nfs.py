@@ -96,6 +96,7 @@ class nfs(connection):
                                 attrs = self.nfs3.getattr(file_handle, auth=self.auth)
                                 file_size = attrs["attributes"]["size"]
                                 file_size = convert_size(file_size)
+                                uid = attrs["attributes"]["uid"]
                                 read_perm, write_perm, exec_perm = self.get_permissions(entry["name_handle"]["handle"]["data"])
                                 contents.append({"path": item_path, "read": read_perm, "write": write_perm, "execute": exec_perm, "filesize": file_size, "uid": uid})
 
@@ -112,7 +113,7 @@ class nfs(connection):
 
         if recurse == 0:
             read_perm, write_perm, exec_perm = self.get_permissions(file_handle)
-            return [{"path": f"{path}/", "read": read_perm, "write": write_perm, "execute": exec_perm, "filesize": "-"}]
+            return [{"path": f"{path}/", "read": read_perm, "write": write_perm, "execute": exec_perm, "filesize": "-", "uid": self.auth["uid"]}]
 
         items = self.nfs3.readdirplus(file_handle, auth=self.auth)
         if "resfail" in items:
