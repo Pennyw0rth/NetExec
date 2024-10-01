@@ -134,7 +134,7 @@ class connection:
         # Authentication info
         self.password = ""
         self.username = ""
-        self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey)
+        self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey or (hasattr(self.args, "delegate") and self.args.delegate))
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
         self.admin_privs = False
@@ -157,7 +157,7 @@ class connection:
         else:
             return
 
-        if self.args.kerberos:
+        if self.kerberos:
             self.host = self.hostname
 
         self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
@@ -167,6 +167,9 @@ class connection:
         except Exception as e:
             if "ERROR_DEPENDENT_SERVICES_RUNNING" in str(e):
                 self.logger.error(f"Exception while calling proto_flow() on target {target}: {e}")
+            # Catching impacket SMB specific exceptions, which should not be imported due to performance reasons
+            elif e.__class__.__name__ in ["NetBIOSTimeout", "NetBIOSError"]:
+                self.logger.error(f"{e.__class__.__name__} on target {target}: {e}")
             else:
                 self.logger.exception(f"Exception while calling proto_flow() on target {target}: {e}")
         finally:
@@ -470,8 +473,6 @@ class connection:
             return False
         if self.args.continue_on_success and owned:
             return False
-        if hasattr(self.args, "delegate") and self.args.delegate:
-            self.args.kerberos = True
 
         if self.args.jitter:
             jitter = self.args.jitter
@@ -486,7 +487,7 @@ class connection:
 
         with sem:
             if cred_type == "plaintext":
-                if self.args.kerberos:
+                if self.kerberos:
                     self.logger.debug("Trying to authenticate using Kerberos")
                     return self.kerberos_login(domain, username, secret, "", "", self.kdcHost, False)
                 elif hasattr(self.args, "domain"):  # Some protocols don't use domain for login
@@ -499,7 +500,7 @@ class connection:
                     self.logger.debug("Trying to authenticate using plaintext")
                     return self.plaintext_login(username, secret)
             elif cred_type == "hash":
-                if self.args.kerberos:
+                if self.kerberos:
                     return self.kerberos_login(domain, username, "", secret, "", self.kdcHost, False)
                 return self.hash_login(domain, username, secret)
             elif cred_type == "aesKey":

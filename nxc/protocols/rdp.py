@@ -109,7 +109,7 @@ class rdp(connection):
     def print_host_info(self):
         nla = colored(f"nla:{self.nla}", host_info_colors[3], attrs=["bold"]) if self.nla else colored(f"nla:{self.nla}", host_info_colors[2], attrs=["bold"])
         if self.domain is None:
-            self.logger.display("Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
+            self.logger.display(f"Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
         else:
             self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({nla})")
         return True
@@ -181,7 +181,7 @@ class rdp(connection):
                     credentials=self.auth,
                 )
                 asyncio.run(self.connect_rdp())
-                if str(proto) == "SUPP_PROTOCOLS.RDP" or str(proto) == "SUPP_PROTOCOLS.SSL" or str(proto) == "SUPP_PROTOCOLS.SSL|SUPP_PROTOCOLS.RDP":
+                if proto.value == SUPP_PROTOCOLS.RDP or proto.value == SUPP_PROTOCOLS.SSL or proto.value == SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.RDP:
                     self.nla = False
                     return
             except Exception:
