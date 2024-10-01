@@ -7,6 +7,6 @@ def proto_args(parser, parents):
     dgroup.add_argument("--shares", action="store_true", help="List NFS shares")
     dgroup.add_argument("--enum-shares", nargs="?", type=int, const=3, help="Authenticate and enumerate exposed shares recursively (default depth: %(const)s)")
     dgroup.add_argument("--get-file", nargs=2, metavar="FILE", help="Download remote NFS file.\n--get-file remote_file local_file")
-    dgroup.add_argument("--put-file", nargs=2, metavar="FILE", help="Upload remote NFS file.\n--put-file local_file remote_file")
+    dgroup.add_argument("--put-file", nargs=2, metavar="FILE", help="Upload remote NFS file with chmod 777 permissions.\n--put-file local_file remote_file")
 
     return parser

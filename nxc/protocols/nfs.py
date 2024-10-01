@@ -1,6 +1,6 @@
 from nxc.connection import connection
 from nxc.logger import NXCAdapter
-from pyNfsClient import Portmap, Mount, NFSv3, NFS_PROGRAM, NFS_V3, ACCESS3_READ, ACCESS3_MODIFY, ACCESS3_EXECUTE
+from pyNfsClient import Portmap, Mount, NFSv3, NFS_PROGRAM, NFS_V3, ACCESS3_READ, ACCESS3_MODIFY, ACCESS3_EXECUTE, NFSSTAT3
 import re
 import uuid
 import math
@@ -323,19 +323,17 @@ class nfs(connection):
 
                 # Create file
                 self.logger.display(f"Trying to create {remote_file_path}{file_name}")
-                self.nfs3.create(dir_handle, file_name, 1, auth=self.auth)
-                self.logger.success(f"{file_name} successfully created.")
+                res = self.nfs3.create(dir_handle, file_name, create_mode=1, mode=0o777, auth=self.auth)
+                if res["status"] != 0:
+                    raise Exception(NFSSTAT3[res["status"]])
+                else:
+                    file_handle = res["resok"]["obj"]["handle"]["data"]
+                self.logger.success(f"{file_name} successfully created")
             except Exception as e:
-                self.logger.fail(f"{file_name} was not created.")
-                self.logger.debug(f"Error while creating remote file: {e}")
-                exit(-1)
+                self.logger.fail(f"{file_name} was not created: {e}")
+                return
 
             try:
-                # Mount the NFS share to write the file
-                mnt_info = self.mount.mnt(remote_file_path + "/" + file_name, self.auth)
-                file_handle = mnt_info["mountinfo"]["fhandle"]
-                attrs = self.nfs3.getattr(file_handle, auth=self.auth)
-                self.auth["uid"] = attrs["attributes"]["uid"]
                 with open(local_file_path, "rb") as file:
                     file_data = file.read().decode()
 
@@ -344,9 +342,7 @@ class nfs(connection):
                 self.nfs3.write(file_handle, 0, len(file_data), file_data, 1, auth=self.auth)
                 self.logger.success(f"Data from {local_file_path} successfully written to {remote_file_path}")
             except Exception as e:
-                self.logger.fail(f"{local_file_path} was not writed.")
-                self.logger.debug(f"Error while creating remote file: {e}")
-                exit(-1)
+                self.logger.fail(f"Could not write to {local_file_path}: {e}")
 
             # Unmount the share
             self.mount.umnt(self.auth)
