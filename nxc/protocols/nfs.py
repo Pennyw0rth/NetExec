@@ -251,6 +251,7 @@ class nfs(connection):
         """Downloads a file from the NFS share"""
         remote_file_path = self.args.get_file[0]
         local_file_path = self.args.get_file[1]
+        windows = False
 
         # Do a bit of smart handling for the local file path
         if local_file_path.endswith("/"):
@@ -265,12 +266,24 @@ class nfs(connection):
 
             # Mount the NFS share
             mnt_info = self.mount.mnt(remote_file_path, self.auth)
+            if mnt_info["mountinfo"] is None:
+                windows = True
+                remote_file_path2, remote_file_path = os.path.split(remote_file_path.rstrip("/"))  # For windows. Windows wants to share name, not whole file path.
+                mnt_info = self.mount.mnt(remote_file_path2, self.auth)
+
             # Update the UID for the file
             attrs = self.nfs3.getattr(mnt_info["mountinfo"]["fhandle"], auth=self.auth)
             self.auth["uid"] = attrs["attributes"]["uid"]
-            file_handle = mnt_info["mountinfo"]["fhandle"]
+            dir_handle = mnt_info["mountinfo"]["fhandle"]
+            
             # Read the file data
-            file_data = self.nfs3.read(file_handle, auth=self.auth)
+            if windows:
+                dir_data = self.nfs3.lookup(dir_handle, remote_file_path, auth=self.auth)
+                file_handle = dir_data["resok"]["object"]["data"]
+                file_data = self.nfs3.read(file_handle, auth=self.auth)
+            else:
+                file_handle = mnt_info["mountinfo"]["fhandle"]
+                file_data = self.nfs3.read(file_handle, auth=self.auth)
 
             if "resfail" in file_data:
                 raise Exception("Insufficient Permissions")
@@ -323,10 +336,11 @@ class nfs(connection):
             except Exception as e:
                 self.logger.fail(f"{file_name} was not created.")
                 self.logger.debug(f"Error while creating remote file: {e}")
+                exit(-1)
 
             try:
                 # Mount the NFS share to write the file
-                mnt_info = self.mount.mnt(remote_file_path, self.auth)
+                mnt_info = self.mount.mnt(remote_file_path + "/" + file_name, self.auth)
                 file_handle = mnt_info["mountinfo"]["fhandle"]
                 attrs = self.nfs3.getattr(file_handle, auth=self.auth)
                 self.auth["uid"] = attrs["attributes"]["uid"]
@@ -340,6 +354,7 @@ class nfs(connection):
             except Exception as e:
                 self.logger.fail(f"{local_file_path} was not writed.")
                 self.logger.debug(f"Error while creating remote file: {e}")
+                exit(-1)
 
             # Unmount the share
             self.mount.umnt(self.auth)
