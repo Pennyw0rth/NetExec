@@ -250,12 +250,12 @@ class nfs(connection):
     def get_file(self):
         """Downloads a file from the NFS share"""
         remote_file_path = self.args.get_file[0]
+        remote_dir_path, file_name = os.path.split(remote_file_path)
         local_file_path = self.args.get_file[1]
-        windows = False
 
         # Do a bit of smart handling for the local file path
         if local_file_path.endswith("/"):
-            local_file_path += remote_file_path.split("/")[-1]
+            local_file_path += file_name
 
         self.logger.display(f"Downloading {remote_file_path} to {local_file_path}")
         try:
@@ -265,25 +265,17 @@ class nfs(connection):
             self.nfs3.connect()
 
             # Mount the NFS share
-            mnt_info = self.mount.mnt(remote_file_path, self.auth)
-            if mnt_info["mountinfo"] is None:
-                windows = True
-                remote_file_path2, remote_file_path = os.path.split(remote_file_path.rstrip("/"))  # For windows. Windows wants to share name, not whole file path.
-                mnt_info = self.mount.mnt(remote_file_path2, self.auth)
+            mnt_info = self.mount.mnt(remote_dir_path, self.auth)
 
             # Update the UID for the file
             attrs = self.nfs3.getattr(mnt_info["mountinfo"]["fhandle"], auth=self.auth)
             self.auth["uid"] = attrs["attributes"]["uid"]
             dir_handle = mnt_info["mountinfo"]["fhandle"]
             
-            # Read the file data
-            if windows:
-                dir_data = self.nfs3.lookup(dir_handle, remote_file_path, auth=self.auth)
-                file_handle = dir_data["resok"]["object"]["data"]
-                file_data = self.nfs3.read(file_handle, auth=self.auth)
-            else:
-                file_handle = mnt_info["mountinfo"]["fhandle"]
-                file_data = self.nfs3.read(file_handle, auth=self.auth)
+            # Get the file handle and read the file data
+            dir_data = self.nfs3.lookup(dir_handle, file_name, auth=self.auth)
+            file_handle = dir_data["resok"]["object"]["data"]
+            file_data = self.nfs3.read(file_handle, auth=self.auth)
 
             if "resfail" in file_data:
                 raise Exception("Insufficient Permissions")
@@ -299,7 +291,7 @@ class nfs(connection):
             # Unmount the share
             self.mount.umnt(self.auth)
         except Exception as e:
-            self.logger.fail(f'Error writing file "{remote_file_path}" from share "{local_file_path}": {e}')
+            self.logger.fail(f'Error retrieving file "{file_name}" from "{remote_dir_path}": {e}')
             if os.path.exists(local_file_path) and os.path.getsize(local_file_path) == 0:
                 os.remove(local_file_path)
 
