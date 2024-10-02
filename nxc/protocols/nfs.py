@@ -272,7 +272,7 @@ class nfs(connection):
             attrs = self.nfs3.getattr(mnt_info["mountinfo"]["fhandle"], auth=self.auth)
             self.auth["uid"] = attrs["attributes"]["uid"]
             dir_handle = mnt_info["mountinfo"]["fhandle"]
-            
+
             # Get the file handle and read the file data
             dir_data = self.nfs3.lookup(dir_handle, file_name, auth=self.auth)
             file_handle = dir_data["resok"]["object"]["data"]
@@ -322,11 +322,12 @@ class nfs(connection):
             # Mount the NFS share to create the file
             mnt_info = self.mount.mnt(remote_file_path, self.auth)
             dir_handle = mnt_info["mountinfo"]["fhandle"]
+
             # Update the UID from the directory
             attrs = self.nfs3.getattr(dir_handle, auth=self.auth)
             self.auth["uid"] = attrs["attributes"]["uid"]
-            
-            # Checking if file_name is already exist on remote file path
+
+            # Checking if file_name already exists on remote file path
             lookup_response = self.nfs3.lookup(dir_handle, file_name, auth=self.auth)
 
             # If success, file_name does not exist on remote machine. Else, trying to overwrite it.
@@ -340,11 +341,10 @@ class nfs(connection):
                     file_handle = res["resok"]["obj"]["handle"]["data"]
                 self.logger.success(f"{file_name} successfully created")
             else:
-                # Asking to user overwriting.
-                ans = input(highlight(f"[!] {file_name} is already exist on {remote_file_path}. Do you want to overwrite it? [Y/n] ", "red"))
+                # Asking the user if they want to overwrite the file
+                ans = input(highlight(f"[!] {file_name} already exists on {remote_file_path}. Do you want to overwrite it? [Y/n] ", "red"))
                 if ans.lower() in ["y", "yes", ""]:
-                    # Overwriting
-                    self.logger.display(f"{file_name} is already exist on {remote_file_path}. Trying to overwrite it...")
+                    self.logger.display(f"{file_name} already exists on {remote_file_path}. Trying to overwrite it...")
                     file_handle = lookup_response["resok"]["object"]["data"]
                 else:
                     self.logger.fail(f"Uploading was not successful. The {file_name} is exist on {remote_file_path}")
