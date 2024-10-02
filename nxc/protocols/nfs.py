@@ -1,5 +1,6 @@
 from nxc.connection import connection
 from nxc.logger import NXCAdapter
+from nxc.helpers.logger import highlight
 from pyNfsClient import Portmap, Mount, NFSv3, NFS_PROGRAM, NFS_V3, ACCESS3_READ, ACCESS3_MODIFY, ACCESS3_EXECUTE, NFSSTAT3
 import re
 import uuid
@@ -301,6 +302,11 @@ class nfs(connection):
         remote_file_path = self.args.put_file[1]
         file_name = ""
 
+        # Check if local file is exist
+        if not os.path.isfile(local_file_path):
+            self.logger.fail(f"{local_file_path} does not exist.")
+            return
+
         # Do a bit of smart handling for the file paths
         file_name = local_file_path.split("/")[-1] if "/" in local_file_path else local_file_path
         if not remote_file_path.endswith("/"):
@@ -313,14 +319,18 @@ class nfs(connection):
             self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
             self.nfs3.connect()
 
-            try:
-                # Mount the NFS share to create the file
-                mnt_info = self.mount.mnt(remote_file_path, self.auth)
-                dir_handle = mnt_info["mountinfo"]["fhandle"]
-                # Update the UID from the directory
-                attrs = self.nfs3.getattr(dir_handle, auth=self.auth)
-                self.auth["uid"] = attrs["attributes"]["uid"]
+            # Mount the NFS share to create the file
+            mnt_info = self.mount.mnt(remote_file_path, self.auth)
+            dir_handle = mnt_info["mountinfo"]["fhandle"]
+            # Update the UID from the directory
+            attrs = self.nfs3.getattr(dir_handle, auth=self.auth)
+            self.auth["uid"] = attrs["attributes"]["uid"]
+            
+            # Checking if file_name is already exist on remote file path
+            lookup_response = self.nfs3.lookup(dir_handle, file_name, auth=self.auth)
 
+            # If success, file_name does not exist on remote machine. Else, trying to overwrite it.
+            if lookup_response["resok"] is None:
                 # Create file
                 self.logger.display(f"Trying to create {remote_file_path}{file_name}")
                 res = self.nfs3.create(dir_handle, file_name, create_mode=1, mode=0o777, auth=self.auth)
@@ -329,9 +339,16 @@ class nfs(connection):
                 else:
                     file_handle = res["resok"]["obj"]["handle"]["data"]
                 self.logger.success(f"{file_name} successfully created")
-            except Exception as e:
-                self.logger.fail(f"{file_name} was not created: {e}")
-                return
+            else:
+                # Asking to user overwriting.
+                ans = input(highlight(f"[!] {file_name} is already exist on {remote_file_path}. Do you want to overwrite it? [Y/n] ", "red"))
+                if ans.lower() in ["y", "yes", ""]:
+                    # Overwriting
+                    self.logger.display(f"{file_name} is already exist on {remote_file_path}. Trying to overwrite it...")
+                    file_handle = lookup_response["resok"]["object"]["data"]
+                else:
+                    self.logger.fail(f"Uploading was not successful. The {file_name} is exist on {remote_file_path}")
+                    return
 
             try:
                 with open(local_file_path, "rb") as file:
