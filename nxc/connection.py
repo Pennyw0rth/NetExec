@@ -215,7 +215,7 @@ class connection:
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         return
 
-    def plaintext_login(self, domain, username, password):
+    def plaintext_login(self, username, password):
         return
 
     def hash_login(self, domain, username, ntlm_hash):
