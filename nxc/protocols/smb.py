@@ -303,7 +303,7 @@ class smb(connection):
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
         # If we want to authenticate we should create another connection object, because we already logged in
-        if self.args.username or self.args.cred_id or self.kerberos:
+        if self.args.username or self.args.cred_id or self.kerberos or self.args.use_kcache:
             self.create_conn_obj()
 
     def print_host_info(self):
