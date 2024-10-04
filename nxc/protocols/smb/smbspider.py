@@ -83,7 +83,7 @@ class SMBSpider:
 
         filelist = None
         try:
-            filelist = self.smbconnection.listPath(self.share, subfolder)
+            filelist = self.smbconnection.listPath(self.share, subfolder.encode('utf-8').decode('latin-1'))
             self.dir_list(filelist, subfolder)
             if depth == 0:
                 return
