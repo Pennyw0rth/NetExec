@@ -45,24 +45,8 @@ def write_configfile(config, config_path):
         config.write(configfile)
 
 
-def create_workspace(workspace_name, p_loader=None):
-    """
-    Create a new workspace with the given name.
-
-    Args:
-    ----
-        workspace_name (str): The name of the workspace.
-
-    Returns:
-    -------
-        None
-    """
-    if exists(path_join(WORKSPACE_DIR, workspace_name)):
-        print(f"[-] Workspace {workspace_name} already exists")
-    else:
-        print(f"[*] Creating {workspace_name} workspace")
-        mkdir(path_join(WORKSPACE_DIR, workspace_name))
-    
+def init_protocol_dbs(workspace_name, p_loader=None):
+    """Check for each protocol if the database exists, if not create it."""
     if p_loader is None:
         p_loader = ProtocolLoader()
     protocols = p_loader.get_protocols()
@@ -87,6 +71,27 @@ def create_workspace(workspace_name, p_loader=None):
             conn.close()
 
 
+def create_workspace(workspace_name, p_loader=None):
+    """
+    Create a new workspace with the given name.
+
+    Args:
+    ----
+        workspace_name (str): The name of the workspace.
+
+    Returns:
+    -------
+        None
+    """
+    if exists(path_join(WORKSPACE_DIR, workspace_name)):
+        print(f"[-] Workspace {workspace_name} already exists")
+    else:
+        print(f"[*] Creating {workspace_name} workspace")
+        mkdir(path_join(WORKSPACE_DIR, workspace_name))
+
+    init_protocol_dbs(workspace_name, p_loader)
+
+
 def delete_workspace(workspace_name):
     shutil.rmtree(path_join(WORKSPACE_DIR, workspace_name))
     print(f"[*] Workspace {workspace_name} deleted")
@@ -95,3 +100,6 @@ def delete_workspace(workspace_name):
 def initialize_db():
     if not exists(path_join(WORKSPACE_DIR, "default")):
         create_workspace("default")
+
+    # Even if the default workspace exists, we still need to check if every protocol has a database (in case of a new protocol)
+    init_protocol_dbs("default")
