@@ -575,7 +575,7 @@ class smb(connection):
         try:
             dce.connect()
         except Exception:
-            pass
+            self.admin_privs = False
         else:
             with contextlib.suppress(Exception):
                 dce.bind(scmr.MSRPC_UUID_SCMR)
