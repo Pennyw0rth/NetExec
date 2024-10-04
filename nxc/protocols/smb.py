@@ -775,7 +775,7 @@ class smb(connection):
 
     def shares(self):
         temp_dir = ntpath.normpath("\\" + gen_random_string())
-        temp_file = ntpath.normpath("\\" + gen_random_string()+ ".txt")
+        temp_file = ntpath.normpath("\\" + gen_random_string() + ".txt")
         permissions = []
 
         try:
@@ -814,6 +814,8 @@ class smb(connection):
             share_info = {"name": share_name, "remark": share_remark, "access": []}
             read = False
             write = False
+            write_dir = False
+            write_file = False
             try:
                 self.conn.listPath(share_name, "*")
                 read = True
@@ -825,13 +827,12 @@ class smb(connection):
             if not self.args.no_write_check:
                 try:
                     self.conn.createDirectory(share_name, temp_dir)
-                    write = True
-                    share_info["access"].append("WRITE")
+                    write_dir = True
                     try:
                         self.conn.deleteDirectory(share_name, temp_dir)
                     except SessionError as e:
                         error = get_error_string(e)
-                        if error == 'STATUS_OBJECT_NAME_NOT_FOUND':
+                        if error == "STATUS_OBJECT_NAME_NOT_FOUND":
                             pass
                         else:
                             self.logger.debug(f"Error DELETING created temp dir {temp_dir} on share {share_name}: {error}")
@@ -843,19 +844,23 @@ class smb(connection):
                     tid = self.conn.connectTree(share_name)
                     fid = self.conn.createFile(tid, temp_file, desiredAccess=FILE_SHARE_WRITE, shareMode=FILE_SHARE_DELETE)
                     self.conn.closeFile(tid, fid)
-                    write = True
-                    share_info["access"].append("WRITE")
+                    write_file = True
                     try:
                         self.conn.deleteFile(share_name, temp_file)
                     except SessionError as e:
                         error = get_error_string(e)
-                        if error == 'STATUS_OBJECT_NAME_NOT_FOUND':
+                        if error == "STATUS_OBJECT_NAME_NOT_FOUND":
                             pass
                         else:
                             self.logger.debug(f"Error DELETING created temp file {temp_file} on share {share_name}")
                 except SessionError as e:
                     error = get_error_string(e)
                     self.logger.debug(f"Error checking WRITE access with file on share {share_name}: {error}")
+
+                # If we either can create a file or a directory we add the write privs to the output. Agreed on in https://github.com/Pennyw0rth/NetExec/pull/404
+                if write_dir or write_file:
+                    write = True
+                    share_info["access"].append("WRITE")
 
             permissions.append(share_info)
 
