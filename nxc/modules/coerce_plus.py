@@ -957,7 +957,7 @@ class MSEvenTrigger:
             request["MinorVersion"] = 1
             dce.request(request)
         except Exception as e:
-            if str(e).find("ERROR_BAD_NETPATH") >= 0:
+            if str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("STATUS_OBJECT_PATH_NOT_FOUND") >= 0 or str(e).find("STATUS_CONNECTION_DISCONNECTED") >= 0:
                 self.context.log.debug("ElfrOpenBELW Success")
                 self.context.log.highlight(f"Exploit Success, {pipe}\\ElfrOpenBELW")
                 if not always_continue:
