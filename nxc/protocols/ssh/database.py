@@ -26,6 +26,7 @@ class database(BaseDB):
         self.LoggedinRelationsTable = None
         self.AdminRelationsTable = None
         self.KeysTable = None
+
         super().__init__(db_engine)
 
     @staticmethod
