@@ -206,13 +206,16 @@ class connection:
     def create_conn_obj(self):
         return
 
+    def disconnect(self):
+        return
+
     def check_if_admin(self):
         return
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         return
 
-    def plaintext_login(self, domain, username, password):
+    def plaintext_login(self, username, password):
         return
 
     def hash_login(self, domain, username, ntlm_hash):
@@ -234,6 +237,7 @@ class connection:
                 else:
                     self.logger.debug("Calling command arguments")
                     self.call_cmd_args()
+            self.disconnect()
 
     def call_cmd_args(self):
         """Calls all the methods specified by the command line arguments

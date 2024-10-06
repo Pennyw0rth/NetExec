@@ -248,3 +248,8 @@ netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --get test_file.txt
 netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce
 netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce --continue-on-success
 netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE
+##### NFS
+netexec nfs TARGET_HOST -u "" -p "" --shares
+netexec nfs TARGET_HOST -u "" -p "" --enum-shares
+netexec nfs TARGET_HOST -u "" -p "" --get-file /NFStest/test/test.txt ../test.txt
+netexec nfs TARGET_HOST -u "" -p "" --put-file ../test.txt /NFStest/test
