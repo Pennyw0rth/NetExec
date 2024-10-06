@@ -107,6 +107,9 @@ def initialize_db():
     if not exists(path_join(WORKSPACE_DIR, "default")):
         create_workspace("default")
 
+    # Even if the default workspace exists, we still need to check if every protocol has a database (in case of a new protocol)
+    init_protocol_dbs("default")
+
 
 class BaseDB:
     def __init__(self, db_engine):
@@ -142,7 +145,3 @@ class BaseDB:
         res = self.sess.execute(*args)
         self.lock.release()
         return res
-
-
-    # Even if the default workspace exists, we still need to check if every protocol has a database (in case of a new protocol)
-    init_protocol_dbs("default")
