@@ -22,13 +22,6 @@ class NXCModule:
 		pass
 
 	def on_admin_login(self, context, connection):
-		host = connection.host
-		domain_name = connection.domain
-		username = connection.username
-		password = getattr(connection, "password", "")
-		lmhash = getattr(connection, "lmhash", "")
-		nthash = getattr(connection, "nthash", "")
-
 		obj = GetLoggedOn(context)
 		target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
 		dce = obj.connect(
@@ -41,7 +34,6 @@ class NXCModule:
 			doKerberos=connection.kerberos,
 			dcHost=connection.kdcHost,
 			aesKey=connection.aesKey,
-			port=445
 		)
 		users = obj.lookup(dce)
 		for user in users:
