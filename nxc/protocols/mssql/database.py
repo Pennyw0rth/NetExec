@@ -158,8 +158,7 @@ class database(BaseDB):
                     q = update(self.UsersTable).values(credential_data)  # .returning(self.UsersTable.c.id)
                     results = self.db_execute(q)  # .first()
 
-        nxc_logger.debug(
-            f"add_credential(credtype={credtype}, domain={domain}, username={username}, password={password}, pillaged_from={pillaged_from})")
+        nxc_logger.debug(f"add_credential(credtype={credtype}, domain={domain}, username={username}, password={password}, pillaged_from={pillaged_from})")
         return user_rowid
 
     def remove_credentials(self, creds_id):
@@ -274,7 +273,6 @@ class database(BaseDB):
         # if we're filtering by ip/hostname
         elif filter_term and filter_term != "":
             like_term = func.lower(f"%{filter_term}%")
-            q = select(self.HostsTable).filter(
-                self.HostsTable.c.ip.like(like_term) | func.lower(self.HostsTable.c.hostname).like(like_term))
+            q = select(self.HostsTable).filter(self.HostsTable.c.ip.like(like_term) | func.lower(self.HostsTable.c.hostname).like(like_term))
 
         return self.db_execute(q).all()

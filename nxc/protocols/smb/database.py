@@ -190,17 +190,17 @@ class database(BaseDB):
 
     # pull/545
     def add_host(
-            self,
-            ip,
-            hostname,
-            domain,
-            os,
-            smbv1,
-            signing,
-            spooler=None,
-            zerologon=None,
-            petitpotam=None,
-            dc=None,
+        self,
+        ip,
+        hostname,
+        domain,
+        os,
+        smbv1,
+        signing,
+        spooler=None,
+        zerologon=None,
+        petitpotam=None,
+        dc=None,
     ):
         """Check if this host has already been added to the database, if not, add it in."""
         hosts = []
@@ -271,8 +271,7 @@ class database(BaseDB):
         credentials = []
         groups = []
 
-        if (group_id and not self.is_group_valid(group_id)) or (
-                pillaged_from and not self.is_host_valid(pillaged_from)):
+        if (group_id and not self.is_group_valid(group_id)) or (pillaged_from and not self.is_host_valid(pillaged_from)):
             nxc_logger.debug("Invalid group or host")
             return
 
@@ -345,7 +344,8 @@ class database(BaseDB):
         creds_q = creds_q.filter(self.UsersTable.c.id == user_id) if user_id else creds_q.filter(
             func.lower(self.UsersTable.c.credtype) == func.lower(credtype),
             func.lower(self.UsersTable.c.domain) == func.lower(domain),
-            func.lower(self.UsersTable.c.username) == func.lower(username), self.UsersTable.c.password == password)
+            func.lower(self.UsersTable.c.username) == func.lower(username),
+            self.UsersTable.c.password == password)
         users = self.db_execute(creds_q)
         hosts = self.get_hosts(host)
 
@@ -568,8 +568,7 @@ class database(BaseDB):
 
         results = self.db_execute(q).all()
 
-        nxc_logger.debug(
-            f"get_groups(filter_term={filter_term}, groupName={group_name}, groupDomain={group_domain}) => {results}")
+        nxc_logger.debug(f"get_groups(filter_term={filter_term}, groupName={group_name}, groupDomain={group_domain}) => {results}")
         return results
 
     def get_group_relations(self, user_id=None, group_id=None):
@@ -722,13 +721,13 @@ class database(BaseDB):
         return valid
 
     def add_dpapi_secrets(
-            self,
-            host: str,
-            dpapi_type: str,
-            windows_user: str,
-            username: str,
-            password: str,
-            url: str = "",
+        self,
+        host: str,
+        dpapi_type: str,
+        windows_user: str,
+        username: str,
+        password: str,
+        url: str = "",
     ):
         """Add dpapi secrets to nxcdb"""
         secret = {
@@ -747,13 +746,13 @@ class database(BaseDB):
             f"add_dpapi_secrets(host={host}, dpapi_type={dpapi_type}, windows_user={windows_user}, username={username}, password={password}, url={url})")
 
     def get_dpapi_secrets(
-            self,
-            filter_term=None,
-            host: Optional[str] = None,
-            dpapi_type: Optional[str] = None,
-            windows_user: Optional[str] = None,
-            username: Optional[str] = None,
-            url: Optional[str] = None,
+        self,
+        filter_term=None,
+        host: Optional[str] = None,
+        dpapi_type: Optional[str] = None,
+        windows_user: Optional[str] = None,
+        username: Optional[str] = None,
+        url: Optional[str] = None,
     ):
         """Get dpapi secrets from nxcdb"""
         q = select(self.DpapiSecrets)
@@ -780,8 +779,7 @@ class database(BaseDB):
             q = q.filter(func.lower(self.DpapiSecrets.c.url) == func.lower(url))
         results = self.db_execute(q).all()
 
-        nxc_logger.debug(
-            f"get_dpapi_secrets(filter_term={filter_term}, host={host}, dpapi_type={dpapi_type}, windows_user={windows_user}, username={username}, url={url}) => {results}")
+        nxc_logger.debug(f"get_dpapi_secrets(filter_term={filter_term}, host={host}, dpapi_type={dpapi_type}, windows_user={windows_user}, username={username}, url={url}) => {results}")
         return results
 
     def add_loggedin_relation(self, user_id, host_id):
@@ -878,8 +876,7 @@ class database(BaseDB):
 
     def add_check_result(self, host_id, check_id, secure, reasons):
         """Check if this check result has already been added to the database, if not, add it in."""
-        q = select(self.ConfChecksResultsTable).filter(self.ConfChecksResultsTable.c.host_id == host_id,
-                                                       self.ConfChecksResultsTable.c.check_id == check_id)
+        q = select(self.ConfChecksResultsTable).filter(self.ConfChecksResultsTable.c.host_id == host_id, self.ConfChecksResultsTable.c.check_id == check_id)
         select_results = self.db_execute(q).all()
         context = locals()
         new_row = {column: context[column] for column in ("host_id", "check_id", "secure", "reasons")}
