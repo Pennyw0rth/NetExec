@@ -1087,46 +1087,54 @@ class ldap(connection):
                 self.logger.highlight(f"{attr:<20} {vals}")
 
     def find_delegation(self):
+        # Constants for delegation types
+        UF_TRUSTED_FOR_DELEGATION = 0x80000
+        UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION = 0x1000000
+        UF_ACCOUNTDISABLE = 0x2
+
+        def processAttributeValue(attribute):
+            # Extract the payload value from the AttributeValue object
+            if hasattr(attribute, "payload"):
+                return str(attribute.payload)
+            return str(attribute)
+
         def printTable(items, header):
             colLen = []
-            try:
-                for i, col in enumerate(header):
-                    rowMaxLen = max(len(str(row[i])) for row in items)
-                    colLen.append(max(rowMaxLen, len(col)))
+            for i, col in enumerate(header):
+                rowMaxLen = max(len(str(row[i])) for row in items)
+                colLen.append(max(rowMaxLen, len(col)))
 
-                # Create the format string for each row
-                outputFormat = " ".join([f"{{{num}:{width}s}}" for num, width in enumerate(colLen)])
+            # Create the format string for each row
+            outputFormat = " ".join([f"{{{num}:{width}s}}" for num, width in enumerate(colLen)])
 
-                # Print header
-                self.logger.highlight(outputFormat.format(*header))
-                self.logger.highlight(" ".join(["-" * itemLen for itemLen in colLen]))
+            self.logger.highlight(outputFormat.format(*header))
+            self.logger.highlight(" ".join(["-" * itemLen for itemLen in colLen]))
 
-                # Print rows
-                for row in items:
-                    self.logger.highlight(outputFormat.format(*row))
-            except Exception as e:
-                self.logger.fail("Header Index error " + str(e))    
+            # Print rows
+            for row in items:
+                # Burada DelegationRightsTo'yu düzeltmek için join() ekleyin
+                row[3] = ", ".join(str(x) for x in row[3]) if isinstance(row[3], list) else row[3]
+                self.logger.highlight(outputFormat.format(*row))
                 
         # Building the search filter
-        search_filter = ("(&(|(UserAccountControl:1.2.840.113556.1.4.803:=16777216)(UserAccountControl:1.2.840.113556.1.4.803:="
-                         "524288)(msDS-AllowedToDelegateTo=*)(msDS-AllowedToActOnBehalfOfOtherIdentity=*))"
-                         "(!(UserAccountControl:1.2.840.113556.1.4.803:=2))(!(UserAccountControl:1.2.840.113556.1.4.803:=8192)))"
-                        )
-        attributes = ["sAMAccountName", 
-                      "pwdLastSet", 
-                      "userAccountControl", 
-                      "objectCategory", 
-                      "msDS-AllowedToActOnBehalfOfOtherIdentity", 
-                      "msDS-AllowedToDelegateTo"]
+        search_filter = ("(&(|(UserAccountControl:1.2.840.113556.1.4.803:=16777216)"
+                         "(UserAccountControl:1.2.840.113556.1.4.803:=524288)"
+                         "(msDS-AllowedToDelegateTo=*)(msDS-AllowedToActOnBehalfOfOtherIdentity=*))"
+                         "(!(UserAccountControl:1.2.840.113556.1.4.803:=2))"
+                         "(!(UserAccountControl:1.2.840.113556.1.4.803:=8192)))")
         
+        attributes = ["sAMAccountName", "pwdLastSet", "userAccountControl", "objectCategory", 
+                      "msDS-AllowedToActOnBehalfOfOtherIdentity", "msDS-AllowedToDelegateTo"]
+
         resp = self.search(search_filter, attributes, 0)
 
         answers = []
         self.logger.debug(f"Total of records returned {len(resp):d}")
 
         for item in resp:
-            if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
+            if not isinstance(item, ldapasn1_impacket.SearchResultEntry):
                 continue
+
             mustCommit = False
             sAMAccountName = ""
             userAccountControl = 0
@@ -1134,8 +1142,7 @@ class ldap(connection):
             objectType = ""
             rightsTo = []
             protocolTransition = 0
-            
-            # After receiving responses we parse through to determine the type of delegation configured on each object
+
             try:
                 for attribute in item["attributes"]:
                     if str(attribute["type"]) == "sAMAccountName":
@@ -1154,42 +1161,42 @@ class ldap(connection):
                     elif str(attribute["type"]) == "msDS-AllowedToDelegateTo":
                         if protocolTransition == 0:
                             delegation = "Constrained"
-                        rightsTo = list(attribute["vals"])
-             
-                    # Not an elif as an object could both have rbcd and another type of delegation configured for the same object
+                        rightsTo = [processAttributeValue(val) for val in attribute["vals"]]
+
+                    # Not an elif as an object could both have RBCD and another type of delegation
                     if str(attribute["type"]) == "msDS-AllowedToActOnBehalfOfOtherIdentity":
                         rbcdRights = []
                         rbcdObjType = []
-                        search_filter = "(&(|"
                         sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(attribute["vals"][0]))
+                        search_filter = "(&(|"
                         for ace in sd["Dacl"].aces:
-                            search_filter = search_filter + "(objectSid=" + ace["Ace"]["Sid"].formatCanonical() + ")"
-                        search_filter = search_filter + ")(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))"
+                            search_filter += "(objectSid=" + ace["Ace"]["Sid"].formatCanonical() + ")"
+                        search_filter += ")(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))"
                         delegUserResp = self.search(search_filter, attributes=["sAMAccountName", "objectCategory"], sizeLimit=999)
+
                         for item2 in delegUserResp:
-                            if isinstance(item2, ldapasn1_impacket.SearchResultEntry) is not True:
+                            if not isinstance(item2, ldapasn1_impacket.SearchResultEntry):
                                 continue
                             rbcdRights.append(str(item2["attributes"][0]["vals"][0]))
                             rbcdObjType.append(str(item2["attributes"][1]["vals"][0]).split("=")[1].split(",")[0])
-                            
-                        if mustCommit is True:
+
+                        if mustCommit:
                             if int(userAccountControl) & UF_ACCOUNTDISABLE:
-                                self.logger.debug("Bypassing disabled account %s " % sAMAccountName)
+                                self.logger.debug(f"Bypassing disabled account {sAMAccountName}")
                             else:
                                 for rights, objType in zip(rbcdRights, rbcdObjType):
                                     answers.append([rights, objType, "Resource-Based Constrained", sAMAccountName])
-                        
-                # Print unconstrained + constrained delegation relationships
-                if (delegation in ["Unconstrained", "Constrained", "Constrained w/ Protocol Transition"] and mustCommit):
+
+                if delegation in ["Unconstrained", "Constrained", "Constrained w/ Protocol Transition"] and mustCommit:
                     if int(userAccountControl) & UF_ACCOUNTDISABLE:
-                        self.logger.debug("Bypassing disabled account %s " % sAMAccountName)
+                        self.logger.debug(f"Bypassing disabled account {sAMAccountName}")
                     else:
-                        answers = [sAMAccountName, objectType, delegation, rightsTo]
+                        answers.append([sAMAccountName, objectType, delegation, rightsTo])
 
             except Exception as e:
-                self.logger.error("Skipping item, cannot process due to error %s" % str(e))
-                
-        if len(answers) > 0:
+                self.logger.error(f"Skipping item, cannot process due to error {e}")
+
+        if answers:
             printTable(answers, header=["AccountName", "AccountType", "DelegationType", "DelegationRightsTo"])
         else:
             self.logger.fail("No entries found!")
