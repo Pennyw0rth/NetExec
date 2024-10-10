@@ -276,7 +276,6 @@ class nfs(connection):
             # Get the file handle and file size
             dir_data = self.nfs3.lookup(dir_handle, file_name, auth=self.auth)
             file_handle = dir_data["resok"]["object"]["data"]
-            file_size = dir_data["resok"]["obj_attributes"]["attributes"]["size"]
 
             # Handle files over the default chunk size of 1024 * 1024
             offset = 0
