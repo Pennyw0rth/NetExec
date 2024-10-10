@@ -619,7 +619,7 @@ class smb(connection):
 
     @requires_admin
     def execute(self, payload=None, get_output=False, methods=None):
-        if self.args.exec_method:
+        if getattr(self.args, "exec_method_explicitly_set", False):
             methods = [self.args.exec_method]
         if not methods:
             methods = ["wmiexec", "atexec", "smbexec", "mmcexec"]
