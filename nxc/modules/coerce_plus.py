@@ -486,15 +486,13 @@ class DFSCoerceTrigger:
             self.handle_exception(request.__class__.__name__, always_continue, pipe, e)
 
     def handle_exception(self, method_name, always_continue, pipe, e):
-        if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
+        if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
             self.context.log.debug(f"{method_name} Success")
             self.context.log.highlight(f"Exploit Success, {pipe}\\{method_name}")
             if not always_continue:
                 return True
         elif str(e).find("ERROR_NOT_SUPPORTED") >= 0:
             self.context.log.debug("Not Vulnerable")
-        elif str(e).find("ERROR_BAD_NETPATH") >= 0:
-            self.context.log.info("Could not find listener machine")
         else:
             self.context.log.debug(f"Something went wrong, check error status => {e!s}")
 
