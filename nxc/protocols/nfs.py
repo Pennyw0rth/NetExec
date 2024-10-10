@@ -273,23 +273,19 @@ class nfs(connection):
             self.auth["uid"] = attrs["attributes"]["uid"]
             dir_handle = mnt_info["mountinfo"]["fhandle"]
 
-            # Get the file handle
+            # Get the file handle and file size
             dir_data = self.nfs3.lookup(dir_handle, file_name, auth=self.auth)
             file_handle = dir_data["resok"]["object"]["data"]
+            file_size = dir_data["resok"]["obj_attributes"]["attributes"]["size"]
 
-            # Get the file attributes (size)
-            file_attrs = self.nfs3.getattr(file_handle, auth=self.auth)
-            file_size = file_attrs["attributes"]["size"]
-
-            # Handle files over 32768 bytes
+            # Handle files over the default chunk size of 1024 * 1024
             offset = 0
-            chunk_size = 32768  # 32KB
             eof = False
             file_data_total = b''
 
             # Loop until we have read the entire file
-            while offset < file_size:
-                file_data = self.nfs3.read(file_handle, offset, chunk_size, auth=self.auth)
+            while not eof:
+                file_data = self.nfs3.read(file_handle, offset, chunk_count=1024 * 1024, auth=self.auth)
 
                 if "resfail" in file_data:
                     raise Exception("Insufficient Permissions")
@@ -297,6 +293,7 @@ class nfs(connection):
                 else:
                     # Get the data and append it to the total file data
                     data = file_data["resok"]["data"]
+                    eof = file_data["resok"]["eof"]
                     file_data_total += data
                     
                     # Update the offset to read the next chunk
