@@ -281,27 +281,24 @@ class nfs(connection):
             # Handle files over the default chunk size of 1024 * 1024
             offset = 0
             eof = False
-            file_data_total = b''
 
             # Loop until we have read the entire file
-            while not eof:
-                file_data = self.nfs3.read(file_handle, offset, chunk_count=1024 * 1024, auth=self.auth)
-
-                if "resfail" in file_data:
-                    raise Exception("Insufficient Permissions")
-
-                else:
-                    # Get the data and append it to the total file data
-                    data = file_data["resok"]["data"]
-                    eof = file_data["resok"]["eof"]
-                    file_data_total += data
-                    
-                    # Update the offset to read the next chunk
-                    offset += len(data)
-
-            # Write the complete file data to the local file
             with open(local_file_path, "wb+") as local_file:
-                local_file.write(file_data_total)
+                while not eof:
+                    file_data = self.nfs3.read(file_handle, offset, auth=self.auth)
+
+                    if "resfail" in file_data:
+                        raise Exception("Insufficient Permissions")
+
+                    else:
+                        # Get the data and append it to the total file data
+                        data = file_data["resok"]["data"]
+                        eof = file_data["resok"]["eof"]
+
+                        # Update the offset to read the next chunk
+                        offset += len(data)
+                        # Write the file data to the local file
+                        local_file.write(data)
 
             self.logger.highlight(f"File successfully downloaded to {local_file_path} from {remote_file_path}")
 
