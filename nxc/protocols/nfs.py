@@ -273,19 +273,35 @@ class nfs(connection):
             self.auth["uid"] = attrs["attributes"]["uid"]
             dir_handle = mnt_info["mountinfo"]["fhandle"]
 
-            # Get the file handle and read the file data
+            # Get the file handle and file size
             dir_data = self.nfs3.lookup(dir_handle, file_name, auth=self.auth)
             file_handle = dir_data["resok"]["object"]["data"]
-            file_data = self.nfs3.read(file_handle, auth=self.auth)
+            file_size = dir_data["resok"]["obj_attributes"]["attributes"]["size"]
 
-            if "resfail" in file_data:
-                raise Exception("Insufficient Permissions")
-            else:
-                data = file_data["resok"]["data"]
+            # Handle files over the default chunk size of 1024 * 1024
+            offset = 0
+            eof = False
+            file_data_total = b''
 
-            # Write the data to the local file
+            # Loop until we have read the entire file
+            while not eof:
+                file_data = self.nfs3.read(file_handle, offset, chunk_count=1024 * 1024, auth=self.auth)
+
+                if "resfail" in file_data:
+                    raise Exception("Insufficient Permissions")
+
+                else:
+                    # Get the data and append it to the total file data
+                    data = file_data["resok"]["data"]
+                    eof = file_data["resok"]["eof"]
+                    file_data_total += data
+                    
+                    # Update the offset to read the next chunk
+                    offset += len(data)
+
+            # Write the complete file data to the local file
             with open(local_file_path, "wb+") as local_file:
-                local_file.write(data)
+                local_file.write(file_data_total)
 
             self.logger.highlight(f"File successfully downloaded to {local_file_path} from {remote_file_path}")
 
