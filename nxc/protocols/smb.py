@@ -829,7 +829,8 @@ class smb(connection):
                     self.sessions[SessionId]['DisconnectTime'] = sessdata['LSMSessionInfoExPtr']['LSM_SessionInfo_Level1']['DisconnectTime']
                     self.sessions[SessionId]['LogonTime'] = sessdata['LSMSessionInfoExPtr']['LSM_SessionInfo_Level1']['LogonTime']
                     self.sessions[SessionId]['LastInputTime'] = sessdata['LSMSessionInfoExPtr']['LSM_SessionInfo_Level1']['LastInputTime']
-
+    
+    @requires_admin
     def qwinsta(self):
         desktop_states = {
             'WTS_SESSIONSTATE_UNKNOWN': '',
@@ -910,7 +911,8 @@ class smb(connection):
         self.logger.success("Enumerated qwinsta sessions")
         for row in result:
             self.logger.highlight(row)
-
+    
+    @requires_admin
     def tasklist(self):
         with TSTS.LegacyAPI(self.conn, self.host) as legacy:
             try:
