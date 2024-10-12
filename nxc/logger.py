@@ -90,6 +90,7 @@ class NXCAdapter(logging.LoggerAdapter):
                 rich_tracebacks=True,
                 tracebacks_show_locals=False
             )],
+            encoding="utf-8"
         )
         self.logger = logging.getLogger("nxc")
         self.extra = extra
@@ -181,7 +182,7 @@ class NXCAdapter(logging.LoggerAdapter):
             open(output_file, "x")  # noqa: SIM115
             file_creation = True
 
-        file_handler = RotatingFileHandler(output_file, maxBytes=100000)
+        file_handler = RotatingFileHandler(output_file, maxBytes=100000, encoding="utf-8")
 
         with file_handler._open() as f:
             if file_creation:
