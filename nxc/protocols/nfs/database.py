@@ -1,18 +1,18 @@
-import sys
-
 from sqlalchemy import Table
 from sqlalchemy.exc import (
     NoInspectionAvailable,
     NoSuchTableError,
 )
-
 from nxc.database import BaseDB
+import sys
 
 
 class database(BaseDB):
     def __init__(self, db_engine):
         self.CredentialsTable = None
         self.HostsTable = None
+        self.LoggedinRelationsTable = None
+        self.SharesTable = None
 
         super().__init__(db_engine)
 
@@ -22,8 +22,7 @@ class database(BaseDB):
             """CREATE TABLE "credentials" (
             "id" integer PRIMARY KEY,
             "username" text,
-            "password" text,
-            "pkey" text
+            "password" text
             )"""
         )
 
@@ -32,8 +31,24 @@ class database(BaseDB):
             "id" integer PRIMARY KEY,
             "ip" text,
             "hostname" text,
-            "port" integer,
-            "server_banner" text
+            "port" integer
+            )"""
+        )
+        db_conn.execute(
+            """CREATE TABLE "loggedin_relations" (
+            "id" integer PRIMARY KEY,
+            "cred_id" integer,
+            "host_id" integer,
+            FOREIGN KEY(cred_id) REFERENCES credentials(id),
+            FOREIGN KEY(host_id) REFERENCES hosts(id)
+            )"""
+        )
+        db_conn.execute(
+            """CREATE TABLE "shares" (
+            "id" integer PRIMARY KEY,
+            "lir_id" integer,
+            "data" text,
+            FOREIGN KEY(lir_id) REFERENCES loggedin_relations(id)
             )"""
         )
 
@@ -42,6 +57,8 @@ class database(BaseDB):
             try:
                 self.CredentialsTable = Table("credentials", self.metadata, autoload_with=self.db_engine)
                 self.HostsTable = Table("hosts", self.metadata, autoload_with=self.db_engine)
+                self.LoggedinRelationsTable = Table("loggedin_relations", self.metadata, autoload_with=self.db_engine)
+                self.SharesTable = Table("shares", self.metadata, autoload_with=self.db_engine)
             except (NoInspectionAvailable, NoSuchTableError):
                 print(
                     f"""

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "netexec"
-version = "1.2.0"
+version = "1.3.0"
 description = "The Network Execution tool"
 authors = [
     "Marshall Hallenbeck <marshall.hallenbeck@gmail.com>",
@@ -54,6 +54,7 @@ paramiko = "^3.3.1"
 poetry-dynamic-versioning = "^1.2.0"
 pyasn1-modules = "^0.3.0"
 pylnk3 = "^0.4.2"
+pynfsclient = { git = "https://github.com/Pennyw0rth/NfsClient" }
 pypsrp = "^0.8.1"
 pypykatz = "^0.6.8"
 pywerview = "^0.3.3" # pywerview 5 requires libkrb5-dev installed which is not default on kali (as of 9/23)

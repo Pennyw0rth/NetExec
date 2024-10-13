@@ -13,9 +13,9 @@ jobs:
         python-version: ["3.11"]
         #python-version: ["3.8", "3.9", "3.10", "3.11"] # for binary builds we only need one version
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: NetExec set up python on ${{ matrix.os }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     - name: Build Native Binary

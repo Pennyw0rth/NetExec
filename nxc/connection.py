@@ -134,7 +134,7 @@ class connection:
         # Authentication info
         self.password = ""
         self.username = ""
-        self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey)
+        self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey or (hasattr(self.args, "delegate") and self.args.delegate))
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
         self.admin_privs = False
@@ -157,7 +157,7 @@ class connection:
         else:
             return
 
-        if self.args.kerberos:
+        if self.kerberos:
             self.host = self.hostname
 
         self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
@@ -206,13 +206,16 @@ class connection:
     def create_conn_obj(self):
         return
 
+    def disconnect(self):
+        return
+
     def check_if_admin(self):
         return
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         return
 
-    def plaintext_login(self, domain, username, password):
+    def plaintext_login(self, username, password):
         return
 
     def hash_login(self, domain, username, ntlm_hash):
@@ -234,6 +237,7 @@ class connection:
                 else:
                     self.logger.debug("Calling command arguments")
                     self.call_cmd_args()
+            self.disconnect()
 
     def call_cmd_args(self):
         """Calls all the methods specified by the command line arguments
@@ -469,8 +473,6 @@ class connection:
             return False
         if self.args.continue_on_success and owned:
             return False
-        if hasattr(self.args, "delegate") and self.args.delegate:
-            self.args.kerberos = True
 
         if self.args.jitter:
             jitter = self.args.jitter
@@ -485,7 +487,7 @@ class connection:
 
         with sem:
             if cred_type == "plaintext":
-                if self.args.kerberos:
+                if self.kerberos:
                     self.logger.debug("Trying to authenticate using Kerberos")
                     return self.kerberos_login(domain, username, secret, "", "", self.kdcHost, False)
                 elif hasattr(self.args, "domain"):  # Some protocols don't use domain for login
@@ -498,7 +500,7 @@ class connection:
                     self.logger.debug("Trying to authenticate using plaintext")
                     return self.plaintext_login(username, secret)
             elif cred_type == "hash":
-                if self.args.kerberos:
+                if self.kerberos:
                     return self.kerberos_login(domain, username, "", secret, "", self.kdcHost, False)
                 return self.hash_login(domain, username, secret)
             elif cred_type == "aesKey":

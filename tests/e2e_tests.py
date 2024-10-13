@@ -62,6 +62,12 @@ def get_cli_args():
         help="Display errors from commands",
     )
     parser.add_argument(
+        "--not-tested",
+        action="store_true",
+        required=False,
+        help="Display commands that didn't get tested",
+    )
+    parser.add_argument(
         "--poetry",
         action="store_true",
         required=False,
@@ -189,6 +195,7 @@ def run_e2e_tests(args):
     tasks = generate_commands(args)
     tasks_len = len(tasks)
     failures = []
+    not_tested_cmds = []
 
     result = subprocess.Popen(
         f"{args.executable} --version",
@@ -202,6 +209,7 @@ def run_e2e_tests(args):
         start_time = time()
         passed = 0
         failed = 0
+        not_tested = 0
 
         while tasks:
             task = str(tasks.pop(0))
@@ -232,6 +240,11 @@ def run_e2e_tests(args):
                 failures.append(task.strip())
                 failed += 1
 
+            # Count the amount of commands that didn't get tested
+            if not text:
+                not_tested_cmds.append(task.strip())
+                not_tested += 1
+
             if args.errors:
                 raw_text = text.decode("utf-8")
                 # this is not a good way to detect errors, but it does catch a lot of things
@@ -243,11 +256,16 @@ def run_e2e_tests(args):
                 # this prints sorta janky, but it does its job
                 console.log(f"[*] Results:\n{text.decode('utf-8')}")
 
+        if not_tested_cmds and args.not_tested:
+            console.log("[bold yellow]Commands that didn't get tested:")
+            for not_tested_cmd in not_tested_cmds:
+                console.log(f"[bold yellow]{not_tested_cmd}")
+
         if failures:
             console.log("[bold red]Failed Commands:")
             for failure in failures:
                 console.log(f"[bold red]{failure}")
-        console.log(f"Ran {tasks_len} tests in {int((time() - start_time) / 60)} mins and {int((time() - start_time) % 60)} seconds - [bold green] Passed: {passed} [bold red] Failed: {failed}")
+        console.log(f"Ran {tasks_len} tests in {int((time() - start_time) / 60)} mins and {int((time() - start_time) % 60)} seconds - [bold green] Passed: {passed} [bold red] Failed: {failed} [bold yellow] Not Tested: {not_tested}")
 
 
 if __name__ == "__main__":
