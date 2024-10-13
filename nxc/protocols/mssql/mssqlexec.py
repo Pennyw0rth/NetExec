@@ -8,11 +8,19 @@ class MSSQLEXEC:
 
     def execute(self, command):
         result = None
+        xp_cmdshell_was_enabled = False
+
         try:
-            self.logger.debug("Attempting to enable xp cmd shell")
-            self.enable_xp_cmdshell()
+            xp_cmdshell_was_enabled = self.is_xp_cmdshell_enabled()
+            if not xp_cmdshell_was_enabled:
+                self.logger.debug("xp_cmdshell is disabled, attempting to enable it.")
+                self.enable_xp_cmdshell()
+            else:
+                self.logger.debug("xp_cmdshell is already enabled.")
+
         except Exception as e:
-            self.logger.error(f"Error when attempting to enable x_cmdshell: {e}")
+            self.logger.error(f"Error when checking/enabling xp_cmdshell: {e}")
+
         try:
             cmd = f"exec master..xp_cmdshell '{command}'"
             self.logger.debug(f"Attempting to execute query: {cmd}")
@@ -28,11 +36,25 @@ class MSSQLEXEC:
             self.logger.error(f"Error when attempting to execute command via xp_cmdshell: {e}")
 
         try:
-            self.logger.debug("Attempting to disable xp cmd shell")
-            self.disable_xp_cmdshell()
+            if not xp_cmdshell_was_enabled:
+                self.logger.debug("xp_cmdshell was not enabled originally, attempting to disable it.")
+                self.disable_xp_cmdshell()
+            else:
+                self.logger.debug("xp_cmdshell was originally enabled, leaving it enabled.")
         except Exception as e:
             self.logger.error(f"[OPSEC] Error when attempting to disable xp_cmdshell: {e}")
+        
         return result
+
+    def is_xp_cmdshell_enabled(self):
+        query = "EXEC sp_configure 'xp_cmdshell';"
+        self.logger.debug(f"Checking if xp_cmdshell is enabled: {query}")
+        result = self.mssql_conn.sql_query(query)
+        # Assuming the query returns a list of dictionaries with 'config_value' as the key
+        self.logger.debug(f"xp_cmdshell check result: {result}")
+        if result and result[0]["config_value"] == 1:
+            return True
+        return False
 
     def enable_xp_cmdshell(self):
         query = "exec master.dbo.sp_configure 'show advanced options',1;RECONFIGURE;exec master.dbo.sp_configure 'xp_cmdshell', 1;RECONFIGURE;"
