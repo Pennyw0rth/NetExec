@@ -66,10 +66,9 @@ class NXCModule:
                         # if username is found but password is not found. we need? ignore it 
                         continue
                     # C:\Windows\system32\RunDll32.exe C:\Windows\system32\migration\WininetPlugin.dll,MigrateCacheForUser /m /0
-                    if m.groupdict().get("username") and m.groupdict().get("password"): 
+                    if m.groupdict().get("username") and m.groupdict().get("password") and len(m.group("password")) < 6 and len(m.group("username")) < 6:
                         # if username and password is shorter than 6 characters, ignore it
-                        if len(m.group("password")) < 6 and len(m.group("username")) < 6:
-                            continue
+                        continue
 
                     context.log.highlight("Credentials found! " + line.strip())
                     if m.groupdict().get("username"):
