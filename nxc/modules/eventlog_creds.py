@@ -71,7 +71,7 @@ class NXCModule:
                         if len(m.group("password")) < 6 and len(m.group("username")) < 6:
                             continue
 
-                    context.log.highlight("Credentials found! Command: " + line.strip())
+                    context.log.highlight("Credentials found! " + line.strip())
                     if m.groupdict().get("username"):
                         context.log.highlight("Username: " + m.group("username"))
                     if m.groupdict().get("password"):
