@@ -20,7 +20,6 @@ class NXCModule:
         self.context = None
         self.module_options = None
         self.method = "execute"
-        
         self.limit = 1000
 
     def options(self, context, module_options):
@@ -38,32 +37,31 @@ class NXCModule:
             self.limit = int(module_options["LIMIT"])
         if "L" in module_options:
             self.limit = int(module_options["L"])
-            
+
     def find_credentials(self, content, context):
         # remove unnecessary words
         content = content.replace("\r\n", "\n")
         content = content.replace("/add", "") 
         content = content.replace("/active:yes", "") 
-        
+
         # sort and unique lines
         content = "\n".join(sorted(set(content.split("\n"))))
-        
 
         regexps = [
-        # "C:\Windows\system32\net.exe" user /add lodos2005 123456 /domain 
-        "net.+user\s+(?P<username>[^\s]+)\s+(?P<password>[^\s]+)",
-        # "C:\Windows\system32\net.exe" use \\server\share /user:contoso\lodos2005 password
-        "net.+use.+/user:(?P<username>[^\s]+)\s+(?P<password>[^\s]+)",
-        # schtasks.exe /CREATE /S 192.168.20.05 /RU SYSTEM /U lodos2005@contoso /P "123456" /SC ONCE /ST 20:05 /TN Test /TR hostname /F
-        "schtasks.+/U\s+(?P<username>[^\s]+).+/P\s+(?P<password>[^\s]+)",
-        # wmic.exe /node:192.168.20.05 /user:lodos2005@contoso /password:123456 computersystem get
-        "wmic.+/user:\s*(?P<username>[^\s]+).+/password:\s*(?P<password>[^\s]+)",
-        # psexec \\192.168.20.05 -u lodos2005@contoso -p 123456 hostname
-        "psexec.+-u\s+(?P<username>[^\s]+).+-p\s+(?P<password>[^\s]+)",
-        # generic username on command line
-        "(?:(?:(?:-u)|(?:-user)|(?:-username)|(?:--user)|(?:--username)|(?:/u)|(?:/USER)|(?:/USERNAME))(?:\s+|\:)(?P<username>[^\s]+))",
-        # generic password on command line
-        "(?:(?:(?:-p)|(?:-password)|(?:-passwd)|(?:--password)|(?:--passwd)|(?:/P)|(?:/PASSWD)|(?:/PASS)|(?:/CODE)|(?:/PASSWORD))(?:\s+|\:)(?P<password>[^\s]+))",
+            # "C:\Windows\system32\net.exe" user /add lodos2005 123456 /domain 
+            "net.+user\s+(?P<username>[^\s]+)\s+(?P<password>[^\s]+)",
+            # "C:\Windows\system32\net.exe" use \\server\share /user:contoso\lodos2005 password
+            "net.+use.+/user:(?P<username>[^\s]+)\s+(?P<password>[^\s]+)",
+            # schtasks.exe /CREATE /S 192.168.20.05 /RU SYSTEM /U lodos2005@contoso /P "123456" /SC ONCE /ST 20:05 /TN Test /TR hostname /F
+            "schtasks.+/U\s+(?P<username>[^\s]+).+/P\s+(?P<password>[^\s]+)",
+            # wmic.exe /node:192.168.20.05 /user:lodos2005@contoso /password:123456 computersystem get
+            "wmic.+/user:\s*(?P<username>[^\s]+).+/password:\s*(?P<password>[^\s]+)",
+            # psexec \\192.168.20.05 -u lodos2005@contoso -p 123456 hostname
+            "psexec.+-u\s+(?P<username>[^\s]+).+-p\s+(?P<password>[^\s]+)",
+            # generic username on command line
+            "(?:(?:(?:-u)|(?:-user)|(?:-username)|(?:--user)|(?:--username)|(?:/u)|(?:/USER)|(?:/USERNAME))(?:\s+|\:)(?P<username>[^\s]+))",
+            # generic password on command line
+            "(?:(?:(?:-p)|(?:-password)|(?:-passwd)|(?:--password)|(?:--passwd)|(?:/P)|(?:/PASSWD)|(?:/PASS)|(?:/CODE)|(?:/PASSWORD))(?:\s+|\:)(?P<password>[^\s]+))",
         ]
         # Extracting credentials
         for line in content.split("\n"):
@@ -91,7 +89,7 @@ class NXCModule:
                     if m.groupdict().get("password"):
                         context.log.highlight("Password: " + m.group("password"))
                     break
-        
+
     def on_admin_login(self, context, connection):
         content = ""
         if self.method[:1].lower() == "e":
@@ -127,11 +125,11 @@ class NXCModule:
                     m = re.search(regexp, xmlString, re.IGNORECASE)
                     if m and m.groupdict().get("ParentCommandLine"):
                         content += "ParentCommandLine: " + m.group("ParentCommandLine") + "\n"
-        
+
                 except Exception as e:
                     context.log.error(f"Error: {e}")
                     continue
-            
+    
             for record in msevenclass.query("\x00", '<QueryList><Query Id="0"><Select Path="Security">*[System/EventID=4688]</Select></Query></QueryList>\x00', self.limit):
                 if record is None:
                     continue
@@ -144,14 +142,8 @@ class NXCModule:
                 except Exception as e:
                     context.log.error(f"Error: {e} {record}")
                     continue
-        
-        self.find_credentials(content, context)
 
-        
-             
-                
-                
-                
+        self.find_credentials(content, context)
 
 class MSEvenTrigger:
     def __init__(self, context):
@@ -159,9 +151,7 @@ class MSEvenTrigger:
         self.dce = None
 
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
-    
         rpctransport = transport.DCERPCTransportFactory(hept_map(target, even6.MSRPC_UUID_EVEN6, protocol="ncacn_ip_tcp"))
-
         if hasattr(rpctransport, "set_credentials"):
             rpctransport.set_credentials(
                 username=username,
@@ -171,10 +161,8 @@ class MSEvenTrigger:
                 nthash=nthash,
                 aesKey=aesKey,
             )
-
         if doKerberos:
             rpctransport.set_kerberos(doKerberos, kdcHost=dcHost)
-
         rpctransport.setRemoteHost(target)
         self.dce = rpctransport.get_dce_rpc()
         if doKerberos:
