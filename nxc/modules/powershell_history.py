@@ -5,7 +5,7 @@ from io import BytesIO
 
 
 class NXCModule:
-    # Module by @357384n
+    """Module by @357384n"""
     # Modified by @Defte_ 12/10/2024 to remove unecessary powershell execute command
 
     name = "powershell_history"
@@ -26,7 +26,7 @@ class NXCModule:
 
     def on_admin_login(self, context, connection):
         for directory in connection.conn.listPath("C$",  "Users\\*"):
-            if directory.get_longname() not in self.false_positive and directory.is_directory() > 0:
+            if directory.get_longname() not in self.false_positive and directory.is_directory():
                 try:
                     powershell_history_dir = f"Users\\{directory.get_longname()}\\AppData\\Roaming\\Microsoft\\Windows\\PowerShell\\PSReadLine\\"
                     for file in connection.conn.listPath("C$", f"{powershell_history_dir}\\*"):
@@ -45,7 +45,7 @@ class NXCModule:
                             if keyword:
                                 context.log.highlight(f"C:\\{file_path} [ {' '.join(keywords)} ]")
                             else:
-                                context.log.highlight(f"C:\\{file_path}")
+                                context.log.highlight(f"C:\\{file_path}\n")
 
                             for line in file_content.splitlines():
                                 context.log.highlight(f"\t{line}")    
