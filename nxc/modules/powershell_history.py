@@ -5,7 +5,7 @@ from io import BytesIO
 
 
 class NXCModule:
-    """Module by @357384n"""
+    # Module by @357384n
     # Modified by @Defte_ 12/10/2024 to remove unecessary powershell execute command
 
     name = "powershell_history"
@@ -45,7 +45,7 @@ class NXCModule:
                             if keyword:
                                 context.log.highlight(f"C:\\{file_path} [ {' '.join(keywords)} ]")
                             else:
-                                context.log.highlight(f"C:\\{file_path}\n")
+                                context.log.highlight(f"C:\\{file_path}")
 
                             for line in file_content.splitlines():
                                 context.log.highlight(f"\t{line}")    
