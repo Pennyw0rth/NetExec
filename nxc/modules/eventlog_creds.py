@@ -68,26 +68,26 @@ class NXCModule:
             for reg in regexps:
                 # verbose context.log.debug("Line: " + line)
                 # verbose context.log.debug("Reg: " + reg)
-                m = re.search(reg, line, re.IGNORECASE)
-                if m:
+                match = re.search(reg, line, re.IGNORECASE)
+                if match:
                     # eleminate false positives
                     # C:\Windows\system32\svchost.exe -k DcomLaunch -p -s PlugPlay
-                    if not m.groupdict().get("username") and m.groupdict().get("password") and len(m.group("password")) < 6: 
+                    if not match.groupdict().get("username") and match.groupdict().get("password") and len(match.group("password")) < 6: 
                         # if password is found but username is not found, and password is shorter than 6 characters, ignore it
                         continue
-                    if not m.groupdict().get("password") and m.groupdict().get("username"): 
+                    if not match.groupdict().get("password") and match.groupdict().get("username"): 
                         # if username is found but password is not found. we need? ignore it 
                         continue
                     # C:\Windows\system32\RunDll32.exe C:\Windows\system32\migration\WininetPlugin.dll,MigrateCacheForUser /m /0
-                    if m.groupdict().get("username") and m.groupdict().get("password") and len(m.group("password")) < 6 and len(m.group("username")) < 6: 
+                    if match.groupdict().get("username") and match.groupdict().get("password") and len(match.group("password")) < 6 and len(match.group("username")) < 6: 
                         # if username and password is shorter than 6 characters, ignore it
                         continue
 
                     context.log.highlight("Credentials found! " + line.strip())
-                    if m.groupdict().get("username"):
-                        context.log.highlight("Username: " + m.group("username"))
-                    if m.groupdict().get("password"):
-                        context.log.highlight("Password: " + m.group("password"))
+                    if match.groupdict().get("username"):
+                        context.log.highlight("Username: " + match.group("username"))
+                    if match.groupdict().get("password"):
+                        context.log.highlight("Password: " + match.group("password"))
                     break
 
     def on_admin_login(self, context, connection):
@@ -102,7 +102,7 @@ class NXCModule:
                 context.log.debug("Execute Command: " + command)
                 content += connection.execute(command, True)
         else:
-            msevenclass = MSEvenTrigger(context)
+            msevenclass = MSEven6Trigger(context)
             target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
             msevenclass.connect(
                 username=connection.username,
@@ -116,36 +116,22 @@ class NXCModule:
                 aesKey=connection.aesKey,
                 pipe="eventlog"
             )
-            for record in msevenclass.query("\x00", '<QueryList><Query Id="0"><Select Path="Microsoft-Windows-Sysmon/Operational">*[System/EventID=1]</Select></Query></QueryList>\x00', self.limit):
-                if record is None:
-                    continue
-                try:
-                    xmlString = ResultSet(record).xml()
-                    regexp = 'ParentCommandLine">(?P<ParentCommandLine>(.|\n)*?)<\/Data>'
-                    m = re.search(regexp, xmlString, re.IGNORECASE)
-                    if m and m.groupdict().get("ParentCommandLine"):
-                        content += "ParentCommandLine: " + m.group("ParentCommandLine") + "\n"
-
-                except Exception as e:
-                    context.log.error(f"Error: {e}")
-                    continue
-    
-            for record in msevenclass.query("\x00", '<QueryList><Query Id="0"><Select Path="Security">*[System/EventID=4688]</Select></Query></QueryList>\x00', self.limit):
+            for record in msevenclass.query("\x00", '<QueryList><Query Id="0"><Select Path="Security">*[System/EventID=4688]</Select></Query><Query Id="0"><Select Path="Microsoft-Windows-Sysmon/Operational">*[System/EventID=1]</Select></Query></QueryList>\x00', self.limit):
                 if record is None:
                     continue
                 try:
                     xmlString = ResultSet(record).xml()
                     regexp = 'CommandLine">(?P<CommandLine>(.|\n)*?)<\/Data>'
-                    m = re.search(regexp, xmlString, re.IGNORECASE)
-                    if m and m.groupdict().get("CommandLine"):
-                        content += "CommandLine: " + m.group("CommandLine") + "\n"
+                    match = re.search(regexp, xmlString, re.IGNORECASE)
+                    if match and match.groupdict().get("CommandLine"):
+                        content += "CommandLine: " + match.group("CommandLine") + "\n"
                 except Exception as e:
-                    context.log.error(f"Error: {e} {record}")
+                    context.log.error(f"Error: {e}")
                     continue
 
         self.find_credentials(content, context)
 
-class MSEvenTrigger:
+class MSEven6Trigger:
     def __init__(self, context):
         self.context = context
         self.dce = None
@@ -213,7 +199,7 @@ class MSEven6Result:
         if self._resp is None or self._index == self._resp["NumActualRecords"]:
             req = even6.EvtRpcQueryNext()
             req["LogQuery"] = self._handle
-            req["NumRequestedRecords"] = 1
+            req["NumRequestedRecords"] = 100
             req["TimeOutEnd"] = 1000
             req["Flags"] = 0
             self._resp = self._conn.dce.request(req)
