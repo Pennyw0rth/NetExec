@@ -276,7 +276,7 @@ class rdp(connection):
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "KDC_ERR_C_PRINCIPAL_UNKNOWN") else "red"),
                 )
             elif "Authentication failed!" in str(e):
-                self.logger.success(f"{domain}\\{username}:{(process_secret(password))} {self.mark_pwned()}")
+                self.logger.fail(f"{domain}\\{username}:{(process_secret(password))} {self.mark_pwned()}")
             elif "No such file" in str(e):
                 self.logger.fail(e)
             else:
@@ -312,7 +312,7 @@ class rdp(connection):
             return True
         except Exception as e:
             if "Authentication failed!" in str(e):
-                self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
+                self.logger.fail(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
             else:
                 reason = None
                 for word in self.rdp_error_status:
@@ -346,7 +346,7 @@ class rdp(connection):
             return True
         except Exception as e:
             if "Authentication failed!" in str(e):
-                self.logger.success(f"{domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
+                self.logger.fail(f"{domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
             else:
                 reason = None
                 for word in self.rdp_error_status:
