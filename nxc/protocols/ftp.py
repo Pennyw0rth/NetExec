@@ -158,7 +158,7 @@ class ftp(connection):
     def put_file(self, local_file, remote_file):
         try:
             # Check if the remote file already exists
-            self.conn.voidcmd('TYPE I')  # Switch to binary mode. necessary for size command.
+            self.conn.voidcmd("TYPE I")  # Switch to binary mode. necessary for size command.
             if self.conn.size(remote_file) is not None:
                 ans = input(highlight(f"[!] {remote_file} already exists. Do you want to overwrite it? [Y/n] ", "red"))
                 if ans.lower() not in ["y", "yes", ""]:
