@@ -17,6 +17,7 @@ def proto_args(parser, parents):
 
     vgroup = ldap_parser.add_argument_group("Retrieve useful information on the domain", "Options to to play with Kerberos")
     vgroup.add_argument("--query", nargs=2, help="Query LDAP with a custom filter and attributes")
+    vgroup.add_argument("--find-delegation", action="store_true", help="Finds delegation relationships within an Active Directory domain.")
     vgroup.add_argument("--trusted-for-delegation", action="store_true", help="Get the list of users and computers with flag TRUSTED_FOR_DELEGATION")
     vgroup.add_argument("--password-not-required", action="store_true", help="Get the list of users with flag PASSWD_NOTREQD")
     vgroup.add_argument("--admin-count", action="store_true", help="Get objets that had the value adminCount=1")
