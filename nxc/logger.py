@@ -93,6 +93,7 @@ class NXCAdapter(logging.LoggerAdapter):
                 rich_tracebacks=True,
                 tracebacks_show_locals=False
             )],
+            encoding="utf-8"
         )
         self.logger = logging.getLogger("nxc")
         self.extra = extra
