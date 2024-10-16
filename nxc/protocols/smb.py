@@ -60,7 +60,7 @@ from dploot.triage.sccm import SCCMTriage
 
 from pywerview.cli.helpers import get_localdisks, get_netsession, get_netgroupmember, get_netgroup, get_netcomputer, get_netloggedon, get_netlocalgroup
 
-from time import time
+from time import time, ctime
 from datetime import datetime
 from functools import wraps
 from traceback import format_exc
@@ -902,6 +902,65 @@ class smb(connection):
                 continue
             self.logger.highlight(f"{name:<15} {','.join(perms):<15} {remark}")
         return permissions
+
+
+    def enum_shares(self):
+        try:
+            shares = self.conn.listShares()
+            self.logger.info(f"Shares returned: {shares}")
+        except SessionError as e:
+            error = get_error_string(e)
+            self.logger.fail(
+                f"Error enumerating shares: {error}",
+                color="magenta" if error in smb_error_status else "red",
+            )
+            return
+        except Exception as e:
+            error = get_error_string(e)
+            self.logger.fail(
+                f"Error enumerating shares: {error}",
+                color="magenta" if error in smb_error_status else "red",
+            )
+            return
+
+        self.logger.display("Enumerating SMB Shares Directories")
+        for share in shares:
+            share_name = share["shi1_netname"][:-1]
+            depth = 1
+            contents = self.conn.listPath(share_name, "*")
+
+            self.logger.success(share_name)
+
+            if contents and depth == 1:
+                self.logger.highlight(f"{'Perms':<9}{'File Size':<15}{'Date':<30}{'File Path':<45}")
+                self.logger.highlight(f"{'-----':<9}{'---------':<15}{'----':<30}{'---------':<45}")
+            self.list_share(share_name, "")
+
+
+    def list_share(self, share_name, path_dir, depth=1):
+        search_path = ntpath.join(path_dir, "*")
+
+        try:
+            contents = self.conn.listPath(share_name, search_path)
+        except SessionError as e:
+            error = get_error_string(e)
+            self.logger.fail(
+                f"Error enumerating '{search_path}': {error}",
+                color="magenta" if error in smb_error_status else "red",
+            )
+            return
+
+        for content in contents:
+            path_name = content.get_longname()
+            full_path = ntpath.join(path_dir, path_name)
+
+            if path_name in [".", ".."]:
+                continue
+
+            if path_name != path_dir:
+                self.logger.highlight(f"{'d' if content.is_directory() else 'f'}{'rw-' if content.is_readonly() > 0 else 'r--':<8}{content.get_filesize():<15}{ctime(float(content.get_mtime_epoch())):<30}{full_path:<45}")
+            if content.is_directory() and depth < self.args.enum_shares and path_name not in [ ".", ".."]:
+                self.list_share(share_name, full_path, depth+1)
 
     @requires_admin
     def interfaces(self):
