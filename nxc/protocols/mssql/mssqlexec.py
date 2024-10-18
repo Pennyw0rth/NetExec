@@ -1,6 +1,5 @@
 import binascii
 
-
 class MSSQLEXEC:
     def __init__(self, connection, logger):
         self.mssql_conn = connection
@@ -35,12 +34,58 @@ class MSSQLEXEC:
         return result
 
     def enable_xp_cmdshell(self):
-        query = "exec master.dbo.sp_configure 'show advanced options',1;RECONFIGURE;exec master.dbo.sp_configure 'xp_cmdshell', 1;RECONFIGURE;"
-        self.logger.debug(f"Executing query: {query}")
+        global advop
+        global cmdshell
+        #Check for "show advanced options"
+        query = "exec master.dbo.sp_configure 'show advanced options';"
         self.mssql_conn.sql_query(query)
+        result = self.mssql_conn.sql_query(query)
+        for data in result:
+          if isinstance(data, dict):
+             for key, value in data.items():
+                  if key == "config_value":
+                      self.logger.debug(f"{key}: {value}")
+                      if value == 0:
+                         self.logger.highlight("'show advanced options' is disabled - Will require to be on for xp_cmdshell to be enabled")
+                         query = "exec master.dbo.sp_configure 'show advanced options',1;RECONFIGURE;"
+                         self.logger.debug(f"Executing query: {query}")
+                         self.mssql_conn.sql_query(query)
+                         advop = 0
+                      else:
+                         self.logger.highlight("'show advanced options' is already enabled")
+                         advop = 1
+                  else:
+                      ""
+          else:
+              self.logger.fail("Unexpected output")
+          
+        #Check for "xp_cmdshell"
+        query = "exec master.dbo.sp_configure 'xp_cmdshell';"
+        self.mssql_conn.sql_query(query)
+        result = self.mssql_conn.sql_query(query)
+        for data in result:
+          if isinstance(data, dict):
+             for key, value in data.items():
+                  if key == "config_value":
+                      self.logger.debug(f"{key}: {value}")
+                      if value == 0:
+                         self.logger.highlight("'xp_cmdshell' options is disabled - Will be enabled")
+                         query = "exec master.dbo.sp_configure 'xp_cmdshell', 1;RECONFIGURE;"
+                         self.logger.debug(f"Executing query: {query}")
+                         self.mssql_conn.sql_query(query)
+                         cmdshell = 0
+                      else:
+                         self.logger.highlight("'xp_cmdshell' options is already enabled")
+                         cmdshell = 1
+                  else:
+                      ""
+          else:
+              self.logger.fail("Unexpected output")
 
     def disable_xp_cmdshell(self):
-        query = "exec sp_configure 'xp_cmdshell', 0 ;RECONFIGURE;exec sp_configure 'show advanced options', 0 ;RECONFIGURE;"
+        self.logger.highlight(f"Reverting 'show advanced options' back to {advop}")
+        self.logger.highlight(f"Reverting 'xp_cmdshell' back to {cmdshell}")
+        query = f"exec sp_configure 'xp_cmdshell', {cmdshell} ;RECONFIGURE;exec sp_configure 'show advanced options', {advop} ;RECONFIGURE;"
         self.logger.debug(f"Executing query: {query}")
         self.mssql_conn.sql_query(query)
 
