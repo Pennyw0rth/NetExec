@@ -1179,12 +1179,11 @@ class ldap(connection):
                         search_filter += "(objectSid=" + ace["Ace"]["Sid"].formatCanonical() + ")"
                     search_filter += ")(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))"
                     delegUserResp = self.search(search_filter, attributes=["sAMAccountName", "objectCategory"], sizeLimit=999)
-
-                    for item2 in delegUserResp:
-                        if not isinstance(item2, ldapasn1_impacket.SearchResultEntry):
-                            continue
-                        rbcdRights.append(str(item2["attributes"][0]["vals"][0]))
-                        rbcdObjType.append(str(item2["attributes"][1]["vals"][0]).split("=")[1].split(",")[0])
+                    delegUserResp_parse = parse_result_attributes(delegUserResp)
+                    
+                    for rbcd in delegUserResp_parse:
+                        rbcdRights.append(str(rbcd.get("sAMAccountName")))
+                        rbcdObjType.append(str(rbcd.get("objectCategory")))
 
                     if mustCommit:
                         if int(userAccountControl) & UF_ACCOUNTDISABLE:
