@@ -11,6 +11,10 @@ def parse_result_attributes(ldap_response):
             val_list = []
             for val in attribute["vals"].components:
                 try:
+                    encoding = val.encoding
+
+                    print(f"Val: {str(val)}, Type: {type(val)}, Encoding: {encoding}")
+                    print(str(val).encode(encoding).decode("utf-8"))
                     # Attempt to decode as UTF-8
                     decoded_val = val.decode("utf-8")
                 except (UnicodeDecodeError, AttributeError):

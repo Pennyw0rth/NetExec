@@ -33,8 +33,11 @@ class ssh(connection):
                 return
             if self.login():
                 if hasattr(self.args, "module") and self.args.module:
+                    self.load_modules()
+                    self.logger.debug("Calling modules")
                     self.call_modules()
                 else:
+                    self.logger.debug("Calling command arguments")
                     self.call_cmd_args()
                 self.conn.close()
 

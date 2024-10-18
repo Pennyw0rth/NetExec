@@ -1,3 +1,5 @@
+from pyasn1.error import PyAsn1Error
+
 
 class NXCModule:
     """
@@ -21,9 +23,10 @@ class NXCModule:
     multiple_hosts = False
 
     def on_login(self, context, connection):
-        result = []
         context.log.display("Getting the MachineAccountQuota")
-        searchFilter = "(objectClass=*)"
-        attributes = ["ms-DS-MachineAccountQuota"]
-        result = connection.search(searchFilter, attributes)
-        context.log.highlight("MachineAccountQuota: %d" % result[0]["attributes"][0]["vals"][0])
+        result = connection.search("(objectClass=*)", ["ms-DS-MachineAccountQuota"])
+        try:
+            maq = result[0]["attributes"][0]["vals"][0]
+            context.log.highlight(f"MachineAccountQuota: {maq}")
+        except PyAsn1Error:
+            context.log.highlight("MachineAccountQuota: <not set>")
