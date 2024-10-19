@@ -1092,12 +1092,7 @@ class ldap(connection):
         UF_TRUSTED_FOR_DELEGATION = 0x80000
         UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION = 0x1000000
         UF_ACCOUNTDISABLE = 0x2
-
-        def processAttributeValue(attribute):
-            # Extract the payload value from the AttributeValue object
-            if hasattr(attribute, "payload"):
-                return str(attribute.payload)
-            return str(attribute)
+        SERVER_TRUST_ACCOUNT = 0x2000
 
         def printTable(items, header):
             colLen = []
@@ -1126,11 +1121,11 @@ class ldap(connection):
                 self.logger.highlight(outputFormat.format(*row))
 
         # Building the search filter
-        search_filter = ("(&(|(UserAccountControl:1.2.840.113556.1.4.803:=16777216)"
-                         "(UserAccountControl:1.2.840.113556.1.4.803:=524288)"
+        search_filter = (f"(&(|(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION})"
+                         f"(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_FOR_DELEGATION})"
                          "(msDS-AllowedToDelegateTo=*)(msDS-AllowedToActOnBehalfOfOtherIdentity=*))"
-                         "(!(UserAccountControl:1.2.840.113556.1.4.803:=2))"
-                         "(!(UserAccountControl:1.2.840.113556.1.4.803:=8192)))")
+                         f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE}))"
+                         f"(!(UserAccountControl:1.2.840.113556.1.4.803:={SERVER_TRUST_ACCOUNT})))")
 
         attributes = ["sAMAccountName", "pwdLastSet", "userAccountControl", "objectCategory", 
                       "msDS-AllowedToActOnBehalfOfOtherIdentity", "msDS-AllowedToDelegateTo"]
