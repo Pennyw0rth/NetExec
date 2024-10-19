@@ -29,7 +29,6 @@ from impacket.krb5.types import Principal, KerberosException
 from impacket.ldap import ldap as ldap_impacket
 from impacket.ldap import ldaptypes
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
-from impacket.ldap.ldapasn1 import AttributeValue
 from impacket.ldap.ldap import LDAPFilterSyntaxError
 from impacket.smb import SMB_DIALECT
 from impacket.smbconnection import SMBConnection, SessionError
