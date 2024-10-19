@@ -1127,7 +1127,7 @@ class ldap(connection):
                          f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE}))"
                          f"(!(UserAccountControl:1.2.840.113556.1.4.803:={SERVER_TRUST_ACCOUNT})))")
 
-        attributes = ["sAMAccountName", "pwdLastSet", "userAccountControl", "objectCategory", 
+        attributes = ["sAMAccountName", "pwdLastSet", "userAccountControl", "objectCategory",
                       "msDS-AllowedToActOnBehalfOfOtherIdentity", "msDS-AllowedToDelegateTo"]
 
         resp = self.search(search_filter, attributes, 0)
@@ -1143,7 +1143,7 @@ class ldap(connection):
             objectType = ""
             rightsTo = []
             protocolTransition = 0
-            
+
             try:
                 sAMAccountName = item.get("sAMAccountName")
                 mustCommit = sAMAccountName is not None
@@ -1165,27 +1165,28 @@ class ldap(connection):
 
                 # Not an elif as an object could both have RBCD and another type of delegation
                 if item.get("msDS-AllowedToActOnBehalfOfOtherIdentity") is not None:
-                    databyte = AttributeValue(item.get("msDS-AllowedToActOnBehalfOfOtherIdentity"))  # STR to impacket.ldap.ldapasn1.AttributeValue
+                    databyte = item.get("msDS-AllowedToActOnBehalfOfOtherIdentity")
                     rbcdRights = []
                     rbcdObjType = []
                     sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(databyte))
-                    search_filter = "(&(|"
-                    for ace in sd["Dacl"].aces:
-                        search_filter += "(objectSid=" + ace["Ace"]["Sid"].formatCanonical() + ")"
-                    search_filter += ")(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))"
-                    delegUserResp = self.search(search_filter, attributes=["sAMAccountName", "objectCategory"], sizeLimit=999)
-                    delegUserResp_parse = parse_result_attributes(delegUserResp)
-                    
-                    for rbcd in delegUserResp_parse:
-                        rbcdRights.append(str(rbcd.get("sAMAccountName")))
-                        rbcdObjType.append(str(rbcd.get("objectCategory")))
+                    if len(sd["Dacl"].aces) > 0:
+                        search_filter = "(&(|"
+                        for ace in sd["Dacl"].aces:
+                            search_filter += "(objectSid=" + ace["Ace"]["Sid"].formatCanonical() + ")"
+                        search_filter += ")(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))"
+                        delegUserResp = self.search(search_filter, attributes=["sAMAccountName", "objectCategory"], sizeLimit=999)
+                        delegUserResp_parse = parse_result_attributes(delegUserResp)
 
-                    if mustCommit:
-                        if int(userAccountControl) & UF_ACCOUNTDISABLE:
-                            self.logger.debug(f"Bypassing disabled account {sAMAccountName}")
-                        else:
-                            for rights, objType in zip(rbcdRights, rbcdObjType):
-                                answers.append([rights, objType, "Resource-Based Constrained", sAMAccountName])
+                        for rbcd in delegUserResp_parse:
+                            rbcdRights.append(str(rbcd.get("sAMAccountName")))
+                            rbcdObjType.append(str(rbcd.get("objectCategory")))
+
+                        if mustCommit:
+                            if int(userAccountControl) & UF_ACCOUNTDISABLE:
+                                self.logger.debug(f"Bypassing disabled account {sAMAccountName}")
+                            else:
+                                for rights, objType in zip(rbcdRights, rbcdObjType):
+                                    answers.append([rights, objType, "Resource-Based Constrained", sAMAccountName])
 
                 if delegation in ["Unconstrained", "Constrained", "Constrained w/ Protocol Transition"] and mustCommit:
                     if int(userAccountControl) & UF_ACCOUNTDISABLE:
@@ -1200,7 +1201,7 @@ class ldap(connection):
             printTable(answers, header=["AccountName", "AccountType", "DelegationType", "DelegationRightsTo"])
         else:
             self.logger.fail("No entries found!")
-    
+
     def trusted_for_delegation(self):
         # Building the search filter
         searchFilter = "(userAccountControl:1.2.840.113556.1.4.803:=524288)"
