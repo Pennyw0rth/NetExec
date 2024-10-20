@@ -266,29 +266,28 @@ class rdp(connection):
             return True
 
         except Exception as e:
-            if "KDC_ERR" in str(e):
-                reason = None
+            reason = str(e)
+            if "KDC_ERR" in reason:
                 for word in self.rdp_error_status:
-                    if word in str(e):
+                    if word in reason:
                         reason = self.rdp_error_status[word]
                 self.logger.fail(
-                    (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {f'({reason})' if reason else str(e)}"),
-                    color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "KDC_ERR_C_PRINCIPAL_UNKNOWN") else "red"),
+                    (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {f'({reason})' if reason else reason}"),
+                    color=("magenta" if ((reason or "CredSSP" in reason) and reason != "KDC_ERR_C_PRINCIPAL_UNKNOWN") else "red"),
                 )
-            elif "Authentication failed!" in str(e):
+            elif "Authentication failed!" in reason:
                 self.logger.success(f"{domain}\\{username}:{(process_secret(password))} {self.mark_pwned()}")
-            elif "No such file" in str(e):
+            elif "No such file" in reason:
                 self.logger.fail(e)
             else:
-                reason = None
                 for word in self.rdp_error_status:
-                    if word in str(e):
+                    if word in reason:
                         reason = self.rdp_error_status[word]
-                if str(e) == "cannot unpack non-iterable NoneType object":
+                if reason == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
                 self.logger.fail(
                     (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {f'({reason})' if reason else ''}"),
-                    color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
+                    color=("magenta" if ((reason or "CredSSP" in reason) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
             return False
 
@@ -311,18 +310,18 @@ class rdp(connection):
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except Exception as e:
-            if "Authentication failed!" in str(e):
+            reason = str(e)
+            if "Authentication failed!" in reason:
                 self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
             else:
-                reason = None
                 for word in self.rdp_error_status:
-                    if word in str(e):
+                    if word in reason:
                         reason = self.rdp_error_status[word]
-                if str(e) == "cannot unpack non-iterable NoneType object":
+                if reason == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
                 self.logger.fail(
                     (f"{domain}\\{username}:{process_secret(password)} {f'({reason})' if reason else ''}"),
-                    color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
+                    color=("magenta" if ((reason or "CredSSP" in reason) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
             return False
 
@@ -345,19 +344,19 @@ class rdp(connection):
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except Exception as e:
-            if "Authentication failed!" in str(e):
+            reason = str(e)
+            if "Authentication failed!" in reason:
                 self.logger.success(f"{domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
             else:
-                reason = None
                 for word in self.rdp_error_status:
-                    if word in str(e):
+                    if word in reason:
                         reason = self.rdp_error_status[word]
-                if str(e) == "cannot unpack non-iterable NoneType object":
+                if reason == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
 
                 self.logger.fail(
                     (f"{domain}\\{username}:{process_secret(ntlm_hash)} {f'({reason})' if reason else ''}"),
-                    color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
+                    color=("magenta" if ((reason or "CredSSP" in reason) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
             return False
 
