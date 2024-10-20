@@ -27,6 +27,7 @@ from impacket.krb5 import constants
 from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError
 from impacket.krb5.types import Principal, KerberosException
 from impacket.ldap import ldap as ldap_impacket
+from impacket.ldap import ldaptypes
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ldap.ldap import LDAPFilterSyntaxError
 from impacket.smb import SMB_DIALECT
@@ -1084,6 +1085,121 @@ class ldap(connection):
                 if "SetOf: " in vals:
                     vals = vals.replace("SetOf: ", "")
                 self.logger.highlight(f"{attr:<20} {vals}")
+
+    def find_delegation(self):
+        # Constants for delegation types
+        UF_TRUSTED_FOR_DELEGATION = 0x80000
+        UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION = 0x1000000
+        UF_ACCOUNTDISABLE = 0x2
+        SERVER_TRUST_ACCOUNT = 0x2000
+
+        def printTable(items, header):
+            colLen = []
+
+            # Calculating maximum lenght before parsing CN.
+            for i, col in enumerate(header):
+                rowMaxLen = max(len(row[1].split(",")[0].split("CN=")[-1]) for row in items) if i == 1 else max(len(str(row[i])) for row in items)
+                colLen.append(max(rowMaxLen, len(col)))
+
+            # Create the format string for each row
+            outputFormat = " ".join([f"{{{num}:{width}s}}" for num, width in enumerate(colLen)])
+
+            # Print header
+            self.logger.highlight(outputFormat.format(*header))
+            self.logger.highlight(" ".join(["-" * itemLen for itemLen in colLen]))
+
+            # Print rows
+            for row in items:
+                # Get first CN value.
+                if "CN=" in row[1]:
+                    row[1] = row[1].split(",")[0].split("CN=")[-1]
+
+                # Added join for DelegationRightsTo
+                row[3] = ", ".join(str(x) for x in row[3]) if isinstance(row[3], list) else row[3]
+
+                self.logger.highlight(outputFormat.format(*row))
+
+        # Building the search filter
+        search_filter = (f"(&(|(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION})"
+                         f"(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_FOR_DELEGATION})"
+                         "(msDS-AllowedToDelegateTo=*)(msDS-AllowedToActOnBehalfOfOtherIdentity=*))"
+                         f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE}))"
+                         f"(!(UserAccountControl:1.2.840.113556.1.4.803:={SERVER_TRUST_ACCOUNT})))")
+
+        attributes = ["sAMAccountName", "pwdLastSet", "userAccountControl", "objectCategory",
+                      "msDS-AllowedToActOnBehalfOfOtherIdentity", "msDS-AllowedToDelegateTo"]
+
+        resp = self.search(search_filter, attributes, 0)
+        answers = []
+        self.logger.debug(f"Total of records returned {len(resp):d}")
+        resp_parse = parse_result_attributes(resp)
+
+        for item in resp_parse:
+            mustCommit = False
+            sAMAccountName = ""
+            userAccountControl = 0
+            delegation = ""
+            objectType = ""
+            rightsTo = []
+            protocolTransition = 0
+
+            try:
+                sAMAccountName = item.get("sAMAccountName")
+                mustCommit = sAMAccountName is not None
+
+                userAccountControl = int(item.get("userAccountControl", 0))
+                objectType = item.get("objectCategory")
+
+                if userAccountControl & UF_TRUSTED_FOR_DELEGATION:
+                    delegation = "Unconstrained"
+                    rightsTo.append("N/A")
+                elif userAccountControl & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
+                    delegation = "Constrained w/ Protocol Transition"
+                    protocolTransition = 1
+
+                if item.get("msDS-AllowedToDelegateTo") is not None:
+                    if protocolTransition == 0:
+                        delegation = "Constrained"
+                    rightsTo = item.get("msDS-AllowedToDelegateTo")
+
+                # Not an elif as an object could both have RBCD and another type of delegation
+                if item.get("msDS-AllowedToActOnBehalfOfOtherIdentity") is not None:
+                    databyte = item.get("msDS-AllowedToActOnBehalfOfOtherIdentity")
+                    rbcdRights = []
+                    rbcdObjType = []
+                    sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(databyte))
+                    if len(sd["Dacl"].aces) > 0:
+                        search_filter = "(&(|"
+                        for ace in sd["Dacl"].aces:
+                            search_filter += "(objectSid=" + ace["Ace"]["Sid"].formatCanonical() + ")"
+                        search_filter += ")(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))"
+                        delegUserResp = self.search(search_filter, attributes=["sAMAccountName", "objectCategory"], sizeLimit=999)
+                        delegUserResp_parse = parse_result_attributes(delegUserResp)
+
+                        for rbcd in delegUserResp_parse:
+                            rbcdRights.append(str(rbcd.get("sAMAccountName")))
+                            rbcdObjType.append(str(rbcd.get("objectCategory")))
+
+                        if mustCommit:
+                            if int(userAccountControl) & UF_ACCOUNTDISABLE:
+                                self.logger.debug(f"Bypassing disabled account {sAMAccountName}")
+                            else:
+                                for rights, objType in zip(rbcdRights, rbcdObjType):
+                                    answers.append([rights, objType, "Resource-Based Constrained", sAMAccountName])
+
+                if delegation in ["Unconstrained", "Constrained", "Constrained w/ Protocol Transition"] and mustCommit:
+                    if int(userAccountControl) & UF_ACCOUNTDISABLE:
+                        self.logger.debug(f"Bypassing disabled account {sAMAccountName}")
+                    else:
+                        answers.append([sAMAccountName, objectType, delegation, rightsTo])
+
+            except Exception as e:
+                self.logger.error(f"Skipping item, cannot process due to error {e}")
+
+        if answers:
+            printTable(answers, header=["AccountName", "AccountType", "DelegationType", "DelegationRightsTo"])
+        else:
+            self.logger.fail("No entries found!")
 
     def trusted_for_delegation(self):
         # Building the search filter
