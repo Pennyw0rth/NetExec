@@ -258,9 +258,10 @@ class smb(connection):
         except KeyError:
             self.logger.debug("Error getting server information...")
 
+        # Handle cases where server_os is returned as bytes, such as when accidentally scanning a machine running Responder
         if isinstance(self.server_os.lower(), bytes):
             self.server_os = self.server_os.decode("utf-8")
-            
+
         if "Windows 6.1" in self.server_os and self.server_os_build == 0 and self.os_arch == 0:
             self.server_os = "Unix - Samba"
         elif self.server_os_build == 0 and self.os_arch == 0:
