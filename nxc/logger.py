@@ -22,10 +22,11 @@ def parse_debug_args():
     args, _ = debug_parser.parse_known_args()
     return args
 
+
 def setup_debug_logging():
     debug_args = parse_debug_args()
     root_logger = logging.getLogger("root")
-    
+
     if debug_args.verbose:
         nxc_logger.logger.setLevel(logging.INFO)
         root_logger.setLevel(logging.INFO)
@@ -35,7 +36,7 @@ def setup_debug_logging():
     else:
         nxc_logger.logger.setLevel(logging.ERROR)
         root_logger.setLevel(logging.ERROR)
-        
+
 
 def create_temp_logger(caller_frame, formatted_text, args, kwargs):
     """Create a temporary logger for emitting a log where we need to override the calling file & line number, since these are obfuscated"""
@@ -47,21 +48,23 @@ def create_temp_logger(caller_frame, formatted_text, args, kwargs):
 
 class SmartDebugRichHandler(RichHandler):
     """Custom logging handler for when we want to log normal messages to DEBUG and not double log"""
+
     def __init__(self, formatter=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if formatter is not None:
             self.setFormatter(formatter)
-            
+
     def emit(self, record):
         """Overrides the emit method of the RichHandler class so we can set the proper pathname and lineno"""
         # for some reason in RDP, the exc_text is None which leads to a KeyError in Python logging
         record.exc_text = record.getMessage() if record.exc_text is None else record.exc_text
-        
+
         if hasattr(record, "caller_frame"):
             frame_info = inspect.getframeinfo(record.caller_frame)
             record.pathname = frame_info.filename
             record.lineno = frame_info.lineno
         super().emit(record)
+
 
 def no_debug(func):
     """Stops logging non-debug messages when we are in debug mode
@@ -72,7 +75,7 @@ def no_debug(func):
     def wrapper(self, msg, *args, **kwargs):
         if self.logger.getEffectiveLevel() >= logging.INFO:
             return func(self, msg, *args, **kwargs)
-        else:            
+        else:
             formatted_text = Text.from_ansi(self.format(msg, *args, **kwargs)[0])
             caller_frame = inspect.currentframe().f_back
             create_temp_logger(caller_frame, formatted_text, args, kwargs)
@@ -94,7 +97,7 @@ class NXCAdapter(logging.LoggerAdapter):
         self.logger = logging.getLogger("nxc")
         self.extra = extra
         self.output_file = None
-        
+
         logging.getLogger("impacket").disabled = True
         logging.getLogger("pypykatz").disabled = True
         logging.getLogger("minidump").disabled = True
@@ -181,7 +184,7 @@ class NXCAdapter(logging.LoggerAdapter):
             open(output_file, "x")  # noqa: SIM115
             file_creation = True
 
-        file_handler = RotatingFileHandler(output_file, maxBytes=100000)
+        file_handler = RotatingFileHandler(output_file, maxBytes=100000, encoding="utf-8")
 
         with file_handler._open() as f:
             if file_creation:
@@ -203,7 +206,7 @@ class NXCAdapter(logging.LoggerAdapter):
             datetime.now().strftime("%Y-%m-%d"),
             f"log_{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.log",
         )
-    
+
 
 class TermEscapeCodeFormatter(logging.Formatter):
     """A class to strip the escape codes for logging to files"""
