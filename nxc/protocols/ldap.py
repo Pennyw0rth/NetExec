@@ -5,7 +5,7 @@ import hmac
 import os
 import socket
 from binascii import hexlify
-from datetime import datetime, timedelta
+from datetime import datetime
 from re import sub, I
 from zipfile import ZipFile
 from termcolor import colored
