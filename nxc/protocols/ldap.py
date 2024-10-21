@@ -184,6 +184,7 @@ class ldap(connection):
                 attributes=["defaultNamingContext", "dnsHostName"],
                 sizeLimit=0,
             )
+            
             for item in resp:
                 if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
                     continue
