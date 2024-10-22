@@ -55,7 +55,6 @@ class ssh(connection):
 
     def print_host_info(self):
         self.logger.display(self.remote_version if self.remote_version != "Unknown SSH Version" else f"{self.remote_version}, skipping...")
-        return True
 
     def enum_host_info(self):
         if self.conn._transport.remote_version:
