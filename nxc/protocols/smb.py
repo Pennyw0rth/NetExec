@@ -618,7 +618,7 @@ class smb(connection):
                     relay_list.write(self.host + "\n")
 
     @requires_admin
-    def execute(self, payload=None, get_output=False, methods=None) -> list:
+    def execute(self, payload=None, get_output=False, methods=None) -> str:
         """
         Executes a command on the target host using CMD.exe and the specified method(s).
 
@@ -630,7 +630,7 @@ class smb(connection):
 
         Returns:
         -------
-            list: A list containing the lines of the output of the command
+            str: The output of the command
         """
         if self.args.exec_method:
             methods = [self.args.exec_method]
@@ -765,7 +765,7 @@ class smb(connection):
 
             if "This script contains malicious content" in output:
                 self.logger.fail("Command execution blocked by AMSI")
-                return []
+                return ""
 
             if (self.args.execute or self.args.ps_execute):
                 self.logger.success(f"Executed command via {current_method}")
@@ -776,7 +776,7 @@ class smb(connection):
             return output
         else:
             self.logger.fail(f"Execute command failed with {current_method}")
-            return []
+            return ""
 
     @requires_admin
     def ps_execute(self, payload=None, get_output=False, methods=None, force_ps32=False, obfs=False, encode=False) -> list:
