@@ -693,7 +693,7 @@ class ldap(connection):
         t /= 10000000
         return t
 
-    def search(self, searchFilter, attributes, sizeLimit=0):
+    def search(self, searchFilter, attributes, sizeLimit=0) -> list:
         try:
             if self.ldapConnection:
                 self.logger.debug(f"Search Filter={searchFilter}")
@@ -713,8 +713,8 @@ class ldap(connection):
                 e.getAnswers()
             else:
                 self.logger.fail(e)
-                return False
-        return False
+                return []
+        return []
 
     def users(self):
         """
