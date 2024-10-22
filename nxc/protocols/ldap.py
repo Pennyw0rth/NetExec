@@ -184,28 +184,24 @@ class ldap(connection):
                 attributes=["defaultNamingContext", "dnsHostName"],
                 sizeLimit=0,
             )
-            
-            for item in resp:
-                if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
-                    continue
-                target = None
-                target_domain = None
-                base_dn = None
-                try:
-                    for attribute in item["attributes"]:
-                        if str(attribute["type"]) == "defaultNamingContext":
-                            base_dn = str(attribute["vals"][0])
-                            target_domain = sub(
-                                ",DC=",
-                                ".",
-                                base_dn[base_dn.lower().find("dc="):],
-                                flags=I,
-                            )[3:]
-                        if str(attribute["type"]) == "dnsHostName":
-                            target = str(attribute["vals"][0])
-                except Exception as e:
-                    self.logger.debug("Exception:", exc_info=True)
-                    self.logger.info(f"Skipping item, cannot process due to error {e}")
+            resp_parse = parse_result_attributes(resp)
+
+            target = None
+            target_domain = None
+            base_dn = None
+            try:
+                for attribute in resp_parse:
+                    base_dn = attribute.get("defaultNamingContext")
+                    if base_dn:
+                        base_dn = str(base_dn)
+                        target_domain = sub(r",DC=", ".", base_dn[base_dn.lower().find("dc="):], flags=I)[3:]
+
+                    target = attribute.get("dnsHostName")
+                    if target:
+                        target = str(target)
+            except Exception as e:
+                self.logger.debug("Exception:", exc_info=True)
+                self.logger.info(f"Skipping item, cannot process due to error {e}")
         except OSError:
             return [None, None, None]
         self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
