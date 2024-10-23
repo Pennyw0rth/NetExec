@@ -69,7 +69,6 @@ class nfs(connection):
 
     def print_host_info(self):
         self.logger.display(f"Target supported NFS versions: ({', '.join(str(x) for x in self.nfs_versions)})")
-        return True
 
     def disconnect(self):
         """Disconnect mount and portmap if they are connected"""
