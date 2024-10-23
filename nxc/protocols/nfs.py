@@ -224,7 +224,15 @@ class nfs(connection):
             for share, network in zip(shares, networks):
                 try:
                     mount_info = self.mount.mnt(share, self.auth)
-                    contents = self.list_dir(mount_info["mountinfo"]["fhandle"], share, self.args.enum_shares)
+                    self.logger.debug(f"Mounted {share} - {mount_info}")
+                    if mount_info["status"] != 0:  # noqa: SIM102
+                        if mount_info["status"] == 13:
+                            self.logger.fail(f"{share} - Permission Denied")
+                            continue
+                        # check for other error codes here
+                        
+                    fhandle = mount_info["mountinfo"]["fhandle"]
+                    contents = self.list_dir(fhandle, share, self.args.enum_shares)
 
                     self.logger.success(share)
                     if contents:
