@@ -170,6 +170,10 @@ class nfs(connection):
             for share, network in zip(shares, networks):
                 try:
                     mnt_info = self.mount.mnt(share, self.auth)
+                    self.logger.debug(f"Mounted {share} - {mnt_info}")
+                    if mnt_info["status"] != 0:
+                        self.logger.fail(f"Error mounting share {share}: {NFSSTAT3[mnt_info['status']]}")
+                        continue
                     file_handle = mnt_info["mountinfo"]["fhandle"]
 
                     info = self.nfs3.fsstat(file_handle, self.auth)
@@ -224,7 +228,13 @@ class nfs(connection):
             for share, network in zip(shares, networks):
                 try:
                     mount_info = self.mount.mnt(share, self.auth)
-                    contents = self.list_dir(mount_info["mountinfo"]["fhandle"], share, self.args.enum_shares)
+                    self.logger.debug(f"Mounted {share} - {mount_info}")
+                    if mount_info["status"] != 0:
+                        self.logger.fail(f"Error mounting share {share}: {NFSSTAT3[mount_info['status']]}")
+                        continue
+
+                    fhandle = mount_info["mountinfo"]["fhandle"]
+                    contents = self.list_dir(fhandle, share, self.args.enum_shares)
 
                     self.logger.success(share)
                     if contents:
