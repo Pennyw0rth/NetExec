@@ -768,17 +768,14 @@ class ldap(connection):
         search_filter = "(objectCategory=group)"
         attributes = ["name"]
         resp = self.search(search_filter, attributes, 0)
+        resp_parse = parse_result_attributes(resp)
         if resp:
             self.logger.debug(f"Total of records returned {len(resp):d}")
 
-            for item in resp:
-                if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
-                    continue
+            for item in resp_parse:
                 name = ""
                 try:
-                    for attribute in item["attributes"]:
-                        if str(attribute["type"]) == "name":
-                            name = str(attribute["vals"][0])
+                    name = item.get("name")
                     self.logger.highlight(f"{name}")
                 except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
