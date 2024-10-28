@@ -656,33 +656,33 @@ class ldap(connection):
         search_filter = "(userAccountControl:1.2.840.113556.1.4.803:=8192)"
         attributes = ["objectSid"]
         resp = self.search(search_filter, attributes, sizeLimit=0)
+        resp_parse = parse_result_attributes(resp)
         answers = []
         if resp and (self.password != "" or self.lmhash != "" or self.nthash != "") and self.username != "":
-            for attribute in resp[0][1]:
-                if str(attribute["type"]) == "objectSid":
-                    sid = self.sid_to_str(attribute["vals"][0])
-                    self.sid_domain = "-".join(sid.split("-")[:-1])
+
+            for item in resp_parse:
+                sid = item.get("objectSid").encode("latin1")
+                sid = self.sid_to_str(sid)
+                self.sid_domain = "-".join(sid.split("-")[:-1])
 
             # 2. get all group cn name
             search_filter = "(|(objectSid=" + self.sid_domain + "-512)(objectSid=" + self.sid_domain + "-544)(objectSid=" + self.sid_domain + "-519)(objectSid=S-1-5-32-549)(objectSid=S-1-5-32-551))"
             attributes = ["distinguishedName"]
             resp = self.search(search_filter, attributes, sizeLimit=0)
+            resp_parse = parse_result_attributes(resp)
             answers = []
-            for item in resp:
-                if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
-                    continue
-                for attribute in item["attributes"]:
-                    if str(attribute["type"]) == "distinguishedName":
-                        answers.append(str("(memberOf:1.2.840.113556.1.4.1941:=" + attribute["vals"][0] + ")"))
+
+            for item in resp_parse:
+                answers.append(str("(memberOf:1.2.840.113556.1.4.1941:=" + item.get("distinguishedName") + ")"))
 
             # 3. get member of these groups
             search_filter = "(&(objectCategory=user)(sAMAccountName=" + self.username + ")(|" + "".join(answers) + "))"
             attributes = [""]
             resp = self.search(search_filter, attributes, sizeLimit=0)
             answers = []
-            for item in resp:
-                if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
-                    continue
+            resp_parse = parse_result_attributes(resp)
+            
+            for item in resp_parse:
                 if item:
                     self.admin_privs = True
 
