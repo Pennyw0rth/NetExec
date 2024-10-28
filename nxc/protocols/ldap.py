@@ -949,6 +949,7 @@ class ldap(connection):
             "lastLogon",
         ]
         resp = self.search(searchFilter, attributes, 0)
+        resp_parse = parse_result_attributes(resp)
         self.logger.debug(f"Search Filter: {searchFilter}")
         self.logger.debug(f"Attributes: {attributes}")
         self.logger.debug(f"Response: {resp}")
@@ -957,9 +958,7 @@ class ldap(connection):
         elif resp:
             answers = []
 
-            for item in resp:
-                if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
-                    continue
+            for item in resp_parse:
                 mustCommit = False
                 sAMAccountName = ""
                 memberOf = ""
@@ -969,24 +968,17 @@ class ldap(connection):
                 lastLogon = "N/A"
                 delegation = ""
                 try:
-                    for attribute in item["attributes"]:
-                        if str(attribute["type"]) == "sAMAccountName":
-                            sAMAccountName = str(attribute["vals"][0])
-                            mustCommit = True
-                        elif str(attribute["type"]) == "userAccountControl":
-                            userAccountControl = str(attribute["vals"][0])
-                            if int(userAccountControl) & UF_TRUSTED_FOR_DELEGATION:
-                                delegation = "unconstrained"
-                            elif int(userAccountControl) & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
-                                delegation = "constrained"
-                        elif str(attribute["type"]) == "memberOf":
-                            memberOf = str(attribute["vals"][0])
-                        elif str(attribute["type"]) == "pwdLastSet":
-                            pwdLastSet = "<never>" if str(attribute["vals"][0]) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
-                        elif str(attribute["type"]) == "lastLogon":
-                            lastLogon = "<never>" if str(attribute["vals"][0]) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
-                        elif str(attribute["type"]) == "servicePrincipalName":
-                            SPNs = [str(spn) for spn in attribute["vals"]]
+                    sAMAccountName = item.get("sAMAccountName")
+                    mustCommit = sAMAccountName is not None
+                    userAccountControl = int(item.get("userAccountControl", 0))
+                    memberOf = str(item.get("memberOf"))
+                    if userAccountControl & UF_TRUSTED_FOR_DELEGATION:
+                        delegation = "unconstrained"
+                    elif userAccountControl & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
+                        delegation = "constrained"
+                    pwdLastSet = "<never>" if str(item.get("pwdLastSet")) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("pwdLastSet"))))))
+                    lastLogon = "<never>" if str(item.get("lastLogon")) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("lastLogon"))))))
+                    SPNs = [str(spn) for spn in item.get("servicePrincipalName")]
 
                     if mustCommit is True:
                         if int(userAccountControl) & UF_ACCOUNTDISABLE:
