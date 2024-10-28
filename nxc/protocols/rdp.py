@@ -81,11 +81,6 @@ class rdp(connection):
 
         connection.__init__(self, args, db, host)
 
-    # def proto_flow(self):
-    #     if self.create_conn_obj():
-    #         if self.login() or (self.username == '' and self.password == ''):
-    #             if hasattr(self.args, 'module') and self.args.module:
-
     def proto_logger(self):
         import platform
         if platform.python_version() in ["3.11.5", "3.11.6", "3.12.0"]:
@@ -112,7 +107,6 @@ class rdp(connection):
             self.logger.display(f"Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
         else:
             self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({nla})")
-        return True
 
     def create_conn_obj(self):
         self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout)

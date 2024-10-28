@@ -312,7 +312,6 @@ class smb(connection):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
         smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
         self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1})")
-        return True
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.logger.debug(f"KDC set to: {kdcHost}")
@@ -619,7 +618,20 @@ class smb(connection):
                     relay_list.write(self.host + "\n")
 
     @requires_admin
-    def execute(self, payload=None, get_output=False, methods=None):
+    def execute(self, payload=None, get_output=False, methods=None) -> str:
+        """
+        Executes a command on the target host using CMD.exe and the specified method(s).
+
+        Args:
+        ----
+            payload (str): The command to execute
+            get_output (bool): Whether to get the output of the command (can be useful for AV evasion)
+            methods (list): The method(s) to use for command execution
+
+        Returns:
+        -------
+            str: The output of the command
+        """
         if self.args.exec_method:
             methods = [self.args.exec_method]
         if not methods:
@@ -753,7 +765,7 @@ class smb(connection):
 
             if "This script contains malicious content" in output:
                 self.logger.fail("Command execution blocked by AMSI")
-                return None
+                return ""
 
             if (self.args.execute or self.args.ps_execute):
                 self.logger.success(f"Executed command via {current_method}")
@@ -764,14 +776,29 @@ class smb(connection):
             return output
         else:
             self.logger.fail(f"Execute command failed with {current_method}")
-            return False
+            return ""
 
     @requires_admin
-    def ps_execute(self, payload=None, get_output=False, methods=None, force_ps32=False, obfs=False, encode=False):
+    def ps_execute(self, payload=None, get_output=False, methods=None, force_ps32=False, obfs=False, encode=False) -> list:
+        """
+        Wrapper for executing a PowerShell command on the target host. This still uses the execute() method internally, but
+        creates a PowerShell command together with possible AMSI bypasses and other options.
+
+        Args:
+        ----
+            payload (str): The PowerShell command to execute OR the path to a file containing PowerShell commands
+            get_output (bool): Whether to get the output of the command (can be useful for AV evasion)
+            methods (list): The method(s) to use for command execution
+            force_ps32 (bool): Whether to force 32-bit PowerShell
+
+        Returns:
+        -------
+            list: A list containing the lines of the output of the command
+        """
         payload = self.args.ps_execute if not payload and self.args.ps_execute else payload
         if not payload:
             self.logger.error("No command to execute specified!")
-            return None
+            return []
 
         response = []
         obfs = obfs if obfs else self.args.obfs
