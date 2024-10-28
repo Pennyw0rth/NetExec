@@ -1050,19 +1050,21 @@ class ldap(connection):
         self.logger.debug(f"Querying LDAP server with filter: {search_filter} and attributes: {attributes}")
         try:
             resp = self.search(search_filter, attributes, 0)
+            resp_parse = parse_result_attributes(resp)
         except LDAPFilterSyntaxError as e:
             self.logger.fail(f"LDAP Filter Syntax Error: {e}")
             return
-        for item in resp:
-            if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
-                continue
-            self.logger.success(f"Response for object: {item['objectName']}")
-            for attribute in item["attributes"]:
-                attr = f"{attribute['type']}:"
-                vals = str(attribute["vals"]).replace("\n", "")
-                if "SetOf: " in vals:
-                    vals = vals.replace("SetOf: ", "")
-                self.logger.highlight(f"{attr:<20} {vals}")
+
+        for item in resp_parse:
+            self.logger.success(f"Response for object: {item.get('distinguishedName')}")
+            for attr, value in item.items():
+                if isinstance(value, list):
+                    self.logger.highlight(f"{attr:<20}: {' '.join(value)}")
+                elif isinstance(value, str) and not value.isprintable():
+                    # Convert non-printable strings to hex format
+                    self.logger.highlight(f"{attr:<20}: {value.encode('latin1').hex()}")
+                else:
+                    self.logger.highlight(f"{attr:<20}: {value}")
 
     def trusted_for_delegation(self):
         # Building the search filter
