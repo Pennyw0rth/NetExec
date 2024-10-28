@@ -904,12 +904,12 @@ class ldap(connection):
                 userAccountControl = 0
                 lastLogon = "N/A"
                 try:
-                    sAMAccountName = item.get("sAMAccountName")
+                    sAMAccountName = item.get("sAMAccountName", "")
                     mustCommit = sAMAccountName is not None
                     userAccountControl = "0x%x" % int(item.get("userAccountControl", 0))
-                    memberOf = str(item.get("memberOf"))
-                    pwdLastSet = "<never>" if str(item.get("pwdLastSet")) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("pwdLastSet"))))))
-                    pwdLastSet = "<never>" if str(item.get("lastLogon")) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("lastLogon"))))))
+                    memberOf = str(item.get("memberOf", " "))
+                    pwdLastSet = "<never>" if str(item.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("pwdLastSet", 0))))))
+                    pwdLastSet = "<never>" if str(item.get("lastLogon", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("lastLogon", 0))))))
 
                     if mustCommit is True:
                         answers.append(
@@ -968,16 +968,16 @@ class ldap(connection):
                 lastLogon = "N/A"
                 delegation = ""
                 try:
-                    sAMAccountName = item.get("sAMAccountName")
+                    sAMAccountName = item.get("sAMAccountName", "")
                     mustCommit = sAMAccountName is not None
                     userAccountControl = int(item.get("userAccountControl", 0))
-                    memberOf = str(item.get("memberOf"))
+                    memberOf = str(item.get("memberOf", " "))
                     if userAccountControl & UF_TRUSTED_FOR_DELEGATION:
                         delegation = "unconstrained"
                     elif userAccountControl & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
                         delegation = "constrained"
-                    pwdLastSet = "<never>" if str(item.get("pwdLastSet")) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("pwdLastSet"))))))
-                    lastLogon = "<never>" if str(item.get("lastLogon")) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("lastLogon"))))))
+                    pwdLastSet = "<never>" if str(item.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("pwdLastSet", 0))))))
+                    lastLogon = "<never>" if str(item.get("lastLogon", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("lastLogon", 0))))))
                     SPNs = [str(spn) for spn in item.get("servicePrincipalName")]
 
                     if mustCommit is True:
@@ -1090,12 +1090,12 @@ class ldap(connection):
             userAccountControl = 0
             lastLogon = "N/A"
             try:
-                sAMAccountName = item.get("sAMAccountName")
+                sAMAccountName = item.get("sAMAccountName", "")
                 mustCommit = sAMAccountName is not None
                 userAccountControl = "0x%x" % int(item.get("userAccountControl", 0))
-                memberOf = str(item.get("memberOf"))
-                pwdLastSet = "<never>" if str(item.get("pwdLastSet")) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("pwdLastSet"))))))
-                lastLogon = "<never>" if str(item.get("lastLogon")) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("lastLogon"))))))
+                memberOf = str(item.get("memberOf", " "))
+                pwdLastSet = "<never>" if str(item.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("pwdLastSet", 0))))))
+                lastLogon = "<never>" if str(item.get("lastLogon", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("lastLogon", 0))))))
 
                 if mustCommit is True:
                     answers.append(
@@ -1146,23 +1146,17 @@ class ldap(connection):
         resp_parse = parse_result_attributes(resp)
 
         for item in resp_parse:
-            mustCommit = False
-            sAMAccountName = ""
-            memberOf = ""
-            pwdLastSet = ""
-            userAccountControl = 0
             status = "enabled"
-            lastLogon = "N/A"
             try:
-                sAMAccountName = item.get("sAMAccountName")
+                sAMAccountName = item.get("sAMAccountName", "")
                 mustCommit = sAMAccountName is not None
                 userAccountControl = int(item.get("userAccountControl", 0))
                 if userAccountControl & 2:
                     status = "disabled"
                 userAccountControl = f"0x{int(item.get('userAccountControl', 0)):x}"
-                memberOf = str(item.get("memberOf"))
-                pwdLastSet = "<never>" if str(item.get("pwdLastSet")) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("pwdLastSet"))))))
-                lastLogon = "<never>" if str(item.get("lastLogon")) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("lastLogon"))))))
+                memberOf = str(item.get("memberOf", " "))
+                pwdLastSet = "<never>" if str(item.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("pwdLastSet", 0))))))
+                lastLogon = "<never>" if str(item.get("lastLogon", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("lastLogon", 0))))))
 
                 if mustCommit is True:
                     answers.append(
@@ -1202,7 +1196,7 @@ class ldap(connection):
 
         for item in resp_parse:
             try:    
-                sAMAccountName = item.get("sAMAccountName", " ")
+                sAMAccountName = item.get("sAMAccountName", "")
                 mustCommit = sAMAccountName is not None
                 userAccountControl = f"0x{int(item.get('userAccountControl', 0)):x}"
                 memberOf = str(item.get("memberOf", " "))
