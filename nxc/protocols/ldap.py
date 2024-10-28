@@ -1196,31 +1196,19 @@ class ldap(connection):
             "lastLogon",
         ]
         resp = self.search(searchFilter, attributes, 0)
+        resp_parse = parse_result_attributes(resp)
         answers = []
         self.logger.debug(f"Total of records returned {len(resp):d}")
 
-        for item in resp:
-            if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
-                continue
-            mustCommit = False
-            sAMAccountName = ""
-            memberOf = ""
-            pwdLastSet = ""
-            userAccountControl = 0
-            lastLogon = "N/A"
-            try:
-                for attribute in item["attributes"]:
-                    if str(attribute["type"]) == "sAMAccountName":
-                        sAMAccountName = str(attribute["vals"][0])
-                        mustCommit = True
-                    elif str(attribute["type"]) == "userAccountControl":
-                        userAccountControl = "0x%x" % int(attribute["vals"][0])
-                    elif str(attribute["type"]) == "memberOf":
-                        memberOf = str(attribute["vals"][0])
-                    elif str(attribute["type"]) == "pwdLastSet":
-                        pwdLastSet = "<never>" if str(attribute["vals"][0]) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
-                    elif str(attribute["type"]) == "lastLogon":
-                        lastLogon = "<never>" if str(attribute["vals"][0]) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(attribute["vals"][0])))))
+        for item in resp_parse:
+            try:    
+                sAMAccountName = item.get("sAMAccountName", " ")
+                mustCommit = sAMAccountName is not None
+                userAccountControl = f"0x{int(item.get('userAccountControl', 0)):x}"
+                memberOf = str(item.get("memberOf", " "))
+                pwdLastSet = "<never>" if str(item.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("pwdLastSet", 0))))))
+                lastLogon = "<never>" if str(item.get("lastLogon", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("lastLogon", 0))))))
+
                 if mustCommit is True:
                     answers.append(
                         [
