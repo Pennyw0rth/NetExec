@@ -91,7 +91,7 @@ class NXCModule:
         except Exception as e:
             if "SCHED_S_TASK_HAS_NOT_RUN" in str(e):
                 self.logger.fail("Task was not run, seems like the specified user has no active session on the target")
-
+                exec_method.deleteartifact()
 
 class TSCH_EXEC:
     def __init__(self, target, share_name, username, password, domain, user, cmd, file, task, location, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
@@ -143,6 +143,18 @@ class TSCH_EXEC:
             )
             self.__rpctransport.set_kerberos(self.__doKerberos, self.__kdcHost)
 
+    def deleteartifact(self):
+        dce = self.__rpctransport.get_dce_rpc()
+        if self.__doKerberos:
+            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+        dce.set_credentials(*self.__rpctransport.get_credentials())
+        dce.connect()
+        dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
+        dce.bind(tsch.MSRPC_UUID_TSCHS)
+        self.logger.display(f"Deleting task \\{tmpName}")
+        tsch.hSchRpcDelete(dce, f"\\{tmpName}")
+        dce.disconnect()
+    
     def execute(self, command, output=False):
         self.__retOutput = output
         self.execute_handler(command)
@@ -223,7 +235,9 @@ class TSCH_EXEC:
         return xml
 
     def execute_handler(self, command, fileless=False):
+        global tmpName
         dce = self.__rpctransport.get_dce_rpc()
+
         if self.__doKerberos:
             dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
 
@@ -243,19 +257,23 @@ class TSCH_EXEC:
         except Exception as e:
             if "ERROR_NONE_MAPPED" in str(e):
                 self.logger.fail(f"User {self.user} is not connected on the target, cannot run the task")
+                tsch.hSchRpcDelete(dce, f"\\{tmpName}")
             if e.error_code and hex(e.error_code) == "0x80070005":
                 self.logger.fail("Schtask_as: Create schedule task got blocked.")
+                tsch.hSchRpcDelete(dce, f"\\{tmpName}")
             if "ERROR_TRUSTED_DOMAIN_FAILURE" in str(e):
                 self.logger.fail(f"User {self.user} does not exist in the domain.")
+                tsch.hSchRpcDelete(dce, f"\\{tmpName}")
+            if "SCHED_S_TASK_HAS_NOT_RUN" in str(e):
+                tsch.hSchRpcDelete(dce, f"\\{tmpName}")
             else:
                 self.logger.fail(f"Schtask_as: Create schedule task failed: {e}")
+                tsch.hSchRpcDelete(dce, f"\\{tmpName}")
             return
         else:
-            taskCreated = True
-
+            taskCreated = True    
         self.logger.info(f"Running task \\{tmpName}")
-        tsch.hSchRpcRun(dce, f"\\{tmpName}")
-
+        tsch.hSchRpcRun(dce, f"\\{tmpName}") 
         done = False
         while not done:
             self.logger.debug(f"Calling SchRpcGetLastRunInfo for \\{tmpName}")
