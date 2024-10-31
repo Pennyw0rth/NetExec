@@ -344,6 +344,7 @@ class connection:
         data = []  # Arbitrary data needed for the login, e.g. ssh_key
 
         for cred_id in self.args.cred_id:
+            self.logger.debug(f"Querying database for credential ID: {cred_id}")
             if cred_id.lower() == "all":
                 creds = self.db.get_credentials()
             else:
