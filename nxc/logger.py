@@ -162,7 +162,7 @@ class NXCAdapter(logging.LoggerAdapter):
         nxc_console.print(text, *args, **kwargs)
         self.log_console_to_file(text, *args, **kwargs)
 
-    def error(self, msg, *args, exc_info = None, stack_info = False, stacklevel = 1, extra = None, **kwargs):
+    def error(self, msg, *args, exc_info=None, stack_info=False, stacklevel=1, extra=None, **kwargs):
         """Wrapper for the error method of the logger, but will also print the host ip if available"""
         if self.extra and self.extra["host"]:
             msg = f"Host {self.extra['host']}: {msg}"
