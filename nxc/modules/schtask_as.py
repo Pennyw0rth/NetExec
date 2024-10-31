@@ -273,7 +273,7 @@ class TSCH_EXEC:
                 tsch.hSchRpcDelete(dce, f"\\{tmpName}")
             return
         else:
-            taskCreated = True    
+            taskCreated = True
         self.logger.info(f"Running task \\{tmpName}")
         tsch.hSchRpcRun(dce, f"\\{tmpName}") 
         done = False
