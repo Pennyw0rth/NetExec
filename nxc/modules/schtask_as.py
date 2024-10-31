@@ -91,7 +91,7 @@ class NXCModule:
         except Exception as e:
             if "SCHED_S_TASK_HAS_NOT_RUN" in str(e):
                 self.logger.fail("Task was not run, seems like the specified user has no active session on the target")
-                exec_method.deleteartifact()
+                #exec_method.deleteartifact()
 
 class TSCH_EXEC:
     def __init__(self, target, share_name, username, password, domain, user, cmd, file, task, location, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
@@ -266,6 +266,8 @@ class TSCH_EXEC:
                 tsch.hSchRpcDelete(dce, f"\\{tmpName}")
             if "SCHED_S_TASK_HAS_NOT_RUN" in str(e):
                 tsch.hSchRpcDelete(dce, f"\\{tmpName}")
+            if "ERROR_ALREADY_EXISTS" in str(e):
+                self.logger.fail(f"Schtask_as: Create schedule task failed: {e}")
             else:
                 self.logger.fail(f"Schtask_as: Create schedule task failed: {e}")
                 tsch.hSchRpcDelete(dce, f"\\{tmpName}")
