@@ -302,7 +302,7 @@ class ldap(connection):
     def print_host_info(self):
         self.logger.debug("Printing host info for LDAP")
         if self.args.no_smb:
-            self.logger.extra["protocol"] = "LDAP" if self.port == "389" else "LDAPS"
+            self.logger.extra["protocol"] = "LDAP" if self.port == 389 else "LDAPS"
             self.logger.extra["port"] = self.port
             self.logger.display(f'{self.baseDN} (Hostname: {self.hostname.split(".")[0]}) (domain: {self.domain})')
         else:
@@ -312,7 +312,6 @@ class ldap(connection):
             smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
             self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1})")
             self.logger.extra["protocol"] = "LDAP"
-        return True
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.username = username
@@ -694,7 +693,7 @@ class ldap(connection):
         t /= 10000000
         return t
 
-    def search(self, searchFilter, attributes, sizeLimit=0):
+    def search(self, searchFilter, attributes, sizeLimit=0) -> list:
         try:
             if self.ldapConnection:
                 self.logger.debug(f"Search Filter={searchFilter}")
@@ -714,8 +713,8 @@ class ldap(connection):
                 e.getAnswers()
             else:
                 self.logger.fail(e)
-                return False
-        return False
+                return []
+        return []
 
     def users(self):
         """
