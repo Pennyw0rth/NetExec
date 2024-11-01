@@ -209,7 +209,7 @@ class smb(connection):
         self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
 
         try:
-            self.conn.login("", "")
+            logged_in = self.conn.login("", "")
         except BrokenPipeError:
             self.logger.fail("Broken Pipe Error while attempting to login")
         except Exception as e:
@@ -306,6 +306,9 @@ class smb(connection):
 
         # If we want to authenticate we should create another connection object, because we already logged in
         if self.args.username or self.args.cred_id or self.kerberos or self.args.use_kcache:
+            self.create_conn_obj()
+        if logged_in:
+            self.logger.debug(f"Logged in anonymously to host {self.host}, recreating connection object")
             self.create_conn_obj()
 
     def print_host_info(self):
