@@ -313,6 +313,12 @@ class smb(connection):
         smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
         self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1})")
 
+        if self.args.generate_hosts_file:
+            with open(self.args.generate_hosts_file, "a+") as host_file:
+                host_file.write(f"{self.host}    {self.hostname} {self.hostname}.{self.targetDomain}\n")
+
+        return self.host, self.hostname, self.targetDomain
+
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.logger.debug(f"KDC set to: {kdcHost}")
         lmhash = ""
