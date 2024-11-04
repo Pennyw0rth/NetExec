@@ -314,8 +314,18 @@ class smb(connection):
         self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1})")
 
         if self.args.generate_hosts_file:
+            from impacket.dcerpc.v5 import nrpc, epm
+            self.logger.debug("Performing authentication attempts...")
+            isdc = False
+            try:
+                epm.hept_map(self.host, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
+                isdc = True
+            except DCERPCException:
+                self.logger.debug("Error while connecting to host: DCERPCException, which means this is probably not a DC!")
+
             with open(self.args.generate_hosts_file, "a+") as host_file:
-                host_file.write(f"{self.host}    {self.hostname} {self.hostname}.{self.targetDomain}\n")
+                host_file.write(f"{self.host}    {self.hostname} {self.hostname}.{self.targetDomain} {self.targetDomain if isdc else ''}\n")
+                self.logger.debug(f"{self.host}    {self.hostname} {self.hostname}.{self.targetDomain} {self.targetDomain if isdc else ''}")
 
         return self.host, self.hostname, self.targetDomain
 
