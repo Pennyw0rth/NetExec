@@ -60,7 +60,7 @@ from dploot.triage.sccm import SCCMTriage
 
 from pywerview.cli.helpers import get_localdisks, get_netsession, get_netgroupmember, get_netgroup, get_netcomputer, get_netloggedon, get_netlocalgroup
 
-from time import time
+from time import time, ctime
 from datetime import datetime
 from functools import wraps
 from traceback import format_exc
@@ -946,6 +946,29 @@ class smb(connection):
                 continue
             self.logger.highlight(f"{name:<15} {','.join(perms):<15} {remark}")
         return permissions
+
+
+    def dir(self):  # noqa: A003
+        search_path = ntpath.join(self.args.dir, "*")
+        try: 
+            contents = self.conn.listPath(self.args.share, search_path)
+        except SessionError as e:
+            error = get_error_string(e)
+            self.logger.fail(
+                f"Error enumerating '{search_path}': {error}",
+                color="magenta" if error in smb_error_status else "red",
+            )
+            return
+        
+        if not contents:
+            return
+
+        self.logger.highlight(f"{'Perms':<9}{'File Size':<15}{'Date':<30}{'File Path':<45}")
+        self.logger.highlight(f"{'-----':<9}{'---------':<15}{'----':<30}{'---------':<45}")
+        for content in contents:
+            full_path = ntpath.join(self.args.dir, content.get_longname())
+            self.logger.highlight(f"{'d' if content.is_directory() else 'f'}{'rw-' if content.is_readonly() > 0 else 'r--':<8}{content.get_filesize():<15}{ctime(float(content.get_mtime_epoch())):<30}{full_path:<45}")
+
 
     @requires_admin
     def interfaces(self):
