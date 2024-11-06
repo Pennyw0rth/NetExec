@@ -6,20 +6,14 @@ class MSSQLEXEC:
         self.mssql_conn = connection
         self.logger = logger
 
+        # Store the original state of options that have to be enabled/disabled in order to restore them later
+        self.backuped_options = {}
+
     def execute(self, command):
         result = None
-        xp_cmdshell_was_enabled = False
 
-        try:
-            xp_cmdshell_was_enabled = self.is_xp_cmdshell_enabled()
-            if not xp_cmdshell_was_enabled:
-                self.logger.debug("xp_cmdshell is disabled, attempting to enable it.")
-                self.enable_xp_cmdshell()
-            else:
-                self.logger.debug("xp_cmdshell is already enabled.")
-
-        except Exception as e:
-            self.logger.error(f"Error when checking/enabling xp_cmdshell: {e}")
+        self.backup_and_enable("advanced options")
+        self.backup_and_enable("xp_cmdshell")
 
         try:
             cmd = f"exec master..xp_cmdshell '{command}'"
@@ -35,56 +29,57 @@ class MSSQLEXEC:
         except Exception as e:
             self.logger.error(f"Error when attempting to execute command via xp_cmdshell: {e}")
 
-        try:
-            if not xp_cmdshell_was_enabled:
-                self.logger.debug("xp_cmdshell was not enabled originally, attempting to disable it.")
-                self.disable_xp_cmdshell()
-            else:
-                self.logger.debug("xp_cmdshell was originally enabled, leaving it enabled.")
-        except Exception as e:
-            self.logger.error(f"[OPSEC] Error when attempting to disable xp_cmdshell: {e}")
-        
+        self.restore("xp_cmdshell")
+        self.restore("advanced options")
+
         return result
 
-    def is_xp_cmdshell_enabled(self):
-        query = "EXEC sp_configure 'xp_cmdshell';"
-        self.logger.debug(f"Checking if xp_cmdshell is enabled: {query}")
+    def restore(self, option):
+        try:
+            if not self.backuped_options[option]:
+                self.logger.debug(f"Option '{option}' was not enabled originally, attempting to disable it.")
+                query = f"EXEC master.dbo.sp_configure '{option}', 0;RECONFIGURE;"
+                self.logger.debug(f"Executing query: {query}")
+                self.mssql_conn.sql_query(query)
+            else:
+                self.logger.debug(f"Option '{option}' was originally enabled, leaving it enabled.")
+        except Exception as e:
+            self.logger.error(f"[OPSEC] Error when attempting to restore option '{option}': {e}")
+
+    def backup_and_enable(self, option):
+        try:
+            self.backuped_options[option] = self.is_option_enabled("show advanced options")
+            if not self.backuped_options[option]:
+                self.logger.debug(f"Option '{option}' is disabled, attempting to enable it.")
+                query = f"EXEC master.dbo.sp_configure '{option}', 1;RECONFIGURE;"
+                self.logger.debug(f"Executing query: {query}")
+                self.mssql_conn.sql_query(query)
+            else:
+                self.logger.debug(f"Option '{option}' is already enabled.")
+        except Exception as e:
+            self.logger.error(f"Error when checking/enabling option '{option}': {e}")
+
+    def is_option_enabled(self, option):
+        query = f"EXEC master.dbo.sp_configure '{option}';"
+        self.logger.debug(f"Checking if {option} is enabled: {query}")
         result = self.mssql_conn.sql_query(query)
         # Assuming the query returns a list of dictionaries with 'config_value' as the key
-        self.logger.debug(f"xp_cmdshell check result: {result}")
+        self.logger.debug(f"{option} check result: {result}")
         if result and result[0]["config_value"] == 1:
             return True
         return False
 
-    def enable_xp_cmdshell(self):
-        query = "exec master.dbo.sp_configure 'show advanced options',1;RECONFIGURE;exec master.dbo.sp_configure 'xp_cmdshell', 1;RECONFIGURE;"
-        self.logger.debug(f"Executing query: {query}")
-        self.mssql_conn.sql_query(query)
-
-    def disable_xp_cmdshell(self):
-        query = "exec sp_configure 'xp_cmdshell', 0 ;RECONFIGURE;exec sp_configure 'show advanced options', 0 ;RECONFIGURE;"
-        self.logger.debug(f"Executing query: {query}")
-        self.mssql_conn.sql_query(query)
-
-    def enable_ole(self):
-        query = "exec master.dbo.sp_configure 'show advanced options',1;RECONFIGURE;exec master.dbo.sp_configure 'Ole Automation Procedures', 1;RECONFIGURE;"
-        self.logger.debug(f"Executing query: {query}")
-        self.mssql_conn.sql_query(query)
-
-    def disable_ole(self):
-        query = "exec master.dbo.sp_configure 'show advanced options',1;RECONFIGURE;exec master.dbo.sp_configure 'Ole Automation Procedures', 0;RECONFIGURE;"
-        self.logger.debug(f"Executing query: {query}")
-        self.mssql_conn.sql_query(query)
-
     def put_file(self, data, remote):
         try:
-            self.enable_ole()
+            self.backup_and_enable("advanced options")
+            self.backup_and_enable("Ole Automation Procedures")
             hexdata = data.hex()
             self.logger.debug(f"Hex data to write to file: {hexdata}")
             query = f"DECLARE @ob INT;EXEC sp_OACreate 'ADODB.Stream', @ob OUTPUT;EXEC sp_OASetProperty @ob, 'Type', 1;EXEC sp_OAMethod @ob, 'Open';EXEC sp_OAMethod @ob, 'Write', NULL, 0x{hexdata};EXEC sp_OAMethod @ob, 'SaveToFile', NULL, '{remote}', 2;EXEC sp_OAMethod @ob, 'Close';EXEC sp_OADestroy @ob;"
             self.logger.debug(f"Executing query: {query}")
             self.mssql_conn.sql_query(query)
-            self.disable_ole()
+            self.restore("Ole Automation Procedures")
+            self.restore("advanced options")
         except Exception as e:
             self.logger.debug(f"Error uploading via mssqlexec: {e}")
 
