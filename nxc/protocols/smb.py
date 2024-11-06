@@ -904,7 +904,7 @@ class smb(connection):
         return permissions
 
 
-    def dir(self):
+    def dir(self):  # noqa: A003
         search_path = ntpath.join(self.args.dir, "*")
         try: 
             contents = self.conn.listPath(self.args.share, search_path)
