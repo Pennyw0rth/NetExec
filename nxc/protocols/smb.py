@@ -905,11 +905,6 @@ class smb(connection):
 
 
     def dir(self):
-        # Seems defined by default, do we have to keep this check ?
-        if not self.args.share:
-            self.logger.error("You must define --share option")
-            return
-        
         search_path = ntpath.join(self.args.dir, "*")
         try: 
             contents = self.conn.listPath(self.args.share, search_path)
