@@ -305,12 +305,13 @@ class smb(connection):
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
         # If we want to authenticate we should create another connection object, because we already logged in
-        if self.args.username or self.args.cred_id or self.kerberos or self.args.use_kcache:
-            self.logger.debug(f"Recreating connection object because of {bool(self.args.username)=}, {bool(self.args.cred_id)=}, {self.kerberos=}, {self.args.use_kcache=}")
-            self.create_conn_obj()
-        if logged_in:
-            self.logger.debug(f"Logged in anonymously to host {self.host}, recreating connection object")
-            self.create_conn_obj()
+        # if self.args.username or self.args.cred_id or self.kerberos or self.args.use_kcache:
+        #     self.logger.debug(f"Recreating connection object because of {bool(self.args.username)=}, {bool(self.args.cred_id)=}, {self.kerberos=}, {self.args.use_kcache=}")
+        #     self.create_conn_obj()
+        # if logged_in:
+        #     self.logger.debug(f"Logged in anonymously to host {self.host}, recreating connection object")
+        #     self.create_conn_obj()
+        self.create_conn_obj()
 
     def print_host_info(self):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
@@ -408,7 +409,6 @@ class smb(connection):
             return False
 
     def plaintext_login(self, domain, username, password):
-        self.create_conn_obj()
         try:
             self.password = password
             self.username = username
