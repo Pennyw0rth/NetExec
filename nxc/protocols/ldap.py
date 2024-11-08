@@ -1135,7 +1135,6 @@ class ldap(connection):
         resp_parse = parse_result_attributes(resp)
 
         for item in resp_parse:
-            mustCommit = False
             sAMAccountName = ""
             userAccountControl = 0
             delegation = ""
@@ -1145,53 +1144,53 @@ class ldap(connection):
 
             try:
                 sAMAccountName = item.get("sAMAccountName")
-                mustCommit = sAMAccountName is not None
+                if sAMAccountName:
 
-                userAccountControl = int(item.get("userAccountControl", 0))
-                objectType = item.get("objectCategory")
+                    userAccountControl = int(item.get("userAccountControl", 0))
+                    objectType = item.get("objectCategory")
 
-                if userAccountControl & UF_TRUSTED_FOR_DELEGATION:
-                    delegation = "Unconstrained"
-                    rightsTo.append("N/A")
-                elif userAccountControl & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
-                    delegation = "Constrained w/ Protocol Transition"
-                    protocolTransition = 1
+                    if userAccountControl & UF_TRUSTED_FOR_DELEGATION:
+                        delegation = "Unconstrained"
+                        rightsTo.append("N/A")
+                    elif userAccountControl & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
+                        delegation = "Constrained w/ Protocol Transition"
+                        protocolTransition = 1
 
-                if item.get("msDS-AllowedToDelegateTo") is not None:
-                    if protocolTransition == 0:
-                        delegation = "Constrained"
-                    rightsTo = item.get("msDS-AllowedToDelegateTo")
+                    if item.get("msDS-AllowedToDelegateTo") is not None:
+                        if protocolTransition == 0:
+                            delegation = "Constrained"
+                        rightsTo = item.get("msDS-AllowedToDelegateTo")
 
-                # Not an elif as an object could both have RBCD and another type of delegation
-                if item.get("msDS-AllowedToActOnBehalfOfOtherIdentity") is not None:
-                    databyte = item.get("msDS-AllowedToActOnBehalfOfOtherIdentity")
-                    rbcdRights = []
-                    rbcdObjType = []
-                    sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(databyte))
-                    if len(sd["Dacl"].aces) > 0:
-                        search_filter = "(&(|"
-                        for ace in sd["Dacl"].aces:
-                            search_filter += "(objectSid=" + ace["Ace"]["Sid"].formatCanonical() + ")"
-                        search_filter += ")(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))"
-                        delegUserResp = self.search(search_filter, attributes=["sAMAccountName", "objectCategory"], sizeLimit=999)
-                        delegUserResp_parse = parse_result_attributes(delegUserResp)
+                    # Not an elif as an object could both have RBCD and another type of delegation
+                    if item.get("msDS-AllowedToActOnBehalfOfOtherIdentity") is not None:
+                        databyte = item.get("msDS-AllowedToActOnBehalfOfOtherIdentity")
+                        rbcdRights = []
+                        rbcdObjType = []
+                        sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(databyte))
+                        if len(sd["Dacl"].aces) > 0:
+                            search_filter = "(&(|"
+                            for ace in sd["Dacl"].aces:
+                                search_filter += "(objectSid=" + ace["Ace"]["Sid"].formatCanonical() + ")"
+                            search_filter += ")(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))"
+                            delegUserResp = self.search(search_filter, attributes=["sAMAccountName", "objectCategory"], sizeLimit=999)
+                            delegUserResp_parse = parse_result_attributes(delegUserResp)
 
-                        for rbcd in delegUserResp_parse:
-                            rbcdRights.append(str(rbcd.get("sAMAccountName")))
-                            rbcdObjType.append(str(rbcd.get("objectCategory")))
+                            for rbcd in delegUserResp_parse:
+                                rbcdRights.append(str(rbcd.get("sAMAccountName")))
+                                rbcdObjType.append(str(rbcd.get("objectCategory")))
 
-                        if mustCommit:
+                            
                             if int(userAccountControl) & UF_ACCOUNTDISABLE:
                                 self.logger.debug(f"Bypassing disabled account {sAMAccountName}")
                             else:
                                 for rights, objType in zip(rbcdRights, rbcdObjType):
                                     answers.append([rights, objType, "Resource-Based Constrained", sAMAccountName])
 
-                if delegation in ["Unconstrained", "Constrained", "Constrained w/ Protocol Transition"] and mustCommit:
-                    if int(userAccountControl) & UF_ACCOUNTDISABLE:
-                        self.logger.debug(f"Bypassing disabled account {sAMAccountName}")
-                    else:
-                        answers.append([sAMAccountName, objectType, delegation, rightsTo])
+                    if delegation in ["Unconstrained", "Constrained", "Constrained w/ Protocol Transition"]:
+                        if int(userAccountControl) & UF_ACCOUNTDISABLE:
+                            self.logger.debug(f"Bypassing disabled account {sAMAccountName}")
+                        else:
+                            answers.append([sAMAccountName, objectType, delegation, rightsTo])
 
             except Exception as e:
                 self.logger.error(f"Skipping item, cannot process due to error {e}")
