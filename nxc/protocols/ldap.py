@@ -1091,7 +1091,7 @@ class ldap(connection):
         UF_TRUSTED_FOR_DELEGATION = 0x80000
         UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION = 0x1000000
         UF_ACCOUNTDISABLE = 0x2
-        SERVER_TRUST_ACCOUNT = 0x2000
+        """SERVER_TRUST_ACCOUNT = 0x2000"""
 
         def printTable(items, header):
             colLen = []
@@ -1123,8 +1123,8 @@ class ldap(connection):
         search_filter = (f"(&(|(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION})"
                          f"(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_FOR_DELEGATION})"
                          "(msDS-AllowedToDelegateTo=*)(msDS-AllowedToActOnBehalfOfOtherIdentity=*))"
-                         f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE}))"
-                         f"(!(UserAccountControl:1.2.840.113556.1.4.803:={SERVER_TRUST_ACCOUNT})))")
+                         f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE})))")
+        # f"(!(UserAccountControl:1.2.840.113556.1.4.803:={SERVER_TRUST_ACCOUNT})))")  To listing  RBCD to DCs
 
         attributes = ["sAMAccountName", "pwdLastSet", "userAccountControl", "objectCategory",
                       "msDS-AllowedToActOnBehalfOfOtherIdentity", "msDS-AllowedToDelegateTo"]
@@ -1190,7 +1190,9 @@ class ldap(connection):
                         if int(userAccountControl) & UF_ACCOUNTDISABLE:
                             self.logger.debug(f"Bypassing disabled account {sAMAccountName}")
                         else:
-                            answers.append([sAMAccountName, objectType, delegation, rightsTo])
+                            # Check if the entry is invalid, i.e., for "Unconstrained N/A"
+                            if not (delegation == "Unconstrained" and rightsTo == ["N/A"]):
+                                answers.append([sAMAccountName, objectType, delegation, rightsTo])
 
             except Exception as e:
                 self.logger.error(f"Skipping item, cannot process due to error {e}")
