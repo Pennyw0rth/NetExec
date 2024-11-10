@@ -166,7 +166,7 @@ class TSCH_EXEC:
         self.__outputBuffer = data
 
     def get_end_boundary(self):
-        # Get current date and time
+        # Get current date and time + 5 minutes
         end_boundary = datetime.now() + timedelta(minutes=5)
 
         # Format it to match the format in the XML: "YYYY-MM-DDTHH:MM:SS.ssssss"
