@@ -1,6 +1,6 @@
 import os
 from time import sleep
-from datetime import datetime
+from datetime import datetime, timedelta
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5 import tsch, transport
 from nxc.helpers.misc import gen_random_string
@@ -92,6 +92,8 @@ class NXCModule:
             if "SCHED_S_TASK_HAS_NOT_RUN" in str(e):
                 self.logger.fail("Task was not run, seems like the specified user has no active session on the target")
                 exec_method.deleteartifact()
+            else:
+                self.logger.fail(f"Failed to execute command: {e}")
 
 class TSCH_EXEC:
     def __init__(self, target, share_name, username, password, domain, user, cmd, file, task, location, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
@@ -163,24 +165,20 @@ class TSCH_EXEC:
     def output_callback(self, data):
         self.__outputBuffer = data
 
-    def get_current_date(self):
+    def get_end_boundary(self):
         # Get current date and time
-        now = datetime.now()
+        end_boundary = datetime.now() + timedelta(minutes=5)
 
         # Format it to match the format in the XML: "YYYY-MM-DDTHH:MM:SS.ssssss"
-        return now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
+        return end_boundary.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
 
     def gen_xml(self, command, fileless=False):
         xml = f"""<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <Triggers>
-    <CalendarTrigger>
-      <StartBoundary>{self.get_current_date()}</StartBoundary>
-      <Enabled>true</Enabled>
-      <ScheduleByDay>
-        <DaysInterval>1</DaysInterval>
-      </ScheduleByDay>
-    </CalendarTrigger>
+    <RegistrationTrigger>
+      <EndBoundary>{self.get_end_boundary()}</EndBoundary>
+    </RegistrationTrigger>
   </Triggers>
   <Principals>
     <Principal id="LocalSystem">
