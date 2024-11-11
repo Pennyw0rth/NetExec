@@ -1,3 +1,4 @@
+import contextlib
 import os
 from time import sleep
 from datetime import datetime, timedelta
@@ -91,7 +92,8 @@ class NXCModule:
         except Exception as e:
             if "SCHED_S_TASK_HAS_NOT_RUN" in str(e):
                 self.logger.fail("Task was not run, seems like the specified user has no active session on the target")
-                exec_method.deleteartifact()
+                with contextlib.suppress(Exception):
+                    exec_method.deleteartifact()
             else:
                 self.logger.fail(f"Failed to execute command: {e}")
 
@@ -255,20 +257,25 @@ class TSCH_EXEC:
         except Exception as e:
             if "ERROR_NONE_MAPPED" in str(e):
                 self.logger.fail(f"User {self.user} is not connected on the target, cannot run the task")
-                tsch.hSchRpcDelete(dce, f"\\{self.task}")
-            if e.error_code and hex(e.error_code) == "0x80070005":
-                self.logger.fail("Schtask_as: Create schedule task got blocked.")
-                tsch.hSchRpcDelete(dce, f"\\{self.task}")
-            if "ERROR_TRUSTED_DOMAIN_FAILURE" in str(e):
+                with contextlib.suppress(Exception):
+                    tsch.hSchRpcDelete(dce, f"\\{self.task}")
+            elif e.error_code and hex(e.error_code) == "0x80070005":
+                self.logger.fail("Create schedule task got blocked.")
+                with contextlib.suppress(Exception):
+                    tsch.hSchRpcDelete(dce, f"\\{self.task}")
+            elif "ERROR_TRUSTED_DOMAIN_FAILURE" in str(e):
                 self.logger.fail(f"User {self.user} does not exist in the domain.")
-                tsch.hSchRpcDelete(dce, f"\\{self.task}")
-            if "SCHED_S_TASK_HAS_NOT_RUN" in str(e):
-                tsch.hSchRpcDelete(dce, f"\\{self.task}")
-            if "ERROR_ALREADY_EXISTS" in str(e):
-                self.logger.fail(f"Schtask_as: Create schedule task failed: {e}")
+                with contextlib.suppress(Exception):
+                    tsch.hSchRpcDelete(dce, f"\\{self.task}")
+            elif "SCHED_S_TASK_HAS_NOT_RUN" in str(e):
+                with contextlib.suppress(Exception):
+                    tsch.hSchRpcDelete(dce, f"\\{self.task}")
+            elif "ERROR_ALREADY_EXISTS" in str(e):
+                self.logger.fail(f"Create schedule task failed: {e}")
             else:
-                self.logger.fail(f"Schtask_as: Create schedule task failed: {e}")
-                tsch.hSchRpcDelete(dce, f"\\{self.task}")
+                self.logger.fail(f"Create schedule task failed: {e}")
+                with contextlib.suppress(Exception):
+                    tsch.hSchRpcDelete(dce, f"\\{self.task}")
             return
 
         self.logger.info(f"Running task \\{self.task}")
