@@ -95,6 +95,7 @@ class NXCModule:
             else:
                 self.logger.fail(f"Failed to execute command: {e}")
 
+
 class TSCH_EXEC:
     def __init__(self, target, share_name, username, password, domain, user, cmd, file, task, location, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
         self.__target = target
@@ -156,7 +157,7 @@ class TSCH_EXEC:
         self.logger.display(f"Deleting task \\{tmpName}")
         tsch.hSchRpcDelete(dce, f"\\{tmpName}")
         dce.disconnect()
-    
+
     def execute(self, command, output=False):
         self.__retOutput = output
         self.execute_handler(command)
@@ -245,7 +246,6 @@ class TSCH_EXEC:
         xml = self.gen_xml(command, fileless)
 
         self.logger.info(f"Task XML: {xml}")
-        taskCreated = False
         self.logger.info(f"Creating task \\{tmpName}")
         try:
             # windows server 2003 has no MSRPC_UUID_TSCHS, if it bind, it will return abstract_syntax_not_supported
@@ -270,10 +270,10 @@ class TSCH_EXEC:
                 self.logger.fail(f"Schtask_as: Create schedule task failed: {e}")
                 tsch.hSchRpcDelete(dce, f"\\{tmpName}")
             return
-        else:
-            taskCreated = True
+
         self.logger.info(f"Running task \\{tmpName}")
-        tsch.hSchRpcRun(dce, f"\\{tmpName}") 
+        tsch.hSchRpcRun(dce, f"\\{tmpName}")
+
         done = False
         while not done:
             self.logger.debug(f"Calling SchRpcGetLastRunInfo for \\{tmpName}")
@@ -285,10 +285,6 @@ class TSCH_EXEC:
 
         self.logger.info(f"Deleting task \\{tmpName}")
         tsch.hSchRpcDelete(dce, f"\\{tmpName}")
-        taskCreated = False
-
-        if taskCreated is True:
-            tsch.hSchRpcDelete(dce, f"\\{tmpName}")
 
         if self.__retOutput:
             if fileless:

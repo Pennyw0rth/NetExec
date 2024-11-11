@@ -138,7 +138,6 @@ class TSCH_EXEC:
         xml = self.gen_xml(command, fileless)
 
         self.logger.debug(f"Task XML: {xml}")
-        taskCreated = False
         self.logger.info(f"Creating task \\{tmpName}")
         try:
             # windows server 2003 has no MSRPC_UUID_TSCHS, if it bind, it will return abstract_syntax_not_supported
@@ -151,8 +150,6 @@ class TSCH_EXEC:
             else:
                 self.logger.fail(str(e))
             return
-        else:
-            taskCreated = True
 
         self.logger.info(f"Running task \\{tmpName}")
         tsch.hSchRpcRun(dce, f"\\{tmpName}")
@@ -168,10 +165,6 @@ class TSCH_EXEC:
 
         self.logger.info(f"Deleting task \\{tmpName}")
         tsch.hSchRpcDelete(dce, f"\\{tmpName}")
-        taskCreated = False
-
-        if taskCreated is True:
-            tsch.hSchRpcDelete(dce, f"\\{tmpName}")
 
         if self.__retOutput:
             if fileless:
