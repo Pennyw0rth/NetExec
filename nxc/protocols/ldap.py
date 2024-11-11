@@ -3,7 +3,6 @@
 import hashlib
 import hmac
 import os
-import dns.resolver
 from binascii import hexlify
 from datetime import datetime, timedelta
 from re import sub, I
@@ -34,6 +33,7 @@ from impacket.smbconnection import SMBConnection, SessionError
 
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
+from nxc.connection import resolver
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.logger import NXCAdapter, nxc_logger
 from nxc.protocols.ldap.bloodhound import BloodHound
@@ -790,8 +790,8 @@ class ldap(connection):
 
     def dc_list(self):
         # Building the search filter
-        resolver = dns.resolver.Resolver()
-        resolver.nameservers = [self.host]
+        resolv = resolver.Resolver()
+        resolv.nameservers = [self.host]
 
         search_filter = "(&(objectCategory=computer)(primaryGroupId=516))"
         attributes = ["dNSHostName"]
@@ -810,7 +810,7 @@ class ldap(connection):
                             break  # If a record has been found, stop checking further
                         
                         try:
-                            answers = resolver.resolve(name, record_type)
+                            answers = resolv.resolve(name, record_type)
                             for rdata in answers:
                                 if record_type in ["A", "AAAA"]:
                                     ip_address = rdata.to_text()
@@ -825,11 +825,11 @@ class ldap(connection):
                                 elif record_type == "NS":
                                     self.logger.highlight(f"{name} NS = {colored(rdata.to_text(), host_info_colors[0])}")
                                     found_record = True
-                        except dns.resolver.NXDOMAIN:
+                        except resolv.NXDOMAIN:
                             self.logger.fail(f"{name} = Host not found (NXDOMAIN)")
-                        except dns.resolver.Timeout:
+                        except resolv.Timeout:
                             self.logger.fail(f"{name} = Connection timed out")
-                        except dns.resolver.NoAnswer:
+                        except resolv.NoAnswer:
                             self.logger.fail(f"{name} = DNS server did not respond")
                         except Exception as e:
                             self.logger.fail(f"{name} encountered an unexpected error: {e}")
