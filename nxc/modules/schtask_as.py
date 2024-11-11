@@ -154,8 +154,8 @@ class TSCH_EXEC:
         dce.connect()
         dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
         dce.bind(tsch.MSRPC_UUID_TSCHS)
-        self.logger.display(f"Deleting task \\{tmpName}")
-        tsch.hSchRpcDelete(dce, f"\\{tmpName}")
+        self.logger.display(f"Deleting task \\{self.task}")
+        tsch.hSchRpcDelete(dce, f"\\{self.task}")
         dce.disconnect()
 
     def execute(self, command, output=False):
@@ -234,7 +234,6 @@ class TSCH_EXEC:
         return xml
 
     def execute_handler(self, command, fileless=False):
-        global tmpName
         dce = self.__rpctransport.get_dce_rpc()
 
         if self.__doKerberos:
@@ -242,49 +241,50 @@ class TSCH_EXEC:
 
         dce.set_credentials(*self.__rpctransport.get_credentials())
         dce.connect()
-        tmpName = gen_random_string(8) if self.task is None else self.task
+        # Give self.task a random string as name if not already specified
+        self.task = gen_random_string(8) if self.task is None else self.task
         xml = self.gen_xml(command, fileless)
 
         self.logger.info(f"Task XML: {xml}")
-        self.logger.info(f"Creating task \\{tmpName}")
+        self.logger.info(f"Creating task \\{self.task}")
         try:
             # windows server 2003 has no MSRPC_UUID_TSCHS, if it bind, it will return abstract_syntax_not_supported
             dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
             dce.bind(tsch.MSRPC_UUID_TSCHS)
-            tsch.hSchRpcRegisterTask(dce, f"\\{tmpName}", xml, tsch.TASK_CREATE, NULL, tsch.TASK_LOGON_NONE)
+            tsch.hSchRpcRegisterTask(dce, f"\\{self.task}", xml, tsch.TASK_CREATE, NULL, tsch.TASK_LOGON_NONE)
         except Exception as e:
             if "ERROR_NONE_MAPPED" in str(e):
                 self.logger.fail(f"User {self.user} is not connected on the target, cannot run the task")
-                tsch.hSchRpcDelete(dce, f"\\{tmpName}")
+                tsch.hSchRpcDelete(dce, f"\\{self.task}")
             if e.error_code and hex(e.error_code) == "0x80070005":
                 self.logger.fail("Schtask_as: Create schedule task got blocked.")
-                tsch.hSchRpcDelete(dce, f"\\{tmpName}")
+                tsch.hSchRpcDelete(dce, f"\\{self.task}")
             if "ERROR_TRUSTED_DOMAIN_FAILURE" in str(e):
                 self.logger.fail(f"User {self.user} does not exist in the domain.")
-                tsch.hSchRpcDelete(dce, f"\\{tmpName}")
+                tsch.hSchRpcDelete(dce, f"\\{self.task}")
             if "SCHED_S_TASK_HAS_NOT_RUN" in str(e):
-                tsch.hSchRpcDelete(dce, f"\\{tmpName}")
+                tsch.hSchRpcDelete(dce, f"\\{self.task}")
             if "ERROR_ALREADY_EXISTS" in str(e):
                 self.logger.fail(f"Schtask_as: Create schedule task failed: {e}")
             else:
                 self.logger.fail(f"Schtask_as: Create schedule task failed: {e}")
-                tsch.hSchRpcDelete(dce, f"\\{tmpName}")
+                tsch.hSchRpcDelete(dce, f"\\{self.task}")
             return
 
-        self.logger.info(f"Running task \\{tmpName}")
-        tsch.hSchRpcRun(dce, f"\\{tmpName}")
+        self.logger.info(f"Running task \\{self.task}")
+        tsch.hSchRpcRun(dce, f"\\{self.task}")
 
         done = False
         while not done:
-            self.logger.debug(f"Calling SchRpcGetLastRunInfo for \\{tmpName}")
-            resp = tsch.hSchRpcGetLastRunInfo(dce, f"\\{tmpName}")
+            self.logger.debug(f"Calling SchRpcGetLastRunInfo for \\{self.task}")
+            resp = tsch.hSchRpcGetLastRunInfo(dce, f"\\{self.task}")
             if resp["pLastRuntime"]["wYear"] != 0:
                 done = True
             else:
                 sleep(2)
 
-        self.logger.info(f"Deleting task \\{tmpName}")
-        tsch.hSchRpcDelete(dce, f"\\{tmpName}")
+        self.logger.info(f"Deleting task \\{self.task}")
+        tsch.hSchRpcDelete(dce, f"\\{self.task}")
 
         if self.__retOutput:
             if fileless:
