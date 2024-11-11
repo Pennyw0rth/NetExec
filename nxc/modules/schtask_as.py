@@ -278,9 +278,6 @@ class TSCH_EXEC:
                     tsch.hSchRpcDelete(dce, f"\\{self.task}")
             return
 
-        self.logger.info(f"Running task \\{self.task}")
-        tsch.hSchRpcRun(dce, f"\\{self.task}")
-
         done = False
         while not done:
             self.logger.debug(f"Calling SchRpcGetLastRunInfo for \\{self.task}")

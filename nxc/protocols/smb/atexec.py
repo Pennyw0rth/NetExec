@@ -151,9 +151,6 @@ class TSCH_EXEC:
                 self.logger.fail(str(e))
             return
 
-        self.logger.info(f"Running task \\{tmpName}")
-        tsch.hSchRpcRun(dce, f"\\{tmpName}")
-
         done = False
         while not done:
             self.logger.debug(f"Calling SchRpcGetLastRunInfo for \\{tmpName}")
