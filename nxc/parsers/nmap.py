@@ -11,6 +11,8 @@ protocol_dict = {
     "rdp": {"ports": [3389], "services": ["ms-wbt-server"]},
     "winrm": {"ports": [5985, 5986], "services": ["wsman"]},
     "vnc": {"ports": [5900, 5901, 5902, 5903, 5904, 5905, 5906], "services": ["vnc"]},
+    "wmi": {"ports": [135], "services": ["msrpc"]},
+    "nfs": {"ports": [2049], "services": ["nfs"]},
 }
 
 
