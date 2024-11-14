@@ -1091,7 +1091,7 @@ class ldap(connection):
         UF_TRUSTED_FOR_DELEGATION = 0x80000
         UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION = 0x1000000
         UF_ACCOUNTDISABLE = 0x2
-        SERVER_TRUST_ACCOUNT = 0x2000
+        UF_SERVER_TRUST_ACCOUNT = 0x2000
 
         def printTable(items, header):
             colLen = []
@@ -1124,12 +1124,12 @@ class ldap(connection):
                          f"(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_FOR_DELEGATION})"
                          "(msDS-AllowedToDelegateTo=*)(msDS-AllowedToActOnBehalfOfOtherIdentity=*))"
                          f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE})))")
-        # f"(!(UserAccountControl:1.2.840.113556.1.4.803:={SERVER_TRUST_ACCOUNT})))")  This would filter out RBCD to DCs
+        # f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_SERVER_TRUST_ACCOUNT})))")  This would filter out RBCD to DCs
 
         attributes = ["sAMAccountName", "pwdLastSet", "userAccountControl", "objectCategory",
                       "msDS-AllowedToActOnBehalfOfOtherIdentity", "msDS-AllowedToDelegateTo"]
 
-        resp = self.search(search_filter, attributes, 0)
+        resp = self.search(search_filter, attributes)
         answers = []
         self.logger.debug(f"Total of records returned {len(resp):d}")
         resp_parse = parse_result_attributes(resp)
@@ -1149,7 +1149,7 @@ class ldap(connection):
                 objectType = item.get("objectCategory")
 
                 # Filter out DCs, unconstrained delegation to DCs is not a useful information
-                if userAccountControl & UF_TRUSTED_FOR_DELEGATION and not userAccountControl & SERVER_TRUST_ACCOUNT:
+                if userAccountControl & UF_TRUSTED_FOR_DELEGATION and not userAccountControl & UF_SERVER_TRUST_ACCOUNT:
                     delegation = "Unconstrained"
                     rightsTo.append("N/A")
                 elif userAccountControl & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
@@ -1171,8 +1171,8 @@ class ldap(connection):
                         search_filter = "(&(|"
                         for ace in sd["Dacl"].aces:
                             search_filter += "(objectSid=" + ace["Ace"]["Sid"].formatCanonical() + ")"
-                        search_filter += ")(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))"
-                        delegUserResp = self.search(search_filter, attributes=["sAMAccountName", "objectCategory"], sizeLimit=999)
+                        search_filter += f")(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE})))"
+                        delegUserResp = self.search(search_filter, attributes=["sAMAccountName", "objectCategory"])
                         delegUserResp_parse = parse_result_attributes(delegUserResp)
 
                         for rbcd in delegUserResp_parse:
