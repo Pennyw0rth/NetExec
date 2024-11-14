@@ -1179,17 +1179,11 @@ class ldap(connection):
                             rbcdRights.append(str(rbcd.get("sAMAccountName")))
                             rbcdObjType.append(str(rbcd.get("objectCategory")))
 
-                        if int(userAccountControl) & UF_ACCOUNTDISABLE:
-                            self.logger.debug(f"Bypassing disabled account {sAMAccountName}")
-                        else:
-                            for rights, objType in zip(rbcdRights, rbcdObjType):
-                                answers.append([rights, objType, "Resource-Based Constrained", sAMAccountName])
+                        for rights, objType in zip(rbcdRights, rbcdObjType):
+                            answers.append([rights, objType, "Resource-Based Constrained", sAMAccountName])
 
                 if delegation in ["Unconstrained", "Constrained", "Constrained w/ Protocol Transition"]:
-                    if int(userAccountControl) & UF_ACCOUNTDISABLE:
-                        self.logger.debug(f"Bypassing disabled account {sAMAccountName}")
-                    else:
-                        answers.append([sAMAccountName, objectType, delegation, rightsTo])
+                    answers.append([sAMAccountName, objectType, delegation, rightsTo])
 
             except Exception as e:
                 self.logger.error(f"Skipping item, cannot process due to error {e}")
