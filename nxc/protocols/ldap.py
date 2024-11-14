@@ -1148,7 +1148,8 @@ class ldap(connection):
                 userAccountControl = int(item["userAccountControl"])
                 objectType = item.get("objectCategory")
 
-                if userAccountControl & UF_TRUSTED_FOR_DELEGATION:
+                # Filter out DCs, unconstrained delegation to DCs is not a useful information
+                if userAccountControl & UF_TRUSTED_FOR_DELEGATION and not userAccountControl & SERVER_TRUST_ACCOUNT:
                     delegation = "Unconstrained"
                     rightsTo.append("N/A")
                 elif userAccountControl & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
@@ -1188,9 +1189,7 @@ class ldap(connection):
                     if int(userAccountControl) & UF_ACCOUNTDISABLE:
                         self.logger.debug(f"Bypassing disabled account {sAMAccountName}")
                     else:
-                        # Check if the entry is invalid, i.e., for "Unconstrained N/A"
-                        if not (delegation == "Unconstrained" and rightsTo == ["N/A"]):
-                            answers.append([sAMAccountName, objectType, delegation, rightsTo])
+                        answers.append([sAMAccountName, objectType, delegation, rightsTo])
 
             except Exception as e:
                 self.logger.error(f"Skipping item, cannot process due to error {e}")
