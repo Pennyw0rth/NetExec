@@ -21,6 +21,7 @@ from impacket.dcerpc.v5.samr import (
     UF_DONT_REQUIRE_PREAUTH,
     UF_TRUSTED_FOR_DELEGATION,
     UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION,
+    UF_SERVER_TRUST_ACCOUNT,
 )
 from impacket.dcerpc.v5.transport import DCERPCTransportFactory
 from impacket.krb5 import constants
@@ -1087,12 +1088,6 @@ class ldap(connection):
                 self.logger.highlight(f"{attr:<20} {vals}")
 
     def find_delegation(self):
-        # Constants for delegation types
-        UF_TRUSTED_FOR_DELEGATION = 0x80000
-        UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION = 0x1000000
-        UF_ACCOUNTDISABLE = 0x2
-        UF_SERVER_TRUST_ACCOUNT = 0x2000
-
         def printTable(items, header):
             colLen = []
 
