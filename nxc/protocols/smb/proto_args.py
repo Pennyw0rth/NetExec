@@ -19,6 +19,7 @@ def proto_args(parser, parents):
     smb_parser.add_argument("--gen-relay-list", metavar="OUTPUT_FILE", help="outputs all hosts that don't require SMB signing to the specified file")
     smb_parser.add_argument("--smb-timeout", help="SMB connection timeout", type=int, default=2)
     smb_parser.add_argument("--laps", dest="laps", metavar="LAPS", type=str, help="LAPS authentification", nargs="?", const="administrator")
+    smb_parser.add_argument("--generate-hosts-file", type=str, help="Generate a hosts file like from a range of IP")
     self_delegate_arg.make_required = [delegate_arg]
 
     cred_gathering_group = smb_parser.add_argument_group("Credential Gathering", "Options for gathering credentials")
@@ -34,6 +35,7 @@ def proto_args(parser, parents):
 
     mapping_enum_group = smb_parser.add_argument_group("Mapping/Enumeration", "Options for Mapping/Enumerating")
     mapping_enum_group.add_argument("--shares", action="store_true", help="enumerate shares and access")
+    mapping_enum_group.add_argument("--dir", nargs="?", type=str, const="", help="List the content of a path (default path: '%(const)s')")
     mapping_enum_group.add_argument("--interfaces", action="store_true", help="enumerate network interfaces")
     mapping_enum_group.add_argument("--no-write-check", action="store_true", help="Skip write check on shares (avoid leaving traces when missing delete permissions)")
     mapping_enum_group.add_argument("--filter-shares", nargs="+", help="Filter share by access, option 'read' 'write' or 'read,write'")

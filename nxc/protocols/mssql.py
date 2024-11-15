@@ -141,7 +141,6 @@ class mssql(connection):
 
     def print_host_info(self):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain})")
-        return True
 
     @reconnect_mssql
     def kerberos_login(

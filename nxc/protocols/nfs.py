@@ -69,7 +69,6 @@ class nfs(connection):
 
     def print_host_info(self):
         self.logger.display(f"Target supported NFS versions: ({', '.join(str(x) for x in self.nfs_versions)})")
-        return True
 
     def disconnect(self):
         """Disconnect mount and portmap if they are connected"""
@@ -171,6 +170,10 @@ class nfs(connection):
             for share, network in zip(shares, networks):
                 try:
                     mnt_info = self.mount.mnt(share, self.auth)
+                    self.logger.debug(f"Mounted {share} - {mnt_info}")
+                    if mnt_info["status"] != 0:
+                        self.logger.fail(f"Error mounting share {share}: {NFSSTAT3[mnt_info['status']]}")
+                        continue
                     file_handle = mnt_info["mountinfo"]["fhandle"]
 
                     info = self.nfs3.fsstat(file_handle, self.auth)
@@ -225,7 +228,13 @@ class nfs(connection):
             for share, network in zip(shares, networks):
                 try:
                     mount_info = self.mount.mnt(share, self.auth)
-                    contents = self.list_dir(mount_info["mountinfo"]["fhandle"], share, self.args.enum_shares)
+                    self.logger.debug(f"Mounted {share} - {mount_info}")
+                    if mount_info["status"] != 0:
+                        self.logger.fail(f"Error mounting share {share}: {NFSSTAT3[mount_info['status']]}")
+                        continue
+
+                    fhandle = mount_info["mountinfo"]["fhandle"]
+                    contents = self.list_dir(fhandle, share, self.args.enum_shares)
 
                     self.logger.success(share)
                     if contents:
@@ -273,19 +282,31 @@ class nfs(connection):
             self.auth["uid"] = attrs["attributes"]["uid"]
             dir_handle = mnt_info["mountinfo"]["fhandle"]
 
-            # Get the file handle and read the file data
+            # Get the file handle and file size
             dir_data = self.nfs3.lookup(dir_handle, file_name, auth=self.auth)
             file_handle = dir_data["resok"]["object"]["data"]
-            file_data = self.nfs3.read(file_handle, auth=self.auth)
 
-            if "resfail" in file_data:
-                raise Exception("Insufficient Permissions")
-            else:
-                data = file_data["resok"]["data"]
+            # Handle files over the default chunk size of 1024 * 1024
+            offset = 0
+            eof = False
 
-            # Write the data to the local file
+            # Loop until we have read the entire file
             with open(local_file_path, "wb+") as local_file:
-                local_file.write(data)
+                while not eof:
+                    file_data = self.nfs3.read(file_handle, offset, auth=self.auth)
+
+                    if "resfail" in file_data:
+                        raise Exception("Insufficient Permissions")
+
+                    else:
+                        # Get the data and append it to the total file data
+                        data = file_data["resok"]["data"]
+                        eof = file_data["resok"]["eof"]
+
+                        # Update the offset to read the next chunk
+                        offset += len(data)
+                        # Write the file data to the local file
+                        local_file.write(data)
 
             self.logger.highlight(f"File successfully downloaded to {local_file_path} from {remote_file_path}")
 
