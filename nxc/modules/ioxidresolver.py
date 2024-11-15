@@ -18,8 +18,8 @@ class NXCModule:
 
     def options(self, context, module_options):
         """DIFFERENT show only ip address if different from target ip (Default: False)"""
-        if module_options and "DIFFERENT" in module_options:
-            self.pivot = module_options.get("DIFFERENT", "false").lower() in ("true", "1")
+        self.pivot = module_options.get("DIFFERENT", "false").lower() in ["true", "1"]
+
     def on_login(self, context, connection):
         try:
             rpctransport = transport.DCERPCTransportFactory(f"ncacn_ip_tcp:{connection.host}")
@@ -39,7 +39,7 @@ class NXCModule:
                 try:
                     ip_address(NetworkAddr[:-1])
                     if self.pivot:
-                        if NetworkAddr.rtrip() != connection.host.rtrip():
+                        if NetworkAddr.rstrip("\x00") != connection.host:
                             context.log.highlight(f"Address: {NetworkAddr}")
                     else:
                         context.log.highlight(f"Address: {NetworkAddr}")
