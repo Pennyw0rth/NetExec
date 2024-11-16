@@ -241,7 +241,7 @@ class smb(connection):
                     self.hostname = self.host
                     self.targetDomain = self.host
 
-        self.domain = self.targetDomain if not self.args.domain else self.args.domain
+        self.domain = self.targetDomain if self.args.domain is None else self.args.domain
 
         if self.args.local_auth:
             self.domain = self.hostname
