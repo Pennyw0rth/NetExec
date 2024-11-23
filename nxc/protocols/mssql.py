@@ -444,8 +444,7 @@ class mssql(connection):
                 if username == "NULL":
                     continue
                 rid = so_far + n
-                sid_type = "SID TYPE ??"
-                self.logger.highlight(f"{rid}: {username} ({sid_type})")
+                self.logger.highlight(f"{rid}: {username}")
                 entries.append(
                     {
                         "rid": rid,
@@ -455,16 +454,4 @@ class mssql(connection):
                 )
 
             so_far += simultaneous
-            # if user == "NULL":
-            #     continue
-            # sid_type = "SID TYPE?"
-            # 
-            # entries.append(
-            #     {
-            #         "rid": rid,
-            #         "domain": domain,
-            #         "username": user.split("\\")[1],
-            #         #"sidtype": sid_type, #??
-            #     }
-            # )
         return entries
