@@ -423,9 +423,10 @@ class mssql(connection):
         if not max_rid:
             max_rid = int(self.args.rid_brute)
 
-
-
+        # Query domain
         domain = self.conn.sql_query("SELECT DEFAULT_DOMAIN()")[0][""]
+
+        # Query known group to determine raw SID & convert to canon
         raw_domain_sid = self.conn.sql_query(f"SELECT SUSER_SID('{domain}\\Domain Admins')")[0][""]
         domain_sid = SID(bytes.fromhex(raw_domain_sid.decode())).formatCanonical()[:-4]
 
@@ -435,8 +436,9 @@ class mssql(connection):
             sids_to_check = (max_rid - so_far) % simultaneous if (max_rid - so_far) // simultaneous == 0 else simultaneous
             if sids_to_check == 0:
                 break
+
+            # Batch query multiple sids at a time
             sid_queries = [f"SELECT SUSER_SNAME(SID_BINARY(N'{domain_sid}-{i:d}'))" for i in range(so_far, so_far + sids_to_check)]
-            
             raw_output = self.conn.sql_query(";".join(sid_queries))
 
             for n, item in enumerate(raw_output):
