@@ -428,19 +428,43 @@ class mssql(connection):
         domain = self.conn.sql_query("SELECT DEFAULT_DOMAIN()")[0][""]
         raw_domain_sid = self.conn.sql_query(f"SELECT SUSER_SID('{domain}\\Domain Admins')")[0][""]
         domain_sid = SID(bytes.fromhex(raw_domain_sid.decode())).formatCanonical()[:-4]
-        for rid in range(500, max_rid + 1):
-            query = f"SELECT SUSER_SNAME(SID_BINARY(N'{domain_sid}-{rid:d}'))"
-            user = self.conn.sql_query(query)[0][""]
-            if user == "NULL":
-                continue
-            sid_type = "SID TYPE?"
-            self.logger.highlight(f"{rid}: {user} ({sid_type})")
-            entries.append(
-                {
-                    "rid": rid,
-                    "domain": domain,
-                    "username": user.split("\\")[1],
-                    #"sidtype": sid_type, #??
-                }
-            )
+
+        so_far = 0
+        simultaneous = 1000
+        for _j in range(max_rid // simultaneous + 1):
+            sids_to_check = (max_rid - so_far) % simultaneous if (max_rid - so_far) // simultaneous == 0 else simultaneous
+            if sids_to_check == 0:
+                break
+            sid_queries = [f"SELECT SUSER_SNAME(SID_BINARY(N'{domain_sid}-{i:d}'))" for i in range(so_far, so_far + sids_to_check)]
+            
+            raw_output = self.conn.sql_query(";".join(sid_queries))
+
+            for n, item in enumerate(raw_output):
+                username = item[""]
+                if username == "NULL":
+                    continue
+                rid = so_far + n
+                sid_type = "SID TYPE ??"
+                self.logger.highlight(f"{rid}: {username} ({sid_type})")
+                entries.append(
+                    {
+                        "rid": rid,
+                        "domain": domain,
+                        "username": username.split("\\")[1],
+                    }
+                )
+
+            so_far += simultaneous
+            # if user == "NULL":
+            #     continue
+            # sid_type = "SID TYPE?"
+            # 
+            # entries.append(
+            #     {
+            #         "rid": rid,
+            #         "domain": domain,
+            #         "username": user.split("\\")[1],
+            #         #"sidtype": sid_type, #??
+            #     }
+            # )
         return entries
