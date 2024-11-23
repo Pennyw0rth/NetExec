@@ -15,6 +15,7 @@ from nxc.protocols.mssql.mssqlexec import MSSQLEXEC
 
 from impacket import tds, ntlm
 from impacket.krb5.ccache import CCache
+from impacket.dcerpc.v5.dtypes import SID
 from impacket.tds import (
     SQLErrorException,
     TDS_LOGINACK_TOKEN,
@@ -416,3 +417,30 @@ class mssql(connection):
                     else:
                         _type = f"{key['Type']:d}"
                     return f"(ENVCHANGE({_type}): Old Value: {record['OldValue'].decode('utf-16le')}, New Value: {record['NewValue'].decode('utf-16le')})"
+
+    def rid_brute(self, max_rid=None):
+        entries = []
+        if not max_rid:
+            max_rid = int(self.args.rid_brute)
+
+
+
+        domain = self.conn.sql_query("SELECT DEFAULT_DOMAIN()")[0][""]
+        raw_domain_sid = self.conn.sql_query(f"SELECT SUSER_SID('{domain}\\Domain Admins')")[0][""]
+        domain_sid = SID(bytes.fromhex(raw_domain_sid.decode())).formatCanonical()[:-4]
+        for rid in range(500, max_rid + 1):
+            query = f"SELECT SUSER_SNAME(SID_BINARY(N'{domain_sid}-{rid:d}'))"
+            user = self.conn.sql_query(query)[0][""]
+            if user == "NULL":
+                continue
+            sid_type = "SID TYPE?"
+            self.logger.highlight(f"{rid}: {user} ({sid_type})")
+            entries.append(
+                {
+                    "rid": rid,
+                    "domain": domain,
+                    "username": user.split("\\")[1],
+                    #"sidtype": sid_type, #??
+                }
+            )
+        return entries
