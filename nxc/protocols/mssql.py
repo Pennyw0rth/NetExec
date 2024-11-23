@@ -423,12 +423,16 @@ class mssql(connection):
         if not max_rid:
             max_rid = int(self.args.rid_brute)
 
-        # Query domain
-        domain = self.conn.sql_query("SELECT DEFAULT_DOMAIN()")[0][""]
+        try:
+            # Query domain
+            domain = self.conn.sql_query("SELECT DEFAULT_DOMAIN()")[0][""]
 
-        # Query known group to determine raw SID & convert to canon
-        raw_domain_sid = self.conn.sql_query(f"SELECT SUSER_SID('{domain}\\Domain Admins')")[0][""]
-        domain_sid = SID(bytes.fromhex(raw_domain_sid.decode())).formatCanonical()[:-4]
+            # Query known group to determine raw SID & convert to canon
+            raw_domain_sid = self.conn.sql_query(f"SELECT SUSER_SID('{domain}\\Domain Admins')")[0][""]
+            domain_sid = SID(bytes.fromhex(raw_domain_sid.decode())).formatCanonical()[:-4]
+        except Exception as e:
+            self.logger.fail(f"Error parsing SID. Not domain joined?: {e}")
+
 
         so_far = 0
         simultaneous = 1000
