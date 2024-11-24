@@ -93,11 +93,6 @@ class NXCModule:
     "S-1-5-32-580": "BUILTIN\\Remote Management Users",
 }
 
-
-    def options(self, context, module_options):
-        """ """
-        pass
-
     def options(self, context, module_options):
         """
         Define module options.
@@ -259,9 +254,7 @@ class NXCModule:
 
 
     def resolve_sid(self, context, sid, ldap_connection):
-        """
-        Resolves a SID to a human-readable name using well-known mappings or LDAP queries.
-        """
+        """Resolves a SID to a human-readable name using well-known mappings or LDAP queries."""
         if sid in self.WELL_KNOWN_SIDS:
             return self.WELL_KNOWN_SIDS[sid]
 
