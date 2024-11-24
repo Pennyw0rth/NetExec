@@ -433,7 +433,6 @@ class mssql(connection):
         except Exception as e:
             self.logger.fail(f"Error parsing SID. Not domain joined?: {e}")
 
-
         so_far = 0
         simultaneous = 1000
         for _j in range(max_rid // simultaneous + 1):
