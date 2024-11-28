@@ -554,8 +554,11 @@ class smb(connection):
         except OSError as e:
             if "Connection reset by peer" in str(e):
                 self.logger.info(f"SMBv1 might be disabled on {self.host}")
-            if "timed out" in str(e):
+            elif "timed out" in str(e):
                 self.is_timeouted = True
+                self.logger.debug(f"Timeout creating SMBv1 connection to {self.host}")
+            else:
+                self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
             return False
         except NetBIOSError:
             self.logger.info(f"SMBv1 disabled on {self.host}")
@@ -576,15 +579,7 @@ class smb(connection):
                 timeout=self.args.smb_timeout,
             )
             self.smbv1 = False
-        except OSError as e:
-            # This should not happen anymore!!!
-            if str(e).find("Too many open files") != -1:
-                if not self.logger:
-                    print("DEBUG ERROR: logger not set, please open an issue on github: " + str(self) + str(self.logger))
-                    self.proto_logger()
-                self.logger.fail(f"SMBv3 connection error on {self.host}: {e}")
-            return False
-        except (Exception, NetBIOSTimeout) as e:
+        except (Exception, NetBIOSTimeout, OSError) as e:
             self.logger.info(f"Error creating SMBv3 connection to {self.host}: {e}")
             return False
         return True
