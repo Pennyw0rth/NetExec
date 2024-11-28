@@ -159,6 +159,7 @@ class smb(connection):
         self.bootkey = None
         self.output_filename = None
         self.smbv1 = None
+        self.is_timeouted = False
         self.signing = False
         self.smb_share_name = smb_share_name
         self.pvkbytes = None
@@ -551,8 +552,13 @@ class smb(connection):
             )
             self.smbv1 = True
         except OSError as e:
-            if str(e).find("Connection reset by peer") != -1:
+            if "Connection reset by peer" in str(e):
                 self.logger.info(f"SMBv1 might be disabled on {self.host}")
+            if "timed out" in str(e):
+                self.is_timeouted = True
+            return False
+        except NetBIOSError:
+            self.logger.info(f"SMBv1 disabled on {self.host}")
             return False
         except (Exception, NetBIOSTimeout) as e:
             self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
@@ -596,7 +602,7 @@ class smb(connection):
             self.smbv1 = self.create_smbv1_conn()
             if self.smbv1:
                 return True
-            else:
+            elif not self.is_timeouted:
                 return self.create_smbv3_conn()
         elif not no_smbv1 and self.smbv1:
             return self.create_smbv1_conn()
