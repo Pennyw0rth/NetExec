@@ -43,7 +43,7 @@ def create_temp_logger(caller_frame, formatted_text, args, kwargs):
     temp_logger = logging.getLogger("temp")
     formatter = logging.Formatter("%(message)s", datefmt="[%X]")
     handler = SmartDebugRichHandler(formatter=formatter)
-    handler.handle(LogRecord(temp_logger.name, logging.INFO, caller_frame.f_code.co_filename, caller_frame.f_lineno, formatted_text, args, kwargs, caller_frame=caller_frame))
+    handler.handle(LogRecord(temp_logger.name, logging.INFO, caller_frame.f_code.co_filename, caller_frame.f_lineno, formatted_text, args, None, caller_frame=caller_frame))
 
 
 class SmartDebugRichHandler(RichHandler):
@@ -56,9 +56,6 @@ class SmartDebugRichHandler(RichHandler):
 
     def emit(self, record):
         """Overrides the emit method of the RichHandler class so we can set the proper pathname and lineno"""
-        # for some reason in RDP, the exc_text is None which leads to a KeyError in Python logging
-        record.exc_text = record.getMessage() if record.exc_text is None else record.exc_text
-
         if hasattr(record, "caller_frame"):
             frame_info = inspect.getframeinfo(record.caller_frame)
             record.pathname = frame_info.filename
