@@ -21,13 +21,16 @@ from impacket.dcerpc.v5.samr import (
     UF_DONT_REQUIRE_PREAUTH,
     UF_TRUSTED_FOR_DELEGATION,
     UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION,
+    UF_SERVER_TRUST_ACCOUNT,
 )
 from impacket.dcerpc.v5.transport import DCERPCTransportFactory
 from impacket.krb5 import constants
 from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError
 from impacket.krb5.types import Principal, KerberosException
 from impacket.ldap import ldap as ldap_impacket
+from impacket.ldap import ldaptypes
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
+from impacket.ldap.ldap import LDAPFilterSyntaxError
 from impacket.smb import SMB_DIALECT
 from impacket.smbconnection import SMBConnection, SessionError
 
@@ -171,12 +174,12 @@ class ldap(connection):
                     self.logger.debug(f"ldap_connection: {ldap_connection}")
             except SysCallError as e:
                 if proto == "ldaps":
-                    self.logger.debug(f"LDAPs connection to {ldap_url} failed - {e}")
+                    self.logger.fail(f"LDAPs connection to {ldap_url} failed - {e}")
                     # https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/enable-ldap-over-ssl-3rd-certification-authority
-                    self.logger.debug("Even if the port is open, LDAPS may not be configured")
+                    self.logger.fail("Even if the port is open, LDAPS may not be configured")
                 else:
-                    self.logger.debug(f"LDAP connection to {ldap_url} failed: {e}")
-                return [None, None, None]
+                    self.logger.fail(f"LDAP connection to {ldap_url} failed: {e}")
+                exit(1)
 
             resp = ldap_connection.search(
                 scope=ldapasn1_impacket.Scope("baseObject"),
@@ -301,7 +304,7 @@ class ldap(connection):
     def print_host_info(self):
         self.logger.debug("Printing host info for LDAP")
         if self.args.no_smb:
-            self.logger.extra["protocol"] = "LDAP" if self.port == "389" else "LDAPS"
+            self.logger.extra["protocol"] = "LDAP" if self.port == 389 else "LDAPS"
             self.logger.extra["port"] = self.port
             self.logger.display(f'{self.baseDN} (Hostname: {self.hostname.split(".")[0]}) (domain: {self.domain})')
         else:
@@ -311,7 +314,6 @@ class ldap(connection):
             smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
             self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1})")
             self.logger.extra["protocol"] = "LDAP"
-        return True
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.username = username
@@ -493,15 +495,12 @@ class ldap(connection):
                         f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                         color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                     )
-                    self.logger.fail("LDAPS channel binding might be enabled, this is only supported with kerberos authentication. Try using '-k'.")
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
                     f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
-                if proto == "ldaps":
-                    self.logger.fail("LDAPS channel binding might be enabled, this is only supported with kerberos authentication. Try using '-k'.")
             return False
         except OSError as e:
             self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {'Error connecting to the domain, are you sure LDAP service is running on the target?'} \nError: {e}")
@@ -583,15 +582,12 @@ class ldap(connection):
                         f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                         color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                     )
-                    self.logger.fail("LDAPS channel binding might be enabled, this is only supported with kerberos authentication. Try using '-k'.")
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
                     f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
-                if proto == "ldaps":
-                    self.logger.fail("LDAPS channel binding might be enabled, this is only supported with kerberos authentication. Try using '-k'.")
             return False
         except OSError as e:
             self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {'Error connecting to the domain, are you sure LDAP service is running on the target?'} \nError: {e}")
@@ -693,7 +689,7 @@ class ldap(connection):
         t /= 10000000
         return t
 
-    def search(self, searchFilter, attributes, sizeLimit=0):
+    def search(self, searchFilter, attributes, sizeLimit=0) -> list:
         try:
             if self.ldapConnection:
                 self.logger.debug(f"Search Filter={searchFilter}")
@@ -713,8 +709,8 @@ class ldap(connection):
                 e.getAnswers()
             else:
                 self.logger.fail(e)
-                return False
-        return False
+                return []
+        return []
 
     def users(self):
         """
@@ -751,7 +747,7 @@ class ldap(connection):
 
             users = parse_result_attributes(resp)
             # we print the total records after we parse the results since often SearchResultReferences are returned
-            self.logger.display(f"Total records returned: {len(users):d}")
+            self.logger.display(f"Enumerated {len(users):d} domain users: {self.domain}")
             self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
             for user in users:
                 # TODO: functionize this - we do this calculation in a bunch of places, different, including in the `pso` module
@@ -1053,6 +1049,137 @@ class ldap(connection):
             else:
                 self.logger.highlight("No entries found!")
         self.logger.fail("Error with the LDAP account used")
+
+    def query(self):
+        """
+        Query the LDAP server with the specified filter and attributes.
+        Example usage:
+            --query "(sAMAccountName=Administrator)" "sAMAccountName pwdLastSet memberOf"
+        """
+        search_filter = self.args.query[0]
+        attributes = [attr.strip() for attr in self.args.query[1].split(" ")]
+        if len(attributes) == 1 and attributes[0] == "":
+            attributes = None
+        if not search_filter:
+            self.logger.fail("No filter specified")
+            return
+        self.logger.debug(f"Querying LDAP server with filter: {search_filter} and attributes: {attributes}")
+        try:
+            resp = self.search(search_filter, attributes, 0)
+        except LDAPFilterSyntaxError as e:
+            self.logger.fail(f"LDAP Filter Syntax Error: {e}")
+            return
+        for item in resp:
+            if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
+                continue
+            self.logger.success(f"Response for object: {item['objectName']}")
+            for attribute in item["attributes"]:
+                attr = f"{attribute['type']}:"
+                vals = str(attribute["vals"]).replace("\n", "")
+                if "SetOf: " in vals:
+                    vals = vals.replace("SetOf: ", "")
+                self.logger.highlight(f"{attr:<20} {vals}")
+
+    def find_delegation(self):
+        def printTable(items, header):
+            colLen = []
+
+            # Calculating maximum lenght before parsing CN.
+            for i, col in enumerate(header):
+                rowMaxLen = max(len(row[1].split(",")[0].split("CN=")[-1]) for row in items) if i == 1 else max(len(str(row[i])) for row in items)
+                colLen.append(max(rowMaxLen, len(col)))
+
+            # Create the format string for each row
+            outputFormat = " ".join([f"{{{num}:{width}s}}" for num, width in enumerate(colLen)])
+
+            # Print header
+            self.logger.highlight(outputFormat.format(*header))
+            self.logger.highlight(" ".join(["-" * itemLen for itemLen in colLen]))
+
+            # Print rows
+            for row in items:
+                # Get first CN value.
+                if "CN=" in row[1]:
+                    row[1] = row[1].split(",")[0].split("CN=")[-1]
+
+                # Added join for DelegationRightsTo
+                row[3] = ", ".join(str(x) for x in row[3]) if isinstance(row[3], list) else row[3]
+
+                self.logger.highlight(outputFormat.format(*row))
+
+        # Building the search filter
+        search_filter = (f"(&(|(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION})"
+                         f"(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_FOR_DELEGATION})"
+                         "(msDS-AllowedToDelegateTo=*)(msDS-AllowedToActOnBehalfOfOtherIdentity=*))"
+                         f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE})))")
+        # f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_SERVER_TRUST_ACCOUNT})))")  This would filter out RBCD to DCs
+
+        attributes = ["sAMAccountName", "pwdLastSet", "userAccountControl", "objectCategory",
+                      "msDS-AllowedToActOnBehalfOfOtherIdentity", "msDS-AllowedToDelegateTo"]
+
+        resp = self.search(search_filter, attributes)
+        answers = []
+        self.logger.debug(f"Total of records returned {len(resp):d}")
+        resp_parse = parse_result_attributes(resp)
+
+        for item in resp_parse:
+            sAMAccountName = ""
+            userAccountControl = 0
+            delegation = ""
+            objectType = ""
+            rightsTo = []
+            protocolTransition = 0
+
+            try:
+                sAMAccountName = item["sAMAccountName"]
+
+                userAccountControl = int(item["userAccountControl"])
+                objectType = item.get("objectCategory")
+
+                # Filter out DCs, unconstrained delegation to DCs is not a useful information
+                if userAccountControl & UF_TRUSTED_FOR_DELEGATION and not userAccountControl & UF_SERVER_TRUST_ACCOUNT:
+                    delegation = "Unconstrained"
+                    rightsTo.append("N/A")
+                elif userAccountControl & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
+                    delegation = "Constrained w/ Protocol Transition"
+                    protocolTransition = 1
+
+                if item.get("msDS-AllowedToDelegateTo") is not None:
+                    if protocolTransition == 0:
+                        delegation = "Constrained"
+                    rightsTo = item.get("msDS-AllowedToDelegateTo")
+
+                # Not an elif as an object could both have RBCD and another type of delegation
+                if item.get("msDS-AllowedToActOnBehalfOfOtherIdentity") is not None:
+                    databyte = item.get("msDS-AllowedToActOnBehalfOfOtherIdentity")
+                    rbcdRights = []
+                    rbcdObjType = []
+                    sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(databyte))
+                    if len(sd["Dacl"].aces) > 0:
+                        search_filter = "(&(|"
+                        for ace in sd["Dacl"].aces:
+                            search_filter += "(objectSid=" + ace["Ace"]["Sid"].formatCanonical() + ")"
+                        search_filter += f")(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE})))"
+                        delegUserResp = self.search(search_filter, attributes=["sAMAccountName", "objectCategory"])
+                        delegUserResp_parse = parse_result_attributes(delegUserResp)
+
+                        for rbcd in delegUserResp_parse:
+                            rbcdRights.append(str(rbcd.get("sAMAccountName")))
+                            rbcdObjType.append(str(rbcd.get("objectCategory")))
+
+                        for rights, objType in zip(rbcdRights, rbcdObjType):
+                            answers.append([rights, objType, "Resource-Based Constrained", sAMAccountName])
+
+                if delegation in ["Unconstrained", "Constrained", "Constrained w/ Protocol Transition"]:
+                    answers.append([sAMAccountName, objectType, delegation, rightsTo])
+
+            except Exception as e:
+                self.logger.error(f"Skipping item, cannot process due to error {e}")
+
+        if answers:
+            printTable(answers, header=["AccountName", "AccountType", "DelegationType", "DelegationRightsTo"])
+        else:
+            self.logger.fail("No entries found!")
 
     def trusted_for_delegation(self):
         # Building the search filter
@@ -1371,9 +1498,9 @@ class ldap(connection):
         ad = AD(
             auth=auth,
             domain=self.domain,
-            nameserver=self.args.nameserver,
-            dns_tcp=False,
-            dns_timeout=3,
+            nameserver=self.args.dns_server,
+            dns_tcp=self.args.dns_tcp,
+            dns_timeout=self.args.dns_timeout,
         )
         collect = resolve_collection_methods("Default" if not self.args.collection else self.args.collection)
         if not collect:
@@ -1388,6 +1515,7 @@ class ldap(connection):
             auth.get_tgt()
         if self.args.use_kcache:
             self.logger.highlight("Using kerberos auth from ccache")
+            auth.load_ccache()
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S") + "_"
         bloodhound = BloodHound(ad, self.hostname, self.host, self.port)

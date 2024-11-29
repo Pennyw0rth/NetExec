@@ -141,7 +141,6 @@ class mssql(connection):
 
     def print_host_info(self):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain})")
-        return True
 
     @reconnect_mssql
     def kerberos_login(
@@ -318,9 +317,10 @@ class mssql(connection):
             return False
         else:
             self.logger.success("Executed command via mssqlexec")   
-            output_lines = StringIO(output).readlines()
-            for line in output_lines:
-                self.logger.highlight(line.strip())
+            if output:
+                output_lines = StringIO(output).readlines()
+                for line in output_lines:
+                    self.logger.highlight(line.strip())
         return output
 
     @requires_admin

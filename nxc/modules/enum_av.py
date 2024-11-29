@@ -248,6 +248,14 @@ conf = {
             "pipes": [{"name": "CrowdStrike\\{*", "processes": ["CSFalconContainer.exe", "CSFalconService.exe"]}]
         },
         {
+            "name": "Cortex",
+            "services": [
+                {"name": "xdrhealth", "description": "Cortex XDR Health Helper"},
+                {"name": "cyserver", "description": " Cortex XDR"}
+            ],
+            "pipes": []
+        },
+        {
             "name": "Cybereason",
             "services": [
                 {"name": "CybereasonActiveProbe", "description": "Cybereason Active Probe"},
@@ -348,6 +356,27 @@ conf = {
                 {"name": "SophosEventStore", "processes": [""]},
                 {"name": "sophos_deviceencryption", "processes": [""]},
                 {"name": "sophoslivequery_*", "processes": [""]}
+            ]
+        },
+        {
+            "name": "Trellix Endpoint Detection and Response (EDR)",
+            "services": [
+                {"name": "McAfee Endpoint Security Platform Service", "description": "Trellix Core Service"},
+                {"name": "mfemactl", "description": "Trellix Management Service"},
+                {"name": "mfemms", "description": "McAfee Management Service"},
+                {"name": "mfefire", "description": "Trellix Firewall Core Service"},
+                {"name": "masvc", "description": "Trellix Agent Service"},
+                {"name": "macmnsvc", "description": "Trellix Agent Common Service"},
+                {"name": "mfetp", "description": "Trellix Endpoint Threat Prevention Service"},
+                {"name": "mfewc", "description": "Trellix Endpoint Security Web Control Service"}, 
+                {"name": "mfeaack", "description": "Trellix Anti-Malware Core Service"}
+            ],
+            "pipes": [
+                {"name": "TrellixEDR_Pipe_*", "processes": ["McAfeeEDR.exe"]},
+                {"name": "mfemactl_*", "processes": ["mfemactl.exe"]},
+                {"name": "mfefire_*", "processes": ["mfefire.exe"]},
+                {"name": "McAfeeAgent_Pipe_*", "processes": ["McAfeeAgent.exe"]},
+                {"name": "mfetp_*", "processes": ["mfetp.exe"]}
             ]
         },
         {

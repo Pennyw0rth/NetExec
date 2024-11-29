@@ -85,6 +85,8 @@ def get_host_addr_info(target, force_ipv6, dns_server, dns_tcp, dns_timeout):
 def requires_admin(func):
     def _decorator(self, *args, **kwargs):
         if self.admin_privs is False:
+            if hasattr(self.args, "exec_method") and self.args.exec_method == "mmcexec":
+                return func(self, *args, **kwargs)
             return None
         return func(self, *args, **kwargs)
 
@@ -132,7 +134,7 @@ class connection:
         # Authentication info
         self.password = ""
         self.username = ""
-        self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey)
+        self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey or (hasattr(self.args, "delegate") and self.args.delegate))
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
         self.admin_privs = False
@@ -146,6 +148,7 @@ class connection:
         self.kdcHost = self.args.kdcHost
         self.port = self.args.port
         self.local_ip = None
+        self.dns_server = self.args.dns_server
 
         # DNS resolution
         dns_result = self.resolver(target)
@@ -154,7 +157,7 @@ class connection:
         else:
             return
 
-        if self.args.kerberos:
+        if self.kerberos:
             self.host = self.hostname
 
         self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
@@ -164,6 +167,9 @@ class connection:
         except Exception as e:
             if "ERROR_DEPENDENT_SERVICES_RUNNING" in str(e):
                 self.logger.error(f"Exception while calling proto_flow() on target {target}: {e}")
+            # Catching impacket SMB specific exceptions, which should not be imported due to performance reasons
+            elif e.__class__.__name__ in ["NetBIOSTimeout", "NetBIOSError"]:
+                self.logger.error(f"{e.__class__.__name__} on target {target}: {e}")
             else:
                 self.logger.exception(f"Exception while calling proto_flow() on target {target}: {e}")
         finally:
@@ -200,13 +206,16 @@ class connection:
     def create_conn_obj(self):
         return
 
+    def disconnect(self):
+        return
+
     def check_if_admin(self):
         return
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         return
 
-    def plaintext_login(self, domain, username, password):
+    def plaintext_login(self, username, password):
         return
 
     def hash_login(self, domain, username, ntlm_hash):
@@ -220,7 +229,8 @@ class connection:
         else:
             self.logger.debug("Created connection object")
             self.enum_host_info()
-            if self.print_host_info() and (self.login() or (self.username == "" and self.password == "")):
+            self.print_host_info()
+            if self.login() or (self.username == "" and self.password == ""):
                 if hasattr(self.args, "module") and self.args.module:
                     self.load_modules()
                     self.logger.debug("Calling modules")
@@ -228,6 +238,7 @@ class connection:
                 else:
                     self.logger.debug("Calling command arguments")
                     self.call_cmd_args()
+            self.disconnect()
 
     def call_cmd_args(self):
         """Calls all the methods specified by the command line arguments
@@ -412,12 +423,22 @@ class connection:
             for ntlm_hash in self.args.hash:
                 if isfile(ntlm_hash):
                     with open(ntlm_hash) as ntlm_hash_file:
-                        for line in ntlm_hash_file:
-                            secret.append(line.strip())
-                            cred_type.append("hash")
+                        for i, line in enumerate(ntlm_hash_file):
+                            line = line.strip()
+                            if len(line) != 32 and len(line) != 65:
+                                self.logger.fail(f"Invalid NTLM hash length on line {(i + 1)} (len {len(line)}): {line}")
+                                continue
+                            else:
+                                secret.append(line)
+                                cred_type.append("hash")
                 else:
-                    secret.append(ntlm_hash)
-                    cred_type.append("hash")
+                    if len(ntlm_hash) != 32 and len(ntlm_hash) != 65:
+                        self.logger.fail(f"Invalid NTLM hash length {len(ntlm_hash)}, authentication not sent")
+                        exit(1)
+                    else:
+                        secret.append(ntlm_hash)
+                        cred_type.append("hash")
+            self.logger.debug(secret)
 
         # Parse AES keys
         if self.args.aesKey:
@@ -453,8 +474,6 @@ class connection:
             return False
         if self.args.continue_on_success and owned:
             return False
-        if hasattr(self.args, "delegate") and self.args.delegate:
-            self.args.kerberos = True
 
         if self.args.jitter:
             jitter = self.args.jitter
@@ -469,7 +488,7 @@ class connection:
 
         with sem:
             if cred_type == "plaintext":
-                if self.args.kerberos:
+                if self.kerberos:
                     self.logger.debug("Trying to authenticate using Kerberos")
                     return self.kerberos_login(domain, username, secret, "", "", self.kdcHost, False)
                 elif hasattr(self.args, "domain"):  # Some protocols don't use domain for login
@@ -482,7 +501,7 @@ class connection:
                     self.logger.debug("Trying to authenticate using plaintext")
                     return self.plaintext_login(username, secret)
             elif cred_type == "hash":
-                if self.args.kerberos:
+                if self.kerberos:
                     return self.kerberos_login(domain, username, "", secret, "", self.kdcHost, False)
                 return self.hash_login(domain, username, secret)
             elif cred_type == "aesKey":
@@ -531,7 +550,7 @@ class connection:
 
         if hasattr(self.args, "laps") and self.args.laps:
             self.logger.debug("Trying to authenticate using LAPS")
-            username[0], secret[0], domain[0], ntlm_hash = laps_search(self, username, secret, cred_type, domain)
+            username[0], secret[0], domain[0] = laps_search(self, username, secret, cred_type, domain, self.dns_server)
             cred_type = ["plaintext"]
             if not (username[0] or secret[0] or domain[0]):
                 return False
