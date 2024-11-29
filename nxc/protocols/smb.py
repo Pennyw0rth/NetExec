@@ -948,10 +948,9 @@ class smb(connection):
             self.logger.highlight(f"{name:<15} {','.join(perms):<15} {remark}")
         return permissions
 
-
     def dir(self):  # noqa: A003
         search_path = ntpath.join(self.args.dir, "*")
-        try: 
+        try:
             contents = self.conn.listPath(self.args.share, search_path)
         except SessionError as e:
             error = get_error_string(e)
@@ -960,7 +959,7 @@ class smb(connection):
                 color="magenta" if error in smb_error_status else "red",
             )
             return
-        
+
         if not contents:
             return
 
@@ -969,7 +968,6 @@ class smb(connection):
         for content in contents:
             full_path = ntpath.join(self.args.dir, content.get_longname())
             self.logger.highlight(f"{'d' if content.is_directory() else 'f'}{'rw-' if content.is_readonly() > 0 else 'r--':<8}{content.get_filesize():<15}{ctime(float(content.get_mtime_epoch())):<30}{full_path:<45}")
-
 
     @requires_admin
     def interfaces(self):
