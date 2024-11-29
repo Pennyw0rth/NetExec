@@ -846,7 +846,7 @@ class smb(connection):
             self.logger.debug(f"domain: {self.domain}")
             user_id = self.db.get_user(self.domain.upper(), self.username)[0][0]
         except IndexError as e:
-            if self.kerberos:
+            if self.kerberos or self.username == "":
                 pass
             else:
                 self.logger.fail(f"IndexError: {e!s}")
