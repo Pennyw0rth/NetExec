@@ -286,10 +286,9 @@ class SMBSpiderPlus:
         # Check file extension filter.
         _, file_extension = splitext(file_path)
         if file_extension:
-            if file_extension.startswith(".") and len(file_extension) > 1:
-                file_extension = file_extension[1:]
+            file_extension = file_extension.lstrip(".")
             self.stats["file_exts"].add(file_extension.lower())
-            if file_extension.lower() in self.exclude_exts:
+            if file_extension.lower() in [ext.lstrip(".") for ext in self.exclude_exts]:
                 self.logger.info(f'The file "{file_path}" has an excluded extension.')
                 self.stats["num_files_filtered"] += 1
                 return
