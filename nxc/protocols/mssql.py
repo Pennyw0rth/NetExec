@@ -15,6 +15,7 @@ from nxc.protocols.mssql.mssqlexec import MSSQLEXEC
 
 from impacket import tds, ntlm
 from impacket.krb5.ccache import CCache
+from impacket.dcerpc.v5.dtypes import SID
 from impacket.tds import (
     SQLErrorException,
     TDS_LOGINACK_TOKEN,
@@ -416,3 +417,46 @@ class mssql(connection):
                     else:
                         _type = f"{key['Type']:d}"
                     return f"(ENVCHANGE({_type}): Old Value: {record['OldValue'].decode('utf-16le')}, New Value: {record['NewValue'].decode('utf-16le')})"
+
+    def rid_brute(self, max_rid=None):
+        entries = []
+        if not max_rid:
+            max_rid = int(self.args.rid_brute)
+
+        try:
+            # Query domain
+            domain = self.conn.sql_query("SELECT DEFAULT_DOMAIN()")[0][""]
+
+            # Query known group to determine raw SID & convert to canon
+            raw_domain_sid = self.conn.sql_query(f"SELECT SUSER_SID('{domain}\\Domain Admins')")[0][""]
+            domain_sid = SID(bytes.fromhex(raw_domain_sid.decode())).formatCanonical()[:-4]
+        except Exception as e:
+            self.logger.fail(f"Error parsing SID. Not domain joined?: {e}")
+
+        so_far = 0
+        simultaneous = 1000
+        for _j in range(max_rid // simultaneous + 1):
+            sids_to_check = (max_rid - so_far) % simultaneous if (max_rid - so_far) // simultaneous == 0 else simultaneous
+            if sids_to_check == 0:
+                break
+
+            # Batch query multiple sids at a time
+            sid_queries = [f"SELECT SUSER_SNAME(SID_BINARY(N'{domain_sid}-{i:d}'))" for i in range(so_far, so_far + sids_to_check)]
+            raw_output = self.conn.sql_query(";".join(sid_queries))
+
+            for n, item in enumerate(raw_output):
+                username = item[""]
+                if username == "NULL":
+                    continue
+                rid = so_far + n
+                self.logger.highlight(f"{rid}: {username}")
+                entries.append(
+                    {
+                        "rid": rid,
+                        "domain": domain,
+                        "username": username.split("\\")[1],
+                    }
+                )
+
+            so_far += simultaneous
+        return entries
