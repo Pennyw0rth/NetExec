@@ -379,16 +379,16 @@ class rdp(connection):
                 self.auth = NTLMCredential(secret="", username="", domain="", stype=asyauthSecret.PASS)
                 self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
                 await self.connect_rdp()
-                await asyncio.sleep(int(self.args.screentime))
-
-                if self.conn is not None and self.conn.desktop_buffer_has_data is True:
-                    buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-                    filename = os.path.expanduser(f"~/.nxc/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
-                    buffer.save(filename, "png")
-                    self.logger.highlight(f"NLA Screenshot saved {filename}")
-                    return
             except Exception:
-                pass
+                return
+
+            await asyncio.sleep(int(self.args.screentime))
+            if self.conn is not None and self.conn.desktop_buffer_has_data is True:
+                buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
+                filename = os.path.expanduser(f"~/.nxc/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
+                buffer.save(filename, "png")
+                self.logger.highlight(f"NLA Screenshot saved {filename}")
+                return
 
     def nla_screenshot(self):
         if not self.nla:
