@@ -373,11 +373,13 @@ class rdp(connection):
         asyncio.run(self.screen())
 
     async def nla_screen(self):
+        self.auth = NTLMCredential(secret="", username="", domain="", stype=asyauthSecret.PASS)
+
         for proto in self.protoflags_nla:
             try:
                 self.iosettings.supported_protocols = proto
-                self.auth = NTLMCredential(secret="", username="", domain="", stype=asyauthSecret.PASS)
                 self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
+
                 await self.connect_rdp()
             except Exception:
                 return
