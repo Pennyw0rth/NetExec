@@ -255,6 +255,7 @@ class ldap(connection):
 
     def enum_host_info(self):
         self.target, self.targetDomain, self.baseDN = self.get_ldap_info(self.host)
+        self.baseDN = self.args.base_dn if self.args.base_dn else self.baseDN   # Allow overwriting baseDN from args
         self.hostname = self.target
         self.remoteName = self.target
         self.domain = self.targetDomain
@@ -697,6 +698,7 @@ class ldap(connection):
                 # Microsoft Active Directory set an hard limit of 1000 entries returned by any search
                 paged_search_control = ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000)
                 return self.ldapConnection.search(
+                    searchBase=self.baseDN,
                     searchFilter=searchFilter,
                     attributes=attributes,
                     sizeLimit=sizeLimit,
