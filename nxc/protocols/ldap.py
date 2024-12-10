@@ -1246,6 +1246,7 @@ class ldap(connection):
         try:
             self.logger.debug(f"Search Filter={searchFilter}")
             resp = self.ldapConnection.search(
+                searchBase=self.baseDN,
                 searchFilter=searchFilter,
                 attributes=[
                     "sAMAccountName",
@@ -1373,6 +1374,7 @@ class ldap(connection):
         self.logger.display("Getting GMSA Passwords")
         search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
         gmsa_accounts = self.ldapConnection.search(
+            searchBase=self.baseDN,
             searchFilter=search_filter,
             attributes=[
                 "sAMAccountName",
@@ -1380,7 +1382,6 @@ class ldap(connection):
                 "msDS-GroupMSAMembership",
             ],
             sizeLimit=0,
-            searchBase=self.baseDN,
         )
         if gmsa_accounts:
             self.logger.debug(f"Total of records returned {len(gmsa_accounts):d}")
@@ -1426,10 +1427,10 @@ class ldap(connection):
                 # getting the gmsa account
                 search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
                 gmsa_accounts = self.ldapConnection.search(
+                    searchBase=self.baseDN,
                     searchFilter=search_filter,
                     attributes=["sAMAccountName"],
                     sizeLimit=0,
-                    searchBase=self.baseDN,
                 )
                 if gmsa_accounts:
                     self.logger.debug(f"Total of records returned {len(gmsa_accounts):d}")
@@ -1456,10 +1457,10 @@ class ldap(connection):
                 # getting the gmsa account
                 search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
                 gmsa_accounts = self.ldapConnection.search(
+                    searchBase=self.baseDN,
                     searchFilter=search_filter,
                     attributes=["sAMAccountName"],
                     sizeLimit=0,
-                    searchBase=self.baseDN,
                 )
                 if gmsa_accounts:
                     self.logger.debug(f"Total of records returned {len(gmsa_accounts):d}")
