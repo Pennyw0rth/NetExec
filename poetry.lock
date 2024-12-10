@@ -894,7 +894,7 @@ all = ["flake8 (>=7.1.1)", "mypy (>=1.11.2)", "pytest (>=8.3.2)", "ruff (>=0.6.2
 
 [[package]]
 name = "impacket"
-version = "0.13.0.dev0+20241125.162952.ea27e8b2"
+version = "0.13.0.dev0+20241210.90537.75ea977c"
 description = "Network protocols Constructors and Dissectors"
 optional = false
 python-versions = "*"
@@ -916,9 +916,9 @@ six = "*"
 
 [package.source]
 type = "git"
-url = "https://github.com/fortra/impacket.git"
+url = "https://github.com/blacklanternsecurity/impacket.git"
 reference = "HEAD"
-resolved_reference = "ea27e8b2dfedf57370d2f65c5053a2b8eeb8ca9d"
+resolved_reference = "75ea977c2388bed19b0a078ae760c1d265b1e100"
 
 [[package]]
 name = "iniconfig"
@@ -2447,4 +2447,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10.0"
-content-hash = "65140872bd2a7ae06b4bf273c575159ba49cd04a60acd5bf77794d852d65e1c1"
+content-hash = "6c180d04807a03e5137aee7af251677a1c19f3f65d759fe8bd68cab692ccbb83"
