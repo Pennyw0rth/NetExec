@@ -15,7 +15,8 @@ def proto_args(parser, parents):
     egroup.add_argument("--asreproast", help="Output AS_REP response to crack with hashcat to file")
     egroup.add_argument("--kerberoasting", help="Output TGS ticket to crack with hashcat to file")
 
-    vgroup = ldap_parser.add_argument_group("Retrieve useful information on the domain", "Options to to play with Kerberos")
+    vgroup = ldap_parser.add_argument_group("Retrieve useful information on the domain")
+    vgroup.add_argument("--base-dn", metavar="BASE_DN", dest="base_dn", type=str, default=None, help="base DN for search queries")
     vgroup.add_argument("--query", nargs=2, help="Query LDAP with a custom filter and attributes")
     vgroup.add_argument("--find-delegation", action="store_true", help="Finds delegation relationships within an Active Directory domain. (Enabled Accounts only)")
     vgroup.add_argument("--trusted-for-delegation", action="store_true", help="Get the list of users and computers with flag TRUSTED_FOR_DELEGATION")
