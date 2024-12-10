@@ -4,10 +4,12 @@ from threading import BoundedSemaphore
 from functools import wraps
 from time import sleep
 from ipaddress import ip_address
+from dns import resolver, rdatatype
 from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
 
 from nxc.config import pwned_label
 from nxc.helpers.logger import highlight
+from nxc.loaders.moduleloader import ModuleLoader
 from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
 from nxc.protocols.ldap.laps import laps_search
@@ -21,35 +23,77 @@ global_failed_logins = 0
 user_failed_logins = {}
 
 
-def gethost_addrinfo(hostname):
-    is_ipv6 = False
-    is_link_local_ipv6 = False
+def get_host_addr_info(target, force_ipv6, dns_server, dns_tcp, dns_timeout):
+    result = {
+        "host": "",
+        "is_ipv6": False,
+        "is_link_local_ipv6": False
+    }
     address_info = {"AF_INET6": "", "AF_INET": ""}
 
-    for res in getaddrinfo(hostname, None, AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
-        af, _, _, canonname, sa = res
-        address_info[af.name] = sa[0]
+    try:
+        if ip_address(target).version == 4:
+            address_info["AF_INET"] = target
+        else:
+            address_info["AF_INET6"] = target
+    except Exception:
+        # If the target is not an IP address, we need to resolve it
+        if not (dns_server or dns_tcp):
+            for res in getaddrinfo(target, None, AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
+                af, _, _, canonname, sa = res
+                address_info[af.name] = sa[0]
+
+            if address_info["AF_INET6"] and ip_address(address_info["AF_INET6"]).is_link_local:
+                address_info["AF_INET6"] = canonname
+                result["is_link_local_ipv6"] = True
+        else:
+            dnsresolver = resolver.Resolver()
+            dnsresolver.timeout = dns_timeout
+            dnsresolver.lifetime = dns_timeout
+
+            if dns_server:
+                dnsresolver.nameservers = [dns_server]
+
+            try:
+                answers_ipv4 = dnsresolver.resolve(target, rdatatype.A, raise_on_no_answer=False, tcp=dns_tcp)
+                address_info["AF_INET"] = answers_ipv4[0].address
+            except Exception:
+                pass
+
+            try:
+                answers_ipv6 = dnsresolver.resolve(target, rdatatype.AAAA, raise_on_no_answer=False, tcp=dns_tcp)
+                address_info["AF_INET6"] = answers_ipv6[0].address
+
+                if address_info["AF_INET6"] and ip_address(address_info["AF_INET6"]).is_link_local:
+                    result["is_link_local_ipv6"] = True
+            except Exception:
+                pass
+
+    if not (address_info["AF_INET"] or address_info["AF_INET6"]):
+        raise Exception(f"The DNS query name does not exist: {target}")
 
     # IPv4 preferred
-    if address_info["AF_INET"]:
-        host = address_info["AF_INET"]
+    if address_info["AF_INET"] and not force_ipv6:
+        result["host"] = address_info["AF_INET"]
     else:
-        is_ipv6 = True
-        host, is_link_local_ipv6 = (canonname, True) if ip_address(address_info["AF_INET6"]).is_link_local else (address_info["AF_INET6"], False)
+        result["is_ipv6"] = True
+        result["host"] = address_info["AF_INET6"]
 
-    return host, is_ipv6, is_link_local_ipv6
+    return result
 
 
 def requires_admin(func):
     def _decorator(self, *args, **kwargs):
         if self.admin_privs is False:
+            if hasattr(self.args, "exec_method") and self.args.exec_method == "mmcexec":
+                return func(self, *args, **kwargs)
             return None
         return func(self, *args, **kwargs)
 
     return wraps(func)(_decorator)
 
 
-def dcom_FirewallChecker(iInterface, timeout):
+def dcom_FirewallChecker(iInterface, remoteHost, timeout):
     stringBindings = iInterface.get_cinstance().get_string_bindings()
     for strBinding in stringBindings:
         if strBinding["wTowerId"] == 7:
@@ -69,6 +113,7 @@ def dcom_FirewallChecker(iInterface, timeout):
         return True, None
     try:
         rpctransport = transport.DCERPCTransportFactory(stringBinding)
+        rpctransport.setRemoteHost(remoteHost)
         rpctransport.set_connect_timeout(timeout)
         rpctransport.connect()
         rpctransport.disconnect()
@@ -80,56 +125,70 @@ def dcom_FirewallChecker(iInterface, timeout):
 
 
 class connection:
-    def __init__(self, args, db, host):
-        self.domain = None
+    def __init__(self, args, db, target):
         self.args = args
         self.db = db
-        self.hostname = host
-        self.port = self.args.port
+        self.logger = nxc_logger
         self.conn = None
-        self.admin_privs = False
+
+        # Authentication info
         self.password = ""
         self.username = ""
-        self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey)
+        self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey or (hasattr(self.args, "delegate") and self.args.delegate))
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
-        self.kdcHost = None if not self.args.kdcHost else self.args.kdcHost
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
+        self.admin_privs = False
         self.failed_logins = 0
-        self.local_ip = None
-        self.logger = nxc_logger
 
-        try:
-            self.host, self.is_ipv6, self.is_link_local_ipv6 = gethost_addrinfo(self.hostname)
-            if self.args.kerberos:
-                self.host = self.hostname
-            self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
-        except Exception as e:
-            self.logger.info(f"Error resolving hostname {self.hostname}: {e}")
+        # Network info
+        self.domain = None
+        self.host = None            # IP address of the target. If kerberos this is the hostname
+        self.hostname = target      # Target info supplied by the user, may be an IP address or a hostname
+        self.remoteName = target    # hostname + domain, defaults to target if domain could not be resolved/not specified
+        self.kdcHost = self.args.kdcHost
+        self.port = self.args.port
+        self.local_ip = None
+        self.dns_server = self.args.dns_server
+
+        # DNS resolution
+        dns_result = self.resolver(target)
+        if dns_result:
+            self.host, self.is_ipv6, self.is_link_local_ipv6 = dns_result["host"], dns_result["is_ipv6"], dns_result["is_link_local_ipv6"]
+        else:
             return
 
-        if args.jitter:
-            jitter = args.jitter
-            if "-" in jitter:
-                start, end = jitter.split("-")
-                jitter = (int(start), int(end))
-            else:
-                jitter = (0, int(jitter))
+        if self.kerberos:
+            self.host = self.hostname
 
-            value = random.choice(range(jitter[0], jitter[1]))
-            self.logger.debug(f"Doin' the jitterbug for {value} second(s)")
-            sleep(value)
+        self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
 
         try:
             self.proto_flow()
         except Exception as e:
             if "ERROR_DEPENDENT_SERVICES_RUNNING" in str(e):
-                self.logger.error(f"Exception while calling proto_flow() on target {self.host}: {e}")
+                self.logger.error(f"Exception while calling proto_flow() on target {target}: {e}")
+            # Catching impacket SMB specific exceptions, which should not be imported due to performance reasons
+            elif e.__class__.__name__ in ["NetBIOSTimeout", "NetBIOSError"]:
+                self.logger.error(f"{e.__class__.__name__} on target {target}: {e}")
             else:
-                self.logger.exception(f"Exception while calling proto_flow() on target {self.host}: {e}")
+                self.logger.exception(f"Exception while calling proto_flow() on target {target}: {e}")
         finally:
-            self.logger.debug(f"Closing connection to: {host}")
+            self.logger.debug(f"Closing connection to: {target}")
             with contextlib.suppress(Exception):
                 self.conn.close()
+
+    def resolver(self, target):
+        try:
+            return get_host_addr_info(
+                target=target,
+                force_ipv6=self.args.force_ipv6,
+                dns_server=self.args.dns_server,
+                dns_tcp=self.args.dns_tcp,
+                dns_timeout=self.args.dns_timeout
+            )
+        except Exception as e:
+            self.logger.info(f"Error resolving hostname {target}: {e}")
+            return None
 
     @staticmethod
     def proto_args(std_parser, module_parser):
@@ -147,22 +206,16 @@ class connection:
     def create_conn_obj(self):
         return
 
+    def disconnect(self):
+        return
+
     def check_if_admin(self):
         return
 
-    def kerberos_login(
-        self,
-        domain,
-        username,
-        password="",
-        ntlm_hash="",
-        aesKey="",
-        kdcHost="",
-        useCache=False,
-    ):
+    def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         return
 
-    def plaintext_login(self, domain, username, password):
+    def plaintext_login(self, username, password):
         return
 
     def hash_login(self, domain, username, ntlm_hash):
@@ -176,13 +229,16 @@ class connection:
         else:
             self.logger.debug("Created connection object")
             self.enum_host_info()
-            if self.print_host_info() and (self.login() or (self.username == "" and self.password == "")):
+            self.print_host_info()
+            if self.login() or (self.username == "" and self.password == ""):
                 if hasattr(self.args, "module") and self.args.module:
+                    self.load_modules()
                     self.logger.debug("Calling modules")
                     self.call_modules()
                 else:
                     self.logger.debug("Calling command arguments")
                     self.call_cmd_args()
+            self.disconnect()
 
     def call_cmd_args(self):
         """Calls all the methods specified by the command line arguments
@@ -211,7 +267,7 @@ class connection:
         It iterates over the modules specified in the command line arguments.
         For each module, it loads the module and creates a context object, then calls functions based on the module's attributes.
         """
-        for module in self.module:
+        for module in self.modules:
             self.logger.debug(f"Loading module {module.name} - {module}")
             module_logger = NXCAdapter(
                 extra={
@@ -367,12 +423,22 @@ class connection:
             for ntlm_hash in self.args.hash:
                 if isfile(ntlm_hash):
                     with open(ntlm_hash) as ntlm_hash_file:
-                        for line in ntlm_hash_file:
-                            secret.append(line.strip())
-                            cred_type.append("hash")
+                        for i, line in enumerate(ntlm_hash_file):
+                            line = line.strip()
+                            if len(line) != 32 and len(line) != 65:
+                                self.logger.fail(f"Invalid NTLM hash length on line {(i + 1)} (len {len(line)}): {line}")
+                                continue
+                            else:
+                                secret.append(line)
+                                cred_type.append("hash")
                 else:
-                    secret.append(ntlm_hash)
-                    cred_type.append("hash")
+                    if len(ntlm_hash) != 32 and len(ntlm_hash) != 65:
+                        self.logger.fail(f"Invalid NTLM hash length {len(ntlm_hash)}, authentication not sent")
+                        exit(1)
+                    else:
+                        secret.append(ntlm_hash)
+                        cred_type.append("hash")
+            self.logger.debug(secret)
 
         # Parse AES keys
         if self.args.aesKey:
@@ -395,7 +461,9 @@ class connection:
         return domain, username, owned, secret, cred_type, [None] * len(secret)
 
     def try_credentials(self, domain, username, owned, secret, cred_type, data=None):
-        """Try to login using the specified credentials and protocol.
+        """
+        Try to login using the specified credentials and protocol.
+        With  --jitter an authentication throttle can be applied.
 
         Possible login methods are:
             - plaintext (/kerberos)
@@ -406,11 +474,21 @@ class connection:
             return False
         if self.args.continue_on_success and owned:
             return False
-        if hasattr(self.args, "delegate") and self.args.delegate:
-            self.args.kerberos = True
+
+        if self.args.jitter:
+            jitter = self.args.jitter
+            if "-" in jitter:
+                start, end = jitter.split("-")
+                jitter = (int(start), int(end))
+            else:
+                jitter = (0, int(jitter))
+            value = jitter[0] if jitter[0] == jitter[1] else random.choice(range(jitter[0], jitter[1]))
+            self.logger.debug(f"Throttle authentications: sleeping {value} second(s)")
+            sleep(value)
+
         with sem:
             if cred_type == "plaintext":
-                if self.args.kerberos:
+                if self.kerberos:
                     self.logger.debug("Trying to authenticate using Kerberos")
                     return self.kerberos_login(domain, username, secret, "", "", self.kdcHost, False)
                 elif hasattr(self.args, "domain"):  # Some protocols don't use domain for login
@@ -423,7 +501,7 @@ class connection:
                     self.logger.debug("Trying to authenticate using plaintext")
                     return self.plaintext_login(username, secret)
             elif cred_type == "hash":
-                if self.args.kerberos:
+                if self.kerberos:
                     return self.kerberos_login(domain, username, "", secret, "", self.kdcHost, False)
                 return self.hash_login(domain, username, secret)
             elif cred_type == "aesKey":
@@ -472,7 +550,7 @@ class connection:
 
         if hasattr(self.args, "laps") and self.args.laps:
             self.logger.debug("Trying to authenticate using LAPS")
-            username[0], secret[0], domain[0], ntlm_hash = laps_search(self, username, secret, cred_type, domain)
+            username[0], secret[0], domain[0] = laps_search(self, username, secret, cred_type, domain, self.dns_server)
             cred_type = ["plaintext"]
             if not (username[0] or secret[0] or domain[0]):
                 return False
@@ -496,3 +574,12 @@ class connection:
 
     def mark_pwned(self):
         return highlight(f"({pwned_label})" if self.admin_privs else "")
+
+    def load_modules(self):
+        self.logger.info(f"Loading modules for target: {self.host}")
+        loader = ModuleLoader(self.args, self.db, self.logger)
+        self.modules = []
+
+        for module_path in self.module_paths:
+            module = loader.init_module(module_path)
+            self.modules.append(module)

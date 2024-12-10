@@ -19,7 +19,7 @@ class ssh(connection):
         self.protocol = "SSH"
         self.remote_version = "Unknown SSH Version"
         self.server_os_platform = "Linux"
-        self.user_principal = "root"
+        self.uac = ""
         super().__init__(args, db, host)
 
     def proto_flow(self):
@@ -33,8 +33,11 @@ class ssh(connection):
                 return
             if self.login():
                 if hasattr(self.args, "module") and self.args.module:
+                    self.load_modules()
+                    self.logger.debug("Calling modules")
                     self.call_modules()
                 else:
+                    self.logger.debug("Calling command arguments")
                     self.call_cmd_args()
                 self.conn.close()
 
@@ -52,7 +55,6 @@ class ssh(connection):
 
     def print_host_info(self):
         self.logger.display(self.remote_version if self.remote_version != "Unknown SSH Version" else f"{self.remote_version}, skipping...")
-        return True
 
     def enum_host_info(self):
         if self.conn._transport.remote_version:
@@ -195,8 +197,10 @@ class ssh(connection):
                     username=username,
                     passphrase=password if password != "" else None,
                     key_filename=private_key if private_key else self.args.key_file,
+                    timeout=self.args.ssh_timeout,
                     look_for_keys=False,
                     allow_agent=False,
+                    banner_timeout=self.args.ssh_timeout,
                 )
 
                 cred_id = self.db.add_credential(
@@ -213,18 +217,27 @@ class ssh(connection):
                     port=self.port,
                     username=username,
                     password=password,
+                    timeout=self.args.ssh_timeout,
                     look_for_keys=False,
                     allow_agent=False,
+                    banner_timeout=self.args.ssh_timeout,
                 )
                 cred_id = self.db.add_credential("plaintext", username, password)
 
             # Some IOT devices will not raise exception in self.conn._transport.auth_password / self.conn._transport.auth_publickey
             _, stdout, _ = self.conn.exec_command("id")
             stdout = stdout.read().decode(self.args.codec, errors="ignore")
+        except AuthenticationException:
+            self.logger.fail(f"{username}:{process_secret(password)}")
         except SSHException as e:
-            self.logger.fail(f"{username}:{process_secret(password)} Could not decrypt private key, error: {e}")
+            if "Invalid key" in str(e):
+                self.logger.fail(f"{username}:{process_secret(password)} Could not decrypt private key, error: {e}")
+            if "Error reading SSH protocol banner" in str(e):
+                self.logger.error(f"Internal Paramiko error for {username}:{process_secret(password)}, {e}")
+            else:
+                self.logger.exception(e)
         except Exception as e:
-            self.logger.fail(f"{username}:{process_secret(password)} {e}")
+            self.logger.exception(e)
             self.conn.close()
             return False
         else:
@@ -235,15 +248,11 @@ class ssh(connection):
                 _, stdout, _ = self.conn.exec_command("whoami /priv")
                 stdout = stdout.read().decode(self.args.codec, errors="ignore")
                 self.server_os_platform = "Windows"
-                self.user_principal = "admin"
                 if "SeDebugPrivilege" in stdout:
                     self.admin_privs = True
                 elif "SeUndockPrivilege" in stdout:
                     self.admin_privs = True
-                    self.user_principal = "admin (UAC)"
-                else:
-                    # non admin (low priv)
-                    self.user_principal = "admin (low priv)"
+                    self.uac = "with UAC - "
 
             if not stdout:
                 self.logger.debug(f"User: {self.username} can't get a basic shell")
@@ -261,22 +270,12 @@ class ssh(connection):
                     if self.args.key_file:
                         self.db.add_admin_user("key", username, password, host_id=host_id, cred_id=cred_id)
                     else:
-                        self.db.add_admin_user(
-                            "plaintext",
-                            username,
-                            password,
-                            host_id=host_id,
-                            cred_id=cred_id,
-                        )
+                        self.db.add_admin_user("plaintext", username, password, host_id=host_id, cred_id=cred_id)
 
             if self.args.key_file:
                 password = f"{process_secret(password)} (keyfile: {self.args.key_file})"
 
-            display_shell_access = "{} {} {}".format(
-                f"({self.user_principal})" if self.admin_privs else f"(non {self.user_principal})",
-                self.server_os_platform,
-                "- Shell access!" if shell_access else ""
-            )
+            display_shell_access = f"{self.uac}{self.server_os_platform}{' - Shell access!' if shell_access else ''}"
             self.logger.success(f"{username}:{process_secret(password)} {self.mark_pwned()} {highlight(display_shell_access)}")
 
             return True

@@ -42,12 +42,12 @@ class NXCModule:
             - rollback (remove sysadmin privilege)
         """
         self.action = None
-        self.context = context
 
         if "ACTION" in module_options:
             self.action = module_options["ACTION"]
 
     def on_login(self, context, connection):
+        self.context = context
         # get mssql connection
         self.mssql_conn = connection.conn
         # fetch the current user
@@ -219,6 +219,7 @@ class NXCModule:
         """
         if self.is_admin_user(user.username):
             user.is_sysadmin = True
+            self.context.log.debug(f"Updated {user.username} to is_sysadmin")
             return True
         user.dbowner = self.check_dbowner_privesc(exec_as)
         return user.dbowner
@@ -249,11 +250,15 @@ class NXCModule:
         self.revert_context(exec_as)
         is_admin = res[0][""]
         self.context.log.debug(f"IsAdmin Result: {is_admin}")
-        if is_admin:
-            self.context.log.debug("User is admin!")
-            self.admin_privs = True
-            return True
-        else:
+        try:
+            if int(is_admin):
+                self.context.log.debug("User is admin!")
+                self.admin_privs = True
+                return True
+            else:
+                return False
+        except ValueError:
+            self.logger.fail(f"Error checking if user is admin, got {is_admin} as response. Expected 0 or 1.")
             return False
 
     def get_databases(self, exec_as="") -> list:
@@ -441,13 +446,16 @@ class NXCModule:
         :rtype: bool
         """
         res = self.query_and_get_output(f"SELECT IS_SRVROLEMEMBER('sysadmin', '{username}')")
+        is_admin = res[0][""]
         try:
-            if int(res):
+            if is_admin != "NULL" and int(is_admin):
                 self.admin_privs = True
+                self.context.log.debug(f"Updated: {username} is admin!")
                 return True
             else:
                 return False
-        except Exception:
+        except ValueError:
+            self.context.log.fail(f"Error checking if user is admin, got {is_admin} as response. Expected 0 or 1.")
             return False
 
     def revert_context(self, exec_as):

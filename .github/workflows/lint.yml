@@ -3,6 +3,7 @@ name: Lint Python code with ruff
 
 on:
   push:
+  workflow_dispatch:
 
 jobs:
   lint:
@@ -11,14 +12,14 @@ jobs:
       github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install poetry
         run: |
           pipx install poetry
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: 3.11
+          python-version: 3.12
           cache: poetry
           cache-dependency-path: poetry.lock
       - name: Install dependencies with dev group

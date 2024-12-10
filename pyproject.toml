@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "netexec"
-version = "1.1.0"
+version = "1.3.0"
 description = "The Network Execution tool"
 authors = [
     "Marshall Hallenbeck <marshall.hallenbeck@gmail.com>",
@@ -33,37 +33,39 @@ NetExec = 'nxc.netexec:main'
 nxcdb = 'nxc.nxcdb:main'
 
 [tool.poetry.dependencies]
-python = "^3.8.0"
-requests = ">=2.27.1"
-beautifulsoup4 = ">=4.11,<5"
-lsassy = ">=3.1.8"
-termcolor = "2.0.1"
-msgpack = "^1.0.0"
-neo4j = "^5.0.0"
-pylnk3 = "^0.4.2"
-pypsrp = "^0.8.1"
-paramiko = "^3.3.1"
-impacket =  { git = "https://github.com/blacklanternsecurity/impacket.git", branch = "gkdi" }
-dsinternals = "^1.2.4"
-xmltodict = "^0.13.0"
-terminaltables = "^3.1.0"
+python = "^3.10.0"
+aardwolf = "^0.2.8"
 aioconsole = "^0.6.2"
-pywerview = "^0.3.3" # pywerview 5 requires libkrb5-dev installed which is not default on kali (as of 9/23)
-minikerberos = "^0.4.1"
-pypykatz = "^0.6.8"
-aardwolf = "^0.2.7"
-dploot = "^2.2.1"
-bloodhound = "^1.6.1"
-asyauth = "~0.0.14"
-masky = "^0.2.0"
-sqlalchemy = "^2.0.4"
 aiosqlite = "^0.19.0"
-pyasn1-modules = "^0.3.0"
-rich = "^13.3.5"
-python-libnmap = "^0.7.3"
 argcomplete = "^3.1.4"
-python-dateutil = ">=2.8.2"
+asyauth = ">=0.0.20"
+beautifulsoup4 = ">=4.11,<5"
+bloodhound = "^1.7.2"
+dploot = "^2.7.4"
+dsinternals = "^1.2.4"
+impacket =  { git = "https://github.com/blacklanternsecurity/impacket.git" }
+lsassy = ">=3.1.11"
+masky = "^0.2.0"
+minikerberos = "^0.4.1"
+msgpack = "^1.0.0"
+msldap = "^0.5.10"
+neo4j = "^5.0.0"
+paramiko = "^3.3.1"
 poetry-dynamic-versioning = "^1.2.0"
+pyasn1-modules = "^0.3.0"
+pylnk3 = "^0.4.2"
+pynfsclient = { git = "https://github.com/Pennyw0rth/NfsClient" }
+pypsrp = "^0.8.1"
+pypykatz = "^0.6.8"
+pywerview = "^0.3.3" # pywerview 5 requires libkrb5-dev installed which is not default on kali (as of 9/23)
+python-dateutil = ">=2.8.2"
+python-libnmap = "^0.7.3"
+requests = ">=2.27.1"
+rich = "^13.3.5"
+sqlalchemy = "^2.0.4"
+termcolor = ">=2.4.0"
+terminaltables = "^3.1.0"
+xmltodict = "^0.13.0"
 
 [tool.poetry.group.dev.dependencies]
 flake8 = "*"
@@ -72,7 +74,7 @@ pytest = "^7.2.2"
 ruff = "=0.0.292"
 
 [build-system]
-requires = ["poetry-core>=1.2.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
+requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
 build-backend = "poetry_dynamic_versioning.backend"
 
 [tool.poetry-dynamic-versioning]
