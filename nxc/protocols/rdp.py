@@ -22,6 +22,8 @@ from asyauth.common.credentials.kerberos import KerberosCredential
 from asyauth.common.constants import asyauthSecret
 from asysocks.unicomm.common.target import UniTarget, UniProto
 
+from nxc.paths import NXC_PATH
+
 
 class rdp(connection):
     def __init__(self, args, db, host):
@@ -166,6 +168,7 @@ class rdp(connection):
         return True
 
     def check_nla(self):
+        self.logger.debug(f"Checking NLA for {self.host}")
         for proto in self.protoflags_nla:
             try:
                 self.iosettings.supported_protocols = proto
@@ -373,18 +376,25 @@ class rdp(connection):
         asyncio.run(self.screen())
 
     async def nla_screen(self):
-        # Otherwise it crash
-        self.iosettings.supported_protocols = None
         self.auth = NTLMCredential(secret="", username="", domain="", stype=asyauthSecret.PASS)
-        self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
-        await self.connect_rdp()
-        await asyncio.sleep(int(self.args.screentime))
 
-        if self.conn is not None and self.conn.desktop_buffer_has_data is True:
-            buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-            filename = os.path.expanduser(f"~/.nxc/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
-            buffer.save(filename, "png")
-            self.logger.highlight(f"NLA Screenshot saved {filename}")
+        for proto in self.protoflags_nla:
+            try:
+                self.iosettings.supported_protocols = proto
+                self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
+
+                await self.connect_rdp()
+            except Exception as e:
+                self.logger.debug(f"Failed to connect for nla_screenshot with {proto} {e}")
+                return
+
+            await asyncio.sleep(int(self.args.screentime))
+            if self.conn is not None and self.conn.desktop_buffer_has_data is True:
+                buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
+                filename = os.path.expanduser(f"{NXC_PATH}/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
+                buffer.save(filename, "png")
+                self.logger.highlight(f"NLA Screenshot saved {filename}")
+                return
 
     def nla_screenshot(self):
         if not self.nla:
