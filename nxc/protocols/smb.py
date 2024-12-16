@@ -159,6 +159,7 @@ class smb(connection):
         self.bootkey = None
         self.output_filename = None
         self.smbv1 = None
+        self.is_timeouted = False
         self.signing = False
         self.smb_share_name = smb_share_name
         self.pvkbytes = None
@@ -551,8 +552,16 @@ class smb(connection):
             )
             self.smbv1 = True
         except OSError as e:
-            if str(e).find("Connection reset by peer") != -1:
+            if "Connection reset by peer" in str(e):
                 self.logger.info(f"SMBv1 might be disabled on {self.host}")
+            elif "timed out" in str(e):
+                self.is_timeouted = True
+                self.logger.debug(f"Timeout creating SMBv1 connection to {self.host}")
+            else:
+                self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
+            return False
+        except NetBIOSError:
+            self.logger.info(f"SMBv1 disabled on {self.host}")
             return False
         except (Exception, NetBIOSTimeout) as e:
             self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
@@ -570,15 +579,7 @@ class smb(connection):
                 timeout=self.args.smb_timeout,
             )
             self.smbv1 = False
-        except OSError as e:
-            # This should not happen anymore!!!
-            if str(e).find("Too many open files") != -1:
-                if not self.logger:
-                    print("DEBUG ERROR: logger not set, please open an issue on github: " + str(self) + str(self.logger))
-                    self.proto_logger()
-                self.logger.fail(f"SMBv3 connection error on {self.host}: {e}")
-            return False
-        except (Exception, NetBIOSTimeout) as e:
+        except (Exception, NetBIOSTimeout, OSError) as e:
             self.logger.info(f"Error creating SMBv3 connection to {self.host}: {e}")
             return False
         return True
@@ -596,7 +597,7 @@ class smb(connection):
             self.smbv1 = self.create_smbv1_conn()
             if self.smbv1:
                 return True
-            else:
+            elif not self.is_timeouted:
                 return self.create_smbv3_conn()
         elif not no_smbv1 and self.smbv1:
             return self.create_smbv1_conn()
@@ -845,7 +846,7 @@ class smb(connection):
             self.logger.debug(f"domain: {self.domain}")
             user_id = self.db.get_user(self.domain.upper(), self.username)[0][0]
         except IndexError as e:
-            if self.kerberos:
+            if self.kerberos or self.username == "":
                 pass
             else:
                 self.logger.fail(f"IndexError: {e!s}")
@@ -947,10 +948,9 @@ class smb(connection):
             self.logger.highlight(f"{name:<15} {','.join(perms):<15} {remark}")
         return permissions
 
-
     def dir(self):  # noqa: A003
         search_path = ntpath.join(self.args.dir, "*")
-        try: 
+        try:
             contents = self.conn.listPath(self.args.share, search_path)
         except SessionError as e:
             error = get_error_string(e)
@@ -959,7 +959,7 @@ class smb(connection):
                 color="magenta" if error in smb_error_status else "red",
             )
             return
-        
+
         if not contents:
             return
 
@@ -968,7 +968,6 @@ class smb(connection):
         for content in contents:
             full_path = ntpath.join(self.args.dir, content.get_longname())
             self.logger.highlight(f"{'d' if content.is_directory() else 'f'}{'rw-' if content.is_readonly() > 0 else 'r--':<8}{content.get_filesize():<15}{ctime(float(content.get_mtime_epoch())):<30}{full_path:<45}")
-
 
     @requires_admin
     def interfaces(self):
