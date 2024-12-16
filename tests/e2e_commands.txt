@@ -1,6 +1,7 @@
 ##### Check Generic Help Options
 netexec -h
 ##### SMB
+netexec smb TARGET_HOST --generate-hosts-file /tmp/hostsfile
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec {DNS} smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --shares
@@ -212,6 +213,7 @@ netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --check-p
 ##### MSSQL
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # Need a space at the end for kerb regex
 netexec {DNS} mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # Need a space at the end for kerb regex
+netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --rid-brute
 ##### MSSQL PowerShell
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig --force-ps32

@@ -60,7 +60,7 @@ from dploot.triage.sccm import SCCMTriage
 
 from pywerview.cli.helpers import get_localdisks, get_netsession, get_netgroupmember, get_netgroup, get_netcomputer, get_netloggedon, get_netlocalgroup
 
-from time import time
+from time import time, ctime
 from datetime import datetime
 from functools import wraps
 from traceback import format_exc
@@ -159,6 +159,7 @@ class smb(connection):
         self.bootkey = None
         self.output_filename = None
         self.smbv1 = None
+        self.is_timeouted = False
         self.signing = False
         self.smb_share_name = smb_share_name
         self.pvkbytes = None
@@ -241,7 +242,7 @@ class smb(connection):
                     self.hostname = self.host
                     self.targetDomain = self.host
 
-        self.domain = self.targetDomain if not self.args.domain else self.args.domain
+        self.domain = self.targetDomain if self.args.domain is None else self.args.domain
 
         if self.args.local_auth:
             self.domain = self.hostname
@@ -258,6 +259,10 @@ class smb(connection):
         except KeyError:
             self.logger.debug("Error getting server information...")
 
+        # Handle cases where server_os is returned as bytes, such as when accidentally scanning a machine running Responder
+        if isinstance(self.server_os.lower(), bytes):
+            self.server_os = self.server_os.decode("utf-8")
+
         if "Windows 6.1" in self.server_os and self.server_os_build == 0 and self.os_arch == 0:
             self.server_os = "Unix - Samba"
         elif self.server_os_build == 0 and self.os_arch == 0:
@@ -265,9 +270,6 @@ class smb(connection):
         self.logger.debug(f"Server OS: {self.server_os} {self.server_os_major}.{self.server_os_minor} build {self.server_os_build}")
 
         self.logger.extra["hostname"] = self.hostname
-
-        if isinstance(self.server_os.lower(), bytes):
-            self.server_os = self.server_os.decode("utf-8")
 
         try:
             self.signing = self.conn.isSigningRequired() if self.smbv1 else self.conn._SMBConnection._Connection["RequireSigning"]
@@ -311,7 +313,22 @@ class smb(connection):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
         smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
         self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1})")
-        return True
+
+        if self.args.generate_hosts_file:
+            from impacket.dcerpc.v5 import nrpc, epm
+            self.logger.debug("Performing authentication attempts...")
+            isdc = False
+            try:
+                epm.hept_map(self.host, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
+                isdc = True
+            except DCERPCException:
+                self.logger.debug("Error while connecting to host: DCERPCException, which means this is probably not a DC!")
+
+            with open(self.args.generate_hosts_file, "a+") as host_file:
+                host_file.write(f"{self.host}    {self.hostname} {self.hostname}.{self.targetDomain} {self.targetDomain if isdc else ''}\n")
+                self.logger.debug(f"{self.host}    {self.hostname} {self.hostname}.{self.targetDomain} {self.targetDomain if isdc else ''}")
+
+        return self.host, self.hostname, self.targetDomain
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.logger.debug(f"KDC set to: {kdcHost}")
@@ -535,8 +552,16 @@ class smb(connection):
             )
             self.smbv1 = True
         except OSError as e:
-            if str(e).find("Connection reset by peer") != -1:
+            if "Connection reset by peer" in str(e):
                 self.logger.info(f"SMBv1 might be disabled on {self.host}")
+            elif "timed out" in str(e):
+                self.is_timeouted = True
+                self.logger.debug(f"Timeout creating SMBv1 connection to {self.host}")
+            else:
+                self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
+            return False
+        except NetBIOSError:
+            self.logger.info(f"SMBv1 disabled on {self.host}")
             return False
         except (Exception, NetBIOSTimeout) as e:
             self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
@@ -554,15 +579,7 @@ class smb(connection):
                 timeout=self.args.smb_timeout,
             )
             self.smbv1 = False
-        except OSError as e:
-            # This should not happen anymore!!!
-            if str(e).find("Too many open files") != -1:
-                if not self.logger:
-                    print("DEBUG ERROR: logger not set, please open an issue on github: " + str(self) + str(self.logger))
-                    self.proto_logger()
-                self.logger.fail(f"SMBv3 connection error on {self.host}: {e}")
-            return False
-        except (Exception, NetBIOSTimeout) as e:
+        except (Exception, NetBIOSTimeout, OSError) as e:
             self.logger.info(f"Error creating SMBv3 connection to {self.host}: {e}")
             return False
         return True
@@ -580,7 +597,7 @@ class smb(connection):
             self.smbv1 = self.create_smbv1_conn()
             if self.smbv1:
                 return True
-            else:
+            elif not self.is_timeouted:
                 return self.create_smbv3_conn()
         elif not no_smbv1 and self.smbv1:
             return self.create_smbv1_conn()
@@ -618,8 +635,21 @@ class smb(connection):
                     relay_list.write(self.host + "\n")
 
     @requires_admin
-    def execute(self, payload=None, get_output=False, methods=None):
-        if self.args.exec_method:
+    def execute(self, payload=None, get_output=False, methods=None) -> str:
+        """
+        Executes a command on the target host using CMD.exe and the specified method(s).
+
+        Args:
+        ----
+            payload (str): The command to execute
+            get_output (bool): Whether to get the output of the command (can be useful for AV evasion)
+            methods (list): The method(s) to use for command execution
+
+        Returns:
+        -------
+            str: The output of the command
+        """
+        if getattr(self.args, "exec_method_explicitly_set", False):
             methods = [self.args.exec_method]
         if not methods:
             methods = ["wmiexec", "atexec", "smbexec", "mmcexec"]
@@ -752,7 +782,7 @@ class smb(connection):
 
             if "This script contains malicious content" in output:
                 self.logger.fail("Command execution blocked by AMSI")
-                return None
+                return ""
 
             if (self.args.execute or self.args.ps_execute):
                 self.logger.success(f"Executed command via {current_method}")
@@ -763,14 +793,29 @@ class smb(connection):
             return output
         else:
             self.logger.fail(f"Execute command failed with {current_method}")
-            return False
+            return ""
 
     @requires_admin
-    def ps_execute(self, payload=None, get_output=False, methods=None, force_ps32=False, obfs=False, encode=False):
+    def ps_execute(self, payload=None, get_output=False, methods=None, force_ps32=False, obfs=False, encode=False) -> list:
+        """
+        Wrapper for executing a PowerShell command on the target host. This still uses the execute() method internally, but
+        creates a PowerShell command together with possible AMSI bypasses and other options.
+
+        Args:
+        ----
+            payload (str): The PowerShell command to execute OR the path to a file containing PowerShell commands
+            get_output (bool): Whether to get the output of the command (can be useful for AV evasion)
+            methods (list): The method(s) to use for command execution
+            force_ps32 (bool): Whether to force 32-bit PowerShell
+
+        Returns:
+        -------
+            list: A list containing the lines of the output of the command
+        """
         payload = self.args.ps_execute if not payload and self.args.ps_execute else payload
         if not payload:
             self.logger.error("No command to execute specified!")
-            return None
+            return []
 
         response = []
         obfs = obfs if obfs else self.args.obfs
@@ -801,7 +846,7 @@ class smb(connection):
             self.logger.debug(f"domain: {self.domain}")
             user_id = self.db.get_user(self.domain.upper(), self.username)[0][0]
         except IndexError as e:
-            if self.kerberos:
+            if self.kerberos or self.username == "":
                 pass
             else:
                 self.logger.fail(f"IndexError: {e!s}")
@@ -902,6 +947,27 @@ class smb(connection):
                 continue
             self.logger.highlight(f"{name:<15} {','.join(perms):<15} {remark}")
         return permissions
+
+    def dir(self):  # noqa: A003
+        search_path = ntpath.join(self.args.dir, "*")
+        try:
+            contents = self.conn.listPath(self.args.share, search_path)
+        except SessionError as e:
+            error = get_error_string(e)
+            self.logger.fail(
+                f"Error enumerating '{search_path}': {error}",
+                color="magenta" if error in smb_error_status else "red",
+            )
+            return
+
+        if not contents:
+            return
+
+        self.logger.highlight(f"{'Perms':<9}{'File Size':<15}{'Date':<30}{'File Path':<45}")
+        self.logger.highlight(f"{'-----':<9}{'---------':<15}{'----':<30}{'---------':<45}")
+        for content in contents:
+            full_path = ntpath.join(self.args.dir, content.get_longname())
+            self.logger.highlight(f"{'d' if content.is_directory() else 'f'}{'rw-' if content.is_readonly() > 0 else 'r--':<8}{content.get_filesize():<15}{ctime(float(content.get_mtime_epoch())):<30}{full_path:<45}")
 
     @requires_admin
     def interfaces(self):
