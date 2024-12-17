@@ -1,7 +1,8 @@
-#Author: 
-# deathflamingo
 class NXCModule:
-    """Enable or disable xp_cmdshell on a linked SQL server"""
+    """
+    Enable or disable xp_cmdshell on a linked SQL server
+    Module by deathflamingo
+    """
 
     name = "link_enable_xp"
     description = "Enable or disable xp_cmdshell on a linked SQL server"
@@ -43,10 +44,10 @@ class NXCModule:
         """Enable xp_cmdshell on the linked server."""
         query = f"EXEC ('sp_configure ''show advanced options'', 1; RECONFIGURE;') AT [{self.linked_server}]"
         self.context.log.display(f"Enabling advanced options on {self.linked_server}...")
-        out=self.query_and_get_output(query)
+        out = self.query_and_get_output(query)
         query = f"EXEC ('sp_configure ''xp_cmdshell'', 1; RECONFIGURE;') AT [{self.linked_server}]"
         self.context.log.display(f"Enabling xp_cmdshell on {self.linked_server}...")
-        out=self.query_and_get_output(query)
+        out = self.query_and_get_output(query)
         self.context.log.display(out)
         self.context.log.success(f"xp_cmdshell enabled on {self.linked_server}")
 

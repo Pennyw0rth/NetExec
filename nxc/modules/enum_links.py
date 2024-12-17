@@ -1,7 +1,8 @@
-#Author: 
-# deathflamingo
 class NXCModule:
-    """Enumerate SQL Server linked servers"""
+    """
+    Enumerate SQL Server linked servers
+    Module by deathflamingo
+    """
 
     name = "enum_links"
     description = "Enumerate linked SQL Servers"
@@ -28,7 +29,7 @@ class NXCModule:
         """
         Fetches a list of linked servers.
 
-        Returns:
+        Returns
         -------
         list: List of linked server names.
         """
