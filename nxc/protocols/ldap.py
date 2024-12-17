@@ -20,12 +20,14 @@ from impacket.dcerpc.v5.samr import (
     UF_DONT_REQUIRE_PREAUTH,
     UF_TRUSTED_FOR_DELEGATION,
     UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION,
+    UF_SERVER_TRUST_ACCOUNT,
 )
 from impacket.ntlm import getNTLMSSPType1
 from impacket.krb5 import constants
 from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError
 from impacket.krb5.types import Principal, KerberosException
 from impacket.ldap import ldap as ldap_impacket
+from impacket.ldap import ldaptypes
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.smbconnection import SessionError
 
@@ -427,15 +429,12 @@ class ldap(connection):
                         f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                         color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                     )
-                    self.logger.fail("LDAPS channel binding might be enabled, this is only supported with kerberos authentication. Try using '-k'.")
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
                     f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
-                if proto == "ldaps":
-                    self.logger.fail("LDAPS channel binding might be enabled, this is only supported with kerberos authentication. Try using '-k'.")
             return False
         except OSError as e:
             self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {'Error connecting to the domain, are you sure LDAP service is running on the target?'} \nError: {e}")
@@ -521,15 +520,12 @@ class ldap(connection):
                         f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                         color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                     )
-                    self.logger.fail("LDAPS channel binding might be enabled, this is only supported with kerberos authentication. Try using '-k'.")
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
                     f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
-                if proto == "ldaps":
-                    self.logger.fail("LDAPS channel binding might be enabled, this is only supported with kerberos authentication. Try using '-k'.")
             return False
         except OSError as e:
             self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {'Error connecting to the domain, are you sure LDAP service is running on the target?'} \nError: {e}")
@@ -611,7 +607,7 @@ class ldap(connection):
         t /= 10000000
         return t
 
-    def search(self, searchFilter, attributes, sizeLimit=0):
+    def search(self, searchFilter, attributes, sizeLimit=0) -> list:
         try:
             if self.ldapConnection:
                 self.logger.debug(f"Search Filter={searchFilter}")
@@ -619,6 +615,7 @@ class ldap(connection):
                 # Microsoft Active Directory set an hard limit of 1000 entries returned by any search
                 paged_search_control = ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000)
                 return self.ldapConnection.search(
+                    searchBase=self.baseDN,
                     searchFilter=searchFilter,
                     attributes=attributes,
                     sizeLimit=sizeLimit,
@@ -631,8 +628,8 @@ class ldap(connection):
                 e.getAnswers()
             else:
                 self.logger.fail(e)
-                return False
-        return False
+                return []
+        return []
 
     def users(self):
         """
@@ -1002,6 +999,107 @@ class ldap(connection):
                     vals = vals.replace("SetOf: ", "")
                 self.logger.highlight(f"{attr:<20} {vals}")
 
+    def find_delegation(self):
+        def printTable(items, header):
+            colLen = []
+
+            # Calculating maximum lenght before parsing CN.
+            for i, col in enumerate(header):
+                rowMaxLen = max(len(row[1].split(",")[0].split("CN=")[-1]) for row in items) if i == 1 else max(len(str(row[i])) for row in items)
+                colLen.append(max(rowMaxLen, len(col)))
+
+            # Create the format string for each row
+            outputFormat = " ".join([f"{{{num}:{width}s}}" for num, width in enumerate(colLen)])
+
+            # Print header
+            self.logger.highlight(outputFormat.format(*header))
+            self.logger.highlight(" ".join(["-" * itemLen for itemLen in colLen]))
+
+            # Print rows
+            for row in items:
+                # Get first CN value.
+                if "CN=" in row[1]:
+                    row[1] = row[1].split(",")[0].split("CN=")[-1]
+
+                # Added join for DelegationRightsTo
+                row[3] = ", ".join(str(x) for x in row[3]) if isinstance(row[3], list) else row[3]
+
+                self.logger.highlight(outputFormat.format(*row))
+
+        # Building the search filter
+        search_filter = (f"(&(|(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION})"
+                         f"(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_FOR_DELEGATION})"
+                         "(msDS-AllowedToDelegateTo=*)(msDS-AllowedToActOnBehalfOfOtherIdentity=*))"
+                         f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE})))")
+        # f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_SERVER_TRUST_ACCOUNT})))")  This would filter out RBCD to DCs
+
+        attributes = ["sAMAccountName", "pwdLastSet", "userAccountControl", "objectCategory",
+                      "msDS-AllowedToActOnBehalfOfOtherIdentity", "msDS-AllowedToDelegateTo"]
+
+        resp = self.search(search_filter, attributes)
+        answers = []
+        self.logger.debug(f"Total of records returned {len(resp):d}")
+        resp_parse = parse_result_attributes(resp)
+
+        for item in resp_parse:
+            sAMAccountName = ""
+            userAccountControl = 0
+            delegation = ""
+            objectType = ""
+            rightsTo = []
+            protocolTransition = 0
+
+            try:
+                sAMAccountName = item["sAMAccountName"]
+
+                userAccountControl = int(item["userAccountControl"])
+                objectType = item.get("objectCategory")
+
+                # Filter out DCs, unconstrained delegation to DCs is not a useful information
+                if userAccountControl & UF_TRUSTED_FOR_DELEGATION and not userAccountControl & UF_SERVER_TRUST_ACCOUNT:
+                    delegation = "Unconstrained"
+                    rightsTo.append("N/A")
+                elif userAccountControl & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
+                    delegation = "Constrained w/ Protocol Transition"
+                    protocolTransition = 1
+
+                if item.get("msDS-AllowedToDelegateTo") is not None:
+                    if protocolTransition == 0:
+                        delegation = "Constrained"
+                    rightsTo = item.get("msDS-AllowedToDelegateTo")
+
+                # Not an elif as an object could both have RBCD and another type of delegation
+                if item.get("msDS-AllowedToActOnBehalfOfOtherIdentity") is not None:
+                    databyte = item.get("msDS-AllowedToActOnBehalfOfOtherIdentity")
+                    rbcdRights = []
+                    rbcdObjType = []
+                    sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(databyte))
+                    if len(sd["Dacl"].aces) > 0:
+                        search_filter = "(&(|"
+                        for ace in sd["Dacl"].aces:
+                            search_filter += "(objectSid=" + ace["Ace"]["Sid"].formatCanonical() + ")"
+                        search_filter += f")(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE})))"
+                        delegUserResp = self.search(search_filter, attributes=["sAMAccountName", "objectCategory"])
+                        delegUserResp_parse = parse_result_attributes(delegUserResp)
+
+                        for rbcd in delegUserResp_parse:
+                            rbcdRights.append(str(rbcd.get("sAMAccountName")))
+                            rbcdObjType.append(str(rbcd.get("objectCategory")))
+
+                        for rights, objType in zip(rbcdRights, rbcdObjType):
+                            answers.append([rights, objType, "Resource-Based Constrained", sAMAccountName])
+
+                if delegation in ["Unconstrained", "Constrained", "Constrained w/ Protocol Transition"]:
+                    answers.append([sAMAccountName, objectType, delegation, rightsTo])
+
+            except Exception as e:
+                self.logger.error(f"Skipping item, cannot process due to error {e}")
+
+        if answers:
+            printTable(answers, header=["AccountName", "AccountType", "DelegationType", "DelegationRightsTo"])
+        else:
+            self.logger.fail("No entries found!")
+
     def trusted_for_delegation(self):
         # Building the search filter
         searchFilter = "(userAccountControl:1.2.840.113556.1.4.803:=524288)"
@@ -1065,6 +1163,7 @@ class ldap(connection):
         try:
             self.logger.debug(f"Search Filter={searchFilter}")
             resp = self.ldapConnection.search(
+                searchBase=self.baseDN,
                 searchFilter=searchFilter,
                 attributes=[
                     "sAMAccountName",
@@ -1192,6 +1291,7 @@ class ldap(connection):
         self.logger.display("Getting GMSA Passwords")
         search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
         gmsa_accounts = self.ldapConnection.search(
+            searchBase=self.baseDN,
             searchFilter=search_filter,
             attributes=[
                 "sAMAccountName",
@@ -1199,7 +1299,6 @@ class ldap(connection):
                 "msDS-GroupMSAMembership",
             ],
             sizeLimit=0,
-            searchBase=self.baseDN,
         )
         if gmsa_accounts:
             self.logger.debug(f"Total of records returned {len(gmsa_accounts):d}")
@@ -1245,10 +1344,10 @@ class ldap(connection):
                 # getting the gmsa account
                 search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
                 gmsa_accounts = self.ldapConnection.search(
+                    searchBase=self.baseDN,
                     searchFilter=search_filter,
                     attributes=["sAMAccountName"],
                     sizeLimit=0,
-                    searchBase=self.baseDN,
                 )
                 if gmsa_accounts:
                     self.logger.debug(f"Total of records returned {len(gmsa_accounts):d}")
@@ -1275,10 +1374,10 @@ class ldap(connection):
                 # getting the gmsa account
                 search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
                 gmsa_accounts = self.ldapConnection.search(
+                    searchBase=self.baseDN,
                     searchFilter=search_filter,
                     attributes=["sAMAccountName"],
                     sizeLimit=0,
-                    searchBase=self.baseDN,
                 )
                 if gmsa_accounts:
                     self.logger.debug(f"Total of records returned {len(gmsa_accounts):d}")
