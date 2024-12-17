@@ -373,7 +373,7 @@ class NXCModule:
         if self.target_DN is not None:
             _lookedup_principal = self.target_DN
             target = self.ldap_session.search(
-                searchBase=self.baseDN,
+                searchBase=_lookedup_principal,
                 searchFilter=f"(distinguishedName={_lookedup_principal})",
                 attributes=["nTSecurityDescriptor"],
                 searchControls=controls,
