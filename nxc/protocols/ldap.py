@@ -263,8 +263,8 @@ class ldap(connection):
             self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldap_url = f"{proto}://{self.remoteName}"
-            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.remoteHost} [1]")
-            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.remoteHost)
+            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.remoteName} [1]")
+            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.remoteName)
             self.ldapConnection.kerberosLogin(
                 username,
                 password,
@@ -316,8 +316,8 @@ class ldap(connection):
                 try:
                     # Connect to LDAPS
                     ldaps_url = f"ldaps://{self.remoteName}"
-                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.remoteHost} [2]")
-                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.remoteHost)
+                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.remoteName} [2]")
+                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.remoteName)
                     self.ldapConnection.kerberosLogin(
                         username,
                         password,
@@ -383,8 +383,8 @@ class ldap(connection):
             self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldap_url = f"{proto}://{self.remoteName}"
-            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.remoteHost} [3]")
-            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.remoteHost)
+            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.remoteName} [3]")
+            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.remoteName)
             self.ldapConnection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
             self.check_if_admin()
 
@@ -402,8 +402,8 @@ class ldap(connection):
                 try:
                     # Connect to LDAPS
                     ldaps_url = f"ldaps://{self.remoteName}"
-                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.remoteHost} [4]")
-                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.remoteHost)
+                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.remoteName} [4]")
+                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.remoteName)
                     self.ldapConnection.login(
                         self.username,
                         self.password,
@@ -476,8 +476,8 @@ class ldap(connection):
             self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldaps_url = f"{proto}://{self.remoteName}"
-            self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.remoteHost}")
-            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.remoteHost)
+            self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.remoteName}")
+            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.remoteName)
             self.ldapConnection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
             self.check_if_admin()
 
@@ -495,8 +495,8 @@ class ldap(connection):
                 try:
                     # We need to try SSL
                     ldaps_url = f"{proto}://{self.remoteName}"
-                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.remoteHost}")
-                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.remoteHost)
+                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.remoteName}")
+                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.remoteName)
                     self.ldapConnection.login(
                         self.username,
                         self.password,
