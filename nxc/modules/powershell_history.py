@@ -25,7 +25,7 @@ class NXCModule:
         self.export = bool(module_options.get("EXPORT", False))
 
     def on_admin_login(self, context, connection):
-        for directory in connection.conn.listPath("C$",  "Users\\*"):
+        for directory in connection.conn.listPath("C$", "Users\\*"):
             if directory.get_longname() not in self.false_positive and directory.is_directory():
                 try:
                     powershell_history_dir = f"Users\\{directory.get_longname()}\\AppData\\Roaming\\Microsoft\\Windows\\PowerShell\\PSReadLine\\"
@@ -37,12 +37,8 @@ class NXCModule:
                             connection.conn.getFile("C$", file_path, buf.write)
                             buf.seek(0)
                             file_content = buf.read().decode("utf-8", errors="ignore").lower()                
-                            keywords = []
-                            for keyword in self.sensitive_keywords:
-                                if keyword in file_content:
-                                    keywords.append(keyword.upper())
-                            
-                            if keyword:
+                            keywords = [keyword.upper() for keyword in self.sensitive_keywords if keyword in file_content]
+                            if len(keywords):
                                 context.log.highlight(f"C:\\{file_path} [ {' '.join(keywords)} ]")
                             else:
                                 context.log.highlight(f"C:\\{file_path}")

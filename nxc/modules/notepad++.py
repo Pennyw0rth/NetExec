@@ -20,7 +20,7 @@ class NXCModule:
 
     def on_admin_login(self, context, connection):
         found = 0
-        for directory in connection.conn.listPath("C$",  "Users\\*"):
+        for directory in connection.conn.listPath("C$", "Users\\*"):
             if directory.get_longname() not in self.false_positive and directory.is_directory():
                 try:
                     notepad_backup_dir = f"Users\\{directory.get_longname()}\\AppData\\Roaming\\Notepad++\\backup\\"
