@@ -255,6 +255,7 @@ class ldap(connection):
 
     def enum_host_info(self):
         self.target, self.targetDomain, self.baseDN = self.get_ldap_info(self.host)
+        self.baseDN = self.args.base_dn if self.args.base_dn else self.baseDN   # Allow overwriting baseDN from args
         self.hostname = self.target
         self.remoteName = self.target
         self.domain = self.targetDomain
@@ -495,15 +496,12 @@ class ldap(connection):
                         f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                         color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                     )
-                    self.logger.fail("LDAPS channel binding might be enabled, this is only supported with kerberos authentication. Try using '-k'.")
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
                     f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
-                if proto == "ldaps":
-                    self.logger.fail("LDAPS channel binding might be enabled, this is only supported with kerberos authentication. Try using '-k'.")
             return False
         except OSError as e:
             self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {'Error connecting to the domain, are you sure LDAP service is running on the target?'} \nError: {e}")
@@ -585,15 +583,12 @@ class ldap(connection):
                         f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                         color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                     )
-                    self.logger.fail("LDAPS channel binding might be enabled, this is only supported with kerberos authentication. Try using '-k'.")
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
                     f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
-                if proto == "ldaps":
-                    self.logger.fail("LDAPS channel binding might be enabled, this is only supported with kerberos authentication. Try using '-k'.")
             return False
         except OSError as e:
             self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {'Error connecting to the domain, are you sure LDAP service is running on the target?'} \nError: {e}")
@@ -703,6 +698,7 @@ class ldap(connection):
                 # Microsoft Active Directory set an hard limit of 1000 entries returned by any search
                 paged_search_control = ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000)
                 return self.ldapConnection.search(
+                    searchBase=self.baseDN,
                     searchFilter=searchFilter,
                     attributes=attributes,
                     sizeLimit=sizeLimit,
@@ -1277,6 +1273,7 @@ class ldap(connection):
         try:
             self.logger.debug(f"Search Filter={searchFilter}")
             resp = self.ldapConnection.search(
+                searchBase=self.baseDN,
                 searchFilter=searchFilter,
                 attributes=[
                     "sAMAccountName",
@@ -1404,6 +1401,7 @@ class ldap(connection):
         self.logger.display("Getting GMSA Passwords")
         search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
         gmsa_accounts = self.ldapConnection.search(
+            searchBase=self.baseDN,
             searchFilter=search_filter,
             attributes=[
                 "sAMAccountName",
@@ -1411,7 +1409,6 @@ class ldap(connection):
                 "msDS-GroupMSAMembership",
             ],
             sizeLimit=0,
-            searchBase=self.baseDN,
         )
         if gmsa_accounts:
             self.logger.debug(f"Total of records returned {len(gmsa_accounts):d}")
@@ -1457,10 +1454,10 @@ class ldap(connection):
                 # getting the gmsa account
                 search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
                 gmsa_accounts = self.ldapConnection.search(
+                    searchBase=self.baseDN,
                     searchFilter=search_filter,
                     attributes=["sAMAccountName"],
                     sizeLimit=0,
-                    searchBase=self.baseDN,
                 )
                 if gmsa_accounts:
                     self.logger.debug(f"Total of records returned {len(gmsa_accounts):d}")
@@ -1487,10 +1484,10 @@ class ldap(connection):
                 # getting the gmsa account
                 search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
                 gmsa_accounts = self.ldapConnection.search(
+                    searchBase=self.baseDN,
                     searchFilter=search_filter,
                     attributes=["sAMAccountName"],
                     sizeLimit=0,
-                    searchBase=self.baseDN,
                 )
                 if gmsa_accounts:
                     self.logger.debug(f"Total of records returned {len(gmsa_accounts):d}")
