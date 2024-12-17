@@ -1,11 +1,3 @@
----
-name: Pull request
-about: Update code to fix a bug or add an enhancement/feature
-title: ''
-labels: ''
-assignees: ''
-
----
 ## Description
 
 Please include a summary of the change and which issue is fixed, or what the enhancement does.

@@ -22,7 +22,7 @@ def gen_cli_args():
     except ValueError:
         VERSION = importlib.metadata.version("netexec")
         COMMIT = ""
-    CODENAME = "ItsAlwaysDNS"
+    CODENAME = "NeedForSpeed"
     nxc_logger.debug(f"NXC VERSION: {VERSION} - {CODENAME} - {COMMIT}")
     
     generic_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
