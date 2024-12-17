@@ -1,6 +1,7 @@
+import contextlib
 import os
 from time import sleep
-from datetime import datetime
+from datetime import datetime, timedelta
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5 import tsch, transport
 from nxc.helpers.misc import gen_random_string
@@ -91,6 +92,10 @@ class NXCModule:
         except Exception as e:
             if "SCHED_S_TASK_HAS_NOT_RUN" in str(e):
                 self.logger.fail("Task was not run, seems like the specified user has no active session on the target")
+                with contextlib.suppress(Exception):
+                    exec_method.deleteartifact()
+            else:
+                self.logger.fail(f"Failed to execute command: {e}")
 
 
 class TSCH_EXEC:
@@ -143,6 +148,18 @@ class TSCH_EXEC:
             )
             self.__rpctransport.set_kerberos(self.__doKerberos, self.__kdcHost)
 
+    def deleteartifact(self):
+        dce = self.__rpctransport.get_dce_rpc()
+        if self.__doKerberos:
+            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+        dce.set_credentials(*self.__rpctransport.get_credentials())
+        dce.connect()
+        dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
+        dce.bind(tsch.MSRPC_UUID_TSCHS)
+        self.logger.display(f"Deleting task \\{self.task}")
+        tsch.hSchRpcDelete(dce, f"\\{self.task}")
+        dce.disconnect()
+
     def execute(self, command, output=False):
         self.__retOutput = output
         self.execute_handler(command)
@@ -151,24 +168,20 @@ class TSCH_EXEC:
     def output_callback(self, data):
         self.__outputBuffer = data
 
-    def get_current_date(self):
-        # Get current date and time
-        now = datetime.now()
+    def get_end_boundary(self):
+        # Get current date and time + 5 minutes
+        end_boundary = datetime.now() + timedelta(minutes=5)
 
         # Format it to match the format in the XML: "YYYY-MM-DDTHH:MM:SS.ssssss"
-        return now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
+        return end_boundary.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
 
     def gen_xml(self, command, fileless=False):
         xml = f"""<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <Triggers>
-    <CalendarTrigger>
-      <StartBoundary>{self.get_current_date()}</StartBoundary>
-      <Enabled>true</Enabled>
-      <ScheduleByDay>
-        <DaysInterval>1</DaysInterval>
-      </ScheduleByDay>
-    </CalendarTrigger>
+    <RegistrationTrigger>
+      <EndBoundary>{self.get_end_boundary()}</EndBoundary>
+    </RegistrationTrigger>
   </Triggers>
   <Principals>
     <Principal id="LocalSystem">
@@ -224,53 +237,58 @@ class TSCH_EXEC:
 
     def execute_handler(self, command, fileless=False):
         dce = self.__rpctransport.get_dce_rpc()
+
         if self.__doKerberos:
             dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
 
         dce.set_credentials(*self.__rpctransport.get_credentials())
         dce.connect()
-        tmpName = gen_random_string(8) if self.task is None else self.task
+        # Give self.task a random string as name if not already specified
+        self.task = gen_random_string(8) if self.task is None else self.task
         xml = self.gen_xml(command, fileless)
 
         self.logger.info(f"Task XML: {xml}")
-        taskCreated = False
-        self.logger.info(f"Creating task \\{tmpName}")
+        self.logger.info(f"Creating task \\{self.task}")
         try:
             # windows server 2003 has no MSRPC_UUID_TSCHS, if it bind, it will return abstract_syntax_not_supported
             dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
             dce.bind(tsch.MSRPC_UUID_TSCHS)
-            tsch.hSchRpcRegisterTask(dce, f"\\{tmpName}", xml, tsch.TASK_CREATE, NULL, tsch.TASK_LOGON_NONE)
+            tsch.hSchRpcRegisterTask(dce, f"\\{self.task}", xml, tsch.TASK_CREATE, NULL, tsch.TASK_LOGON_NONE)
         except Exception as e:
             if "ERROR_NONE_MAPPED" in str(e):
                 self.logger.fail(f"User {self.user} is not connected on the target, cannot run the task")
-            if e.error_code and hex(e.error_code) == "0x80070005":
-                self.logger.fail("Schtask_as: Create schedule task got blocked.")
-            if "ERROR_TRUSTED_DOMAIN_FAILURE" in str(e):
+                with contextlib.suppress(Exception):
+                    tsch.hSchRpcDelete(dce, f"\\{self.task}")
+            elif e.error_code and hex(e.error_code) == "0x80070005":
+                self.logger.fail("Create schedule task got blocked.")
+                with contextlib.suppress(Exception):
+                    tsch.hSchRpcDelete(dce, f"\\{self.task}")
+            elif "ERROR_TRUSTED_DOMAIN_FAILURE" in str(e):
                 self.logger.fail(f"User {self.user} does not exist in the domain.")
+                with contextlib.suppress(Exception):
+                    tsch.hSchRpcDelete(dce, f"\\{self.task}")
+            elif "SCHED_S_TASK_HAS_NOT_RUN" in str(e):
+                with contextlib.suppress(Exception):
+                    tsch.hSchRpcDelete(dce, f"\\{self.task}")
+            elif "ERROR_ALREADY_EXISTS" in str(e):
+                self.logger.fail(f"Create schedule task failed: {e}")
             else:
-                self.logger.fail(f"Schtask_as: Create schedule task failed: {e}")
+                self.logger.fail(f"Create schedule task failed: {e}")
+                with contextlib.suppress(Exception):
+                    tsch.hSchRpcDelete(dce, f"\\{self.task}")
             return
-        else:
-            taskCreated = True
-
-        self.logger.info(f"Running task \\{tmpName}")
-        tsch.hSchRpcRun(dce, f"\\{tmpName}")
 
         done = False
         while not done:
-            self.logger.debug(f"Calling SchRpcGetLastRunInfo for \\{tmpName}")
-            resp = tsch.hSchRpcGetLastRunInfo(dce, f"\\{tmpName}")
+            self.logger.debug(f"Calling SchRpcGetLastRunInfo for \\{self.task}")
+            resp = tsch.hSchRpcGetLastRunInfo(dce, f"\\{self.task}")
             if resp["pLastRuntime"]["wYear"] != 0:
                 done = True
             else:
                 sleep(2)
 
-        self.logger.info(f"Deleting task \\{tmpName}")
-        tsch.hSchRpcDelete(dce, f"\\{tmpName}")
-        taskCreated = False
-
-        if taskCreated is True:
-            tsch.hSchRpcDelete(dce, f"\\{tmpName}")
+        self.logger.info(f"Deleting task \\{self.task}")
+        tsch.hSchRpcDelete(dce, f"\\{self.task}")
 
         if self.__retOutput:
             if fileless:

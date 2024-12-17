@@ -229,7 +229,8 @@ class connection:
         else:
             self.logger.debug("Created connection object")
             self.enum_host_info()
-            if self.print_host_info() and (self.login() or (self.username == "" and self.password == "")):
+            self.print_host_info()
+            if self.login() or (self.username == "" and self.password == ""):
                 if hasattr(self.args, "module") and self.args.module:
                     self.load_modules()
                     self.logger.debug("Calling modules")

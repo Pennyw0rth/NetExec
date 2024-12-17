@@ -1,4 +1,4 @@
-![Supported Python versions](https://img.shields.io/badge/python-3.8+-blue.svg)
+![Supported Python versions](https://img.shields.io/badge/python-3.10+-blue.svg)
 [![Twitter](https://img.shields.io/twitter/follow/al3xn3ff?label=al3x_n3ff&style=social)](https://twitter.com/intent/follow?screen_name=al3x_n3ff)
 [![Twitter](https://img.shields.io/twitter/follow/_zblurx?label=_zblurx&style=social)](https://twitter.com/intent/follow?screen_name=_zblurx)
 [![Twitter](https://img.shields.io/twitter/follow/MJHallenbeck?label=MJHallenbeck&style=social)](https://twitter.com/intent/follow?screen_name=MJHallenbeck)

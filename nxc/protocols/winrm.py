@@ -72,8 +72,6 @@ class winrm(connection):
         self.logger.extra["port"] = self.port
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain})")
 
-        return True
-
     def create_conn_obj(self):
         if self.is_link_local_ipv6:
             self.logger.fail("winrm not support link-local ipv6, exiting...")

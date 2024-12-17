@@ -33,7 +33,7 @@ NetExec = 'nxc.netexec:main'
 nxcdb = 'nxc.nxcdb:main'
 
 [tool.poetry.dependencies]
-python = "^3.8.0"
+python = "^3.10.0"
 aardwolf = "^0.2.8"
 aioconsole = "^0.6.2"
 aiosqlite = "^0.19.0"
@@ -41,7 +41,7 @@ argcomplete = "^3.1.4"
 asyauth = ">=0.0.20"
 beautifulsoup4 = ">=4.11,<5"
 bloodhound = "^1.7.2"
-dploot = "^2.7.4"
+dploot = "^3.0.3"
 dsinternals = "^1.2.4"
 impacket =  { git = "https://github.com/fortra/impacket.git" }
 lsassy = ">=3.1.11"
@@ -74,7 +74,7 @@ pytest = "^7.2.2"
 ruff = "=0.0.292"
 
 [build-system]
-requires = ["poetry-core>=1.2.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
+requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
 build-backend = "poetry_dynamic_versioning.backend"
 
 [tool.poetry-dynamic-versioning]
