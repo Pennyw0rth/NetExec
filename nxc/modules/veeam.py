@@ -142,7 +142,7 @@ class NXCModule:
             context.log.fail("Access denied! This is probably due to an AntiVirus software blocking the execution of the PowerShell script.")
 
         # Stripping whitespaces and newlines
-        output_stripped = [" ".join(line.split()) for line in output.split("\r\n") if line.strip()]
+        output_stripped = [line for line in output.replace("\r", "").split("\n") if line.strip()]
 
         # Error handling
         if "Can't connect to DB! Exiting..." in output_stripped or "No passwords found!" in output_stripped:
@@ -154,7 +154,8 @@ class NXCModule:
         try:
             for account in output_stripped:
                 user, password = account.split(" ", 1)
-                password = password.replace("WHITESPACE_ERROR", " ")
+                password = password.strip().replace("WHITESPACE_ERROR", " ")
+                user = user.strip()
                 context.log.highlight(f"{user}:{password}")
                 if " " in password:
                     context.log.fail(f'Password contains whitespaces! The password for user "{user}" is: "{password}"')
