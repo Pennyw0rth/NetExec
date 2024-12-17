@@ -1,7 +1,8 @@
-#Author: 
-# deathflamingo
 class NXCModule:
-    """Enumerate SQL Server logins"""
+    """
+    Enumerate SQL Server logins
+    Module by deathflamingo
+    """
 
     name = "enum_logins"
     description = "Enumerate SQL Server logins"
@@ -28,7 +29,7 @@ class NXCModule:
         """
         Fetches a list of SQL Server logins.
 
-        Returns:
+        Returns
         -------
         list: List of login names.
         """
