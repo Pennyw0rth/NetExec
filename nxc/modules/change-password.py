@@ -30,7 +30,7 @@ class NXCModule:
         - USER: User whose password to change (default is current user)
         - RESET: Set to True to reset password with admin privileges
         """
-        self.newpass = module_options.get("NEWPASS", 'Password123!')
+        self.newpass = module_options.get("NEWPASS")
         self.newhash = module_options.get("NEWHASH")
         self.oldpass = module_options.get("OLDPASS")
         self.target_user = module_options.get("USER")
