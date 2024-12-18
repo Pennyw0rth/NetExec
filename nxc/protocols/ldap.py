@@ -14,8 +14,6 @@ from Cryptodome.Hash import MD4
 from OpenSSL.SSL import SysCallError
 from bloodhound.ad.authentication import ADAuthentication
 from bloodhound.ad.domain import AD
-from impacket.dcerpc.v5.epm import MSRPC_UUID_PORTMAP
-from impacket.dcerpc.v5.rpcrt import DCERPCException, RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.dcerpc.v5.samr import (
     UF_ACCOUNTDISABLE,
     UF_DONT_REQUIRE_PREAUTH,
@@ -23,7 +21,6 @@ from impacket.dcerpc.v5.samr import (
     UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION,
     UF_SERVER_TRUST_ACCOUNT,
 )
-from impacket.dcerpc.v5.transport import DCERPCTransportFactory
 from impacket.krb5 import constants
 from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError
 from impacket.krb5.types import Principal, KerberosException
@@ -31,7 +28,7 @@ from impacket.ldap import ldap as ldap_impacket
 from impacket.ldap import ldaptypes
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ldap.ldap import LDAPFilterSyntaxError
-from impacket.smbconnection import SMBConnection, SessionError
+from impacket.smbconnection import SessionError
 from impacket.ntlm import getNTLMSSPType1
 
 from nxc.config import process_secret, host_info_colors
@@ -238,13 +235,13 @@ class ldap(connection):
 
         ntlm_challenge = None
         bindRequest = ldapasn1_impacket.BindRequest()
-        bindRequest['version'] = 3
-        bindRequest['name'] = ""
+        bindRequest["version"] = 3
+        bindRequest["name"] = ""
         negotiate = getNTLMSSPType1()
-        bindRequest['authentication']['sicilyNegotiate'] = negotiate.getData()
+        bindRequest["authentication"]["sicilyNegotiate"] = negotiate.getData()
         try:
-            response = self.ldap_connection.sendReceive(bindRequest)[0]['protocolOp']
-            ntlm_challenge = bytes(response['bindResponse']['matchedDN'])
+            response = self.ldap_connection.sendReceive(bindRequest)[0]["protocolOp"]
+            ntlm_challenge = bytes(response["bindResponse"]["matchedDN"])
         except Exception as e:
             self.logger.debug(f"Failed to get target {self.host} ntlm challenge, error: {e!s}")
 
