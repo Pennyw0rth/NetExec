@@ -38,7 +38,7 @@ class NXCModule:
                     remoteOps._RemoteOperations__rrp,
                     regHandle, 
                     "Software\\Policies\\Microsoft\\Windows NT\\Terminal Services\\"
-                )['phkResult']
+                )["phkResult"]
 
                 # Checks if the key already exists or not
                 try:

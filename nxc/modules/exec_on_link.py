@@ -1,7 +1,8 @@
-#Author: 
-# deathflamingo
 class NXCModule:
-    """Execute commands on linked servers"""
+    """
+    Execute commands on linked servers
+    Module by deathflamingo
+    """
 
     name = "exec_on_link"
     description = "Execute commands on a SQL Server linked server"
@@ -35,9 +36,7 @@ class NXCModule:
         self.execute_on_link()
 
     def execute_on_link(self):
-        """
-        Executes the specified command on the linked server.
-        """
+        """Executes the specified command on the linked server."""
         query = f"EXEC ('{self.command}') AT [{self.linked_server}];"
         result = self.mssql_conn.sql_query(query)
         self.context.log.display(f"Command output: {result}")

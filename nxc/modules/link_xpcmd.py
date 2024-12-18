@@ -1,7 +1,8 @@
-#Author: 
-# deathflamingo
 class NXCModule:
-    """Run xp_cmdshell commands on a linked SQL server"""
+    """
+    Run xp_cmdshell commands on a linked SQL server
+    Module by deathflamingo
+    """
 
     name = "link_xpcmd"
     description = "Run xp_cmdshell commands on a linked SQL server"

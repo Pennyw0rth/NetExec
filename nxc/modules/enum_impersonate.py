@@ -1,7 +1,8 @@
-#Author: 
-# deathflamingo
 class NXCModule:
-    """Enumerate SQL Server users with impersonation rights"""
+    """
+    Enumerate SQL Server users with impersonation rights
+    Module by deathflamingo
+    """
 
     name = "enum_impersonate"
     description = "Enumerate users with impersonation privileges"
@@ -28,7 +29,7 @@ class NXCModule:
         """
         Fetches a list of users with impersonation rights.
 
-        Returns:
+        Returns
         -------
         list: List of user names.
         """
