@@ -229,7 +229,7 @@ class ldap(connection):
 
     def enum_host_info(self):
         self.baseDN = self.args.base_dn if self.args.base_dn else self.baseDN   # Allow overwriting baseDN from args
-        self.hostname = self.target
+        self.hostname = self.target.split(".")[0].upper()
         self.remoteName = self.target
         self.domain = self.targetDomain
 
@@ -260,7 +260,7 @@ class ldap(connection):
         self.logger.debug("Printing host info for LDAP")
         self.logger.extra["protocol"] = "LDAP" if str(self.port) == "389" else "LDAPS"
         self.logger.extra["port"] = self.port
-        self.logger.extra["hostname"] = self.target.split(".")[0].upper()
+        self.logger.extra["hostname"] = self.hostname
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
