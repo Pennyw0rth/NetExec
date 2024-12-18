@@ -134,7 +134,7 @@ class ldap(connection):
         self.server_os = None
         self.os_arch = 0
         self.hash = None
-        self.ldapConnection = None
+        self.ldap_connection = None
         self.lmhash = ""
         self.nthash = ""
         self.baseDN = ""
@@ -302,8 +302,8 @@ class ldap(connection):
             proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [1]")
-            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-            self.ldapConnection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
+            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
+            self.ldap_connection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
             if self.username == "":
                 self.username = self.get_ldap_username()
 
@@ -347,8 +347,8 @@ class ldap(connection):
                     self.logger.extra["port"] = "636"
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [2]")
-                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
-                    self.ldapConnection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
+                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+                    self.ldap_connection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
                     if self.username == "":
                         self.username = self.get_ldap_username()
 
@@ -404,8 +404,8 @@ class ldap(connection):
             proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3]")
-            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-            self.ldapConnection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
+            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
+            self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
             self.check_if_admin()
 
             # Prepare success credential text
@@ -425,8 +425,8 @@ class ldap(connection):
                     self.logger.extra["port"] = "636"
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [4]")
-                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
-                    self.ldapConnection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
+                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+                    self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
                     self.check_if_admin()
 
                     # Prepare success credential text
@@ -490,8 +490,8 @@ class ldap(connection):
             proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldaps_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
-            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
-            self.ldapConnection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
+            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+            self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
             self.check_if_admin()
 
             # Prepare success credential text
@@ -511,8 +511,8 @@ class ldap(connection):
                     self.logger.extra["port"] = "636"
                     ldaps_url = f"{proto}://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
-                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
-                    self.ldapConnection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
+                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+                    self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
                     self.check_if_admin()
 
                     # Prepare success credential text
@@ -605,12 +605,12 @@ class ldap(connection):
 
     def search(self, searchFilter, attributes, sizeLimit=0) -> list:
         try:
-            if self.ldapConnection:
+            if self.ldap_connection:
                 self.logger.debug(f"Search Filter={searchFilter}")
 
                 # Microsoft Active Directory set an hard limit of 1000 entries returned by any search
                 paged_search_control = ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000)
-                return self.ldapConnection.search(
+                return self.ldap_connection.search(
                     searchBase=self.baseDN,
                     searchFilter=searchFilter,
                     attributes=attributes,
@@ -1158,7 +1158,7 @@ class ldap(connection):
         searchFilter = "(userAccountControl:1.2.840.113556.1.4.803:=32)"
         try:
             self.logger.debug(f"Search Filter={searchFilter}")
-            resp = self.ldapConnection.search(
+            resp = self.ldap_connection.search(
                 searchBase=self.baseDN,
                 searchFilter=searchFilter,
                 attributes=[
@@ -1286,7 +1286,7 @@ class ldap(connection):
     def gmsa(self):
         self.logger.display("Getting GMSA Passwords")
         search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
-        gmsa_accounts = self.ldapConnection.search(
+        gmsa_accounts = self.ldap_connection.search(
             searchBase=self.baseDN,
             searchFilter=search_filter,
             attributes=[
@@ -1339,7 +1339,7 @@ class ldap(connection):
             else:
                 # getting the gmsa account
                 search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
-                gmsa_accounts = self.ldapConnection.search(
+                gmsa_accounts = self.ldap_connection.search(
                     searchBase=self.baseDN,
                     searchFilter=search_filter,
                     attributes=["sAMAccountName"],
@@ -1369,7 +1369,7 @@ class ldap(connection):
                 gmsa_pass = gmsa[1]
                 # getting the gmsa account
                 search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
-                gmsa_accounts = self.ldapConnection.search(
+                gmsa_accounts = self.ldap_connection.search(
                     searchBase=self.baseDN,
                     searchFilter=search_filter,
                     attributes=["sAMAccountName"],
