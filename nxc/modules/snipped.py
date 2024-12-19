@@ -96,17 +96,17 @@ class NXCModule:
                                     connection.conn.getFile(self.share, remote_file_path, local_file.write)
 
                                 if not exists(local_file_path):
-                                    context.log.error(f"Downloaded file {local_file_path} does not exist.")
+                                    context.log.fail(f"Downloaded file '{local_file_path}' does not exist.")
                                     continue
 
                                 file_size = getsize(local_file_path)
                                 if file_size == 0:
-                                    context.log.error(f"Downloaded file {local_file_path} is 0 bytes. Skipping.")
+                                    context.log.fail(f"Downloaded file '{local_file_path}' is 0 bytes. Skipping.")
                                     os.remove(local_file_path)
                                 else:
                                     total_files_downloaded += 1
                             except Exception as e:
-                                context.log.debug(f"Failed to download {remote_file_path} for user {folder_name}: {e}")
+                                context.log.debug(f"Failed to download '{remote_file_path}' for user {folder_name}: {e}")
 
         if total_files_downloaded > 0 and host_output_path:
             context.log.success(f"{total_files_downloaded} file(s) downloaded from host {connection.host} to {host_output_path}.")
