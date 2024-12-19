@@ -14,8 +14,6 @@ from Cryptodome.Hash import MD4
 from OpenSSL.SSL import SysCallError
 from bloodhound.ad.authentication import ADAuthentication
 from bloodhound.ad.domain import AD
-from impacket.dcerpc.v5.epm import MSRPC_UUID_PORTMAP
-from impacket.dcerpc.v5.rpcrt import DCERPCException, RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.dcerpc.v5.samr import (
     UF_ACCOUNTDISABLE,
     UF_DONT_REQUIRE_PREAUTH,
@@ -23,7 +21,6 @@ from impacket.dcerpc.v5.samr import (
     UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION,
     UF_SERVER_TRUST_ACCOUNT,
 )
-from impacket.dcerpc.v5.transport import DCERPCTransportFactory
 from impacket.krb5 import constants
 from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError
 from impacket.krb5.types import Principal, KerberosException
@@ -31,8 +28,8 @@ from impacket.ldap import ldap as ldap_impacket
 from impacket.ldap import ldaptypes
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ldap.ldap import LDAPFilterSyntaxError
-from impacket.smb import SMB_DIALECT
-from impacket.smbconnection import SMBConnection, SessionError
+from impacket.smbconnection import SessionError
+from impacket.ntlm import getNTLMSSPType1
 
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
@@ -42,6 +39,7 @@ from nxc.protocols.ldap.bloodhound import BloodHound
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
+from nxc.helpers.ntlm_parser import parse_challenge
 
 ldap_error_status = {
     "1": "STATUS_NOT_SUPPORTED",
@@ -136,7 +134,7 @@ class ldap(connection):
         self.server_os = None
         self.os_arch = 0
         self.hash = None
-        self.ldapConnection = None
+        self.ldap_connection = None
         self.lmhash = ""
         self.nthash = ""
         self.baseDN = ""
@@ -163,15 +161,15 @@ class ldap(connection):
             }
         )
 
-    def get_ldap_info(self, host):
+    def create_conn_obj(self):
         try:
             proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
-            ldap_url = f"{proto}://{host}"
+            ldap_url = f"{proto}://{self.host}"
             self.logger.info(f"Connecting to {ldap_url} with no baseDN")
             try:
-                ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.host)
-                if ldap_connection:
-                    self.logger.debug(f"ldap_connection: {ldap_connection}")
+                self.ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.host)
+                if self.ldap_connection:
+                    self.logger.debug(f"ldap_connection: {self.ldap_connection}")
             except SysCallError as e:
                 if proto == "ldaps":
                     self.logger.fail(f"LDAPs connection to {ldap_url} failed - {e}")
@@ -179,9 +177,9 @@ class ldap(connection):
                     self.logger.fail("Even if the port is open, LDAPS may not be configured")
                 else:
                     self.logger.fail(f"LDAP connection to {ldap_url} failed: {e}")
-                exit(1)
+                return False
 
-            resp = ldap_connection.search(
+            resp = self.ldap_connection.search(
                 scope=ldapasn1_impacket.Scope("baseObject"),
                 attributes=["defaultNamingContext", "dnsHostName"],
                 sizeLimit=0,
@@ -208,42 +206,18 @@ class ldap(connection):
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.info(f"Skipping item, cannot process due to error {e}")
         except OSError:
-            return [None, None, None]
+            return False
         self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
-        return [target, target_domain, base_dn]
-
-    def get_os_arch(self):
-        try:
-            string_binding = rf"ncacn_ip_tcp:{self.host}[135]"
-            transport = DCERPCTransportFactory(string_binding)
-            transport.setRemoteHost(self.host)
-            transport.set_connect_timeout(5)
-            dce = transport.get_dce_rpc()
-            if self.args.kerberos:
-                dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-            dce.connect()
-            try:
-                dce.bind(
-                    MSRPC_UUID_PORTMAP,
-                    transfer_syntax=("71710533-BEBA-4937-8319-B5DBEF9CCC36", "1.0"),
-                )
-            except DCERPCException as e:
-                if str(e).find("syntaxes_not_supported") >= 0:
-                    dce.disconnect()
-                    return 32
-            else:
-                dce.disconnect()
-                return 64
-        except Exception as e:
-            self.logger.fail(f"Error retrieving os arch of {self.host}: {e!s}")
-
-        return 0
+        self.target = target
+        self.targetDomain = target_domain
+        self.baseDN = base_dn
+        return True
 
     def get_ldap_username(self):
         extended_request = ldapasn1_impacket.ExtendedRequest()
         extended_request["requestName"] = "1.3.6.1.4.1.4203.1.11.3"  # whoami
 
-        response = self.ldapConnection.sendReceive(extended_request)
+        response = self.ldap_connection.sendReceive(extended_request)
         for message in response:
             search_result = message["protocolOp"].getComponent()
             if search_result["resultCode"] == ldapasn1_impacket.ResultCode("success"):
@@ -254,46 +228,26 @@ class ldap(connection):
         return ""
 
     def enum_host_info(self):
-        self.target, self.targetDomain, self.baseDN = self.get_ldap_info(self.host)
         self.baseDN = self.args.base_dn if self.args.base_dn else self.baseDN   # Allow overwriting baseDN from args
-        self.hostname = self.target
+        self.hostname = self.target.split(".")[0].upper()
         self.remoteName = self.target
         self.domain = self.targetDomain
-        # smb no open, specify the domain
-        if not self.args.no_smb:
-            self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
 
-            try:
-                self.conn.login("", "")
-            except BrokenPipeError as e:
-                self.logger.fail(f"Broken Pipe Error while attempting to login: {e}")
-            except Exception as e:
-                if "STATUS_NOT_SUPPORTED" in str(e):
-                    self.no_ntlm = True
-            if not self.no_ntlm:
-                self.hostname = self.conn.getServerName()
-                self.targetDomain = self.domain = self.conn.getServerDNSDomainName()
-            self.server_os = self.conn.getServerOS()
-            self.signing = self.conn.isSigningRequired() if self.smbv1 else self.conn._SMBConnection._Connection["RequireSigning"]
-            self.os_arch = self.get_os_arch()
-            self.logger.extra["hostname"] = self.hostname
+        ntlm_challenge = None
+        bindRequest = ldapasn1_impacket.BindRequest()
+        bindRequest["version"] = 3
+        bindRequest["name"] = ""
+        negotiate = getNTLMSSPType1()
+        bindRequest["authentication"]["sicilyNegotiate"] = negotiate.getData()
+        try:
+            response = self.ldap_connection.sendReceive(bindRequest)[0]["protocolOp"]
+            ntlm_challenge = bytes(response["bindResponse"]["matchedDN"])
+        except Exception as e:
+            self.logger.debug(f"Failed to get target {self.host} ntlm challenge, error: {e!s}")
 
-            if not self.domain:
-                self.domain = self.hostname
-            if self.args.domain:
-                self.domain = self.args.domain
-            if self.args.local_auth:
-                self.domain = self.hostname
-            self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
-
-            try:  # noqa: SIM105
-                # DC's seem to want us to logoff first, windows workstations sometimes reset the connection
-                self.conn.logoff()
-            except Exception:
-                pass
-
-            # Re-connect since we logged off
-            self.create_conn_obj()
+        if ntlm_challenge:
+            ntlm_info = parse_challenge(ntlm_challenge)
+            self.server_os = ntlm_info["os_version"]
 
         if not self.kdcHost and self.domain:
             result = self.resolver(self.domain)
@@ -304,17 +258,10 @@ class ldap(connection):
 
     def print_host_info(self):
         self.logger.debug("Printing host info for LDAP")
-        if self.args.no_smb:
-            self.logger.extra["protocol"] = "LDAP" if self.port == 389 else "LDAPS"
-            self.logger.extra["port"] = self.port
-            self.logger.display(f'{self.baseDN} (Hostname: {self.hostname.split(".")[0]}) (domain: {self.domain})')
-        else:
-            self.logger.extra["protocol"] = "SMB" if not self.no_ntlm else "LDAP"
-            self.logger.extra["port"] = "445" if not self.no_ntlm else "389"
-            signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
-            smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
-            self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1})")
-            self.logger.extra["protocol"] = "LDAP"
+        self.logger.extra["protocol"] = "LDAP" if str(self.port) == "389" else "LDAPS"
+        self.logger.extra["port"] = self.port
+        self.logger.extra["hostname"] = self.hostname
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.username = username
@@ -355,8 +302,8 @@ class ldap(connection):
             proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [1]")
-            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-            self.ldapConnection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
+            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
+            self.ldap_connection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
             if self.username == "":
                 self.username = self.get_ldap_username()
 
@@ -400,8 +347,8 @@ class ldap(connection):
                     self.logger.extra["port"] = "636"
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [2]")
-                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
-                    self.ldapConnection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
+                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+                    self.ldap_connection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
                     if self.username == "":
                         self.username = self.get_ldap_username()
 
@@ -457,8 +404,8 @@ class ldap(connection):
             proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3]")
-            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-            self.ldapConnection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
+            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
+            self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
             self.check_if_admin()
 
             # Prepare success credential text
@@ -478,8 +425,8 @@ class ldap(connection):
                     self.logger.extra["port"] = "636"
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [4]")
-                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
-                    self.ldapConnection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
+                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+                    self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
                     self.check_if_admin()
 
                     # Prepare success credential text
@@ -543,8 +490,8 @@ class ldap(connection):
             proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldaps_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
-            self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
-            self.ldapConnection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
+            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+            self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
             self.check_if_admin()
 
             # Prepare success credential text
@@ -564,8 +511,8 @@ class ldap(connection):
                     self.logger.extra["port"] = "636"
                     ldaps_url = f"{proto}://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
-                    self.ldapConnection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
-                    self.ldapConnection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
+                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+                    self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
                     self.check_if_admin()
 
                     # Prepare success credential text
@@ -593,40 +540,6 @@ class ldap(connection):
         except OSError as e:
             self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {'Error connecting to the domain, are you sure LDAP service is running on the target?'} \nError: {e}")
             return False
-
-    def create_smbv1_conn(self):
-        self.logger.debug("Creating smbv1 connection object")
-        try:
-            self.conn = SMBConnection(self.host, self.host, None, 445, preferredDialect=SMB_DIALECT)
-            self.smbv1 = True
-            if self.conn:
-                self.logger.debug("SMBv1 Connection successful")
-        except OSError as e:
-            if str(e).find("Connection reset by peer") != -1:
-                self.logger.debug(f"SMBv1 might be disabled on {self.host}")
-            return False
-        except Exception as e:
-            self.logger.debug(f"Error creating SMBv1 connection to {self.host}: {e}")
-            return False
-        return True
-
-    def create_smbv3_conn(self):
-        self.logger.debug("Creating smbv3 connection object")
-        try:
-            self.conn = SMBConnection(self.host, self.host, None, 445)
-            self.smbv1 = False
-            if self.conn:
-                self.logger.debug("SMBv3 Connection successful")
-        except OSError:
-            return False
-        except Exception as e:
-            self.logger.debug(f"Error creating SMBv3 connection to {self.host}: {e}")
-            return False
-
-        return True
-
-    def create_conn_obj(self):
-        return bool(self.args.no_smb or self.create_smbv1_conn() or self.create_smbv3_conn())
 
     def get_sid(self):
         self.logger.highlight(f"Domain SID {self.sid_domain}")
@@ -692,12 +605,12 @@ class ldap(connection):
 
     def search(self, searchFilter, attributes, sizeLimit=0) -> list:
         try:
-            if self.ldapConnection:
+            if self.ldap_connection:
                 self.logger.debug(f"Search Filter={searchFilter}")
 
                 # Microsoft Active Directory set an hard limit of 1000 entries returned by any search
                 paged_search_control = ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000)
-                return self.ldapConnection.search(
+                return self.ldap_connection.search(
                     searchBase=self.baseDN,
                     searchFilter=searchFilter,
                     attributes=attributes,
@@ -1245,7 +1158,7 @@ class ldap(connection):
         searchFilter = "(userAccountControl:1.2.840.113556.1.4.803:=32)"
         try:
             self.logger.debug(f"Search Filter={searchFilter}")
-            resp = self.ldapConnection.search(
+            resp = self.ldap_connection.search(
                 searchBase=self.baseDN,
                 searchFilter=searchFilter,
                 attributes=[
@@ -1373,7 +1286,7 @@ class ldap(connection):
     def gmsa(self):
         self.logger.display("Getting GMSA Passwords")
         search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
-        gmsa_accounts = self.ldapConnection.search(
+        gmsa_accounts = self.ldap_connection.search(
             searchBase=self.baseDN,
             searchFilter=search_filter,
             attributes=[
@@ -1426,7 +1339,7 @@ class ldap(connection):
             else:
                 # getting the gmsa account
                 search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
-                gmsa_accounts = self.ldapConnection.search(
+                gmsa_accounts = self.ldap_connection.search(
                     searchBase=self.baseDN,
                     searchFilter=search_filter,
                     attributes=["sAMAccountName"],
@@ -1456,7 +1369,7 @@ class ldap(connection):
                 gmsa_pass = gmsa[1]
                 # getting the gmsa account
                 search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
-                gmsa_accounts = self.ldapConnection.search(
+                gmsa_accounts = self.ldap_connection.search(
                     searchBase=self.baseDN,
                     searchFilter=search_filter,
                     attributes=["sAMAccountName"],
