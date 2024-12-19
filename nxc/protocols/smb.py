@@ -296,9 +296,10 @@ class smb(connection):
             self.logger.debug(f"Error logging off system: {e}")
 
         # DCOM connection with kerberos needed
-        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
+        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.targetDomain}"
 
-        if not self.kdcHost and self.domain:
+        # using kdcHost is buggy on impacket when using trust relation between ad so we kdcHost must stay to none if targetdomain is not equal to domain
+        if not self.kdcHost and self.domain and self.domain == self.targetDomain:
             result = self.resolver(self.domain)
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
