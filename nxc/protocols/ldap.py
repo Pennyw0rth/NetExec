@@ -249,7 +249,7 @@ class ldap(connection):
             ntlm_info = parse_challenge(ntlm_challenge)
             self.server_os = ntlm_info["os_version"]
 
-        if not self.kdcHost and self.domain:
+        if not self.kdcHost and self.domain and self.domain == self.remoteName:
             result = self.resolver(self.domain)
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
