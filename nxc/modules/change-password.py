@@ -108,12 +108,14 @@ class NXCModule:
         dce.bind(samr.MSRPC_UUID_SAMR)
 
         try:
+            # Retrieve the user handle by connecting to SAMR and looking up the username.
             server_handle = samr.hSamrConnect(dce, connection.host + "\x00")["ServerHandle"]
             domain_sid = samr.hSamrLookupDomainInSamServer(dce, server_handle, target_domain)["DomainId"]
             domain_handle = samr.hSamrOpenDomain(dce, server_handle, domainId=domain_sid)["DomainHandle"]
             user_rid = samr.hSamrLookupNamesInDomain(dce, domain_handle, (target_username,))["RelativeIds"]["Element"][0]
             user_handle = samr.hSamrOpenUser(dce, domain_handle, userId=user_rid)["UserHandle"]
             if self.reset:
+                # Reset the password
                 samr.hSamrSetNTInternal1(dce, user_handle, new_password, new_nthash)
                 context.log.success(f"Successfully reset password for {target_username}")
             else:
