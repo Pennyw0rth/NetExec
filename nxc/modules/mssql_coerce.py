@@ -75,5 +75,5 @@ class NXCModule:
                 result = self.mssql_conn.sql_query(command)
                 self.context.log.debug(f"Executing command: {command}, Command result: {result}")
             except Exception as e:
-                self.context.log.error(f"Failed to execute command: {command}, Error: {e}")
+                self.context.log.fail(f"Failed to execute command: {command}, Error: {e}")
         self.context.log.display("Commands executed successfully, check the listener for results")
