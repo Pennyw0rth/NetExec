@@ -24,7 +24,7 @@ class NXCModule:
 
     def on_login(self, context, connection):
         try:
-            ldap_connection = connection.ldapConnection
+            ldap_connection = connection.ldap_connection
 
             # Define the search filter for pre-created computer accounts
             search_filter = "(&(objectClass=computer)(userAccountControl=4128))"

@@ -76,7 +76,7 @@ class NXCModule:
 
         try:
             sc = ldap.SimplePagedResultsControl()
-            connection.ldapConnection.search(
+            connection.ldap_connection.search(
                 searchFilter=self.search_filter,
                 attributes=["sAMAccountName", "description"],
                 sizeLimit=0,
