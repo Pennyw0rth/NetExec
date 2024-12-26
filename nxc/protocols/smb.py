@@ -583,22 +583,23 @@ class smb(connection):
             return False
         return True
 
-    def create_conn_obj(self, no_smbv1=False):
+    def create_conn_obj(self):
         """
         Tries to create a connection object to the target host.
         On first try, it will try to create a SMBv1 connection.
         On further tries, it will remember which SMB version is supported and create a connection object accordingly.
-
-        :param no_smbv1: If True, it will not try to create a SMBv1 connection
         """
+        if self.args.force_smbv2:
+            return self.create_smbv3_conn()
+
         # Initial negotiation
-        if not no_smbv1 and self.smbv1 is None:
+        if self.smbv1 is None:
             self.smbv1 = self.create_smbv1_conn()
             if self.smbv1:
                 return True
             elif not self.is_timeouted:
                 return self.create_smbv3_conn()
-        elif not no_smbv1 and self.smbv1:
+        elif self.smbv1:
             return self.create_smbv1_conn()
         else:
             return self.create_smbv3_conn()
@@ -879,8 +880,10 @@ class smb(connection):
             write = False
             write_dir = False
             write_file = False
+            pwd = ntpath.join("\\", "*")
+            pwd = ntpath.normpath(pwd)
             try:
-                self.conn.listPath(share_name, "*")
+                self.conn.listPath(share_name, pwd)
                 read = True
                 share_info["access"].append("READ")
             except SessionError as e:
