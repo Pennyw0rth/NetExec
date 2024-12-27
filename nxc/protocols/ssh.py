@@ -1,4 +1,5 @@
 import paramiko
+import os
 import re
 import uuid
 import logging
@@ -279,6 +280,36 @@ class ssh(connection):
             self.logger.success(f"{username}:{process_secret(password)} {self.mark_pwned()} {highlight(display_shell_access)}")
 
             return True
+
+    def put_file_single(self, sftp_conn, src, dst):
+        self.logger.display(f'Copying "{src}" to "{dst}"')
+        try:
+            sftp_conn.put(src, dst)
+            self.logger.success(f'Created file "{src}" on "{dst}"')
+        except Exception as e:
+            self.logger.fail(f'Error writing file to "{dst}": {e}')
+
+    def put_file(self):
+        sftp_conn = self.conn.open_sftp()
+        for src, dest in self.args.put_file:
+            self.put_file_single(sftp_conn, src, dest)
+        sftp_conn.close()
+
+    def get_file_single(self, sftp_conn, remote_path, download_path):
+        self.logger.display(f'Copying "{remote_path}" to "{download_path}"')
+        try:
+            sftp_conn.get(remote_path, download_path)
+            self.logger.success(f'File "{remote_path}" was downloaded to "{download_path}"')
+        except Exception as e:
+            self.logger.fail(f'Error getting file "{remote_path}": {e}')
+            if os.path.getsize(download_path) == 0:
+                os.remove(download_path)
+
+    def get_file(self):
+        sftp_conn = self.conn.open_sftp()
+        for src, dest in self.args.get_file:
+            self.get_file_single(sftp_conn, src, dest)
+        sftp_conn.close()
 
     def execute(self, payload=None, get_output=False):
         if not payload and self.args.execute:
