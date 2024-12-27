@@ -549,7 +549,6 @@ class smb(connection):
                 preferredDialect=SMB_DIALECT,
                 timeout=self.args.smb_timeout,
             )
-            self.smbv1 = True
         except OSError as e:
             if "Connection reset by peer" in str(e):
                 self.logger.info(f"SMBv1 might be disabled on {self.host}")
@@ -577,20 +576,20 @@ class smb(connection):
                 self.port,
                 timeout=self.args.smb_timeout,
             )
-            self.smbv1 = False
         except (Exception, NetBIOSTimeout, OSError) as e:
             self.logger.info(f"Error creating SMBv3 connection to {self.host}: {e}")
             return False
         return True
 
-    def create_conn_obj(self):
+    def create_conn_obj(self, no_smbv1=False):
         """
         Tries to create a connection object to the target host.
         On first try, it will try to create a SMBv1 connection.
         On further tries, it will remember which SMB version is supported and create a connection object accordingly.
+
+        :param no_smbv1: If True, it will not try to create a SMBv1 connection
         """
-        if self.args.force_smbv2:
-            return self.create_smbv3_conn()
+        no_smbv1 = self.args.no_smbv1 if self.args.no_smbv1 else no_smbv1
 
         # Initial negotiation
         if self.smbv1 is None:
@@ -599,7 +598,7 @@ class smb(connection):
                 return True
             elif not self.is_timeouted:
                 return self.create_smbv3_conn()
-        elif self.smbv1:
+        elif not no_smbv1 and self.smbv1:
             return self.create_smbv1_conn()
         else:
             return self.create_smbv3_conn()
@@ -841,6 +840,7 @@ class smb(connection):
         temp_dir = ntpath.normpath("\\" + gen_random_string())
         temp_file = ntpath.normpath("\\" + gen_random_string() + ".txt")
         permissions = []
+        write_check = True if not self.args.no_write_check else False
 
         try:
             self.logger.debug(f"domain: {self.domain}")
@@ -880,17 +880,21 @@ class smb(connection):
             write = False
             write_dir = False
             write_file = False
-            pwd = ntpath.join("\\", "*")
-            pwd = ntpath.normpath(pwd)
             try:
-                self.conn.listPath(share_name, pwd)
+                self.conn.listPath(share_name, "*")
                 read = True
                 share_info["access"].append("READ")
             except SessionError as e:
                 error = get_error_string(e)
                 self.logger.debug(f"Error checking READ access on share {share_name}: {error}")
+            except (NetBIOSError, UnicodeEncodeError) as e:
+                write_check = False
+                share_info["access"].append("UNKNOWN (try '--no-smbv1')")
+                error = get_error_string(e)
+                self.logger.debug(f"Error checking READ access on share {share_name}: {error}. This exception always caused by special character in share name with SMBv1")
+                self.logger.info(f"Skipping WRITE permission check on share {share_name}")
 
-            if not self.args.no_write_check:
+            if write_check:
                 try:
                     self.conn.createDirectory(share_name, temp_dir)
                     write_dir = True
