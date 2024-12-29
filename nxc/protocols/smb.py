@@ -592,7 +592,7 @@ class smb(connection):
         no_smbv1 = self.args.no_smbv1 if self.args.no_smbv1 else no_smbv1
 
         # Initial negotiation
-        if self.smbv1 is None:
+        if not no_smbv1 and self.smbv1 is None:
             self.smbv1 = self.create_smbv1_conn()
             if self.smbv1:
                 return True
