@@ -1,11 +1,11 @@
 import sys
+from impacket.dcerpc.v5 import samr, epm, transport
+from impacket.dcerpc.v5.rpcrt import DCERPCException
 
 class NXCModule:
     """
     Module for changing or resetting user passwords
     Module by Fagan Afandiyev
-
-    This is NXC implementation of changepasswd.py from impacket
     """
 
     name = "change-password"
@@ -17,17 +17,23 @@ class NXCModule:
     def options(self, context, module_options):
         """
         Module options for password change
+
+        Required options:
+        If STATUS_PASSWORD_MUST_CHANGE or STATUS_PASSWORD_EXPIRED (Change password for current user)
+            netexec smb <DC_IP> -u username -p oldpass -M change-password -o OLDPASS='oldpass' NEWPASS='newpass'
+            netexec smb <DC_IP> -u username -H oldnthash -M change-password -o OLDNTHASH='oldnthash' NEWPASS='newpass'
         
-        Supported options:
-        - NEWPASS: New password to set
-        - NEWHASH: New password hash (NTHASH or LMHASH:NTHASH)
-        - OLDPASS: Current password (optional for reset)
-        - USER: User whose password to change (default is current user)
-        - RESET: Set to True to reset password with admin privileges
+        If want to change other user's password (with forcechangepassword priv or admin rights)
+            netexec smb <DC_IP> -u username -p password -M change-password -o USER='target_user' NEWPASS='target_user_newpass'
+            netexec smb <DC_IP> -u username -p password -M change-password -o USER='target_user' NEWNTHASH='target_user_newnthash'
+        
+        NEWPASS or NEWHASH
         """
+        self.context = context
         self.newpass = module_options.get("NEWPASS")
-        self.newhash = module_options.get("NEWHASH")
+        self.newhash = module_options.get("NEWNTHASH")
         self.oldpass = module_options.get("OLDPASS")
+        self.oldhash = module_options.get("OLDNTHASH")
         self.target_user = module_options.get("USER")
         self.reset = module_options.get("RESET", True)
 
@@ -35,104 +41,101 @@ class NXCModule:
             context.log.error("Either NEWPASS or NEWHASH is required!")
             sys.exit(1)
 
+    def authenticate(self, context, connection, protocol, anonymous=False):
+        try:
+            string_binding = epm.hept_map(connection.host, samr.MSRPC_UUID_SAMR, protocol=protocol)
+            rpctransport = transport.DCERPCTransportFactory(string_binding)
+            rpctransport.setRemoteHost(connection.host)
+
+            if anonymous:
+                rpctransport.set_credentials("", "", "", "", "", "")
+                rpctransport.set_kerberos(False, None)
+                context.log.info("Connecting with null session credentials.")
+            else:
+                rpctransport.set_credentials(
+                    connection.username,
+                    connection.password,
+                    connection.domain,
+                    connection.lmhash,
+                    connection.nthash,
+                    aesKey=connection.aesKey,
+                )
+                context.log.info(f"Connecting as {connection.domain}\\{connection.username}")
+
+            dce = rpctransport.get_dce_rpc()
+            dce.connect()
+            context.log.info("[+] Successfully connected to DCE/RPC")
+            dce.bind(samr.MSRPC_UUID_SAMR)
+            context.log.debug("[+] Successfully bound to SAMR")
+            return dce
+
+        except DCERPCException as e:
+            context.log.error(f"DCE/RPC Exception: {e!s}")
+            raise
+
     def on_login(self, context, connection):
-        # Determine which user's password to change (prioritize TARGETUSER)
-        target_username = self.target_user if self.target_user else connection.username
+        target_username = self.target_user or connection.username
         target_domain = connection.domain
 
-        # Prepare authentication details
-        username = connection.username
-        domain = connection.domain
-        password = connection.password
-        lmhash, nthash = "", ""
-
-        if context.hash and ":" in context.hash[0]:
-            hash_list = context.hash[0].split(":")
-            nthash = hash_list[-1]
-            lmhash = hash_list[0]
-        elif context.hash:
-            nthash = context.hash[0]
-            lmhash = "00000000000000000000000000000000"
-
-        # Prepare new password details
-        new_password = None  # Start with None for new_password
         new_lmhash, new_nthash = "", ""
-        
-        if self.newpass:
-            # If NEWPASS is provided, use it
-            new_password = self.newpass
 
         if self.newhash:
-            # If NEWHASH is provided, split the hash and set new password to None
             try:
                 new_lmhash, new_nthash = self.newhash.split(":")
-                new_password = None  # Don't set a plain password when using a hash
             except ValueError:
-                new_lmhash = "00000000000000000000000000000000"
                 new_nthash = self.newhash
-                new_password = None  # Ensure no password is set for hash-only change
-
-        # Use the appropriate protocol based on netexec's context
-        protocol = "smb"
 
         try:
-            if protocol == "smb":
-                self._smb_samr_change(
-                    context, connection, target_username, target_domain, username, domain, password,
-                    lmhash, nthash, self.oldpass, new_password, new_lmhash, new_nthash
-                )
-            else:
-                context.log.error(f"Unsupported protocol: {protocol}")
-                sys.exit(1)
+            self.anonymous = False
+            self.dce = self.authenticate(context, connection, protocol="ncacn_np", anonymous=self.anonymous)
         except Exception as e:
-            context.log.error(f"Password change failed: {e!s}")
-
-    def _smb_samr_change(self, context, connection, target_username, target_domain,
-                        username, domain, password, lmhash, nthash,
-                        old_password, new_password, new_lmhash, new_nthash):
-        """Change password using SMB-SAMR protocol"""
-        from impacket.dcerpc.v5 import samr, epm, transport
-
-        if not new_password and not new_lmhash and not new_nthash:
-            context.log.error("New password or hash cannot be None or empty")
-            return
-        string_binding = epm.hept_map(connection.host, samr.MSRPC_UUID_SAMR, protocol="ncacn_np")
-        rpc_transport = transport.DCERPCTransportFactory(string_binding)
-        rpc_transport.setRemoteHost(connection.host)
-
-        if hasattr(rpc_transport, "set_credentials"):
-            rpc_transport.set_credentials(username, password, domain, lmhash, nthash)
-
-        dce = rpc_transport.get_dce_rpc()
-        dce.connect()
-        dce.bind(samr.MSRPC_UUID_SAMR)
+            if "STATUS_PASSWORD_MUST_CHANGE" in str(e) or "STATUS_PASSWORD_EXPIRED" in str(e):
+                context.log.warning("Password must be changed. Trying with null session.")
+                self.anonymous = True
+                self.dce = self.authenticate(context, connection, protocol="ncacn_ip_tcp", anonymous=self.anonymous)
+            elif "STATUS_LOGON_FAILURE" in str(e):
+                context.log.critical("Authentication failure: wrong credentials.")
+                return False
+            else:
+                raise
 
         try:
-            # Retrieve the user handle by connecting to SAMR and looking up the username.
-            server_handle = samr.hSamrConnect(dce, connection.host + "\x00")["ServerHandle"]
-            domain_sid = samr.hSamrLookupDomainInSamServer(dce, server_handle, target_domain)["DomainId"]
-            domain_handle = samr.hSamrOpenDomain(dce, server_handle, domainId=domain_sid)["DomainHandle"]
-            user_rid = samr.hSamrLookupNamesInDomain(dce, domain_handle, (target_username,))["RelativeIds"]["Element"][0]
-            user_handle = samr.hSamrOpenUser(dce, domain_handle, userId=user_rid)["UserHandle"]
-            if self.reset:
-                # Reset the password
-                samr.hSamrSetNTInternal1(dce, user_handle, new_password, new_nthash)
-                context.log.success(f"Successfully reset password for {target_username}")
-            else:
-                try:
-                    if new_password:
-                        # If using new password
-                        samr.hSamrUnicodeChangePasswordUser2(
-                            dce, "\x00", target_username, old_password, new_password, "", ""
-                        )
-                    elif new_lmhash and new_nthash:
-                        # If using hash (NEWHASH)
-                        samr.hSamrSetNTInternal1(dce, user_handle, new_password, new_nthash)
-                        context.log.success(f"Successfully changed password for {target_username}")
-                except AttributeError as encode_error:
-                    context.log.error(f"Encoding issue in new password: {encode_error!s}")
-                    return
+            self._smb_samr_change(context, connection, target_username, target_domain, self.oldhash, self.newpass, new_nthash)
         except Exception as e:
-            context.log.error(f"SMB-SAMR password change failed: {e!s}")
+            context.log.error(f"Password change failed: {e}")
+
+    def _smb_samr_change(self, context, connection, target_username, target_domain, oldHash, newPassword, newHash):
+        try:
+            if not self.anonymous:
+                server_handle = samr.hSamrConnect(self.dce, connection.host + "\x00")["ServerHandle"]
+                domain_sid = samr.hSamrLookupDomainInSamServer(self.dce, server_handle, target_domain)["DomainId"]
+                domain_handle = samr.hSamrOpenDomain(self.dce, server_handle, domainId=domain_sid)["DomainHandle"]
+                user_rid = samr.hSamrLookupNamesInDomain(self.dce, domain_handle, (target_username,))["RelativeIds"]["Element"][0]
+                user_handle = samr.hSamrOpenUser(self.dce, domain_handle, userId=user_rid)["UserHandle"]
+
+                if self.reset:
+                    samr.hSamrSetNTInternal1(self.dce, user_handle, newPassword, newHash)
+                    context.log.success(f"Successfully changed password for {target_username}")
+                else:
+                    
+                    samr.hSamrUnicodeChangePasswordUser2(
+                        self.dce, "\x00", target_username, self.oldpass, newPassword, "", ""
+                    )
+                    context.log.success(f"Successfully changed password for {target_username}")
+            else:
+                self.mustchangePassword(target_username, target_domain, self.oldpass, newPassword, "", oldHash, "", newHash)
+        except Exception as e:
+            context.log.fail(f"SMB-SAMR password change failed: {e}")
         finally:
-            dce.disconnect()
+            self.dce.disconnect()
+
+    def mustchangePassword(self, target_username, targetDomain, oldPassword, newPassword, oldPwdHashLM, oldPwdHashNT, newPwdHashLM, newPwdHashNT):
+        if newPassword and oldPassword:
+            samr.hSamrUnicodeChangePasswordUser2(self.dce, "\x00", target_username, oldPassword, newPassword, "", "")
+            self.context.log.success(f"Successfully changed password for {target_username}")
+        elif newPassword and oldPwdHashNT: 
+            samr.hSamrUnicodeChangePasswordUser2(self.dce, "\x00", target_username, oldPassword, newPassword, "", oldPwdHashNT)
+            self.context.log.success(f"Successfully changed password for {target_username}")
+        else:
+            samr.hSamrSetNTInternal1(self.dce, target_username, newPassword, newPwdHashNT)
+            self.context.log.success(f"Successfully changed password for {target_username}")
