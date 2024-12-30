@@ -840,7 +840,7 @@ class smb(connection):
         temp_dir = ntpath.normpath("\\" + gen_random_string())
         temp_file = ntpath.normpath("\\" + gen_random_string() + ".txt")
         permissions = []
-        write_check = True if not self.args.no_write_check else False
+        write_check = bool(not self.args.no_write_check)
 
         try:
             self.logger.debug(f"domain: {self.domain}")
