@@ -71,7 +71,7 @@ class NXCModule:
         Users can specify additional LDAP filters that are applied to the query.
         """
         self.context = context
-        self.create_log_file(connection.conn.getRemoteHost(), datetime.now().strftime("%Y%m%d_%H%M%S"))
+        self.create_log_file(connection.target, datetime.now().strftime("%Y%m%d_%H%M%S"))
         context.log.info(f"Starting LDAP search with search filter '{self.search_filter}'")
 
         try:
