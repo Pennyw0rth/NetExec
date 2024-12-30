@@ -318,7 +318,7 @@ class rdp(connection):
                 if str(e) == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
                 self.logger.fail(
-                    (f"{domain}\\{username}:{process_secret(password)} {f'({reason})' if reason else ''}"),
+                    (f"{domain}\\{username}:{process_secret(password)} ({f'{reason}' if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
             return False
