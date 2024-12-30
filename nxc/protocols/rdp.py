@@ -269,7 +269,7 @@ class rdp(connection):
                     if word in str(e):
                         reason = self.rdp_error_status[word]
                 self.logger.fail(
-                    (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {f'({reason})' if reason else str(e)}"),
+                    (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} ({f'{reason}' if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "KDC_ERR_C_PRINCIPAL_UNKNOWN") else "red"),
                 )
             elif "Authentication failed!" in str(e):
@@ -284,7 +284,7 @@ class rdp(connection):
                 if str(e) == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
                 self.logger.fail(
-                    (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {f'({reason})' if reason else ''}"),
+                    (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} ({f'{reason}' if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
             return False
@@ -353,7 +353,7 @@ class rdp(connection):
                     reason = "User valid but cannot connect"
 
                 self.logger.fail(
-                    (f"{domain}\\{username}:{process_secret(ntlm_hash)} {f'({reason})' if reason else ''}"),
+                    (f"{domain}\\{username}:{process_secret(ntlm_hash)} ({f'{reason}' if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
             return False
