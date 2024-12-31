@@ -16,6 +16,7 @@ def proto_args(parser, parents):
     smb_parser.add_argument("--port", type=int, default=445, help="SMB port")
     smb_parser.add_argument("--share", metavar="SHARE", default="C$", help="specify a share")
     smb_parser.add_argument("--smb-server-port", default="445", help="specify a server port for SMB", type=int)
+    smb_parser.add_argument("--no-smbv1", action="store_true", help="Force to disable SMBv1 in connection")
     smb_parser.add_argument("--gen-relay-list", metavar="OUTPUT_FILE", help="outputs all hosts that don't require SMB signing to the specified file")
     smb_parser.add_argument("--smb-timeout", help="SMB connection timeout", type=int, default=2)
     smb_parser.add_argument("--laps", dest="laps", metavar="LAPS", type=str, help="LAPS authentification", nargs="?", const="administrator")
