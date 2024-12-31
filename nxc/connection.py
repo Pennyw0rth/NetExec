@@ -384,7 +384,7 @@ class connection:
             if isfile(user):
                 with open(user) as user_file:
                     for line in user_file:
-                        if "\\" in line:
+                        if "\\" in line and len(line.split("\\")) == 2:
                             domain_single, username_single = line.split("\\")
                         else:
                             domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain else self.domain

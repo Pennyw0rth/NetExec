@@ -296,9 +296,10 @@ class smb(connection):
             self.logger.debug(f"Error logging off system: {e}")
 
         # DCOM connection with kerberos needed
-        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
+        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.targetDomain}"
 
-        if not self.kdcHost and self.domain:
+        # using kdcHost is buggy on impacket when using trust relation between ad so we kdcHost must stay to none if targetdomain is not equal to domain
+        if not self.kdcHost and self.domain and self.domain == self.targetDomain:
             result = self.resolver(self.domain)
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
@@ -548,7 +549,6 @@ class smb(connection):
                 preferredDialect=SMB_DIALECT,
                 timeout=self.args.smb_timeout,
             )
-            self.smbv1 = True
         except OSError as e:
             if "Connection reset by peer" in str(e):
                 self.logger.info(f"SMBv1 might be disabled on {self.host}")
@@ -576,7 +576,6 @@ class smb(connection):
                 self.port,
                 timeout=self.args.smb_timeout,
             )
-            self.smbv1 = False
         except (Exception, NetBIOSTimeout, OSError) as e:
             self.logger.info(f"Error creating SMBv3 connection to {self.host}: {e}")
             return False
@@ -590,6 +589,8 @@ class smb(connection):
 
         :param no_smbv1: If True, it will not try to create a SMBv1 connection
         """
+        no_smbv1 = self.args.no_smbv1 if self.args.no_smbv1 else no_smbv1
+
         # Initial negotiation
         if not no_smbv1 and self.smbv1 is None:
             self.smbv1 = self.create_smbv1_conn()
@@ -839,6 +840,7 @@ class smb(connection):
         temp_dir = ntpath.normpath("\\" + gen_random_string())
         temp_file = ntpath.normpath("\\" + gen_random_string() + ".txt")
         permissions = []
+        write_check = bool(not self.args.no_write_check)
 
         try:
             self.logger.debug(f"domain: {self.domain}")
@@ -885,8 +887,14 @@ class smb(connection):
             except SessionError as e:
                 error = get_error_string(e)
                 self.logger.debug(f"Error checking READ access on share {share_name}: {error}")
+            except (NetBIOSError, UnicodeEncodeError) as e:
+                write_check = False
+                share_info["access"].append("UNKNOWN (try '--no-smbv1')")
+                error = get_error_string(e)
+                self.logger.debug(f"Error checking READ access on share {share_name}: {error}. This exception always caused by special character in share name with SMBv1")
+                self.logger.info(f"Skipping WRITE permission check on share {share_name}")
 
-            if not self.args.no_write_check:
+            if write_check:
                 try:
                     self.conn.createDirectory(share_name, temp_dir)
                     write_dir = True

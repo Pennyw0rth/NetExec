@@ -121,7 +121,7 @@ class NXCModule:
         sfilter = "(DC=*)"
 
         try:
-            list_sites = connection.ldapConnection.search(
+            list_sites = connection.ldap_connection.search(
                 searchBase=search_target,
                 searchFilter=sfilter,
                 attributes=["dnsRecord", "dNSTombstoned", "name"],

@@ -40,7 +40,7 @@ class NXCModule:
 
         try:
             context.log.debug(f"Search Filter={search_filter}")
-            resp = connection.ldapConnection.search(searchFilter=search_filter, attributes=attributes, sizeLimit=0)
+            resp = connection.ldap_connection.search(searchFilter=search_filter, attributes=attributes, sizeLimit=0)
         except Exception:
             context.log.error("LDAP search error:", exc_info=True)
             return False

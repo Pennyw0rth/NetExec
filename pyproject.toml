@@ -44,6 +44,7 @@ bloodhound = "^1.7.2"
 dploot = "^3.0.3"
 dsinternals = "^1.2.4"
 impacket =  { git = "https://github.com/fortra/impacket.git" }
+jwt = ">=1.3.1"
 lsassy = ">=3.1.11"
 masky = "^0.2.0"
 minikerberos = "^0.4.1"
