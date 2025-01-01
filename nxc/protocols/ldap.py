@@ -3,12 +3,12 @@
 import hashlib
 import hmac
 import os
-import socket
 from binascii import hexlify
 from datetime import datetime, timedelta
 from re import sub, I
 from zipfile import ZipFile
 from termcolor import colored
+from dns import resolver
 
 from Cryptodome.Hash import MD4
 from OpenSSL.SSL import SysCallError
@@ -701,27 +701,58 @@ class ldap(connection):
 
     def dc_list(self):
         # Building the search filter
+        resolv = resolver.Resolver()
+        if self.args.dns_server:
+            resolv.nameservers = [self.args.dns_server]
+        else:
+            resolv.nameservers = [self.host]
+        resolv.timeout = self.args.dns_timeout
+
         search_filter = "(&(objectCategory=computer)(primaryGroupId=516))"
         attributes = ["dNSHostName"]
         resp = self.search(search_filter, attributes, 0)
+        resp_parse = parse_result_attributes(resp)
 
-        for item in resp:
-            if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
-                continue
-            name = ""
+        for item in resp_parse:
+            name = item.get("dNSHostName", "")  # Get dNSHostName attribute or empty string
             try:
-                for attribute in item["attributes"]:
-                    if str(attribute["type"]) == "dNSHostName":
-                        name = str(attribute["vals"][0])
-                try:
-                    ip_address = socket.gethostbyname(name.split(".")[0])
-                    if ip_address is not True and name != "":
-                        self.logger.highlight(f"{name} = {colored(ip_address, host_info_colors[0])}")
-                except socket.gaierror:
-                    self.logger.fail(f"{name} = Connection timeout")
+                # Resolve using DNS server for A, AAAA, CNAME, PTR, and NS records
+                if name:
+                    found_record = False  # Flag to check if any record is found
+
+                    for record_type in ["A", "AAAA", "CNAME", "PTR", "NS"]:
+                        if found_record:
+                            break  # If a record has been found, stop checking further
+                        
+                        try:
+                            answers = resolv.resolve(name, record_type, tcp=self.args.dns_tcp)
+                            for rdata in answers:
+                                if record_type in ["A", "AAAA"]:
+                                    ip_address = rdata.to_text()
+                                    self.logger.highlight(f"{name} = {colored(ip_address, host_info_colors[0])}")
+                                    found_record = True  # Set flag to true since a record is found
+                                elif record_type == "CNAME":
+                                    self.logger.highlight(f"{name} CNAME = {colored(rdata.to_text(), host_info_colors[0])}")
+                                    found_record = True
+                                elif record_type == "PTR":
+                                    self.logger.highlight(f"{name} PTR = {colored(rdata.to_text(), host_info_colors[0])}")
+                                    found_record = True
+                                elif record_type == "NS":
+                                    self.logger.highlight(f"{name} NS = {colored(rdata.to_text(), host_info_colors[0])}")
+                                    found_record = True
+                        except resolv.NXDOMAIN:
+                            self.logger.fail(f"{name} = Host not found (NXDOMAIN)")
+                        except resolv.Timeout:
+                            self.logger.fail(f"{name} = Connection timed out")
+                        except resolv.NoAnswer:
+                            self.logger.fail(f"{name} = DNS server did not respond")
+                        except Exception as e:
+                            self.logger.fail(f"{name} encountered an unexpected error: {e}")
+                else:
+                    self.logger.fail("dNSHostName value is empty, unable to process.")
             except Exception as e:
-                self.logger.fail("Exception:", exc_info=True)
-                self.logger.fail(f"Skipping item, cannot process due to error {e}")
+                self.logger.fail("General Error:", exc_info=True)
+                self.logger.fail(f"Skipping item(dNSHostName) {name}, error: {e}")
 
     def active_users(self):
         if len(self.args.active_users) > 0:
