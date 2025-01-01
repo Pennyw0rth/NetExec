@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from re import sub, I
 from zipfile import ZipFile
 from termcolor import colored
+from dns import resolver
 
 from Cryptodome.Hash import MD4
 from OpenSSL.SSL import SysCallError
@@ -32,7 +33,6 @@ from impacket.ntlm import getNTLMSSPType1
 
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
-from nxc.connection import resolver
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.logger import NXCAdapter, nxc_logger
 from nxc.protocols.ldap.bloodhound import BloodHound
@@ -702,7 +702,11 @@ class ldap(connection):
     def dc_list(self):
         # Building the search filter
         resolv = resolver.Resolver()
-        resolv.nameservers = [self.host]
+        if self.args.dns_server:
+            resolv.nameservers = [self.args.dns_server]
+        else:
+            resolv.nameservers = [self.host]
+        resolv.timeout = self.args.dns_timeout
 
         search_filter = "(&(objectCategory=computer)(primaryGroupId=516))"
         attributes = ["dNSHostName"]
@@ -721,7 +725,7 @@ class ldap(connection):
                             break  # If a record has been found, stop checking further
                         
                         try:
-                            answers = resolv.resolve(name, record_type)
+                            answers = resolv.resolve(name, record_type, tcp=self.args.dns_tcp)
                             for rdata in answers:
                                 if record_type in ["A", "AAAA"]:
                                     ip_address = rdata.to_text()
