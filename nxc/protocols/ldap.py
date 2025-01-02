@@ -208,6 +208,7 @@ class ldap(connection):
         except OSError as e:
             self.logger.error(f"Error getting ldap info {e}")
 
+        self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
         self.target = target
         self.targetDomain = target_domain
         self.baseDN = base_dn
