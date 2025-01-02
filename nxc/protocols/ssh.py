@@ -120,9 +120,9 @@ class ssh(connection):
 
             self.check_shell(cred_id)
 
-            out = process_secret(self.password) if not self.args.key_file else f"{process_secret(self.password)} (keyfile: {self.args.key_file})"
+            secret = process_secret(self.password) if not self.args.key_file else f"{process_secret(self.password)} (keyfile: {self.args.key_file})"
             display_shell_access = f"{self.uac}{self.server_os_platform}{' - Shell access!' if self.shell_access else ''}"
-            self.logger.success(f"{self.username}:{process_secret(out)} {self.mark_pwned()} {highlight(display_shell_access)}")
+            self.logger.success(f"{self.username}:{process_secret(secret)} {self.mark_pwned()} {highlight(display_shell_access)}")
             return True
         except AuthenticationException as e:
             if "Private key file is encrypted" in str(e):
@@ -164,7 +164,7 @@ class ssh(connection):
         stdout = self.conn.exec_command("whoami /priv")[1].read().decode(self.args.codec, errors="ignore")
         if stdout:
             self.server_os_platform = "Windows"
-            self.logger.debug(f"Windows detected for user: {stdout}")
+            self.logger.debug("Windows detected")
             self.shell_access = True
             self.check_windows_priv(stdout)
             self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
