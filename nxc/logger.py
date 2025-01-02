@@ -3,7 +3,6 @@ from logging import LogRecord
 from logging.handlers import RotatingFileHandler
 import os.path
 import sys
-import re
 from nxc.console import nxc_console
 from nxc.paths import NXC_PATH
 from termcolor import colored
@@ -43,7 +42,7 @@ def create_temp_logger(caller_frame, formatted_text, args, kwargs):
     temp_logger = logging.getLogger("temp")
     formatter = logging.Formatter("%(message)s", datefmt="[%X]")
     handler = SmartDebugRichHandler(formatter=formatter)
-    handler.handle(LogRecord(temp_logger.name, logging.INFO, caller_frame.f_code.co_filename, caller_frame.f_lineno, formatted_text, args, kwargs, caller_frame=caller_frame))
+    handler.handle(LogRecord(temp_logger.name, logging.INFO, caller_frame.f_code.co_filename, caller_frame.f_lineno, formatted_text, args, None, caller_frame=caller_frame))
 
 
 class SmartDebugRichHandler(RichHandler):
@@ -56,9 +55,6 @@ class SmartDebugRichHandler(RichHandler):
 
     def emit(self, record):
         """Overrides the emit method of the RichHandler class so we can set the proper pathname and lineno"""
-        # for some reason in RDP, the exc_text is None which leads to a KeyError in Python logging
-        record.exc_text = record.getMessage() if record.exc_text is None else record.exc_text
-
         if hasattr(record, "caller_frame"):
             frame_info = inspect.getframeinfo(record.caller_frame)
             record.pathname = frame_info.filename
@@ -179,7 +175,7 @@ class NXCAdapter(logging.LoggerAdapter):
                 self.logger.fail(f"Issue while trying to custom print handler: {e}")
 
     def add_file_log(self, log_file=None):
-        file_formatter = TermEscapeCodeFormatter("%(asctime)s | %(filename)s:%(lineno)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+        file_formatter = logging.Formatter("%(asctime)s | %(filename)s:%(lineno)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
         output_file = self.init_log_file() if log_file is None else log_file
         file_creation = False
 
@@ -209,18 +205,6 @@ class NXCAdapter(logging.LoggerAdapter):
             datetime.now().strftime("%Y-%m-%d"),
             f"log_{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.log",
         )
-
-
-class TermEscapeCodeFormatter(logging.Formatter):
-    """A class to strip the escape codes for logging to files"""
-
-    def __init__(self, fmt=None, datefmt=None, style="%", validate=True):
-        super().__init__(fmt, datefmt, style, validate)
-
-    def format(self, record):  # noqa: A003
-        escape_re = re.compile(r"\x1b\[[0-9;]*m")
-        record.msg = re.sub(escape_re, "", str(record.msg))
-        return super().format(record)
 
 
 # initialize the logger for all of nxc - this is imported everywhere
