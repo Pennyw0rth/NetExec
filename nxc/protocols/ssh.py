@@ -160,7 +160,7 @@ class ssh(connection):
             self.db.add_loggedin_relation(cred_id, host_id, shell=shell_access)
 
             if shell_access and self.server_os_platform == "Linux":
-                self.check_if_admin()
+                self.check_linux_priv()
                 if self.admin_privs:
                     self.logger.debug(f"User {username} logged in successfully and is root!")
                     if self.args.key_file:
@@ -176,11 +176,11 @@ class ssh(connection):
 
             return True
 
-    def check_if_admin(self):
+    def check_linux_priv(self):
         self.admin_privs = False
 
         if self.args.sudo_check:
-            self.check_if_admin_sudo()
+            self.check_linux_priv_sudo()
             return
 
         # we could add in another method to check by piping in the password to sudo
@@ -207,7 +207,7 @@ class ssh(connection):
             self.logger.display(tips)
         return
 
-    def check_if_admin_sudo(self):
+    def check_linux_priv_sudo(self):
         if not self.password:
             self.logger.error("Check admin with sudo does not support using a private key")
             return
