@@ -343,18 +343,17 @@ files = [
 
 [[package]]
 name = "bloodhound"
-version = "1.7.2"
+version = "1.8.0"
 description = "Python based ingestor for BloodHound"
 optional = false
 python-versions = "*"
 files = [
-    {file = "bloodhound-1.7.2-py3-none-any.whl", hash = "sha256:4395feb0df85ae855b369446140746f9b86bcb2d2a328fb14ae45c20a46243f8"},
-    {file = "bloodhound-1.7.2.tar.gz", hash = "sha256:512654d7d74ba69a2ad7df89305b62a23c8993a6e3f7a9cfd89403abb2459073"},
+    {file = "bloodhound-1.8.0-py3-none-any.whl", hash = "sha256:97dcef77fa38dbab7219909c117eb9fd7263aff107cee0bf6fc7a0d0db9a61ac"},
+    {file = "bloodhound-1.8.0.tar.gz", hash = "sha256:35ed0f1fdda2b1d79a4e9d891cabe2c55309a32743aeed16d885f3d809f409b3"},
 ]
 
 [package.dependencies]
 dnspython = "*"
-future = "*"
 impacket = ">=0.9.17"
 ldap3 = ">2.5.0,<2.5.2 || >2.5.2,<2.6 || >2.6"
 pyasn1 = ">=0.4"
@@ -2507,4 +2506,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10.0"
-content-hash = "9af8efb9eb1cf1026dca8b5276ca23db2dbcdf6865fd61920a9daf1098646193"
+content-hash = "e48bf197f7fcfe678fa0b9e426ddfa732ded291209cd7e7681551d61cce9a10d"

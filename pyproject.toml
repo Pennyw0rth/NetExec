@@ -40,7 +40,7 @@ aiosqlite = "^0.19.0"
 argcomplete = "^3.1.4"
 asyauth = ">=0.0.20"
 beautifulsoup4 = ">=4.11,<5"
-bloodhound = "^1.7.2"
+bloodhound = "^1.8.0"
 dploot = "^3.0.3"
 dsinternals = "^1.2.4"
 impacket =  { git = "https://github.com/fortra/impacket.git" }

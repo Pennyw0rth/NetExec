@@ -773,8 +773,7 @@ class PrinterBugTrigger:
         try:
             endpoint = epm.hept_map(target, interface, protocol="ncacn_ip_tcp", dce=dce)
             self.context.log.debug(
-                "Resolved dynamic endpoint %s to %s"
-                % (repr(uuid.bin_to_string(interface)), repr(endpoint))
+                f"Resolved dynamic endpoint {uuid.bin_to_string(interface)!r} to {endpoint!r}"
             )
             return endpoint
         except Exception as e:
