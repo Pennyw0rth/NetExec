@@ -102,7 +102,6 @@ class ssh(connection):
                     password if password != "" else "",
                     key=private_key,
                 )
-
             else:
                 self.logger.debug(f"Logging {self.host} with username: {self.username}, password: {self.password}")
                 self.conn.connect(
@@ -118,8 +117,12 @@ class ssh(connection):
                 cred_id = self.db.add_credential("plaintext", username, password)
 
             # Some IOT devices will not raise exception in self.conn._transport.auth_password / self.conn._transport.auth_publickey
+            # Also an early check if we are on Linux or not, as on windows only stderr and not stdout is returned ("id" is not implemented)
             _, stdout, _ = self.conn.exec_command("id")
             stdout = stdout.read().decode(self.args.codec, errors="ignore")
+
+            self.check_privs(cred_id, stdout)
+            return True
         except AuthenticationException as e:
             if "Private key file is encrypted" in str(e):
                 self.logger.fail(f"{username}:{process_secret(password)} Could not load private key, error: {e}")
@@ -136,45 +139,43 @@ class ssh(connection):
             self.logger.exception(e)
             self.conn.close()
             return False
-        else:
+
+    def check_privs(self, cred_id, stdout):
+        shell_access = False
+        host_id = self.db.get_hosts(self.host)[0].id
+
+        # If we have stdout we know it must be linux, "id" is not implemented on Windows
+        if not stdout:
+            self.server_os_platform = "Windows"
+            _, stdout, _ = self.conn.exec_command("whoami /priv")
+            stdout = stdout.read().decode(self.args.codec, errors="ignore")
+            if "SeDebugPrivilege" in stdout:
+                self.admin_privs = True
+            elif "SeUndockPrivilege" in stdout:
+                self.admin_privs = True
+                self.uac = "with UAC - "
+
+        if not stdout:
+            self.logger.debug(f"User: {self.username} can't get a basic shell")
+            self.server_os_platform = "Network Devices"
             shell_access = False
-            host_id = self.db.get_hosts(self.host)[0].id
+        else:
+            shell_access = True
 
-            if not stdout:
-                _, stdout, _ = self.conn.exec_command("whoami /priv")
-                stdout = stdout.read().decode(self.args.codec, errors="ignore")
-                self.server_os_platform = "Windows"
-                if "SeDebugPrivilege" in stdout:
-                    self.admin_privs = True
-                elif "SeUndockPrivilege" in stdout:
-                    self.admin_privs = True
-                    self.uac = "with UAC - "
+        self.db.add_loggedin_relation(cred_id, host_id, shell=shell_access)
 
-            if not stdout:
-                self.logger.debug(f"User: {self.username} can't get a basic shell")
-                self.server_os_platform = "Network Devices"
-                shell_access = False
-            else:
-                shell_access = True
+        if shell_access and self.server_os_platform == "Linux":
+            self.check_linux_priv()
+            if self.admin_privs:
+                self.logger.debug(f"User {self.username} logged in successfully and is root!")
+                if self.args.key_file:
+                    self.db.add_admin_user("key", self.username, self.password, host_id=host_id, cred_id=cred_id)
+                else:
+                    self.db.add_admin_user("plaintext", self.username, self.password, host_id=host_id, cred_id=cred_id)
 
-            self.db.add_loggedin_relation(cred_id, host_id, shell=shell_access)
-
-            if shell_access and self.server_os_platform == "Linux":
-                self.check_linux_priv()
-                if self.admin_privs:
-                    self.logger.debug(f"User {username} logged in successfully and is root!")
-                    if self.args.key_file:
-                        self.db.add_admin_user("key", username, password, host_id=host_id, cred_id=cred_id)
-                    else:
-                        self.db.add_admin_user("plaintext", username, password, host_id=host_id, cred_id=cred_id)
-
-            if self.args.key_file:
-                password = f"{process_secret(password)} (keyfile: {self.args.key_file})"
-
-            display_shell_access = f"{self.uac}{self.server_os_platform}{' - Shell access!' if shell_access else ''}"
-            self.logger.success(f"{username}:{process_secret(password)} {self.mark_pwned()} {highlight(display_shell_access)}")
-
-            return True
+        out = process_secret(self.password) if not self.args.key_file else f"{process_secret(self.password)} (keyfile: {self.args.key_file})"
+        display_shell_access = f"{self.uac}{self.server_os_platform}{' - Shell access!' if shell_access else ''}"
+        self.logger.success(f"{self.username}:{process_secret(out)} {self.mark_pwned()} {highlight(display_shell_access)}")
 
     def check_linux_priv(self):
         self.admin_privs = False
