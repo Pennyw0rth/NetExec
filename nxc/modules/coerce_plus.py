@@ -137,6 +137,7 @@ class NXCModule:
                             if not self.always_continue and exploit_status:
                                 break
                         petitpotamconnect.disconnect()
+                        break
                     else:
                         context.log.debug("Target is not vulnerable to PetitPotam")
                 except Exception as e:
