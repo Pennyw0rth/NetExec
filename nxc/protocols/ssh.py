@@ -138,7 +138,7 @@ class ssh(connection):
         except Exception as e:
             self.logger.exception(e)
             self.conn.close()
-            return False
+        return False
 
     def check_privs(self, cred_id, stdout):
         shell_access = False
