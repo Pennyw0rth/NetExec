@@ -85,7 +85,6 @@ class ssh(connection):
         try:
             if self.args.key_file or private_key:
                 self.logger.debug(f"Logging {self.host} with username: {username}, keyfile: {self.args.key_file}")
-
                 self.conn.connect(
                     self.host,
                     port=self.port,
@@ -97,13 +96,7 @@ class ssh(connection):
                     allow_agent=False,
                     banner_timeout=self.args.ssh_timeout,
                 )
-
-                cred_id = self.db.add_credential(
-                    "key",
-                    username,
-                    password if password != "" else "",
-                    key=private_key,
-                )
+                cred_id = self.db.add_credential("key", username, password, key=private_key)
             else:
                 self.logger.debug(f"Logging {self.host} with username: {self.username}, password: {self.password}")
                 self.conn.connect(
@@ -151,6 +144,7 @@ class ssh(connection):
             self.server_os_platform = "Linux"
             self.logger.debug(f"Linux detected for user: {stdout}")
             self.shell_access = True
+            self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
             self.check_linux_priv()
             if self.admin_privs:
                 self.logger.debug(f"User {self.username} logged in successfully and is root!")
@@ -166,8 +160,14 @@ class ssh(connection):
             self.server_os_platform = "Windows"
             self.logger.debug("Windows detected")
             self.shell_access = True
-            self.check_windows_priv(stdout)
             self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
+            self.check_windows_priv(stdout)
+            if self.admin_privs:
+                self.logger.debug(f"User {self.username} logged in successfully and is admin!")
+                if self.args.key_file:
+                    self.db.add_admin_user("key", self.username, self.password, host_id=host_id, cred_id=cred_id)
+                else:
+                    self.db.add_admin_user("plaintext", self.username, self.password, host_id=host_id, cred_id=cred_id)
             return
 
         # No shell access
