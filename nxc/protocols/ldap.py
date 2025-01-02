@@ -162,6 +162,9 @@ class ldap(connection):
         )
 
     def create_conn_obj(self):
+        target = ""
+        target_domain = ""
+        base_dn = ""
         try:
             proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldap_url = f"{proto}://{self.host}"
@@ -187,9 +190,6 @@ class ldap(connection):
             for item in resp:
                 if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
                     continue
-                target = None
-                target_domain = None
-                base_dn = None
                 try:
                     for attribute in item["attributes"]:
                         if str(attribute["type"]) == "defaultNamingContext":
@@ -205,9 +205,9 @@ class ldap(connection):
                 except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.info(f"Skipping item, cannot process due to error {e}")
-        except OSError:
-            return False
-        self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
+        except OSError as e:
+            self.logger.error(f"Error getting ldap info { str(e) }")
+
         self.target = target
         self.targetDomain = target_domain
         self.baseDN = base_dn
@@ -229,7 +229,7 @@ class ldap(connection):
 
     def enum_host_info(self):
         self.baseDN = self.args.base_dn if self.args.base_dn else self.baseDN   # Allow overwriting baseDN from args
-        self.hostname = self.target.split(".")[0].upper()
+        self.hostname = self.target.split(".")[0].upper() if "." in self.target else self.target
         self.remoteName = self.target
         self.domain = self.targetDomain
 
