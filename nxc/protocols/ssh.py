@@ -187,7 +187,6 @@ class ssh(connection):
     def plaintext_login(self, username, password, private_key=""):
         self.username = username
         self.password = password
-        stdout = None
         try:
             if self.args.key_file or private_key:
                 self.logger.debug(f"Logging {self.host} with username: {username}, keyfile: {self.args.key_file}")
@@ -228,12 +227,15 @@ class ssh(connection):
             # Some IOT devices will not raise exception in self.conn._transport.auth_password / self.conn._transport.auth_publickey
             _, stdout, _ = self.conn.exec_command("id")
             stdout = stdout.read().decode(self.args.codec, errors="ignore")
-        except AuthenticationException:
-            self.logger.fail(f"{username}:{process_secret(password)}")
+        except AuthenticationException as e:
+            if "Private key file is encrypted" in str(e):
+                self.logger.fail(f"{username}:{process_secret(password)} Could not load private key, error: {e}")
+            else:
+                self.logger.fail(f"{username}:{process_secret(password)}")
         except SSHException as e:
             if "Invalid key" in str(e):
-                self.logger.fail(f"{username}:{process_secret(password)} Could not decrypt private key, error: {e}")
-            if "Error reading SSH protocol banner" in str(e):
+                self.logger.fail(f"{username}:{process_secret(password)} Could not decrypt private key, invalid password")
+            elif "Error reading SSH protocol banner" in str(e):
                 self.logger.error(f"Internal Paramiko error for {username}:{process_secret(password)}, {e}")
             else:
                 self.logger.exception(e)
