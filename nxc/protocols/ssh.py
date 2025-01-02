@@ -334,6 +334,6 @@ class ssh(connection):
         else:
             self.logger.success("Executed command")
             if get_output:
-                for line in stdout.split("\n"):
+                for line in stdout.replace("\r\n", "\n").rstrip("\n").split("\n"):
                     self.logger.highlight(line.strip("\n"))
             return stdout
