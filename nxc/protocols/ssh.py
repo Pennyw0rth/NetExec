@@ -90,12 +90,17 @@ class ssh(connection):
                     port=self.port,
                     username=username,
                     passphrase=password if password != "" else None,
-                    key_filename=private_key if private_key else self.args.key_file,
+                    pkey=private_key,
+                    key_filename=self.args.key_file,
                     timeout=self.args.ssh_timeout,
                     look_for_keys=False,
                     allow_agent=False,
                     banner_timeout=self.args.ssh_timeout,
                 )
+                # If we get the private key from the file, we need to load it into the database
+                if self.args.key_file:
+                    with open(self.args.key_file) as f:
+                        private_key = f.read().rstrip("\n")
                 cred_id = self.db.add_credential("key", username, password, key=private_key)
             else:
                 self.logger.debug(f"Logging {self.host} with username: {self.username}, password: {self.password}")
