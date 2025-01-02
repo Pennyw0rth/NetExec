@@ -184,8 +184,6 @@ class ssh(connection):
             self.uac = "with UAC - "
 
     def check_linux_priv(self):
-        self.admin_privs = False
-
         if self.args.sudo_check:
             self.check_linux_priv_sudo()
             return
