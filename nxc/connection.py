@@ -570,6 +570,7 @@ class connection:
                 }
                 self.logger.info("Loading certificate and key from file")
 
+                # Load the certificate and key from file
                 if self.args.pfx_cert or self.args.pfx_base64:
                     pfx = self.args.pfx_cert if self.args.pfx_cert else self.args.pfx_base64
                     ini = myPKINIT.from_pfx(pfx, self.args.pfx_pass, dhparams, bool(self.args.pfx_base64))
@@ -582,10 +583,11 @@ class connection:
                 username = self.args.username[0]
                 log_ccache = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}-{username}.ccache".replace(":", "-"))
 
+                # Request a TGT with the cert data
                 req = ini.build_asreq(self.domain, username)
                 self.logger.info("Requesting TGT")
 
-                sock = KerberosClientSocket(KerberosTarget(self.domain))
+                sock = KerberosClientSocket(KerberosTarget(self.host))
                 try:
                     res = sock.sendrecv(req)
                 except Exception as e:
@@ -603,7 +605,7 @@ class connection:
                 creds = ccache.getCredential(principal)
                 if creds is not None:
                     tgt = creds.toTGT()
-                    dumper = GETPAC(username, self.domain, self.domain, key, tgt)
+                    dumper = GETPAC(username, self.domain, self.host, key, tgt)
                     nthash = dumper.dump()
                     if not self.kerberos:
                         self.hash_login(self.domain, username, nthash)
