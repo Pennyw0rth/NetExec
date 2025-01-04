@@ -69,6 +69,8 @@ from minikerberos.common.ccache import CCACHE
 
 from impacket.krb5.ccache import CCache as impacket_CCache
 
+from nxc.paths import NXC_PATH
+
 
 class myPKINIT(PKINIT):
     """
@@ -501,7 +503,7 @@ def pfx_auth(self):
         return None
 
     username = self.args.username[0]
-    log_ccache = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}-{username}.ccache".replace(":", "-"))
+    log_ccache = os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}-{username}.ccache".replace(":", "-"))
 
     # Request a TGT with the cert data
     req = ini.build_asreq(self.domain, username)
