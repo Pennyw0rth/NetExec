@@ -229,7 +229,8 @@ class connection:
         else:
             self.logger.debug("Created connection object")
             self.enum_host_info()
-            if self.print_host_info() and (self.login() or (self.username == "" and self.password == "")):
+            self.print_host_info()
+            if self.login() or (self.username == "" and self.password == ""):
                 if hasattr(self.args, "module") and self.args.module:
                     self.load_modules()
                     self.logger.debug("Calling modules")
@@ -383,7 +384,7 @@ class connection:
             if isfile(user):
                 with open(user) as user_file:
                     for line in user_file:
-                        if "\\" in line:
+                        if "\\" in line and len(line.split("\\")) == 2:
                             domain_single, username_single = line.split("\\")
                         else:
                             domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain else self.domain

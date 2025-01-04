@@ -24,7 +24,7 @@ class NXCModule:
     def on_login(self, context, connection):
         # Are there even any FGPPs?
         context.log.success("Attempting to enumerate policies...")
-        resp = connection.ldapConnection.search(searchBase=f"CN=Password Settings Container,CN=System,{''.join([f'DC={dc},' for dc in connection.domain.split('.')]).rstrip(',')}", searchFilter="(objectclass=*)")
+        resp = connection.ldap_connection.search(searchBase=f"CN=Password Settings Container,CN=System,{''.join([f'DC={dc},' for dc in connection.domain.split('.')]).rstrip(',')}", searchFilter="(objectclass=*)")
         if len(resp) > 1:
             context.log.highlight(f"{len(resp) - 1} PSO Objects found!")
             context.log.highlight("")
