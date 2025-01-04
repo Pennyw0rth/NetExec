@@ -67,7 +67,7 @@ from minikerberos.network.clientsocket import KerberosClientSocket
 from minikerberos.common.target import KerberosTarget
 from minikerberos.common.ccache import CCACHE
 
-from impacket.krb5.ccache import CCache
+from impacket.krb5.ccache import CCache as impacket_CCache
 
 
 class myPKINIT(PKINIT):
@@ -164,7 +164,6 @@ class myPKINIT(PKINIT):
         kdc_req_body_data["etype"] = [18, 17]  # 23 breaks...
         kdc_req_body = KDC_REQ_BODY(kdc_req_body_data)
 
-
         checksum = hashlib.sha1(kdc_req_body.dump()).digest()
 
         authenticator = {}
@@ -172,7 +171,6 @@ class myPKINIT(PKINIT):
         authenticator["ctime"] = now.replace(microsecond=0)
         authenticator["nonce"] = secrets.randbits(31)
         authenticator["paChecksum"] = checksum
-
 
         dp = {}
         dp["p"] = self.diffie.p
@@ -186,7 +184,6 @@ class myPKINIT(PKINIT):
         spki = {}
         spki["algorithm"] = keys.PublicKeyAlgorithm(pka)
         spki["public_key"] = self.diffie.get_public_key()
-
 
         authpack = {}
         authpack["pkAuthenticator"] = PKAuthenticator(authenticator)
@@ -232,7 +229,6 @@ class myPKINIT(PKINIT):
             "issuer":  self.certificate.issuer,
             "serial_number":  self.certificate.serial_number,
         })
-
 
         si["digest_algorithm"] = algos.DigestAlgorithm(da)
         si["signed_attrs"] = [
@@ -304,7 +300,6 @@ class myPKINIT(PKINIT):
         elif etype == Enctype.RC4:
             raise NotImplementedError("RC4 key truncation documentation missing. it is different from AES")
 
-
         key = Key(cipher.enctype, t_key)
         enc_data = as_rep["enc-part"]["cipher"]
         logging.info("AS-REP encryption key (you might need this later):")
@@ -355,7 +350,7 @@ class GETPAC:
                     nthash = hexlify(credstruct["NtPassword"]).decode("utf-8")
 
             buff = buff[len(infoBuffer):]
-            
+
         if not found:
             logging.info("Did not find the PAC_CREDENTIAL_INFO in the PAC. Are you sure your TGT originated from a PKINIT operation?")
         return nthash
@@ -451,7 +446,7 @@ class GETPAC:
         reqBody["till"] = KerberosTime.to_asn1(now)
         reqBody["nonce"] = random.getrandbits(31)
         seq_set_iter(reqBody, "etype",
-                      (int(cipher.enctype), int(constants.EncryptionTypes.rc4_hmac.value)))
+                     (int(cipher.enctype), int(constants.EncryptionTypes.rc4_hmac.value)))
 
         myTicket = ticket.to_asn1(TicketAsn1())
         seq_set_iter(reqBody, "additional-tickets", (myTicket,))
@@ -480,12 +475,11 @@ class GETPAC:
         #  application session key), encrypted with the service key
         #  (section 5.4.2)
 
-
         # S4USelf + U2U uses this other key
         plainText = cipher.decrypt(sessionKey, 2, cipherText)
         specialkey = Key(18, unhexlify(self.__asrep_key))
         return self.printPac(plainText, specialkey)
-    
+
 
 def pfx_auth(self):
     """Handles the authentication using a PFX or PEM file"""
@@ -524,9 +518,9 @@ def pfx_auth(self):
     ccache_minikerberos = CCACHE()
     ccache_minikerberos.add_tgt(res.native, encasrep)
     ccache_minikerberos.to_file(log_ccache)
-    self.logger.info(f"Saved TGT to file { log_ccache }")
-    self.logger.info(f"Using Kerberos Cache { log_ccache }")
-    ccache = CCache.loadFile(log_ccache)
+    self.logger.info(f"Saved TGT to file {log_ccache}")
+    self.logger.info(f"Using Kerberos Cache {log_ccache}")
+    ccache = impacket_CCache.loadFile(log_ccache)
     principal = f"krbtgt/{self.domain.upper()}@{self.domain.upper()}"
     creds = ccache.getCredential(principal)
     if creds is not None:
