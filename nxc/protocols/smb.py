@@ -596,7 +596,6 @@ class smb(connection):
 
         :param no_smbv1: If True, it will not try to create a SMBv1 connection
         """
-
         # Initial negotiation
         if self.smbv3 is None:
             self.smbv3 = self.create_smbv3_conn()
