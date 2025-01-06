@@ -33,7 +33,7 @@ class NXCModule:
         self.newpass = module_options.get("NEWPASS")
         self.newhash = module_options.get("NEWNTHASH")
         self.oldpass = module_options.get("OLDPASS")
-        self.oldhash = module_options.get("OLDNTHASH" )
+        self.oldhash = module_options.get("OLDNTHASH")
         self.target_user = module_options.get("USER")
         self.reset = module_options.get("RESET", True)
 
@@ -141,7 +141,7 @@ class NXCModule:
             else:
                 # Handle anonymous/null session password change
                 self.mustchangePassword(target_username, target_domain, self.oldpass, newPassword, "", oldHash, "", newHash)
-        except AttributeError as e:
+        except AttributeError:
             context.log.fail("SMB-SAMR password change failed: Ensure that either the OLDPASS or OLDNTHASH option is provided and attempt again.")
         except Exception as e:
             context.log.fail(f"SMB-SAMR password change failed: {e}")
