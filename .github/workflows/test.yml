@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     name: Test for Py${{ matrix.python-version }}
-    if: github.event.review.state == 'APPROVED'
+    if: github.event.review.state == 'APPROVED' || github.event_name == 'workflow_dispatch'
     runs-on: ${{ matrix.os }}
     strategy:
       max-parallel: 5
