@@ -38,7 +38,7 @@ class NXCModule:
         self.reset = module_options.get("RESET", True)
 
         if not self.newpass and not self.newhash:
-            context.log.error("Either NEWPASS or NEWHASH is required!")
+            context.log.fail("Either NEWPASS or NEWHASH is required!")
             sys.exit(1)
 
     def authenticate(self, context, connection, protocol, anonymous=False):
@@ -69,11 +69,11 @@ class NXCModule:
             dce.connect()
             context.log.info("[+] Successfully connected to DCE/RPC")
             dce.bind(samr.MSRPC_UUID_SAMR)
-            context.log.debug("[+] Successfully bound to SAMR")
+            context.log.info("[+] Successfully bound to SAMR")
             return dce
 
         except DCERPCException as e:
-            context.log.error(f"DCE/RPC Exception: {e!s}")
+            context.log.fail(f"DCE/RPC Exception: {e!s}")
             raise
 
     def on_login(self, context, connection):
@@ -108,7 +108,7 @@ class NXCModule:
             # Perform the SMB SAMR password change
             self._smb_samr_change(context, connection, target_username, target_domain, self.oldhash, self.newpass, new_nthash)
         except Exception as e:
-            context.log.error(f"Password change failed: {e}")
+            context.log.fail(f"Password change failed: {e}")
 
     def _smb_samr_change(self, context, connection, target_username, target_domain, oldHash, newPassword, newHash):
         try:
