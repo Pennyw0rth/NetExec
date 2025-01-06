@@ -5,7 +5,7 @@ from impacket.dcerpc.v5.rpcrt import DCERPCException
 class NXCModule:
     """
     Module for changing or resetting user passwords
-    Module by Fagan Afandiyev
+    Module by Fagan Afandiyev and termanix
     """
 
     name = "change-password"
@@ -33,12 +33,12 @@ class NXCModule:
         self.newpass = module_options.get("NEWPASS")
         self.newhash = module_options.get("NEWNTHASH")
         self.oldpass = module_options.get("OLDPASS")
-        self.oldhash = module_options.get("OLDNTHASH")
+        self.oldhash = module_options.get("OLDNTHASH" )
         self.target_user = module_options.get("USER")
         self.reset = module_options.get("RESET", True)
 
         if not self.newpass and not self.newhash:
-            context.log.fail("Either NEWPASS or NEWHASH is required!")
+            context.log.fail("Either NEWPASS or NEWNTHASH is required!")
             sys.exit(1)
 
     def authenticate(self, context, connection, protocol, anonymous=False):
@@ -79,7 +79,15 @@ class NXCModule:
     def on_login(self, context, connection):
         target_username = self.target_user or connection.username
         target_domain = connection.domain
+        
+        # If OLDPASS or OLDHASH are not specified, default to the credentials used for authentication.
 
+        if not self.oldpass:
+            self.oldpass = connection.password
+        if not self.oldhash:
+            self.oldhash = connection.nthash
+        
+        
         new_lmhash, new_nthash = "", ""
 
         # Parse new hash values if provided
@@ -133,6 +141,8 @@ class NXCModule:
             else:
                 # Handle anonymous/null session password change
                 self.mustchangePassword(target_username, target_domain, self.oldpass, newPassword, "", oldHash, "", newHash)
+        except AttributeError as e:
+            context.log.fail("SMB-SAMR password change failed: Ensure that either the OLDPASS or OLDNTHASH option is provided and attempt again.")
         except Exception as e:
             context.log.fail(f"SMB-SAMR password change failed: {e}")
         finally:
