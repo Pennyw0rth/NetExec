@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install poetry
         run: |
-          pipx install poetry
+          pipx install poetry==1.8.4
       - name: NetExec set up python ${{ matrix.python-version }} on ${{ matrix.os }}
         uses: actions/setup-python@v5
         with:
