@@ -126,7 +126,7 @@ line-length = 65000
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
-target-version = "py37"
+target-version = "py310"
 
 [tool.ruff.flake8-quotes]
 docstring-quotes = "double"
