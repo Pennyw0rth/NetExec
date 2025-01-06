@@ -156,8 +156,8 @@ class smb(connection):
         self.remote_ops = None
         self.bootkey = None
         self.output_filename = None
-        self.smbv1 = None
-        self.smbv3 = None
+        self.smbv1 = None   # Check if SMBv1 is supported
+        self.smbv3 = None   # Check if SMBv3 is supported
         self.is_timeouted = False
         self.signing = False
         self.smb_share_name = smb_share_name
@@ -554,7 +554,8 @@ class smb(connection):
                 preferredDialect=SMB_DIALECT,
                 timeout=self.args.smb_timeout,
             )
-            if check:
+            self.smbv1 = True
+            if not check:
                 self.conn = conn
         except OSError as e:
             if "Connection reset by peer" in str(e):
@@ -583,8 +584,13 @@ class smb(connection):
                 self.port,
                 timeout=self.args.smb_timeout,
             )
+            self.smbv3 = True
         except (Exception, NetBIOSTimeout, OSError) as e:
-            self.logger.info(f"Error creating SMBv3 connection to {self.host}: {e}")
+            if "timed out" in str(e):
+                self.is_timeouted = True
+                self.logger.debug(f"Timeout creating SMBv3 connection to {self.host}")
+            else:
+                self.logger.info(f"Error creating SMBv3 connection to {self.host}: {e}")
             return False
         return True
 
