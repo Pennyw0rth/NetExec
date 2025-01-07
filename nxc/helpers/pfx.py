@@ -527,7 +527,7 @@ def pfx_auth(self):
     creds = ccache.getCredential(principal)
     if creds is not None:
         tgt = creds.toTGT()
-        dumper = GETPAC(username, self.domain, self.domain, key, tgt)
+        dumper = GETPAC(username, self.domain, self.kdcHost, key, tgt)
         nthash = dumper.dump()
         if not self.kerberos:
             self.hash_login(self.domain, username, nthash)
