@@ -509,7 +509,7 @@ def pfx_auth(self):
     req = ini.build_asreq(self.domain, username)
     self.logger.info("Requesting TGT")
 
-    sock = KerberosClientSocket(KerberosTarget(self.domain))
+    sock = KerberosClientSocket(KerberosTarget(self.kdcHost))
     try:
         res = sock.sendrecv(req)
     except Exception as e:
