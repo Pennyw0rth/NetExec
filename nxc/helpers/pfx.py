@@ -509,7 +509,7 @@ def pfx_auth(self):
     req = ini.build_asreq(self.domain, username)
     self.logger.info("Requesting TGT")
 
-    sock = KerberosClientSocket(KerberosTarget(self.host))
+    sock = KerberosClientSocket(KerberosTarget(self.domain))
     try:
         res = sock.sendrecv(req)
     except Exception as e:
@@ -527,7 +527,7 @@ def pfx_auth(self):
     creds = ccache.getCredential(principal)
     if creds is not None:
         tgt = creds.toTGT()
-        dumper = GETPAC(username, self.domain, self.host, key, tgt)
+        dumper = GETPAC(username, self.domain, self.domain, key, tgt)
         nthash = dumper.dump()
         if not self.kerberos:
             self.hash_login(self.domain, username, nthash)
