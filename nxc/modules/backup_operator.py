@@ -68,8 +68,8 @@ class NXCModule:
                     self.domain_admin = fields[0]
                     self.domain_admin_hash = fields[3]
 
-            localOperations = LocalOperations(log_path + "SYSTEM")
-            bootKey = localOperations.getBootKey()
+            local_operations = LocalOperations(log_path + "SYSTEM")
+            bootKey = local_operations.getBootKey()
             sam_hashes = SAMHashes(log_path + "SAM", bootKey, isRemote=False, perSecretCallback=lambda secret: parse_sam(secret))
             sam_hashes.dump()
             sam_hashes.finish()
