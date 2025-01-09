@@ -74,7 +74,7 @@ class NXCModule:
             sam_hashes.dump()
             sam_hashes.finish()
 
-            LSA = LSASecrets(log_path + "SECURITY", bootKey, remoteOps, isRemote=False, perSecretCallback=lambda secret_type, secret: context.log.highlight(secret))
+            LSA = LSASecrets(log_path + "SECURITY", bootKey, remote_ops, isRemote=False, perSecretCallback=lambda secret_type, secret: context.log.highlight(secret))
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
         except Exception as e:
