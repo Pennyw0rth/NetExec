@@ -1,6 +1,7 @@
 import time
 import os
 import datetime
+import sys
 
 from impacket.examples.secretsdump import SAMHashes, LSASecrets, LocalOperations
 from impacket.smbconnection import SessionError
@@ -44,6 +45,7 @@ class NXCModule:
                     context.log.highlight(f"Saved {hive} to {outputFileName}")
                 except Exception as e:
                     context.log.fail(f"Couldn't save {hive}: {e} on path {outputFileName}")
+                    sys.exit()
 
         except (Exception, KeyboardInterrupt) as e:
             context.log.fail(str(e))
