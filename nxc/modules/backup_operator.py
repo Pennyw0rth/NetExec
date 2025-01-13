@@ -82,7 +82,6 @@ class NXCModule:
             context.log.fail(f"Fail to dump the sam and lsa: {e!s}")
 
         if self.domain_admin:
-            context.log.display(f"Cleaning dump with user {self.domain_admin} and hash {self.domain_admin_hash} on domain {connection.domain}")
             connection.conn.logoff()
             connection.create_conn_obj()
             if connection.hash_login(connection.domain, self.domain_admin, self.domain_admin_hash):
@@ -92,6 +91,7 @@ class NXCModule:
                 except Exception as e:
                     context.log.fail(f"Fail to dump the NTDS: {e!s}")
 
+                context.log.display(f"Cleaning dump with user {self.domain_admin} and hash {self.domain_admin_hash} on domain {connection.domain}")
                 connection.execute("del C:\\Windows\\sysvol\\sysvol\\SECURITY && del C:\\Windows\\sysvol\\sysvol\\SAM && del C:\\Windows\\sysvol\\sysvol\\SYSTEM")
                 for hive in ["SAM", "SECURITY", "SYSTEM"]:
                     try:
