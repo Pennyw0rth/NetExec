@@ -98,7 +98,7 @@ class NXCModule:
                         connection.conn.listPath("SYSVOL", log_path + hive)
                     except SessionError as e:
                         if e.getErrorCode() != nt_errors.STATUS_OBJECT_PATH_NOT_FOUND:
-                            context.log.fail("Fail to remove the files...")
+                            context.log.fail(f"Fail to remove the file { hive }...")
                             self.suprress_error(context)
                             sys.exit()
                 context.log.display("Successfully deleted dump files !")
