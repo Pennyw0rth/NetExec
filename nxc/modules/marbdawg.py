@@ -38,7 +38,9 @@ class NXCModule:
         if not self.location.endswith("\\"):
             self.location += "\\"
 
-        if self.LOCAL:
+        if self.MODE == "custom":
+            self.deploy_custom_tools(context, connection, self.custom_tools)
+        elif self.LOCAL:
             self.handle_local_mode(context, connection)
         elif self.MODE == "all":
             self.install_all(context, connection)
@@ -48,8 +50,6 @@ class NXCModule:
             self.deploy_exploit_tools(context, connection)
         elif self.MODE == "pingcastle":
             self.deploy_pingcastle(context, connection)
-        elif self.MODE == "custom":
-            self.deploy_custom_tools(context, connection, self.custom_tools)
         else:
             context.log.fail(f"Invalid MODE: {self.MODE}")
 
@@ -276,9 +276,57 @@ class NXCModule:
             context.log.fail(f"Failed to transfer reports: {e}")
 
     def deploy_custom_tools(self, context, connection, custom_tools):
-        """Deploy custom tools."""
+        """
+        If custom_tools points to a local directory, transfer all its files directly.
+        If custom_tools points to a single file, transfer that file.
+        Otherwise, assume they are URLs and download them first.
+        """
         context.log.highlight("Deploying custom tools...")
-        for tool_url in custom_tools:
+
+        # If there's exactly one argument, check if it's a file or directory
+        if len(custom_tools) == 1:
+            path = custom_tools[0]
+            if os.path.isdir(path):
+                context.log.highlight(f"Transferring all files directly from {path}...")
+                for root, _, files in os.walk(path):
+                    for filename in files:
+                        local_path = os.path.join(root, filename)
+                        remote_path = f"{self.location}{filename}".replace("/", "\\")
+                        context.log.highlight(f"Transferring {local_path} to {remote_path}...")
+                        try:
+                            with open(local_path, "rb") as file_stream:
+                                connection.conn.putFile(
+                                    "C$",
+                                    remote_path.replace("C:\\", ""),
+                                    file_stream.read
+                                )
+                            context.log.highlight(f"Successfully transferred {filename} to {remote_path} on the target.")
+                        except Exception as e:
+                            context.log.fail(f"Failed to transfer {filename}: {e}")
+            elif os.path.isfile(path):
+                filename = os.path.basename(path)
+                remote_path = f"{self.location}{filename}".replace("/", "\\")
+                context.log.highlight(f"Transferring single file {path} to {remote_path}...")
+                try:
+                    with open(path, "rb") as file_stream:
+                        connection.conn.putFile(
+                            "C$",
+                            remote_path.replace("C:\\", ""),
+                            file_stream.read
+                        )
+                    context.log.highlight(f"Successfully transferred {filename} to {remote_path} on the target.")
+                except Exception as e:
+                    context.log.fail(f"Failed to transfer {filename}: {e}")
+            else:
+                # Otherwise, assume we have one URL
+                self._download_and_display(context, connection, [path])
+        else:
+            # If multiple items are passed, assume they are URLs
+            self._download_and_display(context, connection, custom_tools)
+
+    def _download_and_display(self, context, connection, urls):
+        """Download each URL locally and indicate success/failure."""
+        for tool_url in urls:
             try:
                 tool_name = tool_url.split("/")[-1]
                 local_path = os.path.join("./custom_tools/", tool_name)
