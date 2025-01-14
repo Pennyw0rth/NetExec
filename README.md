@@ -1,4 +1,4 @@
-![Supported Python versions](https://img.shields.io/badge/python-3.8+-blue.svg)
+![Supported Python versions](https://img.shields.io/badge/python-3.10+-blue.svg)
 [![Twitter](https://img.shields.io/twitter/follow/al3xn3ff?label=al3x_n3ff&style=social)](https://twitter.com/intent/follow?screen_name=al3x_n3ff)
 [![Twitter](https://img.shields.io/twitter/follow/_zblurx?label=_zblurx&style=social)](https://twitter.com/intent/follow?screen_name=_zblurx)
 [![Twitter](https://img.shields.io/twitter/follow/MJHallenbeck?label=MJHallenbeck&style=social)](https://twitter.com/intent/follow?screen_name=MJHallenbeck)
@@ -43,6 +43,11 @@ sudo apt install pipx git
 pipx ensurepath
 pipx install git+https://github.com/Pennyw0rth/NetExec
 ```
+
+## Availability on Unix distributions
+
+[![Packaging status](https://repology.org/badge/vertical-allrepos/netexec.svg)](https://repology.org/project/netexec/versions)
+
 # Development
 Development guidelines and recommendations in development
 

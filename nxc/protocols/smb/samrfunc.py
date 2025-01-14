@@ -77,7 +77,7 @@ class SamrFunc:
         member_sids = self.samr_query.get_alias_members(domain_handle, self.groups["Administrators"])
         member_names = self.lsa_query.lookup_sids(member_sids)
 
-        for sid, name in zip(member_sids, member_names):
+        for sid, name in zip(member_sids, member_names, strict=True):
             print(f"{name} - {sid}")
 
 
