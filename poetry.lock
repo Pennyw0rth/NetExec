@@ -678,13 +678,13 @@ wmi = ["wmi (>=1.5.1)"]
 
 [[package]]
 name = "dploot"
-version = "3.0.3"
+version = "3.1.0"
 description = "DPAPI looting remotely in Python"
 optional = false
 python-versions = "<4.0.0,>=3.10.0"
 files = [
-    {file = "dploot-3.0.3-py3-none-any.whl", hash = "sha256:8d0a2c90e77594b4a7f5b4cee64f71b38d295da27151b5c4f5a0584a7d00ff3b"},
-    {file = "dploot-3.0.3.tar.gz", hash = "sha256:301b8ef5a9c27bcc030feef6a51fdb16b579a40984216636a4a4af3d24ead324"},
+    {file = "dploot-3.1.0-py3-none-any.whl", hash = "sha256:9fb89c4332f407700929290f147703c79e253d14a505649174c9d761415fddfe"},
+    {file = "dploot-3.1.0.tar.gz", hash = "sha256:0e531a12481b0c741be41574988f2a8d3046a66457edb3faecc64ee20f88d6e2"},
 ]
 
 [package.dependencies]
@@ -2510,4 +2510,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10.0"
-content-hash = "6d49bd57d29f45512946dc1ddcaa667cdcb4ae6393cbc2524a6fab06f13802ab"
+content-hash = "6a4e460ce87103f0a4f9eeddbf78d48cd9e8dc6092457187f2deef26b0ccdfc4"
