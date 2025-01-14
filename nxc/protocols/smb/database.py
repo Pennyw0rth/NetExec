@@ -2,7 +2,6 @@ import base64
 import sys
 import warnings
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import func, Table, select, delete
 from sqlalchemy.dialects.sqlite import Insert  # used for upsert
@@ -350,7 +349,7 @@ class database(BaseDB):
         hosts = self.get_hosts(host)
 
         if users and hosts:
-            for user, host in zip(users, hosts):
+            for user, host in zip(users, hosts, strict=True):
                 user_id = user[0]
                 host_id = host[0]
                 link = {"userid": user_id, "hostid": host_id}
@@ -693,7 +692,7 @@ class database(BaseDB):
             except Exception as e:
                 nxc_logger.debug(f"Issue while inserting DPAPI Backup Key: {e}")
 
-    def get_domain_backupkey(self, domain: Optional[str] = None):
+    def get_domain_backupkey(self, domain: str | None = None):
         """
         Get domain backupkey
         :domain is the domain fqdn
@@ -748,11 +747,11 @@ class database(BaseDB):
     def get_dpapi_secrets(
         self,
         filter_term=None,
-        host: Optional[str] = None,
-        dpapi_type: Optional[str] = None,
-        windows_user: Optional[str] = None,
-        username: Optional[str] = None,
-        url: Optional[str] = None,
+        host: str | None = None,
+        dpapi_type: str | None = None,
+        windows_user: str | None = None,
+        username: str | None = None,
+        url: str | None = None,
     ):
         """Get dpapi secrets from nxcdb"""
         q = select(self.DpapiSecrets)

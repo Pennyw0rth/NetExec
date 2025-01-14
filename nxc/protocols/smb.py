@@ -156,7 +156,8 @@ class smb(connection):
         self.remote_ops = None
         self.bootkey = None
         self.output_filename = None
-        self.smbv1 = None
+        self.smbv1 = None   # Check if SMBv1 is supported
+        self.smbv3 = None   # Check if SMBv3 is supported
         self.is_timeouted = False
         self.signing = False
         self.smb_share_name = smb_share_name
@@ -294,6 +295,10 @@ class smb(connection):
             self.conn.logoff()
         except Exception as e:
             self.logger.debug(f"Error logging off system: {e}")
+
+        # Check smbv1
+        if not self.args.no_smbv1:
+            self.smbv1 = self.create_smbv1_conn(check=True)
 
         # DCOM connection with kerberos needed
         self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.targetDomain}"
@@ -538,10 +543,10 @@ class smb(connection):
             self.create_conn_obj()
             return False
 
-    def create_smbv1_conn(self):
-        self.logger.debug(f"Creating SMBv1 connection to {self.host}")
+    def create_smbv1_conn(self, check=False):
+        self.logger.info(f"Creating SMBv1 connection to {self.host}")
         try:
-            self.conn = SMBConnection(
+            conn = SMBConnection(
                 self.remoteName,
                 self.host,
                 None,
@@ -549,6 +554,9 @@ class smb(connection):
                 preferredDialect=SMB_DIALECT,
                 timeout=self.args.smb_timeout,
             )
+            self.smbv1 = True
+            if not check:
+                self.conn = conn
         except OSError as e:
             if "Connection reset by peer" in str(e):
                 self.logger.info(f"SMBv1 might be disabled on {self.host}")
@@ -567,7 +575,7 @@ class smb(connection):
         return True
 
     def create_smbv3_conn(self):
-        self.logger.debug(f"Creating SMBv3 connection to {self.host}")
+        self.logger.info(f"Creating SMBv3 connection to {self.host}")
         try:
             self.conn = SMBConnection(
                 self.remoteName,
@@ -576,32 +584,35 @@ class smb(connection):
                 self.port,
                 timeout=self.args.smb_timeout,
             )
+            self.smbv3 = True
         except (Exception, NetBIOSTimeout, OSError) as e:
-            self.logger.info(f"Error creating SMBv3 connection to {self.host}: {e}")
+            if "timed out" in str(e):
+                self.is_timeouted = True
+                self.logger.debug(f"Timeout creating SMBv3 connection to {self.host}")
+            else:
+                self.logger.info(f"Error creating SMBv3 connection to {self.host}: {e}")
             return False
         return True
 
-    def create_conn_obj(self, no_smbv1=False):
+    def create_conn_obj(self):
         """
         Tries to create a connection object to the target host.
-        On first try, it will try to create a SMBv1 connection.
+        On first try, it will try to create a SMBv3 connection.
         On further tries, it will remember which SMB version is supported and create a connection object accordingly.
 
         :param no_smbv1: If True, it will not try to create a SMBv1 connection
         """
-        no_smbv1 = self.args.no_smbv1 if self.args.no_smbv1 else no_smbv1
-
         # Initial negotiation
-        if not no_smbv1 and self.smbv1 is None:
-            self.smbv1 = self.create_smbv1_conn()
-            if self.smbv1:
+        if self.smbv3 is None:
+            self.smbv3 = self.create_smbv3_conn()
+            if self.smbv3:
                 return True
             elif not self.is_timeouted:
-                return self.create_smbv3_conn()
-        elif not no_smbv1 and self.smbv1:
-            return self.create_smbv1_conn()
-        else:
+                return self.create_smbv1_conn()
+        elif self.smbv3:
             return self.create_smbv3_conn()
+        else:
+            return self.create_smbv1_conn()
 
     def check_if_admin(self):
         self.logger.debug(f"Checking if user is admin on {self.host}")

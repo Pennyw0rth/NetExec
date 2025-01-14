@@ -205,6 +205,9 @@ class ldap(connection):
                 except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.info(f"Skipping item, cannot process due to error {e}")
+        except ConnectionRefusedError as e:
+            self.logger.debug(f"{e} on host {self.host}")
+            return False
         except OSError as e:
             self.logger.error(f"Error getting ldap info {e}")
 
@@ -1114,7 +1117,7 @@ class ldap(connection):
                             rbcdRights.append(str(rbcd.get("sAMAccountName")))
                             rbcdObjType.append(str(rbcd.get("objectCategory")))
 
-                        for rights, objType in zip(rbcdRights, rbcdObjType):
+                        for rights, objType in zip(rbcdRights, rbcdObjType, strict=True):
                             answers.append([rights, objType, "Resource-Based Constrained", sAMAccountName])
 
                 if delegation in ["Unconstrained", "Constrained", "Constrained w/ Protocol Transition"]:
