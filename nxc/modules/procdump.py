@@ -152,3 +152,10 @@ class NXCModule:
                         add_user_bh(credz_bh, None, context.log, connection.config)
                 except Exception as e:
                     context.log.fail("Error openning dump file", str(e))
+
+        else:
+            try:
+                connection.conn.deleteFile(self.share, self.tmp_share + self.procdump)
+                context.log.success(f"Deleted procdump file on the {self.share} share")
+            except Exception as e:
+                context.log.fail(f"Error deleting procdump file on share {self.share}: {e}")
