@@ -98,11 +98,7 @@ class NXCModule:
                 except Exception as e:
                     context.log.fail(f"Error while get file: {e}")
 
-            try:
-                connection.conn.deleteFile(self.share, self.tmp_share + self.procdump)
-                context.log.success(f"Deleted procdump file on the {self.share} share")
-            except Exception as e:
-                context.log.fail(f"Error deleting procdump file on share {self.share}: {e}")
+            self.delete_procdump_binary(connection, context)
 
             try:
                 connection.conn.deleteFile(self.share, self.tmp_share + machine_name)
@@ -154,8 +150,11 @@ class NXCModule:
                     context.log.fail("Error openning dump file", str(e))
 
         else:
-            try:
-                connection.conn.deleteFile(self.share, self.tmp_share + self.procdump)
-                context.log.success(f"Deleted procdump file on the {self.share} share")
-            except Exception as e:
-                context.log.fail(f"Error deleting procdump file on share {self.share}: {e}")
+            self.delete_procdump_binary(connection, context)
+
+    def delete_procdump_binary(self, connection, context):
+        try:
+            connection.conn.deleteFile(self.share, self.tmp_share + self.procdump)
+            context.log.success(f"Deleted procdump file on the {self.share} share")
+        except Exception as e:
+            context.log.fail(f"Error deleting procdump file on share {self.share}: {e}")
