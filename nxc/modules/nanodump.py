@@ -252,6 +252,9 @@ class NXCModule:
                 except Exception as e:
                     self.context.log.fail(f"Error opening dump file: {e}")
 
+        else:
+            self.delete_nanodump_binary()
+    
     def delete_nanodump_binary(self):
         try:
             self.connection.execute(f"del {self.remote_tmp_dir + self.nano}")
