@@ -1570,7 +1570,11 @@ class smb(connection):
         base_folder = os.path.basename(normalized_folder)
         self.logger.debug(f"Base folder: {base_folder}")
 
-        items = self.conn.listPath(self.args.share, ntpath.join(folder, "*"))
+        try:
+            items = self.conn.listPath(self.args.share, ntpath.join(folder, "*"))
+        except SessionError as e:
+            self.logger.error(f"Error listing folder '{folder}': {e}")
+            return
         self.logger.debug(f"{len(items)} items in folder: {items}")
 
         for item in items:
