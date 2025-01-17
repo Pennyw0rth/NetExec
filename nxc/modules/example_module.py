@@ -42,6 +42,9 @@ class NXCModule:
             raise Exception("Exception that might have occurred")
         except Exception as e:
             context.log.exception(f"Exception occurred: {e}")  # This will display an exception traceback screen after an exception was raised and should only be used for critical errors
+            
+        # Use this function to add loot data you want to save to $NXC_PATH/loot/$MODULE_NAME/$FILENAME
+        add_loot_data(self.name, "custom_loot_file.txt", "Data can be anything you want, passwords, hashes, or anything")
 
     def on_admin_login(self, context, connection):
         """Concurrent.
