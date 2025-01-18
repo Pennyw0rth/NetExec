@@ -2,6 +2,7 @@
 netexec -h
 ##### SMB
 netexec smb TARGET_HOST --generate-hosts-file /tmp/hostsfile
+netexec smb TARGET_HOST --generate-krb5-file /tmp/krb5conf
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec {DNS} smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --shares
