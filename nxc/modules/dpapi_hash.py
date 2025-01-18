@@ -52,11 +52,11 @@ class NXCModule:
             masterkeys_triage.triage_masterkeys()
             if self.outputfile is not None:
                 with open(self.outputfile, "a+") as fd:
-                    for mkhash in [mkhash for masterkey in masterkeys_triage.all_looted_masterkeys for mkhash in masterkey.generate_hash() ]:
+                    for mkhash in [mkhash for masterkey in masterkeys_triage.all_looted_masterkeys for mkhash in masterkey.generate_hash()]:
                         context.log.highlight(mkhash)
                         fd.write(f"{mkhash}\n")
             else:
-                for mkhash in [mkhash for masterkey in masterkeys_triage.all_looted_masterkeys for mkhash in masterkey.generate_hash() ]:
+                for mkhash in [mkhash for masterkey in masterkeys_triage.all_looted_masterkeys for mkhash in masterkey.generate_hash()]:
                     context.log.highlight(mkhash)
             
         except Exception as e:
