@@ -22,11 +22,12 @@ def gen_cli_args():
     except ValueError:
         VERSION = importlib.metadata.version("netexec")
         COMMIT = ""
-    CODENAME = "ItsAlwaysDNS"
+    CODENAME = "NeedForSpeed"
     nxc_logger.debug(f"NXC VERSION: {VERSION} - {CODENAME} - {COMMIT}")
     
     generic_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     generic_group = generic_parser.add_argument_group("Generic", "Generic options for nxc across protocols")
+    generic_group.add_argument("--version", action="store_true", help="Display nxc version")
     generic_group.add_argument("-t", "--threads", type=int, dest="threads", default=256, help="set how many concurrent threads to use")
     generic_group.add_argument("--timeout", default=None, type=int, help="max timeout in seconds of each thread")
     generic_group.add_argument("--jitter", metavar="INTERVAL", type=str, help="sets a random delay between each authentication")
@@ -69,8 +70,6 @@ def gen_cli_args():
         parents=[generic_parser, output_parser, dns_parser]
     )
 
-    parser.add_argument("--version", action="store_true", help="Display nxc version")
-
     # we do module arg parsing here so we can reference the module_list attribute below
     module_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     mgroup = module_parser.add_argument_group("Modules", "Options for nxc modules")
@@ -82,7 +81,7 @@ def gen_cli_args():
     subparsers = parser.add_subparsers(title="Available Protocols", dest="protocol")
 
     std_parser = argparse.ArgumentParser(add_help=False, parents=[generic_parser, output_parser, dns_parser], formatter_class=DisplayDefaultsNotNone)
-    std_parser.add_argument("target", nargs="+" if not (module_parser.parse_known_args()[0].list_modules or module_parser.parse_known_args()[0].show_module_options) else "*", type=str, help="the target IP(s), range(s), CIDR(s), hostname(s), FQDN(s), file(s) containing a list of targets, NMap XML or .Nessus file(s)")
+    std_parser.add_argument("target", nargs="+" if not (module_parser.parse_known_args()[0].list_modules or module_parser.parse_known_args()[0].show_module_options or generic_parser.parse_known_args()[0].version) else "*", type=str, help="the target IP(s), range(s), CIDR(s), hostname(s), FQDN(s), file(s) containing a list of targets, NMap XML or .Nessus file(s)")
     credential_group = std_parser.add_argument_group("Authentication", "Options for authenticating")
     credential_group.add_argument("-u", "--username", metavar="USERNAME", dest="username", nargs="+", default=[], help="username(s) or file(s) containing usernames")
     credential_group.add_argument("-p", "--password", metavar="PASSWORD", dest="password", nargs="+", default=[], help="password(s) or file(s) containing passwords")
@@ -99,6 +98,13 @@ def gen_cli_args():
     kerberos_group.add_argument("--use-kcache", action="store_true", help="Use Kerberos authentication from ccache file (KRB5CCNAME)")
     kerberos_group.add_argument("--aesKey", metavar="AESKEY", nargs="+", help="AES key to use for Kerberos Authentication (128 or 256 bits)")
     kerberos_group.add_argument("--kdcHost", metavar="KDCHOST", help="FQDN of the domain controller. If omitted it will use the domain part (FQDN) specified in the target parameter")
+
+    certificate_group = std_parser.add_argument_group("Certificate", "Options for certificate authentication")
+    certificate_group.add_argument("--pfx-cert", metavar="PFXCERT", help="Use certificate authentication from pfx file .pfx")
+    certificate_group.add_argument("--pfx-base64", metavar="PFXB64", help="Use certificate authentication from pfx file encoded in base64")
+    certificate_group.add_argument("--pfx-pass", metavar="PFXPASS", help="Password of the pfx certificate")
+    certificate_group.add_argument("--cert-pem", metavar="CERTPEM", help="Use certificate authentication from PEM file")
+    certificate_group.add_argument("--key-pem", metavar="KEYPEM", help="Private key for the PEM format")
     
     server_group = std_parser.add_argument_group("Servers", "Options for nxc servers")
     server_group.add_argument("--server", choices={"http", "https"}, default="https", help="use the selected server")

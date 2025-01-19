@@ -49,10 +49,10 @@ class NXCModule:
 
         try:
             sc = ldap.SimplePagedResultsControl()
-            base_dn_root = connection.ldapConnection._baseDN if self.base_dn is None else self.base_dn
+            base_dn_root = connection.ldap_connection._baseDN if self.base_dn is None else self.base_dn
 
             if self.server is None:
-                connection.ldapConnection.search(
+                connection.ldap_connection.search(
                     searchFilter=search_filter,
                     attributes=[],
                     sizeLimit=0,
@@ -61,7 +61,7 @@ class NXCModule:
                     searchBase="CN=Configuration," + base_dn_root,
                 )
             else:
-                connection.ldapConnection.search(
+                connection.ldap_connection.search(
                     searchFilter=search_filter + base_dn_root + ")",
                     attributes=["certificateTemplates"],
                     sizeLimit=0,

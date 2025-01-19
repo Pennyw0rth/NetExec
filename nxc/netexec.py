@@ -142,7 +142,6 @@ def main():
 
     protocol_object = getattr(p_loader.load_protocol(protocol_path), args.protocol)
     nxc_logger.debug(f"Protocol Object: {protocol_object}, type: {type(protocol_object)}")
-    nxc_logger.debug(f"Protocol Object dir: {dir(protocol_object)}")
     protocol_db_object = p_loader.load_protocol(protocol_db_path).database
     nxc_logger.debug(f"Protocol DB Object: {protocol_db_object}")
 
@@ -174,6 +173,9 @@ def main():
         for module in args.module:
             nxc_logger.display(f"{module} module options:\n{modules[module]['options']}")
         exit(0)
+    elif args.show_module_options:
+        nxc_logger.error("--options requires -M/--module")
+        exit(1)
     elif args.module:
         # Check the modules for sanity before loading the protocol
         nxc_logger.debug(f"Modules to be Loaded for sanity check: {args.module}, {type(args.module)}")

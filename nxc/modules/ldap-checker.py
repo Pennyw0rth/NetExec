@@ -99,8 +99,8 @@ class NXCModule:
                 do_handshake_on_connect=False,
                 suppress_ragged_eofs=False,
             )
-            ssl_sock.connect((dcIp, 636))
             try:
+                ssl_sock.connect((dcIp, 636))
                 ssl_sock.do_handshake()
                 ssl_sock.close()
                 return True
@@ -126,7 +126,7 @@ class NXCModule:
                 _, err = await ldapsClientConn.connect()
                 if err is not None:
                     context.log.fail(str(err))
-                    return False
+                    return None
                 
                 _, err = await ldapsClientConn.bind()
                 if err is not None:
@@ -142,7 +142,7 @@ class NXCModule:
                     # because LDAP server signing requirements are not enforced
             except Exception as e:
                 context.log.debug(str(e))
-                return False
+                return None
               
 
         # Run trough all our code blocks to determine LDAP signing and channel binding settings.
