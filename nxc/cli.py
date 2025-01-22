@@ -103,8 +103,8 @@ def gen_cli_args():
     certificate_group.add_argument("--pfx-cert", metavar="PFXCERT", help="Use certificate authentication from pfx file .pfx")
     certificate_group.add_argument("--pfx-base64", metavar="PFXB64", help="Use certificate authentication from pfx file encoded in base64")
     certificate_group.add_argument("--pfx-pass", metavar="PFXPASS", help="Password of the pfx certificate")
-    certificate_group.add_argument("--cert-pem", metavar="CERTPEM", help="Use certificate authentication from PEM file")
-    certificate_group.add_argument("--key-pem", metavar="KEYPEM", help="Private key for the PEM format")
+    certificate_group.add_argument("--pem-cert", metavar="PEMCERT", help="Use certificate authentication from PEM file")
+    certificate_group.add_argument("--pem-key", metavar="PEMKEY", help="Private key for the PEM format")
     
     server_group = std_parser.add_argument_group("Servers", "Options for nxc servers")
     server_group.add_argument("--server", choices={"http", "https"}, default="https", help="use the selected server")

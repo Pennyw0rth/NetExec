@@ -550,7 +550,7 @@ class connection:
                 self.logger.info("Successfully authenticated using Kerberos cache")
                 return True
 
-        if self.args.pfx_cert or self.args.pfx_base64 or self.args.cert_pem:
+        if self.args.pfx_cert or self.args.pfx_base64 or self.args.pem_cert:
             self.logger.debug("Trying to authenticate using Certificate pfx")
             if not self.args.username:
                 self.logger.fail("You must specify a username when using certificate authentication")
