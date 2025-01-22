@@ -318,7 +318,7 @@ class smb(connection):
         smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
         self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1})")
 
-        if self.args.generate_hosts_file:
+        if self.args.generate_hosts_file or self.args.generate_krb5_file:
             from impacket.dcerpc.v5 import nrpc, epm
             self.logger.debug("Performing authentication attempts...")
             isdc = False
@@ -328,9 +328,31 @@ class smb(connection):
             except DCERPCException:
                 self.logger.debug("Error while connecting to host: DCERPCException, which means this is probably not a DC!")
 
-            with open(self.args.generate_hosts_file, "a+") as host_file:
-                host_file.write(f"{self.host}    {self.hostname} {self.hostname}.{self.targetDomain} {self.targetDomain if isdc else ''}\n")
-                self.logger.debug(f"{self.host}    {self.hostname} {self.hostname}.{self.targetDomain} {self.targetDomain if isdc else ''}")
+            if self.args.generate_hosts_file:
+                with open(self.args.generate_hosts_file, "a+") as host_file:
+                    host_file.write(f"{self.host}    {self.hostname} {self.hostname}.{self.targetDomain} {self.targetDomain if isdc else ''}\n")
+                    self.logger.debug(f"{self.host}    {self.hostname} {self.hostname}.{self.targetDomain} {self.targetDomain if isdc else ''}")
+            elif self.args.generate_krb5_file and isdc:
+                with open(self.args.generate_krb5_file, "w+") as host_file:
+                    data = f"""
+[libdefaults]
+    dns_lookup_kdc = false
+    dns_lookup_realm = false
+    default_realm = { self.domain.upper() }
+
+[realms]
+    { self.domain.upper() } = {{
+        kdc = { self.hostname.lower() }.{ self.domain }
+        admin_server = { self.hostname.lower() }.{ self.domain }
+        default_domain = { self.domain }
+    }}
+
+[domain_realm]
+    .{ self.domain } = { self.domain.upper() }
+    { self.domain } = { self.domain.upper() }
+"""
+                    host_file.write(data)
+                    self.logger.debug(data)
 
         return self.host, self.hostname, self.targetDomain
 
