@@ -590,6 +590,8 @@ class ldap(connection):
                 for attribute in item["attributes"]:
                     if str(attribute["type"]) == "distinguishedName":
                         answers.append(str("(memberOf:1.2.840.113556.1.4.1941:=" + attribute["vals"][0] + ")"))
+            if len(answers) == 0:
+                return
 
             # 3. get member of these groups
             search_filter = "(&(objectCategory=user)(sAMAccountName=" + self.username + ")(|" + "".join(answers) + "))"
