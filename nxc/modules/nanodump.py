@@ -51,6 +51,11 @@ class NXCModule:
         self.nano = "nano.exe"
         self.nano_path = ""
         self.useembeded = True
+        current_time = datetime.now()
+        time_string = current_time.strftime("%Y%m%d%H%M%S")
+        padding = time_string.encode()
+        self.nano_embedded64 = self.nano_embedded64 + padding
+        self.nano_embedded32 = self.nano_embedded32 + padding
 
         if "NANO_PATH" in module_options:
             self.nano_path = module_options["NANO_PATH"]

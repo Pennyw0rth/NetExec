@@ -5,7 +5,7 @@
 import base64
 import re
 import sys
-
+from datetime import datetime
 from nxc.helpers.bloodhound import add_user_bh
 from pypykatz.pypykatz import pypykatz
 
@@ -34,6 +34,10 @@ class NXCModule:
         self.handlekatz_path = "/tmp/"
         self.dir_result = self.handlekatz_path
         self.useembeded = True
+        current_time = datetime.now()
+        time_string = current_time.strftime("%Y%m%d%H%M%S")
+        padding = time_string.encode()
+        self.handlekatz_embeded = self.handlekatz_embeded + padding
 
         if "HANDLEKATZ_PATH" in module_options:
             self.handlekatz_path = module_options["HANDLEKATZ_PATH"]
