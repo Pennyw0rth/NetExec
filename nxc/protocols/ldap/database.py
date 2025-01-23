@@ -165,3 +165,39 @@ class database(BaseDB):
             q_groups = Insert(self.GroupRelationsTable)
 
             self.db_execute(q_groups, groups)
+
+    def is_credential_valid(self, credential_id):
+        """Check if this credential ID is valid."""
+        q = select(self.UsersTable).filter(
+            self.UsersTable.c.id == credential_id,
+            self.UsersTable.c.password is not None,
+        )
+        results = self.db_execute(q).all()
+        return len(results) > 0
+
+    def get_credentials(self, filter_term=None, cred_type=None):
+        """Return credentials from the database."""
+        # if we're returning a single credential by ID
+        if self.is_credential_valid(filter_term):
+            q = select(self.UsersTable).filter(self.UsersTable.c.id == filter_term)
+        elif cred_type:
+            q = select(self.UsersTable).filter(self.UsersTable.c.credtype == cred_type)
+        # if we're filtering by username
+        elif filter_term and filter_term != "":
+            like_term = func.lower(f"%{filter_term}%")
+            q = select(self.UsersTable).filter(func.lower(self.UsersTable.c.username).like(like_term))
+        # otherwise return all credentials
+        else:
+            q = select(self.UsersTable)
+
+        return self.db_execute(q).all()
+
+    def get_credential(self, cred_type, domain, username, password):
+        q = select(self.UsersTable).filter(
+            self.UsersTable.c.domain == domain,
+            self.UsersTable.c.username == username,
+            self.UsersTable.c.password == password,
+            self.UsersTable.c.credtype == cred_type,
+        )
+        results = self.db_execute(q).first()
+        return results.id
