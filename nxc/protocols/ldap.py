@@ -591,6 +591,7 @@ class ldap(connection):
                     if str(attribute["type"]) == "distinguishedName":
                         answers.append(str("(memberOf:1.2.840.113556.1.4.1941:=" + attribute["vals"][0] + ")"))
             if len(answers) == 0:
+                self.logger.debug(f"No groups with default privileged RID were found. Assuming user is not a Domain Administrator.")
                 return
 
             # 3. get member of these groups
