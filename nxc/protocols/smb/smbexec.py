@@ -124,13 +124,12 @@ class SMBEXEC:
         try:
             self.logger.debug(f"Remote service {self.__serviceName} started.")
             scmr.hRStartServiceW(self.__scmr, service)
-
-            self.logger.debug(f"Remote service {self.__serviceName} deleted.")
-            scmr.hRDeleteService(self.__scmr, service)
-            scmr.hRCloseServiceHandle(self.__scmr, service)
         except Exception:
             pass
 
+        self.logger.debug(f"Remote service {self.__serviceName} deleted.")
+        scmr.hRDeleteService(self.__scmr, service)
+        scmr.hRCloseServiceHandle(self.__scmr, service)
         self.get_output_remote()
 
     def get_output_remote(self):
