@@ -4,7 +4,6 @@
 
 import base64
 import re
-import sys
 import pypykatz
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.paths import TMP_PATH
@@ -79,7 +78,10 @@ class NXCModule:
         else:
             context.log.fail("Process lsass.exe error un dump, try with verbose")
 
-        if dump:
+        if not dump:
+            self.delete_procdump_binary(connection, context)
+            return
+        else:
             regex = r"([A-Za-z0-9-]*.dmp)"
             matches = re.search(regex, str(p), re.MULTILINE)
             machine_name = ""
@@ -87,7 +89,7 @@ class NXCModule:
                 machine_name = matches.group()
             else:
                 context.log.display("Error getting the lsass.dmp file name")
-                sys.exit(1)
+                return
 
             context.log.display(f"Copy {machine_name} to host")
 
@@ -148,9 +150,6 @@ class NXCModule:
                         add_user_bh(credz_bh, None, context.log, connection.config)
                 except Exception as e:
                     context.log.fail("Error openning dump file", str(e))
-
-        else:
-            self.delete_procdump_binary(connection, context)
 
     def delete_procdump_binary(self, connection, context):
         try:
