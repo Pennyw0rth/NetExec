@@ -149,7 +149,10 @@ class NXCModule:
             self.context.log.fail("Process lsass.exe error on dump, try with verbose")
             dump = False
 
-        if dump:
+        if not dump:
+            self.delete_nanodump_binary()
+            return
+        else:
             self.context.log.display(f"Copying {nano_log_name} to host")
             filename = os.path.join(self.dir_result, f"{self.connection.hostname}_{self.connection.os_arch}_{self.connection.domain}.log")
             if self.context.protocol == "smb":
@@ -251,9 +254,6 @@ class NXCModule:
                         add_user_bh(bh_creds, None, self.context.log, self.connection.config)
                 except Exception as e:
                     self.context.log.fail(f"Error opening dump file: {e}")
-
-        else:
-            self.delete_nanodump_binary()
     
     def delete_nanodump_binary(self):
         try:
