@@ -51,6 +51,10 @@ class NXCModule:
         self.nano = "nano.exe"
         self.nano_path = ""
         self.useembeded = True
+        # Add some random binary data to defeat AVs which check the file hash
+        padding = datetime.now().strftime("%Y%m%d%H%M%S").encode()
+        self.nano_embedded64 += padding
+        self.nano_embedded32 += padding
 
         if "NANO_PATH" in module_options:
             self.nano_path = module_options["NANO_PATH"]

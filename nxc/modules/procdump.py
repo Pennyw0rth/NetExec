@@ -8,6 +8,7 @@ import pypykatz
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.paths import TMP_PATH
 from os.path import abspath, join
+from datetime import datetime
 
 
 class NXCModule:
@@ -34,6 +35,8 @@ class NXCModule:
         self.procdump_path = abspath(TMP_PATH)
         self.dir_result = self.procdump_path
         self.useembeded = True
+        # Add some random binary data to defeat AVs which check the file hash
+        self.procdump_embeded += datetime.now().strftime("%Y%m%d%H%M%S").encode()
 
         if "PROCDUMP_PATH" in module_options:
             self.procdump_path = module_options["PROCDUMP_PATH"]
