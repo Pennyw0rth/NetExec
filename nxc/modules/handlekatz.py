@@ -50,7 +50,7 @@ class NXCModule:
 
     def on_admin_login(self, context, connection):
         handlekatz_loc = self.handlekatz_path + self.handlekatz
-        
+
         if self.useembeded:
             try:
                 with open(handlekatz_loc, "wb") as handlekatz:
