@@ -25,14 +25,12 @@ class NXCModule:
         self.pi = "pi.exe"
         self.useembeded = True
         self.pid = self.cmd = ""
-        current_time = datetime.now()
-        time_string = current_time.strftime("%Y%m%d%H%M%S")
         
         with open(join(DATA_PATH, ("pi_module/pi.bs64"))) as pi_file:
             self.pi_embedded = b64decode(pi_file.read())
 
-        padding = time_string.encode()
-        self.pi_embedded = self.pi_embedded + padding
+        # Add some random binary data to defeat AVs which check the file hash
+        self.pi_embedded += datetime.now().strftime("%Y%m%d%H%M%S").encode()
         
         if "EXEC" in module_options:
             self.cmd = module_options["EXEC"]

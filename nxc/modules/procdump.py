@@ -36,10 +36,8 @@ class NXCModule:
         self.procdump_path = abspath(TMP_PATH)
         self.dir_result = self.procdump_path
         self.useembeded = True
-        current_time = datetime.now()
-        time_string = current_time.strftime("%Y%m%d%H%M%S")
-        padding = time_string.encode()
-        self.procdump_embeded = self.procdump_embeded + padding
+        # Add some random binary data to defeat AVs which check the file hash
+        self.procdump_embeded += datetime.now().strftime("%Y%m%d%H%M%S").encode()
 
         if "PROCDUMP_PATH" in module_options:
             self.procdump_path = module_options["PROCDUMP_PATH"]

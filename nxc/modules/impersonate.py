@@ -29,14 +29,12 @@ class NXCModule:
         self.impersonate = "Impersonate.exe"
         self.useembeded = True
         self.token = self.cmd = ""
-        current_time = datetime.now()
-        time_string = current_time.strftime("%Y%m%d%H%M%S")
 
         with open(path.join(DATA_PATH, ("impersonate_module/impersonate.bs64"))) as impersonate_file:
             self.impersonate_embedded = b64decode(impersonate_file.read())
-        
-        padding = time_string.encode()
-        self.impersonate_embedded = self.impersonate_embedded + padding
+
+        # Add some random binary data to defeat AVs which check the file hash
+        self.impersonate_embedded += datetime.now().strftime("%Y%m%d%H%M%S").encode()
 
         if "EXEC" in module_options:
             self.cmd = module_options["EXEC"]
