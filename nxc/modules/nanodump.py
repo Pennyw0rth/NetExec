@@ -254,7 +254,7 @@ class NXCModule:
                         add_user_bh(bh_creds, None, self.context.log, self.connection.config)
                 except Exception as e:
                     self.context.log.fail(f"Error opening dump file: {e}")
-    
+
     def delete_nanodump_binary(self):
         try:
             self.connection.execute(f"del {self.remote_tmp_dir + self.nano}")
