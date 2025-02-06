@@ -15,7 +15,6 @@ def generate_module_log_file(module_name):
     return f"{NXC_PATH}/logs/{module_name}/{datetime.now().strftime('%Y-%m-%d')}.log"
     
 def create_module_logger(module_name):
-    create_log_dir(module_name)
     log_file = generate_module_log_file(module_name)
     module_logger = logging.getLogger(module_name)
     module_logger.propagate = False
