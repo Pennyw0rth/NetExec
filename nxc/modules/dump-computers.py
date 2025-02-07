@@ -1,6 +1,8 @@
+import socket
 from nxc.logger import nxc_logger
 from impacket.ldap.ldap import LDAPSearchError
 from impacket.ldap.ldapasn1 import SearchResultEntry
+import sys
 
 class NXCModule:
 
@@ -13,28 +15,34 @@ class NXCModule:
     def options(self, context, module_options):
         """
         dump-computers: Specify dump-computers to call the module
-        Usage:
-        
+        Usage:        
         >prints fqdn and version
         nxc ldap $DC-IP -u Username -p Password -M dump-computers
         
         >prints only netbios name
         nxc ldap $DC-IP -u Username -p Password -M dump-computers -o NETBIOS=True
         
+        >prints only fqdn
+        nxc ldap $DC-IP -u Username -p Password -M dump-computers -o FQDN=True
+        
         >prints fqdn and version, output to file
         nxc ldap $DC-IP -u Username -p Password -M dump-computers -o OUTPUT=<location>
         
         >prints only netbios name, output to file
         nxc ldap $DC-IP -u Username -p Password -M dump-computers -o OUTPUT=<location> -o NETBIOS=True
+        nxc ldap $DC-IP -u Username -p Password -M dump-computers -o OUTPUT=<location> -o FQDN=True
         
         """
         self.output_file = None
         self.netbios_only = False
+        self.fqdn_only = False
         
         if "OUTPUT" in module_options:
             self.output_file = module_options["OUTPUT"]
         if "NETBIOS" in module_options and module_options["NETBIOS"].lower() == "true":
             self.netbios_only = True
+        if "FQDN" in module_options and module_options["FQDN"].lower() == "true":
+            self.fqdn_only = True
 
     def on_login(self, context, connection):
         search_filter = "(objectCategory=computer)"
@@ -65,7 +73,12 @@ class NXCModule:
                         operating_system = attribute["vals"][0]
                 if dns_host_name:
                     netbios_name = dns_host_name.split(".")[0]
-                    answer = netbios_name if self.netbios_only else f"{dns_host_name} ({operating_system})"
+                    if self.netbios_only:
+                        answer = netbios_name
+                    elif self.fqdn_only:
+                        answer = dns_host_name
+                    else:
+                        answer = f"{dns_host_name} ({operating_system})"
                     answers.append(answer)
             except Exception as e:
                 context.log.debug("Exception:", exc_info=True)
