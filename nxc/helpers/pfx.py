@@ -496,8 +496,8 @@ def pfx_auth(self):
     if self.args.pfx_cert or self.args.pfx_base64:
         pfx = self.args.pfx_cert if self.args.pfx_cert else self.args.pfx_base64
         ini = myPKINIT.from_pfx(pfx, self.args.pfx_pass, dhparams, bool(self.args.pfx_base64))
-    elif self.args.cert_pem and self.args.key_pem:
-        ini = myPKINIT.from_pem(self.args.cert_pem, self.args.key_pem, dhparams)
+    elif self.args.pem_cert and self.args.pem_key:
+        ini = myPKINIT.from_pem(self.args.pem_cert, self.args.pem_key, dhparams)
     else:
         self.logger.fail("You must either specify a PFX file + optional password or a combination of Cert PEM file and Private key PEM file")
         return None
