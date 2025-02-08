@@ -17,20 +17,20 @@ class NXCModule:
         dump-computers: Specify dump-computers to call the module
         Usage:        
         >prints fqdn and version
-        nxc ldap $DC-IP -u Username -p Password -M dump-computers
+        netexec ldap $DC-IP -u $username -p $password -M dump-computers
         
         >prints only netbios name
-        nxc ldap $DC-IP -u Username -p Password -M dump-computers -o NETBIOS=True
+        netexec ldap $DC-IP -u $username -p $password -M dump-computers -o TYPE=netbios
         
         >prints only fqdn
-        nxc ldap $DC-IP -u Username -p Password -M dump-computers -o FQDN=True
+        netexec ldap $DC-IP -u $username -p $password -M dump-computers -o TYPE=fqdn
         
         >prints fqdn and version, output to file
-        nxc ldap $DC-IP -u Username -p Password -M dump-computers -o OUTPUT=<location>
+        netexec ldap $DC-IP -u $username -p $password -M dump-computers -o OUTPUT=<location>
         
         >prints only netbios name, output to file
-        nxc ldap $DC-IP -u Username -p Password -M dump-computers -o OUTPUT=<location> -o NETBIOS=True
-        nxc ldap $DC-IP -u Username -p Password -M dump-computers -o OUTPUT=<location> -o FQDN=True
+        netexec ldap $DC-IP -u $username -p $password -M dump-computers -o TYPE=netbios OUTPUT=<location>
+        netexec ldap $DC-IP -u $username -p $password -M dump-computers -o TYPE=fqdn OUTPUT=<location>
         
         """
         self.output_file = None
@@ -39,9 +39,9 @@ class NXCModule:
         
         if "OUTPUT" in module_options:
             self.output_file = module_options["OUTPUT"]
-        if "NETBIOS" in module_options and module_options["NETBIOS"].lower() == "true":
+        if "TYPE" in module_options and module_options["TYPE"].lower() == "netbios":
             self.netbios_only = True
-        if "FQDN" in module_options and module_options["FQDN"].lower() == "true":
+        if "TYPE" in module_options and module_options["TYPE"].lower() == "fqdn":
             self.fqdn_only = True
 
     def on_login(self, context, connection):
