@@ -645,7 +645,7 @@ class ldap(connection):
             search_filter = f"(|{''.join(f'(sAMAccountName={user})' for user in self.args.users)})"
         else:
             self.logger.debug("Trying to dump all users")
-            search_filter = "(sAMAccountType=805306368)" 
+            search_filter = "(sAMAccountType=805306368)"
 
         # Default to these attributes to mirror the SMB --users functionality
         request_attributes = ["sAMAccountName", "description", "badPwdCount", "pwdLastSet"]
@@ -653,7 +653,7 @@ class ldap(connection):
 
         if resp:
             resp_parse = parse_result_attributes(resp)
-              
+
             # We print the total records after we parse the results since often SearchResultReferences are returned
             self.logger.display(f"Enumerated {len(resp_parse):d} domain users: {self.domain}")
             self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<9}{'-Description-':<60}")
@@ -711,7 +711,7 @@ class ldap(connection):
                     for record_type in ["A", "AAAA", "CNAME", "PTR", "NS"]:
                         if found_record:
                             break  # If a record has been found, stop checking further
-                        
+
                         try:
                             answers = resolv.resolve(name, record_type, tcp=self.args.dns_tcp)
                             for rdata in answers:
