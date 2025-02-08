@@ -772,7 +772,7 @@ class ldap(connection):
                 pwd_last_set = user.get("pwdLastSet", "")
                 if pwd_last_set:
                     pwd_last_set = "<never>" if pwd_last_set == "0" else datetime.fromtimestamp(self.getUnixTime(int(pwd_last_set))).strftime("%Y-%m-%d %H:%M:%S")
-                self.logger.highlight(f"{user.get("sAMAccountName", ''):<30}{pwd_last_set:<20}{user.get("badPwdCount", ''):<9}{user.get("description", '')}")
+                self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{pwd_last_set:<20}{user.get('badPwdCount', ''):<9}{user.get('description', '')}")
 
     def asreproast(self):
         if self.password == "" and self.nthash == "" and self.kerberos is False:
