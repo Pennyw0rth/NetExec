@@ -743,23 +743,11 @@ class ldap(connection):
                 self.logger.fail("General Error:", exc_info=True)
                 self.logger.fail(f"Skipping item(dNSHostName) {name}, error: {e}")
 
-    def active_users(self):               
-        """Helper function to format userAccountControl"""
-        def check_user_account_control(user_account_control):
-            if user_account_control is not None:  # Check if user_account_control is not None
-                account_control = "".join(user_account_control) if isinstance(user_account_control, list) else user_account_control  # If it's already a list
-                account_disabled = int(account_control) & 2
-                if not account_disabled:
-                    self.count += 1
-                    activeusers.append(user.get("sAMAccountName").lower())
-                return activeusers
-
+    def active_users(self):
         if len(self.args.active_users) > 0:
-            arg = True
             self.logger.debug(f"Dumping users: {', '.join(self.args.active_users)}")
             search_filter = f"(|{''.join(f'(sAMAccountName={user})' for user in self.args.active_users)})"
         else:
-            arg = False
             self.logger.debug("Trying to dump all users")
             search_filter = "(sAMAccountType=805306368)"
 
@@ -768,21 +756,14 @@ class ldap(connection):
         resp = self.search(search_filter, request_attributes, sizeLimit=0)
 
         if resp:
-            allusers = parse_result_attributes(resp)
-            activeusers = []
-            self.count = 0
+            all_users = parse_result_attributes(resp)
+            # Filter disabled users (ignore accounts without userAccountControl value)
+            active_users = [user for user in all_users if not (int(user.get("userAccountControl", 2)) & 2)]
 
-            for user in allusers:
-                user_account_control = user.get("userAccountControl")
-                if user_account_control:
-                    # Only shows users with userAccountControl value! If a enable user has not userAccountControl value, it wont be listing.
-                    activeusers = check_user_account_control(user_account_control)  
-                self.logger.debug(f"userAccountControl for user {user.get('sAMAccountName')} is None")
-
-            self.logger.display(f"Total records returned: {self.count}, total {len(allusers) - self.count:d} user(s) disabled") if not arg else self.logger.display(f"Total records returned: {len(allusers)}")
+            self.logger.display(f"Total records returned: {len(all_users)}, total {len(all_users) - len(active_users):d} user(s) disabled")
             self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<9}{'-Description-':<60}")
 
-            for user in allusers:
+            for user in active_users:
                 pwd_last_set = user.get("pwdLastSet", "") if user.get("pwdLastSet") in ["", None] else ("<never>" if str(user.get("pwdLastSet")) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(user.get("pwdLastSet")))).strftime("%Y-%m-%d %H:%M:%S")))
                 self.logger.highlight(f"{user.get("sAMAccountName", ''):<30}{pwd_last_set:<20}{user.get("badPwdCount", ''):<9}{user.get("description", '')}")
 
