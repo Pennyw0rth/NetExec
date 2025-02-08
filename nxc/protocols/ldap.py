@@ -205,6 +205,9 @@ class ldap(connection):
                 except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.info(f"Skipping item, cannot process due to error {e}")
+        except ConnectionRefusedError as e:
+            self.logger.debug(f"{e} on host {self.host}")
+            return False
         except OSError as e:
             self.logger.error(f"Error getting ldap info {e}")
 
@@ -587,6 +590,9 @@ class ldap(connection):
                 for attribute in item["attributes"]:
                     if str(attribute["type"]) == "distinguishedName":
                         answers.append(str("(memberOf:1.2.840.113556.1.4.1941:=" + attribute["vals"][0] + ")"))
+            if len(answers) == 0:
+                self.logger.debug("No groups with default privileged RID were found. Assuming user is not a Domain Administrator.")
+                return
 
             # 3. get member of these groups
             search_filter = "(&(objectCategory=user)(sAMAccountName=" + self.username + ")(|" + "".join(answers) + "))"
@@ -1057,7 +1063,7 @@ class ldap(connection):
                             rbcdRights.append(str(rbcd.get("sAMAccountName")))
                             rbcdObjType.append(str(rbcd.get("objectCategory")))
 
-                        for rights, objType in zip(rbcdRights, rbcdObjType):
+                        for rights, objType in zip(rbcdRights, rbcdObjType, strict=True):
                             answers.append([rights, objType, "Resource-Based Constrained", sAMAccountName])
 
                 if delegation in ["Unconstrained", "Constrained", "Constrained w/ Protocol Transition"]:

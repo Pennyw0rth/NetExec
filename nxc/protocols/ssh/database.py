@@ -256,7 +256,7 @@ class database(BaseDB):
         hosts = self.get_hosts(host_id)
 
         if creds and hosts:
-            for cred, host in zip(creds, hosts):
+            for cred, host in zip(creds, hosts, strict=True):
                 cred_id = cred[0]
                 host_id = host[0]
                 link = {"credid": cred_id, "hostid": host_id}

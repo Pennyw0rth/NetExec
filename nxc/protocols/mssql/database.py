@@ -189,7 +189,7 @@ class database(BaseDB):
         nxc_logger.debug(f"Hosts: {hosts}")
 
         if users is not None and hosts is not None:
-            for user, host in zip(users, hosts):
+            for user, host in zip(users, hosts, strict=True):
                 user_id = user[0]
                 host_id = host[0]
                 link = {"userid": user_id, "hostid": host_id}
