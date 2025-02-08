@@ -659,7 +659,9 @@ class ldap(connection):
             self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<9}{'-Description-':<60}")
             for user in resp_parse:
                 # TODO: functionize this - we do this calculation in a bunch of places, different, including in the `pso` module
-                pwd_last_set = user.get("pwdLastSet", "") if user.get("pwdLastSet") in ["", None] else ("<never>" if str(user.get("pwdLastSet")) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(user.get("pwdLastSet")))).strftime("%Y-%m-%d %H:%M:%S")))
+                pwd_last_set = user.get("pwdLastSet", "")
+                if pwd_last_set:
+                    pwd_last_set = "<never>" if pwd_last_set == "0" else datetime.fromtimestamp(self.getUnixTime(int(pwd_last_set))).strftime("%Y-%m-%d %H:%M:%S")
 
                 # We default attributes to blank strings if they don't exist in the dict
                 self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{pwd_last_set:<20}{user.get('badPwdCount', ''):<9}{user.get('description', ''):<60}")
