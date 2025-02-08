@@ -757,7 +757,7 @@ class ldap(connection):
         if resp:
             all_users = parse_result_attributes(resp)
             # Filter disabled users (ignore accounts without userAccountControl value)
-            active_users = [user for user in all_users if not (int(user.get("userAccountControl", 2)) & 2)]
+            active_users = [user for user in all_users if not (int(user.get("userAccountControl", UF_ACCOUNTDISABLE)) & UF_ACCOUNTDISABLE)]
 
             self.logger.display(f"Total records returned: {len(all_users)}, total {len(all_users) - len(active_users):d} user(s) disabled")
             self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<9}{'-Description-':<60}")
