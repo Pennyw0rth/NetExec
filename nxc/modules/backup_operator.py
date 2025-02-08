@@ -1,12 +1,11 @@
 import time
 import os
 import datetime
-import sys
 
 from impacket.examples.secretsdump import SAMHashes, LSASecrets, LocalOperations
 from impacket.smbconnection import SessionError
 from impacket.dcerpc.v5 import transport, rrp
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket import nt_errors
 
 from nxc.paths import NXC_PATH
@@ -53,7 +52,7 @@ class NXCModule:
                     context.log.highlight(f"Saved {hive} to {outputFileName}")
                 except Exception as e:
                     context.log.fail(f"Couldn't save {hive}: {e} on path {outputFileName}")
-                    sys.exit()
+                    return
         except (Exception, KeyboardInterrupt) as e:
             context.log.fail(str(e))
         finally:
@@ -105,7 +104,7 @@ class NXCModule:
                         if e.getErrorCode() != nt_errors.STATUS_OBJECT_PATH_NOT_FOUND:
                             context.log.fail(f"Fail to remove the file { hive }...")
                             self.suppress_error(context)
-                            sys.exit()
+                            return
                 context.log.display("Successfully deleted dump files !")
             else:
                 self.suppress_error(context)
