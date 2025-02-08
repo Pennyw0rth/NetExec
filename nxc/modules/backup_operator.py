@@ -6,7 +6,6 @@ from impacket.examples.secretsdump import SAMHashes, LSASecrets, LocalOperations
 from impacket.smbconnection import SessionError
 from impacket.dcerpc.v5 import transport, rrp
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
-from impacket import nt_errors
 
 from nxc.paths import NXC_PATH
 
@@ -22,6 +21,7 @@ class NXCModule:
         self.module_options = module_options
         self.domain_admin = None
         self.domain_admin_hash = None
+        self.deleted_files = True  # flag to check if SAM/SYSTEM/SECURITY files were deleted
 
     def options(self, context, module_options):
         """NO OPTIONS"""
@@ -99,21 +99,22 @@ class NXCModule:
                 connection.execute("del C:\\Windows\\sysvol\\sysvol\\SECURITY && del C:\\Windows\\sysvol\\sysvol\\SAM && del C:\\Windows\\sysvol\\sysvol\\SYSTEM")
                 for hive in ["SAM", "SECURITY", "SYSTEM"]:
                     try:
-                        connection.conn.listPath("SYSVOL", log_path + hive)
+                        out = connection.conn.listPath("SYSVOL", hive)
+                        if out:
+                            self.deleted_files = False
+                            context.log.fail(f"Fail to remove the file {hive}, path: C:\\Windows\\sysvol\\sysvol\\{hive}")
                     except SessionError as e:
-                        if e.getErrorCode() != nt_errors.STATUS_OBJECT_PATH_NOT_FOUND:
-                            context.log.fail(f"Fail to remove the file { hive }...")
-                            self.suppress_error(context)
-                            return
-                context.log.display("Successfully deleted dump files !")
+                        context.log.debug(f"File {hive} successfully removed: {e}")
             else:
-                self.suppress_error(context)
+                self.deleted_files = False
         else:
-            self.suppress_error(context)
+            self.deleted_files = False
 
-    def suppress_error(self, context):
-        context.log.display("Use the domain admin account to clean the file on the remote host")
-        context.log.display("netexec smb dc_ip -u user -p pass -x 'del C:\\Windows\\sysvol\\sysvol\\SECURITY && del C:\\Windows\\sysvol\\sysvol\\SAM && del C:\\Windows\\sysvol\\sysvol\\SYSTEM'")
+        if not self.deleted_files:
+            context.log.display("Use the domain admin account to clean the file on the remote host")
+            context.log.display("netexec smb dc_ip -u user -p pass -x \"del C:\\Windows\\sysvol\\sysvol\\SECURITY && del C:\\Windows\\sysvol\\sysvol\\SAM && del C:\\Windows\\sysvol\\sysvol\\SYSTEM\"")  # noqa: Q003
+        else:
+            context.log.display("Successfully deleted dump files !")
 
     def trigger_winreg(self, connection, context):
         # Original idea from https://twitter.com/splinter_code/status/1715876413474025704
