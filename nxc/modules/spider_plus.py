@@ -3,10 +3,11 @@ import errno
 from os.path import abspath, join, split, exists, splitext, getsize, sep
 from os import makedirs, remove, stat
 import time
-from nxc.paths import TMP_PATH
+from nxc.paths import NXC_PATH
 from nxc.protocols.smb.remotefile import RemoteFile
 from impacket.smb3structs import FILE_READ_DATA
 from impacket.smbconnection import SessionError
+from impacket.nmb import NetBIOSTimeout
 
 
 CHUNK_SIZE = 4096
@@ -213,9 +214,9 @@ class SMBSpiderPlus:
                     # Start the spider at the root of the share folder
                     self.results[share_name] = {}
                     self.spider_folder(share_name, "")
-                except SessionError as e:
+                except (SessionError, NetBIOSTimeout) as e:
                     self.logger.exception(e)
-                    self.logger.fail("Got a session error while spidering.")
+                    self.logger.fail(f"Got a session or NetBIOSTimeout error while spidering share: {share_name}")
                     self.reconnect()
 
         except Exception as e:
@@ -238,7 +239,11 @@ class SMBSpiderPlus:
         """
         self.logger.info(f'Spider share "{share_name}" in folder "{folder}".')
 
-        filelist = self.list_path(share_name, folder + "*")
+        try:
+            filelist = self.list_path(share_name, folder + "*")
+        except Exception:
+            self.logger.fail(f"Error listing path: {share_name}:/{folder}. Skipping...")
+            return
 
         # For each entry:
         # - It's a folder then we spider it (skipping `.` and `..`)
