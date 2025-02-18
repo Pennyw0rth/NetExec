@@ -117,8 +117,7 @@ class SMBSpiderPlus:
             filelist = self.smb.conn.listPath(share, subfolder + "*")
 
         except SessionError as e:
-            self.logger.debug(f'Failed listing files on share "{share}" in folder "{subfolder}".')
-            self.logger.debug(str(e))
+            self.logger.debug(f'Failed listing files on share "{share}" in folder "{subfolder}": {e!s}')
 
             if "STATUS_ACCESS_DENIED" in str(e):
                 self.logger.debug(f'Cannot list files in folder "{subfolder}".')
@@ -126,6 +125,8 @@ class SMBSpiderPlus:
                 self.logger.debug(f"The folder {subfolder} does not exist.")
             elif self.reconnect():
                 filelist = self.list_path(share, subfolder)
+        except NetBIOSTimeout as e:
+            self.logger.debug(f'Failed listing files on share "{share}" in folder "{subfolder}": {e!s}')
         return filelist
 
     def get_remote_file(self, share, path):
@@ -164,7 +165,7 @@ class SMBSpiderPlus:
 
     def get_file_save_path(self, remote_file):
         r"""Processes the remote file path to extract the filename and the folder path where the file should be saved locally.
-        
+
         It converts forward slashes (/) and backslashes (\) in the remote file path to the appropriate path separator for the local file system.
         The folder path and filename are then obtained separately.
         """
@@ -236,11 +237,7 @@ class SMBSpiderPlus:
         """
         self.logger.info(f'Spider share "{share_name}" in folder "{folder}".')
 
-        try:
-            filelist = self.list_path(share_name, folder + "*")
-        except Exception:
-            self.logger.fail(f"Error listing path: {share_name}:/{folder}. Skipping...")
-            return
+        filelist = self.list_path(share_name, folder + "*")
 
         # For each entry:
         # - It's a folder then we spider it (skipping `.` and `..`)
@@ -376,7 +373,7 @@ class SMBSpiderPlus:
 
     def dump_folder_metadata(self, results):
         """Takes the metadata results as input and writes them to a JSON file in the `self.output_folder`.
-        
+
         The results are formatted with indentation and sorted keys before being written to the file.
         """
         metadata_path = join(self.output_folder, f"{self.host}.json")
