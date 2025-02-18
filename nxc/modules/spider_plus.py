@@ -122,13 +122,10 @@ class SMBSpiderPlus:
 
             if "STATUS_ACCESS_DENIED" in str(e):
                 self.logger.debug(f'Cannot list files in folder "{subfolder}".')
-
             elif "STATUS_OBJECT_PATH_NOT_FOUND" in str(e):
                 self.logger.debug(f"The folder {subfolder} does not exist.")
-
             elif self.reconnect():
                 filelist = self.list_path(share, subfolder)
-
         return filelist
 
     def get_remote_file(self, share, path):
