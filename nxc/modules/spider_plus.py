@@ -491,7 +491,7 @@ class NXCModule:
         EXCLUDE_EXTS      Case-insensitive extension filter to exclude (Default: ico,lnk)
         EXCLUDE_FILTER    Case-insensitive filter to exclude folders/files (Default: print$,ipc$)
         MAX_FILE_SIZE     Max file size to download (Default: 51200)
-        OUTPUT_FOLDER     Path of the local folder to save files (Default: /tmp/nxc_spider_plus)
+        OUTPUT_FOLDER     Path of the local folder to save files (Default: ~/.nxc/nxc_spider_plus)
         """
         self.download_flag = False
         if any("DOWNLOAD" in key for key in module_options):
@@ -504,7 +504,7 @@ class NXCModule:
         self.exclude_filter = get_list_from_option(module_options.get("EXCLUDE_FILTER", "print$,ipc$"))
         self.exclude_filter = [d.lower() for d in self.exclude_filter]  # force case-insensitive
         self.max_file_size = int(module_options.get("MAX_FILE_SIZE", 50 * 1024))
-        self.output_folder = module_options.get("OUTPUT_FOLDER", abspath(join(TMP_PATH, "nxc_spider_plus")))
+        self.output_folder = module_options.get("OUTPUT_FOLDER", abspath(join(NXC_PATH, "modules/nxc_spider_plus")))
 
     def on_login(self, context, connection):
         context.log.display("Started module spidering_plus with the following options:")
