@@ -167,8 +167,8 @@ class NXCModule:
         # When powershell returns something else than the usernames and passwords account.split() will throw a ValueError.
         # This is likely an error thrown by powershell, so we print the error and the output for debugging purposes.
         try:
-            context.log.highlight(f"{'Username':<30} {'Password':<30} {'Description'}")
-            context.log.highlight(f"{'--------':<30} {'--------':<30} {'-----------'}")
+            context.log.highlight(f"{'Username':<40} {'Password':<40} {'Description'}")
+            context.log.highlight(f"{'--------':<40} {'--------':<40} {'-----------'}")
             for account in output_stripped:
                 # Remove multiple whitespaces
                 account = " ".join(account.split())
@@ -176,10 +176,11 @@ class NXCModule:
                     user, password, description = account.split(" ", 2)
                 except ValueError:
                     user, password = account.split(" ", 1)
+                    description = ""
                 user = user.strip().replace("WHITESPACE_ERROR", " ").strip()
                 password = password.strip().replace("WHITESPACE_ERROR", " ").strip()
                 description = description.strip().replace("WHITESPACE_ERROR", " ").strip()
-                context.log.highlight(f"{user:<30} {password:<30} {description}")
+                context.log.highlight(f"{user:<40} {password:<40} {description}")
         except ValueError:
             context.log.fail(f"Powershell returned unexpected output: {output_stripped}")
             context.log.fail("Please report this issue on GitHub!")

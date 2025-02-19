@@ -4,7 +4,7 @@ $SqlInstanceName = "REPLACE_ME_SqlInstance"
 $b64Salt = "REPLACE_ME_b64Salt"
 
 #Forming the connection string
-$SQL = "SELECT [user_name] AS 'User',[password] AS 'Password' FROM [$SqlDatabaseName].[dbo].[Credentials] WHERE password <> ''" #Filter empty passwords
+$SQL = "SELECT [user_name] AS 'User', [password] AS 'Password', [description] AS 'Description' FROM [$SqlDatabaseName].[dbo].[Credentials] WHERE password <> ''" #Filter empty passwords
 $auth = "Integrated Security=SSPI;" #Local user
 $connectionString = "Provider=sqloledb; Data Source=$SqlServerName\$SqlInstanceName; Initial Catalog=$SqlDatabaseName; $auth;"
 $connection = New-Object System.Data.OleDb.OleDbConnection $connectionString
@@ -23,15 +23,15 @@ catch {
 	exit -1
 }
 
-$rows=($dataset.Tables | Select-Object -Expand Rows)
-if ($rows.count -eq 0) {
+$output=($dataset.Tables | Select-Object -Expand Rows)
+if ($output.count -eq 0) {
 	Write-Host "No passwords found!"
 	exit
 }
 
 Add-Type -assembly System.Security
 # Decrypting passwords using DPAPI
-$rows | ForEach-Object -Process {
+$output | ForEach-Object -Process {
 	$EncryptedPWD = [Convert]::FromBase64String($_.password)
 	$enc = [system.text.encoding]::Default
 
