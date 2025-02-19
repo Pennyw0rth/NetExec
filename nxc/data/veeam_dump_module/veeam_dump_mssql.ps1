@@ -32,29 +32,29 @@ if ($rows.count -eq 0) {
 Add-Type -assembly System.Security
 # Decrypting passwords using DPAPI
 $rows | ForEach-Object -Process {
-	$EnryptedPWD = [Convert]::FromBase64String($_.password)
+	$EncryptedPWD = [Convert]::FromBase64String($_.password)
 	$enc = [system.text.encoding]::Default
 
 	try {
 		# Decrypt password with DPAPI (old Veeam versions)
-		$raw = [System.Security.Cryptography.ProtectedData]::Unprotect( $EnryptedPWD, $null, [System.Security.Cryptography.DataProtectionScope]::LocalMachine )
+		$raw = [System.Security.Cryptography.ProtectedData]::Unprotect( $EncryptedPWD, $null, [System.Security.Cryptography.DataProtectionScope]::LocalMachine )
 		$pw_string = $enc.GetString($raw) -replace '\s', 'WHITESPACE_ERROR'
 	} catch {
 		try{
 			# Decrypt password with salted DPAPI (new Veeam versions)
 			$salt = [System.Convert]::FromBase64String($b64Salt)
-			$hex = New-Object -TypeName System.Text.StringBuilder -ArgumentList ($EnryptedPWD.Length * 2)
-			foreach ($byte in $EnryptedPWD)
+			$hex = New-Object -TypeName System.Text.StringBuilder -ArgumentList ($EncryptedPWD.Length * 2)
+			foreach ($byte in $EncryptedPWD)
 			{
 				$hex.AppendFormat("{0:x2}", $byte) > $null
 			}
 			$hex = $hex.ToString().Substring(74,$hex.Length-74)
-			$EnryptedPWD = New-Object -TypeName byte[] -ArgumentList ($hex.Length / 2)
+			$EncryptedPWD = New-Object -TypeName byte[] -ArgumentList ($hex.Length / 2)
 			for ($i = 0; $i -lt $hex.Length; $i += 2)
 			{
-				$EnryptedPWD[$i / 2] = [System.Convert]::ToByte($hex.Substring($i, 2), 16)
+				$EncryptedPWD[$i / 2] = [System.Convert]::ToByte($hex.Substring($i, 2), 16)
 			}
-			$raw = [System.Security.Cryptography.ProtectedData]::Unprotect($EnryptedPWD, $salt, [System.Security.Cryptography.DataProtectionScope]::LocalMachine)
+			$raw = [System.Security.Cryptography.ProtectedData]::Unprotect($EncryptedPWD, $salt, [System.Security.Cryptography.DataProtectionScope]::LocalMachine)
 			$pw_string = $enc.GetString($raw) -replace '\s', 'WHITESPACE_ERROR'
 		}catch {
 			$pw_string = "COULD_NOT_DECRYPT"
