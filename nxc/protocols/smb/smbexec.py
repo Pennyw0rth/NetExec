@@ -172,9 +172,11 @@ class SMBEXEC:
                 else:
                     self.logger.debug(str(e))
 
-        if self.__outputBuffer:
+        try:
             self.logger.debug(f"Deleting file {self.__share}\\{self.__output}")
             self.__smbconnection.deleteFile(self.__share, self.__output)
+        except Exception:
+            pass
 
     def execute_fileless(self, data):
         self.__output = gen_random_string(6)
