@@ -60,7 +60,9 @@ $rows | ForEach-Object -Process {
 			$pw_string = "COULD_NOT_DECRYPT"
 		}
 	}
+	$_.user = $_.user -replace '\s', 'WHITESPACE_ERROR'
 	$_.password = $pw_string
+	$_.description = $_.description -replace '\s', 'WHITESPACE_ERROR'
 }
 
-Write-Output $rows | Format-Table -HideTableHeaders | Out-String
+Write-Output $output | Format-Table -HideTableHeaders | Out-String -Width 10000
