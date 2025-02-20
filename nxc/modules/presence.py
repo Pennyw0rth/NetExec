@@ -75,31 +75,34 @@ class NXCModule:
         return users
     
     def check_users_directory(self, context, connection, admin_users):
-        """Checks if identified admin users have directories in C:\\Users\\, ensuring only dotted Administrator formats."""
+        """Checks if identified admin users have directories in C:\\Users\\"""
         command = 'dir C:\\Users'
         output = connection.execute(command, True, methods=["smbexec"])
         context.log.debug(f"Raw output for user directories:\n{output}")
 
         matched_dirs = []
+        admin_users_lower = {user.lower() for user in admin_users}  # Normalize admin user names
 
         for line in output.splitlines():
-            parts = line.split()  # Split line by spaces
-            if len(parts) > 3:
-                folder_name = parts[-1]
+                parts = line.split()
+                if len(parts) > 3:
+                        folder_name = parts[-1]
+                        folder_name_lower = folder_name.lower()  # Case-insensitive comparison
 
-                # Ensure Administrator is only included if it has a dotted prefix
-                if folder_name.endswith(".Administrator") and folder_name != "Administrator":
-                    matched_dirs.append(folder_name)
-                
-                # Check for exact match or dotted variations for other admin users
-                for user in admin_users:
-                    if user != "Administrator" and (folder_name == user or folder_name.endswith(f".{user}")):
-                        matched_dirs.append(folder_name)
+                        # Match Administrator only if it's in "Administrator.domain" format
+                        if folder_name_lower.startswith("administrator.") and folder_name_lower != "administrator":
+                                matched_dirs.append(folder_name)
+
+                        # Match other users exactly or in "user.domain" format
+                        for user in admin_users_lower:
+                                if user != "administrator":  
+                                        if folder_name_lower == user or folder_name_lower.startswith(user + "."):
+                                                matched_dirs.append(folder_name)
 
         if matched_dirs:
-            context.log.success(f"Found user directories: {', '.join(matched_dirs)}")
+                context.log.success(f"Found users in directories: {', '.join(matched_dirs)}")
         else:
-            context.log.info("No matching directories found in C:\\Users\\")
+                context.log.info("No matching directories found in C:\\Users\\")
 
         return matched_dirs
 
