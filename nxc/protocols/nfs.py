@@ -413,7 +413,7 @@ class nfs(connection):
         Usually:
         - 1 byte: 0x01 fb_version
         - 1 byte: 0x00 fb_auth_type, can be 0x00 (no auth) and 0x01 (some md5 auth)
-        - 1 byte: 0xXX fb_fsid_type -> determines the legth of the fsid
+        - 1 byte: 0xXX fb_fsid_type -> determines the length of the fsid
         - 1 byte: 0xXX fb_fileid_type
         """
         fh = bytearray(file_handle)
