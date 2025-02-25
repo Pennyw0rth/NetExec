@@ -4,7 +4,7 @@ version = "1.3.0"
 description = "The Network Execution tool"
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
-license = { name = "BSD-2-Clause" }
+license = { text = "BSD-2-Clause" }
 authors = [
     { name = "Marshall Hallenbeck", email = "marshall.hallenbeck@gmail.com" },
     { name = "Alexander Neff", email = "alex99.neff@gmx.de" },
