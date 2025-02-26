@@ -837,7 +837,7 @@ class smb(connection):
         return response
 
     def get_session_list(self):
-        with TSTS.TermSrvEnumeration(self.conn, self.host) as lsm:
+        with TSTS.TermSrvEnumeration(self.conn, self.host, self.kerberos) as lsm:
             handle = lsm.hRpcOpenEnum()
             rsessions = lsm.hRpcGetEnumResult(handle, Level=1)["ppSessionEnumResult"]
             lsm.hRpcCloseEnum(handle)
@@ -858,7 +858,7 @@ class smb(connection):
 
     def enumerate_sessions_info(self):
         if len(self.sessions):
-            with TSTS.TermSrvSession(self.conn, self.host) as TermSrvSession:
+            with TSTS.TermSrvSession(self.conn, self.host, self.kerberos) as TermSrvSession:
                 for SessionId in self.sessions:
                     sessdata = TermSrvSession.hRpcGetSessionInformationEx(SessionId)
                     sessflags = TSTS.enum2value(TSTS.SESSIONFLAGS, sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["SessionFlags"])
@@ -957,7 +957,7 @@ class smb(connection):
 
     @requires_admin
     def tasklist(self):
-        with TSTS.LegacyAPI(self.conn, self.host) as legacy:
+        with TSTS.LegacyAPI(self.conn, self.host, self.kerberos) as legacy:
             try:
                 handle = legacy.hRpcWinStationOpenServer()
                 r = legacy.hRpcWinStationGetAllProcesses(handle)
