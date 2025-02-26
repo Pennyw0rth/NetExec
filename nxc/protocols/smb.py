@@ -1083,7 +1083,7 @@ class smb(connection):
             dc_ips.append(self.host)
         return dc_ips
 
-    def sessions(self):
+    def smb_sessions(self):
         try:
             sessions = get_netsession(
                 self.host,
@@ -1098,8 +1098,8 @@ class smb(connection):
                 if session.sesi10_cname.find(self.local_ip) == -1:
                     self.logger.highlight(f"{session.sesi10_cname:<25} User:{session.sesi10_username}")
             return sessions
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.debug(e)
 
     def disks(self):
         disks = []
