@@ -874,6 +874,15 @@ class smb(connection):
                     sessions[SessionId]["DisconnectTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["DisconnectTime"]
                     sessions[SessionId]["LogonTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["LogonTime"]
                     sessions[SessionId]["LastInputTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["LastInputTime"]
+            with TSTS.RCMPublic(self.conn, self.host, self.kerberos) as rcm:
+                for SessionId in sessions:
+                    try:
+                        client = rcm.hRpcGetRemoteAddress(SessionId)
+                        if not client:
+                            continue
+                        sessions[SessionId]["RemoteIp"] = client["pRemoteAddress"]["ipv4"]["in_addr"]
+                    except Exception as e:
+                        self.logger.debug(f"Error getting client address for session {SessionId}: {e}")
 
     @requires_admin
     def qwinsta(self):
@@ -902,6 +911,7 @@ class smb(connection):
         template = ("{SESSIONNAME: <%d} "
                     "{USERNAME: <%d} "
                     "{ID: <%d} "
+                    "{IPv4: <16} "
                     "{STATE: <%d} "
                     "{DSTATE: <9} "
                     "{CONNTIME: <20} "
@@ -912,6 +922,7 @@ class smb(connection):
             SESSIONNAME="SESSIONNAME",
             USERNAME="USERNAME",
             ID="ID",
+            IPv4="RemoteAddress",
             STATE="STATE",
             DSTATE="Desktop",
             CONNTIME="ConnectTime",
@@ -922,15 +933,13 @@ class smb(connection):
             SESSIONNAME="",
             USERNAME="",
             ID="",
+            IPv4="",
             STATE="",
             DSTATE="",
             CONNTIME="",
             DISCTIME="",
         )
-
-        header_verbose = ""
-        header2_verbose = ""
-        result.extend((header + header_verbose, header2 + header2_verbose + "\n"))
+        result.extend((header, header2))
 
         for i in sessions:
             connectTime = sessions[i]["ConnectTime"]
@@ -940,17 +949,16 @@ class smb(connection):
             disconnectTime = disconnectTime.strftime(r"%Y/%m/%d %H:%M:%S") if disconnectTime.year > 1601 else "None"
             userName = sessions[i]["Domain"] + "\\" + sessions[i]["Username"] if len(sessions[i]["Username"]) else ""
 
-            row = template.format(
+            result.append(template.format(
                 SESSIONNAME=sessions[i]["SessionName"],
                 USERNAME=userName,
                 ID=i,
+                IPv4=sessions[i]["RemoteIp"],
                 STATE=sessions[i]["state"],
                 DSTATE=desktop_states[sessions[i]["flags"]],
                 CONNTIME=connectTime,
                 DISCTIME=disconnectTime,
-            )
-            row_verbose = ""
-            result.append(row+row_verbose)
+            ))
 
         self.logger.success("Enumerated qwinsta sessions")
         for row in result:
