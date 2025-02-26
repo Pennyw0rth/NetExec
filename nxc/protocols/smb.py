@@ -1082,20 +1082,8 @@ class smb(connection):
         return dc_ips
 
     def smb_sessions(self):
-        try:
-            rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(),
-                                                filename=r'\srvsvc', smb_connection=self.conn)
-            dce = rpctransport.get_dce_rpc()
-            dce.connect()
-            dce.bind(srvs.MSRPC_UUID_SRVS)
-
-            response = srvs.hNetrSessionEnum(dce, '\x00', NULL, 10)
-            self.logger.display("Enumerated sessions")
-            for session in response['InfoStruct']['SessionInfo']['Level10']['Buffer']:
-                if session['sesi10_cname'][:-1][2:] != self.local_ip:
-                    self.logger.highlight(f"{session['sesi10_cname'][:-1][2:]:<25} User:{session['sesi10_username'][:-1]}")
-        except Exception as e:
-            self.logger.fail(f"Failed to enumerate sessions: {e}")
+        self.logger.display("Use option qwinsta or loggedon-users")
+        return
 
     def disks(self):
         disks = []
