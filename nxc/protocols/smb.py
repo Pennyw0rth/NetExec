@@ -922,7 +922,7 @@ class smb(connection):
             SESSIONNAME="SESSIONNAME",
             USERNAME="USERNAME",
             ID="ID",
-            IPv4="RemoteAddress",
+            IPv4="IPv4 Address",
             STATE="STATE",
             DSTATE="Desktop",
             CONNTIME="ConnectTime",
