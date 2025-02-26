@@ -37,9 +37,7 @@ class NXCModule:
                             connection.conn.getFile("C$", file_path, buf.write)
                             buf.seek(0)
                             file_content = buf.read().decode("utf-8", errors="ignore")
-                            # Use temporary lowercase version for searching
-                            file_content_lower = file_content.lower()
-                            keywords = [keyword.upper() for keyword in self.sensitive_keywords if keyword.lower() in file_content_lower]
+                            keywords = [keyword.upper() for keyword in self.sensitive_keywords if keyword.lower() in file_content.lower()]
                             if len(keywords):
                                 context.log.highlight(f"C:\\{file_path} [ {' '.join(keywords)} ]")
                             else:
