@@ -14,7 +14,7 @@ from impacket.examples.secretsdump import (
     NTDSHashes,
 )
 from impacket.nmb import NetBIOSError, NetBIOSTimeout
-from impacket.dcerpc.v5 import transport, lsat, lsad, scmr, rrp
+from impacket.dcerpc.v5 import transport, lsat, lsad, scmr, rrp, srvs, samr, wkst
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5.transport import DCERPCTransportFactory, SMBTransport
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
@@ -55,8 +55,6 @@ from dploot.triage.browser import BrowserTriage, LoginData, GoogleRefreshToken, 
 from dploot.triage.credentials import CredentialsTriage
 from dploot.lib.target import Target
 from dploot.triage.sccm import SCCMTriage, SCCMCred, SCCMSecret, SCCMCollection
-
-from pywerview.cli.helpers import get_localdisks, get_netsession, get_netgroupmember, get_netgroup, get_netcomputer, get_netloggedon, get_netlocalgroup
 
 from time import time, ctime
 from datetime import datetime
@@ -1085,112 +1083,53 @@ class smb(connection):
 
     def smb_sessions(self):
         try:
-            sessions = get_netsession(
-                self.host,
-                self.domain,
-                self.username,
-                self.password,
-                self.lmhash,
-                self.nthash,
-            )
+            rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(),
+                                                filename=r'\srvsvc', smb_connection=self.conn)
+            dce = rpctransport.get_dce_rpc()
+            dce.connect()
+            dce.bind(srvs.MSRPC_UUID_SRVS)
+
+            response = srvs.hNetrSessionEnum(dce, '\x00', NULL, 10)
             self.logger.display("Enumerated sessions")
-            for session in sessions:
-                if session.sesi10_cname.find(self.local_ip) == -1:
-                    self.logger.highlight(f"{session.sesi10_cname:<25} User:{session.sesi10_username}")
-            return sessions
+            for session in response['InfoStruct']['SessionInfo']['Level10']['Buffer']:
+                if session['sesi10_cname'][:-1][2:] != self.local_ip:
+                    self.logger.highlight(f"{session['sesi10_cname'][:-1][2:]:<25} User:{session['sesi10_username'][:-1]}")
         except Exception as e:
-            self.logger.debug(e)
+            self.logger.fail(f"Failed to enumerate sessions: {e}")
 
     def disks(self):
         disks = []
         try:
-            disks = get_localdisks(
-                self.host,
-                self.domain,
-                self.username,
-                self.password,
-                self.lmhash,
-                self.nthash,
-            )
+            rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(),
+                                                filename=r'\srvsvc', smb_connection=self.conn)
+            dce = rpctransport.get_dce_rpc()
+            dce.connect()
+            dce.bind(srvs.MSRPC_UUID_SRVS)
+
+            response = srvs.hNetrServerDiskEnum(dce, 0)
+            # Process the response
             self.logger.display("Enumerated disks")
-            for disk in disks:
-                self.logger.highlight(disk.disk)
+            for disk in response['DiskInfoStruct']['Buffer']:
+                if disk['Disk'] != '\x00':
+                    self.logger.highlight(disk['Disk'])
         except Exception as e:
-            error, desc = e.getErrorString()
-            self.logger.fail(
-                f"Error enumerating disks: {error}",
-                color="magenta" if error in smb_error_status else "red",
-            )
+            self.logger.fail(f"Failed to enumerate disks: {e}")
 
         return disks
 
     def local_groups(self):
-        groups = []
-        # To enumerate local groups the DC IP is optional
-        # if specified it will resolve the SIDs and names of any domain accounts in the local group
-        for dc_ip in self.get_dc_ips():
-            try:
-                groups = get_netlocalgroup(
-                    self.host,
-                    dc_ip,
-                    "",
-                    self.username,
-                    self.password,
-                    self.lmhash,
-                    self.nthash,
-                    queried_groupname=self.args.local_groups,
-                    list_groups=bool(not self.args.local_groups),
-                    recurse=False,
-                )
+        
+        self.logger.display("Trying with SAMRPC protocol")
+        groups = SamrFunc(self).get_local_groups()
+        if groups:
+            self.logger.success("Enumerated local groups")
+            self.logger.debug(f"Local groups: {groups}")
 
-                if self.args.local_groups:
-                    self.logger.success("Enumerated members of local group")
-                else:
-                    self.logger.success("Enumerated local groups")
+        for group_name, group_rid in groups.items():
+            self.logger.highlight(f"{group_rid} - {group_name}")
+            group_id = self.db.add_group(self.hostname, group_name, rid=group_rid)[0]
+            self.logger.debug(f"Added group, returned id: {group_id}")
 
-                for group in groups:
-                    if group.name:
-                        if not self.args.local_groups:
-                            self.logger.highlight(f"{group.name:<40} membercount: {group.membercount}")
-                            group_id = self.db.add_group(
-                                self.hostname,
-                                group.name,
-                                member_count_ad=group.membercount,
-                            )[0]
-                        else:
-                            domain, name = group.name.split("/")
-                            self.logger.highlight(f"domain: {domain}, name: {name}")
-                            self.logger.highlight(f"{domain.upper()}\\{name}")
-                            try:
-                                group_id = self.db.get_groups(
-                                    group_name=self.args.local_groups,
-                                    group_domain=domain,
-                                )[0][0]
-                            except IndexError:
-                                group_id = self.db.add_group(
-                                    domain,
-                                    self.args.local_groups,
-                                    member_count_ad=group.membercount,
-                                )[0]
-
-                            # domain groups can be part of a local group which is also part of another local group
-                            if not group.isgroup:
-                                self.db.add_credential("plaintext", domain, name, "", group_id, "")
-                            elif group.isgroup:
-                                self.db.add_group(domain, name, member_count_ad=group.membercount)
-                break
-            except Exception as e:
-                self.logger.fail(f"Error enumerating local groups of {self.host}: {e}")
-                self.logger.display("Trying with SAMRPC protocol")
-                groups = SamrFunc(self).get_local_groups()
-                if groups:
-                    self.logger.success("Enumerated local groups")
-                    self.logger.debug(f"Local groups: {groups}")
-
-                for group_name, group_rid in groups.items():
-                    self.logger.highlight(f"rid => {group_rid} => {group_name}")
-                    group_id = self.db.add_group(self.hostname, group_name, rid=group_rid)[0]
-                    self.logger.debug(f"Added group, returned id: {group_id}")
         return groups
 
     def domainfromdsn(self, dsn):
@@ -1208,97 +1147,8 @@ class smb(connection):
         return domain, dnsparts[0] + "$"
 
     def groups(self):
-        groups = []
-        for dc_ip in self.get_dc_ips():
-            if self.args.groups:
-                try:
-                    groups = get_netgroupmember(
-                        dc_ip,
-                        self.domain,
-                        self.username,
-                        password=self.password,
-                        lmhash=self.lmhash,
-                        nthash=self.nthash,
-                        queried_groupname=self.args.groups,
-                        queried_sid="",
-                        queried_domain="",
-                        ads_path="",
-                        recurse=False,
-                        use_matching_rule=False,
-                        full_data=False,
-                        custom_filter="",
-                    )
-
-                    self.logger.success("Enumerated members of domain group")
-                    for group in groups:
-                        member_count = len(group.member) if hasattr(group, "member") else 0
-                        self.logger.highlight(f"{group.memberdomain}\\{group.membername}")
-                        try:
-                            group_id = self.db.get_groups(
-                                group_name=self.args.groups,
-                                group_domain=group.groupdomain,
-                            )[0][0]
-                        except IndexError:
-                            group_id = self.db.add_group(
-                                group.groupdomain,
-                                self.args.groups,
-                                member_count_ad=member_count,
-                            )[0]
-                        if not group.isgroup:
-                            self.db.add_credential(
-                                "plaintext",
-                                group.memberdomain,
-                                group.membername,
-                                "",
-                                group_id,
-                                "",
-                            )
-                        elif group.isgroup:
-                            group_id = self.db.add_group(
-                                group.groupdomain,
-                                group.groupname,
-                                member_count_ad=member_count,
-                            )[0]
-                    break
-                except Exception as e:
-                    self.logger.fail(f"Error enumerating domain group members using dc ip {dc_ip}: {e}")
-            else:
-                try:
-                    groups = get_netgroup(
-                        dc_ip,
-                        self.domain,
-                        self.username,
-                        password=self.password,
-                        lmhash=self.lmhash,
-                        nthash=self.nthash,
-                        queried_groupname="",
-                        queried_sid="",
-                        queried_username="",
-                        queried_domain="",
-                        ads_path="",
-                        admin_count=False,
-                        full_data=True,
-                        custom_filter="",
-                    )
-
-                    self.logger.success("Enumerated domain group(s)")
-                    for group in groups:
-                        member_count = len(group.member) if hasattr(group, "member") else 0
-                        self.logger.highlight(f"{group.samaccountname:<40} membercount: {member_count}")
-
-                        if bool(group.isgroup) is True:
-                            # Since there isn't a groupmember attribute on the returned object from get_netgroup
-                            # we grab it from the distinguished name
-                            domain = self.domainfromdsn(group.distinguishedname)
-                            group_id = self.db.add_group(
-                                domain,
-                                group.samaccountname,
-                                member_count_ad=member_count,
-                            )[0]
-                    break
-                except Exception as e:
-                    self.logger.fail(f"Error enumerating domain group using dc ip {dc_ip}: {e}")
-        return groups
+        self.logger.display("Arg moved to the ldap protocol")
+        return
 
     def users(self):
         if len(self.args.users) > 0:
@@ -1306,51 +1156,28 @@ class smb(connection):
         return UserSamrDump(self).dump(self.args.users)
 
     def computers(self):
-        hosts = []
-        for dc_ip in self.get_dc_ips():
-            try:
-                hosts = get_netcomputer(
-                    dc_ip,
-                    self.domain,
-                    self.username,
-                    password=self.password,
-                    lmhash=self.lmhash,
-                    nthash=self.nthash,
-                    queried_domain="",
-                    ads_path="",
-                    custom_filter="",
-                )
-
-                self.logger.success("Enumerated domain computer(s)")
-                for host in hosts:
-                    domain, host_clean = self.domainfromdnshostname(host.dnshostname)
-                    self.logger.highlight(f"{domain}\\{host_clean:<30}")
-                break
-            except Exception as e:
-                self.logger.fail(f"Error enumerating domain computers using dc ip {dc_ip}: {e}")
-                break
-        return hosts
+        self.logger.display("Arg moved to the ldap protocol")
+        return
 
     def loggedon_users(self):
-        logged_on = []
+        logged_on = set()
         try:
-            logged_on = get_netloggedon(
-                self.host,
-                self.domain,
-                self.username,
-                self.password,
-                lmhash=self.lmhash,
-                nthash=self.nthash,
-            )
-            logged_on = {(f"{user.wkui1_logon_domain}\\{user.wkui1_username}", user.wkui1_logon_server) for user in logged_on}
-            self.logger.success("Enumerated logged_on users")
-            if self.args.loggedon_users_filter:
-                for user in logged_on:
-                    if re.match(self.args.loggedon_users_filter, user[0].split("\\")[1]):
-                        self.logger.highlight(f"{user[0]:<25} {f'logon_server: {user[1]}'}")
-            else:
-                for user in logged_on:
-                    self.logger.highlight(f"{user[0]:<25} {f'logon_server: {user[1]}'}")
+            rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(),
+                                                filename=r'\wkssvc', smb_connection=self.conn)
+            dce = rpctransport.get_dce_rpc()
+            dce.connect()
+            dce.bind(wkst.MSRPC_UUID_WKST)
+
+            response = wkst.hNetrWkstaUserEnum(dce, 1)
+            for user in response['UserInfo']['WkstaUserInfo']['Level1']['Buffer']:
+                user_info = (user['wkui1_logon_domain'][:-1], user['wkui1_username'][:-1], user['wkui1_logon_server'][:-1])
+                if user_info not in logged_on:
+                    logged_on.add(user_info)
+                    if self.args.loggedon_users_filter:
+                        if re.match(self.args.loggedon_users_filter, user_info[1]):
+                            self.logger.highlight(f"{user_info[0]}\\{user_info[1]:<25} logon_server: {user_info[2]}")
+                    else:
+                        self.logger.highlight(f"{user_info[0]}\\{user_info[1]:<25} logon_server: {user_info[2]}")
         except Exception as e:
             self.logger.fail(f"Error enumerating logged on users: {e}")
 
