@@ -3,7 +3,7 @@ name = "netexec"
 version = "1.3.0"
 description = "The Network Execution tool"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<4.0"
 license = { text = "BSD-2-Clause" }
 authors = [
     { name = "Marshall Hallenbeck", email = "marshall.hallenbeck@gmail.com" },
