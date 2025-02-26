@@ -14,7 +14,7 @@ from impacket.examples.secretsdump import (
     NTDSHashes,
 )
 from impacket.nmb import NetBIOSError, NetBIOSTimeout
-from impacket.dcerpc.v5 import transport, lsat, lsad, scmr, rrp, srvs, samr, wkst
+from impacket.dcerpc.v5 import transport, lsat, lsad, scmr, rrp, srvs, wkst
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5.transport import DCERPCTransportFactory, SMBTransport
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
@@ -1089,7 +1089,7 @@ class smb(connection):
         disks = []
         try:
             rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(),
-                                                filename=r'\srvsvc', smb_connection=self.conn)
+                                                filename=r"\srvsvc", smb_connection=self.conn)
             dce = rpctransport.get_dce_rpc()
             dce.connect()
             dce.bind(srvs.MSRPC_UUID_SRVS)
@@ -1097,9 +1097,9 @@ class smb(connection):
             response = srvs.hNetrServerDiskEnum(dce, 0)
             # Process the response
             self.logger.display("Enumerated disks")
-            for disk in response['DiskInfoStruct']['Buffer']:
-                if disk['Disk'] != '\x00':
-                    self.logger.highlight(disk['Disk'])
+            for disk in response["DiskInfoStruct"]["Buffer"]:
+                if disk["Disk"] != "\x00":
+                    self.logger.highlight(disk["Disk"])
         except Exception as e:
             self.logger.fail(f"Failed to enumerate disks: {e}")
 
@@ -1151,14 +1151,14 @@ class smb(connection):
         logged_on = set()
         try:
             rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(),
-                                                filename=r'\wkssvc', smb_connection=self.conn)
+                                                filename=r"\wkssvc", smb_connection=self.conn)
             dce = rpctransport.get_dce_rpc()
             dce.connect()
             dce.bind(wkst.MSRPC_UUID_WKST)
 
             response = wkst.hNetrWkstaUserEnum(dce, 1)
-            for user in response['UserInfo']['WkstaUserInfo']['Level1']['Buffer']:
-                user_info = (user['wkui1_logon_domain'][:-1], user['wkui1_username'][:-1], user['wkui1_logon_server'][:-1])
+            for user in response["UserInfo"]["WkstaUserInfo"]["Level1"]["Buffer"]:
+                user_info = (user["wkui1_logon_domain"][:-1], user["wkui1_username"][:-1], user["wkui1_logon_server"][:-1])
                 if user_info not in logged_on:
                     logged_on.add(user_info)
                     if self.args.loggedon_users_filter:
