@@ -845,15 +845,16 @@ class smb(connection):
             for i in rsessions:
                 sess = i["SessionInfo"]["SessionEnum_Level1"]
                 state = TSTS.enum2value(TSTS.WINSTATIONSTATECLASS, sess["State"]).split("_")[-1]
-                self.sessions[sess["SessionId"]] = {"state": state,
-                                                "SessionName": sess["Name"],
-                                                "RemoteIp": "",
-                                                "ClientName": "",
-                                                "Username": "",
-                                                "Domain": "",
-                                                "Resolution": "",
-                                                "ClientTimeZone": ""
-                                            }
+                self.sessions[sess["SessionId"]] = {
+                    "state": state,
+                    "SessionName": sess["Name"],
+                    "RemoteIp": "",
+                    "ClientName": "",
+                    "Username": "",
+                    "Domain": "",
+                    "Resolution": "",
+                    "ClientTimeZone": ""
+                }
 
     def enumerate_sessions_info(self):
         if len(self.sessions):
@@ -861,7 +862,7 @@ class smb(connection):
                 for SessionId in self.sessions:
                     sessdata = TermSrvSession.hRpcGetSessionInformationEx(SessionId)
                     sessflags = TSTS.enum2value(TSTS.SESSIONFLAGS, sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["SessionFlags"])
-                    self.sessions[SessionId]["flags"]    = sessflags
+                    self.sessions[SessionId]["flags"] = sessflags
                     domain = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["DomainName"]
                     if not len(self.sessions[SessionId]["Domain"]) and len(domain):
                         self.sessions[SessionId]["Domain"] = domain
@@ -872,7 +873,7 @@ class smb(connection):
                     self.sessions[SessionId]["DisconnectTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["DisconnectTime"]
                     self.sessions[SessionId]["LogonTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["LogonTime"]
                     self.sessions[SessionId]["LastInputTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["LastInputTime"]
-    
+
     @requires_admin
     def qwinsta(self):
         desktop_states = {
@@ -884,7 +885,7 @@ class smb(connection):
         if not len(self.sessions):
             return
         self.enumerate_sessions_info()
-        
+
         maxSessionNameLen = max([len(self.sessions[i]["SessionName"])+1 for i in self.sessions])
         maxSessionNameLen = maxSessionNameLen if len("SESSIONNAME") < maxSessionNameLen else len("SESSIONNAME")+1
         maxUsernameLen = max([len(self.sessions[i]["Username"]+self.sessions[i]["Domain"])+1 for i in self.sessions])+1
@@ -907,29 +908,29 @@ class smb(connection):
 
         result = []
         header = template.format(
-                SESSIONNAME = "SESSIONNAME",
-                USERNAME    = "USERNAME",
-                ID          = "ID",
-                STATE       = "STATE",
-                DSTATE      = "Desktop",
-                CONNTIME    = "ConnectTime",
-                DISCTIME    = "DisconnectTime",
-            )
-        
+            SESSIONNAME="SESSIONNAME",
+            USERNAME="USERNAME",
+            ID="ID",
+            STATE="STATE",
+            DSTATE="Desktop",
+            CONNTIME="ConnectTime",
+            DISCTIME="DisconnectTime",
+        )
+
         header2 = template.replace(" <", "=<").format(
-                SESSIONNAME = "",
-                USERNAME    = "",
-                ID          = "",
-                STATE       = "",
-                DSTATE      = "",
-                CONNTIME    = "",
-                DISCTIME    = "",
-            )
+            SESSIONNAME="",
+            USERNAME="",
+            ID="",
+            STATE="",
+            DSTATE="",
+            CONNTIME="",
+            DISCTIME="",
+        )
 
         header_verbose = ""
         header2_verbose = ""
         result.extend((header + header_verbose, header2 + header2_verbose + "\n"))
-        
+
         for i in self.sessions:
             connectTime = self.sessions[i]["ConnectTime"]
             connectTime = connectTime.strftime(r"%Y/%m/%d %H:%M:%S") if connectTime.year > 1601 else "None"
@@ -939,28 +940,28 @@ class smb(connection):
             userName = self.sessions[i]["Domain"] + "\\" + self.sessions[i]["Username"] if len(self.sessions[i]["Username"]) else ""
 
             row = template.format(
-                SESSIONNAME = self.sessions[i]["SessionName"],
-                USERNAME    = userName,
-                ID          = i,
-                STATE       = self.sessions[i]["state"],
-                DSTATE      = desktop_states[self.sessions[i]["flags"]],
-                CONNTIME    = connectTime,
-                DISCTIME    = disconnectTime,
+                SESSIONNAME=self.sessions[i]["SessionName"],
+                USERNAME=userName,
+                ID=i,
+                STATE=self.sessions[i]["state"],
+                DSTATE=desktop_states[self.sessions[i]["flags"]],
+                CONNTIME=connectTime,
+                DISCTIME=disconnectTime,
             )
-            row_verbose = ""        
+            row_verbose = ""
             result.append(row+row_verbose)
 
         self.logger.success("Enumerated qwinsta sessions")
         for row in result:
             self.logger.highlight(row)
-    
+
     @requires_admin
     def tasklist(self):
         with TSTS.LegacyAPI(self.conn, self.host) as legacy:
             try:
-                handle = legacy.hRpcWinStationOpenServer()            
+                handle = legacy.hRpcWinStationOpenServer()
                 r = legacy.hRpcWinStationGetAllProcesses(handle)
-            except: 
+            except:
                 # TODO: Issue https://github.com/fortra/impacket/issues/1816
                 self.logger.debug("Exception while calling hRpcWinStationGetAllProcesses")
                 return
@@ -974,12 +975,12 @@ class smb(connection):
             self.logger.highlight(template.replace(": ", ":=").format("", "", "", "", ""))
             for procInfo in r:
                 row = template.format(
-                            procInfo["ImageName"],
-                            procInfo["UniqueProcessId"],
-                            procInfo["SessionId"],
-                            procInfo["pSid"],
-                            "{:,} K".format(procInfo["WorkingSetSize"]//1000),
-                        )
+                    procInfo["ImageName"],
+                    procInfo["UniqueProcessId"],
+                    procInfo["SessionId"],
+                    procInfo["pSid"],
+                    "{:,} K".format(procInfo["WorkingSetSize"]//1000),
+                )
                 self.logger.highlight(row)
 
     def shares(self):
