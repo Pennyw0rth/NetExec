@@ -180,7 +180,7 @@ class nfs(connection):
             # Mount shares and check permissions
             self.logger.highlight(f"{'UID':<11}{'Perms':<9}{'Storage Usage':<17}{'Share':<30} {'Access List':<15}")
             self.logger.highlight(f"{'---':<11}{'-----':<9}{'-------------':<17}{'-----':<30} {'-----------':<15}")
-            for share, network in zip(shares, networks):
+            for share, network in zip(shares, networks, strict=True):
                 try:
                     mnt_info = self.mount.mnt(share, self.auth)
                     self.logger.debug(f"Mounted {share} - {mnt_info}")
@@ -238,7 +238,7 @@ class nfs(connection):
             networks = self.export_info(self.mount.export())
 
             self.logger.display("Enumerating NFS Shares Directories")
-            for share, network in zip(shares, networks):
+            for share, network in zip(shares, networks, strict=True):
                 try:
                     mount_info = self.mount.mnt(share, self.auth)
                     self.logger.debug(f"Mounted {share} - {mount_info}")

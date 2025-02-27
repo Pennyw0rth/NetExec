@@ -21,6 +21,7 @@ def proto_args(parser, parents):
     smb_parser.add_argument("--smb-timeout", help="SMB connection timeout", type=int, default=2)
     smb_parser.add_argument("--laps", dest="laps", metavar="LAPS", type=str, help="LAPS authentification", nargs="?", const="administrator")
     smb_parser.add_argument("--generate-hosts-file", type=str, help="Generate a hosts file like from a range of IP")
+    smb_parser.add_argument("--generate-krb5-file", type=str, help="Generate a krb5 file like from a range of IP")
     self_delegate_arg.make_required = [delegate_arg]
 
     cred_gathering_group = smb_parser.add_argument_group("Credential Gathering", "Options for gathering credentials")
@@ -40,7 +41,7 @@ def proto_args(parser, parents):
     mapping_enum_group.add_argument("--interfaces", action="store_true", help="enumerate network interfaces")
     mapping_enum_group.add_argument("--no-write-check", action="store_true", help="Skip write check on shares (avoid leaving traces when missing delete permissions)")
     mapping_enum_group.add_argument("--filter-shares", nargs="+", help="Filter share by access, option 'read' 'write' or 'read,write'")
-    mapping_enum_group.add_argument("--sessions", action="store_true", help="enumerate active sessions")
+    mapping_enum_group.add_argument("--smb-sessions", action="store_true", help="enumerate active smb sessions")
     mapping_enum_group.add_argument("--disks", action="store_true", help="enumerate disks")
     mapping_enum_group.add_argument("--loggedon-users-filter", action="store", help="only search for specific user, works with regex")
     mapping_enum_group.add_argument("--loggedon-users", action="store_true", help="enumerate logged on users")
@@ -50,7 +51,9 @@ def proto_args(parser, parents):
     mapping_enum_group.add_argument("--local-groups", nargs="?", const="", metavar="GROUP", help="enumerate local groups, if a group is specified then its members are enumerated")
     mapping_enum_group.add_argument("--pass-pol", action="store_true", help="dump password policy")
     mapping_enum_group.add_argument("--rid-brute", nargs="?", type=int, const=4000, metavar="MAX_RID", help="enumerate users by bruteforcing RIDs")
-
+    mapping_enum_group.add_argument("--qwinsta", action="store_true", help="Enumerate RDP connections")
+    mapping_enum_group.add_argument("--tasklist", action="store_true", help="Enumerate running processes")
+    
     wmi_group = smb_parser.add_argument_group("WMI", "Options for WMI Queries")
     wmi_group.add_argument("--wmi", metavar="QUERY", type=str, help="issues the specified WMI query")
     wmi_group.add_argument("--wmi-namespace", metavar="NAMESPACE", default="root\\cimv2", help="WMI Namespace")

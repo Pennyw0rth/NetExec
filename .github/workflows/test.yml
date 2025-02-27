@@ -8,18 +8,18 @@ on:
 jobs:
   build:
     name: Test for Py${{ matrix.python-version }}
-    if: github.event.review.state == 'APPROVED'
+    if: github.event.review.state == 'APPROVED' || github.event_name == 'workflow_dispatch'
     runs-on: ${{ matrix.os }}
     strategy:
       max-parallel: 5
       matrix:
         os: [ubuntu-latest]
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - name: Install poetry
         run: |
-          pipx install poetry
+          pipx install poetry==1.8.4
       - name: NetExec set up python ${{ matrix.python-version }} on ${{ matrix.os }}
         uses: actions/setup-python@v5
         with:

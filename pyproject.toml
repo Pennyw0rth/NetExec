@@ -41,7 +41,7 @@ argcomplete = "^3.1.4"
 asyauth = ">=0.0.20"
 beautifulsoup4 = ">=4.11,<5"
 bloodhound = "^1.8.0"
-dploot = "^3.0.3"
+dploot = "^3.1.0"
 dsinternals = "^1.2.4"
 impacket =  { git = "https://github.com/fortra/impacket.git" }
 jwt = ">=1.3.1"
@@ -51,6 +51,7 @@ minikerberos = "^0.4.1"
 msgpack = "^1.0.0"
 msldap = "^0.5.10"
 neo4j = "^5.0.0"
+oscrypto = { git = "https://github.com/wbond/oscrypto" }
 paramiko = "^3.3.1"
 poetry-dynamic-versioning = "^1.2.0"
 pyasn1-modules = "^0.3.0"
@@ -126,7 +127,7 @@ line-length = 65000
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
-target-version = "py37"
+target-version = "py310"
 
 [tool.ruff.flake8-quotes]
 docstring-quotes = "double"
