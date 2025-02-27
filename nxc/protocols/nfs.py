@@ -3,16 +3,15 @@ from nxc.logger import NXCAdapter
 from nxc.helpers.logger import highlight
 from pyNfsClient import (
     Portmap,
-      Mount, 
-      NFSv3, 
-      NFS_PROGRAM, 
-      NFS_V3, 
-      ACCESS3_READ, 
-      ACCESS3_MODIFY, 
-      ACCESS3_EXECUTE, 
-      NFSSTAT3,
-      NF3DIR,
-      )
+    Mount,
+    NFSv3,
+    NFS_PROGRAM,
+    NFS_V3,
+    ACCESS3_READ,
+    ACCESS3_MODIFY,
+    ACCESS3_EXECUTE,
+    NFSSTAT3,
+)
 import re
 import uuid
 import math
@@ -403,7 +402,49 @@ class nfs(connection):
         else:
             self.logger.highlight(f"File {local_file_path} successfully uploaded to {remote_file_path}")
 
-    def get_root_handle(self, file_handle):
+    class FileID:
+        root = "root"
+        ext = "ext/xfs"
+        btrfs = "btrfs"
+        udf = "udf"
+        nilfs = "nilfs"
+        fat = "fat"
+        lustre = "lustre"
+        kernfs = "kernfs"
+        invalid = "invalid"
+        unknown = "unknown"
+
+    fileid_types = {
+        0: FileID.root,
+        1: FileID.ext,
+        2: FileID.ext,
+        0x81: FileID.ext,
+        0x4d: FileID.btrfs,
+        0x4e: FileID.btrfs,
+        0x4f: FileID.btrfs,
+        0x51: FileID.udf,
+        0x52: FileID.udf,
+        0x61: FileID.nilfs,
+        0x62: FileID.nilfs,
+        0x71: FileID.fat,
+        0x72: FileID.fat,
+        0x97: FileID.lustre,
+        0xfe: FileID.kernfs,
+        0xff: FileID.invalid
+    }
+
+    fsid_lens = {
+        0: 8,
+        1: 4,
+        2: 12,
+        3: 8,
+        4: 8,
+        5: 8,
+        6: 16,
+        7: 24,
+    }
+
+    def get_root_handles(self, mount_fh):
         """
         Get the root handle of the NFS share
         Sources: 
@@ -416,9 +457,11 @@ class nfs(connection):
         - 1 byte: 0xXX fb_fsid_type -> determines the length of the fsid
         - 1 byte: 0xXX fb_fileid_type
         """
-        fh = bytearray(file_handle)
+        dir_data = self.nfs3.listdir(mount_fh, auth=self.auth)
+        print(dir_data)
+        fh = bytearray(mount_fh)
         # Concatinate old header with root Inode             and Generation id
-        return bytes(fh[:3] + int.to_bytes(NF3DIR) + fh[4:] + b"\x02\x00\x00\x00" + b"\x00\x00\x00\x00")
+        return bytes(fh[:3] + b"\x02" + fh[4:] + b"\x02\x00\x00\x00" + b"\x00\x00\x00\x00")
 
     def ls(self):
         nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
@@ -432,8 +475,8 @@ class nfs(connection):
 
         for share in ["/var/nfs/general"]:
             mount_info = self.mount.mnt(share, self.auth)
-            fh = mount_info["mountinfo"]["fhandle"]
-            root_fh = self.get_root_handle(fh)
+            mount_fh = mount_info["mountinfo"]["fhandle"]
+            root_fh = self.get_root_handles(mount_fh)
 
             # pprint(self.nfs3.readdir(root_fh, auth=self.auth))
 
@@ -444,6 +487,7 @@ class nfs(connection):
                     self.logger.highlight(f"{entry['name'].decode()}")
                     content = entry["nextentry"] if "nextentry" in entry else None
             self.mount.umnt(self.auth)
+
 
 def convert_size(size_bytes):
     if size_bytes == 0:
