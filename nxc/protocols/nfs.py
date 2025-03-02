@@ -1,6 +1,8 @@
+from termcolor import colored
 from nxc.connection import connection
 from nxc.logger import NXCAdapter
 from nxc.helpers.logger import highlight
+from nxc.config import host_info_colors
 from pyNfsClient import (
     Portmap,
     Mount,
@@ -19,7 +21,6 @@ import os
 
 
 from pprint import pprint
-
 
 class FileID:
     root = "root"
@@ -81,6 +82,10 @@ class nfs(connection):
             "gid": 0,
             "aux_gid": [],
         }
+        self.root_escape = False
+        # If root escape is possible, the escape_share and escape_fh will be populated
+        self.escape_share = None
+        self.escape_fh = b""
         connection.__init__(self, args, db, host)
 
     def proto_logger(self):
@@ -122,12 +127,20 @@ class nfs(connection):
             for program in programs:
                 if program["program"] == NFS_PROGRAM:
                     self.nfs_versions.add(program["version"])
-            return self.nfs_versions
         except Exception as e:
             self.logger.debug(f"Error checking NFS version: {self.host} {e}")
 
+        # Connect to NFS
+        nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
+        self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
+        self.nfs3.connect()
+        # Check if root escape is possible
+        self.root_escape = self.try_root_escape()
+        self.nfs3.disconnect()
+
     def print_host_info(self):
-        self.logger.display(f"Target supported NFS versions: ({', '.join(str(x) for x in self.nfs_versions)})")
+        root_escape_str = colored(f"root escape:{self.root_escape}", host_info_colors[1 if self.root_escape else 0], attrs=["bold"])
+        self.logger.display(f"Supported NFS versions: ({', '.join(str(x) for x in self.nfs_versions)}) ({root_escape_str})")
 
     def disconnect(self):
         """Disconnect mount and portmap if they are connected"""
@@ -479,7 +492,7 @@ class nfs(connection):
                     fid_type = entry["name_handle"]["handle"]["data"][3]
                     if fid_type in fileid_types:
                         filesystem = fileid_types[fid_type]
-                        self.logger.info(f"Found filesystem type: {filesystem}")
+                        self.logger.debug(f"Found filesystem type: {filesystem}")
                         break
                 except Exception as e:
                     self.logger.debug(f"Error on getting filesystem type: {e}")
