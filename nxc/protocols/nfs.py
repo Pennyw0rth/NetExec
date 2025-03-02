@@ -558,7 +558,7 @@ class nfs(connection):
         self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
         self.nfs3.connect()
 
-        # Remove leading slashes
+        # Remove leading or trailing slashes
         self.args.ls = self.args.ls.lstrip("/").rstrip("/")
 
         # NORMAL LS CALL (without root escape)
@@ -595,8 +595,22 @@ class nfs(connection):
 
         dir_listing = self.nfs3.readdirplus(curr_fh, auth=self.auth)
         content = self.format_directory(dir_listing)
-        path = f"{self.args.share if self.args.share else ''}/{self.args.ls}"
+
+        # Sometimes the NFS Server does not return the attributes for the files
+        # However, they can still be looked up individually is missing
+        for item in content:
+            if not item["name_attributes"]["present"]:
+                try:
+                    res = self.nfs3.lookup(curr_fh, item["name"].decode(), auth=self.auth)
+                    item["name_attributes"]["attributes"] = res["resok"]["obj_attributes"]["attributes"]
+                    item["name_attributes"]["present"] = True
+                    item["name_handle"]["handle"] = res["resok"]["object"]
+                    item["name_handle"]["present"] = True
+                except Exception as e:
+                    self.logger.debug(f"Error on getting attributes for {item['name'].decode()}: {e}")
+
         # If the requested path is a file, we filter out all other files
+        path = f"{self.args.share if self.args.share else ''}/{self.args.ls}"
         if is_file:
             content = [x for x in content if x["name"].decode() == sub_path]
             path = path.rsplit("/", 1)[0]   # Remove the file from the path
@@ -612,7 +626,7 @@ class nfs(connection):
         for item in content:
             if item["name"] in [b".", b".."]:
                 continue
-            if not item["name_attributes"]["present"]:
+            if not item["name_attributes"]["present"] or not item["name_handle"]["present"]:
                 uid = "-"
                 perms = "----"
                 file_size = "-"
