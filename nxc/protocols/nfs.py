@@ -14,6 +14,7 @@ from pyNfsClient.const import (
     ACCESS3_READ,
     ACCESS3_MODIFY,
     ACCESS3_EXECUTE,
+    MNT3ERR_ACCES,
     NFSSTAT3,
     NFS3ERR_NOENT,
     NF3REG,
@@ -348,17 +349,35 @@ class nfs(connection):
             self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
             self.nfs3.connect()
 
-            # Mount the NFS share
-            mnt_info = self.mount.mnt(remote_dir_path, self.auth)
+            # Mount the NFS share or get the root handle
+            if self.root_escape and not self.args.share:
+                mount_fh = self.escape_fh
+            elif not self.args.share:
+                self.logger.fail("No root escape possible, please specify a share")
+                return
+            else:
+                mnt_info = self.mount.mnt(self.args.share, self.auth)
+                if mnt_info["status"] != 0:
+                    self.logger.fail(f"Error mounting share {self.args.share}: {NFSSTAT3[mnt_info['status']]}")
+                    return
+                mount_fh = mnt_info["mountinfo"]["fhandle"]
 
-            # Update the UID for the file
-            attrs = self.nfs3.getattr(mnt_info["mountinfo"]["fhandle"], auth=self.auth)
-            self.auth["uid"] = attrs["attributes"]["uid"]
-            dir_handle = mnt_info["mountinfo"]["fhandle"]
+            # Iterate over the path until we hit the file
+            curr_fh = mount_fh
+            for sub_path in remote_file_path.lstrip("/").split("/"):
+                # Update the UID for the next object and get the handle
+                self.update_auth(mount_fh)
+                res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
 
-            # Get the file handle and file size
-            dir_data = self.nfs3.lookup(dir_handle, file_name, auth=self.auth)
-            file_handle = dir_data["resok"]["object"]["data"]
+                # Check for a bad path
+                if "resfail" in res and res["status"] == NFS3ERR_NOENT:
+                    self.logger.fail(f"Unknown path: {remote_file_path!r}")
+                    return
+
+                curr_fh = res["resok"]["object"]["data"]
+                # If response is file then break
+                if res["resok"]["obj_attributes"]["attributes"]["type"] == NF3REG:
+                    break
 
             # Handle files over the default chunk size of 1024 * 1024
             offset = 0
@@ -367,7 +386,7 @@ class nfs(connection):
             # Loop until we have read the entire file
             with open(local_file_path, "wb+") as local_file:
                 while not eof:
-                    file_data = self.nfs3.read(file_handle, offset, auth=self.auth)
+                    file_data = self.nfs3.read(curr_fh, offset, auth=self.auth)
 
                     if "resfail" in file_data:
                         raise Exception("Insufficient Permissions")
@@ -395,17 +414,12 @@ class nfs(connection):
         """Uploads a file to the NFS share"""
         local_file_path = self.args.put_file[0]
         remote_file_path = self.args.put_file[1]
-        file_name = ""
+        remote_dir_path, file_name = os.path.split(remote_file_path)
 
         # Check if local file is exist
         if not os.path.isfile(local_file_path):
             self.logger.fail(f"{local_file_path} does not exist.")
             return
-
-        # Do a bit of smart handling for the file paths
-        file_name = local_file_path.split("/")[-1] if "/" in local_file_path else local_file_path
-        if not remote_file_path.endswith("/"):
-            remote_file_path += "/"
 
         self.logger.display(f"Uploading from {local_file_path} to {remote_file_path}")
         try:
@@ -414,22 +428,49 @@ class nfs(connection):
             self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
             self.nfs3.connect()
 
-            # Mount the NFS share to create the file
-            mnt_info = self.mount.mnt(remote_file_path, self.auth)
-            dir_handle = mnt_info["mountinfo"]["fhandle"]
+            # Mount the NFS share or get the root handle
+            if self.root_escape and not self.args.share:
+                mount_fh = self.escape_fh
+            elif not self.args.share:
+                self.logger.fail("No root escape possible, please specify a share")
+                return
+            else:
+                mnt_info = self.mount.mnt(self.args.share, self.auth)
+                if mnt_info["status"] != 0:
+                    self.logger.fail(f"Error mounting share {self.args.share}: {NFSSTAT3[mnt_info['status']]}")
+                    return
+                mount_fh = mnt_info["mountinfo"]["fhandle"]
+
+            # Iterate over the path
+            curr_fh = mount_fh
+            for sub_path in remote_dir_path.lstrip("/").split("/"):
+                self.update_auth(mount_fh)
+                res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
+
+                # If the path does not exist, create it
+                if "resfail" in res and res["status"] == NFS3ERR_NOENT:
+                    self.logger.display(f"Creating directory '/{sub_path}/'")
+                    res = self.nfs3.mkdir(curr_fh, sub_path, 0o777, auth=self.auth)
+                    if res["status"] != 0:
+                        self.logger.fail(f"Error creating directory '/{sub_path}/': {NFSSTAT3[res['status']]}")
+                        return
+                    else:
+                        curr_fh = res["resok"]["obj"]["handle"]["data"]
+                        continue
+
+                curr_fh = res["resok"]["object"]["data"]
 
             # Update the UID from the directory
-            attrs = self.nfs3.getattr(dir_handle, auth=self.auth)
-            self.auth["uid"] = attrs["attributes"]["uid"]
+            self.update_auth(curr_fh)
 
             # Checking if file_name already exists on remote file path
-            lookup_response = self.nfs3.lookup(dir_handle, file_name, auth=self.auth)
+            lookup_response = self.nfs3.lookup(curr_fh, file_name, auth=self.auth)
 
             # If success, file_name does not exist on remote machine. Else, trying to overwrite it.
             if lookup_response["resok"] is None:
                 # Create file
                 self.logger.display(f"Trying to create {remote_file_path}{file_name}")
-                res = self.nfs3.create(dir_handle, file_name, create_mode=1, mode=0o777, auth=self.auth)
+                res = self.nfs3.create(curr_fh, file_name, create_mode=1, mode=0o777, auth=self.auth)
                 if res["status"] != 0:
                     raise Exception(NFSSTAT3[res["status"]])
                 else:
@@ -441,9 +482,6 @@ class nfs(connection):
                 if ans.lower() in ["y", "yes", ""]:
                     self.logger.display(f"{file_name} already exists on {remote_file_path}. Trying to overwrite it...")
                     file_handle = lookup_response["resok"]["object"]["data"]
-                else:
-                    self.logger.fail(f"Uploading was not successful. The {file_name} is exist on {remote_file_path}")
-                    return
 
             try:
                 with open(local_file_path, "rb") as file:
