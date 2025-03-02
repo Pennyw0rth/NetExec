@@ -14,7 +14,6 @@ from pyNfsClient.const import (
     ACCESS3_READ,
     ACCESS3_MODIFY,
     ACCESS3_EXECUTE,
-    MNT3ERR_ACCES,
     NFSSTAT3,
     NFS3ERR_NOENT,
     NF3REG,
