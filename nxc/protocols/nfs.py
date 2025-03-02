@@ -24,9 +24,6 @@ import math
 import os
 
 
-from pprint import pprint
-
-
 class FileID:
     root = "root"
     ext = "ext/xfs"
@@ -526,7 +523,14 @@ class nfs(connection):
         return root_handles
 
     def try_root_escape(self) -> bool:
-        """With an established connection look for a share that can be escaped to the root filesystem"""
+        """
+        With an established connection look for a share that can be escaped to the root filesystem.
+        If successfull, self.escape_share and self.escape_fh will be populated.
+
+        Returns
+        -------
+            bool: True if root escape was successful
+        """
         if not self.nfs3:
             raise Exception("NFS connection is not established")
 
