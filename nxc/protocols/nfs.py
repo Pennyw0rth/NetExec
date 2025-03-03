@@ -445,7 +445,8 @@ class nfs(connection):
 
             # Iterate over the path
             curr_fh = mount_fh
-            for sub_path in remote_dir_path.lstrip("/").split("/"):
+            # If target dir is "" or "/" without filter we would get one item with [""]
+            for sub_path in list(filter(None, remote_dir_path.lstrip("/").split("/"))):
                 self.update_auth(mount_fh)
                 res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
 
