@@ -445,7 +445,8 @@ class nfs(connection):
 
             # Iterate over the path
             curr_fh = mount_fh
-            for sub_path in remote_dir_path.lstrip("/").split("/"):
+            # If target dir is "" or "/" without filter we would get one item with [""]
+            for sub_path in list(filter(None, remote_dir_path.lstrip("/").split("/"))):
                 self.update_auth(mount_fh)
                 res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
 
@@ -494,7 +495,7 @@ class nfs(connection):
                     file_data = file.read().decode()
 
                 # Write the data to the remote file
-                self.logger.display(f"Trying to write data from {local_file_path} to {remote_file_path}")
+                self.logger.info(f"Trying to write data from {local_file_path} to {remote_file_path}")
                 res = self.nfs3.write(file_handle, 0, len(file_data), file_data, 1, auth=self.auth)
                 if res["status"] != 0:
                     self.logger.fail(f"Error writing to {remote_file_path}: {NFSSTAT3[res['status']]}")
@@ -645,7 +646,13 @@ class nfs(connection):
                 break
             curr_fh = res["resok"]["object"]["data"]
 
+        # Update the UID and GID for the file/dir
+        self.update_auth(curr_fh)
+
         dir_listing = self.nfs3.readdirplus(curr_fh, auth=self.auth)
+        if dir_listing["status"] != 0:
+            self.logger.fail(f"Error on listing directory: {NFSSTAT3[dir_listing['status']]}")
+            return
         content = self.format_directory(dir_listing)
 
         # Sometimes the NFS Server does not return the attributes for the files
@@ -676,8 +683,6 @@ class nfs(connection):
         self.logger.highlight(f"{'UID':<11}{'Perms':<7}{'File Size':<14}{'File Path'}")
         self.logger.highlight(f"{'---':<11}{'-----':<7}{'---------':<14}{'---------'}")
         for item in content:
-            if item["name"] in [b".", b".."]:
-                continue
             if not item["name_attributes"]["present"] or not item["name_handle"]["present"]:
                 uid = "-"
                 perms = "----"
