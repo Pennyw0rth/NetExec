@@ -378,6 +378,9 @@ class nfs(connection):
                 if res["resok"]["obj_attributes"]["attributes"]["type"] == NF3REG:
                     break
 
+            # Update the UID and GID for the file
+            self.update_auth(curr_fh)
+
             # Handle files over the default chunk size of 1024 * 1024
             offset = 0
             eof = False
@@ -459,7 +462,7 @@ class nfs(connection):
 
                 curr_fh = res["resok"]["object"]["data"]
 
-            # Update the UID from the directory
+            # Update the UID and GID from the directory
             self.update_auth(curr_fh)
 
             # Checking if file_name already exists on remote file path
@@ -474,6 +477,7 @@ class nfs(connection):
                     raise Exception(NFSSTAT3[res["status"]])
                 else:
                     file_handle = res["resok"]["obj"]["handle"]["data"]
+                    self.update_auth(file_handle)
                 self.logger.success(f"{file_name} successfully created")
             else:
                 # Asking the user if they want to overwrite the file
@@ -482,14 +486,21 @@ class nfs(connection):
                     self.logger.display(f"{file_name} already exists on {remote_file_path}. Trying to overwrite it...")
                     file_handle = lookup_response["resok"]["object"]["data"]
 
+            # Update the UID and GID for the file
+            self.update_auth(file_handle)
+
             try:
                 with open(local_file_path, "rb") as file:
                     file_data = file.read().decode()
 
                 # Write the data to the remote file
                 self.logger.display(f"Trying to write data from {local_file_path} to {remote_file_path}")
-                self.nfs3.write(file_handle, 0, len(file_data), file_data, 1, auth=self.auth)
-                self.logger.success(f"Data from {local_file_path} successfully written to {remote_file_path}")
+                res = self.nfs3.write(file_handle, 0, len(file_data), file_data, 1, auth=self.auth)
+                if res["status"] != 0:
+                    self.logger.fail(f"Error writing to {remote_file_path}: {NFSSTAT3[res['status']]}")
+                    return
+                else:
+                    self.logger.success(f"Data from {local_file_path} successfully written to {remote_file_path} with permissions 777")
             except Exception as e:
                 self.logger.fail(f"Could not write to {local_file_path}: {e}")
 
@@ -549,13 +560,13 @@ class nfs(connection):
         # Format for the file id see: https://elixir.bootlin.com/linux/v6.13.4/source/include/linux/exportfs.h#L25
         fh = bytearray(mount_fh)
         if filesystem in [FileID.ext, FileID.unknown]:
-            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x02\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x02\x00\x00\x00"))
-            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x80\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x80\x00\x00\x00"))
+            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x02\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x02\x00\x00\x00"))    # noqa: E226 FURB113
+            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x80\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x80\x00\x00\x00"))    # noqa: E226
         if filesystem in [FileID.btrfs, FileID.unknown]:
             # Iterate over btrfs subvolumes, use 16 as default similar to the guys from nfs-security-tooling
             for i in range(16):
                 subvolume = int.to_bytes(i) + b"\x01\x00\x00"
-                root_handles.append(bytes(fh[:3] + b"\x4d" + fh[4:4+fh_fsid_len] + b"\x00\x01\x00\x00" + b"\x00\x00\x00\x00" + subvolume + b"\x00\x00\x00\x00" + b"\x00\x00\x00\x00"))
+                root_handles.append(bytes(fh[:3] + b"\x4d" + fh[4:4+fh_fsid_len] + b"\x00\x01\x00\x00" + b"\x00\x00\x00\x00" + subvolume + b"\x00\x00\x00\x00" + b"\x00\x00\x00\x00"))  # noqa: E226
 
         return root_handles
 
