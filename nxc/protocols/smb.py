@@ -337,18 +337,18 @@ class smb(connection):
 [libdefaults]
     dns_lookup_kdc = false
     dns_lookup_realm = false
-    default_realm = { self.domain.upper() }
+    default_realm = {self.domain.upper()}
 
 [realms]
-    { self.domain.upper() } = {{
-        kdc = { self.hostname.lower() }.{ self.domain }
-        admin_server = { self.hostname.lower() }.{ self.domain }
-        default_domain = { self.domain }
+    {self.domain.upper()} = {{
+        kdc = {self.hostname.lower()}.{self.domain}
+        admin_server = {self.hostname.lower()}.{self.domain}
+        default_domain = {self.domain}
     }}
 
 [domain_realm]
-    .{ self.domain } = { self.domain.upper() }
-    { self.domain } = { self.domain.upper() }
+    .{self.domain} = {self.domain.upper()}
+    {self.domain} = {self.domain.upper()}
 """
                     host_file.write(data)
                     self.logger.debug(data)
@@ -1239,31 +1239,26 @@ class smb(connection):
         return dc_ips
 
     def smb_sessions(self):
-        self.logger.display("Use option qwinsta or loggedon-users")
+        self.logger.display("[DEPRECATED] Use option --qwinsta or --loggedon-users")
         return
 
     def disks(self):
-        disks = []
         try:
-            rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(),
-                                                filename=r"\srvsvc", smb_connection=self.conn)
+            rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\srvsvc", smb_connection=self.conn)
             dce = rpctransport.get_dce_rpc()
             dce.connect()
             dce.bind(srvs.MSRPC_UUID_SRVS)
 
             response = srvs.hNetrServerDiskEnum(dce, 0)
             # Process the response
-            self.logger.display("Enumerated disks")
+            self.logger.display("Enumerated disks:")
             for disk in response["DiskInfoStruct"]["Buffer"]:
                 if disk["Disk"] != "\x00":
                     self.logger.highlight(disk["Disk"])
         except Exception as e:
             self.logger.fail(f"Failed to enumerate disks: {e}")
 
-        return disks
-
     def local_groups(self):
-        
         self.logger.display("Trying with SAMRPC protocol")
         groups = SamrFunc(self).get_local_groups()
         if groups:
@@ -1274,8 +1269,6 @@ class smb(connection):
             self.logger.highlight(f"{group_rid} - {group_name}")
             group_id = self.db.add_group(self.hostname, group_name, rid=group_rid)[0]
             self.logger.debug(f"Added group, returned id: {group_id}")
-
-        return groups
 
     def domainfromdsn(self, dsn):
         dsnparts = dsn.split(",")
@@ -1307,8 +1300,7 @@ class smb(connection):
     def loggedon_users(self):
         logged_on = set()
         try:
-            rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(),
-                                                filename=r"\wkssvc", smb_connection=self.conn)
+            rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\wkssvc", smb_connection=self.conn)
             dce = rpctransport.get_dce_rpc()
             dce.connect()
             dce.bind(wkst.MSRPC_UUID_WKST)
