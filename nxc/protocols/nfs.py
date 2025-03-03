@@ -403,7 +403,7 @@ class nfs(connection):
                         # Write the file data to the local file
                         local_file.write(data)
 
-            self.logger.highlight(f"File successfully downloaded to {local_file_path} from {remote_file_path}")
+            self.logger.highlight(f"File successfully downloaded from {remote_file_path} to {local_file_path}")
 
             # Unmount the share
             self.mount.umnt(self.auth)
