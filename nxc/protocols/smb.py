@@ -1285,7 +1285,7 @@ class smb(connection):
         return domain, dnsparts[0] + "$"
 
     def groups(self):
-        self.logger.display("Arg moved to the ldap protocol")
+        self.logger.display("[DEPRECATED] Arg moved to the ldap protocol")
         return
 
     def users(self):
@@ -1294,7 +1294,7 @@ class smb(connection):
         return UserSamrDump(self).dump(self.args.users)
 
     def computers(self):
-        self.logger.display("Arg moved to the ldap protocol")
+        self.logger.display("[DEPRECATED] Arg moved to the ldap protocol")
         return
 
     def loggedon_users(self):
