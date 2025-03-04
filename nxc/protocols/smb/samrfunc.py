@@ -26,6 +26,7 @@ class SamrFunc:
         self.aesKey = connection.aesKey
         self.doKerberos = connection.kerberos
         self.kdcHost = connection.kdcHost
+        self.host = connection.host
 
         if self.hash is not None:
             if self.hash.find(":") != -1:

@@ -59,7 +59,6 @@ pylnk3 = "^0.4.2"
 pynfsclient = { git = "https://github.com/Pennyw0rth/NfsClient" }
 pypsrp = "^0.8.1"
 pypykatz = "^0.6.8"
-pywerview = "^0.3.3" # pywerview 5 requires libkrb5-dev installed which is not default on kali (as of 9/23)
 python-dateutil = ">=2.8.2"
 python-libnmap = "^0.7.3"
 requests = ">=2.27.1"
