@@ -680,21 +680,29 @@ class ldap(connection):
             attributes = ["member"]
         else:
             search_filter = "(objectCategory=group)"
-            attributes = ["cn"]
+            attributes = ["cn", "member"]
         resp = self.search(search_filter, attributes, 0)
         resp_parsed = parse_result_attributes(resp)
         self.logger.debug(f"Total of records returned {len(resp):d}")
 
         if self.args.groups:
-            if not resp:
+            if not resp_parsed:
                 self.logger.fail(f"Group {self.args.groups} not found")
+            elif not resp_parsed[0]:
+                self.logger.fail(f"Group {self.args.groups} has no members")
             else:
+                # Fix if group has only one member
+                if not isinstance(resp_parsed[0]["member"], list):
+                    resp_parsed[0]["member"] = [resp_parsed[0]["member"]]
                 for user in resp_parsed[0]["member"]:
                     self.logger.highlight(user.split(",")[0].split("=")[1])
         else:
             for item in resp_parsed:
                 try:
-                    self.logger.highlight(item["cn"])
+                    # Fix if group has only one member
+                    if not isinstance(item.get("member", []), list):
+                        item["member"] = [item["member"]]
+                    self.logger.highlight(f"{item['cn']:<40} membercount: {len(item.get('member', []))}")
                 except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
