@@ -1270,20 +1270,6 @@ class smb(connection):
             group_id = self.db.add_group(self.hostname, group_name, rid=group_rid)[0]
             self.logger.debug(f"Added group, returned id: {group_id}")
 
-    def domainfromdsn(self, dsn):
-        dsnparts = dsn.split(",")
-        domain = ""
-        for part in dsnparts:
-            k, v = part.split("=")
-            if k == "DC":
-                domain = v if domain == "" else domain + "." + v
-        return domain
-
-    def domainfromdnshostname(self, dns):
-        dnsparts = dns.split(".")
-        domain = ".".join(dnsparts[1:])
-        return domain, dnsparts[0] + "$"
-
     def groups(self):
         self.logger.display("[DEPRECATED] Arg moved to the ldap protocol")
         return
