@@ -24,19 +24,23 @@ class ftp(connection):
 
     def proto_flow(self):
         self.proto_logger()
-        if self.create_conn_obj() and self.enum_host_info() and self.print_host_info() and self.login():
-            pass
+        if self.create_conn_obj() and self.login():
+            if hasattr(self.args, "module") and self.args.module:
+                self.load_modules()
+                self.logger.debug("Calling modules")
+                self.call_modules()
+            else:
+                self.logger.debug("Calling command arguments")
+                self.call_cmd_args()
 
     def enum_host_info(self):
         welcome = self.conn.getwelcome()
         self.logger.debug(f"Welcome result: {welcome}")
         self.remote_version = welcome.split("220", 1)[1].strip()  # strip out the extra space in the front
         self.logger.debug(f"Remote version: {self.remote_version}")
-        return True
 
     def print_host_info(self):
         self.logger.display(f"Banner: {self.remote_version}")
-        return True
 
     def create_conn_obj(self):
         self.conn = FTP()

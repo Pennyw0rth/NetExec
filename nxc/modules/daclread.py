@@ -274,8 +274,8 @@ class NXCModule:
         self.context = context
         """On a successful LDAP login we perform a search for the targets' SID, their Security Descriptors and the principal's SID if there is one specified"""
         context.log.highlight("Be careful, this module cannot read the DACLS recursively.")
-        self.baseDN = connection.ldapConnection._baseDN
-        self.ldap_session = connection.ldapConnection
+        self.baseDN = connection.ldap_connection._baseDN
+        self.ldap_session = connection.ldap_connection
 
         # Searching for the principal SID
         if self.principal_sAMAccountName is not None:
@@ -373,7 +373,7 @@ class NXCModule:
         if self.target_DN is not None:
             _lookedup_principal = self.target_DN
             target = self.ldap_session.search(
-                searchBase=self.baseDN,
+                searchBase=_lookedup_principal,
                 searchFilter=f"(distinguishedName={_lookedup_principal})",
                 attributes=["nTSecurityDescriptor"],
                 searchControls=controls,

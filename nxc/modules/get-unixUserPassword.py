@@ -24,7 +24,7 @@ class NXCModule:
 
         try:
             context.log.debug(f"Search Filter={searchFilter}")
-            resp = connection.ldapConnection.search(
+            resp = connection.ldap_connection.search(
                 searchFilter=searchFilter,
                 attributes=["sAMAccountName", "unixUserPassword"],
                 sizeLimit=0,

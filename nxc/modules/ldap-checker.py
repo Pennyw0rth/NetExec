@@ -146,43 +146,58 @@ class NXCModule:
               
 
         # Run trough all our code blocks to determine LDAP signing and channel binding settings.
-        stype = asyauthSecret.PASS if not connection.nthash else asyauthSecret.NT
-        secret = connection.password if not connection.nthash else connection.nthash
-        if not connection.kerberos:
+        stype = asyauthSecret.PASS
+        secret = connection.password
+        if connection.nthash:
+            stype = asyauthSecret.NT
+            secret = connection.nthash
+        if connection.aesKey:
+            stype = asyauthSecret.AES
+            secret = connection.aesKey
+        if connection.username == "" and secret == "":
             credential = NTLMCredential(
-                secret=secret,
-                username=connection.username,
-                domain=connection.domain,
+                secret=None,
+                username="Guest",
+                domain=None,
                 stype=stype,
             )
+            context.log.info("No username used, skipping LDAP signing check")
         else:
-            kerberos_target = UniTarget(
-                connection.host,
-                88,
-                UniProto.CLIENT_TCP,
-                hostname=connection.remoteName,
-                dc_ip=connection.kdcHost,
-                domain=connection.domain,
-                proxies=None,
-                dns=None,
-            )
-            credential = KerberosCredential(
-                target=kerberos_target,
-                secret=secret,
-                username=connection.username,
-                domain=connection.domain,
-                stype=stype,
-            )
+            if not connection.kerberos:
+                credential = NTLMCredential(
+                    secret=secret,
+                    username=connection.username,
+                    domain=connection.domain,
+                    stype=stype,
+                )
+            else:
+                kerberos_target = UniTarget(
+                    connection.host,
+                    88,
+                    UniProto.CLIENT_TCP,
+                    hostname=connection.remoteName,
+                    dc_ip=connection.kdcHost,
+                    domain=connection.domain,
+                    proxies=None,
+                    dns=None,
+                )
+                credential = KerberosCredential(
+                    target=kerberos_target,
+                    secret=secret,
+                    username=connection.username,
+                    domain=connection.domain,
+                    stype=stype,
+                )
 
-        target = MSLDAPTarget(connection.host, 389, hostname=connection.remoteName, domain=connection.domain, dc_ip=connection.kdcHost)
-        ldapIsProtected = asyncio.run(run_ldap(target, credential))
-        if ldapIsProtected is False:
-            context.log.highlight("LDAP Signing NOT Enforced!")
-        elif ldapIsProtected is True:
-            context.log.fail("LDAP Signing IS Enforced")
-        else:
-            context.log.fail("Connection fail, exiting now")
-            sys.exit()
+            target = MSLDAPTarget(connection.host, 389, hostname=connection.remoteName, domain=connection.domain, dc_ip=connection.kdcHost)
+            ldapIsProtected = asyncio.run(run_ldap(target, credential))
+            if ldapIsProtected is False:
+                context.log.highlight("LDAP Signing NOT Enforced!")
+            elif ldapIsProtected is True:
+                context.log.fail("LDAP Signing IS Enforced")
+            else:
+                context.log.fail("Connection fail, exiting now")
+                sys.exit()
 
         if DoesLdapsCompleteHandshake(connection.host) is True:
             target = MSLDAPTarget(connection.host, 636, UniProto.CLIENT_SSL_TCP, hostname=connection.remoteName, domain=connection.domain, dc_ip=connection.kdcHost)
