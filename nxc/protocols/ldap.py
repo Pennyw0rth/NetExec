@@ -20,6 +20,7 @@ from impacket.dcerpc.v5.samr import (
     UF_TRUSTED_FOR_DELEGATION,
     UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION,
     UF_SERVER_TRUST_ACCOUNT,
+    SAM_MACHINE_ACCOUNT,
 )
 from impacket.krb5 import constants
 from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError
@@ -697,6 +698,15 @@ class ldap(connection):
                 except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
+
+    def computers(self):
+        resp = self.search(f"(sAMAccountType={SAM_MACHINE_ACCOUNT})", ["name"], 0)
+        resp_parse = parse_result_attributes(resp)
+
+        if resp:
+            self.logger.display(f"Total records returned: {len(resp_parse)}")
+            for item in resp_parse:
+                self.logger.highlight(item["name"] + "$")
 
     def dc_list(self):
         # Building the search filter
