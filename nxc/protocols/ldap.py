@@ -673,25 +673,30 @@ class ldap(connection):
 
     def groups(self):
         # Building the search filter
-        search_filter = "(objectCategory=group)"
-        attributes = ["name"]
+        if self.args.groups:
+            self.logger.debug(f"Dumping group: {self.args.groups}")
+            search_filter = f"(cn={self.args.groups})"
+            attributes = ["member"]
+        else:
+            search_filter = "(objectCategory=group)"
+            attributes = ["cn"]
         resp = self.search(search_filter, attributes, 0)
-        if resp:
-            self.logger.debug(f"Total of records returned {len(resp):d}")
+        resp_parsed = parse_result_attributes(resp)
+        self.logger.debug(f"Total of records returned {len(resp):d}")
 
-            for item in resp:
-                if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
-                    continue
-                name = ""
+        if self.args.groups:
+            if not resp:
+                self.logger.fail(f"Group {self.args.groups} not found")
+            else:
+                for user in resp_parsed[0]["member"]:
+                    self.logger.highlight(user.split(",")[0].split("=")[1])
+        else:
+            for item in resp_parsed:
                 try:
-                    for attribute in item["attributes"]:
-                        if str(attribute["type"]) == "name":
-                            name = str(attribute["vals"][0])
-                    self.logger.highlight(f"{name}")
+                    self.logger.highlight(item["cn"])
                 except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
-            return
 
     def dc_list(self):
         # Building the search filter
