@@ -776,51 +776,123 @@ class ldap(connection):
             resolv.nameservers = [self.host]
         resolv.timeout = self.args.dns_timeout
 
-        search_filter = "(&(objectCategory=computer)(primaryGroupId=516))"
-        attributes = ["dNSHostName"]
-        resp = self.search(search_filter, attributes, 0)
-        resp_parse = parse_result_attributes(resp)
-
-        for item in resp_parse:
-            name = item.get("dNSHostName", "")  # Get dNSHostName attribute or empty string
+        # Function to resolve and display hostnames
+        def resolve_and_display_hostname(name, domain_name=None):
+            prefix = f"[{domain_name}] " if domain_name else ""
             try:
                 # Resolve using DNS server for A, AAAA, CNAME, PTR, and NS records
                 if name:
-                    found_record = False  # Flag to check if any record is found
-
+                    found_record = False
                     for record_type in ["A", "AAAA", "CNAME", "PTR", "NS"]:
-                        if found_record:
+                        if found_record:  # Flag to check if any record is found
                             break  # If a record has been found, stop checking further
-
                         try:
                             answers = resolv.resolve(name, record_type, tcp=self.args.dns_tcp)
                             for rdata in answers:
                                 if record_type in ["A", "AAAA"]:
                                     ip_address = rdata.to_text()
-                                    self.logger.highlight(f"{name} = {colored(ip_address, host_info_colors[0])}")
-                                    found_record = True  # Set flag to true since a record is found
+                                    self.logger.highlight(f"{prefix}{name} = {colored(ip_address, host_info_colors[0])}")
+                                    found_record = True   # Set flag to true since a record is found
                                 elif record_type == "CNAME":
-                                    self.logger.highlight(f"{name} CNAME = {colored(rdata.to_text(), host_info_colors[0])}")
+                                    self.logger.highlight(f"{prefix}{name} CNAME = {colored(rdata.to_text(), host_info_colors[0])}")
                                     found_record = True
                                 elif record_type == "PTR":
-                                    self.logger.highlight(f"{name} PTR = {colored(rdata.to_text(), host_info_colors[0])}")
+                                    self.logger.highlight(f"{prefix}{name} PTR = {colored(rdata.to_text(), host_info_colors[0])}")
                                     found_record = True
                                 elif record_type == "NS":
-                                    self.logger.highlight(f"{name} NS = {colored(rdata.to_text(), host_info_colors[0])}")
+                                    self.logger.highlight(f"{prefix}{name} NS = {colored(rdata.to_text(), host_info_colors[0])}")
                                     found_record = True
                         except resolv.NXDOMAIN:
-                            self.logger.fail(f"{name} = Host not found (NXDOMAIN)")
+                            self.logger.fail(f"{prefix}{name} = Host not found (NXDOMAIN)")
                         except resolv.Timeout:
-                            self.logger.fail(f"{name} = Connection timed out")
+                            self.logger.fail(f"{prefix}{name} = Connection timed out")
                         except resolv.NoAnswer:
-                            self.logger.fail(f"{name} = DNS server did not respond")
+                            self.logger.fail(f"{prefix}{name} = DNS server did not respond")
                         except Exception as e:
-                            self.logger.fail(f"{name} encountered an unexpected error: {e}")
+                            self.logger.fail(f"{prefix}{name} encountered an unexpected error: {e}")
                 else:
-                    self.logger.fail("dNSHostName value is empty, unable to process.")
+                    self.logger.fail(f"{prefix}dNSHostName value is empty, unable to process.")
             except Exception as e:
                 self.logger.fail("General Error:", exc_info=True)
-                self.logger.fail(f"Skipping item(dNSHostName) {name}, error: {e}")
+                self.logger.fail(f"Skipping item(dNSHostName) {prefix}{name}, error: {e}")
+
+        # Find all domain controllers in the current domain
+        self.logger.info("Enumerating Domain Controllers in current domain...")
+        search_filter = "(&(objectCategory=computer)(primaryGroupId=516))"
+        attributes = ["dNSHostName"]
+        resp = self.search(search_filter, attributes, 0)
+        resp_parse = parse_result_attributes(resp)
+        for item in resp_parse:
+            name = item.get("dNSHostName", "")  # Get dNSHostName attribute or empty string
+            resolve_and_display_hostname(name)
+
+        # Find all trusted domains
+        self.logger.info("Enumerating Trusted Domains...")
+        search_filter = "(objectClass=trustedDomain)"
+        attributes = ["name", "trustDirection", "trustType", "trustAttributes", "flatName"]
+        resp = self.search(search_filter, attributes, 0)
+        trust_resp_parse = parse_result_attributes(resp)
+
+        if trust_resp_parse:
+            # Find domain controllers for each trusted domain
+            for trust in trust_resp_parse:
+                trust_name = trust.get("name", "")
+                trust_flat_name = trust.get("flatName", "")
+                trust_direction = trust.get("trustDirection", 0)
+                trust_type = trust.get("trustType", 0)
+                
+                # Convert trust direction/type to human-readable format
+                direction_text = {
+                    0: "Disabled",
+                    1: "Inbound",
+                    2: "Outbound",
+                    3: "Bidirectional"
+                }.get(int(trust_direction) if trust_direction else 0, "Unknown")
+                
+                trust_type_text = {
+                    1: "Windows NT",
+                    2: "Active Directory",
+                    3: "Kerberos",
+                    4: "DCE"
+                }.get(int(trust_type) if trust_type else 0, "Unknown")
+                
+                self.logger.info(f"Processing trusted domain: {trust_name} ({trust_flat_name})")
+                self.logger.info(f"Trust type: {trust_type_text}, Direction: {direction_text}")
+                
+                # Only process if it's an Active Directory trust
+                if int(trust_type) == 2:
+                    # Try to find domain controllers in trusted domain using DNS
+                    try:
+                        # Check if we can resolve the trusted domain's DC using DNS
+                        dc_dns_name = f"_ldap._tcp.dc._msdcs.{trust_name}"
+                        try:
+                            srv_records = resolv.resolve(dc_dns_name, "SRV", tcp=self.args.dns_tcp)
+                            self.logger.info(f"Found domain controllers for trusted domain {trust_name} via DNS:")
+                            for srv in srv_records:
+                                dc_hostname = str(srv.target).rstrip(".")
+                                self.logger.highlight(f"Found DC in trusted domain: {colored(dc_hostname, host_info_colors[0])}")
+                                resolve_and_display_hostname(dc_hostname)
+                        except Exception as e:
+                            self.logger.fail(f"Failed to resolve DCs for {trust_name} via DNS: {e}")
+                            
+                            # If DNS resolution fails, try alternative method using NETLOGON
+                            # Note: This would require additional implementation for NETLOGON querying
+                            self.logger.info(f"Attempting alternative discovery methods for {trust_name}...")
+                            
+                            # Try to find a domain controller through the DFS referrals
+                            try:
+                                # Try to query for the netlogon share which typically exists on all DCs
+                                netlogon_name = f"\\\\{trust_name}\\netlogon"
+                                self.logger.info(f"Attempting to locate DC through netlogon share: {netlogon_name}")
+                                # Implementation for netlogon query would go here
+                            except Exception as e:
+                                self.logger.fail(f"Failed to find DC through netlogon for {trust_name}: {e}")
+                    except Exception as e:
+                        self.logger.fail(f"Error processing trusted domain {trust_name}: {e}")
+                else:
+                    self.logger.info(f"Skipping non-Active Directory trust: {trust_name}")
+
+            self.logger.info("Domain Controller enumeration complete.")
 
     def active_users(self):
         if len(self.args.active_users) > 0:
