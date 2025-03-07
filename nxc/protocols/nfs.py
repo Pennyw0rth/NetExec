@@ -590,6 +590,10 @@ class nfs(connection):
         self.logger.debug(f"Trying root escape on shares: {shares}")
         for share in shares:
             mount_info = self.mount.mnt(share, self.auth)
+            if mount_info["status"] != 0:
+                self.logger.debug(f"Root escape: can't list directory {share}: {NFSSTAT3[mount_info['status']]}")
+                self.mount.umnt(self.auth)
+                continue
             mount_fh = mount_info["mountinfo"]["fhandle"]
             try:
                 possible_root_fhs = self.get_root_handles(mount_fh)
