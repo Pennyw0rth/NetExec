@@ -116,7 +116,7 @@ class nfs(connection):
             self.port = self.mnt_port
             self.proto_logger()
         except Exception as e:
-            self.logger.fail(f"Error during Initialization: {e}")
+            self.logger.info(f"Error during Initialization: {e}")
             return False
         return True
 
