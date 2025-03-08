@@ -42,7 +42,6 @@ class SamrFunc:
 
     def get_builtin_groups(self, group):
         domains = self.samr_query.get_domains()
-        groups_members = []
         members = []
         if "Builtin" not in domains:
             logging.error("No Builtin group to query locally on")
@@ -77,7 +76,7 @@ class SamrFunc:
     def get_local_users(self, group, domain_handle):
         users = []
         try:
-            for group_name, alias_id in group.items():
+            for alias_id in group.values():
                 member_sids = self.samr_query.get_alias_members(domain_handle, alias_id)
                 member_names = self.lsa_query.lookup_sids(member_sids)
                 for sid, name in zip(member_sids, member_names, strict=True):
