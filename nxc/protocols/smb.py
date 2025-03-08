@@ -1239,7 +1239,7 @@ class smb(connection):
         return dc_ips
 
     def smb_sessions(self):
-        self.logger.display("[DEPRECATED] Use option --qwinsta or --loggedon-users")
+        self.logger.fail("[DEPRECATED] Use option --qwinsta or --loggedon-users")
         return
 
     def disks(self):
@@ -1271,7 +1271,7 @@ class smb(connection):
             self.logger.debug(f"Added group, returned id: {group_id}")
 
     def groups(self):
-        self.logger.display("[DEPRECATED] Arg moved to the ldap protocol")
+        self.logger.fail("[DEPRECATED] Arg moved to the ldap protocol")
         return
 
     def users(self):
@@ -1280,7 +1280,7 @@ class smb(connection):
         return UserSamrDump(self).dump(self.args.users)
 
     def computers(self):
-        self.logger.display("[DEPRECATED] Arg moved to the ldap protocol")
+        self.logger.fail("[DEPRECATED] Arg moved to the ldap protocol")
         return
 
     def loggedon_users(self):
