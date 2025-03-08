@@ -1296,8 +1296,8 @@ class smb(connection):
                 user_info = (user["wkui1_logon_domain"][:-1], user["wkui1_username"][:-1], user["wkui1_logon_server"][:-1])
                 if user_info not in logged_on:
                     logged_on.add(user_info)
-                    if self.args.loggedon_users_filter:
-                        if re.match(self.args.loggedon_users_filter, user_info[1]):
+                    if self.args.loggedon_users:
+                        if re.match(self.args.loggedon_users, user_info[1]):
                             self.logger.highlight(f"{user_info[0]}\\{user_info[1]:<25} logon_server: {user_info[2]}")
                     else:
                         self.logger.highlight(f"{user_info[0]}\\{user_info[1]:<25} logon_server: {user_info[2]}")

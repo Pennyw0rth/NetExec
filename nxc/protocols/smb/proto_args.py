@@ -44,7 +44,7 @@ def proto_args(parser, parents):
     mapping_enum_group.add_argument("--smb-sessions", action="store_true", help="enumerate active smb sessions")
     mapping_enum_group.add_argument("--disks", action="store_true", help="enumerate disks")
     mapping_enum_group.add_argument("--loggedon-users-filter", action="store", help="only search for specific user, works with regex")
-    mapping_enum_group.add_argument("--loggedon-users", action="store_true", help="enumerate logged on users")
+    mapping_enum_group.add_argument("--loggedon-users", nargs="?", const="", help="enumerate logged on users, if a user is specified than a regex filter is applied.")
     mapping_enum_group.add_argument("--users", nargs="*", metavar="USER", help="enumerate domain users, if a user is specified than only its information is queried.")
     mapping_enum_group.add_argument("--groups", nargs="?", const="", metavar="GROUP", help="enumerate domain groups, if a group is specified than its members are enumerated")
     mapping_enum_group.add_argument("--computers", nargs="?", const="", metavar="COMPUTER", help="enumerate computer users")
