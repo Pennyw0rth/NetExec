@@ -5,7 +5,7 @@ from impacket.examples.secretsdump import RemoteOperations
 # Enables UAC (prevent non RID500 account to get high priv token remotely)
 # Disables UAC (allow non RID500 account to get high priv token remotely)
 class NXCModule:
-    name = "remoteuac"
+    name = "remote-uac"
     description = "Enable or disable remote UAC"
     supported_protocols = ["smb"]
     opsec_safe = True
@@ -39,7 +39,7 @@ class NXCModule:
                     remoteOps._RemoteOperations__rrp,
                     regHandle, 
                     "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System"
-                )['phkResult']
+                )["phkResult"]
 
                 # Checks if the key already exists or not
                 try:
