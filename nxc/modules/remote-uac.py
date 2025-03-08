@@ -4,6 +4,8 @@ from impacket.examples.secretsdump import RemoteOperations
 # Module by @Defte_
 # Enables UAC (prevent non RID500 account to get high priv token remotely)
 # Disables UAC (allow non RID500 account to get high priv token remotely)
+
+
 class NXCModule:
     name = "remote-uac"
     description = "Enable or disable remote UAC"
@@ -17,14 +19,14 @@ class NXCModule:
         self.action = None
 
     def options(self, context, module_options):
-    
+
         if "ACTION" not in module_options:
             context.log.fail("ACTION option not specified!")
-            exit(1)
+            return
 
         if module_options["ACTION"].lower() not in ["enable", "disable"]:
             context.log.fail("ACTION must be either enable, disable or query")
-            exit(1)
+            return
         self.action = module_options["ACTION"].lower()
 
     def on_admin_login(self, context, connection):
@@ -35,47 +37,24 @@ class NXCModule:
                 ans = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)
                 regHandle = ans["phKey"]
 
-                keyHandle = rrp.hBaseRegOpenKey(
-                    remoteOps._RemoteOperations__rrp,
-                    regHandle, 
-                    "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System"
-                )["phkResult"]
+                keyHandle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System")["phkResult"]
 
                 # Checks if the key already exists or not
                 try:
-                    rrp.hBaseRegQueryValue(
-                        remoteOps._RemoteOperations__rrp,
-                        keyHandle,
-                        "LocalAccountTokenFilterPolicy\x00"
-                    )
+                    rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "LocalAccountTokenFilterPolicy\x00")
                 except Exception as e:
                     if "ERROR_FILE_NOT_FOUND" in str(e):
-                        context.log.debug("here")
-                        ans = rrp.hBaseRegCreateKey(
-                            remoteOps._RemoteOperations__rrp,
-                            keyHandle,
-                            "LocalAccountTokenFilterPolicy\x00")
+                        context.log.debug("Registry key 'LocalAccountTokenFilterPolicy' does not exist, creating it")
+                        ans = rrp.hBaseRegCreateKey(remoteOps._RemoteOperations__rrp, keyHandle, "LocalAccountTokenFilterPolicy\x00")
 
                 # Disable remote UAC
                 if self.action == "disable":
-                    rrp.hBaseRegSetValue(
-                        remoteOps._RemoteOperations__rrp,
-                        keyHandle,
-                        "LocalAccountTokenFilterPolicy\x00",
-                        rrp.REG_DWORD,
-                        1
-                    )
+                    rrp.hBaseRegSetValue(remoteOps._RemoteOperations__rrp, keyHandle, "LocalAccountTokenFilterPolicy\x00", rrp.REG_DWORD, 1)
                     context.log.highlight("Remote UAC disabled")
-                
+
                 # Enable remote UAC
                 if self.action == "enable":
-                    rrp.hBaseRegSetValue(
-                        remoteOps._RemoteOperations__rrp,
-                        keyHandle,
-                        "LocalAccountTokenFilterPolicy\x00",
-                        rrp.REG_DWORD,
-                        0
-                    )
+                    rrp.hBaseRegSetValue(remoteOps._RemoteOperations__rrp, keyHandle, "LocalAccountTokenFilterPolicy\x00", rrp.REG_DWORD, 0)
                     context.log.highlight("Remote UAC enabled")
 
         except Exception as e:
