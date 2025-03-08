@@ -1,12 +1,9 @@
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 
-# Module by @Defte_
-# Enables UAC (prevent non RID500 account to get high priv token remotely)
-# Disables UAC (allow non RID500 account to get high priv token remotely)
-
 
 class NXCModule:
+    """Module by @Defte_"""
     name = "remote-uac"
     description = "Enable or disable remote UAC"
     supported_protocols = ["smb"]
@@ -19,7 +16,12 @@ class NXCModule:
         self.action = None
 
     def options(self, context, module_options):
+        """
+        Enables UAC (prevent non RID500 account to get high priv token remotely)
+        Disables UAC (allow non RID500 account to get high priv token remotely)
 
+        ACTION:     "enable" or "disable" (required)
+        """
         if "ACTION" not in module_options:
             context.log.fail("ACTION option not specified!")
             return
