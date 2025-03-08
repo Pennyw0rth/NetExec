@@ -388,6 +388,21 @@ pyasn1 = ">=0.4"
 pycryptodome = "*"
 
 [[package]]
+name = "bs4"
+version = "0.0.2"
+description = "Dummy package for Beautiful Soup (beautifulsoup4)"
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "bs4-0.0.2-py2.py3-none-any.whl", hash = "sha256:abf8742c0805ef7f662dce4b51cca104cffe52b835238afc169142ab9b3fbccc"},
+    {file = "bs4-0.0.2.tar.gz", hash = "sha256:a48685c58f50fe127722417bae83fe6badf500d54b55f7e39ffe43b798653925"},
+]
+
+[package.dependencies]
+beautifulsoup4 = "*"
+
+[[package]]
 name = "certifi"
 version = "2025.1.31"
 description = "Python package for providing Mozilla's CA Bundle."
@@ -2119,15 +2134,20 @@ files = [
 
 [[package]]
 name = "pywerview"
-version = "0.7.1"
+version = "0.3.3"
 description = "A Python port of PowerSploit's PowerView"
 optional = false
 python-versions = "*"
 groups = ["main"]
 files = [
-    {file = "pywerview-0.7.1-py3-none-any.whl", hash = "sha256:55cf663793f82f85113e7d43a6fac31932320a63d60bf65b7bb260c42b4a2a32"},
-    {file = "pywerview-0.7.1.tar.gz", hash = "sha256:d3d980e3751b85a79b95f32f32770121e8881d3bbe409a48891e907638f2ba36"},
+    {file = "pywerview-0.3.3-py3-none-any.whl", hash = "sha256:66e8135456bb47c88a00a00caf8f4a19b63f9e7bbb00774e99720f3b21b50f63"},
+    {file = "pywerview-0.3.3.tar.gz", hash = "sha256:adc8797976659efeadf3e2fd583430b80c28ed76e0ca54ecb8dc95b6030c6d5c"},
 ]
+
+[package.dependencies]
+bs4 = "*"
+impacket = ">=0.9.22"
+lxml = "*"
 
 [[package]]
 name = "requests"
@@ -2629,4 +2649,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<4.0"
-content-hash = "4d45c90ee63355fd5521071d0fbb60e11e36934640e46547f2cd788d8a09fbb6"
+content-hash = "8858f2cec759388e7f2c45771018d76ec5c0d394fe668c0954bf213c1452a448"
