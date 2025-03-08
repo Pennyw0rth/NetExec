@@ -1284,6 +1284,9 @@ class smb(connection):
         return
 
     def loggedon_users(self):
+        if self.args.loggedon_users_filter:
+            self.logger.fail("[DEPRECATED] Use option '--loggedon-users <USERNAME>' for filtering")
+
         logged_on = set()
         try:
             rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\wkssvc", smb_connection=self.conn)
