@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import os
+from errno import EHOSTUNREACH
 from binascii import hexlify
 from datetime import datetime
 from re import sub, I
@@ -210,7 +211,11 @@ class ldap(connection):
             self.logger.debug(f"{e} on host {self.host}")
             return False
         except OSError as e:
-            self.logger.error(f"Error getting ldap info {e}")
+            if e.errno == EHOSTUNREACH:
+                self.logger.info(f"Error connecting to {self.host} - {e}")
+                return False
+            else:
+                self.logger.error(f"Error getting ldap info {e}")
 
         self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
         self.target = target
@@ -574,7 +579,7 @@ class ldap(connection):
         attributes = ["objectSid"]
         resp = self.search(search_filter, attributes, sizeLimit=0)
         answers = []
-        if resp and (self.password != "" or self.lmhash != "" or self.nthash != "") and self.username != "":
+        if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "") and self.username != "":
             for attribute in resp[0][1]:
                 if str(attribute["type"]) == "objectSid":
                     sid = self.sid_to_str(attribute["vals"][0])
