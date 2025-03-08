@@ -222,7 +222,7 @@ class database(BaseDB):
         # if we're filtering by host
         elif filter_term and filter_term != "":
             q = format_host_query(q, filter_term, self.HostsTable)
-                
+
         results = self.db_execute(q).all()
         nxc_logger.debug(f"FTP get_hosts() - results: {results}")
         return results
