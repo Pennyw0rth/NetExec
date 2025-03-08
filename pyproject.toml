@@ -79,9 +79,8 @@ poetry-dynamic-versioning = { version = ">=1.7.0,<2.0.0", extras = ["plugin"] }
 [tool.poetry-dynamic-versioning]
 enable = true
 style = "pep440"
-bump = true
 pattern = "(?P<base>\\d+\\.\\d+\\.\\d+)"
-format = "{base}+{distance}.g{commit}"
+format = "{base}+{distance}.{commit}"
 
 [build-system]
 requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]

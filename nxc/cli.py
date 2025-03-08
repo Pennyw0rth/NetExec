@@ -19,11 +19,13 @@ def gen_cli_args():
     
     try:
         VERSION, COMMIT = importlib.metadata.version("netexec").split("+")
+        DISTANCE, COMMIT = COMMIT.split(".")
     except ValueError:
         VERSION = importlib.metadata.version("netexec")
         COMMIT = ""
+        DISTANCE = ""
     CODENAME = "NeedForSpeed"
-    nxc_logger.debug(f"NXC VERSION: {VERSION} - {CODENAME} - {COMMIT}")
+    nxc_logger.debug(f"NXC VERSION: {VERSION} - {CODENAME} - {COMMIT} - {DISTANCE}")
     
     generic_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     generic_group = generic_parser.add_argument_group("Generic", "Generic options for nxc across protocols")
@@ -130,7 +132,7 @@ def gen_cli_args():
         sys.exit(1)
 
     if args.version:
-        print(f"{VERSION} - {CODENAME} - {COMMIT}")
+        print(f"{VERSION} - {CODENAME} - {COMMIT} - {DISTANCE}")
         sys.exit(1)
 
     # Multiply output_tries by 10 to enable more fine granural control, see exec methods
