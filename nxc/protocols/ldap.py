@@ -3,8 +3,9 @@
 import hashlib
 import hmac
 import os
+from errno import EHOSTUNREACH
 from binascii import hexlify
-from datetime import datetime, timedelta
+from datetime import datetime
 from re import sub, I
 from zipfile import ZipFile
 from termcolor import colored
@@ -209,7 +210,11 @@ class ldap(connection):
             self.logger.debug(f"{e} on host {self.host}")
             return False
         except OSError as e:
-            self.logger.error(f"Error getting ldap info {e}")
+            if e.errno == EHOSTUNREACH:
+                self.logger.info(f"Error connecting to {self.host} - {e}")
+                return False
+            else:
+                self.logger.error(f"Error getting ldap info {e}")
 
         self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
         self.target = target
@@ -573,7 +578,7 @@ class ldap(connection):
         attributes = ["objectSid"]
         resp = self.search(search_filter, attributes, sizeLimit=0)
         answers = []
-        if resp and (self.password != "" or self.lmhash != "" or self.nthash != "") and self.username != "":
+        if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "") and self.username != "":
             for attribute in resp[0][1]:
                 if str(attribute["type"]) == "objectSid":
                     sid = self.sid_to_str(attribute["vals"][0])
@@ -651,38 +656,25 @@ class ldap(connection):
             search_filter = f"(|{''.join(f'(sAMAccountName={user})' for user in self.args.users)})"
         else:
             self.logger.debug("Trying to dump all users")
-            search_filter = "(sAMAccountType=805306368)" if self.username != "" else "(objectclass=*)"
+            search_filter = "(sAMAccountType=805306368)"
 
-        # default to these attributes to mirror the SMB --users functionality
+        # Default to these attributes to mirror the SMB --users functionality
         request_attributes = ["sAMAccountName", "description", "badPwdCount", "pwdLastSet"]
         resp = self.search(search_filter, request_attributes, sizeLimit=0)
 
         if resp:
-            # I think this was here for anonymous ldap bindings, so I kept it, but we might just want to remove it
-            if self.username == "":
-                self.logger.display(f"Total records returned: {len(resp):d}")
-                for item in resp:
-                    if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
-                        continue
-                    self.logger.highlight(f"{item['objectName']}")
-                return
+            resp_parse = parse_result_attributes(resp)
 
-            users = parse_result_attributes(resp)
-            # we print the total records after we parse the results since often SearchResultReferences are returned
-            self.logger.display(f"Enumerated {len(users):d} domain users: {self.domain}")
-            self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
-            for user in users:
-                # TODO: functionize this - we do this calculation in a bunch of places, different, including in the `pso` module
-                parsed_pw_last_set = ""
+            # We print the total records after we parse the results since often SearchResultReferences are returned
+            self.logger.display(f"Enumerated {len(resp_parse):d} domain users: {self.domain}")
+            self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<9}{'-Description-':<60}")
+            for user in resp_parse:
                 pwd_last_set = user.get("pwdLastSet", "")
-                if pwd_last_set != "":
-                    timestamp_seconds = int(pwd_last_set) / 10**7
-                    start_date = datetime(1601, 1, 1)
-                    parsed_pw_last_set = (start_date + timedelta(seconds=timestamp_seconds)).replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
-                    if parsed_pw_last_set == "1601-01-01 00:00:00":
-                        parsed_pw_last_set = "<never>"
-                # we default attributes to blank strings if they don't exist in the dict
-                self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{parsed_pw_last_set:<20}{user.get('badPwdCount', ''):<8}{user.get('description', ''):<60}")
+                if pwd_last_set:
+                    pwd_last_set = "<never>" if pwd_last_set == "0" else datetime.fromtimestamp(self.getUnixTime(int(pwd_last_set))).strftime("%Y-%m-%d %H:%M:%S")
+
+                # We default attributes to blank strings if they don't exist in the dict
+                self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{pwd_last_set:<20}{user.get('badPwdCount', ''):<9}{user.get('description', ''):<60}")
 
     def groups(self):
         # Building the search filter
@@ -730,7 +722,7 @@ class ldap(connection):
                     for record_type in ["A", "AAAA", "CNAME", "PTR", "NS"]:
                         if found_record:
                             break  # If a record has been found, stop checking further
-                        
+
                         try:
                             answers = resolv.resolve(name, record_type, tcp=self.args.dns_tcp)
                             for rdata in answers:
@@ -763,73 +755,29 @@ class ldap(connection):
 
     def active_users(self):
         if len(self.args.active_users) > 0:
-            arg = True
             self.logger.debug(f"Dumping users: {', '.join(self.args.active_users)}")
-            search_filter = "(sAMAccountType=805306368)" if self.username != "" else "(objectclass=*)"
-            search_filter_args = f"(|{''.join(f'(sAMAccountName={user})' for user in self.args.active_users)})"
+            search_filter = f"(|{''.join(f'(sAMAccountName={user})' for user in self.args.active_users)})"
         else:
-            arg = False
             self.logger.debug("Trying to dump all users")
-            search_filter = "(sAMAccountType=805306368)" if self.username != "" else "(objectclass=*)"
+            search_filter = "(sAMAccountType=805306368)"
 
-        # default to these attributes to mirror the SMB --users functionality
+        # Default to these attributes to mirror the SMB --users functionality
         request_attributes = ["sAMAccountName", "description", "badPwdCount", "pwdLastSet", "userAccountControl"]
         resp = self.search(search_filter, request_attributes, sizeLimit=0)
-        allusers = parse_result_attributes(resp)
 
-        count = 0
-        activeusers = []
-        argsusers = []
+        if resp:
+            all_users = parse_result_attributes(resp)
+            # Filter disabled users (ignore accounts without userAccountControl value)
+            active_users = [user for user in all_users if not (int(user.get("userAccountControl", UF_ACCOUNTDISABLE)) & UF_ACCOUNTDISABLE)]
 
-        if arg:
-            resp_args = self.search(search_filter_args, request_attributes, sizeLimit=0)
-            users_args = parse_result_attributes(resp_args)
-            # This try except for, if user gives a doesn't exist username. If it does, parsing process is crashing
-            for i in range(len(self.args.active_users)):
-                try:
-                    argsusers.append(users_args[i])
-                except Exception as e:
-                    self.logger.debug("Exception:", exc_info=True)
-                    self.logger.debug(f"Skipping item, cannot process due to error {e}")
-        else:
-            argsusers = allusers
+            self.logger.display(f"Total records returned: {len(all_users)}, total {len(all_users) - len(active_users):d} user(s) disabled")
+            self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<9}{'-Description-':<60}")
 
-        for user in allusers:
-            user_account_control = user.get("userAccountControl")
-            if user_account_control is not None:  # Check if user_account_control is not None
-                account_control = "".join(user_account_control) if isinstance(user_account_control, list) else user_account_control  # If it's already a list
-                account_disabled = int(account_control) & 2
-                if not account_disabled:
-                    count += 1
-                    activeusers.append(user.get("sAMAccountName").lower())
-            else:
-                self.logger.debug(f"userAccountControl for user {user.get('sAMAccountName')} is None")
-
-        if self.username == "":
-            self.logger.display(f"Total records returned: {len(resp):d}")
-            for item in resp_args:
-                if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
-                    continue
-                self.logger.highlight(f"{item['objectName']}")
-            return
-        self.logger.display(f"Total records returned: {count}, total {len(allusers) - count:d} user(s) disabled") if not arg else self.logger.display(f"Total records returned: {len(argsusers)}, Total {len(allusers) - count:d} user(s) disabled")
-        self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
-
-        for arguser in argsusers:
-            pwd_last_set = arguser.get("pwdLastSet", "")  # Retrieves pwdLastSet directly and defaults to an empty string.
-            if pwd_last_set:  # Checks if pwdLastSet is empty or not.
-                timestamp_seconds = int(pwd_last_set) / 10**7  # Converts pwdLastSet to an integer.
-                start_date = datetime(1601, 1, 1)
-                parsed_pw_last_set = (start_date + timedelta(seconds=timestamp_seconds)).replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
-                if parsed_pw_last_set == "1601-01-01 00:00:00":
-                    parsed_pw_last_set = "<never>"
-
-            if arguser.get("sAMAccountName").lower() in activeusers and arg is False:
-                self.logger.highlight(f"{arguser.get('sAMAccountName', ''):<30}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
-            elif (arguser.get("sAMAccountName").lower() not in activeusers) and arg is True:
-                self.logger.highlight(f"{arguser.get('sAMAccountName', '') + ' (Disabled)':<30}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
-            elif (arguser.get("sAMAccountName").lower() in activeusers):
-                self.logger.highlight(f"{arguser.get('sAMAccountName', ''):<30}{parsed_pw_last_set:<20}{arguser.get('badPwdCount', ''):<8}{arguser.get('description', ''):<60}")
+            for user in active_users:
+                pwd_last_set = user.get("pwdLastSet", "")
+                if pwd_last_set:
+                    pwd_last_set = "<never>" if pwd_last_set == "0" else datetime.fromtimestamp(self.getUnixTime(int(pwd_last_set))).strftime("%Y-%m-%d %H:%M:%S")
+                self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{pwd_last_set:<20}{user.get('badPwdCount', ''):<9}{user.get('description', '')}")
 
     def asreproast(self):
         if self.password == "" and self.nthash == "" and self.kerberos is False:

@@ -29,6 +29,7 @@ from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login
 from impacket.smb3structs import FILE_SHARE_WRITE, FILE_SHARE_DELETE
+from impacket.dcerpc.v5 import tsts as TSTS
 
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
@@ -870,6 +871,162 @@ class smb(connection):
         self.logger.debug(f"ps_execute response: {response}")
         return response
 
+    def get_session_list(self):
+        with TSTS.TermSrvEnumeration(self.conn, self.host, self.kerberos) as lsm:
+            handle = lsm.hRpcOpenEnum()
+            rsessions = lsm.hRpcGetEnumResult(handle, Level=1)["ppSessionEnumResult"]
+            lsm.hRpcCloseEnum(handle)
+            sessions = {}
+            for i in rsessions:
+                sess = i["SessionInfo"]["SessionEnum_Level1"]
+                state = TSTS.enum2value(TSTS.WINSTATIONSTATECLASS, sess["State"]).split("_")[-1]
+                sessions[sess["SessionId"]] = {
+                    "state": state,
+                    "SessionName": sess["Name"],
+                    "RemoteIp": "",
+                    "ClientName": "",
+                    "Username": "",
+                    "Domain": "",
+                    "Resolution": "",
+                    "ClientTimeZone": ""
+                }
+            return sessions
+
+    def enumerate_sessions_info(self, sessions):
+        if len(sessions):
+            with TSTS.TermSrvSession(self.conn, self.host, self.kerberos) as TermSrvSession:
+                for SessionId in sessions:
+                    sessdata = TermSrvSession.hRpcGetSessionInformationEx(SessionId)
+                    sessflags = TSTS.enum2value(TSTS.SESSIONFLAGS, sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["SessionFlags"])
+                    sessions[SessionId]["flags"] = sessflags
+                    domain = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["DomainName"]
+                    if not len(sessions[SessionId]["Domain"]) and len(domain):
+                        sessions[SessionId]["Domain"] = domain
+                    username = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["UserName"]
+                    if not len(sessions[SessionId]["Username"]) and len(username):
+                        sessions[SessionId]["Username"] = username
+                    sessions[SessionId]["ConnectTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["ConnectTime"]
+                    sessions[SessionId]["DisconnectTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["DisconnectTime"]
+                    sessions[SessionId]["LogonTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["LogonTime"]
+                    sessions[SessionId]["LastInputTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["LastInputTime"]
+            with TSTS.RCMPublic(self.conn, self.host, self.kerberos) as rcm:
+                for SessionId in sessions:
+                    try:
+                        client = rcm.hRpcGetRemoteAddress(SessionId)
+                        if not client:
+                            continue
+                        sessions[SessionId]["RemoteIp"] = client["pRemoteAddress"]["ipv4"]["in_addr"]
+                    except Exception as e:
+                        self.logger.debug(f"Error getting client address for session {SessionId}: {e}")
+
+    @requires_admin
+    def qwinsta(self):
+        desktop_states = {
+            "WTS_SESSIONSTATE_UNKNOWN": "",
+            "WTS_SESSIONSTATE_LOCK": "Locked",
+            "WTS_SESSIONSTATE_UNLOCK": "Unlocked",
+        }
+        sessions = self.get_session_list()
+        if not len(sessions):
+            return
+        self.enumerate_sessions_info(sessions)
+
+        maxSessionNameLen = max([len(sessions[i]["SessionName"]) + 1 for i in sessions])
+        maxSessionNameLen = maxSessionNameLen if len("SESSIONNAME") < maxSessionNameLen else len("SESSIONNAME") + 1
+        maxUsernameLen = max([len(sessions[i]["Username"] + sessions[i]["Domain"]) + 1 for i in sessions]) + 1
+        maxUsernameLen = maxUsernameLen if len("Username") < maxUsernameLen else len("Username") + 1
+        maxIdLen = max([len(str(i)) for i in sessions])
+        maxIdLen = maxIdLen if len("ID") < maxIdLen else len("ID") + 1
+        maxStateLen = max([len(sessions[i]["state"]) + 1 for i in sessions])
+        maxStateLen = maxStateLen if len("STATE") < maxStateLen else len("STATE") + 1
+        maxRemoteIp = max([len(sessions[i]["RemoteIp"]) + 1 for i in sessions])
+        maxRemoteIp = maxRemoteIp if len("RemoteAddress") < maxRemoteIp else len("RemoteAddress") + 1
+        maxClientName = max([len(sessions[i]["ClientName"]) + 1 for i in sessions])
+        maxClientName = maxClientName if len("ClientName") < maxClientName else len("ClientName") + 1
+        template = ("{SESSIONNAME: <%d} "
+                    "{USERNAME: <%d} "
+                    "{ID: <%d} "
+                    "{IPv4: <16} "
+                    "{STATE: <%d} "
+                    "{DSTATE: <9} "
+                    "{CONNTIME: <20} "
+                    "{DISCTIME: <20} ") % (maxSessionNameLen, maxUsernameLen, maxIdLen, maxStateLen)
+
+        result = []
+        header = template.format(
+            SESSIONNAME="SESSIONNAME",
+            USERNAME="USERNAME",
+            ID="ID",
+            IPv4="IPv4 Address",
+            STATE="STATE",
+            DSTATE="Desktop",
+            CONNTIME="ConnectTime",
+            DISCTIME="DisconnectTime",
+        )
+
+        header2 = template.replace(" <", "=<").format(
+            SESSIONNAME="",
+            USERNAME="",
+            ID="",
+            IPv4="",
+            STATE="",
+            DSTATE="",
+            CONNTIME="",
+            DISCTIME="",
+        )
+        result.extend((header, header2))
+
+        for i in sessions:
+            connectTime = sessions[i]["ConnectTime"]
+            connectTime = connectTime.strftime(r"%Y/%m/%d %H:%M:%S") if connectTime.year > 1601 else "None"
+
+            disconnectTime = sessions[i]["DisconnectTime"]
+            disconnectTime = disconnectTime.strftime(r"%Y/%m/%d %H:%M:%S") if disconnectTime.year > 1601 else "None"
+            userName = sessions[i]["Domain"] + "\\" + sessions[i]["Username"] if len(sessions[i]["Username"]) else ""
+
+            result.append(template.format(
+                SESSIONNAME=sessions[i]["SessionName"],
+                USERNAME=userName,
+                ID=i,
+                IPv4=sessions[i]["RemoteIp"],
+                STATE=sessions[i]["state"],
+                DSTATE=desktop_states[sessions[i]["flags"]],
+                CONNTIME=connectTime,
+                DISCTIME=disconnectTime,
+            ))
+
+        self.logger.success("Enumerated qwinsta sessions")
+        for row in result:
+            self.logger.highlight(row)
+
+    @requires_admin
+    def tasklist(self):
+        with TSTS.LegacyAPI(self.conn, self.host, self.kerberos) as legacy:
+            try:
+                handle = legacy.hRpcWinStationOpenServer()
+                res = legacy.hRpcWinStationGetAllProcesses(handle)
+            except Exception as e:
+                # TODO: Issue https://github.com/fortra/impacket/issues/1816
+                self.logger.debug(f"Exception while calling hRpcWinStationGetAllProcesses: {e}")
+                return
+            if not res:
+                return
+            self.logger.success("Enumerated processes")
+            maxImageNameLen = max([len(i["ImageName"]) for i in res])
+            maxSidLen = max([len(i["pSid"]) for i in res])
+            template = "{: <%d} {: <8} {: <11} {: <%d} {: >12}" % (maxImageNameLen, maxSidLen)
+            self.logger.highlight(template.format("Image Name", "PID", "Session#", "SID", "Mem Usage"))
+            self.logger.highlight(template.replace(": ", ":=").format("", "", "", "", ""))
+            for procInfo in res:
+                row = template.format(
+                    procInfo["ImageName"],
+                    procInfo["UniqueProcessId"],
+                    procInfo["SessionId"],
+                    procInfo["pSid"],
+                    "{:,} K".format(procInfo["WorkingSetSize"] // 1000),
+                )
+                self.logger.highlight(row)
+
     def shares(self):
         temp_dir = ntpath.normpath("\\" + gen_random_string())
         temp_file = ntpath.normpath("\\" + gen_random_string() + ".txt")
@@ -1084,7 +1241,7 @@ class smb(connection):
             dc_ips.append(self.host)
         return dc_ips
 
-    def sessions(self):
+    def smb_sessions(self):
         try:
             sessions = get_netsession(
                 self.host,
@@ -1099,8 +1256,8 @@ class smb(connection):
                 if session.sesi10_cname.find(self.local_ip) == -1:
                     self.logger.highlight(f"{session.sesi10_cname:<25} User:{session.sesi10_username}")
             return sessions
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.debug(e)
 
     def disks(self):
         disks = []
