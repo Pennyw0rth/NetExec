@@ -1259,8 +1259,8 @@ class smb(connection):
             self.logger.fail(f"Failed to enumerate disks: {e}")
 
     def local_groups(self):
-        self.logger.display("Trying with SAMRPC protocol")
-        groups = SamrFunc(self).get_local_groups()
+        self.logger.display("Enumerating with SAMRPC protocol")
+        groups, members = SamrFunc(self).get_local_groups(self.args.local_groups)
         if groups:
             self.logger.success("Enumerated local groups")
             self.logger.debug(f"Local groups: {groups}")
@@ -1269,6 +1269,9 @@ class smb(connection):
             self.logger.highlight(f"{group_rid} - {group_name}")
             group_id = self.db.add_group(self.hostname, group_name, rid=group_rid)[0]
             self.logger.debug(f"Added group, returned id: {group_id}")
+
+        for member in members:
+            self.logger.highlight(member)
 
     def groups(self):
         self.logger.fail("[DEPRECATED] Arg moved to the ldap protocol")

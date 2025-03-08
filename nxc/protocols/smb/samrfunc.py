@@ -40,47 +40,52 @@ class SamrFunc:
         self.samr_query = SAMRQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.addr, remote_host=self.host, kerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey)
         self.lsa_query = LSAQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.addr, remote_host=self.host, kdcHost=self.kdcHost, kerberos=self.doKerberos, aesKey=self.aesKey, logger=self.logger)
 
-    def get_builtin_groups(self):
+    def get_builtin_groups(self, group):
         domains = self.samr_query.get_domains()
-
+        groups_members = []
+        members = []
         if "Builtin" not in domains:
             logging.error("No Builtin group to query locally on")
             return None
 
         domain_handle = self.samr_query.get_domain_handle("Builtin")
-        return self.samr_query.get_domain_aliases(domain_handle)
+        builtin_groups = self.samr_query.get_domain_aliases(domain_handle, group)
+        if group:
+            members = self.get_local_users(builtin_groups, domain_handle)
+        return builtin_groups, members
 
-    def get_custom_groups(self):
+    def get_custom_groups(self, group=None):
         domains = self.samr_query.get_domains()
         custom_groups = {}
-
+        members = []
         for domain in domains:
             if domain == "Builtin":
                 continue
             domain_handle = self.samr_query.get_domain_handle(domain)
-            custom_groups.update(self.samr_query.get_domain_aliases(domain_handle))
-        return custom_groups
+            custom_groups.update(self.samr_query.get_domain_aliases(domain_handle, group))
+            if group:
+                members = self.get_local_users(custom_groups, domain_handle)
+        return custom_groups, members
 
-    def get_local_groups(self):
-        builtin_groups = self.get_builtin_groups()
-        custom_groups = self.get_custom_groups()
-        return {**builtin_groups, **custom_groups}
+    def get_local_groups(self, group=None):
+        if group:
+            self.logger.display(f"Querying group: {group}")
+        builtin_groups, builtin_groups_members = self.get_builtin_groups(group)
+        custom_groups, custom_groups_members = self.get_custom_groups(group)
+        return {**builtin_groups, **custom_groups}, builtin_groups_members + custom_groups_members
 
-    def get_local_users(self):
-        pass
-
-    def get_local_administrators(self):
-        self.get_builtin_groups()
-        if "Administrators" in self.groups:
-            self.logger.success(f"Found Local Administrators group: RID {self.groups['Administrators']}")
-        domain_handle = self.samr_query.get_domain_handle("Builtin")
-        self.logger.debug("Querying group members")
-        member_sids = self.samr_query.get_alias_members(domain_handle, self.groups["Administrators"])
-        member_names = self.lsa_query.lookup_sids(member_sids)
-
-        for sid, name in zip(member_sids, member_names, strict=True):
-            print(f"{name} - {sid}")
-
+    def get_local_users(self, group, domain_handle):
+        users = []
+        try:
+            for group_name, alias_id in group.items():
+                member_sids = self.samr_query.get_alias_members(domain_handle, alias_id)
+                member_names = self.lsa_query.lookup_sids(member_sids)
+                for sid, name in zip(member_sids, member_names, strict=True):
+                    users.append(f"{name} - {sid}")
+        except Exception as e:
+            nxc_logger.debug(f"Error enumerating users in {group}: {e}")
+            return []
+        return users
 
 class SAMRQuery:
     def __init__(
@@ -163,12 +168,15 @@ class SAMRQuery:
         resp = samr.hSamrOpenDomain(self.dce, serverHandle=self.server_handle, domainId=resp["DomainId"])
         return resp["DomainHandle"]
 
-    def get_domain_aliases(self, domain_handle):
+    def get_domain_aliases(self, domain_handle, group=None):
         """Use a dictionary comprehension to generate the aliases dictionary.
 
         Calls the hSamrEnumerateAliasesInDomain() method directly in the dictionary comprehension and extracts the "Name" and "RelativeId" values from each element in the "Buffer" list
         """
-        return {alias["Name"]: alias["RelativeId"] for alias in samr.hSamrEnumerateAliasesInDomain(self.dce, domain_handle)["Buffer"]["Buffer"]}
+        aliases = {alias["Name"]: alias["RelativeId"] for alias in samr.hSamrEnumerateAliasesInDomain(self.dce, domain_handle)["Buffer"]["Buffer"]}
+        if group:
+            aliases = {name: rid for name, rid in aliases.items() if name == group}
+        return aliases
 
     def get_alias_handle(self, domain_handle, alias_id):
         resp = samr.hSamrOpenAlias(self.dce, domain_handle, desiredAccess=MAXIMUM_ALLOWED, aliasId=alias_id)
@@ -178,7 +186,6 @@ class SAMRQuery:
         """Calls the hSamrGetMembersInAlias() method directly with list comprehension and extracts the "SidPointer" value from each element in the "Sids" list."""
         alias_handle = self.get_alias_handle(domain_handle, alias_id)
         return [member["SidPointer"].formatCanonical() for member in samr.hSamrGetMembersInAlias(self.dce, alias_handle)["Members"]["Sids"]]
-
 
 class LSAQuery:
     def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", kdcHost="", aesKey="", kerberos=None, logger=None):
