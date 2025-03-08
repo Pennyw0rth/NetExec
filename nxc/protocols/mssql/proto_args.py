@@ -29,4 +29,6 @@ def proto_args(parser, parents):
     tgroup.add_argument("--put-file", nargs=2, metavar=("SRC_FILE", "DEST_FILE"), help="Put a local file into remote target, ex: whoami.txt C:\\\\Windows\\\\Temp\\\\whoami.txt")
     tgroup.add_argument("--get-file", nargs=2, metavar=("SRC_FILE", "DEST_FILE"), help="Get a remote file, ex: C:\\\\Windows\\\\Temp\\\\whoami.txt whoami.txt")
 
+    mapping_enum_group = mssql_parser.add_argument_group("Mapping/Enumeration", "Options for Mapping/Enumerating")
+    mapping_enum_group.add_argument("--rid-brute", nargs="?", type=int, const=4000, metavar="MAX_RID", help="enumerate users by bruteforcing RIDs")
     return parser

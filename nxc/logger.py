@@ -3,7 +3,6 @@ from logging import LogRecord
 from logging.handlers import RotatingFileHandler
 import os.path
 import sys
-import re
 from nxc.console import nxc_console
 from nxc.paths import NXC_PATH
 from termcolor import colored
@@ -22,10 +21,11 @@ def parse_debug_args():
     args, _ = debug_parser.parse_known_args()
     return args
 
+
 def setup_debug_logging():
     debug_args = parse_debug_args()
     root_logger = logging.getLogger("root")
-    
+
     if debug_args.verbose:
         nxc_logger.logger.setLevel(logging.INFO)
         root_logger.setLevel(logging.INFO)
@@ -35,33 +35,32 @@ def setup_debug_logging():
     else:
         nxc_logger.logger.setLevel(logging.ERROR)
         root_logger.setLevel(logging.ERROR)
-        
+
 
 def create_temp_logger(caller_frame, formatted_text, args, kwargs):
     """Create a temporary logger for emitting a log where we need to override the calling file & line number, since these are obfuscated"""
     temp_logger = logging.getLogger("temp")
     formatter = logging.Formatter("%(message)s", datefmt="[%X]")
     handler = SmartDebugRichHandler(formatter=formatter)
-    handler.handle(LogRecord(temp_logger.name, logging.INFO, caller_frame.f_code.co_filename, caller_frame.f_lineno, formatted_text, args, kwargs, caller_frame=caller_frame))
+    handler.handle(LogRecord(temp_logger.name, logging.INFO, caller_frame.f_code.co_filename, caller_frame.f_lineno, formatted_text, args, None, caller_frame=caller_frame))
 
 
 class SmartDebugRichHandler(RichHandler):
     """Custom logging handler for when we want to log normal messages to DEBUG and not double log"""
+
     def __init__(self, formatter=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if formatter is not None:
             self.setFormatter(formatter)
-            
+
     def emit(self, record):
         """Overrides the emit method of the RichHandler class so we can set the proper pathname and lineno"""
-        # for some reason in RDP, the exc_text is None which leads to a KeyError in Python logging
-        record.exc_text = record.getMessage() if record.exc_text is None else record.exc_text
-        
         if hasattr(record, "caller_frame"):
             frame_info = inspect.getframeinfo(record.caller_frame)
             record.pathname = frame_info.filename
             record.lineno = frame_info.lineno
         super().emit(record)
+
 
 def no_debug(func):
     """Stops logging non-debug messages when we are in debug mode
@@ -72,7 +71,7 @@ def no_debug(func):
     def wrapper(self, msg, *args, **kwargs):
         if self.logger.getEffectiveLevel() >= logging.INFO:
             return func(self, msg, *args, **kwargs)
-        else:            
+        else:
             formatted_text = Text.from_ansi(self.format(msg, *args, **kwargs)[0])
             caller_frame = inspect.currentframe().f_back
             create_temp_logger(caller_frame, formatted_text, args, kwargs)
@@ -81,7 +80,7 @@ def no_debug(func):
 
 
 class NXCAdapter(logging.LoggerAdapter):
-    def __init__(self, extra=None):
+    def __init__(self, extra=None, merge_extra=False):
         logging.basicConfig(
             format="%(message)s",
             datefmt="[%X]",
@@ -90,11 +89,13 @@ class NXCAdapter(logging.LoggerAdapter):
                 rich_tracebacks=True,
                 tracebacks_show_locals=False
             )],
+            encoding="utf-8"
         )
         self.logger = logging.getLogger("nxc")
         self.extra = extra
+        self.merge_extra = merge_extra
         self.output_file = None
-        
+
         logging.getLogger("impacket").disabled = True
         logging.getLogger("pypykatz").disabled = True
         logging.getLogger("minidump").disabled = True
@@ -173,7 +174,7 @@ class NXCAdapter(logging.LoggerAdapter):
                 self.logger.fail(f"Issue while trying to custom print handler: {e}")
 
     def add_file_log(self, log_file=None):
-        file_formatter = TermEscapeCodeFormatter("%(asctime)s | %(filename)s:%(lineno)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+        file_formatter = logging.Formatter("%(asctime)s | %(filename)s:%(lineno)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
         output_file = self.init_log_file() if log_file is None else log_file
         file_creation = False
 
@@ -181,7 +182,7 @@ class NXCAdapter(logging.LoggerAdapter):
             open(output_file, "x")  # noqa: SIM115
             file_creation = True
 
-        file_handler = RotatingFileHandler(output_file, maxBytes=100000)
+        file_handler = RotatingFileHandler(output_file, maxBytes=100000, encoding="utf-8")
 
         with file_handler._open() as f:
             if file_creation:
@@ -203,18 +204,6 @@ class NXCAdapter(logging.LoggerAdapter):
             datetime.now().strftime("%Y-%m-%d"),
             f"log_{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.log",
         )
-    
-
-class TermEscapeCodeFormatter(logging.Formatter):
-    """A class to strip the escape codes for logging to files"""
-
-    def __init__(self, fmt=None, datefmt=None, style="%", validate=True):
-        super().__init__(fmt, datefmt, style, validate)
-
-    def format(self, record):  # noqa: A003
-        escape_re = re.compile(r"\x1b\[[0-9;]*m")
-        record.msg = re.sub(escape_re, "", str(record.msg))
-        return super().format(record)
 
 
 # initialize the logger for all of nxc - this is imported everywhere

@@ -54,7 +54,7 @@ class ConfigCheck:
         self.reasons = []
 
     def run(self):
-        for checker, args, kwargs in zip(self.checkers, self.checker_args, self.checker_kwargs):
+        for checker, args, kwargs in zip(self.checkers, self.checker_args, self.checker_kwargs, strict=True):
             if checker is None:
                 checker = HostChecker.check_registry
 

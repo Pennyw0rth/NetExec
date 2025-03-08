@@ -1,4 +1,5 @@
 import paramiko
+import os
 import re
 import uuid
 import logging
@@ -19,6 +20,8 @@ class ssh(connection):
         self.protocol = "SSH"
         self.remote_version = "Unknown SSH Version"
         self.server_os_platform = "Linux"
+        self.shell_access = False
+        self.admin_privs = False
         self.uac = ""
         super().__init__(args, db, host)
 
@@ -33,8 +36,11 @@ class ssh(connection):
                 return
             if self.login():
                 if hasattr(self.args, "module") and self.args.module:
+                    self.load_modules()
+                    self.logger.debug("Calling modules")
                     self.call_modules()
                 else:
+                    self.logger.debug("Calling command arguments")
                     self.call_cmd_args()
                 self.conn.close()
 
@@ -52,7 +58,6 @@ class ssh(connection):
 
     def print_host_info(self):
         self.logger.display(self.remote_version if self.remote_version != "Unknown SSH Version" else f"{self.remote_version}, skipping...")
-        return True
 
     def enum_host_info(self):
         if self.conn._transport.remote_version:
@@ -74,11 +79,118 @@ class ssh(connection):
         except OSError:
             return False
 
-    def check_if_admin(self):
-        self.admin_privs = False
+    def plaintext_login(self, username, password, private_key=""):
+        self.username = username
+        self.password = password
+        try:
+            if self.args.key_file or private_key:
+                self.logger.debug(f"Logging {self.host} with username: {username}, keyfile: {self.args.key_file}")
+                self.conn.connect(
+                    self.host,
+                    port=self.port,
+                    username=username,
+                    passphrase=password if password != "" else None,
+                    pkey=private_key,
+                    key_filename=self.args.key_file,
+                    timeout=self.args.ssh_timeout,
+                    look_for_keys=False,
+                    allow_agent=False,
+                    banner_timeout=self.args.ssh_timeout,
+                )
+                # If we get the private key from the file, we need to load it into the database
+                if self.args.key_file:
+                    with open(self.args.key_file) as f:
+                        private_key = f.read().rstrip("\n")
+                cred_id = self.db.add_credential("key", username, password, key=private_key)
+            else:
+                self.logger.debug(f"Logging {self.host} with username: {self.username}, password: {self.password}")
+                self.conn.connect(
+                    self.host,
+                    port=self.port,
+                    username=username,
+                    password=password,
+                    timeout=self.args.ssh_timeout,
+                    look_for_keys=False,
+                    allow_agent=False,
+                    banner_timeout=self.args.ssh_timeout,
+                )
+                cred_id = self.db.add_credential("plaintext", username, password)
 
+            self.check_shell(cred_id)
+
+            secret = process_secret(self.password) if not self.args.key_file else f"{process_secret(self.password)} (keyfile: {self.args.key_file})"
+            display_shell_access = f"{self.uac}{self.server_os_platform}{' - Shell access!' if self.shell_access else ''}"
+            self.logger.success(f"{self.username}:{process_secret(secret)} {self.mark_pwned()} {highlight(display_shell_access)}")
+            return True
+        except AuthenticationException as e:
+            if "Private key file is encrypted" in str(e):
+                self.logger.fail(f"{username}:{process_secret(password)} Could not load private key, error: {e}")
+            else:
+                self.logger.fail(f"{username}:{process_secret(password)}")
+        except SSHException as e:
+            if "Invalid key" in str(e):
+                self.logger.fail(f"{username}:{process_secret(password)} Could not decrypt private key, invalid password")
+            elif "Error reading SSH protocol banner" in str(e):
+                self.logger.error(f"Internal Paramiko error for {username}:{process_secret(password)}, {e}")
+            else:
+                self.logger.exception(e)
+        except Exception as e:
+            self.logger.exception(e)
+            self.conn.close()
+        return False
+
+    def check_shell(self, cred_id):
+        host_id = self.db.get_hosts(self.host)[0].id
+
+        # Some IOT devices will not raise exception in self.conn._transport.auth_password / self.conn._transport.auth_publickey
+        # Check Linux
+        stdout = self.conn.exec_command("id")[1].read().decode(self.args.codec, errors="ignore")
+        if stdout:
+            self.server_os_platform = "Linux"
+            self.logger.debug(f"Linux detected for user: {stdout}")
+            self.shell_access = True
+            self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
+            self.check_linux_priv()
+            if self.admin_privs:
+                self.logger.debug(f"User {self.username} logged in successfully and is root!")
+                if self.args.key_file:
+                    self.db.add_admin_user("key", self.username, self.password, host_id=host_id, cred_id=cred_id)
+                else:
+                    self.db.add_admin_user("plaintext", self.username, self.password, host_id=host_id, cred_id=cred_id)
+            return
+
+        # Check Windows
+        stdout = self.conn.exec_command("whoami /priv")[1].read().decode(self.args.codec, errors="ignore")
+        if stdout:
+            self.server_os_platform = "Windows"
+            self.logger.debug("Windows detected")
+            self.shell_access = True
+            self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
+            self.check_windows_priv(stdout)
+            if self.admin_privs:
+                self.logger.debug(f"User {self.username} logged in successfully and is admin!")
+                if self.args.key_file:
+                    self.db.add_admin_user("key", self.username, self.password, host_id=host_id, cred_id=cred_id)
+                else:
+                    self.db.add_admin_user("plaintext", self.username, self.password, host_id=host_id, cred_id=cred_id)
+            return
+
+        # No shell access
+        self.shell_access = False
+        self.logger.debug(f"User: {self.username} can't get a basic shell")
+        self.server_os_platform = "Network Devices"
+        self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
+
+    def check_windows_priv(self, stdout):
+        if "SeDebugPrivilege" in stdout:
+            self.admin_privs = True
+        elif "SeUndockPrivilege" in stdout:
+            self.admin_privs = True
+            self.uac = "with UAC - "
+
+    def check_linux_priv(self):
         if self.args.sudo_check:
-            self.check_if_admin_sudo()
+            self.check_linux_priv_sudo()
             return
 
         # we could add in another method to check by piping in the password to sudo
@@ -105,7 +217,7 @@ class ssh(connection):
             self.logger.display(tips)
         return
 
-    def check_if_admin_sudo(self):
+    def check_linux_priv_sudo(self):
         if not self.password:
             self.logger.error("Check admin with sudo does not support using a private key")
             return
@@ -181,102 +293,35 @@ class ssh(connection):
                 self.logger.error("Command: 'mkfifo' unavailable, running command with 'sudo' failed")
                 return
 
-    def plaintext_login(self, username, password, private_key=""):
-        self.username = username
-        self.password = password
-        stdout = None
+    def put_file_single(self, sftp_conn, src, dst):
+        self.logger.display(f'Copying "{src}" to "{dst}"')
         try:
-            if self.args.key_file or private_key:
-                self.logger.debug(f"Logging {self.host} with username: {username}, keyfile: {self.args.key_file}")
-
-                self.conn.connect(
-                    self.host,
-                    port=self.port,
-                    username=username,
-                    passphrase=password if password != "" else None,
-                    key_filename=private_key if private_key else self.args.key_file,
-                    timeout=self.args.ssh_timeout,
-                    look_for_keys=False,
-                    allow_agent=False,
-                    banner_timeout=self.args.ssh_timeout,
-                )
-
-                cred_id = self.db.add_credential(
-                    "key",
-                    username,
-                    password if password != "" else "",
-                    key=private_key,
-                )
-
-            else:
-                self.logger.debug(f"Logging {self.host} with username: {self.username}, password: {self.password}")
-                self.conn.connect(
-                    self.host,
-                    port=self.port,
-                    username=username,
-                    password=password,
-                    timeout=self.args.ssh_timeout,
-                    look_for_keys=False,
-                    allow_agent=False,
-                    banner_timeout=self.args.ssh_timeout,
-                )
-                cred_id = self.db.add_credential("plaintext", username, password)
-
-            # Some IOT devices will not raise exception in self.conn._transport.auth_password / self.conn._transport.auth_publickey
-            _, stdout, _ = self.conn.exec_command("id")
-            stdout = stdout.read().decode(self.args.codec, errors="ignore")
-        except AuthenticationException:
-            self.logger.fail(f"{username}:{process_secret(password)}")
-        except SSHException as e:
-            if "Invalid key" in str(e):
-                self.logger.fail(f"{username}:{process_secret(password)} Could not decrypt private key, error: {e}")
-            if "Error reading SSH protocol banner" in str(e):
-                self.logger.error(f"Internal Paramiko error for {username}:{process_secret(password)}, {e}")
-            else:
-                self.logger.exception(e)
+            sftp_conn.put(src, dst)
+            self.logger.success(f'Created file "{src}" on "{dst}"')
         except Exception as e:
-            self.logger.exception(e)
-            self.conn.close()
-            return False
-        else:
-            shell_access = False
-            host_id = self.db.get_hosts(self.host)[0].id
+            self.logger.fail(f'Error writing file to "{dst}": {e}')
 
-            if not stdout:
-                _, stdout, _ = self.conn.exec_command("whoami /priv")
-                stdout = stdout.read().decode(self.args.codec, errors="ignore")
-                self.server_os_platform = "Windows"
-                if "SeDebugPrivilege" in stdout:
-                    self.admin_privs = True
-                elif "SeUndockPrivilege" in stdout:
-                    self.admin_privs = True
-                    self.uac = "with UAC - "
+    def put_file(self):
+        sftp_conn = self.conn.open_sftp()
+        for src, dest in self.args.put_file:
+            self.put_file_single(sftp_conn, src, dest)
+        sftp_conn.close()
 
-            if not stdout:
-                self.logger.debug(f"User: {self.username} can't get a basic shell")
-                self.server_os_platform = "Network Devices"
-                shell_access = False
-            else:
-                shell_access = True
+    def get_file_single(self, sftp_conn, remote_path, download_path):
+        self.logger.display(f'Copying "{remote_path}" to "{download_path}"')
+        try:
+            sftp_conn.get(remote_path, download_path)
+            self.logger.success(f'File "{remote_path}" was downloaded to "{download_path}"')
+        except Exception as e:
+            self.logger.fail(f'Error getting file "{remote_path}": {e}')
+            if os.path.getsize(download_path) == 0:
+                os.remove(download_path)
 
-            self.db.add_loggedin_relation(cred_id, host_id, shell=shell_access)
-
-            if shell_access and self.server_os_platform == "Linux":
-                self.check_if_admin()
-                if self.admin_privs:
-                    self.logger.debug(f"User {username} logged in successfully and is root!")
-                    if self.args.key_file:
-                        self.db.add_admin_user("key", username, password, host_id=host_id, cred_id=cred_id)
-                    else:
-                        self.db.add_admin_user("plaintext", username, password, host_id=host_id, cred_id=cred_id)
-
-            if self.args.key_file:
-                password = f"{process_secret(password)} (keyfile: {self.args.key_file})"
-
-            display_shell_access = f"{self.uac}{self.server_os_platform}{' - Shell access!' if shell_access else ''}"
-            self.logger.success(f"{username}:{process_secret(password)} {self.mark_pwned()} {highlight(display_shell_access)}")
-
-            return True
+    def get_file(self):
+        sftp_conn = self.conn.open_sftp()
+        for src, dest in self.args.get_file:
+            self.get_file_single(sftp_conn, src, dest)
+        sftp_conn.close()
 
     def execute(self, payload=None, get_output=False):
         if not payload and self.args.execute:
@@ -292,6 +337,6 @@ class ssh(connection):
         else:
             self.logger.success("Executed command")
             if get_output:
-                for line in stdout.split("\n"):
+                for line in stdout.replace("\r\n", "\n").rstrip("\n").split("\n"):
                     self.logger.highlight(line.strip("\n"))
             return stdout

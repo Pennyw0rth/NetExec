@@ -171,6 +171,8 @@ class WMIEXEC:
                 else:
                     self.logger.debug(f"Exception when trying to read output file: {e}")
 
-        if self.__outputBuffer:
+        try:
             self.logger.debug(f"Deleting file {self.__share}\\{self.__output}")
             self.__smbconnection.deleteFile(self.__share, self.__output)
+        except Exception:
+            pass

@@ -21,7 +21,7 @@ class NXCModule:
         attributes = ["flatName", "trustPartner", "trustDirection", "trustAttributes"]
 
         context.log.debug(f"Search Filter={search_filter}")
-        resp = connection.ldapConnection.search(searchFilter=search_filter, attributes=attributes, sizeLimit=0)
+        resp = connection.ldap_connection.search(searchFilter=search_filter, attributes=attributes, sizeLimit=0)
 
         trusts = []
         context.log.debug(f"Total of records returned {len(resp)}")
