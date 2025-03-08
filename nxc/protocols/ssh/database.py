@@ -9,7 +9,7 @@ from sqlalchemy.exc import (
     NoSuchTableError,
 )
 
-from nxc.database import BaseDB
+from nxc.database import BaseDB, format_host_query
 from nxc.logger import nxc_logger
 from nxc.paths import NXC_PATH
 
@@ -348,8 +348,8 @@ class database(BaseDB):
             return [results]
         # if we're filtering by host
         elif filter_term and filter_term != "":
-            like_term = func.lower(f"%{filter_term}%")
-            q = q.filter(self.HostsTable.c.host.like(like_term))
+            q = format_host_query(q, filter_term, self.HostsTable)
+                
         results = self.db_execute(q).all()
         nxc_logger.debug(f"SSH get_hosts() - results: {results}")
         return results
