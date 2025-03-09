@@ -1265,17 +1265,21 @@ class smb(connection):
         except DCERPCException as e:
             self.logger.fail(f"Error enumerating local groups: {e}")
             return
-        if groups:
+
+        if groups and not self.args.local_groups:
             self.logger.success("Enumerated local groups")
             self.logger.debug(f"Local groups: {groups}")
 
-        for group_name, group_rid in groups.items():
-            self.logger.highlight(f"{group_rid} - {group_name}")
-            group_id = self.db.add_group(self.hostname, group_name, rid=group_rid)[0]
-            self.logger.debug(f"Added group, returned id: {group_id}")
+            for group_name, group_rid in groups.items():
+                self.logger.highlight(f"{group_rid} - {group_name}")
+                group_id = self.db.add_group(self.hostname, group_name, rid=group_rid)[0]
+                self.logger.debug(f"Added group, returned id: {group_id}")
+        elif groups and members:
+            self.logger.success(f"Enumerated users of local groups: {groups.popitem()[0]}")
 
-        for member in members:
-            self.logger.highlight(member)
+            members = dict(sorted(members.items(), key=lambda item: int(item[0].split("-")[-1])))
+            for member in members:
+                self.logger.highlight(f"{member} - {members[member]}")
 
     def groups(self):
         self.logger.fail("[DEPRECATED] Arg moved to the ldap protocol")

@@ -41,7 +41,7 @@ class SamrFunc:
 
     def get_builtin_groups(self, group):
         domains = self.samr_query.get_domains()
-        members = []
+        members = {}
         if "Builtin" not in domains:
             logging.error("No Builtin group to query locally on")
             return None
@@ -55,7 +55,7 @@ class SamrFunc:
     def get_custom_groups(self, group=None):
         domains = self.samr_query.get_domains()
         custom_groups = {}
-        members = []
+        members = {}
         for domain in domains:
             if domain == "Builtin":
                 continue
@@ -70,19 +70,18 @@ class SamrFunc:
             self.logger.display(f"Querying group: {group}")
         builtin_groups, builtin_groups_members = self.get_builtin_groups(group)
         custom_groups, custom_groups_members = self.get_custom_groups(group)
-        return {**builtin_groups, **custom_groups}, builtin_groups_members + custom_groups_members
+        return {**builtin_groups, **custom_groups}, builtin_groups_members | custom_groups_members
 
     def get_local_users(self, group, domain_handle):
-        users = []
+        users = {}
         try:
             for alias_id in group.values():
                 member_sids = self.samr_query.get_alias_members(domain_handle, alias_id)
                 member_names = self.lsa_query.lookup_sids(member_sids)
-                for sid, name in zip(member_sids, member_names, strict=True):
-                    users.append(f"{name} - {sid}")
+                users = dict(zip(member_sids, member_names, strict=True))
         except Exception as e:
             self.logger.debug(f"Error enumerating users in {group}: {e}")
-            return []
+            return {}
         return users
 
 
