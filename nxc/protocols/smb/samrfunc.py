@@ -9,7 +9,6 @@ from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.nmb import NetBIOSError
 from impacket.smbconnection import SessionError
-from nxc.logger import nxc_logger
 
 
 class SamrFunc:
@@ -37,7 +36,7 @@ class SamrFunc:
         if self.password is None:
             self.password = ""
 
-        self.samr_query = SAMRQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.addr, remote_host=self.host, kerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey)
+        self.samr_query = SAMRQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.addr, remote_host=self.host, kerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, logger=self.logger)
         self.lsa_query = LSAQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.addr, remote_host=self.host, kdcHost=self.kdcHost, kerberos=self.doKerberos, aesKey=self.aesKey, logger=self.logger)
 
     def get_builtin_groups(self, group):
@@ -82,23 +81,13 @@ class SamrFunc:
                 for sid, name in zip(member_sids, member_names, strict=True):
                     users.append(f"{name} - {sid}")
         except Exception as e:
-            nxc_logger.debug(f"Error enumerating users in {group}: {e}")
+            self.logger.debug(f"Error enumerating users in {group}: {e}")
             return []
         return users
 
+
 class SAMRQuery:
-    def __init__(
-        self,
-        username="",
-        password="",
-        domain="",
-        port=445,
-        remote_name="",
-        remote_host="",
-        kerberos=None,
-        kdcHost="",
-        aesKey="",
-    ):
+    def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", kerberos=None, kdcHost="", aesKey="", logger=None,):
         self.__username = username
         self.__password = password
         self.__domain = domain
@@ -110,12 +99,13 @@ class SAMRQuery:
         self.__remote_host = remote_host
         self.__kerberos = kerberos
         self.__kdcHost = kdcHost
+        self.logger = logger
         self.dce = self.get_dce()
         self.server_handle = self.get_server_handle()
 
     def get_transport(self):
         string_binding = rf"ncacn_np:{self.__port}[\pipe\samr]"
-        nxc_logger.debug(f"Binding to {string_binding}")
+        self.logger.debug(f"Binding to {string_binding}")
         # using a direct SMBTransport instead of DCERPCTransportFactory since we need the filename to be '\samr'
         return transport.SMBTransport(
             self.__remote_name,
@@ -151,11 +141,13 @@ class SAMRQuery:
             try:
                 resp = samr.hSamrConnect(self.dce)
             except samr.DCERPCException as e:
-                nxc_logger.debug(f"Error while connecting with Samr: {e}")
+                if "rpc_s_access_denied" in str(e):
+                    raise
+                self.logger.debug(f"Error while connecting with Samr: {e}")
                 return None
             return resp["ServerHandle"]
         else:
-            nxc_logger.debug("Error creating Samr handle")
+            self.logger.debug("Error creating Samr handle")
 
     def get_domains(self):
         """Calls the hSamrEnumerateDomainsInSamServer() method directly with list comprehension and extracts the "Name" value from each element in the "Buffer" list."""
@@ -185,6 +177,7 @@ class SAMRQuery:
         """Calls the hSamrGetMembersInAlias() method directly with list comprehension and extracts the "SidPointer" value from each element in the "Sids" list."""
         alias_handle = self.get_alias_handle(domain_handle, alias_id)
         return [member["SidPointer"].formatCanonical() for member in samr.hSamrGetMembersInAlias(self.dce, alias_handle)["Members"]["Sids"]]
+
 
 class LSAQuery:
     def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", kdcHost="", aesKey="", kerberos=None, logger=None):
