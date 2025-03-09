@@ -1239,7 +1239,7 @@ class smb(connection):
         return dc_ips
 
     def smb_sessions(self):
-        self.logger.fail("[DEPRECATED] Use option --qwinsta or --loggedon-users")
+        self.logger.fail("[REMOVED] Use option --qwinsta or --loggedon-users")
         return
 
     def disks(self):
@@ -1282,7 +1282,7 @@ class smb(connection):
                 self.logger.highlight(f"{member} - {members[member]}")
 
     def groups(self):
-        self.logger.fail("[DEPRECATED] Arg moved to the ldap protocol")
+        self.logger.fail("[REMOVED] Arg moved to the ldap protocol")
         return
 
     def users(self):
@@ -1291,12 +1291,12 @@ class smb(connection):
         return UserSamrDump(self).dump(self.args.users)
 
     def computers(self):
-        self.logger.fail("[DEPRECATED] Arg moved to the ldap protocol")
+        self.logger.fail("[REMOVED] Arg moved to the ldap protocol")
         return
 
     def loggedon_users(self):
         if self.args.loggedon_users_filter:
-            self.logger.fail("[DEPRECATED] Use option '--loggedon-users <USERNAME>' for filtering")
+            self.logger.fail("[REMOVED] Use option '--loggedon-users <USERNAME>' for filtering")
 
         logged_on = set()
         try:

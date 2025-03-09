@@ -20,7 +20,7 @@ class NXCModule:
 
     def options(self, context, module_options):
         r"""
-        [DEPRECATED] Use the ldap flag '--groups "Administrators"' instead of the module group-mem. Will be removed in the future.
+        [REMOVED] Use the ldap flag '--groups "Administrators"' instead of the module group-mem.
 
         group-mem: Specify group-mem to call the module
         GROUP: Specify the GROUP option to query for that group's members
@@ -36,7 +36,7 @@ class NXCModule:
             sys.exit(1)
 
     def on_login(self, context, connection):
-        self.logger.fail("[DEPRECATED] Use the ldap flag '--groups \"Administrators\"' instead of the module group-mem. Will be removed in the future.")
+        self.logger.fail("[REMOVED] Use the ldap flag '--groups \"Administrators\"' instead of the module group-mem.")
         return None
 
         # First look up the SID of the group passed in
