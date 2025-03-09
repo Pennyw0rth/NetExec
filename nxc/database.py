@@ -1,4 +1,5 @@
 import configparser
+import ipaddress
 import shutil
 import sys
 from os import mkdir
@@ -8,7 +9,7 @@ from pathlib import Path
 from sqlite3 import connect
 from threading import Lock
 
-from sqlalchemy import create_engine, MetaData
+from sqlalchemy import create_engine, MetaData, func
 from sqlalchemy.exc import IllegalStateChangeError
 from sqlalchemy.orm import sessionmaker, scoped_session
 
@@ -109,7 +110,19 @@ def initialize_db():
 
     # Even if the default workspace exists, we still need to check if every protocol has a database (in case of a new protocol)
     init_protocol_dbs("default")
+    
+def format_host_query(q, filter_term, HostsTable):
+    # one annoying thing is that if you search for an ip such as '10.10.10.5', it will return 10.10.10.5 and 10.10.10.52, so we have to check if its an ip address first
+    try:
+        ipaddress.ip_address(filter_term)
+        nxc_logger.debug(f"filter_term is an IP address: {filter_term}")
+        q = q.filter(HostsTable.c.ip == filter_term)
+    except ValueError:
+        nxc_logger.debug(f"filter_term is not an IP address: {filter_term}")
+        like_term = func.lower(f"%{filter_term}%")
+        q = q.filter(HostsTable.c.ip.like(like_term) | func.lower(HostsTable.c.hostname).like(like_term))
 
+    return q
 
 class BaseDB:
     def __init__(self, db_engine):
