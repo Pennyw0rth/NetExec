@@ -14,7 +14,6 @@ from paramiko.ssh_exception import (
     SSHException,
 )
 
-# regex to extract allowed auth methods from errors
 AUTH_METHODS_REGEX = re.compile(r"allowed types: \[(.*?)\]")
 
 class ssh(connection):
@@ -26,8 +25,8 @@ class ssh(connection):
         self.admin_privs = False
         self.uac = ""
         self.password_auth_supported = True
-        self.auth_methods_cache = {}         # auth methods cache per host
-        self.cached_key = None               # cache key_file
+        self.auth_methods_cache = {}
+        self.cached_key = None
         super().__init__(args, db, host)
 
     def proto_flow(self):
@@ -39,9 +38,6 @@ class ssh(connection):
             if self.remote_version == "Unknown SSH Version":
                 self.conn.close()
                 return
-            # only check password auth if no key_file
-            if not hasattr(self.args, "key_file") or not self.args.key_file:
-                self.check_password_auth()
             if self.login():
                 if hasattr(self.args, "module") and self.args.module:
                     self.load_modules()
@@ -55,14 +51,12 @@ class ssh(connection):
     def proto_logger(self):
         logging.getLogger("paramiko").disabled = True
         logging.getLogger("paramiko.transport").disabled = True
-        self.logger = NXCAdapter(
-            extra={
-                "protocol": "SSH",
-                "host": self.host,
-                "port": self.port,
-                "hostname": self.hostname,
-            }
-        )
+        self.logger = NXCAdapter(extra={
+            "protocol": "SSH",
+            "host": self.host,
+            "port": self.port,
+            "hostname": self.hostname,
+        })
 
     def print_host_info(self):
         self.logger.display(
@@ -76,91 +70,6 @@ class ssh(connection):
         self.logger.debug(f"Remote version: {self.remote_version}")
         self.db.add_host(self.host, self.port, self.remote_version)
 
-    def check_password_auth(self):
-        """Check if password authentication is supported by directly attempting a connection."""
-        cache_key = f"{self.host}:{self.port}"
-        if cache_key in self.auth_methods_cache:
-            self.password_auth_supported = "password" in self.auth_methods_cache[cache_key]
-            self.logger.debug(f"Using cached auth methods: {self.auth_methods_cache[cache_key]}")
-            self.logger.debug(f"Password authentication supported (cached): {self.password_auth_supported}")
-            return self.password_auth_supported
-
-        self.logger.debug("Checking if password authentication is supported")
-        self.password_auth_supported = False
-
-        try:
-            test_client = paramiko.SSHClient()
-            test_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            try:
-                # Connect with empty pw to force AuthenticationException
-                test_client.connect(
-                    hostname=self.host,
-                    port=self.port,
-                    username="test_user",
-                    password="",
-                    timeout=min(3, self.args.ssh_timeout),
-                    look_for_keys=False,
-                    allow_agent=False
-                )
-                self.logger.debug("Empty password authentication succeeded unexpectedly")
-            except AuthenticationException as e:
-                error_msg = str(e)
-                self.logger.debug(f"Authentication exception: {error_msg}")
-                if "allowed types" in error_msg.lower():
-                    match = AUTH_METHODS_REGEX.search(error_msg)
-                    if match:
-                        auth_methods = [m.strip("'") for m in match.group(1).split(", ")]
-                        self.logger.debug(f"Server reports auth methods: {auth_methods}")
-                        self.auth_methods_cache[cache_key] = auth_methods
-                        if "password" in auth_methods:
-                            self.logger.debug("Server reports password auth is supported, verifying...")
-                            self.password_auth_supported = self._verify_password_auth()
-                        else:
-                            self.logger.debug(f"Password authentication not supported. Allowed methods: {auth_methods}")
-                    else:
-                        self.logger.debug(f"Could not parse allowed authentication methods from: {error_msg}")
-                else:
-                    self.logger.debug("Could not determine allowed authentication methods")
-            except Exception as e:
-                self.logger.debug(f"Error during auth method check: {e!s}")
-            finally:
-                test_client.close()
-        except Exception as e:
-            self.logger.debug(f"Error setting up SSH connection for auth method check: {e!s}")
-        self.logger.debug(f"Final determination: Password authentication supported: {self.password_auth_supported}")
-        return self.password_auth_supported
-
-    def _verify_password_auth(self):
-        """Helper function to verify if password authentication is actually enabled."""
-        try:
-            temp_client = paramiko.SSHClient()
-            temp_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            temp_client.connect(
-                hostname=self.host,
-                port=self.port,
-                username="dummy_user",
-                password="dummy_password",
-                timeout=min(3, self.args.ssh_timeout),
-                look_for_keys=False,
-                allow_agent=False
-            )
-            temp_client.close()
-            self.logger.debug("Empty password auth unexpectedly succeeded, marking as enabled")
-            return True  # unlikely
-        except AuthenticationException as e:
-            error_msg = str(e).lower()
-            self.logger.debug(f"Password auth dummy attempt exception: {error_msg}")
-            # if we get an error like "Permission denied (publickey)" or "no authentication methods available," password auth is off.
-            if ("permission denied (publickey)" in error_msg or 
-                "no authentication methods available" in error_msg or
-                "not allowed" in error_msg or
-                "no existing session" in error_msg):
-                return False
-            return True
-        except Exception as e:
-            self.logger.debug(f"Error in _verify_password_auth: {e!s}")
-            return False
-
     def create_conn_obj(self):
         self.conn = paramiko.SSHClient()
         self.conn.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -173,6 +82,7 @@ class ssh(connection):
                 allow_agent=False
             )
         except (AuthenticationException, SSHException):
+            # even if auth fails, transport may be valid
             return True
         except (NoValidConnectionsError, OSError):
             return False
@@ -182,16 +92,19 @@ class ssh(connection):
         self.username = username
         self.password = password
         using_key_auth = bool(self.args.key_file or private_key)
+        cache_key = f"{self.host}:{self.port}"
         
-        # if password auth is not supported and we're not using key auth, skip login
-        if not using_key_auth and not self.password_auth_supported:
-            self.logger.fail("Password auth not supported")
-            return False
-            
+        if using_key_auth:
+            self.logger.debug(f"Attempting key authentication for {self.host} with username: {username}")
+        else:
+            self.logger.debug(f"Attempting password authentication for {self.host} with username: {username}")
+            if cache_key in self.auth_methods_cache and "password" not in self.auth_methods_cache[cache_key]:
+                self.logger.debug("Skipping password auth - known unsupported from cache")
+                self.logger.fail("Password auth not supported")
+                return False
+
         try:
             if using_key_auth:
-                self.logger.debug(f"Attempting key authentication for {self.host} with username: {username}")
-                # cache key contents
                 if self.args.key_file and self.cached_key is None:
                     with open(self.args.key_file) as f:
                         self.cached_key = f.read().rstrip("\n")
@@ -209,7 +122,6 @@ class ssh(connection):
                 )
                 cred_id = self.db.add_credential("key", username, password, key=self.cached_key)
             else:
-                self.logger.debug(f"Attempting password authentication for {self.host} with username: {username}")
                 self.conn.connect(
                     self.host,
                     port=self.port,
@@ -223,21 +135,36 @@ class ssh(connection):
                 cred_id = self.db.add_credential("plaintext", username, password)
 
             self.check_shell(cred_id)
-            secret = process_secret(self.password) if not self.args.key_file else f"{process_secret(self.password)} (keyfile: {self.args.key_file})"
+            secret = process_secret(self.password) if not self.args.key_file \
+                     else f"{process_secret(self.password)} (keyfile: {self.args.key_file})"
             display_shell_access = f"{self.uac}{self.server_os_platform}{' - Shell access!' if self.shell_access else ''}"
             self.logger.success(f"{self.username}:{process_secret(secret)} {self.mark_pwned()} {highlight(display_shell_access)}")
             return True
+            
         except AuthenticationException as e:
-            error_msg = str(e)
+            error_msg = str(e).lower()
             self.logger.debug(f"Authentication exception: {error_msg}")
-            if "Private key file is encrypted" in error_msg:
+            if "allowed types" in error_msg:
+                match = AUTH_METHODS_REGEX.search(error_msg)
+                if match:
+                    auth_methods = [m.strip("'") for m in match.group(1).split(", ")]
+                    self.logger.debug(f"Server reports auth methods: {auth_methods}")
+                    self.auth_methods_cache[cache_key] = auth_methods
+                    if not using_key_auth and "password" not in auth_methods:
+                        self.logger.fail("Password auth not supported")
+                        return False
+            if "private key file is encrypted" in error_msg:
                 self.logger.fail(f"{username} - Could not load private key (encrypted key requires passphrase)")
+            elif "permission denied (publickey)" in error_msg and not using_key_auth:
+                self.auth_methods_cache[cache_key] = ["publickey"]
+                self.logger.fail("Password auth not supported")
             else:
                 if using_key_auth:
                     self.logger.fail(f"{username} - Key authentication failed")
                 else:
                     self.logger.fail(f"{username}:{process_secret(password)}")
             return False
+            
         except SSHException as e:
             error_msg = str(e).lower()
             self.logger.debug(f"SSH Exception: {error_msg}")
@@ -248,11 +175,11 @@ class ssh(connection):
                  "no more authentication methods" in error_msg or
                  "permission denied" in error_msg)):
                 self.logger.debug("Detected password authentication is disabled based on error message")
-                self.password_auth_supported = False
+                self.auth_methods_cache[cache_key] = ["publickey"]
                 self.logger.fail("Password auth not supported")
-            elif "Invalid key" in error_msg:
+            elif "invalid key" in error_msg:
                 self.logger.fail(f"{username} - Invalid or encrypted private key")
-            elif "Error reading SSH protocol banner" in error_msg:
+            elif "error reading ssh protocol banner" in error_msg:
                 self.logger.error(f"Internal Paramiko error: {e}")
             else:
                 if using_key_auth:
@@ -260,6 +187,7 @@ class ssh(connection):
                 else:
                     self.logger.fail(f"{username}:{process_secret(password)} SSH error: {e}")
             return False
+            
         except Exception as e:
             self.logger.debug(f"Exception during login: {e!s}")
             if using_key_auth:
@@ -271,14 +199,10 @@ class ssh(connection):
     def check_shell(self, cred_id):
         host_id = self.db.get_hosts(self.host)[0].id
         
-        # Use a single connection for both checks instead of two separate ones
-        # This reduces the number of round trips to the server
         try:
-            # Try Linux commands first (most common)
+            # Execute both Linux and Windows commands in one go to minimize round trips.
             _, stdout, _ = self.conn.exec_command("id && echo '---SEPARATOR---' && whoami /priv")
             output = stdout.read().decode(self.args.codec, errors="ignore")
-            
-            # Split the output by our separator
             parts = output.split("---SEPARATOR---")
             linux_output = parts[0].strip() if len(parts) > 0 else ""
             windows_output = parts[1].strip() if len(parts) > 1 else ""
@@ -291,10 +215,8 @@ class ssh(connection):
                 self.check_linux_priv()
                 if self.admin_privs:
                     self.logger.debug(f"User {self.username} logged in successfully and is root!")
-                    if self.args.key_file:
-                        self.db.add_admin_user("key", self.username, self.password, host_id=host_id, cred_id=cred_id)
-                    else:
-                        self.db.add_admin_user("plaintext", self.username, self.password, host_id=host_id, cred_id=cred_id)
+                    self.db.add_admin_user("key" if self.args.key_file else "plaintext", 
+                                             self.username, self.password, host_id=host_id, cred_id=cred_id)
                 return
             
             if windows_output:
@@ -305,59 +227,50 @@ class ssh(connection):
                 self.check_windows_priv(windows_output)
                 if self.admin_privs:
                     self.logger.debug(f"User {self.username} logged in successfully and is admin!")
-                    if self.args.key_file:
-                        self.db.add_admin_user("key", self.username, self.password, host_id=host_id, cred_id=cred_id)
-                    else:
-                        self.db.add_admin_user("plaintext", self.username, self.password, host_id=host_id, cred_id=cred_id)
+                    self.db.add_admin_user("key" if self.args.key_file else "plaintext", 
+                                             self.username, self.password, host_id=host_id, cred_id=cred_id)
                 return
         except Exception as e:
             self.logger.debug(f"Error during shell check: {e!s}")
             
-        # If we get here, no shell access
         self.shell_access = False
-        self.logger.debug(f"User: {self.username} can't get a basic shell")
+        self.logger.debug(f"User: {self.username} cannot obtain a basic shell")
         self.server_os_platform = "Network Devices"
         self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
 
     def check_windows_priv(self, stdout):
-        if "SeDebugPrivilege" in stdout:
+        if "SeDebugPrivilege" in stdout or "SeUndockPrivilege" in stdout:
             self.admin_privs = True
-        elif "SeUndockPrivilege" in stdout:
-            self.admin_privs = True
-            self.uac = "with UAC - "
+            if "SeUndockPrivilege" in stdout:
+                self.uac = "with UAC - "
 
     def check_linux_priv(self):
         if self.args.sudo_check:
             self.check_linux_priv_sudo()
             return
-        self.logger.info("Determined user is root via `id; sudo -ln` command")
+        self.logger.info("Checking superuser privileges via `id; sudo -ln`")
         _, stdout, _ = self.conn.exec_command("id; sudo -ln 2>&1")
         stdout = stdout.read().decode(self.args.codec, errors="ignore")
         admin_flag = {
             "(root)": [True, None],
             "NOPASSWD: ALL": [True, None],
             "(ALL : ALL) ALL": [True, None],
-            "(sudo)": [False, f"Current user: '{self.username}' was in 'sudo' group, please try '--sudo-check' to check if user can run sudo shell"]
+            "(sudo)": [False, f"User '{self.username}' in 'sudo' group; try '--sudo-check' for shell access"]
         }
-        for keyword in admin_flag:
-            match = re.findall(re.escape(keyword), stdout)
-            if match:
-                self.logger.info(f"User: '{self.username}' matched keyword: {match[0]}")
-                self.admin_privs = admin_flag[match[0]][0]
-                if not self.admin_privs:
-                    tips = admin_flag[match[0]][1]
-                else:
-                    break
-        if not self.admin_privs and "tips" in locals():
-            self.logger.display(tips)
-        return
+        for keyword, (flag, tip) in admin_flag.items():
+            if re.search(re.escape(keyword), stdout):
+                self.logger.info(f"User '{self.username}' matched keyword: {keyword}")
+                self.admin_privs = flag
+                if not flag and tip:
+                    self.logger.display(tip)
+                break
 
     def check_linux_priv_sudo(self):
         if not self.password:
-            self.logger.error("Check admin with sudo does not support using a private key")
+            self.logger.error("Sudo check does not support key authentication")
             return
         method = self.args.sudo_check_method if self.args.sudo_check_method else "sudo-stdin"
-        self.logger.info(f"Doing sudo check with method: {method}")
+        self.logger.info(f"Performing sudo check with method: {method}")
         if method == "sudo-stdin":
             _, stdout, _ = self.conn.exec_command("sudo --help")
             stdout = stdout.read().decode(self.args.codec, errors="ignore")
@@ -366,12 +279,9 @@ class ssh(connection):
                 self.conn.exec_command(f"echo {self.password} | sudo -S cp /etc/shadow {shadow_backup} >/dev/null 2>&1 &")
                 self.conn.exec_command(f"echo {self.password} | sudo -S chmod 777 {shadow_backup} >/dev/null 2>&1 &")
                 tries = 1
-                while True:
-                    self.logger.info(f"Checking {shadow_backup} existence (try {tries})")
+                while tries < self.args.get_output_tries:
+                    self.logger.info(f"Checking existence of {shadow_backup} (try {tries})")
                     _, _, stderr = self.conn.exec_command(f"ls {shadow_backup}")
-                    if tries >= self.args.get_output_tries:
-                        self.logger.info(f"{shadow_backup} not found; pipe may be hanging.")
-                        break
                     if stderr.read().decode("utf-8"):
                         time.sleep(2)
                         tries += 1
@@ -383,7 +293,6 @@ class ssh(connection):
                 self.conn.exec_command(f"echo {self.password} | sudo -S rm -rf {shadow_backup}")
             else:
                 self.logger.error("Sudo does not support stdin mode; sudo-check failed")
-                return
         else:
             _, stdout, _ = self.conn.exec_command("mkfifo --help")
             stdout = stdout.read().decode(self.args.codec, errors="ignore")
@@ -396,13 +305,9 @@ class ssh(connection):
                 self.conn.exec_command(f"echo 'script -qc /bin/sh /dev/null' > {pipe_stdin}")
                 self.conn.exec_command(f"echo 'sudo -s' > {pipe_stdin} && echo '{self.password}' > {pipe_stdin}")
                 tries = 1
-                self.logger.info(f"Attempting to copy /etc/shadow to {shadow_backup}")
-                while True:
+                while tries < self.args.get_output_tries:
                     self.logger.info(f"Checking {shadow_backup} existence (try {tries})")
                     _, _, stderr = self.conn.exec_command(f"ls {shadow_backup}")
-                    if tries >= self.args.get_output_tries:
-                        self.logger.info(f"{shadow_backup} not found; pipe may be hanging.")
-                        break
                     if stderr.read().decode("utf-8"):
                         time.sleep(2)
                         self.conn.exec_command(f"echo 'cp /etc/shadow {shadow_backup} && chmod 777 {shadow_backup}' > {pipe_stdin}")
@@ -415,7 +320,6 @@ class ssh(connection):
                 self.conn.exec_command(f"echo 'rm -rf {shadow_backup}' > {pipe_stdin} && rm -rf {pipe_stdin} {pipe_stdout}")
             else:
                 self.logger.error("mkfifo unavailable; sudo-check failed")
-                return
 
     def put_file_single(self, sftp_conn, src, dst):
         self.logger.display(f'Copying "{src}" to "{dst}"')
@@ -452,29 +356,20 @@ class ssh(connection):
             payload = self.args.execute
             if not self.args.no_output:
                 get_output = True
-                
         try:
-            # use a timeout to prevent hanging for command execution
-            _, stdout, _ = self.conn.exec_command(
-                f"{payload} 2>&1", 
-                timeout=self.args.ssh_timeout
-            )
-            
+            # execute command with timeout to avoid hanging
+            _, stdout, _ = self.conn.exec_command(f"{payload} 2>&1", timeout=self.args.ssh_timeout)
             start_time = time.time()
             stdout_data = ""
             while not stdout.channel.exit_status_ready():
                 if stdout.channel.recv_ready():
                     stdout_data += stdout.channel.recv(1024).decode(self.args.codec, errors="ignore")
-                
                 if time.time() - start_time > self.args.ssh_timeout:
                     self.logger.debug("Command execution timed out")
                     break
-                    
                 time.sleep(0.1)
-                
             if stdout.channel.recv_ready():
                 stdout_data += stdout.channel.recv(1024).decode(self.args.codec, errors="ignore")
-                
         except Exception as e:
             self.logger.fail(f"Execute command failed, error: {e!s}")
             return False
