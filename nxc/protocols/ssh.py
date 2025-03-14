@@ -226,7 +226,8 @@ class ssh(connection):
             if using_key_auth:
                 # show keyFile name instead of password for key auth
                 key_filename = self.args.key_file.split("/")[-1] if self.args.key_file else "private_key"
-                secret = key_filename
+                # Indicate if the key required a passphrase
+                secret = f"{key_filename}" if password else f"{key_filename} (no passphrase)"
             else:
                 secret = process_secret(self.password)
                 
@@ -254,7 +255,7 @@ class ssh(connection):
             
             # key-specific error handling
             if "private key file is encrypted" in error_msg:
-                self.logger.fail(f"{username} - Could not load private key (encrypted key requires passphrase)")
+                self.logger.fail("Key passphrase required")
             elif "permission denied (publickey)" in error_msg and not using_key_auth:
                 self.auth_methods_cache[cache_key] = ["publickey"]
                 self.logger.fail("Password auth not supported")
@@ -283,7 +284,7 @@ class ssh(connection):
                 self.auth_methods_cache[cache_key] = ["publickey"]
                 self.logger.fail("Password auth not supported")
             elif "invalid key" in error_msg:
-                self.logger.fail(f"{username} - Invalid or encrypted private key")
+                self.logger.fail("Invalid passphrase")
             elif "error reading ssh protocol banner" in error_msg:
                 self.logger.error(f"Internal Paramiko error: {e}")
             else:
@@ -295,8 +296,13 @@ class ssh(connection):
             return False
             
         except Exception as e:
-            self.logger.debug(f"Exception during login: {e!s}")
-            if using_key_auth:
+            error_str = str(e)
+            self.logger.debug(f"Exception during login: {error_str}")
+            
+            # additional exception handling for key auth errors
+            if "q must be exactly" in error_str and using_key_auth:
+                self.logger.fail("Key validation failed (key may be for a different user)")
+            elif using_key_auth:
                 self.logger.fail(f"{username} - Error with key authentication: {e}")
             else:
                 self.logger.fail(f"{username}:{process_secret(password)} Error: {e}")
