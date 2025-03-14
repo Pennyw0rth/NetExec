@@ -21,6 +21,7 @@ from impacket.dcerpc.v5.samr import (
     UF_TRUSTED_FOR_DELEGATION,
     UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION,
     UF_SERVER_TRUST_ACCOUNT,
+    SAM_MACHINE_ACCOUNT,
 )
 from impacket.krb5 import constants
 from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError
@@ -678,25 +679,47 @@ class ldap(connection):
 
     def groups(self):
         # Building the search filter
-        search_filter = "(objectCategory=group)"
-        attributes = ["name"]
+        if self.args.groups:
+            self.logger.debug(f"Dumping group: {self.args.groups}")
+            search_filter = f"(cn={self.args.groups})"
+            attributes = ["member"]
+        else:
+            search_filter = "(objectCategory=group)"
+            attributes = ["cn", "member"]
         resp = self.search(search_filter, attributes, 0)
-        if resp:
-            self.logger.debug(f"Total of records returned {len(resp):d}")
+        resp_parsed = parse_result_attributes(resp)
+        self.logger.debug(f"Total of records returned {len(resp):d}")
 
-            for item in resp:
-                if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
-                    continue
-                name = ""
+        if self.args.groups:
+            if not resp_parsed:
+                self.logger.fail(f"Group {self.args.groups} not found")
+            elif not resp_parsed[0]:
+                self.logger.fail(f"Group {self.args.groups} has no members")
+            else:
+                # Fix if group has only one member
+                if not isinstance(resp_parsed[0]["member"], list):
+                    resp_parsed[0]["member"] = [resp_parsed[0]["member"]]
+                for user in resp_parsed[0]["member"]:
+                    self.logger.highlight(user.split(",")[0].split("=")[1])
+        else:
+            for item in resp_parsed:
                 try:
-                    for attribute in item["attributes"]:
-                        if str(attribute["type"]) == "name":
-                            name = str(attribute["vals"][0])
-                    self.logger.highlight(f"{name}")
+                    # Fix if group has only one member
+                    if not isinstance(item.get("member", []), list):
+                        item["member"] = [item["member"]]
+                    self.logger.highlight(f"{item['cn']:<40} membercount: {len(item.get('member', []))}")
                 except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
-            return
+
+    def computers(self):
+        resp = self.search(f"(sAMAccountType={SAM_MACHINE_ACCOUNT})", ["name"], 0)
+        resp_parse = parse_result_attributes(resp)
+
+        if resp:
+            self.logger.display(f"Total records returned: {len(resp_parse)}")
+            for item in resp_parse:
+                self.logger.highlight(item["name"] + "$")
 
     def dc_list(self):
         # Building the search filter
