@@ -9,9 +9,12 @@ from impacket.smbconnection import SMBConnection, SessionError
 from impacket.smb import SMB_DIALECT
 from impacket.examples.secretsdump import (
     RemoteOperations,
-    SAMHashes,
-    LSASecrets,
     NTDSHashes,
+)
+from impacket.examples.regsecrets import (
+    RemoteOperations as RegSecretsRemoteOperations,
+    SAMHashes,
+    LSASecrets
 )
 from impacket.nmb import NetBIOSError, NetBIOSTimeout
 from impacket.dcerpc.v5 import transport, lsat, lsad, scmr, rrp, srvs, wkst
@@ -1532,9 +1535,12 @@ class smb(connection):
         for src, dest in self.args.get_file:
             self.get_file_single(src, dest)
 
-    def enable_remoteops(self):
+    def enable_remoteops(self, regsecret=False):
         try:
-            self.remote_ops = RemoteOperations(self.conn, self.kerberos, self.kdcHost)
+            if regsecret:
+                self.remote_ops = RegSecretsRemoteOperations(self.conn, self.kerberos, self.kdcHost)
+            else:
+                self.remote_ops = RemoteOperations(self.conn, self.kerberos, self.kdcHost)
             self.remote_ops.enableRegistry()
             if self.bootkey is None:
                 self.bootkey = self.remote_ops.getBootKey()
@@ -1544,7 +1550,7 @@ class smb(connection):
     @requires_admin
     def sam(self):
         try:
-            self.enable_remoteops()
+            self.enable_remoteops(regsecret=True)
             host_id = self.db.get_hosts(filter_term=self.host)[0][0]
 
             def add_sam_hash(sam_hash, host_id):
@@ -1562,11 +1568,9 @@ class smb(connection):
             add_sam_hash.sam_hashes = 0
 
             if self.remote_ops and self.bootkey:
-                SAM_file_name = self.remote_ops.saveSAM()
                 SAM = SAMHashes(
-                    SAM_file_name,
                     self.bootkey,
-                    isRemote=True,
+                    remoteOps=self.remote_ops,
                     perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
                 )
 
@@ -1579,7 +1583,6 @@ class smb(connection):
                     self.remote_ops.finish()
                 except Exception as e:
                     self.logger.debug(f"Error calling remote_ops.finish(): {e}")
-                SAM.finish()
         except SessionError as e:
             if "STATUS_ACCESS_DENIED" in e.getErrorString():
                 self.logger.fail('Error "STATUS_ACCESS_DENIED" while dumping SAM. This is likely due to an endpoint protection.')
@@ -1796,7 +1799,7 @@ class smb(connection):
     @requires_admin
     def lsa(self):
         try:
-            self.enable_remoteops()
+            self.enable_remoteops(regsecret=True)
 
             def add_lsa_secret(secret):
                 add_lsa_secret.secrets += 1
@@ -1815,12 +1818,9 @@ class smb(connection):
             add_lsa_secret.secrets = 0
 
             if self.remote_ops and self.bootkey:
-                SECURITYFileName = self.remote_ops.saveSECURITY()
                 LSA = LSASecrets(
-                    SECURITYFileName,
                     self.bootkey,
                     self.remote_ops,
-                    isRemote=True,
                     perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
                 )
                 self.logger.success("Dumping LSA secrets")
@@ -1833,7 +1833,6 @@ class smb(connection):
                     self.remote_ops.finish()
                 except Exception as e:
                     self.logger.debug(f"Error calling remote_ops.finish(): {e}")
-                LSA.finish()
         except SessionError as e:
             if "STATUS_ACCESS_DENIED" in e.getErrorString():
                 self.logger.fail('Error "STATUS_ACCESS_DENIED" while dumping LSA. This is likely due to an endpoint protection.')
