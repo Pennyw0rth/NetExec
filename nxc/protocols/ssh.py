@@ -227,7 +227,7 @@ class ssh(connection):
                 # show keyFile name instead of password for key auth
                 key_filename = self.args.key_file.split("/")[-1] if self.args.key_file else "private_key"
                 # Indicate if the key required a passphrase
-                secret = f"{key_filename}" if password else f"{key_filename} (no passphrase)"
+                secret = f"{key_filename}" if password else f"{key_filename}"
             else:
                 secret = process_secret(self.password)
                 
@@ -240,7 +240,7 @@ class ssh(connection):
             error_msg = str(e).lower()
             self.logger.debug(f"Authentication exception: {error_msg}")
             
-            # extract allowed auth methods
+            # extract allowed auth methods - works with OpenSSH format
             if "allowed types" in error_msg:
                 match = AUTH_METHODS_REGEX.search(error_msg)
                 if match:
@@ -253,12 +253,16 @@ class ssh(connection):
                         self.logger.fail("Password auth not supported")
                         return False
             
-            # key-specific error handling
-            if "private key file is encrypted" in error_msg:
+            # generic pattern matching for common authentication errors across SSH implementations
+            if any(phrase in error_msg for phrase in ["encrypted", "passphrase required", "need passphrase"]):
                 self.logger.fail("Key passphrase required")
-            elif "permission denied (publickey)" in error_msg and not using_key_auth:
-                self.auth_methods_cache[cache_key] = ["publickey"]
-                self.logger.fail("Password auth not supported")
+            elif any(phrase in error_msg for phrase in ["permission denied", "auth fail", "authentication failed"]) and not using_key_auth:
+                # Check if this might be a publickey-only server
+                if "publickey" in error_msg or self.remote_version.lower().startswith("ssh-2.0-openssh"):
+                    self.auth_methods_cache[cache_key] = ["publickey"]
+                    self.logger.fail("Password auth not supported")
+                else:
+                    self.logger.fail(f"{username}:{process_secret(password)}")
             else:
                 # generic auth failure
                 if using_key_auth:
@@ -272,26 +276,28 @@ class ssh(connection):
             error_msg = str(e).lower()
             self.logger.debug(f"SSH Exception: {error_msg}")
             
-            # parse error message for strings which indicate password auth is disabled
-            if (not using_key_auth and 
-                ("no authentication methods available" in error_msg or 
-                 "not allowed" in error_msg or
-                 "authentication method not supported" in error_msg or
-                 "no more authentication methods" in error_msg or
-                 "permission denied" in error_msg)):
-                
+            # generic pattern matching
+            if not using_key_auth and any(phrase in error_msg for phrase in [
+                "no authentication methods", 
+                "not allowed", 
+                "authentication method not supported", 
+                "no more authentication methods", 
+                "permission denied"
+            ]):
                 self.logger.debug("Detected password authentication is disabled based on error message")
                 self.auth_methods_cache[cache_key] = ["publickey"]
                 self.logger.fail("Password auth not supported")
-            elif "invalid key" in error_msg:
+            elif any(phrase in error_msg for phrase in ["invalid key", "bad passphrase", "wrong passphrase", "cannot decrypt"]):
                 self.logger.fail("Invalid passphrase")
             elif "error reading ssh protocol banner" in error_msg:
                 self.logger.error(f"Internal Paramiko error: {e}")
             else:
-                # generic SSH error
+                # generic SSH error with more context
                 if using_key_auth:
+                    self.logger.debug(f"Unhandled SSH exception during key auth: {error_msg}")
                     self.logger.fail(f"{username} - SSH error with key authentication: {e}")
                 else:
+                    self.logger.debug(f"Unhandled SSH exception during password auth: {error_msg}")
                     self.logger.fail(f"{username}:{process_secret(password)} SSH error: {e}")
             return False
             
@@ -299,12 +305,14 @@ class ssh(connection):
             error_str = str(e)
             self.logger.debug(f"Exception during login: {error_str}")
             
-            # additional exception handling for key auth errors
-            if "q must be exactly" in error_str and using_key_auth:
-                self.logger.fail("Key validation failed (key may be for a different user)")
+            # Handle specific key validation errors with more generic patterns
+            if using_key_auth and any(phrase in error_str.lower() for phrase in ["q must be exactly", "key validation", "invalid key format"]):
+                self.logger.fail("Valid key passphrase but ownership validation failed", color="magenta")
             elif using_key_auth:
+                self.logger.debug(f"Unhandled exception during key auth: {error_str}")
                 self.logger.fail(f"{username} - Error with key authentication: {e}")
             else:
+                self.logger.debug(f"Unhandled exception during password auth: {error_str}")
                 self.logger.fail(f"{username}:{process_secret(password)} Error: {e}")
             return False
 
