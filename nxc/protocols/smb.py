@@ -1279,12 +1279,12 @@ class smb(connection):
         return
 
     def users(self):
-        if len(self.args.users) > 0:
+        if self.args.users is not None:
             self.logger.debug(f"Dumping users: {', '.join(self.args.users)}")
-        return UserSamrDump(self).dump(self.args.users)
+        return UserSamrDump(self).dump(requested_users=self.args.users)
 
     def users_export(self):
-        return UserSamrDump(self).dump(self.args.users)
+        return UserSamrDump(self).dump(users_export=self.args.users_export)
 
     def computers(self):
         self.logger.fail("[REMOVED] Arg moved to the ldap protocol")
