@@ -1,4 +1,3 @@
-from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ldap import ldap as ldap_impacket
 from nxc.logger import nxc_logger
 from nxc.parsers.ldap_results import parse_result_attributes
