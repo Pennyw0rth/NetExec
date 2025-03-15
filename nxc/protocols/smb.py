@@ -1552,7 +1552,7 @@ class smb(connection):
     @requires_admin
     def sam(self):
         try:
-            self.enable_remoteops(regsecret=True if self.args.sam == "regdump" else False)
+            self.enable_remoteops(regsecret=self.args.sam == "regdump")
             host_id = self.db.get_hosts(filter_term=self.host)[0][0]
 
             def add_sam_hash(sam_hash, host_id):
@@ -1813,7 +1813,7 @@ class smb(connection):
     @requires_admin
     def lsa(self):
         try:
-            self.enable_remoteops(regsecret=True if self.args.lsa == "regdump" else False)
+            self.enable_remoteops(regsecret=self.args.lsa == "regdump")
 
             def add_lsa_secret(secret):
                 add_lsa_secret.secrets += 1
@@ -1843,6 +1843,7 @@ class smb(connection):
                     LSA = LSASecrets(
                         SECURITYFileName,
                         self.bootkey,
+                        self.remote_ops,
                         isRemote=True,
                         perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
                     )
