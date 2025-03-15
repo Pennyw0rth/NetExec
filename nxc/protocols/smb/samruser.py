@@ -41,7 +41,7 @@ class UserSamrDump:
         if self.password is None:
             self.password = ""
 
-    def dump(self, requested_users=None):
+    def dump(self, requested_users=None, users_export=None):
         # Try all requested protocols until one works.
         for protocol in self.protocols:
             try:
@@ -53,16 +53,17 @@ class UserSamrDump:
             self.logger.debug(f"Trying protocol {protocol}")
             self.rpc_transport = transport.SMBTransport(self.addr, port, r"\samr", self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey, doKerberos=self.doKerberos, kdcHost=self.kdcHost, remote_host=self.host)
             try:
-                self.fetch_users(requested_users)
+                self.fetch_users(requested_users, users_export)
                 break
             except Exception as e:
                 self.logger.debug(f"Connection with protocol {protocol} failed: {e}")
         return self.users
 
-    def fetch_users(self, requested_users):
+    def fetch_users(self, requested_users, users_export):
         self.dce = DCERPC_v5(self.rpc_transport)
         self.dce.connect()
         self.dce.bind(samr.MSRPC_UUID_SAMR)
+        users = []
 
         # Setup Connection
         resp = samr.hSamrConnect2(self.dce)
@@ -129,17 +130,22 @@ class UserSamrDump:
                 rids = [r["RelativeId"] for r in enumerate_users_resp["Buffer"]["Buffer"]]
                 self.logger.debug(f"Full domain RIDs retrieved: {rids}")
                 users = self.get_user_info(domain_handle, rids)
-
                 # set these for the while loop
                 enumerationContext = enumerate_users_resp["EnumerationContext"]
                 status = enumerate_users_resp["ErrorCode"]
-        self.logger.display(f"Enumerated {users:d} local users: {domain_name}")
+
+        self.logger.display(f"Enumerated {len(users):d} local users: {domain_name}")
+        self.logger.display(f"Writing {len(users):d} local users to {users_export}")
+        if users_export:
+            with open(users_export, "w+") as file:
+                for user in users:
+                    file.write(f"{user}\n")
         self.dce.disconnect()
 
     def get_user_info(self, domain_handle, user_ids):
         self.logger.debug(f"Getting user info for users: {user_ids}")
         self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
-        users = 0
+        users = []
 
         for user in user_ids:
             self.logger.debug(f"Calling hSamrOpenUser for RID {user}")
@@ -162,9 +168,11 @@ class UserSamrDump:
             last_pw_set = old_large_int_to_datetime(user_info["PasswordLastSet"])
             if last_pw_set == "1601-01-01 00:00:00":
                 last_pw_set = "<never>"
-            users += + 1
+            users.append(user_name)
             self.logger.highlight(f"{user_name:<30}{last_pw_set:<20}{bad_pwd_count:<8}{user_description} ")
             samr.hSamrCloseHandle(self.dce, open_user_resp["UserHandle"])
+
+
         return users
 
 def old_large_int_to_datetime(large_int):

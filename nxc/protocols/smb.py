@@ -1283,6 +1283,9 @@ class smb(connection):
             self.logger.debug(f"Dumping users: {', '.join(self.args.users)}")
         return UserSamrDump(self).dump(self.args.users)
 
+    def users_export(self):
+        return UserSamrDump(self).dump(self.args.users)
+
     def computers(self):
         self.logger.fail("[REMOVED] Arg moved to the ldap protocol")
         return

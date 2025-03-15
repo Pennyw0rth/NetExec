@@ -46,6 +46,7 @@ def proto_args(parser, parents):
     mapping_enum_group.add_argument("--loggedon-users-filter", action="store", help="only search for specific user, works with regex")
     mapping_enum_group.add_argument("--loggedon-users", nargs="?", const="", help="Enumerate logged on users, if a user is specified than a regex filter is applied.")
     mapping_enum_group.add_argument("--users", nargs="*", metavar="USER", help="Enumerate domain users, if a user is specified than only its information is queried.")
+    mapping_enum_group.add_argument("--users-export", help="Output domain users to a file")
     mapping_enum_group.add_argument("--groups", nargs="?", const="", metavar="GROUP", help="Enumerate domain groups, if a group is specified than its members are Enumerated")
     mapping_enum_group.add_argument("--computers", nargs="?", const="", metavar="COMPUTER", help="Enumerate computer users")
     mapping_enum_group.add_argument("--local-groups", nargs="?", const="", metavar="GROUP", help="Enumerate local groups, if a group is specified then its members are Enumerated")
