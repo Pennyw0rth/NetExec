@@ -388,8 +388,7 @@ class ssh(connection):
                 if self.admin_privs:
                     self.logger.debug(f"User {self.username} logged in successfully and is admin!")
                     auth_type = "key" if self.args.key_file else "plaintext"
-                    self.db.add_admin_user(auth_type, self.username, self.password, 
-                                           host_id=host_id, cred_id=cred_id)
+                    self.db.add_admin_user(auth_type, self.username, self.password, host_id=host_id, cred_id=cred_id)
                 return
         except Exception as e:
             self.logger.debug(f"Error during shell check: {e!s}")
