@@ -806,10 +806,6 @@ class ldap(connection):
         if self.password == "" and self.nthash == "" and self.kerberos is False:
             return False
 
-        # If kdcHost isn't set, use the target IP for DNS resolution
-        if not self.kdcHost:
-            self.kdcHost = self.host
-
         # Building the search filter
         search_filter = "(&(UserAccountControl:1.2.840.113556.1.4.803:=%d)(!(UserAccountControl:1.2.840.113556.1.4.803:=%d))(!(objectCategory=computer)))" % (UF_DONT_REQUIRE_PREAUTH, UF_ACCOUNTDISABLE)
         attributes = [
