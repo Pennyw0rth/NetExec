@@ -346,68 +346,99 @@ class ssh(connection):
     # ║      Shell Access and Privileges                         ║
     # ╚══════════════════════════════════════════════════════════╝
     def check_shell(self, cred_id):
-        """
-        Check if we have shell access and determine the OS type.
-        Also checks for administrative privileges.
-        """
+        """Check shell access, determine OS type, and check admin privileges."""
         host_id = self.db.get_hosts(self.host)[0].id
         
         try:
-            # Execute both Linux and Windows commands in one go to minimize round trips
-            _, stdout, _ = self.conn.exec_command("id && echo '---SEPARATOR---' && whoami /priv")
-            output = stdout.read().decode(self.args.codec, errors="ignore")
-            
-            # Split the output to check for Linux and Windows responses
-            parts = output.split("---SEPARATOR---")
-            linux_output = parts[0].strip() if len(parts) > 0 else ""
-            windows_output = parts[1].strip() if len(parts) > 1 else ""
-            
-            # Linux
-            if linux_output:
-                self.server_os_platform = "[Linux]"
-                self.logger.debug(f"Linux detected for user: {linux_output}")
-                self.shell_access = True
-                self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
-                self.check_linux_priv()
+            # For Windows SSH servers, use a different approach to detect shell access
+            if "windows" in self.remote_version.lower():
+                self.logger.debug("Windows SSH server detected, using Windows-specific shell detection")
+                _, stdout, stderr = self.conn.exec_command("echo %username%")
+                output = stdout.read().decode(self.args.codec, errors="ignore")
+                error = stderr.read().decode(self.args.codec, errors="ignore")
                 
-                if self.admin_privs:
-                    self.logger.debug(f"User {self.username} logged in successfully and is a superuser!")
-                    auth_type = "key" if self.args.key_file else "plaintext"
-                    self.db.add_admin_user(auth_type, self.username, self.password, 
-                                           host_id=host_id, cred_id=cred_id)
-                return
-            
-            # Windows
-            if windows_output:
-                self.server_os_platform = "[Windows]"
-                self.logger.debug("Windows detected")
-                self.shell_access = True
-                self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
-                self.check_windows_priv(windows_output)
+                if output and not error:
+                    self.server_os_platform = "[Windows]"
+                    if self.args.debug:
+                        self.logger.debug(f"Windows detected for user: {output.strip()}")
+                    self.shell_access = True
+                    self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
+                    
+                    self.check_windows_priv()
+                    
+                    if self.admin_privs:
+                        if self.args.debug:
+                            self.logger.debug(f"User {self.username} logged in successfully and is admin!")
+                        auth_type = "key" if self.args.key_file else "plaintext"
+                        self.db.add_admin_user(auth_type, self.username, self.password, host_id=host_id, cred_id=cred_id)
+                    return
+                else:
+                    self.logger.debug(f"Failed to execute basic Windows command: {error}")
+            else:
+                # Execute both Linux and Windows commands in one go to minimize round trips
+                _, stdout, _ = self.conn.exec_command("id && echo '---SEPARATOR---' && echo %username%")
+                output = stdout.read().decode(self.args.codec, errors="ignore")
                 
-                if self.admin_privs:
-                    self.logger.debug(f"User {self.username} logged in successfully and is admin!")
-                    auth_type = "key" if self.args.key_file else "plaintext"
-                    self.db.add_admin_user(auth_type, self.username, self.password, host_id=host_id, cred_id=cred_id)
-                return
+                parts = output.split("---SEPARATOR---")
+                linux_output = parts[0].strip() if len(parts) > 0 else ""
+                windows_output = parts[1].strip() if len(parts) > 1 else ""
+                
+                # Linux
+                if linux_output:
+                    self.server_os_platform = "[Linux]"
+                    self.logger.debug(f"Linux detected for user: {linux_output}")
+                    self.shell_access = True
+                    self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
+                    self.check_linux_priv()
+                    
+                    if self.admin_privs:
+                        self.logger.debug(f"User {self.username} logged in successfully and is a superuser!")
+                        auth_type = "key" if self.args.key_file else "plaintext"
+                        self.db.add_admin_user(auth_type, self.username, self.password, host_id=host_id, cred_id=cred_id)
+                    return
+                
+                # Windows
+                if windows_output:
+                    self.server_os_platform = "[Windows]"
+                    self.logger.debug("Windows detected")
+                    self.shell_access = True
+                    self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
+                    self.check_windows_priv()
+                    
+                    if self.admin_privs:
+                        self.logger.debug(f"User {self.username} logged in successfully and is admin!")
+                        auth_type = "key" if self.args.key_file else "plaintext"
+                        self.db.add_admin_user(auth_type, self.username, self.password, host_id=host_id, cred_id=cred_id)
+                    return
         except Exception as e:
             self.logger.debug(f"Error during shell check: {e!s}")
             
-        # If we get here, no shell access
+        # No shell access if we reach this point
         self.shell_access = False
         self.logger.debug(f"User: {self.username} cannot obtain a basic shell")
         self.server_os_platform = "Network Devices"
         self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
 
-    def check_windows_priv(self, stdout):
-        """Check for Windows admin privileges."""
-        if "SeDebugPrivilege" in stdout or "SeUndockPrivilege" in stdout:
+    def check_windows_priv(self):
+        """Check Windows admin privileges by testing access to C$ admin share."""
+        self.admin_privs = False
+        
+        _, stdout, stderr = self.conn.exec_command("dir \\\\localhost\\C$ 2>&1")
+        output = stdout.read().decode(self.args.codec, errors="ignore")
+        error = stderr.read().decode(self.args.codec, errors="ignore")
+        
+        if "Volume in drive" in output and "Access is denied" not in output and "System error" not in output:
+            self.logger.debug("Admin privileges detected: Access to C$ share")
             self.admin_privs = True
-            if "SeUndockPrivilege" in stdout:
-                self.uac = "with UAC - "
+        else:
+            self.logger.debug("No admin privileges detected: Cannot access C$ share")
+            if error:
+                self.logger.debug(f"Error when checking admin privileges: {error.strip()}")
+        
+        return
 
     def check_linux_priv(self):
-        """Check for Linux superuser privileges."""
+        """Check Linux superuser privileges."""
         if self.args.sudo_check:
             self.check_linux_priv_sudo()
             return
@@ -416,7 +447,7 @@ class ssh(connection):
         _, stdout, _ = self.conn.exec_command("id; sudo -ln 2>&1")
         stdout = stdout.read().decode(self.args.codec, errors="ignore")
         
-        # define privilege indicators
+        # Define privilege indicators
         admin_flag = {
             "(root)": [True, None],
             "NOPASSWD: ALL": [True, None],
@@ -424,7 +455,7 @@ class ssh(connection):
             "(sudo)": [False, f"User '{self.username}' in 'sudo' group; try '--sudo-check' for shell access"]
         }
         
-        # check each privilege indicator
+        # Check each privilege indicator
         found_match = False
         for keyword, (flag, tip) in admin_flag.items():
             if re.search(re.escape(keyword), stdout):
@@ -435,89 +466,83 @@ class ssh(connection):
                     self.logger.display(tip)
                 break
                 
-        # If no matches were found, user is not a superuser
         if not found_match:
             self.admin_privs = False
             self.logger.info(f"User '{self.username}' does not have superuser privileges")
 
     def check_linux_priv_sudo(self):
-        """Check for sudo privileges on Linux by attempting to use sudo."""
+        """Check sudo privileges by attempting to use sudo."""
         if not self.password:
             self.logger.error("Sudo check does not support key authentication")
             return
             
-        # determine which sudo check method to use
         method = self.args.sudo_check_method if self.args.sudo_check_method else "sudo-stdin"
         self.logger.info(f"Performing sudo check with method: {method}")
         
         if method == "sudo-stdin":
-            # check if sudo supports stdin input
+            # Check if sudo supports stdin input
             _, stdout, _ = self.conn.exec_command("sudo --help")
             stdout = stdout.read().decode(self.args.codec, errors="ignore")
             
             if "stdin" in stdout:
-                # create a temporary file to check if sudo works
+                # Create a temporary file to check if sudo works
                 shadow_backup = f"/tmp/{uuid.uuid4()}"
                 self.conn.exec_command(f"echo {self.password} | sudo -S cp /etc/shadow {shadow_backup} >/dev/null 2>&1 &")
                 self.conn.exec_command(f"echo {self.password} | sudo -S chmod 777 {shadow_backup} >/dev/null 2>&1 &")
                 
-                # check if the file was created (indicates sudo worked)
+                # Check if the file was created (indicates sudo worked)
                 tries = 1
                 while tries < self.args.get_output_tries:
                     self.logger.info(f"Checking existence of {shadow_backup} (try {tries})")
                     _, _, stderr = self.conn.exec_command(f"ls {shadow_backup}")
                     
                     if stderr.read().decode("utf-8"):
-                        # file doesn't exist yet, wait and try again
                         time.sleep(2)
                         tries += 1
                     else:
-                        # file exists, sudo worked
                         self.logger.info(f"{shadow_backup} exists")
                         self.admin_privs = True
                         break
                         
-                # delete temp file
+                # Delete temp file
                 self.logger.info(f"Removing temporary file {shadow_backup}")
                 self.conn.exec_command(f"echo {self.password} | sudo -S rm -rf {shadow_backup}")
             else:
                 self.logger.error("Sudo does not support stdin mode; sudo-check failed")
         else:
-            # use mkfifo method as an alternative
+            # Use mkfifo method as an alternative
             _, stdout, _ = self.conn.exec_command("mkfifo --help")
             stdout = stdout.read().decode(self.args.codec, errors="ignore")
             
             if "Create named pipes" in stdout:
                 self.logger.info("mkfifo available")
                 
-                # create named pipes for communication
+                # Create named pipes for communication
                 pipe_stdin = f"/tmp/systemd-{uuid.uuid4()}"
                 pipe_stdout = f"/tmp/systemd-{uuid.uuid4()}"
                 shadow_backup = f"/tmp/{uuid.uuid4()}"
                 
-                # set up the pipes
+                # Set up the pipes
                 self.conn.exec_command(f"mkfifo {pipe_stdin}; tail -f {pipe_stdin} | /bin/sh 2>&1 > {pipe_stdout} >/dev/null 2>&1 &")
                 self.conn.exec_command(f"echo 'script -qc /bin/sh /dev/null' > {pipe_stdin}")
                 self.conn.exec_command(f"echo 'sudo -s' > {pipe_stdin} && echo '{self.password}' > {pipe_stdin}")
                 
-                # check if sudo worked
+                # Check if sudo worked
                 tries = 1
                 while tries < self.args.get_output_tries:
                     self.logger.info(f"Checking {shadow_backup} existence (try {tries})")
                     _, _, stderr = self.conn.exec_command(f"ls {shadow_backup}")
                     
                     if stderr.read().decode("utf-8"):
-                        # file doesn't exist yet, try to create it
                         time.sleep(2)
                         self.conn.exec_command(f"echo 'cp /etc/shadow {shadow_backup} && chmod 777 {shadow_backup}' > {pipe_stdin}")
                         tries += 1
                     else:
-                        # file exists, sudo worked
                         self.logger.info(f"{shadow_backup} exists")
                         self.admin_privs = True
                         break
                         
-                # delete temp files
+                # Delete temp files
                 self.logger.info(f"Removing temporary files {shadow_backup}, {pipe_stdin}, {pipe_stdout}")
                 self.conn.exec_command(f"echo 'rm -rf {shadow_backup}' > {pipe_stdin} && rm -rf {pipe_stdin} {pipe_stdout}")
             else:
