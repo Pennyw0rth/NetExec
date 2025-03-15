@@ -308,10 +308,6 @@ class smb(connection):
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
-        # If we want to authenticate we should create another connection object, because we already logged in
-        if self.args.username or self.args.cred_id or self.kerberos or self.args.use_kcache:
-            self.create_conn_obj()
-
     def print_host_info(self):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
         smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
@@ -357,6 +353,8 @@ class smb(connection):
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.logger.debug(f"KDC set to: {kdcHost}")
+        # Re-connect since we logged off
+        self.create_conn_obj()
         lmhash = ""
         nthash = ""
 
@@ -414,7 +412,6 @@ class smb(connection):
             if self.args.continue_on_success and self.signing:
                 with contextlib.suppress(Exception):
                     self.conn.logoff()
-                self.create_conn_obj()
             return True
         except SessionKeyDecryptionError:
             # success for now, since it's a vulnerability - previously was an error
@@ -447,6 +444,7 @@ class smb(connection):
 
     def plaintext_login(self, domain, username, password):
         # Re-connect since we logged off
+        self.create_conn_obj()
         try:
             self.password = password
             self.username = username
@@ -479,7 +477,6 @@ class smb(connection):
             if self.args.continue_on_success and self.signing:
                 with contextlib.suppress(Exception):
                     self.conn.logoff()
-                self.create_conn_obj()
             return True
         except SessionError as e:
             error, desc = e.getErrorString()
@@ -492,15 +489,14 @@ class smb(connection):
                 return False
         except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
             self.logger.fail(f"Connection Error: {e}")
-            self.create_conn_obj()
             return False
         except BrokenPipeError:
             self.logger.fail("Broken Pipe Error while attempting to login")
-            self.create_conn_obj()
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
         # Re-connect since we logged off
+        self.create_conn_obj()
         lmhash = ""
         nthash = ""
         try:
@@ -543,7 +539,6 @@ class smb(connection):
             if self.args.continue_on_success and self.signing:
                 with contextlib.suppress(Exception):
                     self.conn.logoff()
-                self.create_conn_obj()
             return True
         except SessionError as e:
             error, desc = e.getErrorString()
@@ -557,11 +552,9 @@ class smb(connection):
                 return False
         except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
             self.logger.fail(f"Connection Error: {e}")
-            self.create_conn_obj()
             return False
         except BrokenPipeError:
             self.logger.fail("Broken Pipe Error while attempting to login")
-            self.create_conn_obj()
             return False
 
     def create_smbv1_conn(self, check=False):
