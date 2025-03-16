@@ -130,6 +130,7 @@ class UserSamrDump:
                 rids = [r["RelativeId"] for r in enumerate_users_resp["Buffer"]["Buffer"]]
                 self.logger.debug(f"Full domain RIDs retrieved: {rids}")
                 users = self.get_user_info(domain_handle, rids)
+
                 # set these for the while loop
                 enumerationContext = enumerate_users_resp["EnumerationContext"]
                 status = enumerate_users_resp["ErrorCode"]
@@ -171,8 +172,6 @@ class UserSamrDump:
             users.append(user_name)
             self.logger.highlight(f"{user_name:<30}{last_pw_set:<20}{bad_pwd_count:<8}{user_description} ")
             samr.hSamrCloseHandle(self.dce, open_user_resp["UserHandle"])
-
-
         return users
 
 def old_large_int_to_datetime(large_int):
