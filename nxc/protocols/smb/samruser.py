@@ -139,8 +139,7 @@ class UserSamrDump:
         self.logger.display(f"Writing {len(users):d} local users to {users_export}")
         if users_export:
             with open(users_export, "w+") as file:
-                for user in users:
-                    file.write(f"{user}\n")
+                file.writelines(f"{user}\n" for user in users)
         self.dce.disconnect()
 
     def get_user_info(self, domain_handle, user_ids):
@@ -173,6 +172,7 @@ class UserSamrDump:
             self.logger.highlight(f"{user_name:<30}{last_pw_set:<20}{bad_pwd_count:<8}{user_description} ")
             samr.hSamrCloseHandle(self.dce, open_user_resp["UserHandle"])
         return users
+
 
 def old_large_int_to_datetime(large_int):
     combined = (large_int["HighPart"] << 32) | large_int["LowPart"]

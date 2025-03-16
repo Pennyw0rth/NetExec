@@ -678,12 +678,11 @@ class ldap(connection):
 
                 # We default attributes to blank strings if they don't exist in the dict
                 self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{pwd_last_set:<20}{user.get('badPwdCount', ''):<9}{user.get('description', ''):<60}")
-                users.append(user.get('sAMAccountName', ''))
+                users.append(user.get("sAMAccountName", ""))
             if self.args.users_export is not None:
                 self.logger.display(f"Writing {len(resp_parse):d} local users to {self.args.users_export}")
                 with open(self.args.users_export, "w+") as file:
-                    for user in users:
-                        file.write(f"{user}\n")
+                    file.writelines(f"{user}\n" for user in users)
     
     def users_export(self):
         self.users()
