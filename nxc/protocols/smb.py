@@ -330,8 +330,8 @@ class smb(connection):
 
             if self.args.generate_hosts_file:
                 with open(self.args.generate_hosts_file, "a+") as host_file:
-                    host_file.write(f"{self.host}    {self.hostname} {self.hostname}.{self.targetDomain} {self.targetDomain if isdc else ''}\n")
-                    self.logger.debug(f"{self.host}    {self.hostname} {self.hostname}.{self.targetDomain} {self.targetDomain if isdc else ''}")
+                    host_file.write(f"{self.host}     {self.hostname}.{self.targetDomain} {self.targetDomain if isdc else ''} {self.hostname}\n")
+                    self.logger.debug(f"{self.host}    {self.hostname}.{self.targetDomain} {self.targetDomain if isdc else ''} {self.hostname}")
             elif self.args.generate_krb5_file and isdc:
                 with open(self.args.generate_krb5_file, "w+") as host_file:
                     data = f"""
