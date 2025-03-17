@@ -14,8 +14,12 @@ from paramiko.ssh_exception import (
     SSHException,
 )
 from itertools import starmap
+from nxc.helpers.ssh_key_utils import (
+    get_server_auth_methods,
+    authenticate_with_key
+)
 
-# precompiled regex for parsing allowed SSH auth types
+# Precompiled regex for parsing allowed SSH auth types
 AUTH_METHODS_REGEX = re.compile(r"allowed types: \[(.*?)\]")
 
 class ssh(connection):
@@ -51,7 +55,7 @@ class ssh(connection):
                 self.conn.close()
                 return
                 
-            # skip password auth check if using key authentication
+            # Skip password auth check if using key authentication
             if hasattr(self.args, "key_file") and self.args.key_file:
                 self.logger.debug("Key file provided, skipping password auth check")
                 
@@ -70,7 +74,7 @@ class ssh(connection):
         logging.getLogger("paramiko").disabled = True
         logging.getLogger("paramiko.transport").disabled = True
         
-        # custom logger
+        # Custom logger
         self.logger = NXCAdapter(extra={
             "protocol": "SSH",
             "host": self.host,
@@ -95,27 +99,35 @@ class ssh(connection):
                 allow_agent=False
             )
         except (AuthenticationException, SSHException):
-            # auth failed but connection succeeded
+            # Auth failed but connection succeeded
+            cache_key = f"{self.host}:{self.port}"
+            self.auth_methods_cache[cache_key] = get_server_auth_methods(self.conn._transport, self.logger)
             return True
         except (NoValidConnectionsError, OSError):
-            # connection failed
             return False
+        cache_key = f"{self.host}:{self.port}"
+        self.auth_methods_cache[cache_key] = get_server_auth_methods(self.conn._transport, self.logger)
         return True
 
     def login(self):
-        """Override the parent login method to provide better debug messages for key-based authentication"""
+        """Override the parent login method to handle key-based authentication"""
         if hasattr(self.args, "key_file") and self.args.key_file:
             self.logger.debug(f"Trying to authenticate using key file: {self.args.key_file}")
             
-            # for key-based auth, we'll handle the login process here instead of calling the parent method
+            # Use key-based authentication
             if self.args.no_bruteforce:
-                if self.args.username and (self.args.password or self.args.key_file) and self.plaintext_login(self.args.username, self.args.password):
-                    return True
-                return False
+                return self.plaintext_login(self.args.username, self.args.password)
             
-            # grab creds from credential store
             return any(starmap(self.plaintext_login, self.get_credentials()))
         else:
+            # Check if password auth is supported
+            cache_key = f"{self.host}:{self.port}"
+            if cache_key in self.auth_methods_cache and "password" not in self.auth_methods_cache[cache_key]:
+                self.logger.debug("Password authentication not supported by server")
+                self.logger.fail("Password auth not supported")
+                return False
+            
+            # Use parent login method for password auth
             return super().login()
 
     def get_credentials(self):
@@ -168,45 +180,62 @@ class ssh(connection):
         using_key_auth = bool(self.args.key_file or private_key)
         cache_key = f"{self.host}:{self.port}"
         
-        # log auth attempt type
-        if using_key_auth:
-            self.logger.debug(f"Attempting key authentication for {self.host} with username: {username}")
-        else:
-            self.logger.debug(f"Attempting password authentication for {self.host} with username: {username}")
-            
-            # check cache for known allowed auth methods
-            if cache_key in self.auth_methods_cache and "password" not in self.auth_methods_cache[cache_key]:
-                self.logger.debug("Skipping password auth - known unsupported from cache")
-                self.logger.fail("Password auth not supported")
-                return False
-
         try:
-            # key auth
+            # Key-based authentication
             if using_key_auth:
-                self.conn.connect(
-                    self.host,
-                    port=self.port,
-                    username=username,
-                    passphrase=password if password != "" else None,
-                    pkey=private_key if private_key else None,
-                    key_filename=self.args.key_file,
-                    timeout=self.args.ssh_timeout,
-                    look_for_keys=False,
-                    allow_agent=False,
-                    banner_timeout=self.args.ssh_timeout,
-                )
-                
-                if self.args.key_file and not self.cached_key:
-                    try:
-                        with open(self.args.key_file) as f:
-                            self.cached_key = f.read().rstrip("\n")
-                    except Exception as e:
-                        self.logger.debug(f"Error reading key file for database: {e}")
-                        self.cached_key = "Unable to read key file"
-                
-                cred_id = self.db.add_credential("key", username, password, key=self.cached_key)
+                if self.args.key_file:
+                    # Import exceptions here to ensure they're defined
+                    
+                    success, error_info = authenticate_with_key(
+                        self.conn, 
+                        self.host, 
+                        self.port, 
+                        username, 
+                        self.args.key_file, 
+                        password, 
+                        self.args.ssh_timeout, 
+                        self.logger
+                    )
+                    
+                    if not success:
+                        # Check if error_info includes color information
+                        if isinstance(error_info, tuple) and len(error_info) == 2:
+                            error_msg, color = error_info
+                            self.logger.fail(error_msg, color=color)
+                        else:
+                            self.logger.fail(error_info)
+                        return False
+                    
+                    # Store key in database
+                    if not self.cached_key:
+                        try:
+                            with open(self.args.key_file) as f:
+                                self.cached_key = f.read().rstrip("\n")
+                        except Exception as e:
+                            self.logger.debug(f"Error reading key file for database: {e}")
+                            self.cached_key = "Unable to read key file"
+                    
+                    cred_id = self.db.add_credential("key", username, password, key=self.cached_key)
+                else:
+                    # Using provided private key object
+                    self.conn.connect(
+                        self.host,
+                        port=self.port,
+                        username=username,
+                        pkey=private_key,
+                        timeout=self.args.ssh_timeout,
+                        look_for_keys=False,
+                        allow_agent=False,
+                        banner_timeout=self.args.ssh_timeout,
+                    )
+                    cred_id = self.db.add_credential("key", username, password)
             else:
-                # connect with password auth
+                # Password auth check
+                if cache_key in self.auth_methods_cache and "password" not in self.auth_methods_cache[cache_key]:
+                    self.logger.debug("Skipping password auth - known unsupported from cache")
+                    self.logger.fail("Password auth not supported")
+                    return False
+                
                 self.conn.connect(
                     self.host,
                     port=self.port,
@@ -219,15 +248,14 @@ class ssh(connection):
                 )
                 cred_id = self.db.add_credential("plaintext", username, password)
 
-            # auth success -> check shell access
+            # Authentication succeeded - check shell access
             self.check_shell(cred_id)
             
-            # log success
+            # Log success
             if using_key_auth:
-                # show keyFile name instead of password for key auth
+                # Show key filename instead of password for key auth
                 key_filename = self.args.key_file.split("/")[-1] if self.args.key_file else "private_key"
-                # Indicate if the key required a passphrase
-                secret = f"{key_filename}" if password else f"{key_filename}"
+                secret = f"{key_filename}"
             else:
                 secret = process_secret(self.password)
                 
@@ -235,85 +263,10 @@ class ssh(connection):
             self.logger.success(f"{self.username}:{secret} {self.mark_pwned()} {highlight(display_shell_access)}")
             return True
             
-        except AuthenticationException as e:
-            # auth failed
-            error_msg = str(e).lower()
-            self.logger.debug(f"Authentication exception: {error_msg}")
-            
-            # extract allowed auth methods - works with OpenSSH format
-            if "allowed types" in error_msg:
-                match = AUTH_METHODS_REGEX.search(error_msg)
-                if match:
-                    auth_methods = [m.strip("'") for m in match.group(1).split(", ")]
-                    self.logger.debug(f"Server reports auth methods: {auth_methods}")
-                    self.auth_methods_cache[cache_key] = auth_methods
-                    
-                    # validate password auth is available, otherwise fail
-                    if not using_key_auth and "password" not in auth_methods:
-                        self.logger.fail("Password auth not supported")
-                        return False
-            
-            # generic pattern matching for common authentication errors across SSH implementations
-            if any(phrase in error_msg for phrase in ["encrypted", "passphrase required", "need passphrase"]):
-                self.logger.fail("Key passphrase required")
-            elif any(phrase in error_msg for phrase in ["permission denied", "auth fail", "authentication failed"]) and not using_key_auth:
-                # Check if this might be a publickey-only server
-                if "publickey" in error_msg or self.remote_version.lower().startswith("ssh-2.0-openssh"):
-                    self.auth_methods_cache[cache_key] = ["publickey"]
-                    self.logger.fail("Password auth not supported")
-                else:
-                    self.logger.fail(f"{username}:{process_secret(password)}")
-            else:
-                # generic auth failure
-                if using_key_auth:
-                    self.logger.fail(f"{username} - Key authentication failed")
-                else:
-                    self.logger.fail(f"{username}:{process_secret(password)}")
-            return False
-            
-        except SSHException as e:
-            # SSH protocol error
-            error_msg = str(e).lower()
-            self.logger.debug(f"SSH Exception: {error_msg}")
-            
-            # generic pattern matching
-            if not using_key_auth and any(phrase in error_msg for phrase in [
-                "no authentication methods", 
-                "not allowed", 
-                "authentication method not supported", 
-                "no more authentication methods", 
-                "permission denied"
-            ]):
-                self.logger.debug("Detected password authentication is disabled based on error message")
-                self.auth_methods_cache[cache_key] = ["publickey"]
-                self.logger.fail("Password auth not supported")
-            elif any(phrase in error_msg for phrase in ["invalid key", "bad passphrase", "wrong passphrase", "cannot decrypt"]):
-                self.logger.fail("Invalid passphrase")
-            elif "error reading ssh protocol banner" in error_msg:
-                self.logger.error(f"Internal Paramiko error: {e}")
-            else:
-                # generic SSH error with more context
-                if using_key_auth:
-                    self.logger.debug(f"Unhandled SSH exception during key auth: {error_msg}")
-                    self.logger.fail(f"{username} - SSH error with key authentication: {e}")
-                else:
-                    self.logger.debug(f"Unhandled SSH exception during password auth: {error_msg}")
-                    self.logger.fail(f"{username}:{process_secret(password)} SSH error: {e}")
-            return False
-            
         except Exception as e:
-            error_str = str(e)
-            self.logger.debug(f"Exception during login: {error_str}")
-            
-            # Handle specific key validation errors with more generic patterns
-            if using_key_auth and any(phrase in error_str.lower() for phrase in ["q must be exactly", "key validation", "invalid key format"]):
-                self.logger.fail("Valid key passphrase but ownership validation failed", color="magenta")
-            elif using_key_auth:
-                self.logger.debug(f"Unhandled exception during key auth: {error_str}")
-                self.logger.fail(f"{username} - Error with key authentication: {e}")
-            else:
-                self.logger.debug(f"Unhandled exception during password auth: {error_str}")
-                self.logger.fail(f"{username}:{process_secret(password)} Error: {e}")
+            # Generic exception handling
+            self.logger.debug(f"Exception during login: {e}")
+            self.logger.fail(f"Error: {e}")
             return False
 
     # Add a custom method to handle the parent class's login process
@@ -608,10 +561,10 @@ class ssh(connection):
                 get_output = True
                 
         try:
-            # execute command with timeout to avoid hanging
+            # Execute command with timeout to avoid hanging
             _, stdout, _ = self.conn.exec_command(f"{payload} 2>&1", timeout=self.args.ssh_timeout)
             
-            # read output incrementally with timeout
+            # Read output incrementally with timeout
             start_time = time.time()
             stdout_data = ""
             
@@ -619,14 +572,14 @@ class ssh(connection):
                 if stdout.channel.recv_ready():
                     stdout_data += stdout.channel.recv(1024).decode(self.args.codec, errors="ignore")
                     
-                # check for timeout
+                # Check for timeout
                 if time.time() - start_time > self.args.ssh_timeout:
                     self.logger.debug("Command execution timed out")
                     break
                     
                 time.sleep(0.1)
                 
-            # get any remaining data
+            # Get any remaining data
             if stdout.channel.recv_ready():
                 stdout_data += stdout.channel.recv(1024).decode(self.args.codec, errors="ignore")
                 
@@ -636,7 +589,7 @@ class ssh(connection):
         else:
             self.logger.success("Executed command")
             
-            # display output if requested
+            # Display output if requested
             if get_output and stdout_data:
                 for line in stdout_data.replace("\r\n", "\n").rstrip("\n").split("\n"):
                     self.logger.highlight(line.strip("\n"))
