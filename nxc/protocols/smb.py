@@ -1780,6 +1780,7 @@ class smb(connection):
         recursive = self.args.recursive        
         for folder, dest in self.args.get_folder:
             self.download_folder(folder, dest, recursive)
+            self.logger.success(f"Folder '{folder}' was downloaded to '{dest}'")
 
     def enable_remoteops(self):
         try:
