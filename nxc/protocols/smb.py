@@ -1716,6 +1716,8 @@ class smb(connection):
         except SessionError as e:
             if "STATUS_SHARING_VIOLATION" in str(e):
                 self.logger.debug(f"Sharing violation on {remote_path}: {e}")
+            else:
+                self.logger.debug(f"SessionError when attempting to download file {remote_path}: {e}")
             return False
         except Exception as e:
             self.logger.debug(f"Other error when attempting to download file {remote_path}: {e}")
