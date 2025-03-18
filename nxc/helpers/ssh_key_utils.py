@@ -11,7 +11,6 @@ Author: @Mercury0
 
 import os
 import re
-import base64
 import contextlib
 import tempfile
 import warnings
@@ -69,7 +68,7 @@ def normalize_password(password: str | list[str] | None) -> bytes | None:
 
 def is_passphrase_error(error_msg: str) -> bool:
     """Return True if the error message indicates a passphrase issue."""
-    return any(substr in error_msg.lower() for substr in ["password", "passphrase"])
+    return any(substr in error_msg.lower() for substr in ["password", "passphrase", "passphrase required"])
 
 def is_incorrect_passphrase_error(error_msg: str) -> bool:
     """Return True if the error message indicates an incorrect passphrase."""
@@ -94,21 +93,21 @@ def detect_key_type(key_file: str, password: str | None = None, logger=None) -> 
     if not CRYPTOGRAPHY_AVAILABLE:
         log_debug(logger, "Cryptography module not available for key type detection")
         return None
-
+        
     key_data = read_file(key_file, logger)
     if key_data is None:
         return "File not found"
     if not key_data.strip():
         log_debug(logger, "Key file is empty")
         return "Empty file"
-    
+            
     key_str = key_data.decode("utf-8", errors="ignore")
     if not any(header in key_str for header in VALID_HEADERS):
         log_debug(logger, "Key file does not appear to be a valid SSH key")
         return "Invalid key format"
-    
+            
     key_password = normalize_password(password)
-    
+            
     try:
         private_key = serialization.load_ssh_private_key(
             key_data, password=key_password, backend=default_backend()
@@ -130,11 +129,7 @@ def detect_key_type(key_file: str, password: str | None = None, logger=None) -> 
             if any(substr in key_str.lower() for substr in ["encrypted", "proc-type: 4,encrypted"]):
                 return "Passphrase-protected key (incorrect password)"
             if OPENSSH_HEADER in key_str:
-                try:
-                    serialization.load_ssh_private_key(key_data, password=None, backend=default_backend())
-                except ValueError as inner_e:
-                    if is_passphrase_error(str(inner_e)):
-                        return "Passphrase-protected key (incorrect password)"
+                return "Passphrase-protected key (incorrect password)"
         log_debug(logger, f"Error parsing key: {e}")
         return "DSA (legacy format - may be unsupported)" if DSA_HEADER in key_str else "Invalid or unsupported key format"
     except Exception as e:
@@ -150,139 +145,8 @@ def detect_key_type(key_file: str, password: str | None = None, logger=None) -> 
                 return "DSA (OpenSSH format - may be unsupported)"
             return "OpenSSH format"
         return "Unrecognized key format"
-
-def get_key_owner(key_file: str, logger=None) -> str | None:
-    """
-    Extract the owner information from an SSH key file.
-    
-    Args:
-    ----
-        key_file: Path to the SSH key file.
-        logger: Optional logger for debug messages.
-        
-    Returns:
-    -------
-        str: Owner of the key or None if extraction fails.
-    """
-    expanded_key_path = os.path.expanduser(key_file)
-    try:
-        with open(expanded_key_path) as f:
-            key_content = f.read()
-    except Exception as e:
-        log_debug(logger, f"Error reading key file: {e}")
-        return None
-    
-    # Check for OpenSSH key metadata extraction
-    if OPENSSH_HEADER in key_content:
-        lines = key_content.splitlines()
-        for i in range(len(lines) - 1, 0, -1):
-            if "-----END" in lines[i]:
-                prev_line = lines[i - 1].strip()
-                if "@" in prev_line:
-                    try:
-                        decoded = base64.b64decode(prev_line).decode("utf-8", errors="ignore")
-                        sanitized = "".join(c if c.isprintable() or c.isspace() else "." for c in decoded[:50])
-                        log_debug(logger, f"Decoded potential owner line (sanitized): {sanitized}...")
-                        user_host_match = re.search(r"([a-zA-Z0-9_.-]+)@([a-zA-Z0-9_.-]+)", decoded)
-                        if user_host_match:
-                            username = user_host_match.group(1).strip()
-                            log_debug(logger, f"Found key owner: {username}@{user_host_match.group(2).strip()}")
-                            return username
-                    except Exception:
-                        pass
-    
-    comment_match = re.search(r'^Comment:\s+"(.+?)"', key_content, re.MULTILINE)
-    if comment_match:
-        comment = comment_match.group(1).strip()
-        if "@" in comment:
-            username = comment.split("@")[0].strip()
-            log_debug(logger, f"Found key owner in comment: {username}")
-            return username
-        log_debug(logger, f"Found key comment: {comment}")
-        return comment
-    
-    for pattern in [r"([a-zA-Z0-9_.-]+)@([a-zA-Z0-9_.-]+)"]:
-        match = re.search(pattern, key_content)
-        if match:
-            username = match.group(1).strip()
-            log_debug(logger, f"Found key owner in content: {username}@{match.group(2).strip()}")
-            return username
-    
-    if "-----BEGIN" in key_content and "PRIVATE KEY-----" in key_content:
-        for line in key_content.splitlines():
-            if ":" in line and not line.startswith("-----"):
-                parts = line.split(":", 1)
-                if parts[0].strip().lower() in ["comment", "subject", "owner", "user"]:
-                    value = parts[1].strip()
-                    if "@" in value:
-                        username = value.split("@")[0].strip()
-                        log_debug(logger, f"Found key owner in PEM header: {username}")
-                        return username
-                    log_debug(logger, f"Found key metadata: {parts[0].strip()}={value}")
-                    return value
-    
-    if "root@" in key_content:
-        log_debug(logger, "Found root user in key content")
-        return "root"
-    
-    file_name = os.path.basename(expanded_key_path)
-    if "root" in file_name.lower():
-        log_debug(logger, "Found root user in filename")
-        return "root"
-    if "_" in file_name:
-        potential_user = file_name.split("_")[0].strip()
-        if potential_user and not potential_user.startswith("id_"):
-            log_debug(logger, f"Inferred owner from filename: {potential_user}")
-            return potential_user
-    
-    log_debug(logger, f"Could not determine key owner for {key_file}")
-    return None
-
-def check_key_username_match(key_file: str, username: str, logger=None) -> tuple[bool, str | None]:
-    """
-    Check if the key's owner matches the provided username.
-    
-    Args:
-    ----
-        key_file: Path to the SSH key file.
-        username: Username to compare with the key owner.
-        logger: Optional logger for debug messages.
-        
-    Returns:
-    -------
-        tuple: (True, key owner) if matched or (False, None) if not.
-    """
-    key_owner = get_key_owner(key_file, logger)
-    if not key_owner:
-        file_name = os.path.basename(os.path.expanduser(key_file))
-        if username.lower() in file_name.lower():
-            return True, username
-        if "_" in file_name:
-            parts = file_name.split("_")
-            if len(parts) >= 2 and any(part.lower() == username.lower() for part in parts):
-                return True, username
-        return False, None
-
-    key_owner = key_owner.strip()
-    if len(key_owner) < 2 or not any(c.isalnum() for c in key_owner):
-        log_debug(logger, f"Skipping suspicious key owner: '{key_owner}'")
-        return True, None
-
-    file_name = os.path.basename(os.path.expanduser(key_file))
-    if "password" in file_name.lower() and "protected" in file_name.lower():
-        log_debug(logger, "Skipping owner check for password-protected key file")
-        return True, None
-    if "_" in file_name and key_owner in file_name.split("_") and key_owner != "password":
-        log_debug(logger, f"Skipping owner check for potential filename-derived owner '{key_owner}'")
-        return True, None
-
-    if username.lower() == key_owner.lower():
-        log_debug(logger, f"Key owner '{key_owner}' matches username '{username}'")
-        return True, key_owner
-    else:
-        log_debug(logger, f"Key owner '{key_owner}' does not match username '{username}'")
-        return False, key_owner
-
+                
+                
 def load_ecdsa_key(key_file: str, password: str | None = None, logger=None) -> paramiko.ECDSAKey | None:
     """
     Load an ECDSA key using various methods, including a cryptography conversion fallback.
@@ -297,79 +161,105 @@ def load_ecdsa_key(key_file: str, password: str | None = None, logger=None) -> p
     -------
         paramiko.ECDSAKey or None: The loaded key object or None if all methods fail.
     """
-    log_debug(logger, f"Attempting to load ECDSA key: {key_file}")
+    log_debug(logger, f"Attempting to load ECDSA key from: {key_file}")
     expanded_key_path = os.path.expanduser(key_file)
+    
+    # Read key data as bytes.
+    key_data = read_file(expanded_key_path, logger)
+    if key_data is None:
+        log_debug(logger, "Key data is None.")
+        return None
+
     try:
-        with open(expanded_key_path) as f:
-            return paramiko.ECDSAKey.from_private_key(f, password=password or None)
+        key_str = key_data.decode("utf-8", errors="ignore").lstrip()
     except Exception as e:
-        log_debug(logger, f"Standard ECDSA key loading failed: {e}")
-        if "unpack requires a buffer" in str(e).lower():
-            log_debug(logger, "Detected 'unpack requires a buffer' error, trying alternative method with validate_point=False")
-            try:
-                with open(expanded_key_path) as f:
-                    return paramiko.ECDSAKey.from_private_key(f, password=password or None, validate_point=False)
-            except Exception as e2:
-                log_debug(logger, f"ECDSA loading with validate_point=False failed: {e2}")
-        if CRYPTOGRAPHY_AVAILABLE:
-            try:
-                log_debug(logger, "Attempting to load ECDSA key with cryptography conversion")
-                key_data = read_file(expanded_key_path, logger)
-                if key_data is None:
-                    return None
-                key_pass = password.encode() if password else None
-                crypto_key = serialization.load_ssh_private_key(
-                    key_data, password=key_pass, backend=default_backend()
-                )
-                pem_data = crypto_key.private_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PrivateFormat.PKCS8,
-                    encryption_algorithm=serialization.NoEncryption()
-                )
-                with tempfile.NamedTemporaryFile(mode="w+", delete=False) as temp_file:
-                    temp_file.write(pem_data.decode("utf-8"))
-                    temp_path = temp_file.name
-                try:
-                    with open(temp_path) as f_temp:
-                        if isinstance(crypto_key, rsa.RSAPrivateKey):
-                            key = paramiko.RSAKey.from_private_key(f_temp)
-                        elif isinstance(crypto_key, dsa.DSAPrivateKey):
-                            key = paramiko.DSSKey.from_private_key(f_temp)
-                        elif isinstance(crypto_key, ec.EllipticCurvePrivateKey):
-                            key = paramiko.ECDSAKey.from_private_key(f_temp)
-                        elif isinstance(crypto_key, ed25519.Ed25519PrivateKey):
-                            key = paramiko.Ed25519Key.from_private_key(f_temp)
-                        else:
-                            f_temp.seek(0)
-                            key = paramiko.PKey.from_private_key(f_temp)
-                    log_debug(logger, "Successfully loaded key using cryptography conversion")
-                    return key
-                finally:
-                    with contextlib.suppress(Exception):
-                        os.unlink(temp_path)
-            except PasswordRequiredException:
-                return None
-            except Exception as crypto_e:
-                log_debug(logger, f"Error loading key with cryptography: {crypto_e}")
+        log_debug(logger, f"Error decoding key data: {e}")
+        return None
+
+    log_debug(logger, f"Key header: {key_str[:30]}...")
+    
+    # If the key is in OpenSSH format, skip direct Paramiko load.
+    if key_str.startswith(OPENSSH_HEADER):
+        log_debug(logger, "Key detected as OpenSSH format; using cryptography conversion fallback")
+    else:
+        # Attempt direct load using Paramiko's ECDSAKey.
         try:
-            log_debug(logger, "Attempting to load key as an alternative key type")
-            with open(expanded_key_path) as f:
+            with open(expanded_key_path, "rb") as f:
+                key = paramiko.ECDSAKey.from_private_key(f, password=password or None)
+                log_debug(logger, "Direct Paramiko load succeeded.")
+                return key
+        except Exception as e:
+            log_debug(logger, f"Direct Paramiko load failed: {e}")
+            if "unpack requires a buffer" in str(e).lower():
                 try:
-                    return paramiko.RSAKey.from_private_key(f, password=password or None)
-                except Exception:
+                    with open(expanded_key_path, "rb") as f:
+                        key = paramiko.ECDSAKey.from_private_key(f, password=password or None, validate_point=False)
+                        log_debug(logger, "Direct load with validate_point succeeded.")
+                        return key
+                except Exception as e2:
+                    log_debug(logger, f"Direct load with validate_point failed: {e2}")
+
+    # Fallback: Use cryptography conversion if available.
+    if CRYPTOGRAPHY_AVAILABLE:
+        try:
+            log_debug(logger, "Attempting cryptography conversion fallback.")
+            key_pass = password.encode() if password else None
+            crypto_key = serialization.load_ssh_private_key(key_data, password=key_pass, backend=default_backend())
+            log_debug(logger, f"Crypto key type: {type(crypto_key)}")
+            pem_data = crypto_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            )
+            log_debug(logger, f"PEM data length: {len(pem_data)}")
+            # Write the PEM data to a temporary file.
+            with tempfile.NamedTemporaryFile(mode="w+", delete=False) as temp_file:
+                temp_file.write(pem_data.decode("utf-8"))
+                temp_path = temp_file.name
+            log_debug(logger, f"Temporary PEM file created at: {temp_path}")
+            try:
+                with open(temp_path, "rb") as f_temp:
+                    key = paramiko.ECDSAKey.from_private_key(f_temp, password=password or None)
+                    log_debug(logger, "Key loaded from PEM conversion.")
+                    return key
+            finally:
+                with contextlib.suppress(Exception):
+                    os.unlink(temp_path)
+        except PasswordRequiredException:
+            log_debug(logger, "Password required for key, but none provided.")
+            return None
+        except Exception as crypto_e:
+            log_debug(logger, f"Cryptography conversion error: {crypto_e}")
+
+    # Last resort: Try loading as an alternative key type.
+    try:
+        log_debug(logger, "Attempting alternative key type loading.")
+        with open(expanded_key_path, "rb") as f:
+            try:
+                key = paramiko.RSAKey.from_private_key(f, password=password or None)
+                log_debug(logger, "Alternative load as RSA succeeded.")
+                return key
+            except Exception as e:
+                log_debug(logger, f"Alternative RSA load failed: {e}")
+                f.seek(0)
+                try:
+                    key = paramiko.DSSKey.from_private_key(f, password=password or None)
+                    log_debug(logger, "Alternative load as DSS succeeded.")
+                    return key
+                except Exception as e2:
+                    log_debug(logger, f"Alternative DSS load failed: {e2}")
                     f.seek(0)
                     try:
-                        return paramiko.DSSKey.from_private_key(f, password=password or None)
-                    except Exception:
-                        f.seek(0)
-                        try:
-                            return paramiko.Ed25519Key.from_private_key(f, password=password or None)
-                        except Exception:
-                            pass
-        except Exception as alt_e:
-            log_debug(logger, f"Alternative key type loading failed: {alt_e}")
-        log_debug(logger, "All ECDSA key loading methods failed, will use key_filename parameter")
-        return None
+                        key = paramiko.Ed25519Key.from_private_key(f, password=password or None)
+                        log_debug(logger, "Alternative load as Ed25519 succeeded.")
+                        return key
+                    except Exception as e3:
+                        log_debug(logger, f"Alternative load as Ed25519 failed: {e3}")
+    except Exception as alt_e:
+        log_debug(logger, f"Alternative key type loading exception: {alt_e}")
+    
+    log_debug(logger, "All ECDSA key loading methods failed, returning None.")
+    return None
 
 def get_server_auth_methods(transport, logger=None) -> list:
     """
