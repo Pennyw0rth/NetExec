@@ -112,15 +112,32 @@ def initialize_db():
     init_protocol_dbs("default")
     
 def format_host_query(q, filter_term, HostsTable):
-    # one annoying thing is that if you search for an ip such as '10.10.10.5', it will return 10.10.10.5 and 10.10.10.52, so we have to check if its an ip address first
+    """One annoying thing is that if you search for an ip such as '10.10.10.5',
+    it will return 10.10.10.5 and 10.10.10.52, so we have to check if its an ip address first
+    """
+    # the FTP and SSH protocols call the column host instead of IP
+    # TODO: normalize these column names
+    if hasattr(HostsTable.c, "ip"):
+        ip_column = HostsTable.c.ip
+        nxc_logger.debug("Using 'ip' column for filtering")
+    elif hasattr(HostsTable.c, "host"):
+        ip_column = HostsTable.c.host
+        nxc_logger.debug("Using 'host' column for filtering")
+    else:
+        nxc_logger.debug("Neither 'ip' nor 'host' columns found in the table")
+        return q
+   
+    # first we check if its an ip address 
     try:
         ipaddress.ip_address(filter_term)
         nxc_logger.debug(f"filter_term is an IP address: {filter_term}")
-        q = q.filter(HostsTable.c.ip == filter_term)
+        q = q.filter(ip_column == filter_term)
     except ValueError:
         nxc_logger.debug(f"filter_term is not an IP address: {filter_term}")
         like_term = func.lower(f"%{filter_term}%")
-        q = q.filter(HostsTable.c.ip.like(like_term) | func.lower(HostsTable.c.hostname).like(like_term))
+        
+        # check if the hostname column exists for hostname searching
+        q = q.filter(ip_column.like(like_term) | func.lower(HostsTable.c.hostname).like(like_term)) if hasattr(HostsTable.c, "hostname") else q.filter(ip_column.like(like_term))
 
     return q
 
