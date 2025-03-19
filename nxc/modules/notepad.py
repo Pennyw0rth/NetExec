@@ -71,9 +71,26 @@ class NXCModule:
             
         return True
 
-    def read_and_decode_file(self, connection, file_path):
+    def read_and_decode_file(self, connection, context, file_path, user):
         buf = BytesIO()
-        connection.conn.getFile("C$", file_path, buf.write)
+        try:
+            connection.conn.getFile("C$", file_path, buf.write)
+        except Exception as e:
+            if "STATUS_SHARING_VIOLATION" in str(e):  # It means notepad.exe is open on target.
+                # If there's a sharing violation, try alternative approach
+                context.log.debug(f"Sharing violation on {file_path}, trying alternative method")
+                try:
+                    context.log.debug(f"Trying to kill notepad.exe process for {user} user.")
+                    # To Do: Kill process with RPC, connection.execute can be detect by EDRs and module wont work. Or copy the target bin files without trigger the EDRs
+                    connection.execute("taskkill /IM notepad.exe /F")  # If notepad.exe open by user, needs to kill that process for reading files.
+                    time.sleep(1)  # Sleep 1 sec for finding and reading processing
+                    context.log.debug(f"Notepad process was successfully killed for {user}")
+                except Exception as e:
+                    context.log.debug(f"Alternative method failed: {e}")
+            else:
+                # If it's a different error, just skip this file
+                context.log.debug(f"Error accessing {file_path}: {e}")
+                
         buf.seek(0)
         binary_data = buf.read()
         
@@ -93,15 +110,13 @@ class NXCModule:
                 try:
                     if not connection.conn.listPath("C$", f"{notepad_dir}\\*"):
                         continue
-                    connection.execute("cmd.exe /c taskkill /IM notepad.exe /F")  # If notepad.exe open by user, needs to kill that process for reading files.
-                    time.sleep(1)  # Sleep 1 sec for finding and reading processing
                     try:
                         for file in connection.conn.listPath("C$", f"{notepad_dir}\\*"):
                             if file.get_longname() not in self.false_positive and file.get_longname().endswith(".bin"):
                                 file_path = f"{notepad_dir}{file.get_longname()}"
                                 
                                 # Read the binary file
-                                meaningful_strings = self.read_and_decode_file(connection, file_path)
+                                meaningful_strings = self.read_and_decode_file(connection, context, file_path, directory.get_longname())
 
                                 if meaningful_strings:
                                     found += 1
@@ -114,7 +129,7 @@ class NXCModule:
                                     for _, string in meaningful_strings:
                                         if bool(re.match(self.FILE_PATH_REGEX, string)):  # Only needed if checking locally
                                             # Read the file into a buffer
-                                            meaningful_strings = self.read_and_decode_file(connection, string[2:])
+                                            meaningful_strings = self.read_and_decode_file(connection, context, string[2:], directory.get_longname())
 
                                             # Second loop to handle content inside the file
                                             for _, string in meaningful_strings:
