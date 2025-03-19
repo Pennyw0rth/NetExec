@@ -7,7 +7,7 @@ from nxc.paths import NXC_PATH
 
 class NXCModule:
     # Extracts content from Windows Notepad binary tab state files
-    # Module by @YourUsername
+    # Module by @termanix
     name = "notepad"
     description = "Extracts content from Windows Notepad tab state binary files."
     supported_protocols = ["smb"]
