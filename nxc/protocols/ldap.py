@@ -3,7 +3,7 @@
 import hashlib
 import hmac
 import os
-from errno import EHOSTUNREACH, ETIMEDOUT
+from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
 from binascii import hexlify
 from datetime import datetime
 from re import sub, I
@@ -211,7 +211,7 @@ class ldap(connection):
             self.logger.debug(f"{e} on host {self.host}")
             return False
         except OSError as e:
-            if e.errno in (EHOSTUNREACH, ETIMEDOUT):
+            if e.errno in (EHOSTUNREACH, ENETUNREACH, ETIMEDOUT):
                 self.logger.info(f"Error connecting to {self.host} - {e}")
                 return False
             else:
