@@ -3,7 +3,7 @@
 import hashlib
 import hmac
 import os
-from errno import EHOSTUNREACH
+from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
 from binascii import hexlify
 from datetime import datetime
 from re import sub, I
@@ -211,7 +211,7 @@ class ldap(connection):
             self.logger.debug(f"{e} on host {self.host}")
             return False
         except OSError as e:
-            if e.errno == EHOSTUNREACH:
+            if e.errno in (EHOSTUNREACH, ENETUNREACH, ETIMEDOUT):
                 self.logger.info(f"Error connecting to {self.host} - {e}")
                 return False
             else:
@@ -992,19 +992,20 @@ class ldap(connection):
         self.logger.debug(f"Querying LDAP server with filter: {search_filter} and attributes: {attributes}")
         try:
             resp = self.search(search_filter, attributes, 0)
+            resp_parsed = parse_result_attributes(resp)
         except LDAPFilterSyntaxError as e:
             self.logger.fail(f"LDAP Filter Syntax Error: {e}")
             return
-        for item in resp:
-            if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
-                continue
-            self.logger.success(f"Response for object: {item['objectName']}")
-            for attribute in item["attributes"]:
-                attr = f"{attribute['type']}:"
-                vals = str(attribute["vals"]).replace("\n", "")
-                if "SetOf: " in vals:
-                    vals = vals.replace("SetOf: ", "")
-                self.logger.highlight(f"{attr:<20} {vals}")
+        for idx, entry in enumerate(resp_parsed):
+            self.logger.success(f"Response for object: {resp[idx]['objectName']}")
+            for attribute in entry:
+                if isinstance(entry[attribute], list) and entry[attribute]:
+                    # Display first item in the same line as attribute
+                    self.logger.highlight(f"{attribute:<20} {entry[attribute].pop(0)}")
+                    for item in entry[attribute]:
+                        self.logger.highlight(f"{'':<20} {item}")
+                else:
+                    self.logger.highlight(f"{attribute:<20} {entry[attribute]}")
 
     def find_delegation(self):
         def printTable(items, header):
