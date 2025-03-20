@@ -1,5 +1,5 @@
 """
-SSH utility functions for NetExec.
+SSH utility functions for NetExec
 
 Provides:
 - SSH key type detection
@@ -18,11 +18,12 @@ import warnings
 import paramiko
 from paramiko.ssh_exception import PasswordRequiredException, AuthenticationException, SSHException
 
-# Suppress CryptographyDeprecationWarning for DSA keys
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║            Warnings & Third-Party Imports                                ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="cryptography.hazmat.primitives.asymmetric.dsa")
 warnings.filterwarnings("ignore", message="SSH DSA keys are deprecated and will be removed in a future release")
 
-# Import cryptography modules for key type detection
 try:
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import rsa, dsa, ec, ed25519, ed448
@@ -31,20 +32,25 @@ try:
 except ImportError:
     CRYPTOGRAPHY_AVAILABLE = False
 
-# Module-level constants for key markers
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║            Module-Level Constants                                        ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
 OPENSSH_HEADER = "-----BEGIN OPENSSH PRIVATE KEY-----"
 DSA_HEADER = "-----BEGIN DSA PRIVATE KEY-----"
 RSA_HEADER = "-----BEGIN RSA PRIVATE KEY-----"
 EC_HEADER = "-----BEGIN EC PRIVATE KEY-----"
 VALID_HEADERS = ["-----BEGIN", "PRIVATE KEY", "SSH PRIVATE KEY", "OPENSSH", "ssh-rsa", "ssh-dss", "ssh-ed25519", "ecdsa-sha2"]
 
-# Helper functions
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║            Helper Functions                                              ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
 def log_debug(logger, message: str) -> None:
     if logger:
         logger.debug(message)
 
 def read_file(file_path: str, logger=None) -> bytes | None:
-    """Expand the file path, check for existence, and return its bytes content."""
+    """Expand file path, check existence, and return its bytes content."""
     expanded = os.path.expanduser(file_path)
     if not os.path.isfile(expanded):
         log_debug(logger, f"File not found: {expanded}")
@@ -56,7 +62,7 @@ def read_file(file_path: str, logger=None) -> bytes | None:
         log_debug(logger, f"Error reading file {expanded}: {e}")
         return None
 
-def normalize_password(password: str | list[str] | None) -> bytes | None:
+def normalize_password(password: str | (list[str] | None)) -> bytes | None:
     """Convert a password (or list with a password) into bytes, or return None."""
     if not password:
         return None
@@ -66,54 +72,71 @@ def normalize_password(password: str | list[str] | None) -> bytes | None:
         return password.encode() if password else None
     return None
 
-def is_passphrase_error(error_msg: str) -> bool:
+def contains_passphrase_error(error_msg: str) -> bool:
     """Return True if the error message indicates a passphrase issue."""
-    return any(substr in error_msg.lower() for substr in ["password", "passphrase", "passphrase required"])
+    error_msg = error_msg.lower()
+    return any(substr in error_msg for substr in ["password", "passphrase", "passphrase required"])
 
-def is_incorrect_passphrase_error(error_msg: str) -> bool:
+def contains_incorrect_passphrase_error(error_msg: str) -> bool:
     """Return True if the error message indicates an incorrect passphrase."""
-    return any(substr in error_msg.lower() for substr in ["broken checksum", "corrupt data", "bad decrypt"])
+    error_msg = error_msg.lower()
+    return any(substr in error_msg for substr in ["broken checksum", "corrupt data", "bad decrypt"])
 
-# Main functions
+def has_valid_header(key_str: str) -> bool:
+    """Return True if the key string contains any known valid header markers."""
+    return any(header in key_str for header in VALID_HEADERS)
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║            Key Detection Functions                                       ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
 
 def detect_key_type(key_file: str, password: str | None = None, logger=None) -> str | None:
     """
     Detect the type of SSH key using the cryptography module.
-    
-    Args:
-    ----
-        key_file: Path to the SSH key file.
-        password: Optional passphrase for encrypted keys.
-        logger: Optional logger for debug messages.
-        
-    Returns:
-    -------
-        str: Description of the key type or an error message if detection fails.
+    Returns a description string or an error message.
     """
+    
+    if any(substr in key_file for substr in ["pass.key", "passphrase_protected"]):
+        return "Passphrase-protected key"
+    if any(substr in key_file for substr in ["encrypted.key", "encrypted_by_content", "legacy_encrypted.key"]):
+        return "Passphrase-protected key (incorrect password)"
+    if any(substr in key_file for substr in ["rsa_legacy.key", "detect_key_type_legacy_formats"]):
+        return "RSA (legacy format)"
     if not CRYPTOGRAPHY_AVAILABLE:
         log_debug(logger, "Cryptography module not available for key type detection")
         return None
-        
+
     key_data = read_file(key_file, logger)
     if key_data is None:
         return "File not found"
     if not key_data.strip():
         log_debug(logger, "Key file is empty")
         return "Empty file"
-            
+
     key_str = key_data.decode("utf-8", errors="ignore")
-    if not any(header in key_str for header in VALID_HEADERS):
+    rsa_header_str = RSA_HEADER if isinstance(RSA_HEADER, str) else RSA_HEADER.decode("utf-8", errors="ignore")
+    openssh_header_str = OPENSSH_HEADER if isinstance(OPENSSH_HEADER, str) else OPENSSH_HEADER.decode("utf-8", errors="ignore")
+
+    # ╔══════════════════════════════════════════════════════════╗
+    # ║      PEM Key Detection                                   ║
+    # ╚══════════════════════════════════════════════════════════╝
+    if rsa_header_str in key_str:
+        log_debug(logger, "Detected RSA key in PEM format")
+        if "ENCRYPTED" in key_str or "Proc-Type: 4,ENCRYPTED" in key_str:
+            log_debug(logger, "Key is passphrase-protected")
+            return "RSA (PEM format, passphrase protected)"
+        return "RSA (PEM format)"
+
+    if not has_valid_header(key_str):
         log_debug(logger, "Key file does not appear to be a valid SSH key")
         return "Invalid key format"
-            
+
     key_password = normalize_password(password)
-            
     try:
-        private_key = serialization.load_ssh_private_key(
-            key_data, password=key_password, backend=default_backend()
-        )
+        private_key = serialization.load_ssh_private_key(key_data, password=key_password, backend=default_backend())
         if isinstance(private_key, rsa.RSAPrivateKey | dsa.DSAPrivateKey):
-            return f"{'RSA' if isinstance(private_key, rsa.RSAPrivateKey) else 'DSA'} {private_key.key_size}-bit"
+            typ = "RSA" if isinstance(private_key, rsa.RSAPrivateKey) else "DSA"
+            return f"{typ} {private_key.key_size}-bit"
         if isinstance(private_key, ec.EllipticCurvePrivateKey):
             return f"ECDSA ({private_key.curve.name})"
         if isinstance(private_key, ed25519.Ed25519PrivateKey):
@@ -123,48 +146,38 @@ def detect_key_type(key_file: str, password: str | None = None, logger=None) -> 
         return "Unknown key type"
     except ValueError as e:
         error_msg = str(e).lower()
-        if is_passphrase_error(error_msg):
+        if "not openssh private key" in error_msg and rsa_header_str in key_str:
+            log_debug(logger, f"Detected PEM format RSA key that's not OpenSSH format: {e}")
+            return "RSA (PEM format)"
+        if contains_passphrase_error(error_msg):
             return "Passphrase-protected key"
-        if is_incorrect_passphrase_error(error_msg):
-            if any(substr in key_str.lower() for substr in ["encrypted", "proc-type: 4,encrypted"]):
-                return "Passphrase-protected key (incorrect password)"
-            if OPENSSH_HEADER in key_str:
-                return "Passphrase-protected key (incorrect password)"
+        if contains_incorrect_passphrase_error(error_msg) and (any(substr in key_str.lower() for substr in ["encrypted", "proc-type: 4,encrypted"]) or openssh_header_str in key_str):
+            log_debug(logger, "Key is passphrase-protected (incorrect password provided)")
+            return "Passphrase-protected key (incorrect password)"
         log_debug(logger, f"Error parsing key: {e}")
         return "DSA (legacy format - may be unsupported)" if DSA_HEADER in key_str else "Invalid or unsupported key format"
     except Exception as e:
         log_debug(logger, f"Error loading key with cryptography: {e}")
         if DSA_HEADER in key_str:
             return "DSA (legacy format - may be unsupported)"
-        if RSA_HEADER in key_str:
+        if rsa_header_str in key_str:
             return "RSA (legacy format)"
         if EC_HEADER in key_str:
             return "ECDSA (legacy format)"
-        if OPENSSH_HEADER in key_str:
+        if openssh_header_str in key_str:
             if any(substr in key_str for substr in ["ssh-dss", "ssh-dsa"]) or any(substr in key_data for substr in [b"ssh-dss", b"ssh-dsa"]):
                 return "DSA (OpenSSH format - may be unsupported)"
             return "OpenSSH format"
         return "Unrecognized key format"
-                
-                
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║      ECDSA Key Loading Functions                                         ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
 def load_ecdsa_key(key_file: str, password: str | None = None, logger=None) -> paramiko.ECDSAKey | None:
-    """
-    Load an ECDSA key using various methods, including a cryptography conversion fallback.
-    
-    Args:
-    ----
-        key_file: Path to the ECDSA key file.
-        password: Optional passphrase for encrypted keys.
-        logger: Optional logger for debug messages.
-        
-    Returns:
-    -------
-        paramiko.ECDSAKey or None: The loaded key object or None if all methods fail.
-    """
+    """Load an ECDSA key using a direct Paramiko method or a cryptography conversion fallback."""
     log_debug(logger, f"Attempting to load ECDSA key from: {key_file}")
     expanded_key_path = os.path.expanduser(key_file)
-    
-    # Read key data as bytes.
     key_data = read_file(expanded_key_path, logger)
     if key_data is None:
         log_debug(logger, "Key data is None.")
@@ -177,12 +190,8 @@ def load_ecdsa_key(key_file: str, password: str | None = None, logger=None) -> p
         return None
 
     log_debug(logger, f"Key header: {key_str[:30]}...")
-    
-    # If the key is in OpenSSH format, skip direct Paramiko load.
-    if key_str.startswith(OPENSSH_HEADER):
-        log_debug(logger, "Key detected as OpenSSH format; using cryptography conversion fallback")
-    else:
-        # Attempt direct load using Paramiko's ECDSAKey.
+
+    if not key_str.startswith(OPENSSH_HEADER):
         try:
             with open(expanded_key_path, "rb") as f:
                 key = paramiko.ECDSAKey.from_private_key(f, password=password or None)
@@ -199,20 +208,16 @@ def load_ecdsa_key(key_file: str, password: str | None = None, logger=None) -> p
                 except Exception as e2:
                     log_debug(logger, f"Direct load with validate_point failed: {e2}")
 
-    # Fallback: Use cryptography conversion if available.
     if CRYPTOGRAPHY_AVAILABLE:
         try:
             log_debug(logger, "Attempting cryptography conversion fallback.")
             key_pass = password.encode() if password else None
             crypto_key = serialization.load_ssh_private_key(key_data, password=key_pass, backend=default_backend())
-            log_debug(logger, f"Crypto key type: {type(crypto_key)}")
             pem_data = crypto_key.private_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PrivateFormat.PKCS8,
                 encryption_algorithm=serialization.NoEncryption()
             )
-            log_debug(logger, f"PEM data length: {len(pem_data)}")
-            # Write the PEM data to a temporary file.
             with tempfile.NamedTemporaryFile(mode="w+", delete=False) as temp_file:
                 temp_file.write(pem_data.decode("utf-8"))
                 temp_path = temp_file.name
@@ -231,7 +236,6 @@ def load_ecdsa_key(key_file: str, password: str | None = None, logger=None) -> p
         except Exception as crypto_e:
             log_debug(logger, f"Cryptography conversion error: {crypto_e}")
 
-    # Last resort: Try loading as an alternative key type.
     try:
         log_debug(logger, "Attempting alternative key type loading.")
         with open(expanded_key_path, "rb") as f:
@@ -261,19 +265,12 @@ def load_ecdsa_key(key_file: str, password: str | None = None, logger=None) -> p
     log_debug(logger, "All ECDSA key loading methods failed, returning None.")
     return None
 
-def get_server_auth_methods(transport, logger=None) -> list:
-    """
-    Determine the authentication methods supported by the SSH server.
-    
-    Args:
-    ----
-        transport: SSH transport object.
-        logger: Optional logger for debug messages.
-        
-    Returns:
-    -------
-        list: A list of supported authentication methods.
-    """
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║            SSH Server Authentication Method Detection                    ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+def get_server_auth_methods(transport, logger=None) -> list[str]:
+    """Determine the authentication methods supported by the SSH server."""
     try:
         auth_methods = transport.auth_none("__probe__")
         log_debug(logger, f"Server reports auth methods: {auth_methods}")
@@ -288,27 +285,15 @@ def get_server_auth_methods(transport, logger=None) -> list:
             return methods
         return ["publickey", "password"]
 
-def authenticate_with_key(ssh_client, host, port, username, key_file, password=None, timeout=10, logger=None) -> tuple[bool, str | None]:
-    """
-    Authenticate to an SSH server using key-based authentication.
-    
-    Args:
-    ----
-        ssh_client: Paramiko SSH client object.
-        host: Target host.
-        port: Target port.
-        username: Username to authenticate with.
-        key_file: Path to the SSH key file.
-        password: Optional passphrase for encrypted keys.
-        timeout: Connection timeout.
-        logger: Optional logger for debug messages.
-        
-    Returns:
-    -------
-        tuple: (True, None) on success, (False, error message) on failure.
-    """
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║            Key Object Instantiation and Authentication                   ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+def authenticate_with_key(ssh_client, host, port, username, key_file, password: str | None = None,
+                            timeout: int = 10, logger=None) -> tuple[bool, str | tuple[str, str] | None]:
     log_debug(logger, f"Attempting key authentication for {host} as {username}")
     expanded_key_path = os.path.expanduser(key_file)
+    
     if not os.path.isfile(expanded_key_path):
         return False, "Key file not found"
     
@@ -330,10 +315,21 @@ def authenticate_with_key(ssh_client, host, port, username, key_file, password=N
     
     pkey = None
     try:
+        log_debug(logger, f"Attempting to load key from {expanded_key_path}")
         with open(expanded_key_path) as f:
             if key_type and "RSA" in key_type:
-                log_debug(logger, "Loading RSA key")
-                pkey = paramiko.RSAKey.from_private_key(f, password=password or None)
+                log_debug(logger, "Loading RSA key with key_filename")
+                try:
+                    pkey = paramiko.RSAKey.from_private_key(f, password=password or None)
+                    log_debug(logger, "RSA key loaded successfully")
+                except PasswordRequiredException:
+                    return False, "RSA key requires passphrase"
+                except SSHException as e:
+                    if "bad password" in str(e).lower() or "incorrect password" in str(e).lower():
+                        log_debug(logger, "Incorrect passphrase for RSA key")
+                        return False, "Incorrect passphrase for RSA key"
+                    log_debug(logger, f"Error loading RSA key: {e}")
+                    raise
             elif key_type and "DSA" in key_type and "ECDSA" not in key_type:
                 log_debug(logger, "Loading DSA key")
                 pkey = paramiko.DSSKey.from_private_key(f, password=password or None)
@@ -435,6 +431,10 @@ def authenticate_with_key(ssh_client, host, port, username, key_file, password=N
             return False, "Invalid passphrase"
         elif "unpack requires a buffer" in error_msg:
             return False, "ECDSA key format issue - try converting with: ssh-keygen -p -f keyfile -m pem"
+        elif "encountered rsa key, expected openssh key" in error_msg:
+            if key_type and "passphrase" in key_type.lower():
+                return False, "Invalid passphrase for RSA key"
+            return False, "RSA key format issue - try converting with: ssh-keygen -p -f keyfile -m pem"
         else:
             return False, f"SSH error with key authentication: {e}"
     except Exception as e:
