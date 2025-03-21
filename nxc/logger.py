@@ -80,7 +80,7 @@ def no_debug(func):
 
 
 class NXCAdapter(logging.LoggerAdapter):
-    def __init__(self, extra=None):
+    def __init__(self, extra=None, merge_extra=False):
         logging.basicConfig(
             format="%(message)s",
             datefmt="[%X]",
@@ -93,6 +93,7 @@ class NXCAdapter(logging.LoggerAdapter):
         )
         self.logger = logging.getLogger("nxc")
         self.extra = extra
+        self.merge_extra = merge_extra
         self.output_file = None
 
         logging.getLogger("impacket").disabled = True

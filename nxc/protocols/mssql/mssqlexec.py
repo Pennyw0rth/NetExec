@@ -48,7 +48,7 @@ class MSSQLEXEC:
 
     def backup_and_enable(self, option):
         try:
-            self.backuped_options[option] = self.is_option_enabled("show advanced options")
+            self.backuped_options[option] = self.is_option_enabled(option)
             if not self.backuped_options[option]:
                 self.logger.debug(f"Option '{option}' is disabled, attempting to enable it.")
                 query = f"EXEC master.dbo.sp_configure '{option}', 1;RECONFIGURE;"
