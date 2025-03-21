@@ -22,6 +22,7 @@ def proto_args(parser, parents):
     vgroup.add_argument("--password-not-required", action="store_true", help="Get the list of users with flag PASSWD_NOTREQD")
     vgroup.add_argument("--admin-count", action="store_true", help="Get objets that had the value adminCount=1")
     vgroup.add_argument("--users", nargs="*", help="Enumerate enabled domain users")
+    vgroup.add_argument("--users-export", help="Output domain users to a file")
     vgroup.add_argument("--groups", nargs="?", const="", help="Enumerate domain groups, if a group is specified than its members are enumerated")
     vgroup.add_argument("--computers", action="store_true", help="Enumerate domain computers")
     vgroup.add_argument("--dc-list", action="store_true", help="Enumerate Domain Controllers")
