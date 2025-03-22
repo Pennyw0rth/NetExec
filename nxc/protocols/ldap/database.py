@@ -1,13 +1,13 @@
 import sys
 
-from sqlalchemy import func, Table, select
+from sqlalchemy import func, Table, select, delete
 from sqlalchemy.dialects.sqlite import Insert  # used for upsert
 from sqlalchemy.exc import (
     NoInspectionAvailable,
     NoSuchTableError,
 )
 
-from nxc.database import BaseDB
+from nxc.database import BaseDB, format_host_query
 from nxc.logger import nxc_logger
 
 class database(BaseDB):
@@ -166,6 +166,14 @@ class database(BaseDB):
 
             self.db_execute(q_groups, groups)
 
+    def remove_credentials(self, creds_id):
+        """Removes a credential ID from the database"""
+        del_hosts = []
+        for cred_id in creds_id:
+            q = delete(self.UsersTable).filter(self.UsersTable.c.id == cred_id)
+            del_hosts.append(q)
+        self.db_execute(q)
+
     def is_credential_valid(self, credential_id):
         """Check if this credential ID is valid."""
         q = select(self.UsersTable).filter(
@@ -201,3 +209,31 @@ class database(BaseDB):
         )
         results = self.db_execute(q).first()
         return results.id
+
+    def get_hosts(self, filter_term=None, domain=None):
+        """Return hosts from the database."""
+        q = select(self.HostsTable)
+
+        # if we're returning a single host by ID
+        if self.is_host_valid(filter_term):
+            q = q.filter(self.HostsTable.c.id == filter_term)
+            results = self.db_execute(q).first()
+            # all() returns a list, so we keep the return format the same so consumers don't have to guess
+            return [results]
+        elif filter_term is not None and filter_term.startswith("domain"):
+            domain = filter_term.split()[1]
+            like_term = func.lower(f"%{domain}%")
+            q = q.filter(self.HostsTable.c.domain.like(like_term))
+        # if we're filtering by ip/hostname
+        elif filter_term and filter_term != "":
+            q = format_host_query(q, filter_term, self.HostsTable)
+
+        results = self.db_execute(q).all()
+        nxc_logger.debug(f"ldap hosts() - results: {results}")
+        return results
+
+    def is_host_valid(self, host_id):
+        """Check if this host ID is valid."""
+        q = select(self.HostsTable).filter(self.HostsTable.c.id == host_id)
+        results = self.db_execute(q).all()
+        return len(results) > 0
