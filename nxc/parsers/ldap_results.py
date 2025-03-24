@@ -18,6 +18,9 @@ def parse_result_attributes(ldap_response):
                     # If we can't decode the value, we'll just return the bytes
                     val_decoded = val.__bytes__()
                 val_list.append(val_decoded)
-            attribute_map[str(attribute["type"])] = val_list if len(val_list) > 1 else val_list[0]
+            if len(val_list) == 1:
+                attribute_map[str(attribute["type"])] = val_list[0]
+            else:
+                attribute_map[str(attribute["type"])] = val_list
         parsed_response.append(attribute_map)
     return parsed_response

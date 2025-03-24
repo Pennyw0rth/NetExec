@@ -207,8 +207,10 @@ class TSCH_EXEC:
                         else:
                             self.logger.debug(str(e))
 
-                if self.__outputBuffer:
+                try:
                     self.logger.debug(f"Deleting file {self.__share}\\{self.__output_filename}")
                     smbConnection.deleteFile(self.__share, self.__output_filename)
+                except Exception:
+                    pass
 
         dce.disconnect()

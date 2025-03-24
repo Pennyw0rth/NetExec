@@ -5,7 +5,6 @@ def proto_args(parser, parents):
     ldap_parser = parser.add_parser("ldap", help="own stuff using LDAP", parents=parents, formatter_class=DisplayDefaultsNotNone)
     ldap_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
     ldap_parser.add_argument("--port", type=int, default=389, help="LDAP port")
-    ldap_parser.add_argument("--no-smb", action="store_true", help="No smb connection")
 
     dgroup = ldap_parser.add_mutually_exclusive_group()
     dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, default=None, help="domain to authenticate to")
@@ -23,7 +22,8 @@ def proto_args(parser, parents):
     vgroup.add_argument("--password-not-required", action="store_true", help="Get the list of users with flag PASSWD_NOTREQD")
     vgroup.add_argument("--admin-count", action="store_true", help="Get objets that had the value adminCount=1")
     vgroup.add_argument("--users", nargs="*", help="Enumerate enabled domain users")
-    vgroup.add_argument("--groups", action="store_true", help="Enumerate domain groups")
+    vgroup.add_argument("--groups", nargs="?", const="", help="Enumerate domain groups, if a group is specified than its members are enumerated")
+    vgroup.add_argument("--computers", action="store_true", help="Enumerate domain computers")
     vgroup.add_argument("--dc-list", action="store_true", help="Enumerate Domain Controllers")
     vgroup.add_argument("--get-sid", action="store_true", help="Get domain sid")
     vgroup.add_argument("--active-users", nargs="*", help="Get Active Domain Users Accounts")

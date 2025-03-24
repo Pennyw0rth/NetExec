@@ -84,10 +84,7 @@ class NXCModule:
                             prod_results = results.setdefault(product["name"], {})
                             prod_results.setdefault("pipes", []).append(pipe)
         except Exception as e:
-            if "STATUS_ACCESS_DENIED" in str(e):
-                context.log.fail("Error STATUS_ACCESS_DENIED while enumerating pipes, probably due to using SMBv1")
-            else:
-                context.log.fail(str(e))
+            context.log.fail(str(e))
 
     def dump_results(self, results, context):
         if not results:
