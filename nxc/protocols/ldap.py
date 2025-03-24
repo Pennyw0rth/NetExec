@@ -382,6 +382,13 @@ class ldap(connection):
 
                     self.check_if_admin()
 
+                    if password:
+                        self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
+                        self.db.add_credential("plaintext", domain, self.username, self.password)
+                    elif ntlm_hash:
+                        self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.hash}")
+                        self.db.add_credential("hash", domain, self.username, self.hash)
+
                     # Prepare success credential text
                     self.logger.success(f"{domain}\\{self.username} {self.mark_pwned()}")
 
