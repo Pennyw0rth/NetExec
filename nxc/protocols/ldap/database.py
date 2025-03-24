@@ -10,6 +10,7 @@ from sqlalchemy.exc import (
 from nxc.database import BaseDB, format_host_query
 from nxc.logger import nxc_logger
 
+
 class database(BaseDB):
     def __init__(self, db_engine):
         self.UsersTable = None
@@ -56,13 +57,7 @@ class database(BaseDB):
                 )
                 sys.exit()
 
-    def add_host(
-        self,
-        ip,
-        hostname,
-        domain,
-        os
-    ):
+    def add_host(self, ip, hostname, domain, os):
         """Check if this host has already been added to the database, if not, add it in."""
         hosts = []
         updated_ids = []
