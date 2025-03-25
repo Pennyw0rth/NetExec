@@ -22,6 +22,8 @@ from asyauth.common.credentials.kerberos import KerberosCredential
 from asyauth.common.constants import asyauthSecret
 from asysocks.unicomm.common.target import UniTarget, UniProto
 
+from nxc.paths import NXC_PATH
+
 
 class rdp(connection):
     def __init__(self, args, db, host):
@@ -81,11 +83,6 @@ class rdp(connection):
 
         connection.__init__(self, args, db, host)
 
-    # def proto_flow(self):
-    #     if self.create_conn_obj():
-    #         if self.login() or (self.username == '' and self.password == ''):
-    #             if hasattr(self.args, 'module') and self.args.module:
-
     def proto_logger(self):
         import platform
         if platform.python_version() in ["3.11.5", "3.11.6", "3.12.0"]:
@@ -112,7 +109,6 @@ class rdp(connection):
             self.logger.display(f"Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
         else:
             self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({nla})")
-        return True
 
     def create_conn_obj(self):
         self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout)
@@ -172,6 +168,7 @@ class rdp(connection):
         return True
 
     def check_nla(self):
+        self.logger.debug(f"Checking NLA for {self.host}")
         for proto in self.protoflags_nla:
             try:
                 self.iosettings.supported_protocols = proto
@@ -272,7 +269,7 @@ class rdp(connection):
                     if word in str(e):
                         reason = self.rdp_error_status[word]
                 self.logger.fail(
-                    (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {f'({reason})' if reason else str(e)}"),
+                    (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} ({reason if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "KDC_ERR_C_PRINCIPAL_UNKNOWN") else "red"),
                 )
             elif "Authentication failed!" in str(e):
@@ -287,7 +284,7 @@ class rdp(connection):
                 if str(e) == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
                 self.logger.fail(
-                    (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {f'({reason})' if reason else ''}"),
+                    (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} ({reason if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
             return False
@@ -321,7 +318,7 @@ class rdp(connection):
                 if str(e) == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
                 self.logger.fail(
-                    (f"{domain}\\{username}:{process_secret(password)} {f'({reason})' if reason else ''}"),
+                    (f"{domain}\\{username}:{process_secret(password)} ({reason if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
             return False
@@ -356,7 +353,7 @@ class rdp(connection):
                     reason = "User valid but cannot connect"
 
                 self.logger.fail(
-                    (f"{domain}\\{username}:{process_secret(ntlm_hash)} {f'({reason})' if reason else ''}"),
+                    (f"{domain}\\{username}:{process_secret(ntlm_hash)} ({reason if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
             return False
@@ -379,18 +376,25 @@ class rdp(connection):
         asyncio.run(self.screen())
 
     async def nla_screen(self):
-        # Otherwise it crash
-        self.iosettings.supported_protocols = None
         self.auth = NTLMCredential(secret="", username="", domain="", stype=asyauthSecret.PASS)
-        self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
-        await self.connect_rdp()
-        await asyncio.sleep(int(self.args.screentime))
 
-        if self.conn is not None and self.conn.desktop_buffer_has_data is True:
-            buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-            filename = os.path.expanduser(f"~/.nxc/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
-            buffer.save(filename, "png")
-            self.logger.highlight(f"NLA Screenshot saved {filename}")
+        for proto in self.protoflags_nla:
+            try:
+                self.iosettings.supported_protocols = proto
+                self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
+
+                await self.connect_rdp()
+            except Exception as e:
+                self.logger.debug(f"Failed to connect for nla_screenshot with {proto} {e}")
+                return
+
+            await asyncio.sleep(int(self.args.screentime))
+            if self.conn is not None and self.conn.desktop_buffer_has_data is True:
+                buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
+                filename = os.path.expanduser(f"{NXC_PATH}/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
+                buffer.save(filename, "png")
+                self.logger.highlight(f"NLA Screenshot saved {filename}")
+                return
 
     def nla_screenshot(self):
         if not self.nla:

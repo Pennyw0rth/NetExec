@@ -17,13 +17,13 @@ class NXCModule:
             self.username = module_options["USER"]
 
     def on_login(self, context, connection):
-        searchBase = connection.ldapConnection._baseDN
+        searchBase = connection.ldap_connection._baseDN
         searchFilter = f"(sAMAccountName={connection.username})" if self.username is None else f"(sAMAccountName={format(self.username)})"
 
         context.log.debug(f"Using naming context: {searchBase} and {searchFilter} as search filter")
 
         # Get attributes of provided user
-        r = connection.ldapConnection.search(
+        r = connection.ldap_connection.search(
             searchBase=searchBase,
             searchFilter=searchFilter,
             attributes=[

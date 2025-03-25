@@ -42,12 +42,12 @@ class NXCModule:
     multiple_hosts = False
 
     def on_login(self, context, connection):
-        dn = connection.ldapConnection._baseDN if self.base_dn is None else self.base_dn
+        dn = connection.ldap_connection._baseDN if self.base_dn is None else self.base_dn
 
         context.log.display("Getting the Sites and Subnets from domain")
 
         try:
-            list_sites = connection.ldapConnection.search(
+            list_sites = connection.ldap_connection.search(
                 searchBase=f"CN=Configuration,{dn}",
                 searchFilter="(objectClass=site)",
                 attributes=["distinguishedName", "name", "description"],
@@ -68,7 +68,7 @@ class NXCModule:
                 site_description = site["description"]
 
             # Getting subnets of this site
-            list_subnets = connection.ldapConnection.search(
+            list_subnets = connection.ldap_connection.search(
                 searchBase=f"CN=Sites,CN=Configuration,{dn}",
                 searchFilter=f"(siteObject={site_dn})",
                 attributes=["distinguishedName", "name"],
@@ -86,7 +86,7 @@ class NXCModule:
 
                     if self.showservers:
                         # Getting machines in these subnets
-                        list_servers = connection.ldapConnection.search(
+                        list_servers = connection.ldap_connection.search(
                             searchBase=site_dn,
                             searchFilter="(objectClass=server)",
                             attributes=["cn"],

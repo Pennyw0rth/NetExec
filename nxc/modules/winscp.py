@@ -5,7 +5,6 @@
 # - https://github.com/rapid7/metasploit-framework/blob/master/lib/rex/parser/winscp.rb
 
 import traceback
-from typing import Tuple
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
@@ -98,7 +97,7 @@ class NXCModule:
             clearpass = clearpass[len(key):]
         return clearpass
 
-    def dec_next_char(self, pass_bytes) -> "Tuple[int, bytes]":
+    def dec_next_char(self, pass_bytes) -> tuple[int, bytes]:
         """
         Decrypts the first byte of the password and returns the decrypted byte and the remaining bytes.
 

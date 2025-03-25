@@ -12,6 +12,10 @@ def proto_args(parser, parents):
     ssh_parser.add_argument("--get-output-tries", type=int, default=5, help="Number of times with sudo command tries to get results")
     sudo_check_method_arg.make_required.append(sudo_check_arg)
 
+    files_group = ssh_parser.add_argument_group("Files", "Options for remote file interaction")
+    files_group.add_argument("--put-file", action="append", nargs=2, metavar="FILE", help="Put a local file into remote target, ex: whoami.txt /tmp/whoami.txt")
+    files_group.add_argument("--get-file", action="append", nargs=2, metavar="FILE", help="Get a remote file, ex: /tmp/whoami.txt whoami.txt")
+
     cgroup = ssh_parser.add_argument_group("Command Execution", "Options for executing commands")
     cgroup.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output. If errors are detected, run chcp.com at the target, map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
     cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")

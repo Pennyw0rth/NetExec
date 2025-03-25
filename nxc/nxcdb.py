@@ -153,7 +153,7 @@ class DatabaseNavigator(cmd.Cmd):
                     if cred[4] == "hash":
                         usernames.append(cred[2])
                         passwords.append(cred[3])
-                output_list = [":".join(combination) for combination in zip(usernames, passwords)]
+                output_list = [":".join(combination) for combination in zip(usernames, passwords, strict=True)]
                 write_list(filename, output_list)
             else:
                 print(f"[-] No such export option: {line[1]}")
