@@ -74,8 +74,8 @@ def _add_with_domain(user_info, domain, tx, logger):
         logger.fail("Account not found in the BloodHound database.")
         return
     if result[0]["c"].get("owned") in (False, None):
-        logger.debug(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) SET c.owned=True RETURN c.name AS name")
-        result = tx.run(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) SET c.owned=True RETURN c.name AS name").data()[0]
+        logger.debug(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) SET c.system_tags='owned' RETURN c.name AS name")
+        result = tx.run(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) SET c.system_tags='owned' c.name AS name").data()[0]
         logger.highlight(f"Node {result['name']} successfully set as owned in BloodHound")
 
 
@@ -96,6 +96,6 @@ def _add_without_domain(user_info, tx, logger):
         logger.fail(f"Multiple accounts found with the name '{user_info['username']}' in the BloodHound database. Please specify the FQDN ex:domain.local")
         return
     elif result[0]["c"].get("owned") in (False, None):
-        logger.debug(f"MATCH (c:{account_type} {{name:'{result[0]['c']['name']}'}}) SET c.owned=True RETURN c.name AS name")
-        result = tx.run(f"MATCH (c:{account_type} {{name:'{result[0]['c']['name']}'}}) SET c.owned=True RETURN c.name AS name").data()[0]
+        logger.debug(f"MATCH (c:{account_type} {{name:'{result[0]['c']['name']}'}}) SET c.system_tags='owned' RETURN c.name AS name")
+        result = tx.run(f"MATCH (c:{account_type} {{name:'{result[0]['c']['name']}'}}) SET c.system_tags='owned' c.name AS name").data()[0]
         logger.highlight(f"Node {result['name']} successfully set as owned in BloodHound")
