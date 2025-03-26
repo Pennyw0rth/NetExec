@@ -69,13 +69,15 @@ def _add_with_domain(user_info, domain, tx, logger):
         account_type = "User"
 
     result = tx.run(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) RETURN c").data()
-
     if len(result) == 0:
         logger.fail("Account not found in the BloodHound database.")
         return
-    if result[0]["c"].get("owned") in (False, None):
-        logger.debug(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) SET c.system_tags='owned' RETURN c.name AS name")
-        result = tx.run(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) SET c.system_tags='owned' c.name AS name").data()[0]
+    # add when system_tags is None or does not contains "owned"
+    system_tags = result[0]["c"].get("system_tags")
+    if system_tags is None or "owned" not in system_tags:
+        system_tags = ((system_tags or "").strip() + " owned").strip() 
+        logger.debug(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) SET c.system_tags='{system_tags}' RETURN c.name AS name")
+        result = tx.run(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) SET c.system_tags='{system_tags}' RETURN c.name AS name").data()[0]
         logger.highlight(f"Node {result['name']} successfully set as owned in BloodHound")
 
 
@@ -88,14 +90,15 @@ def _add_without_domain(user_info, tx, logger):
         account_type = "User"
 
     result = tx.run(f"MATCH (c:{account_type}) WHERE c.name STARTS WITH '{user_owned}' RETURN c").data()
-
     if len(result) == 0:
         logger.fail("Account not found in the BloodHound database.")
         return
     elif len(result) >= 2:
         logger.fail(f"Multiple accounts found with the name '{user_info['username']}' in the BloodHound database. Please specify the FQDN ex:domain.local")
         return
-    elif result[0]["c"].get("owned") in (False, None):
-        logger.debug(f"MATCH (c:{account_type} {{name:'{result[0]['c']['name']}'}}) SET c.system_tags='owned' RETURN c.name AS name")
-        result = tx.run(f"MATCH (c:{account_type} {{name:'{result[0]['c']['name']}'}}) SET c.system_tags='owned' c.name AS name").data()[0]
+    system_tags = result[0]["c"].get("system_tags")
+    if system_tags is None or "owned" not in system_tags:
+        system_tags = ((system_tags or "").strip() + " owned").strip() 
+        logger.debug(f"MATCH (c:{account_type} {{name:'{result[0]['c']['name']}'}}) SET c.system_tags='{system_tags}' RETURN c.name AS name")
+        result = tx.run(f"MATCH (c:{account_type} {{name:'{result[0]['c']['name']}'}}) SET c.system_tags='{system_tags}' RETURN c.name AS name").data()[0]
         logger.highlight(f"Node {result['name']} successfully set as owned in BloodHound")
