@@ -1,5 +1,3 @@
-import logging
-
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 
@@ -35,7 +33,6 @@ class NXCModule:
 
     def on_admin_login(self, context, connection):
 
-
         if self.action == 'read':
             # READ MODE
             read = self.check_status(context, connection)
@@ -50,7 +47,7 @@ class NXCModule:
             enable = self.enable(context, connection)
             if enable == True :
                 if self.check_status(context, connection) == 0:
-                    context.log.highlight('Operation complete successfully.')
+                    context.log.highlight('Operation completed successfully.')
                 else:
                     context.log.error('Error unknown value on regkey : %s' % str(read))
         if self.action == 'disable':
@@ -58,7 +55,7 @@ class NXCModule:
             disable = self.disable(context, connection)
             if disable == True :
                 if self.check_status(context, connection) == 1:
-                    context.log.highlight('Operation complete successfully.')
+                    context.log.highlight('Operation completed successfully.')
                 else:
                     context.log.error('Error unknown value on regkey : %s' % str(read))
 
@@ -74,7 +71,7 @@ class NXCModule:
             regHandle = ans["phKey"]
 
             # registry path AND open registry
-            registry_path = f"System\\CurrentControlSet\\Control\\Lsa"
+            registry_path = "System\\CurrentControlSet\\Control\\Lsa"
             keyHandle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, registry_path)["phkResult"]
 
             try:
@@ -104,7 +101,7 @@ class NXCModule:
             regHandle = ans["phKey"]
 
             # registry path AND open registry
-            registry_path = f"System\\CurrentControlSet\\Control\\Lsa"
+            registry_path = "System\\CurrentControlSet\\Control\\Lsa"
             keyHandle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, registry_path)["phkResult"]
 
             try:
@@ -134,7 +131,7 @@ class NXCModule:
             regHandle = ans["phKey"]
 
             # registry path AND open registry
-            registry_path = f"System\\CurrentControlSet\\Control\\Lsa"
+            registry_path = "System\\CurrentControlSet\\Control\\Lsa"
             keyHandle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, registry_path)["phkResult"]
 
             try:
