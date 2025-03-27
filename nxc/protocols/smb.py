@@ -283,6 +283,16 @@ class smb(connection):
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
         try:
+            # DCs seem to want us to logoff first, windows workstations sometimes reset the connection
+            self.conn.logoff()
+        except Exception as e:
+            self.logger.debug(f"Error logging off system: {e}")
+
+        # Check smbv1
+        if not self.args.no_smbv1:
+            self.smbv1 = self.create_smbv1_conn(check=True)
+
+        try:
             self.db.add_host(
                 self.host,
                 self.hostname,
@@ -293,16 +303,6 @@ class smb(connection):
             )
         except Exception as e:
             self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
-
-        try:
-            # DCs seem to want us to logoff first, windows workstations sometimes reset the connection
-            self.conn.logoff()
-        except Exception as e:
-            self.logger.debug(f"Error logging off system: {e}")
-
-        # Check smbv1
-        if not self.args.no_smbv1:
-            self.smbv1 = self.create_smbv1_conn(check=True)
 
         # DCOM connection with kerberos needed
         self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.targetDomain}"
