@@ -1286,7 +1286,7 @@ class smb(connection):
         return
 
     def users(self):
-        if self.args.users is not None:
+        if self.args.users:
             self.logger.debug(f"Dumping users: {', '.join(self.args.users)}")
         return UserSamrDump(self).dump(requested_users=self.args.users)
 
