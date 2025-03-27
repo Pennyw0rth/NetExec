@@ -41,7 +41,7 @@ class UserSamrDump:
         if self.password is None:
             self.password = ""
 
-    def dump(self, requested_users=None, users_export=None):
+    def dump(self, requested_users=None, dump_path=None):
         # Try all requested protocols until one works.
         for protocol in self.protocols:
             try:
@@ -53,13 +53,13 @@ class UserSamrDump:
             self.logger.debug(f"Trying protocol {protocol}")
             self.rpc_transport = transport.SMBTransport(self.addr, port, r"\samr", self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey, doKerberos=self.doKerberos, kdcHost=self.kdcHost, remote_host=self.host)
             try:
-                self.fetch_users(requested_users, users_export)
+                self.fetch_users(requested_users, dump_path)
                 break
             except Exception as e:
                 self.logger.debug(f"Connection with protocol {protocol} failed: {e}")
         return self.users
 
-    def fetch_users(self, requested_users, users_export):
+    def fetch_users(self, requested_users, dump_path):
         self.dce = DCERPC_v5(self.rpc_transport)
         self.dce.connect()
         self.dce.bind(samr.MSRPC_UUID_SAMR)
@@ -135,10 +135,10 @@ class UserSamrDump:
                 enumerationContext = enumerate_users_resp["EnumerationContext"]
                 status = enumerate_users_resp["ErrorCode"]
 
-        self.logger.display(f"Enumerated {len(users):d} local users: {domain_name}")
-        self.logger.display(f"Writing {len(users):d} local users to {users_export}")
-        if users_export:
-            with open(users_export, "w+") as file:
+        self.logger.display(f"Enumerated {len(users)} local users: {domain_name}")
+        if dump_path:
+            self.logger.display(f"Writing {len(users)} local users to {dump_path}")
+            with open(dump_path, "w+") as file:
                 file.writelines(f"{user}\n" for user in users)
         self.dce.disconnect()
 
