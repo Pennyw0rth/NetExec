@@ -653,7 +653,7 @@ class ldap(connection):
         -------
             None
         """
-        if self.args.users is not None:
+        if self.args.users:
             self.logger.debug(f"Dumping users: {', '.join(self.args.users)}")
             search_filter = f"(|{''.join(f'(sAMAccountName={user})' for user in self.args.users)})"
         else:
@@ -679,7 +679,7 @@ class ldap(connection):
                 # We default attributes to blank strings if they don't exist in the dict
                 self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{pwd_last_set:<20}{user.get('badPwdCount', ''):<9}{user.get('description', ''):<60}")
                 users.append(user.get("sAMAccountName", ""))
-            if self.args.users_export is not None:
+            if self.args.users_export:
                 self.logger.display(f"Writing {len(resp_parse):d} local users to {self.args.users_export}")
                 with open(self.args.users_export, "w+") as file:
                     file.writelines(f"{user}\n" for user in users)
