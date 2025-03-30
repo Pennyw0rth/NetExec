@@ -856,42 +856,39 @@ class ldap(connection):
                     4: "DCE",
                     5: "Azure Active Directory",
                 }.get(int(trust_type) if trust_type else 0, "Unknown")
-                
+
                 self.logger.info(f"Processing trusted domain: {trust_name} ({trust_flat_name})")
                 self.logger.info(f"Trust type: {trust_type_text}, Direction: {direction_text}")
-                
+
                 # Only process if it's an Active Directory trust
                 if int(trust_type) == 2:
                     # Try to find domain controllers in trusted domain using DNS
+                    # Check if we can resolve the trusted domain's DC using DNS
+                    dc_dns_name = f"_ldap._tcp.dc._msdcs.{trust_name}"
                     try:
-                        # Check if we can resolve the trusted domain's DC using DNS
-                        dc_dns_name = f"_ldap._tcp.dc._msdcs.{trust_name}"
-                        try:
-                            srv_records = resolv.resolve(dc_dns_name, "SRV", tcp=self.args.dns_tcp)
-                            self.logger.info(f"Found domain controllers for trusted domain {trust_name} via DNS:")
-                            for srv in srv_records:
-                                dc_hostname = str(srv.target).rstrip(".")
-                                self.logger.highlight(f"Found DC in trusted domain: {colored(dc_hostname, host_info_colors[0])}")
-                                resolve_and_display_hostname(dc_hostname)
-                        except Exception as e:
-                            self.logger.fail(f"Failed to resolve DCs for {trust_name} via DNS: {e}")
-                            
-                            # If DNS resolution fails, try alternative method using NETLOGON
-                            # Note: This would require additional implementation for NETLOGON querying
-                            self.logger.info(f"Attempting alternative discovery methods for {trust_name}...")
-                            
-                            # Try to find a domain controller through the DFS referrals
-                            try:
-                                # Try to query for the netlogon share which typically exists on all DCs
-                                netlogon_name = f"\\\\{trust_name}\\netlogon"
-                                self.logger.info(f"Attempting to locate DC through netlogon share: {netlogon_name}")
-                                # Implementation for netlogon query would go here
-                            except Exception as e:
-                                self.logger.fail(f"Failed to find DC through netlogon for {trust_name}: {e}")
+                        srv_records = resolv.resolve(dc_dns_name, "SRV", tcp=self.args.dns_tcp)
+                        self.logger.info(f"Found domain controllers for trusted domain {trust_name} via DNS:")
+                        for srv in srv_records:
+                            dc_hostname = str(srv.target).rstrip(".")
+                            self.logger.highlight(f"Found DC in trusted domain: {colored(dc_hostname, host_info_colors[0])}")
+                            resolve_and_display_hostname(dc_hostname)
                     except Exception as e:
-                        self.logger.fail(f"Error processing trusted domain {trust_name}: {e}")
+                        self.logger.fail(f"Failed to resolve DCs for {trust_name} via DNS: {e}")
+
+                        # If DNS resolution fails, try alternative method using NETLOGON
+                        # Note: This would require additional implementation for NETLOGON querying
+                        self.logger.info(f"Attempting alternative discovery methods for {trust_name}...")
+
+                        # Try to find a domain controller through the DFS referrals
+                        try:
+                            # Try to query for the netlogon share which typically exists on all DCs
+                            netlogon_name = f"\\\\{trust_name}\\netlogon"
+                            self.logger.info(f"Attempting to locate DC through netlogon share: {netlogon_name}")
+                            # Implementation for netlogon query would go here
+                        except Exception as e:
+                            self.logger.fail(f"Failed to find DC through netlogon for {trust_name}: {e}")
                 else:
-                    self.logger.info(f"Skipping non-Active Directory trust: {trust_name}")
+                    self.logger.display(f"Skipping non-Active Directory trust '{trust_name}' with type: {trust_type_text} and direction: {direction_text}")
 
             self.logger.info("Domain Controller enumeration complete.")
 
