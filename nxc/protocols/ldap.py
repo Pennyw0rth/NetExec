@@ -715,7 +715,7 @@ class ldap(connection):
                 self.logger.display(f"Writing {len(resp_parse):d} local users to {self.args.users_export}")
                 with open(self.args.users_export, "w+") as file:
                     file.writelines(f"{user}\n" for user in users)
-    
+
     def users_export(self):
         self.users()
 
@@ -836,20 +836,21 @@ class ldap(connection):
                 trust_flat_name = trust.get("flatName", "")
                 trust_direction = trust.get("trustDirection", 0)
                 trust_type = trust.get("trustType", 0)
-                
+
                 # Convert trust direction/type to human-readable format
                 direction_text = {
                     0: "Disabled",
                     1: "Inbound",
                     2: "Outbound",
-                    3: "Bidirectional"
+                    3: "Bidirectional",
                 }.get(int(trust_direction) if trust_direction else 0, "Unknown")
-                
+
                 trust_type_text = {
                     1: "Windows NT",
                     2: "Active Directory",
                     3: "Kerberos",
-                    4: "DCE"
+                    4: "DCE",
+                    5: "Azure Active Directory",
                 }.get(int(trust_type) if trust_type else 0, "Unknown")
                 
                 self.logger.info(f"Processing trusted domain: {trust_name} ({trust_flat_name})")
