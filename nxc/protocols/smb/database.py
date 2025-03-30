@@ -11,7 +11,7 @@ from sqlalchemy.exc import (
 )
 from sqlalchemy.exc import SAWarning
 
-from nxc.database import BaseDB
+from nxc.database import BaseDB, format_host_query
 from nxc.logger import nxc_logger
 
 # if there is an issue with SQLAlchemy and a connection cannot be cleaned up properly it spews out annoying warnings
@@ -349,6 +349,7 @@ class database(BaseDB):
         hosts = self.get_hosts(host)
 
         if users and hosts:
+            nxc_logger.debug(f"users: {users}, hosts: {hosts}")
             for user, host in zip(users, hosts, strict=True):
                 user_id = user[0]
                 host_id = host[0]
@@ -468,8 +469,8 @@ class database(BaseDB):
             q = q.filter(self.HostsTable.c.domain.like(like_term))
         # if we're filtering by ip/hostname
         elif filter_term and filter_term != "":
-            like_term = func.lower(f"%{filter_term}%")
-            q = q.filter(self.HostsTable.c.ip.like(like_term) | func.lower(self.HostsTable.c.hostname).like(like_term))
+            q = format_host_query(q, filter_term, self.HostsTable)
+
         results = self.db_execute(q).all()
         nxc_logger.debug(f"smb hosts() - results: {results}")
         return results

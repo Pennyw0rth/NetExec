@@ -20,6 +20,7 @@ a = Analysis(
         'aardwolf.commons.target',
         'aardwolf.protocol.x224.constants',
         'impacket.examples.secretsdump',
+        'impacket.examples.regsecrets',
         'impacket.dcerpc.v5.lsat',
         'impacket.dcerpc.v5.transport',
         'impacket.dcerpc.v5.lsad',

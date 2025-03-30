@@ -3,7 +3,7 @@
 import hashlib
 import hmac
 import os
-from errno import EHOSTUNREACH
+from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
 from binascii import hexlify
 from datetime import datetime
 from re import sub, I
@@ -211,7 +211,7 @@ class ldap(connection):
             self.logger.debug(f"{e} on host {self.host}")
             return False
         except OSError as e:
-            if e.errno == EHOSTUNREACH:
+            if e.errno in (EHOSTUNREACH, ENETUNREACH, ETIMEDOUT):
                 self.logger.info(f"Error connecting to {self.host} - {e}")
                 return False
             else:
@@ -259,12 +259,23 @@ class ldap(connection):
             ntlm_info = parse_challenge(ntlm_challenge)
             self.server_os = ntlm_info["os_version"]
 
-        if not self.kdcHost and self.domain and self.domain == self.remoteName:
+        # using kdcHost is buggy on impacket when using trust relation between ad so we kdcHost must stay to none if targetdomain is not equal to domain
+        if not self.kdcHost and self.domain and self.domain == self.targetDomain:
             result = self.resolver(self.domain)
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
         self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}".replace(":", "-"))
+
+        try:
+            self.db.add_host(
+                self.host,
+                self.hostname,
+                self.domain,
+                self.server_os
+            )
+        except Exception as e:
+            self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
 
     def print_host_info(self):
         self.logger.debug("Printing host info for LDAP")
@@ -319,6 +330,13 @@ class ldap(connection):
 
             self.check_if_admin()
 
+            if password:
+                self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
+                self.db.add_credential("plaintext", domain, self.username, self.password)
+            elif ntlm_hash:
+                self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.hash}")
+                self.db.add_credential("hash", domain, self.username, self.hash)
+
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             self.logger.success(f"{domain}\\{self.username}{used_ccache} {self.mark_pwned()}")
 
@@ -363,6 +381,13 @@ class ldap(connection):
                         self.username = self.get_ldap_username()
 
                     self.check_if_admin()
+
+                    if password:
+                        self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
+                        self.db.add_credential("plaintext", domain, self.username, self.password)
+                    elif ntlm_hash:
+                        self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.hash}")
+                        self.db.add_credential("hash", domain, self.username, self.hash)
 
                     # Prepare success credential text
                     self.logger.success(f"{domain}\\{self.username} {self.mark_pwned()}")
@@ -417,6 +442,8 @@ class ldap(connection):
             self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
             self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
             self.check_if_admin()
+            self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
+            self.db.add_credential("plaintext", domain, self.username, self.password)
 
             # Prepare success credential text
             self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
@@ -438,6 +465,8 @@ class ldap(connection):
                     self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
                     self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
                     self.check_if_admin()
+                    self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
+                    self.db.add_credential("plaintext", domain, self.username, self.password)
 
                     # Prepare success credential text
                     self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
@@ -503,6 +532,8 @@ class ldap(connection):
             self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
             self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
             self.check_if_admin()
+            self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.hash}")
+            self.db.add_credential("hash", domain, self.username, self.hash)
 
             # Prepare success credential text
             out = f"{domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}"
@@ -524,6 +555,8 @@ class ldap(connection):
                     self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
                     self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
                     self.check_if_admin()
+                    self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.hash}")
+                    self.db.add_credential("hash", domain, self.username, self.hash)
 
                     # Prepare success credential text
                     out = f"{domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}"
@@ -652,7 +685,7 @@ class ldap(connection):
         -------
             None
         """
-        if len(self.args.users) > 0:
+        if self.args.users:
             self.logger.debug(f"Dumping users: {', '.join(self.args.users)}")
             search_filter = f"(|{''.join(f'(sAMAccountName={user})' for user in self.args.users)})"
         else:
@@ -662,6 +695,7 @@ class ldap(connection):
         # Default to these attributes to mirror the SMB --users functionality
         request_attributes = ["sAMAccountName", "description", "badPwdCount", "pwdLastSet"]
         resp = self.search(search_filter, request_attributes, sizeLimit=0)
+        users = []
 
         if resp:
             resp_parse = parse_result_attributes(resp)
@@ -676,6 +710,14 @@ class ldap(connection):
 
                 # We default attributes to blank strings if they don't exist in the dict
                 self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{pwd_last_set:<20}{user.get('badPwdCount', ''):<9}{user.get('description', ''):<60}")
+                users.append(user.get("sAMAccountName", ""))
+            if self.args.users_export:
+                self.logger.display(f"Writing {len(resp_parse):d} local users to {self.args.users_export}")
+                with open(self.args.users_export, "w+") as file:
+                    file.writelines(f"{user}\n" for user in users)
+    
+    def users_export(self):
+        self.users()
 
     def groups(self):
         # Building the search filter
@@ -877,6 +919,7 @@ class ldap(connection):
     def asreproast(self):
         if self.password == "" and self.nthash == "" and self.kerberos is False:
             return False
+
         # Building the search filter
         search_filter = "(&(UserAccountControl:1.2.840.113556.1.4.803:=%d)(!(UserAccountControl:1.2.840.113556.1.4.803:=%d))(!(objectCategory=computer)))" % (UF_DONT_REQUIRE_PREAUTH, UF_ACCOUNTDISABLE)
         attributes = [
@@ -1062,19 +1105,20 @@ class ldap(connection):
         self.logger.debug(f"Querying LDAP server with filter: {search_filter} and attributes: {attributes}")
         try:
             resp = self.search(search_filter, attributes, 0)
+            resp_parsed = parse_result_attributes(resp)
         except LDAPFilterSyntaxError as e:
             self.logger.fail(f"LDAP Filter Syntax Error: {e}")
             return
-        for item in resp:
-            if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
-                continue
-            self.logger.success(f"Response for object: {item['objectName']}")
-            for attribute in item["attributes"]:
-                attr = f"{attribute['type']}:"
-                vals = str(attribute["vals"]).replace("\n", "")
-                if "SetOf: " in vals:
-                    vals = vals.replace("SetOf: ", "")
-                self.logger.highlight(f"{attr:<20} {vals}")
+        for idx, entry in enumerate(resp_parsed):
+            self.logger.success(f"Response for object: {resp[idx]['objectName']}")
+            for attribute in entry:
+                if isinstance(entry[attribute], list) and entry[attribute]:
+                    # Display first item in the same line as attribute
+                    self.logger.highlight(f"{attribute:<20} {entry[attribute].pop(0)}")
+                    for item in entry[attribute]:
+                        self.logger.highlight(f"{'':<20} {item}")
+                else:
+                    self.logger.highlight(f"{attribute:<20} {entry[attribute]}")
 
     def find_delegation(self):
         def printTable(items, header):
