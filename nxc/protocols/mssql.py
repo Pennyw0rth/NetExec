@@ -220,12 +220,23 @@ class mssql(connection):
             )
             if res is not True:
                 raise
+            self.logger.debug(f"Logged in with password to MSSQL with {domain}/{self.username}")
             self.check_if_admin()
+
+            self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
+            self.db.add_credential("plaintext", domain, self.username, self.password)
+            user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
+            host_id = self.db.get_hosts(self.host)[0].id
+            self.db.add_loggedin_relation(user_id, host_id)
+
             out = f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}"
             self.logger.success(out)
+
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
+                self.logger.debug(f"Adding admin user: {self.domain}/{self.username}:{self.password}@{self.host}")
+                self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
             return True
         except BrokenPipeError:
@@ -237,18 +248,25 @@ class mssql(connection):
             return False
 
     @reconnect_mssql
-    def hash_login(self, domain, username, ntlm_hash):
-        self.username = username
-        self.domain = domain
-        self.lmhash = ""
-        self.nthash = ""
-        
-        if ntlm_hash.find(":") != -1:
-            self.lmhash, self.nthash = ntlm_hash.split(":")
-        else:
-            self.nthash = ntlm_hash
+    def hash_login(self, domain, username, ntlm_hash): 
+        lmhash = ""
+        nthash = ""
 
         try:
+            self.username = username
+            self.domain = domain
+
+            if ntlm_hash.find(":") != -1:
+                lmhash, nthash = ntlm_hash.split(":")
+                self.hash = nthash
+            else:
+                self.nthash = ntlm_hash
+                self.hash = ntlm_hash
+            if lmhash:
+                self.lmhash = lmhash
+            if nthash:
+                self.nthash = nthash
+
             res = self.conn.login(
                 None,
                 self.username,
@@ -259,12 +277,23 @@ class mssql(connection):
             )
             if res is not True:
                 raise
+            self.logger.debug(f"Logged in with hash to MSSQL with {domain}/{self.username}")
             self.check_if_admin()
+
+            self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.hash}")
+            self.db.add_credential("hash", domain, self.username, self.hash)
+            user_id = self.db.get_credential("hash", domain, self.username, self.hash)
+            host_id = self.db.get_hosts(self.host)[0].id
+            self.db.add_loggedin_relation(user_id, host_id)
+
             out = f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}"
             self.logger.success(out)
+
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
+                self.logger.debug(f"Adding admin user: {self.domain}/{self.username}:{self.password}@{self.host}")
+                self.db.add_admin_user("plaintext", domain, self.username, self.hash, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
             return True
         except BrokenPipeError:
