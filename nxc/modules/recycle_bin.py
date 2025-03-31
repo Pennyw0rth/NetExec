@@ -6,6 +6,9 @@ import re
 from datetime import datetime, timedelta
 import struct
 
+# TODO handle reconstructing the original path better when there is no associated metadata file (we are in a subdirectory)
+# TODO handle the struture of downloaded directories better
+
 class NXCModule:
     # Finds files in the Recycle Bin
     # Module by @leDryPotato
@@ -86,8 +89,7 @@ class NXCModule:
                         for _ in range(depth, depth + 1):
                             context.log.highlight(f"{'\t' * (depth + 1)}File: {item.get_longname()}, size: {item.get_filesize()}KB")
                         if self.download:
-                            # TODO handle reconstructing the original path better when there is no associated metadata file
-                            # Would need to access the key in metadata_map that is associated with the current directory we are in
+                            # Would need to access the key in metadata_map that is associated with the current directory we are in to get the original path
                             original_path = metadata_map.get(item.get_longname().replace("$R", ""), f"{sid_dir}\\{item.get_longname()}")
                             if self.filter and self.filter.lower() != "all":
                                 match = re.search(self.filter, original_path, re.IGNORECASE)
