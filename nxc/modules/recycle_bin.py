@@ -84,7 +84,7 @@ class NXCModule:
                     else:
                         # Actual file
                         for _ in range(depth, depth + 1):
-                            context.log.highlight(f"{'\t' * (depth +1)}File: {item.get_longname()}, size: {item.get_filesize()}KB")
+                            context.log.highlight(f"{'\t' * (depth + 1)}File: {item.get_longname()}, size: {item.get_filesize()}KB")
                         if self.download:
                             # TODO handle reconstructing the original path better when there is no associated metadata file
                             # Would need to access the key in metadata_map that is associated with the current directory we are in
