@@ -685,7 +685,7 @@ class ldap(connection):
         -------
             None
         """
-        if len(self.args.users) > 0:
+        if self.args.users:
             self.logger.debug(f"Dumping users: {', '.join(self.args.users)}")
             search_filter = f"(|{''.join(f'(sAMAccountName={user})' for user in self.args.users)})"
         else:
@@ -695,6 +695,7 @@ class ldap(connection):
         # Default to these attributes to mirror the SMB --users functionality
         request_attributes = ["sAMAccountName", "description", "badPwdCount", "pwdLastSet"]
         resp = self.search(search_filter, request_attributes, sizeLimit=0)
+        users = []
 
         if resp:
             resp_parse = parse_result_attributes(resp)
@@ -709,6 +710,14 @@ class ldap(connection):
 
                 # We default attributes to blank strings if they don't exist in the dict
                 self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{pwd_last_set:<20}{user.get('badPwdCount', ''):<9}{user.get('description', ''):<60}")
+                users.append(user.get("sAMAccountName", ""))
+            if self.args.users_export:
+                self.logger.display(f"Writing {len(resp_parse):d} local users to {self.args.users_export}")
+                with open(self.args.users_export, "w+") as file:
+                    file.writelines(f"{user}\n" for user in users)
+    
+    def users_export(self):
+        self.users()
 
     def groups(self):
         # Building the search filter
