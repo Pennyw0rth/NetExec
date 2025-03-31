@@ -6,8 +6,6 @@ import re
 from datetime import datetime, timedelta
 import struct
 
-# TODO handle directories in the Recycle Bin as well as single files
-
 class NXCModule:
     # Finds files in the Recycle Bin
     # Module by @leDryPotato
@@ -55,6 +53,62 @@ class NXCModule:
         except Exception:
             return "Conversion Error"
 
+    def process_recycle_bin_directory(self, connection, context, sid_dir, metadata_map, depth=0):
+        """Recursively process the Recycle Bin directory and its subdirectories."""
+        for item in connection.conn.listPath("C$", f"{sid_dir}\\*"):
+            try:
+                if item.get_longname() in self.false_positive:
+                    continue
+
+                item_path = f"{sid_dir}\\{item.get_longname()}"
+                if item.is_directory():
+                    for _ in range(depth, depth + 1):
+                        context.log.highlight(f"{'\t' * (depth + 1)}Found subdirectory: {item_path}")
+                    
+                    # Recursively process subdirectories
+                    self.process_recycle_bin_directory(connection, context, item_path, metadata_map, depth + 1)
+                else:
+                    # Process files in the directory
+                    if item.get_longname().startswith("$I"):
+                        # Metadata file
+                        data = self.read_file(connection, context, item_path)
+                        if len(data) >= 24:
+                            deletion_time_raw, = struct.unpack("<Q", data[16:24])
+                            deletion_time = self.convert_filetime_to_datetime(deletion_time_raw)
+                            original_path = data[24:].decode("utf-16", errors="ignore").strip("\x00")
+                            match = re.search(r"([a-z]:\\.+)", original_path, re.IGNORECASE)
+                            if match:
+                                original_path = match.group(1)
+                                metadata_map[item.get_longname().replace("$I", "")] = original_path
+                                context.log.highlight(f"\tFile: {item.get_longname()}, Original location: {original_path}, Deletion time: {deletion_time}")
+                    else:
+                        # Actual file
+                        for _ in range(depth, depth + 1):
+                            context.log.highlight(f"{'\t' * (depth +1)}File: {item.get_longname()}, size: {item.get_filesize()}KB")
+                        if self.download:
+                            # TODO handle reconstructing the original path better when there is no associated metadata file
+                            # Would need to access the key in metadata_map that is associated with the current directory we are in
+                            original_path = metadata_map.get(item.get_longname().replace("$R", ""), f"{sid_dir}\\{item.get_longname()}")
+                            if self.filter and self.filter.lower() != "all":
+                                match = re.search(self.filter, original_path, re.IGNORECASE)
+                                if not match:
+                                    context.log.info(f"\tSkipping file {item.get_longname()} ({original_path})")
+                                    continue
+                            context.log.info(f"\tDownloading file {item.get_longname()} from {original_path}")
+                            data = self.read_file(connection, context, item_path)
+                            filename = f"{connection.host}_{original_path}"
+                            export_path = join(NXC_PATH, "modules", "recycle_bin")
+                            path = abspath(join(export_path, filename))
+                            makedirs(export_path, exist_ok=True)
+                            try:
+                                with open(path, "wb") as f:
+                                    f.write(data)
+                                context.log.success(f"Recycle Bin file {item.get_longname()} written to: {path}")
+                            except Exception as e:
+                                context.log.fail(f"Failed to write Recycle Bin file to {filename}: {e}")
+            except Exception as e:
+                context.log.debug(f"Error processing item {item.get_longname()}: {e}")
+
     def on_admin_login(self, context, connection):
         metadata_map = {}
         
@@ -65,69 +119,4 @@ class NXCModule:
                 if (sid_dir is not None):
                     context.log.highlight(f"Found directory {sid_dir}")
 
-                for file in connection.conn.listPath("C$", f"{sid_dir}\\*"):
-                    # File naming convention for files in the Recycle Bin
-                    # $R<random>: actual file content
-                    # $I<random>: associated metadata file
-                    try:
-                        # Metadata files (start with $I)
-                        if file.get_longname() not in self.false_positive and file.get_longname().startswith("$I"):
-                            file_path = f"{sid_dir}\\{file.get_longname()}"
-
-                            # The structure of the metadata file contains the file deletion time, the file size and the original file path
-                            data = self.read_file(connection, context, file_path)
-                            # Get original location/deletion time of the deleted file from the associated metadata file, this can help determine if we want to download it or not
-                            if len(data) < 24:
-                                context.log.info(f"\tInvalid metadata file: {file.get_longname()} (too small: {len(data)} bytes)")
-                            else:
-                                # Read 8 bytes for the deletion time
-                                deletion_time_raw, = struct.unpack("<Q", data[16:24]) 
-                                deletion_time = self.convert_filetime_to_datetime(deletion_time_raw)
-
-                                # Read from byte 24 to the end for the original path
-                                original_path = data[24:].decode("utf-16", errors="ignore").strip("\x00")
-                                match = re.search(r"([a-z]:\\.+)", original_path, re.IGNORECASE)
-                                if match:
-                                    original_path = match.group(1)
-                                    metadata_map[file.get_longname().replace("$I", "")] = original_path
-                                    context.log.highlight(f"\tFile: {file.get_longname()}, Original location: {original_path}, Deletion time: {deletion_time}")
-                    except struct.error as e:
-                        context.log.debug(f"Error unpacking deletion time: {e}")
-                    except Exception as e:
-                        context.log.debug(f"Error parsing metadata file: {e}")
-                    try:
-                        # Actual files (start with $R)
-                        if file.get_longname() not in self.false_positive and file.get_longname().startswith("$R"):
-                            file_path = f"{sid_dir}\\{file.get_longname()}"
-                            context.log.highlight(f"\tFile: {file.get_longname()}, size: {file.get_filesize()}KB")
-
-                            # Download files if the module option is set
-                            if self.download:
-                                original_path = metadata_map.get(file.get_longname().replace("$R", ""), "unknown_file")
-                                
-                                # Apply filter if it's set (and not "all")
-                                if self.filter and self.filter.lower() != "all":
-                                    match = re.search(self.filter, original_path, re.IGNORECASE)
-                                    if not match:
-                                        context.log.info(f"\tSkipping file {file.get_longname()} ({original_path})")
-                                        continue  # Skip downloading this file
-                                
-                                context.log.info(f"\tDownloading file {file.get_longname()} from {original_path}")
-
-                                data = self.read_file(connection, context, file_path)
-
-                                # Use binary mode to write files to prevent decoding errors
-                                filename = f"{connection.host}_{original_path}"
-                                export_path = join(NXC_PATH, "modules", "recycle_bin")
-                                path = abspath(join(export_path, filename))
-                                makedirs(export_path, exist_ok=True)
-
-                                try:
-                                    with open(path, "wb") as f:
-                                        f.write(data)
-                                    context.log.success(f"Recycle Bin file {file.get_longname()} written to: {path}")
-                                except Exception as e:
-                                    context.log.fail(f"Failed to write Recycle Bin file to {filename}: {e}")
-                                        
-                    except Exception as e:
-                        context.log.debug(f"Error parsing content file: {e}")
+                self.process_recycle_bin_directory(connection, context, sid_dir, metadata_map)
