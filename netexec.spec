@@ -48,7 +48,6 @@ a = Analysis(
         'nxc.helpers.ntlm_parser',
         'paramiko',
         'pypsrp.client',
-        'pywerview.cli.helpers',
         'pylnk3',
         'pypykatz',
         'pyNfsClient',

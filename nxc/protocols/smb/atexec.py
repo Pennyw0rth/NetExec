@@ -176,7 +176,7 @@ class TSCH_EXEC:
                 ":".join(map(str, self.__rpctransport.get_socket().getpeername()))
                 smbConnection = self.__rpctransport.get_smb_connection()
 
-                tries = 0
+                tries = 1
                 # Give the command a bit of time to execute before we try to read the output, 0.4 seconds was good in testing
                 sleep(0.4)
                 while True:
@@ -185,7 +185,7 @@ class TSCH_EXEC:
                         smbConnection.getFile(self.__share, self.__output_filename, self.output_callback)
                         break
                     except Exception as e:
-                        if tries > self.__tries:
+                        if tries >= self.__tries:
                             self.logger.fail("ATEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
                             break
                         if "STATUS_BAD_NETWORK_NAME" in str(e):
@@ -197,15 +197,17 @@ class TSCH_EXEC:
                         # When executing powershell and the command is still running, we get a sharing violation
                         # We can use that information to wait longer than if the file is not found (probably av or something)
                         if "STATUS_SHARING_VIOLATION" in str(e):
-                            self.logger.info(f"File {self.__share}\\{self.__output_filename} is still in use with {self.__tries - tries} left, retrying...")
+                            self.logger.info(f"File {self.__share}\\{self.__output_filename} is still in use with {self.__tries - tries} tries left, retrying...")
                             tries += 1
                             sleep(1)
                         elif "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
-                            self.logger.info(f"File {self.__share}\\{self.__output_filename} not found with {self.__tries - tries} left, deducting 10 tries and retrying...")
+                            self.logger.info(f"File {self.__share}\\{self.__output_filename} not found with {self.__tries - tries} tries left, deducting 10 tries and retrying...")
                             tries += 10
                             sleep(1)
                         else:
-                            self.logger.debug(str(e))
+                            self.logger.debug(f"Exception when trying to read output file: {e!s}. {self.__tries - tries} tries left, retrying...")
+                            tries += 1
+                            sleep(1)
 
                 try:
                     self.logger.debug(f"Deleting file {self.__share}\\{self.__output_filename}")
