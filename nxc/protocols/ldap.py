@@ -874,22 +874,8 @@ class ldap(connection):
                             resolve_and_display_hostname(dc_hostname)
                     except Exception as e:
                         self.logger.fail(f"Failed to resolve DCs for {trust_name} via DNS: {e}")
-
-                        # If DNS resolution fails, try alternative method using NETLOGON
-                        # Note: This would require additional implementation for NETLOGON querying
-                        self.logger.info(f"Attempting alternative discovery methods for {trust_name}...")
-
-                        # Try to find a domain controller through the DFS referrals
-                        try:
-                            # Try to query for the netlogon share which typically exists on all DCs
-                            netlogon_name = f"\\\\{trust_name}\\netlogon"
-                            self.logger.info(f"Attempting to locate DC through netlogon share: {netlogon_name}")
-                            # Implementation for netlogon query would go here
-                        except Exception as e:
-                            self.logger.fail(f"Failed to find DC through netlogon for {trust_name}: {e}")
                 else:
                     self.logger.display(f"Skipping non-Active Directory trust '{trust_name}' with type: {trust_type_text} and direction: {direction_text}")
-
             self.logger.info("Domain Controller enumeration complete.")
 
     def active_users(self):
