@@ -823,8 +823,9 @@ class ldap(connection):
         resp = self.search(search_filter, attributes, 0)
         resp_parse = parse_result_attributes(resp)
         for item in resp_parse:
-            name = item.get("dNSHostName", "")  # Get dNSHostName attribute or empty string
-            resolve_and_display_hostname(name)
+            if "dNSHostName" in item:  # Get dNSHostName attribute
+                name = item["dNSHostName"]
+                resolve_and_display_hostname(name)
 
         # Find all trusted domains
         self.logger.info("Enumerating Trusted Domains...")
@@ -834,31 +835,34 @@ class ldap(connection):
         trust_resp_parse = parse_result_attributes(resp)
 
         if trust_resp_parse:
-            # Find domain controllers for each trusted domain
             for trust in trust_resp_parse:
-                trust_name = trust.get("name", "")
-                trust_flat_name = trust.get("flatName", "")
-                trust_direction = trust.get("trustDirection", 0)
-                trust_type = trust.get("trustType", 0)
+                try:
+                    trust_name = trust["name"]
+                    trust_flat_name = trust["flatName"]
+                    trust_direction = int(trust["trustDirection"])
+                    trust_type = int(trust["trustType"])
 
-                # Convert trust direction/type to human-readable format
-                direction_text = {
-                    0: "Disabled",
-                    1: "Inbound",
-                    2: "Outbound",
-                    3: "Bidirectional",
-                }.get(int(trust_direction) if trust_direction else 0, "Unknown")
+                    # Convert trust direction/type to human-readable format
+                    direction_text = {
+                        0: "Disabled",
+                        1: "Inbound",
+                        2: "Outbound",
+                        3: "Bidirectional",
+                    }[trust_direction]
 
-                trust_type_text = {
-                    1: "Windows NT",
-                    2: "Active Directory",
-                    3: "Kerberos",
-                    4: "DCE",
-                    5: "Azure Active Directory",
-                }.get(int(trust_type) if trust_type else 0, "Unknown")
+                    trust_type_text = {
+                        1: "Windows NT",
+                        2: "Active Directory",
+                        3: "Kerberos",
+                        4: "DCE",
+                        5: "Azure Active Directory",
+                    }[trust_type]
 
-                self.logger.info(f"Processing trusted domain: {trust_name} ({trust_flat_name})")
-                self.logger.info(f"Trust type: {trust_type_text}, Direction: {direction_text}")
+                    self.logger.info(f"Processing trusted domain: {trust_name} ({trust_flat_name})")
+                    self.logger.info(f"Trust type: {trust_type_text}, Direction: {direction_text}")
+
+                except Exception as e:
+                    self.logger.fail(f"Failed {e} in trust entry: {trust}")
 
                 # Only process if it's an Active Directory trust
                 if int(trust_type) == 2:
