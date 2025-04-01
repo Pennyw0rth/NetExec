@@ -17,7 +17,8 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """No module options"""
+        """DIFFERENT show only ip address if different from target ip (Default: False)"""
+        self.pivot = module_options.get("DIFFERENT", "false").lower() in ["true", "1"]
 
     def on_login(self, context, connection):
         try:
@@ -37,7 +38,11 @@ class NXCModule:
                 NetworkAddr = binding["aNetworkAddr"]
                 try:
                     ip_address(NetworkAddr[:-1])
-                    context.log.highlight(f"Address: {NetworkAddr}")
+                    if self.pivot:
+                        if NetworkAddr.rstrip("\x00") != connection.host:
+                            context.log.highlight(f"Address: {NetworkAddr}")
+                    else:
+                        context.log.highlight(f"Address: {NetworkAddr}")
                 except Exception as e:
                     context.log.debug(e)
         except DCERPCException as e:

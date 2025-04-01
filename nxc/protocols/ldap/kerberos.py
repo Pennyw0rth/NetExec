@@ -28,6 +28,7 @@ class KerberosAttacks:
         self.username = connection.username
         self.password = connection.password
         self.domain = connection.domain
+        self.host = connection.host
         self.targetDomain = connection.targetDomain
         self.hash = connection.hash
         self.lmhash = ""
@@ -222,6 +223,10 @@ class KerberosAttacks:
         seq_set_iter(req_body, "etype", supported_ciphers)
 
         message = encoder.encode(as_req)
+
+        # If kdcHost isn't set, use the target IP for DNS resolution
+        if not self.kdcHost:
+            self.kdcHost = self.host
 
         try:
             r = sendReceive(message, domain, self.kdcHost)

