@@ -14,7 +14,7 @@ class NXCModule:
     false_positive = [".", "..", "desktop.ini", "Public", "Default", "Default User", "All Users", ".NET v4.5", ".NET v4.5 Classic"]
 
     def options(self, context, module_options):
-        """"""
+        """No options"""
 
     def on_admin_login(self, context, connection):
         lnks = []
