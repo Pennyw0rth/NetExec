@@ -22,7 +22,7 @@ def gen_random_string(length=10):
 
 
 def validate_ntlm(data):
-    allowed = re.compile("^[0-9a-f]{32}", re.IGNORECASE)
+    allowed = re.compile(r"^[0-9a-f]{32}", re.IGNORECASE)
     return bool(allowed.match(data))
 
 

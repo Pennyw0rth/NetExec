@@ -104,8 +104,7 @@ def get_error_string(exception):
 
 def requires_smb_server(func):
     def _decorator(self, *args, **kwargs):
-        global smb_server
-        global smb_share_name
+        global smb_server, smb_share_name
 
         get_output = False
         payload = None

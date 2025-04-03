@@ -30,7 +30,6 @@ import os
 import secrets
 import hashlib
 import datetime
-import logging
 import random
 import base64
 
@@ -70,6 +69,7 @@ from impacket.krb5.ccache import CCache as impacket_CCache
 
 from nxc.paths import NXC_PATH
 from nxc.logger import nxc_logger
+
 
 class myPKINIT(PKINIT):
     """

@@ -112,7 +112,6 @@ class NXCModule:
             context.log.fail(f"Exception in run_ldaps_withEPA: {e}")
             return None
             
-    
     # Domain Controllers do not have a certificate setup for
     # LDAPS on port 636 by default. If this has not been setup,
     # the TLS handshake will hang and you will not be able to

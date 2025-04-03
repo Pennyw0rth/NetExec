@@ -12,6 +12,7 @@ import random
 
 obfuscate_ps_scripts = False
 
+
 def replace_singles(s):
     """Replaces single quotes with a double quote
     We do this because quoting is very important in PowerShell, and we are doing multiple layers:
@@ -26,6 +27,7 @@ def replace_singles(s):
         str: Original string with single quotes replaced with double.
     """
     return s.replace("'", r"\"")
+
 
 def get_ps_script(path):
     """Generates a full path to a PowerShell script given a relative path.
@@ -116,10 +118,9 @@ def obfs_ps_script(path_to_script):
             and debug statements from a PowerShell source file.
             """
             # strip block comments
-            stripped_code = re.sub(re.compile("<#.*?#>", re.DOTALL), "", script.read())
+            stripped_code = re.sub(re.compile(r"<#.*?#>", re.DOTALL), "", script.read())
             # strip blank lines, lines starting with #, and verbose/debug statements
             return "\n".join([line for line in stripped_code.split("\n") if ((line.strip() != "") and (not line.strip().startswith("#")) and (not line.strip().lower().startswith("write-verbose ")) and (not line.strip().lower().startswith("write-debug ")))])
-
 
 
 def create_ps_command(ps_command, force_ps32=False, obfs=False, custom_amsi=None, encode=True):

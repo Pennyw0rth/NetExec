@@ -25,6 +25,7 @@ class FirefoxData:
         self.username = username
         self.password = password
 
+
 @dataclass
 class FirefoxCookie:
     winuser: str
@@ -35,6 +36,7 @@ class FirefoxCookie:
     creation_utc: str
     expires_utc: str
     last_access_utc: str
+
 
 class FirefoxTriage:
     """

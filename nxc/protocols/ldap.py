@@ -6,7 +6,7 @@ import os
 from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
 from binascii import hexlify
 from datetime import datetime
-from re import sub, I
+from re import sub, IGNORECASE
 from zipfile import ZipFile
 from termcolor import colored
 from dns import resolver
@@ -197,10 +197,10 @@ class ldap(connection):
                         if str(attribute["type"]) == "defaultNamingContext":
                             base_dn = str(attribute["vals"][0])
                             target_domain = sub(
-                                ",DC=",
+                                r",DC=",
                                 ".",
                                 base_dn[base_dn.lower().find("dc="):],
-                                flags=I,
+                                flags=IGNORECASE,
                             )[3:]
                         if str(attribute["type"]) == "dnsHostName":
                             target = str(attribute["vals"][0])

@@ -778,7 +778,6 @@ class PrinterBugTrigger:
             self.context.log.debug(f"Failed to resolve dynamic endpoint {uuid.bin_to_string(interface)!r}")
             raise e
 
-
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
             "spoolss": {

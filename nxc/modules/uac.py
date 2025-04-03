@@ -1,4 +1,3 @@
-import logging
 
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations

@@ -3,6 +3,7 @@ import ntpath
 from sys import exit
 from nxc.paths import TMP_PATH
 
+
 class NXCModule:
     """
     Original idea and PoC by Justin Angel (@4rch4ngel86)
@@ -60,7 +61,6 @@ class NXCModule:
         if "ICO_URI" in module_options:
             self.ico_uri = module_options["ICO_URI"]
             context.log.debug("Overriding")
-            
             
         self.lnk_name = module_options["NAME"]
         self.local_lnk_path = f"{TMP_PATH}/{self.lnk_name}.lnk"

@@ -72,7 +72,6 @@ class NXCModule:
             if str(e) == "Buffer size too small (0 instead of at least 32 bytes)":
                 context.log.debug("Buffer size too small, which means the response was not the expected size")
 
-
     def generate_smb_proto_payload(self, *protos):
         """
         Flattens a nested list and merges all bytes objects into a single bytes object.
@@ -98,7 +97,6 @@ class NXCModule:
         self.logger.debug(f"Packed proto data: {hex_data}")
         return hex_data
 
-
     def calculate_doublepulsar_xor_key(self, s):
         """
         Calculate Doublepulsar Xor Key.
@@ -114,8 +112,6 @@ class NXCModule:
         nxc_logger.debug(f"Calculating Doublepulsar XOR key for: {s}")
         x = (2 * s ^ (((s & 0xff00 | (s << 16)) << 8) | (((s >> 16) | s & 0xff0000) >> 8)))
         return x & 0xffffffff  # truncate to 32 bits
-
-
 
     def negotiate_proto_request(self):
         """Generate a negotiate_proto_request packet."""
@@ -159,7 +155,6 @@ class NXCModule:
 
         # Return the generated SMB protocol payload
         return self.generate_smb_proto_payload(netbios, smb_header, negotiate_proto_request)
-
 
     def session_setup_andx_request(self):
         """Generate session setup andx request."""
@@ -209,7 +204,6 @@ class NXCModule:
         ]
 
         return self.generate_smb_proto_payload(netbios, smb_header, session_setup_andx_request)
-
 
     def tree_connect_andx_request(self, ip, userid):
         """Generate tree connect andx request.
@@ -279,7 +273,6 @@ class NXCModule:
         # Generate the final SMB protocol payload
         return self.generate_smb_proto_payload(netbios, smb_header, tree_connect_andx_request)
 
-
     def peeknamedpipe_request(self, treeid, processid, userid, multiplex_id):
         """
         Generate tran2 request.
@@ -345,7 +338,6 @@ class NXCModule:
 
         return self.generate_smb_proto_payload(netbios, smb_header, tran_request)
 
-
     def trans2_request(self, treeid, processid, userid, multiplex_id):
         """Generate trans2 request.
 
@@ -408,7 +400,6 @@ class NXCModule:
         ]
 
         return self.generate_smb_proto_payload(netbios, smb_header, trans2_request)
-
 
     def check(self, ip, port=445):
         """Check if MS17_010 SMB Vulnerability exists.
