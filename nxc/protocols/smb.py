@@ -926,17 +926,17 @@ class smb(connection):
             return
         self.enumerate_sessions_info(sessions)
 
-        maxSessionNameLen = max([len(sessions[i]["SessionName"]) + 1 for i in sessions])
+        maxSessionNameLen = max(len(sessions[i]["SessionName"]) + 1 for i in sessions)
         maxSessionNameLen = maxSessionNameLen if len("SESSIONNAME") < maxSessionNameLen else len("SESSIONNAME") + 1
-        maxUsernameLen = max([len(sessions[i]["Username"] + sessions[i]["Domain"]) + 1 for i in sessions]) + 1
+        maxUsernameLen = max(len(sessions[i]["Username"] + sessions[i]["Domain"]) + 1 for i in sessions) + 1
         maxUsernameLen = maxUsernameLen if len("Username") < maxUsernameLen else len("Username") + 1
-        maxIdLen = max([len(str(i)) for i in sessions])
+        maxIdLen = max(len(str(i)) for i in sessions)
         maxIdLen = maxIdLen if len("ID") < maxIdLen else len("ID") + 1
-        maxStateLen = max([len(sessions[i]["state"]) + 1 for i in sessions])
+        maxStateLen = max(len(sessions[i]["state"]) + 1 for i in sessions)
         maxStateLen = maxStateLen if len("STATE") < maxStateLen else len("STATE") + 1
-        maxRemoteIp = max([len(sessions[i]["RemoteIp"]) + 1 for i in sessions])
+        maxRemoteIp = max(len(sessions[i]["RemoteIp"]) + 1 for i in sessions)
         maxRemoteIp = maxRemoteIp if len("RemoteAddress") < maxRemoteIp else len("RemoteAddress") + 1
-        maxClientName = max([len(sessions[i]["ClientName"]) + 1 for i in sessions])
+        maxClientName = max(len(sessions[i]["ClientName"]) + 1 for i in sessions)
         maxClientName = maxClientName if len("ClientName") < maxClientName else len("ClientName") + 1
         template = ("{SESSIONNAME: <%d} "  # noqa: UP031
                     "{USERNAME: <%d} "
@@ -1007,8 +1007,8 @@ class smb(connection):
             if not res:
                 return
             self.logger.success("Enumerated processes")
-            maxImageNameLen = max([len(i["ImageName"]) for i in res])
-            maxSidLen = max([len(i["pSid"]) for i in res])
+            maxImageNameLen = max(len(i["ImageName"]) for i in res)
+            maxSidLen = max(len(i["pSid"]) for i in res)
             template = "{: <%d} {: <8} {: <11} {: <%d} {: >12}" % (maxImageNameLen, maxSidLen)  # noqa: UP031
             self.logger.highlight(template.format("Image Name", "PID", "Session#", "SID", "Mem Usage"))
             self.logger.highlight(template.replace(": ", ":=").format("", "", "", "", ""))
