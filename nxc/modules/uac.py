@@ -14,7 +14,6 @@ class NXCModule:
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options
-        logging.debug("test")
 
     def options(self, context, module_options):
         """ """
