@@ -326,7 +326,7 @@ class GETPAC:
         for _bufferN in range(pacType["cBuffers"]):
             infoBuffer = PAC_INFO_BUFFER(buff)
             data = pacType["Buffers"][infoBuffer["Offset"] - 8:][:infoBuffer["cbBufferSize"]]
-            nxc_logger.debug("TYPE 0x%x" % infoBuffer["ulType"])
+            nxc_logger.debug(f"TYPE 0x{infoBuffer['ulType']}")
             if infoBuffer["ulType"] == 2:
                 found = True
                 credinfo = PAC_CREDENTIAL_INFO(data)
