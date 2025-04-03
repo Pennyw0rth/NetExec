@@ -39,7 +39,7 @@ if platform.system() != "Windows":
     resource.setrlimit(resource.RLIMIT_NOFILE, file_limit)
 
 
-async def start_run(protocol_obj, args, db, targets):
+async def start_run(protocol_obj, args, db, targets):  # noqa: RUF029
     futures = []
     nxc_logger.debug("Creating ThreadPoolExecutor")
     if args.no_progress or len(targets) == 1:
