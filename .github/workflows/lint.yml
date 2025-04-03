@@ -4,12 +4,14 @@ name: Lint Python code with ruff
 on:
   push:
   workflow_dispatch:
+  pull_request_review:
+    types: [submitted]
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     if:
-      github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
+      github.event_name == 'push' || github.event.review.state == 'APPROVED' || github.event_name == 'workflow_dispatch'
 
     steps:
       - uses: actions/checkout@v4

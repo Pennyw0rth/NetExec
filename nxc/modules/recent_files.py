@@ -18,7 +18,7 @@ class NXCModule:
 
     def on_admin_login(self, context, connection):
         lnks = []
-        for directory in connection.conn.listPath("C$",  "Users\\*"):
+        for directory in connection.conn.listPath("C$", "Users\\*"):
             if directory.get_longname() not in self.false_positive and directory.is_directory():
                 context.log.highlight(f"C:\\{directory.get_longname()}")
                 recent_files_dir = f"Users\\{directory.get_longname()}\\AppData\\Roaming\\Microsoft\\Windows\\Recent\\"
