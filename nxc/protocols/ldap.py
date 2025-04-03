@@ -849,7 +849,7 @@ class ldap(connection):
             return False
 
         # Building the search filter
-        search_filter = "(&(UserAccountControl:1.2.840.113556.1.4.803:=%d)(!(UserAccountControl:1.2.840.113556.1.4.803:=%d))(!(objectCategory=computer)))" % (UF_DONT_REQUIRE_PREAUTH, UF_ACCOUNTDISABLE)
+        search_filter = f"(&(UserAccountControl:1.2.840.113556.1.4.803:={UF_DONT_REQUIRE_PREAUTH})(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE}))(!(objectCategory=computer)))"
         attributes = [
             "sAMAccountName",
             "pwdLastSet",
