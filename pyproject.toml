@@ -85,9 +85,18 @@ build-backend = "poetry_dynamic_versioning.backend"
 flake8 = "*"
 shiv = "*"
 pytest = "^7.2.2"
-ruff = "=0.0.292"
+ruff = "*"
 
 [tool.ruff]
+target-version = "py310"
+exclude = [
+    ".bzr", ".direnv", ".eggs", ".git", ".git-rewrite", ".hg", ".mypy_cache",
+    ".nox", ".pants.d", ".pytype", ".ruff_cache", ".svn", ".tox", ".venv",
+    "__pypackages__", "_build", "buck-out", "build", "dist", "node_modules", "venv"
+]
+line-length = 65000
+
+[tool.ruff.lint]
 select = [
     "E", "F", "D", "UP", "YTT", "ASYNC", "B", "A", "C4", "ISC", "ICN", "PIE", "PT",
     "Q", "RSE", "RET", "SIM", "TID", "ERA", "FLY", "PERF", "FURB", "LOG", "RUF"
@@ -103,20 +112,12 @@ ignore = [
 fixable = ["ALL"]
 unfixable = []
 
-exclude = [
-    ".bzr", ".direnv", ".eggs", ".git", ".git-rewrite", ".hg", ".mypy_cache",
-    ".nox", ".pants.d", ".pytype", ".ruff_cache", ".svn", ".tox", ".venv",
-    "__pypackages__", "_build", "buck-out", "build", "dist", "node_modules", "venv"
-]
 per-file-ignores = {}
-line-length = 65000
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
-target-version = "py310"
-
-[tool.ruff.flake8-quotes]
+[tool.ruff.lint.flake8-quotes]
 docstring-quotes = "double"
 inline-quotes = "double"
 multiline-quotes = "double"
