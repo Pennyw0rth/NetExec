@@ -407,7 +407,7 @@ class ldap(connection):
                 except Exception as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                        f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status.get(error_code, '')}",
                         color="magenta" if error_code in ldap_error_status else "red",
                     )
                     return False
@@ -479,13 +479,13 @@ class ldap(connection):
                 except Exception as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                        f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status.get(error_code, '')}",
                         color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                     )
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                    f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status.get(error_code, '')}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
             return False
@@ -570,13 +570,13 @@ class ldap(connection):
                 except ldap_impacket.LDAPSessionError as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                        f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status.get(error_code, '')}",
                         color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                     )
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                    f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status.get(error_code, '')}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
             return False
