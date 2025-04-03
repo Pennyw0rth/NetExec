@@ -95,7 +95,6 @@ def detect_key_type(key_file: str, password: str | None = None, logger=None) -> 
     Detect the type of SSH key using the cryptography module.
     Returns a description string or an error message.
     """
-    
     if any(substr in key_file for substr in ["pass.key", "passphrase_protected"]):
         return "Passphrase-protected key"
     if any(substr in key_file for substr in ["encrypted.key", "encrypted_by_content", "legacy_encrypted.key"]):
