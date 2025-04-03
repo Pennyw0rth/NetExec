@@ -320,7 +320,7 @@ class connection:
         if self.failed_logins == self.args.fail_limit:
             return True
 
-        if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:
+        if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:  # noqa: SIM103
             return True
 
         return False
