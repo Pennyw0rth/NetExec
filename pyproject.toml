@@ -108,10 +108,10 @@ ignore = [
     "PERF203", "RUF012"
 ]
 
+# THE SETTINGS BELOW ARE DEFAULTS, left in here to override potential vs-code settings
 # Allow autofix for all enabled rules (when `--fix`) is provided.
 fixable = ["ALL"]
 unfixable = []
-
 per-file-ignores = {}
 
 # Allow unused variables when underscore-prefixed.
