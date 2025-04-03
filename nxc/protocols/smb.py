@@ -2,7 +2,6 @@ import ntpath
 import binascii
 import os
 import re
-from io import StringIO
 from Cryptodome.Hash import MD4
 
 from impacket.smbconnection import SMBConnection, SessionError
