@@ -31,19 +31,19 @@ class SmbHeader(Structure):
     ]
 
     def __init__(self, buffer):
-        nxc_logger.debug("server_component : %04x" % self.server_component)
-        nxc_logger.debug("smb_command      : %01x" % self.smb_command)
-        nxc_logger.debug("error_class      : %01x" % self.error_class)
-        nxc_logger.debug("error_code       : %02x" % self.error_code)
-        nxc_logger.debug("flags            : %01x" % self.flags)
-        nxc_logger.debug("flags2           : %02x" % self.flags2)
-        nxc_logger.debug("process_id_high  : %02x" % self.process_id_high)
-        nxc_logger.debug("signature        : %08x" % self.signature)
-        nxc_logger.debug("reserved2        : %02x" % self.reserved2)
-        nxc_logger.debug("tree_id          : %02x" % self.tree_id)
-        nxc_logger.debug("process_id       : %02x" % self.process_id)
-        nxc_logger.debug("user_id          : %02x" % self.user_id)
-        nxc_logger.debug("multiplex_id     : %02x" % self.multiplex_id)
+        nxc_logger.debug(f"server_component : {self.server_component:04x}")
+        nxc_logger.debug(f"smb_command      : {self.smb_command:01x}")
+        nxc_logger.debug(f"error_class      : {self.error_class:01x}")
+        nxc_logger.debug(f"error_code       : {self.error_code:02x}")
+        nxc_logger.debug(f"flags            : {self.flags:01x}")
+        nxc_logger.debug(f"flags2           : {self.flags2:02x}")
+        nxc_logger.debug(f"process_id_high  : {self.process_id_high:02x}")
+        nxc_logger.debug(f"signature        : {self.signature:08x}")
+        nxc_logger.debug(f"reserved2        : {self.reserved2:02x}")
+        nxc_logger.debug(f"tree_id          : {self.tree_id:02x}")
+        nxc_logger.debug(f"process_id       : {self.process_id:02x}")
+        nxc_logger.debug(f"user_id          : {self.user_id:02x}")
+        nxc_logger.debug(f"multiplex_id     : {self.multiplex_id:02x}")
 
     def __new__(self, buffer=None):
         nxc_logger.debug(f"Creating SMB_HEADER object from buffer: {buffer}")

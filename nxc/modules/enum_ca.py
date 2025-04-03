@@ -86,7 +86,7 @@ class NXCModule:
 
             if uuid.uuidtup_to_bin(uuid.string_to_uuidtup(tmpUUID))[:18] in epm.KNOWN_UUIDS:
                 exename = epm.KNOWN_UUIDS[uuid.uuidtup_to_bin(uuid.string_to_uuidtup(tmpUUID))[:18]]
-                context.log.debug("EXEs %s" % exename)
+                context.log.debug(f"EXEs {exename}")
                 if exename == "certsrv.exe":
                     context.log.highlight("Active Directory Certificate Services Found.")
                     url = f"http://{connection.host}/certsrv/certfnsh.asp"

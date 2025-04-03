@@ -362,7 +362,7 @@ class ldap(connection):
             return False
         except (KeyError, KerberosException, OSError) as e:
             self.logger.fail(
-                f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (process_secret(kerb_pass))} {e!s}",
+                f"{self.domain}\\{self.username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {e!s}",
                 color="red",
             )
             return False
@@ -400,7 +400,7 @@ class ldap(connection):
                 except SessionError as e:
                     error, desc = e.getErrorString()
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (process_secret(kerb_pass))} {error!s}",
+                        f"{self.domain}\\{self.username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {error!s}",
                         color="magenta" if error in ldap_error_status else "red",
                     )
                     return False
@@ -414,7 +414,7 @@ class ldap(connection):
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (process_secret(kerb_pass))} {error_code!s}",
+                    f"{self.domain}\\{self.username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {error_code!s}",
                     color="magenta" if error_code in ldap_error_status else "red",
                 )
                 return False
@@ -879,7 +879,7 @@ class ldap(connection):
                             sAMAccountName = str(attribute["vals"][0])
                             mustCommit = True
                         elif str(attribute["type"]) == "userAccountControl":
-                            userAccountControl = "0x%x" % int(attribute["vals"][0])
+                            userAccountControl = "0x{:x}".format(int(attribute["vals"][0]))
                         elif str(attribute["type"]) == "memberOf":
                             memberOf = str(attribute["vals"][0])
                         elif str(attribute["type"]) == "pwdLastSet":
@@ -1179,7 +1179,7 @@ class ldap(connection):
                         sAMAccountName = str(attribute["vals"][0])
                         mustCommit = True
                     elif str(attribute["type"]) == "userAccountControl":
-                        userAccountControl = "0x%x" % int(attribute["vals"][0])
+                        userAccountControl = "0x{:x}".format(int(attribute["vals"][0]))
                     elif str(attribute["type"]) == "memberOf":
                         memberOf = str(attribute["vals"][0])
                     elif str(attribute["type"]) == "pwdLastSet":
@@ -1309,7 +1309,7 @@ class ldap(connection):
                         sAMAccountName = str(attribute["vals"][0])
                         mustCommit = True
                     elif str(attribute["type"]) == "userAccountControl":
-                        userAccountControl = "0x%x" % int(attribute["vals"][0])
+                        userAccountControl = "0x{:x}".format(int(attribute["vals"][0]))
                     elif str(attribute["type"]) == "memberOf":
                         memberOf = str(attribute["vals"][0])
                     elif str(attribute["type"]) == "pwdLastSet":
