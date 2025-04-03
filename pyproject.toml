@@ -95,6 +95,7 @@ exclude = [
     "__pypackages__", "_build", "buck-out", "build", "dist", "node_modules", "venv"
 ]
 line-length = 65000
+preview = true
 
 [tool.ruff.lint]
 select = [
