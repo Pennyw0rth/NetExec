@@ -818,9 +818,8 @@ class smb(connection):
             if (self.args.execute or self.args.ps_execute):
                 self.logger.success(f"Executed command via {current_method}")
                 if output:
-                    output_lines = StringIO(output).readlines()
-                    for line in output_lines:
-                        self.logger.highlight(line.strip())
+                    for line in output.split("\n"):
+                        self.logger.highlight(line)
             return output
         else:
             self.logger.fail(f"Execute command failed with {current_method}")
