@@ -1,5 +1,6 @@
 import sys
 
+
 class NXCModule:
     """Execute arbitrary SQL commands on the target MSSQL server"""
 

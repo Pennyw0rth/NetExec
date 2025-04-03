@@ -40,7 +40,7 @@ class NXCModule:
     def on_login(self, context, connection):
         # Connect and bind to MS-RPRN (https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-rprn/848b8334-134a-4d02-aea4-03b673d6c515)
         target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
-        stringbinding = r"ncacn_np:%s[\PIPE\spoolss]" % target
+        stringbinding = rf"ncacn_np:{target}[\PIPE\spoolss]"
 
         context.log.info(f"Binding to {stringbinding!r}")
 

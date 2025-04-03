@@ -61,7 +61,7 @@ class NXCModule:
             rpctransport.set_credentials(self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash)
             rpctransport.setRemoteHost(connection.host)
             rpctransport.set_dport(self.__port)
-        elif self.__port in [443]:
+        elif self.__port == 443:
             # Setting credentials only for RPC Proxy, but not for the MSRPC level
             rpctransport.set_credentials(self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash)
             rpctransport.set_auth_type(AUTH_NTLM)
@@ -86,7 +86,7 @@ class NXCModule:
 
             if uuid.uuidtup_to_bin(uuid.string_to_uuidtup(tmpUUID))[:18] in epm.KNOWN_UUIDS:
                 exename = epm.KNOWN_UUIDS[uuid.uuidtup_to_bin(uuid.string_to_uuidtup(tmpUUID))[:18]]
-                context.log.debug("EXEs %s" % exename)
+                context.log.debug(f"EXEs {exename}")
                 if exename == "certsrv.exe":
                     context.log.highlight("Active Directory Certificate Services Found.")
                     url = f"http://{connection.host}/certsrv/certfnsh.asp"

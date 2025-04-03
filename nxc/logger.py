@@ -103,7 +103,7 @@ class NXCAdapter(logging.LoggerAdapter):
         logging.getLogger("dploot").disabled = True
         logging.getLogger("neo4j").setLevel(logging.ERROR)
 
-    def format(self, msg, *args, **kwargs):  # noqa: A003
+    def format(self, msg, *args, **kwargs):
         """Format msg for output
 
         This is used instead of process() since process() applies to _all_ messages, including debug calls

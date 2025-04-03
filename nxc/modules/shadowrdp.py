@@ -1,6 +1,7 @@
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 
+
 # Module by @Defte_
 # Enables or disables shadow RDP
 class NXCModule:

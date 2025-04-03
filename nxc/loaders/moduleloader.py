@@ -46,9 +46,7 @@ class ModuleLoader:
             self.logger.fail(f"{module_path} missing the on_login/on_admin_login function(s)")
             module_error = True
 
-        if module_error:
-            return False
-        return True
+        return not module_error
 
     def load_module(self, module_path):
         """Load a module, initializing it and checking that it has the proper attributes"""

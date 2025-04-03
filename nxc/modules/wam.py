@@ -24,7 +24,6 @@ class NXCModule:
 
         self.pvkbytes = get_domain_backup_key(connection)
 
-
         target = Target.create(
             domain=connection.domain,
             username=username,

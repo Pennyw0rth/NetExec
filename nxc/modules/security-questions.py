@@ -4,6 +4,7 @@ from impacket.dcerpc.v5.rpcrt import DCERPCException
 from json import loads
 from traceback import format_exc as traceback_format_exc
 
+
 class NXCModule:
     """
     Module by Adamkadaban: @Adamkadaban
