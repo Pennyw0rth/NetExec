@@ -1696,10 +1696,7 @@ class smb(connection):
             use_kcache=self.use_kcache,
         )
 
-        if hasattr(self, "output_filename") and self.output_filename:
-            self.output_file = open(self.output_filename, "w", encoding="utf-8")
-        else:
-            self.output_file = None
+        self.output_file = open(self.output_filename, "w", encoding="utf-8")  # noqa: SIM115
 
         conn = upgrade_to_dploot_connection(connection=self.conn, target=target)
         if conn is None:
