@@ -238,7 +238,6 @@ class ldap(connection):
         return ""
 
     def enum_host_info(self):
-        self.baseDN = self.args.base_dn if self.args.base_dn else self.baseDN   # Allow overwriting baseDN from args
         self.hostname = self.target.split(".")[0].upper() if "." in self.target else self.target
         self.remoteName = self.target
         self.domain = self.targetDomain
@@ -610,7 +609,7 @@ class ldap(connection):
         # 1. get SID of the domaine
         search_filter = "(userAccountControl:1.2.840.113556.1.4.803:=8192)"
         attributes = ["objectSid"]
-        resp = self.search(search_filter, attributes, sizeLimit=0)
+        resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
         answers = []
         if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "") and self.username != "":
             for attribute in resp[0][1]:
@@ -621,7 +620,7 @@ class ldap(connection):
             # 2. get all group cn name
             search_filter = "(|(objectSid=" + self.sid_domain + "-512)(objectSid=" + self.sid_domain + "-544)(objectSid=" + self.sid_domain + "-519)(objectSid=S-1-5-32-549)(objectSid=S-1-5-32-551))"
             attributes = ["distinguishedName"]
-            resp = self.search(search_filter, attributes, sizeLimit=0)
+            resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
             answers = []
             for item in resp:
                 if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
@@ -636,7 +635,7 @@ class ldap(connection):
             # 3. get member of these groups
             search_filter = "(&(objectCategory=user)(sAMAccountName=" + self.username + ")(|" + "".join(answers) + "))"
             attributes = [""]
-            resp = self.search(search_filter, attributes, sizeLimit=0)
+            resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
             answers = []
             for item in resp:
                 if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
@@ -649,7 +648,12 @@ class ldap(connection):
         t /= 10000000
         return t
 
-    def search(self, searchFilter, attributes, sizeLimit=0) -> list:
+    def search(self, searchFilter, attributes, sizeLimit=0, baseDN=None) -> list:
+        if baseDN is None and self.args.base_dn:
+            baseDN = self.args.base_dn
+        elif baseDN is None:
+            baseDN = self.baseDN
+
         try:
             if self.ldap_connection:
                 self.logger.debug(f"Search Filter={searchFilter}")
@@ -657,7 +661,7 @@ class ldap(connection):
                 # Microsoft Active Directory set an hard limit of 1000 entries returned by any search
                 paged_search_control = ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000)
                 return self.ldap_connection.search(
-                    searchBase=self.baseDN,
+                    searchBase=baseDN,
                     searchFilter=searchFilter,
                     attributes=attributes,
                     sizeLimit=sizeLimit,
@@ -715,7 +719,7 @@ class ldap(connection):
                 self.logger.display(f"Writing {len(resp_parse):d} local users to {self.args.users_export}")
                 with open(self.args.users_export, "w+") as file:
                     file.writelines(f"{user}\n" for user in users)
-    
+
     def users_export(self):
         self.users()
 
