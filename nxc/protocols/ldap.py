@@ -719,7 +719,7 @@ class ldap(connection):
                 self.logger.display(f"Writing {len(resp_parse):d} local users to {self.args.users_export}")
                 with open(self.args.users_export, "w+") as file:
                     file.writelines(f"{user}\n" for user in users)
-    
+
     def users_export(self):
         self.users()
 
