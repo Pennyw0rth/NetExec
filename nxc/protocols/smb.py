@@ -1696,6 +1696,11 @@ class smb(connection):
             use_kcache=self.use_kcache,
         )
 
+        if hasattr(self, "output_filename") and self.output_filename:
+            self.output_file = open(self.output_filename, "w", encoding="utf-8")
+        else:
+            self.output_file = None
+
         conn = upgrade_to_dploot_connection(connection=self.conn, target=target)
         if conn is None:
             self.logger.debug("Could not upgrade connection")
@@ -1712,7 +1717,10 @@ class smb(connection):
         # Collect User and Machine Credentials Manager secrets
         def credential_callback(credential):
             tag = "CREDENTIAL"
-            self.logger.highlight(f"[{credential.winuser}][{tag}] {credential.target} - {credential.username}:{credential.password}")
+            line = f"[{credential.winuser}][{tag}] {credential.target} - {credential.username}:{credential.password}"
+            self.logger.highlight(line)
+            if self.output_file:
+                self.output_file.write(line + "\n")
             self.db.add_dpapi_secrets(
                 target.address,
                 tag,
@@ -1737,7 +1745,10 @@ class smb(connection):
         def browser_callback(secret):
             if isinstance(secret, LoginData):
                 secret_url = secret.url + " -" if secret.url != "" else "-"
-                self.logger.highlight(f"[{secret.winuser}][{secret.browser.upper()}] {secret_url} {secret.username}:{secret.password}")
+                line = f"[{secret.winuser}][{secret.browser.upper()}] {secret_url} {secret.username}:{secret.password}"
+                self.logger.highlight(line)
+                if self.output_file:
+                    self.output_file.write(line + "\n")
                 self.db.add_dpapi_secrets(
                     target.address,
                     secret.browser.upper(),
@@ -1747,7 +1758,10 @@ class smb(connection):
                     secret.url,
                 )
             elif isinstance(secret, GoogleRefreshToken):
-                self.logger.highlight(f"[{secret.winuser}][{secret.browser.upper()}] Google Refresh Token: {secret.service}:{secret.token}")
+                line = f"[{secret.winuser}][{secret.browser.upper()}] Google Refresh Token: {secret.service}:{secret.token}"
+                self.logger.highlight(line)
+                if self.output_file:
+                    self.output_file.write(line + "\n")
                 self.db.add_dpapi_secrets(
                     target.address,
                     secret.browser.upper(),
@@ -1757,7 +1771,10 @@ class smb(connection):
                     "Google Refresh Token",
                 )
             elif isinstance(secret, Cookie):
-                self.logger.highlight(f"[{secret.winuser}][{secret.browser.upper()}] {secret.host}{secret.path} - {secret.cookie_name}:{secret.cookie_value}")
+                line = f"[{secret.winuser}][{secret.browser.upper()}] {secret.host}{secret.path} - {secret.cookie_name}:{secret.cookie_value}"
+                self.logger.highlight(line)
+                if self.output_file:
+                    self.output_file.write(line + "\n")
 
         try:
             browser_triage = BrowserTriage(target=target, conn=conn, masterkeys=masterkeys, per_secret_callback=browser_callback)
@@ -1769,7 +1786,10 @@ class smb(connection):
             tag = "IEX"
             if secret.type == "Internet Explorer":
                 resource = secret.resource + " -" if secret.resource != "" else "-"
-                self.logger.highlight(f"[{secret.winuser}][{tag}] {resource} - {secret.username}:{secret.password}")
+                line = f"[{secret.winuser}][{tag}] {resource} - {secret.username}:{secret.password}"
+                self.logger.highlight(line)
+                if self.output_file:
+                    self.output_file.write(line + "\n")
                 self.db.add_dpapi_secrets(
                     target.address,
                     tag,
@@ -1778,6 +1798,7 @@ class smb(connection):
                     secret.password,
                     secret.resource,
                 )
+
         try:
             # Collect User Internet Explorer stored secrets
             vaults_triage = VaultsTriage(target=target, conn=conn, masterkeys=masterkeys, per_vault_callback=vault_callback)
@@ -1789,7 +1810,10 @@ class smb(connection):
             tag = "FIREFOX"
             if isinstance(secret, FirefoxData):
                 url = secret.url + " -" if secret.url != "" else "-"
-                self.logger.highlight(f"[{secret.winuser}][{tag}] {url} {secret.username}:{secret.password}")
+                line = f"[{secret.winuser}][{tag}] {url} {secret.username}:{secret.password}"
+                self.logger.highlight(line)
+                if self.output_file:
+                    self.output_file.write(line + "\n")
                 self.db.add_dpapi_secrets(
                     target.address,
                     tag,
@@ -1799,7 +1823,10 @@ class smb(connection):
                     secret.url,
                 )
             elif isinstance(secret, FirefoxCookie):
-                self.logger.highlight(f"[{secret.winuser}][{tag}] {secret.host}{secret.path} {secret.cookie_name}:{secret.cookie_value}")
+                line = f"[{secret.winuser}][{tag}] {secret.host}{secret.path} {secret.cookie_name}:{secret.cookie_value}"
+                self.logger.highlight(line)
+                if self.output_file:
+                    self.output_file.write(line + "\n")
 
         try:
             # Collect Firefox stored secrets
@@ -1807,6 +1834,10 @@ class smb(connection):
             firefox_triage.run(gather_cookies=dump_cookies)
         except Exception as e:
             self.logger.debug(f"Error while looting firefox: {e}")
+
+        if self.output_file:
+            self.output_file.close()
+
 
     @requires_admin
     def lsa(self):
