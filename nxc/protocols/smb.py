@@ -158,6 +158,7 @@ class smb(connection):
         self.nthash = ""
         self.remote_ops = None
         self.bootkey = None
+        self.output_file_template = None
         self.output_filename = None
         self.smbv1 = None   # Check if SMBv1 is supported
         self.smbv3 = None   # Check if SMBv3 is supported
@@ -279,7 +280,7 @@ class smb(connection):
             self.logger.debug(e)
 
         self.os_arch = self.get_os_arch()
-        self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
+        self.output_file_template = os.path.expanduser(f"~/.nxc/logs/{{output_folder}}/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
         try:
             # DCs seem to want us to logoff first, windows workstations sometimes reset the connection
@@ -1584,6 +1585,7 @@ class smb(connection):
                     )
 
                 self.logger.display("Dumping SAM hashes")
+                self.output_filename = self.output_file_template.format(output_folder="sam")
                 SAM.dump()
                 SAM.export(self.output_filename)
                 self.logger.success(f"Added {highlight(add_sam_hash.sam_hashes)} SAM hashes to the database")
@@ -1696,7 +1698,7 @@ class smb(connection):
             use_kcache=self.use_kcache,
         )
 
-        self.output_file = open(self.output_filename, "w", encoding="utf-8")  # noqa: SIM115
+        self.output_file = open(self.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # noqa: SIM115
 
         conn = upgrade_to_dploot_connection(connection=self.conn, target=target)
         if conn is None:
@@ -1717,7 +1719,7 @@ class smb(connection):
             line = f"[{credential.winuser}][{tag}] {credential.target} - {credential.username}:{credential.password}"
             self.logger.highlight(line)
             if self.output_file:
-                self.output_file.write(line.encode().replace(b"\x00", b"").decode() + "\n")
+                self.output_file.write(line + "\n")
             self.db.add_dpapi_secrets(
                 target.address,
                 tag,
@@ -1745,7 +1747,7 @@ class smb(connection):
                 line = f"[{secret.winuser}][{secret.browser.upper()}] {secret_url} {secret.username}:{secret.password}"
                 self.logger.highlight(line)
                 if self.output_file:
-                    self.output_file.write(line.encode().replace(b"\x00", b"").decode() + "\n")
+                    self.output_file.write(line + "\n")
                 self.db.add_dpapi_secrets(
                     target.address,
                     secret.browser.upper(),
@@ -1758,7 +1760,7 @@ class smb(connection):
                 line = f"[{secret.winuser}][{secret.browser.upper()}] Google Refresh Token: {secret.service}:{secret.token}"
                 self.logger.highlight(line)
                 if self.output_file:
-                    self.output_file.write(line.encode().replace(b"\x00", b"").decode() + "\n")
+                    self.output_file.write(line + "\n")
                 self.db.add_dpapi_secrets(
                     target.address,
                     secret.browser.upper(),
@@ -1771,7 +1773,7 @@ class smb(connection):
                 line = f"[{secret.winuser}][{secret.browser.upper()}] {secret.host}{secret.path} - {secret.cookie_name}:{secret.cookie_value}"
                 self.logger.highlight(line)
                 if self.output_file:
-                    self.output_file.write(line.encode().replace(b"\x00", b"").decode() + "\n")
+                    self.output_file.write(line + "\n")
 
         try:
             browser_triage = BrowserTriage(target=target, conn=conn, masterkeys=masterkeys, per_secret_callback=browser_callback)
@@ -1786,7 +1788,7 @@ class smb(connection):
                 line = f"[{secret.winuser}][{tag}] {resource} - {secret.username}:{secret.password}"
                 self.logger.highlight(line)
                 if self.output_file:
-                    self.output_file.write(line.encode().replace(b"\x00", b"").decode() + "\n")
+                    self.output_file.write(line + "\n")
                 self.db.add_dpapi_secrets(
                     target.address,
                     tag,
@@ -1810,7 +1812,7 @@ class smb(connection):
                 line = f"[{secret.winuser}][{tag}] {url} {secret.username}:{secret.password}"
                 self.logger.highlight(line)
                 if self.output_file:
-                    self.output_file.write(line.encode().replace(b"\x00", b"").decode() + "\n")
+                    self.output_file.write(line + "\n")
                 self.db.add_dpapi_secrets(
                     target.address,
                     tag,
@@ -1823,7 +1825,7 @@ class smb(connection):
                 line = f"[{secret.winuser}][{tag}] {secret.host}{secret.path} {secret.cookie_name}:{secret.cookie_value}"
                 self.logger.highlight(line)
                 if self.output_file:
-                    self.output_file.write(line.encode().replace(b"\x00", b"").decode() + "\n")
+                    self.output_file.write(line + "\n")
 
         try:
             # Collect Firefox stored secrets
@@ -1873,6 +1875,7 @@ class smb(connection):
                         perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
                     )
                 self.logger.success("Dumping LSA secrets")
+                self.output_filename = self.output_file_template.format(output_folder="lsa")
                 LSA.dumpCachedHashes()
                 LSA.exportCached(self.output_filename)
                 LSA.dumpSecrets()
@@ -1940,6 +1943,8 @@ class smb(connection):
                 # of enough privileges to access DRSUAPI.
                 #    if resumeFile is not None:
                 self.logger.fail(e)
+
+        self.output_filename = self.output_file_template.format(output_folder="ntds")
 
         NTDS = NTDSHashes(
             NTDSFileName,

@@ -29,6 +29,17 @@ def first_run_setup(logger=nxc_logger):
             logger.display(f"Creating missing folder {folder}")
             mkdir(path_join(NXC_PATH, folder))
 
+    log_subfolders = (
+        "sam",
+        "lsa",
+        "ntds",
+        "dpapi",
+    )
+    for subfolder in log_subfolders:
+        if not exists(path_join(NXC_PATH, f"logs/{subfolder}")):
+            logger.display(f"Creating missing folder logs/{subfolder}")
+            mkdir(path_join(NXC_PATH, f"logs/{subfolder}"))
+
     initialize_db()
 
     if not exists(CONFIG_PATH):
