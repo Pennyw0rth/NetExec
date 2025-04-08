@@ -38,6 +38,7 @@ from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
+from nxc.paths import NXC_PATH
 from nxc.protocols.smb.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection
 from nxc.protocols.smb.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
 from nxc.protocols.smb.kerberos import kerberos_login_with_S4U
@@ -280,7 +281,7 @@ class smb(connection):
             self.logger.debug(e)
 
         self.os_arch = self.get_os_arch()
-        self.output_file_template = os.path.expanduser(f"~/.nxc/logs/{{output_folder}}/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
+        self.output_file_template = os.path.expanduser(f"{NXC_PATH}/logs/{{output_folder}}/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
         try:
             # DCs seem to want us to logoff first, windows workstations sometimes reset the connection
