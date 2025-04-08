@@ -1717,7 +1717,7 @@ class smb(connection):
             line = f"[{credential.winuser}][{tag}] {credential.target} - {credential.username}:{credential.password}"
             self.logger.highlight(line)
             if self.output_file:
-                self.output_file.write(line + "\n")
+                self.output_file.write(line.encode().replace(b"\x00", b"").decode() + "\n")
             self.db.add_dpapi_secrets(
                 target.address,
                 tag,
@@ -1745,7 +1745,7 @@ class smb(connection):
                 line = f"[{secret.winuser}][{secret.browser.upper()}] {secret_url} {secret.username}:{secret.password}"
                 self.logger.highlight(line)
                 if self.output_file:
-                    self.output_file.write(line + "\n")
+                    self.output_file.write(line.encode().replace(b"\x00", b"").decode() + "\n")
                 self.db.add_dpapi_secrets(
                     target.address,
                     secret.browser.upper(),
@@ -1758,7 +1758,7 @@ class smb(connection):
                 line = f"[{secret.winuser}][{secret.browser.upper()}] Google Refresh Token: {secret.service}:{secret.token}"
                 self.logger.highlight(line)
                 if self.output_file:
-                    self.output_file.write(line + "\n")
+                    self.output_file.write(line.encode().replace(b"\x00", b"").decode() + "\n")
                 self.db.add_dpapi_secrets(
                     target.address,
                     secret.browser.upper(),
@@ -1771,7 +1771,7 @@ class smb(connection):
                 line = f"[{secret.winuser}][{secret.browser.upper()}] {secret.host}{secret.path} - {secret.cookie_name}:{secret.cookie_value}"
                 self.logger.highlight(line)
                 if self.output_file:
-                    self.output_file.write(line + "\n")
+                    self.output_file.write(line.encode().replace(b"\x00", b"").decode() + "\n")
 
         try:
             browser_triage = BrowserTriage(target=target, conn=conn, masterkeys=masterkeys, per_secret_callback=browser_callback)
@@ -1786,7 +1786,7 @@ class smb(connection):
                 line = f"[{secret.winuser}][{tag}] {resource} - {secret.username}:{secret.password}"
                 self.logger.highlight(line)
                 if self.output_file:
-                    self.output_file.write(line + "\n")
+                    self.output_file.write(line.encode().replace(b"\x00", b"").decode() + "\n")
                 self.db.add_dpapi_secrets(
                     target.address,
                     tag,
@@ -1810,7 +1810,7 @@ class smb(connection):
                 line = f"[{secret.winuser}][{tag}] {url} {secret.username}:{secret.password}"
                 self.logger.highlight(line)
                 if self.output_file:
-                    self.output_file.write(line + "\n")
+                    self.output_file.write(line.encode().replace(b"\x00", b"").decode() + "\n")
                 self.db.add_dpapi_secrets(
                     target.address,
                     tag,
@@ -1823,7 +1823,7 @@ class smb(connection):
                 line = f"[{secret.winuser}][{tag}] {secret.host}{secret.path} {secret.cookie_name}:{secret.cookie_value}"
                 self.logger.highlight(line)
                 if self.output_file:
-                    self.output_file.write(line + "\n")
+                    self.output_file.write(line.encode().replace(b"\x00", b"").decode() + "\n")
 
         try:
             # Collect Firefox stored secrets
@@ -1834,7 +1834,6 @@ class smb(connection):
 
         if self.output_file:
             self.output_file.close()
-
 
     @requires_admin
     def lsa(self):
