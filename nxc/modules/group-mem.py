@@ -11,7 +11,7 @@ class NXCModule:
     """
 
     name = "group-mem"
-    description = "Retrieves all the members within a Group"
+    description = "[REMOVED] Retrieves all the members within a Group"
     supported_protocols = ["ldap"]
     opsec_safe = True
     multiple_hosts = False
