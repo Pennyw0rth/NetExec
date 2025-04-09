@@ -25,6 +25,7 @@ from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.dcerpc.v5.epm import MSRPC_UUID_PORTMAP
 from impacket.dcerpc.v5.samr import SID_NAME_USE
 from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
+from impacket.krb5.ccache import CCache
 from impacket.krb5.kerberosv5 import SessionKeyDecryptionError
 from impacket.krb5.types import KerberosException, Principal
 from impacket.krb5 import constants
@@ -246,7 +247,12 @@ class smb(connection):
                     self.hostname = self.host
                     self.targetDomain = self.host
 
-        self.domain = self.targetDomain if self.args.domain is None else self.args.domain
+        if self.args.domain:
+            self.domain = self.args.domain
+        elif self.args.use_kcache:  # Fixing domain trust, just pull the auth domain out of the ticket
+            self.domain = CCache.parseFile()[0]
+        else:
+            self.domain = self.targetDomain
 
         if self.args.local_auth:
             self.domain = self.hostname
