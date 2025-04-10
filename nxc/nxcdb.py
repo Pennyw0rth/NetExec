@@ -47,8 +47,7 @@ def write_csv(filename, headers, entries):
 def write_list(filename, entries):
     """Writes a file with a simple list"""
     with open(os.path.expanduser(filename), "w") as export_file:
-        for line in entries:
-            export_file.write(line + "\n")
+        export_file.writelines(line + "\n" for line in entries)
 
 
 def complete_import(text, line):
@@ -515,7 +514,6 @@ class NXCDBMenu(cmd.Cmd):
     @staticmethod
     def do_EOF(line):
         sys.exit()
-
 
     @staticmethod
     def help_exit():

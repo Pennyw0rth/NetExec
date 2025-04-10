@@ -6,7 +6,7 @@ import os
 from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
 from binascii import hexlify
 from datetime import datetime
-from re import sub, I
+from re import sub, IGNORECASE
 from zipfile import ZipFile
 from termcolor import colored
 from dns import resolver
@@ -197,10 +197,10 @@ class ldap(connection):
                         if str(attribute["type"]) == "defaultNamingContext":
                             base_dn = str(attribute["vals"][0])
                             target_domain = sub(
-                                ",DC=",
+                                r",DC=",
                                 ".",
                                 base_dn[base_dn.lower().find("dc="):],
-                                flags=I,
+                                flags=IGNORECASE,
                             )[3:]
                         if str(attribute["type"]) == "dnsHostName":
                             target = str(attribute["vals"][0])
@@ -361,7 +361,7 @@ class ldap(connection):
             return False
         except (KeyError, KerberosException, OSError) as e:
             self.logger.fail(
-                f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (process_secret(kerb_pass))} {e!s}",
+                f"{self.domain}\\{self.username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {e!s}",
                 color="red",
             )
             return False
@@ -399,21 +399,21 @@ class ldap(connection):
                 except SessionError as e:
                     error, desc = e.getErrorString()
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (process_secret(kerb_pass))} {error!s}",
+                        f"{self.domain}\\{self.username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {error!s}",
                         color="magenta" if error in ldap_error_status else "red",
                     )
                     return False
                 except Exception as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                        f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status.get(error_code, '')}",
                         color="magenta" if error_code in ldap_error_status else "red",
                     )
                     return False
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (process_secret(kerb_pass))} {error_code!s}",
+                    f"{self.domain}\\{self.username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {error_code!s}",
                     color="magenta" if error_code in ldap_error_status else "red",
                 )
                 return False
@@ -478,13 +478,13 @@ class ldap(connection):
                 except Exception as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                        f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status.get(error_code, '')}",
                         color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                     )
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                    f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status.get(error_code, '')}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
             return False
@@ -569,13 +569,13 @@ class ldap(connection):
                 except ldap_impacket.LDAPSessionError as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                        f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status.get(error_code, '')}",
                         color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                     )
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                    f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status.get(error_code, '')}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
             return False
@@ -853,7 +853,7 @@ class ldap(connection):
             return False
 
         # Building the search filter
-        search_filter = "(&(UserAccountControl:1.2.840.113556.1.4.803:=%d)(!(UserAccountControl:1.2.840.113556.1.4.803:=%d))(!(objectCategory=computer)))" % (UF_DONT_REQUIRE_PREAUTH, UF_ACCOUNTDISABLE)
+        search_filter = f"(&(UserAccountControl:1.2.840.113556.1.4.803:={UF_DONT_REQUIRE_PREAUTH})(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE}))(!(objectCategory=computer)))"
         attributes = [
             "sAMAccountName",
             "pwdLastSet",
@@ -883,7 +883,7 @@ class ldap(connection):
                             sAMAccountName = str(attribute["vals"][0])
                             mustCommit = True
                         elif str(attribute["type"]) == "userAccountControl":
-                            userAccountControl = "0x%x" % int(attribute["vals"][0])
+                            userAccountControl = "0x{:x}".format(int(attribute["vals"][0]))
                         elif str(attribute["type"]) == "memberOf":
                             memberOf = str(attribute["vals"][0])
                         elif str(attribute["type"]) == "pwdLastSet":
@@ -1183,7 +1183,7 @@ class ldap(connection):
                         sAMAccountName = str(attribute["vals"][0])
                         mustCommit = True
                     elif str(attribute["type"]) == "userAccountControl":
-                        userAccountControl = "0x%x" % int(attribute["vals"][0])
+                        userAccountControl = "0x{:x}".format(int(attribute["vals"][0]))
                     elif str(attribute["type"]) == "memberOf":
                         memberOf = str(attribute["vals"][0])
                     elif str(attribute["type"]) == "pwdLastSet":
@@ -1313,7 +1313,7 @@ class ldap(connection):
                         sAMAccountName = str(attribute["vals"][0])
                         mustCommit = True
                     elif str(attribute["type"]) == "userAccountControl":
-                        userAccountControl = "0x%x" % int(attribute["vals"][0])
+                        userAccountControl = "0x{:x}".format(int(attribute["vals"][0]))
                     elif str(attribute["type"]) == "memberOf":
                         memberOf = str(attribute["vals"][0])
                     elif str(attribute["type"]) == "pwdLastSet":

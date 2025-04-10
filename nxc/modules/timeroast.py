@@ -5,10 +5,10 @@ from socket import socket, AF_INET, SOCK_DGRAM
 from struct import pack, unpack
 
 
-
 def hashcat_format(rid, hashval, salt):
     """Encodes hash in Hashcat-compatible format (with username prefix)."""
     return f"{rid}:$sntp-ms${hexlify(hashval).decode()}${hexlify(salt).decode()}"
+
 
 class NXCModule:
     """
@@ -33,7 +33,6 @@ class NXCModule:
         # Static NTP query prefix using the MD5 authenticator. Append 4-byte RID and dummy checksum to create a full query.
         self.ntp_prefix = unhexlify("db0011e9000000000001000000000000e1b8407debc7e50600000000000000000000000000000000e1b8428bffbfcd0a")
         
-
     def options(self, context, module_options):
         self.rids = range(1, 2**31)
         self.rate = 180
@@ -80,7 +79,6 @@ class NXCModule:
                 sock.bind(("0.0.0.0", src_port))
             except PermissionError:
                 context.log.exception(f"No permission to listen on port {src_port}. May need to run as root.")
-
 
             query_interval = 1 / rate
             last_ok_time = time()

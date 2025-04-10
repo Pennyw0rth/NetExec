@@ -4,6 +4,7 @@ import sys
 from impacket.dcerpc.v5 import samr, epm, transport
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 
+
 class NXCModule:
     """
     Module by CyberCelt: @Cyb3rC3lt
@@ -88,7 +89,6 @@ class NXCModule:
         if not self.noLDAPRequired:
             self.do_ldaps_add(connection, context)
             
-
     def do_samr_add(self, context):
         """
         Connects to a target server and performs various operations related to adding or deleting machine accounts.

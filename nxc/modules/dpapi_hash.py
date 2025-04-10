@@ -5,6 +5,7 @@ from nxc.protocols.smb.dpapi import upgrade_to_dploot_connection
 
 # Based on dpapimk2john, original work by @fist0urs
 
+
 class NXCModule:
     name = "dpapi_hash"
     description = "Remotely dump Dpapi hash based on masterkeys"

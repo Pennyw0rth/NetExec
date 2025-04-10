@@ -36,5 +36,6 @@ class NXCModule:
         query = "SELECT name FROM sys.server_principals WHERE type_desc = 'SQL_LOGIN';"
         res = self.mssql_conn.sql_query(query)
         return [login["name"] for login in res] if res else []
+
     def options(self, context, module_options):
         pass

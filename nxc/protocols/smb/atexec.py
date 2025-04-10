@@ -37,7 +37,7 @@ class TSCH_EXEC:
         if self.__password is None:
             self.__password = ""
 
-        stringbinding = r"ncacn_np:%s[\pipe\atsvc]" % self.__target
+        stringbinding = rf"ncacn_np:{self.__target}[\pipe\atsvc]"
         self.__rpctransport = transport.DCERPCTransportFactory(stringbinding)
         self.__rpctransport.setRemoteHost(self.__remoteHost)
 
