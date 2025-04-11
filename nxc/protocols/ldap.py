@@ -877,10 +877,10 @@ class ldap(connection):
         resp_parsed = parse_result_attributes(resp)
         self.logger.debug(f"Search Filter: {searchFilter}")
         self.logger.debug(f"Attributes: {attributes}")
-        self.logger.debug(f"Response: {resp}")
-        if not resp:
+        self.logger.debug(f"Response: {resp_parsed}")
+        if not resp_parsed:
             self.logger.highlight("No entries found!")
-        elif resp:
+        else:
             answers = []
 
             for item in resp_parsed:
@@ -1093,52 +1093,14 @@ class ldap(connection):
 
     def trusted_for_delegation(self):
         # Building the search filter
-        searchFilter = "(userAccountControl:1.2.840.113556.1.4.803:=524288)"
-        attributes = [
-            "sAMAccountName",
-            "pwdLastSet",
-            "MemberOf",
-            "userAccountControl",
-            "lastLogon",
-        ]
-        resp = self.search(searchFilter, attributes, 0)
+        searchFilter = f"(userAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_FOR_DELEGATION})"
+        resp = self.search(searchFilter, attributes=["sAMAccountName"], sizeLimit=0)
         resp_parsed = parse_result_attributes(resp)
+        self.logger.debug(f"Total of records returned {len(resp_parsed):d}")
 
-        answers = []
-        self.logger.debug(f"Total of records returned {len(resp):d}")
-
-        for item in resp_parsed:
-            mustCommit = False
-            sAMAccountName = ""
-            memberOf = ""
-            pwdLastSet = ""
-            userAccountControl = 0
-            lastLogon = "N/A"
-            try:
-                sAMAccountName = item.get("sAMAccountName", "")
-                mustCommit = sAMAccountName is not None
-                userAccountControl = "0x%x" % int(item.get("userAccountControl", 0))
-                memberOf = str(item.get("memberOf", " "))
-                pwdLastSet = "<never>" if str(item.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("pwdLastSet", 0))))))
-                lastLogon = "<never>" if str(item.get("lastLogon", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("lastLogon", 0))))))
-
-                if mustCommit is True:
-                    answers.append(
-                        [
-                            sAMAccountName,
-                            memberOf,
-                            pwdLastSet,
-                            lastLogon,
-                            userAccountControl,
-                        ]
-                    )
-            except Exception as e:
-                self.logger.debug("Exception:", exc_info=True)
-                self.logger.debug(f"Skipping item, cannot process due to error {e}")
-        if len(answers) > 0:
-            self.logger.debug(answers)
-            for value in answers:
-                self.logger.highlight(value[0])
+        if resp_parsed:
+            for item in resp_parsed:
+                self.logger.highlight(item["sAMAccountName"])
         else:
             self.logger.fail("No entries found!")
 
