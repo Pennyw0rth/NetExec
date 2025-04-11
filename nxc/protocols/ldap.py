@@ -1263,7 +1263,7 @@ class ldap(connection):
         self.logger.debug(f"Total of records returned {len(resp):d}")
 
         for item in resp_parsed:
-            try:    
+            try:
                 sAMAccountName = item.get("sAMAccountName", "")
                 mustCommit = sAMAccountName is not None
                 userAccountControl = f"0x{int(item.get('userAccountControl', 0)):x}"
