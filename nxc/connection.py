@@ -1,4 +1,7 @@
 import random
+import sys
+import contextlib
+
 from os.path import isfile
 from threading import BoundedSemaphore
 from functools import wraps
@@ -13,10 +16,9 @@ from nxc.loaders.moduleloader import ModuleLoader
 from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
 from nxc.protocols.ldap.laps import laps_search
+from nxc.helpers.pfx import pfx_auth
 
 from impacket.dcerpc.v5 import transport
-import sys
-import contextlib
 
 sem = BoundedSemaphore(1)
 global_failed_logins = 0
@@ -384,7 +386,7 @@ class connection:
             if isfile(user):
                 with open(user) as user_file:
                     for line in user_file:
-                        if "\\" in line:
+                        if "\\" in line and len(line.split("\\")) == 2:
                             domain_single, username_single = line.split("\\")
                         else:
                             domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain else self.domain
@@ -547,6 +549,14 @@ class connection:
                 self.kerberos_login(self.domain, username, password, "", "", self.kdcHost, True)
                 self.logger.info("Successfully authenticated using Kerberos cache")
                 return True
+
+        if self.args.pfx_cert or self.args.pfx_base64 or self.args.pem_cert:
+            self.logger.debug("Trying to authenticate using Certificate pfx")
+            if not self.args.username:
+                self.logger.fail("You must specify a username when using certificate authentication")
+                return False
+            with sem:
+                return pfx_auth(self)
 
         if hasattr(self.args, "laps") and self.args.laps:
             self.logger.debug("Trying to authenticate using LAPS")
