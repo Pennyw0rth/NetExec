@@ -610,35 +610,30 @@ class ldap(connection):
         search_filter = "(userAccountControl:1.2.840.113556.1.4.803:=8192)"
         attributes = ["objectSid"]
         resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
-        resp_parse = parse_result_attributes(resp)
+        resp_parsed = parse_result_attributes(resp)
         answers = []
         if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "") and self.username != "":
-
-            for item in resp_parse:
+            for item in resp_parsed:
                 sid = self.sid_to_str(item["objectSid"])
                 self.sid_domain = "-".join(sid.split("-")[:-1])
 
             # 2. get all group cn name
-            search_filter = "(|(objectSid=" + self.sid_domain + "-512)(objectSid=" + self.sid_domain + "-544)(objectSid=" + self.sid_domain + "-519)(objectSid=S-1-5-32-549)(objectSid=S-1-5-32-551))"
+            search_filter = f"(|(objectSid={self.sid_domain}-512)(objectSid={self.sid_domain}-544)(objectSid={self.sid_domain}-519)(objectSid=S-1-5-32-549)(objectSid=S-1-5-32-551))"
             attributes = ["distinguishedName"]
             resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
-            resp_parse = parse_result_attributes(resp)
+            resp_parsed = parse_result_attributes(resp)
             answers = []
-
-            for item in resp_parse:
-                answers.append(str("(memberOf:1.2.840.113556.1.4.1941:=" + item.get("distinguishedName", "") + ")"))
+            for item in resp_parsed:
+                answers.append(f"(memberOf:1.2.840.113556.1.4.1941:={item['distinguishedName']})")
             if len(answers) == 0:
                 self.logger.debug("No groups with default privileged RID were found. Assuming user is not a Domain Administrator.")
                 return
 
             # 3. get member of these groups
-            search_filter = "(&(objectCategory=user)(sAMAccountName=" + self.username + ")(|" + "".join(answers) + "))"
-            attributes = [""]
-            resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
-            answers = []
-            resp_parse = parse_result_attributes(resp)
-            
-            for item in resp_parse:
+            search_filter = f"(&(objectCategory=user)(sAMAccountName={self.username})(|{''.join(answers)}))"
+            resp = self.search(search_filter, attributes=[], sizeLimit=0, baseDN=self.baseDN)
+            resp_parsed = parse_result_attributes(resp)
+            for item in resp_parsed:
                 if item:
                     self.admin_privs = True
 
@@ -701,12 +696,12 @@ class ldap(connection):
         users = []
 
         if resp:
-            resp_parse = parse_result_attributes(resp)
+            resp_parsed = parse_result_attributes(resp)
 
             # We print the total records after we parse the results since often SearchResultReferences are returned
-            self.logger.display(f"Enumerated {len(resp_parse):d} domain users: {self.domain}")
+            self.logger.display(f"Enumerated {len(resp_parsed):d} domain users: {self.domain}")
             self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<9}{'-Description-':<60}")
-            for user in resp_parse:
+            for user in resp_parsed:
                 pwd_last_set = user.get("pwdLastSet", "")
                 if pwd_last_set:
                     pwd_last_set = "<never>" if pwd_last_set == "0" else datetime.fromtimestamp(self.getUnixTime(int(pwd_last_set))).strftime("%Y-%m-%d %H:%M:%S")
@@ -715,7 +710,7 @@ class ldap(connection):
                 self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{pwd_last_set:<20}{user.get('badPwdCount', ''):<9}{user.get('description', ''):<60}")
                 users.append(user.get("sAMAccountName", ""))
             if self.args.users_export:
-                self.logger.display(f"Writing {len(resp_parse):d} local users to {self.args.users_export}")
+                self.logger.display(f"Writing {len(resp_parsed):d} local users to {self.args.users_export}")
                 with open(self.args.users_export, "w+") as file:
                     file.writelines(f"{user}\n" for user in users)
 
@@ -759,11 +754,11 @@ class ldap(connection):
 
     def computers(self):
         resp = self.search(f"(sAMAccountType={SAM_MACHINE_ACCOUNT})", ["name"], 0)
-        resp_parse = parse_result_attributes(resp)
+        resp_parsed = parse_result_attributes(resp)
 
         if resp:
-            self.logger.display(f"Total records returned: {len(resp_parse)}")
-            for item in resp_parse:
+            self.logger.display(f"Total records returned: {len(resp_parsed)}")
+            for item in resp_parsed:
                 self.logger.highlight(item["name"] + "$")
 
     def dc_list(self):
@@ -778,9 +773,9 @@ class ldap(connection):
         search_filter = "(&(objectCategory=computer)(primaryGroupId=516))"
         attributes = ["dNSHostName"]
         resp = self.search(search_filter, attributes, 0)
-        resp_parse = parse_result_attributes(resp)
+        resp_parsed = parse_result_attributes(resp)
 
-        for item in resp_parse:
+        for item in resp_parsed:
             name = item.get("dNSHostName", "")  # Get dNSHostName attribute or empty string
             try:
                 # Resolve using DNS server for A, AAAA, CNAME, PTR, and NS records
@@ -861,14 +856,14 @@ class ldap(connection):
             "lastLogon",
         ]
         resp = self.search(search_filter, attributes, 0)
-        resp_parse = parse_result_attributes(resp)
+        resp_parsed = parse_result_attributes(resp)
         if resp is None:
             self.logger.highlight("No entries found!")
         elif resp:
             answers = []
             self.logger.display(f"Total of records returned {len(resp):d}")
 
-            for item in resp_parse:
+            for item in resp_parsed:
                 mustCommit = False
                 sAMAccountName = ""
                 memberOf = ""
@@ -921,7 +916,7 @@ class ldap(connection):
             "lastLogon",
         ]
         resp = self.search(searchFilter, attributes, 0)
-        resp_parse = parse_result_attributes(resp)
+        resp_parsed = parse_result_attributes(resp)
         self.logger.debug(f"Search Filter: {searchFilter}")
         self.logger.debug(f"Attributes: {attributes}")
         self.logger.debug(f"Response: {resp}")
@@ -930,7 +925,7 @@ class ldap(connection):
         elif resp:
             answers = []
 
-            for item in resp_parse:
+            for item in resp_parsed:
                 mustCommit = False
                 sAMAccountName = ""
                 memberOf = ""
@@ -1077,9 +1072,9 @@ class ldap(connection):
         resp = self.search(search_filter, attributes)
         answers = []
         self.logger.debug(f"Total of records returned {len(resp):d}")
-        resp_parse = parse_result_attributes(resp)
+        resp_parsed = parse_result_attributes(resp)
 
-        for item in resp_parse:
+        for item in resp_parsed:
             sAMAccountName = ""
             userAccountControl = 0
             delegation = ""
@@ -1149,12 +1144,12 @@ class ldap(connection):
             "lastLogon",
         ]
         resp = self.search(searchFilter, attributes, 0)
-        resp_parse = parse_result_attributes(resp)
+        resp_parsed = parse_result_attributes(resp)
 
         answers = []
         self.logger.debug(f"Total of records returned {len(resp):d}")
 
-        for item in resp_parse:
+        for item in resp_parsed:
             mustCommit = False
             sAMAccountName = ""
             memberOf = ""
@@ -1216,9 +1211,9 @@ class ldap(connection):
                 return False
         answers = []
         self.logger.debug(f"Total of records returned {len(resp):d}")
-        resp_parse = parse_result_attributes(resp)
+        resp_parsed = parse_result_attributes(resp)
 
-        for item in resp_parse:
+        for item in resp_parsed:
             status = "enabled"
             try:
                 sAMAccountName = item.get("sAMAccountName", "")
@@ -1263,11 +1258,11 @@ class ldap(connection):
             "lastLogon",
         ]
         resp = self.search(searchFilter, attributes, 0)
-        resp_parse = parse_result_attributes(resp)
+        resp_parsed = parse_result_attributes(resp)
         answers = []
         self.logger.debug(f"Total of records returned {len(resp):d}")
 
-        for item in resp_parse:
+        for item in resp_parsed:
             try:    
                 sAMAccountName = item.get("sAMAccountName", "")
                 mustCommit = sAMAccountName is not None
