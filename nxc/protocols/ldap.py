@@ -1107,63 +1107,18 @@ class ldap(connection):
     def password_not_required(self):
         # Building the search filter
         searchFilter = "(userAccountControl:1.2.840.113556.1.4.803:=32)"
-        try:
-            self.logger.debug(f"Search Filter={searchFilter}")
-            resp = self.ldap_connection.search(
-                searchBase=self.baseDN,
-                searchFilter=searchFilter,
-                attributes=[
-                    "sAMAccountName",
-                    "pwdLastSet",
-                    "MemberOf",
-                    "userAccountControl",
-                    "lastLogon",
-                ],
-                sizeLimit=0,
-            )
-        except ldap_impacket.LDAPSearchError as e:
-            if e.getErrorString().find("sizeLimitExceeded") >= 0:
-                self.logger.debug("sizeLimitExceeded exception caught, giving up and processing the data received")
-                # We reached the sizeLimit, process the answers we have already and that's it. Until we implement
-                # paged queries
-                resp = e.getAnswers()
-            else:
-                return False
-        answers = []
-        self.logger.debug(f"Total of records returned {len(resp):d}")
+        attributes = [
+            "sAMAccountName",
+            "userAccountControl",
+        ]
+        resp = self.search(searchFilter, attributes, sizeLimit=0, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
+        self.logger.debug(f"Total of records returned {len(resp_parsed):d}")
 
-        for item in resp_parsed:
-            status = "enabled"
-            try:
-                sAMAccountName = item.get("sAMAccountName", "")
-                mustCommit = sAMAccountName is not None
-                userAccountControl = int(item.get("userAccountControl", 0))
-                if userAccountControl & 2:
-                    status = "disabled"
-                userAccountControl = f"0x{int(item.get('userAccountControl', 0)):x}"
-                memberOf = str(item.get("memberOf", " "))
-                pwdLastSet = "<never>" if str(item.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("pwdLastSet", 0))))))
-                lastLogon = "<never>" if str(item.get("lastLogon", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("lastLogon", 0))))))
-
-                if mustCommit is True:
-                    answers.append(
-                        [
-                            sAMAccountName,
-                            memberOf,
-                            pwdLastSet,
-                            lastLogon,
-                            userAccountControl,
-                            status,
-                        ]
-                    )
-            except Exception as e:
-                self.logger.debug("Exception:", exc_info=True)
-                self.logger.debug(f"Skipping item, cannot process due to error {e!s}")
-        if len(answers) > 0:
-            self.logger.debug(answers)
-            for value in answers:
-                self.logger.highlight(f"User: {value[0]} Status: {value[5]}")
+        if resp_parsed:
+            for user in resp_parsed:
+                status = "disabled" if int(user["userAccountControl"]) & 2 else "enabled"
+                self.logger.highlight(f"User: {user['sAMAccountName']} Status: {status}")
         else:
             self.logger.fail("No entries found!")
 
