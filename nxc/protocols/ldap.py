@@ -860,7 +860,6 @@ class ldap(connection):
                     self.logger.highlight(f"{hash_TGT}")
                     with open(self.args.asreproast, "a+") as hash_asreproast:
                         hash_asreproast.write(f"{hash_TGT}\n")
-                return True
 
     def kerberoasting(self):
         # Building the search filter
