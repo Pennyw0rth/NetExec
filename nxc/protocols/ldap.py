@@ -1124,45 +1124,13 @@ class ldap(connection):
 
     def admin_count(self):
         # Building the search filter
-        searchFilter = "(adminCount=1)"
-        attributes = [
-            "sAMAccountName",
-            "pwdLastSet",
-            "MemberOf",
-            "userAccountControl",
-            "lastLogon",
-        ]
-        resp = self.search(searchFilter, attributes, 0)
+        resp = self.search(searchFilter="(adminCount=1)", attributes=["sAMAccountName"], sizeLimit=0)
         resp_parsed = parse_result_attributes(resp)
-        answers = []
-        self.logger.debug(f"Total of records returned {len(resp):d}")
+        self.logger.debug(f"Total of records returned {len(resp_parsed):d}")
 
-        for item in resp_parsed:
-            try:
-                sAMAccountName = item.get("sAMAccountName", "")
-                mustCommit = sAMAccountName is not None
-                userAccountControl = f"0x{int(item.get('userAccountControl', 0)):x}"
-                memberOf = str(item.get("memberOf", " "))
-                pwdLastSet = "<never>" if str(item.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("pwdLastSet", 0))))))
-                lastLogon = "<never>" if str(item.get("lastLogon", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("lastLogon", 0))))))
-
-                if mustCommit is True:
-                    answers.append(
-                        [
-                            sAMAccountName,
-                            memberOf,
-                            pwdLastSet,
-                            lastLogon,
-                            userAccountControl,
-                        ]
-                    )
-            except Exception as e:
-                self.logger.debug("Exception:", exc_info=True)
-                self.logger.debug(f"Skipping item, cannot process due to error {e!s}")
-        if len(answers) > 0:
-            self.logger.debug(answers)
-            for value in answers:
-                self.logger.highlight(value[0])
+        if resp_parsed:
+            for user in resp_parsed:
+                self.logger.highlight(user["sAMAccountName"])
         else:
             self.logger.fail("No entries found!")
 
