@@ -189,24 +189,16 @@ class ldap(connection):
                 attributes=["defaultNamingContext", "dnsHostName"],
                 sizeLimit=0,
             )
-            for item in resp:
-                if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
-                    continue
-                try:
-                    for attribute in item["attributes"]:
-                        if str(attribute["type"]) == "defaultNamingContext":
-                            base_dn = str(attribute["vals"][0])
-                            target_domain = sub(
-                                ",DC=",
-                                ".",
-                                base_dn[base_dn.lower().find("dc="):],
-                                flags=I,
-                            )[3:]
-                        if str(attribute["type"]) == "dnsHostName":
-                            target = str(attribute["vals"][0])
-                except Exception as e:
-                    self.logger.debug("Exception:", exc_info=True)
-                    self.logger.info(f"Skipping item, cannot process due to error {e}")
+            resp_parsed = parse_result_attributes(resp)[0]
+
+            target = resp_parsed["dnsHostName"]
+            base_dn = resp_parsed["defaultNamingContext"]
+            target_domain = sub(
+                ",DC=",
+                ".",
+                base_dn[base_dn.lower().find("dc="):],
+                flags=I,
+            )[3:]
         except ConnectionRefusedError as e:
             self.logger.debug(f"{e} on host {self.host}")
             return False
