@@ -728,7 +728,7 @@ class ldap(connection):
             attributes = ["cn", "member"]
         resp = self.search(search_filter, attributes, 0)
         resp_parsed = parse_result_attributes(resp)
-        self.logger.debug(f"Total of records returned {len(resp):d}")
+        self.logger.debug(f"Total of records returned {len(resp_parsed)}")
 
         if self.args.groups:
             if not resp_parsed:
@@ -853,7 +853,7 @@ class ldap(connection):
         if not resp_parsed:
             self.logger.highlight("No entries found!")
         else:
-            self.logger.display(f"Total of records returned {len(resp):d}")
+            self.logger.display(f"Total of records returned {len(resp_parsed)}")
             for user in resp_parsed:
                 hash_TGT = KerberosAttacks(self).get_tgt_asroast(user["sAMAccountName"])
                 if hash_TGT:
@@ -1001,8 +1001,8 @@ class ldap(connection):
 
         resp = self.search(search_filter, attributes)
         answers = []
-        self.logger.debug(f"Total of records returned {len(resp):d}")
         resp_parsed = parse_result_attributes(resp)
+        self.logger.debug(f"Total of records returned {len(resp_parsed)}")
 
         for item in resp_parsed:
             sAMAccountName = ""
