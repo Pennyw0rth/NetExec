@@ -42,5 +42,6 @@ class NXCModule:
         """
         res = self.mssql_conn.sql_query(query)
         return [user["name"] for user in res] if res else []
+
     def options(self, context, module_options):
         pass

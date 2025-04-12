@@ -2,8 +2,6 @@
 # Which in turn stole from Impacket :)
 # Code refactored and added to by @mjhallenbeck (Marshall-Hallenbeck on GitHub)
 
-import logging
-
 from impacket.dcerpc.v5 import transport, lsat, lsad, samr
 from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
@@ -43,7 +41,7 @@ class SamrFunc:
         domains = self.samr_query.get_domains()
         members = {}
         if "Builtin" not in domains:
-            logging.error("No Builtin group to query locally on")
+            self.logger.error("No Builtin group to query locally on")
             return None
 
         domain_handle = self.samr_query.get_domain_handle("Builtin")
@@ -128,10 +126,10 @@ class SAMRQuery:
             dce.connect()
             dce.bind(samr.MSRPC_UUID_SAMR)
         except NetBIOSError as e:
-            logging.error(f"NetBIOSError on Connection: {e}")
+            self.logger.error(f"NetBIOSError on Connection: {e}")
             return None
         except SessionError as e:
-            logging.error(f"SessionError on Connection: {e}")
+            self.logger.error(f"SessionError on Connection: {e}")
             return None
         return dce
 

@@ -1,6 +1,7 @@
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 
+
 class NXCModule:
     r"""
     WinLogon AutoLogon: extract the credential from the following registry hive

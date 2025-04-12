@@ -16,6 +16,7 @@ class MRemoteNgEncryptionAttributes:
     encryption_engine: str
     full_file_encryption: bool
 
+
 class NXCModule:
     """
     Dump mRemoteNG Passwords
@@ -181,7 +182,6 @@ class NXCModule:
                             content = conn.readFile(self.context.share, new_path)
                             self.handle_confCons_file(content)
                             
-
     def extract_remoteng_passwords(self, encrypted_password, encryption_attributes: MRemoteNgEncryptionAttributes):
         encrypted_password = b64decode(encrypted_password)
         if encrypted_password == b"":

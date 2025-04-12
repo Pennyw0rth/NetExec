@@ -27,7 +27,7 @@ class NXCModule:
         SERVER             PKI Enrollment Server to enumerate templates for. Default is None, use CN name
         BASE_DN            The base domain name for the LDAP query
         """
-        self.regex = re.compile("(https?://.+)")
+        self.regex = re.compile(r"(https?://.+)")
 
         self.server = None
         self.base_dn = None

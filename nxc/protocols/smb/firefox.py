@@ -18,12 +18,13 @@ from nxc.protocols.smb.dpapi import upgrade_to_dploot_connection
 CKA_ID = unhexlify("f8000000000000000000000000000001")
 
 
+@dataclass
 class FirefoxData:
-    def __init__(self, winuser: str, url: str, username: str, password: str):
-        self.winuser = winuser
-        self.url = url
-        self.username = username
-        self.password = password
+    winuser: str
+    url: str
+    username: str
+    password: str
+
 
 @dataclass
 class FirefoxCookie:
@@ -35,6 +36,7 @@ class FirefoxCookie:
     creation_utc: str
     expires_utc: str
     last_access_utc: str
+
 
 class FirefoxTriage:
     """
@@ -110,11 +112,11 @@ class FirefoxTriage:
                         password = self.decrypt(key=key, iv=pwd[1], ciphertext=pwd[2]).decode("utf-8")
                         if password is not None and decoded_username is not None:
                             data = FirefoxData(
-                                    winuser=user,
-                                    url=host,
-                                    username=decoded_username,
-                                    password=password,
-                                )
+                                winuser=user,
+                                url=host,
+                                username=decoded_username,
+                                password=password,
+                            )
                             if self.per_secret_callback is not None:
                                 self.per_secret_callback(data)
                             firefox_data.append(data)
@@ -126,7 +128,7 @@ class FirefoxTriage:
 
     def parse_cookie_data(self, windows_user, cookies_data):
         cookies = []
-        fh = tempfile.NamedTemporaryFile(delete=False)
+        fh = tempfile.NamedTemporaryFile(delete=False)  # noqa: SIM115
         fh.write(cookies_data)
         fh.seek(0)
         db = sqlite3.connect(fh.name)
@@ -134,15 +136,15 @@ class FirefoxTriage:
         cursor.execute("SELECT name, value, host, path, expiry, lastAccessed, creationTime FROM moz_cookies;")
         for name, value, host, path, expiry, lastAccessed, creationTime in cursor:
             cookie = FirefoxCookie(
-                    winuser=windows_user,
-                    host=host,
-                    path=path,
-                    cookie_name=name,
-                    cookie_value=value,
-                    creation_utc=creationTime,
-                    last_access_utc=lastAccessed,
-                    expires_utc=expiry,
-                )
+                winuser=windows_user,
+                host=host,
+                path=path,
+                cookie_name=name,
+                cookie_value=value,
+                creation_utc=creationTime,
+                last_access_utc=lastAccessed,
+                expires_utc=expiry,
+            )
             if self.per_secret_callback is not None:
                 self.per_secret_callback(cookie)
             cookies.append(cookie)
@@ -165,7 +167,7 @@ class FirefoxTriage:
         # Instead of disabling "delete" and removing the file manually,
         # in the future (py3.12) we could use "delete_on_close=False" as a cleaner solution
         # Related issue: #134
-        fh = tempfile.NamedTemporaryFile(delete=False)
+        fh = tempfile.NamedTemporaryFile(delete=False)  # noqa: SIM115
         fh.write(key4_data)
         fh.seek(0)
         db = sqlite3.connect(fh.name)

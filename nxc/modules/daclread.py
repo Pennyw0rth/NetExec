@@ -429,11 +429,9 @@ class NXCModule:
     def parse_dacl(self, context, dacl):
         parsed_dacl = []
         context.log.debug("Parsing DACL")
-        i = 0
         for ace in dacl["Data"]:
             parsed_ace = self.parse_ace(context, ace)
             parsed_dacl.append(parsed_ace)
-            i += 1
         return parsed_dacl
 
     # Parses an access mask to extract the different values from a simple permission
@@ -509,11 +507,10 @@ class NXCModule:
         parsed_dacl : a parsed DACL from parse_dacl()
         """
         context.log.debug("Printing parsed DACL")
-        i = 0
         # If a specific right or a specific GUID has been specified, only the ACE with this right will be printed
         # If an ACE type has been specified, only the ACE with this type will be specified
         # If a principal has been specified, only the ACE where he is the trustee will be printed
-        for parsed_ace in parsed_dacl:
+        for i, parsed_ace in enumerate(parsed_dacl):
             print_ace = True
             context.log.debug(f"{parsed_ace=}, {self.rights=}, {self.rights_guid=}, {self.ace_type=}, {self.principal_sid=}")
 
@@ -561,16 +558,15 @@ class NXCModule:
                 except Exception as e:
                     context.log.debug(f"Error filtering with {parsed_ace=} and {self.principal_sid=}, probably because of ACE type unsupported for parsing yet ({e})")
             if print_ace:
-                self.context.log.highlight("%-28s" % "ACE[%d] info" % i)
+                self.context.log.highlight(f"ACE[{i}] info")
                 self.print_parsed_ace(parsed_ace)
-            i += 1
 
     # Prints properly a parsed ACE
     #   - parsed_ace : a parsed ACE from parse_ace()
     def print_parsed_ace(self, parsed_ace):
         elements_name = list(parsed_ace.keys())
         for attribute in elements_name:
-            self.context.log.highlight("    %-26s: %s" % (attribute, parsed_ace[attribute]))
+            self.context.log.highlight(f"\t{attribute:<26}: {parsed_ace[attribute]}")
 
     # Retrieves the GUIDs for the specified rights
     def build_guids_for_rights(self):

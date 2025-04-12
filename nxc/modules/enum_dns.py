@@ -50,7 +50,7 @@ class NXCModule:
                     rname = text.split(" ")[0]
                     rtype = text.split(" ")[2]
                     rvalue = " ".join(text.split(" ")[3:])
-                    if domain_data.get(rtype, False):
+                    if domain_data.get(rtype):
                         domain_data[rtype].append(f"{rname}: {rvalue}")
                     else:
                         domain_data[rtype] = [f"{rname}: {rvalue}"]
