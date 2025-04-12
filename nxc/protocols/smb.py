@@ -1466,11 +1466,15 @@ class smb(connection):
 
         policy_handle = resp["PolicyHandle"]
 
-        resp = lsad.hLsarQueryInformationPolicy2(
-            dce,
-            policy_handle,
-            lsad.POLICY_INFORMATION_CLASS.PolicyAccountDomainInformation,
-        )
+        try:
+            resp = lsad.hLsarQueryInformationPolicy2(dce, policy_handle, lsad.POLICY_INFORMATION_CLASS.PolicyAccountDomainInformation)
+        except lsad.DCERPCException as e:
+            if e.error_string == "nca_s_op_rng_error":
+                self.logger.fail("RPC lookup failed: RPC method not implemented")
+            else:
+                self.logger.fail(f"Error querying policy information: {e}")
+            return entries
+
         domain_sid = resp["PolicyInformation"]["PolicyAccountDomainInfo"]["DomainSid"].formatCanonical()
 
         so_far = 0
