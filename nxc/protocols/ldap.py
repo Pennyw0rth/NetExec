@@ -1106,6 +1106,7 @@ class ldap(connection):
             attributes=[
                 "sAMAccountName",
                 "msDS-ManagedPassword",
+                "msDS-GroupMSAMembership",
             ],
             sizeLimit=0,
         )
@@ -1114,7 +1115,30 @@ class ldap(connection):
             self.logger.debug(f"Total of records returned {len(gmsa_accounts_parsed):d}")
 
             for acc in gmsa_accounts_parsed:
-                passwd = ""
+                # PrincipalAllowedToRetrieveGMSAPassword
+                principal_with_read = []
+                if "msDS-GroupMSAMembership" in acc:
+                    msDS_GroupMSAMembership = acc["msDS-GroupMSAMembership"]
+                    dacl = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(msDS_GroupMSAMembership))
+
+                    # Get all SIDs that have the right to read the password
+                    sids = [ace["Ace"]["Sid"].formatCanonical() for ace in dacl["Dacl"]["Data"] if ace["AceType"] == 0x00]
+                    self.logger.debug(f"msDS-GroupMSAMembership: {sids}")
+                    search_filter = "(|" + "".join([f"(objectSid={sid})" for sid in sids]) + ")"
+                    resp = self.ldap_connection.search(
+                        searchBase=self.baseDN,
+                        searchFilter=search_filter,
+                        attributes=["sAMAccountName"],
+                        sizeLimit=0,
+                    )
+                    resp_parsed = parse_result_attributes(resp)
+                    if len(resp_parsed) > 1:
+                        principal_with_read = [f"{item['sAMAccountName']}" for item in resp_parsed]
+                    elif len(resp_parsed) == 1:
+                        principal_with_read = resp_parsed[0]["sAMAccountName"]
+
+                # Get the password
+                passwd = "<no read permissions>"
                 if "msDS-ManagedPassword" in acc:
                     blob = MSDS_MANAGEDPASSWORD_BLOB()
                     blob.fromString(acc["msDS-ManagedPassword"])
@@ -1122,7 +1146,7 @@ class ldap(connection):
                     ntlm_hash = MD4.new()
                     ntlm_hash.update(currentPassword)
                     passwd = hexlify(ntlm_hash.digest()).decode("utf-8")
-                self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} NTLM: {passwd}")
+                self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} NTLM: {passwd:<36} PrincipalsAllowedToReadPassword: {principal_with_read}")
         return True
 
     def decipher_gmsa_name(self, domain_name=None, account_name=None):
