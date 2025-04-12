@@ -1114,6 +1114,7 @@ class ldap(connection):
             self.logger.debug(f"Total of records returned {len(gmsa_accounts_parsed):d}")
 
             for acc in gmsa_accounts_parsed:
+                passwd = ""
                 if "msDS-ManagedPassword" in acc:
                     blob = MSDS_MANAGEDPASSWORD_BLOB()
                     blob.fromString(acc["msDS-ManagedPassword"])
@@ -1121,7 +1122,7 @@ class ldap(connection):
                     ntlm_hash = MD4.new()
                     ntlm_hash.update(currentPassword)
                     passwd = hexlify(ntlm_hash.digest()).decode("utf-8")
-                    self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} NTLM: {passwd}")
+                self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} NTLM: {passwd}")
         return True
 
     def decipher_gmsa_name(self, domain_name=None, account_name=None):
