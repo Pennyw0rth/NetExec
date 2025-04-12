@@ -1095,7 +1095,7 @@ class ldap(connection):
 
     def admin_count(self):
         # Building the search filter
-        resp = self.search(searchFilter="(adminCount=1)", attributes=["sAMAccountName"], sizeLimit=0)
+        resp = self.search(searchFilter="(&(adminCount=1)(objectClass=user))", attributes=["sAMAccountName"], sizeLimit=0)
         resp_parsed = parse_result_attributes(resp)
         self.logger.debug(f"Total of records returned {len(resp_parsed):d}")
 
