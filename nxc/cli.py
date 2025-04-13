@@ -124,7 +124,7 @@ def gen_cli_args():
     except Exception as e:
         nxc_logger.exception(f"Error loading proto_args from proto_args.py file in protocol folder: {protocol} - {e}")
 
-    argcomplete.autocomplete(parser)
+    argcomplete.autocomplete(parser, always_complete_options=False)
     args = parser.parse_args()
 
     if len(sys.argv) == 1:
