@@ -578,25 +578,6 @@ class ldap(connection):
     def get_sid(self):
         self.logger.highlight(f"Domain SID {self.sid_domain}")
 
-    def sid_to_str(self, sid):
-        try:
-            # revision
-            revision = int(sid[0])
-            # count of sub authorities
-            sub_authorities = int(sid[1])
-            # big endian
-            identifier_authority = int.from_bytes(sid[2:8], byteorder="big")
-            # If true then it is represented in hex
-            if identifier_authority >= 2**32:
-                identifier_authority = hex(identifier_authority)
-
-            # loop over the count of small endians
-            sub_authority = "-" + "-".join([str(int.from_bytes(sid[8 + (i * 4): 12 + (i * 4)], byteorder="little")) for i in range(sub_authorities)])
-            return "S-" + str(revision) + "-" + str(identifier_authority) + sub_authority
-        except Exception:
-            pass
-        return sid
-
     def check_if_admin(self):
         # 1. get SID of the domaine
         search_filter = "(userAccountControl:1.2.840.113556.1.4.803:=8192)"
@@ -606,8 +587,7 @@ class ldap(connection):
         answers = []
         if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "") and self.username != "":
             for item in resp_parsed:
-                sid = self.sid_to_str(item["objectSid"])
-                self.sid_domain = "-".join(sid.split("-")[:-1])
+                self.sid_domain = "-".join(item["objectSid"].split("-")[:-1])
 
             # 2. get all group cn name
             search_filter = f"(|(objectSid={self.sid_domain}-512)(objectSid={self.sid_domain}-544)(objectSid={self.sid_domain}-519)(objectSid=S-1-5-32-549)(objectSid=S-1-5-32-551))"
