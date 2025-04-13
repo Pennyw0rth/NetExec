@@ -24,7 +24,7 @@ def gen_cli_args():
         VERSION = importlib.metadata.version("netexec")
         COMMIT = ""
         DISTANCE = ""
-    CODENAME = "NeedForSpeed"
+    CODENAME = "SmoothOperator"
     nxc_logger.debug(f"NXC VERSION: {VERSION} - {CODENAME} - {COMMIT} - {DISTANCE}")
     
     generic_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
