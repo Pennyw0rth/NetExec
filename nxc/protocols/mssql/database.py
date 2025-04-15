@@ -17,6 +17,7 @@ class database(BaseDB):
         self.HostsTable = None
         self.UsersTable = None
         self.AdminRelationsTable = None
+        self.LoggedinRelationsTable = None
 
         super().__init__(db_engine)
 
@@ -53,6 +54,15 @@ class database(BaseDB):
             FOREIGN KEY(pillaged_from_hostid) REFERENCES hosts(id)
             )"""
         )
+        db_conn.execute(
+            """CREATE TABLE "loggedin_relations" (
+            "id" integer PRIMARY KEY,
+            "userid" integer,
+            "hostid" integer,
+            FOREIGN KEY(userid) REFERENCES users(id),
+            FOREIGN KEY(hostid) REFERENCES hosts(id)
+        )"""
+        )
 
     def reflect_tables(self):
         with self.db_engine.connect():
@@ -60,6 +70,7 @@ class database(BaseDB):
                 self.HostsTable = Table("hosts", self.metadata, autoload_with=self.db_engine)
                 self.UsersTable = Table("users", self.metadata, autoload_with=self.db_engine)
                 self.AdminRelationsTable = Table("admin_relations", self.metadata, autoload_with=self.db_engine)
+                self.LoggedinRelationsTable = Table("loggedin_relations", self.metadata, autoload_with=self.db_engine)
             except (NoInspectionAvailable, NoSuchTableError):
                 print(
                     f"""
@@ -248,6 +259,25 @@ class database(BaseDB):
             q = select(self.UsersTable)
 
         return self.db_execute(q).all()
+    
+    def get_credential(self, cred_type, domain, username, password):
+        q = select(self.UsersTable).filter(
+            self.UsersTable.c.domain == domain,
+            self.UsersTable.c.username == username,
+            self.UsersTable.c.password == password,
+            self.UsersTable.c.credtype == cred_type,
+        )
+        results = self.db_execute(q).first()
+        return results.id
+
+    def is_credential_local(self, credential_id):
+        q = select(self.UsersTable.c.domain).filter(self.UsersTable.c.id == credential_id)
+        user_domain = self.db_execute(q).all()
+
+        if user_domain:
+            q = select(self.HostsTable).filter(func.lower(self.HostsTable.c.id) == func.lower(user_domain))
+            results = self.db_execute(q).all()
+            return len(results) > 0
 
     def is_host_valid(self, host_id):
         """Check if this host ID is valid."""
@@ -274,4 +304,33 @@ class database(BaseDB):
         elif filter_term and filter_term != "":
             q = format_host_query(q, filter_term, self.HostsTable)
 
+        return self.db_execute(q).all()
+    
+    def add_loggedin_relation(self, user_id, host_id):
+        relation_query = select(self.LoggedinRelationsTable).filter(
+            self.LoggedinRelationsTable.c.userid == user_id,
+            self.LoggedinRelationsTable.c.hostid == host_id,
+        )
+        results = self.db_execute(relation_query).all()
+        # only add one if one doesn't already exist
+        if not results:
+            relation = {"userid": user_id, "hostid": host_id}
+            try:
+                nxc_logger.debug(f"Inserting loggedin_relations: {relation}")
+                # TODO: find a way to abstract this away to a single Upsert call
+                q = Insert(self.LoggedinRelationsTable)  # .returning(self.LoggedinRelationsTable.c.id)
+
+                self.db_execute(q, [relation])  # .scalar()
+                inserted_id_results = self.get_loggedin_relations(user_id, host_id)
+                nxc_logger.debug(f"Checking if relation was added: {inserted_id_results}")
+                return inserted_id_results[0].id
+            except Exception as e:
+                nxc_logger.debug(f"Error inserting LoggedinRelation: {e}")
+
+    def get_loggedin_relations(self, user_id=None, host_id=None):
+        q = select(self.LoggedinRelationsTable)  # .returning(self.LoggedinRelationsTable.c.id)
+        if user_id:
+            q = q.filter(self.LoggedinRelationsTable.c.userid == user_id)
+        if host_id:
+            q = q.filter(self.LoggedinRelationsTable.c.hostid == host_id)
         return self.db_execute(q).all()
