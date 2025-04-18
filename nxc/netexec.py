@@ -9,7 +9,7 @@ from nxc.cli import gen_cli_args
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.loaders.moduleloader import ModuleLoader
 from nxc.first_run import first_run_setup
-from nxc.paths import NXC_PATH
+from nxc.paths import NXC_PATH, WORKSPACE_DIR
 from nxc.console import nxc_console
 from nxc.logger import nxc_logger
 from nxc.config import nxc_config, nxc_workspace, config_log, ignore_opsec
@@ -17,7 +17,6 @@ from nxc.database import create_db_engine
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
 from nxc.helpers import powershell
-from nxc.paths import WORKSPACE_DIR
 import shutil
 import os
 from os.path import exists
