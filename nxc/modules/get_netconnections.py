@@ -2,6 +2,7 @@ from datetime import datetime
 from nxc.helpers.logger import write_log
 import json
 
+from nxc.paths import NXC_PATH
 
 class NXCModule:
     """
@@ -31,4 +32,4 @@ class NXCModule:
 
         log_name = f"network-connections-{connection.host}-{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log"
         write_log(json.dumps(data), log_name)
-        context.log.display(f"Saved raw output to ~/.nxc/logs/{log_name}")
+        context.log.display(f"Saved raw output to {NXC_PATH}/logs/{log_name}")
