@@ -2,7 +2,6 @@
 # Credit to https://github.com/dirkjanm/adidnsdump @_dirkjan
 # module by @mpgn_x64
 import re
-from os.path import expanduser
 import codecs
 import socket
 from datetime import datetime
@@ -14,6 +13,9 @@ from impacket.ldap import ldap
 from impacket.structure import Structure
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from ldap3 import LEVEL
+from os.path import expanduser
+
+from nxc.paths import NXC_PATH
 
 
 def get_dns_zones(connection, root, debug=False):
@@ -181,7 +183,7 @@ class NXCModule:
                             )
 
         context.log.highlight(f"Found {len(outdata)} records")
-        path = expanduser(f"~/.nxc/logs/{connection.domain}_network_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")
+        path = expanduser(f"{NXC_PATH}/logs/{connection.domain}_network_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")
         with codecs.open(path, "w", "utf-8") as outfile:
             for row in outdata:
                 if self.showhosts:
