@@ -141,7 +141,7 @@ class rdp(connection):
                         self.hostname = info_domain["computername"]
                         self.server_os = info_domain["os_guess"] + " Build " + str(info_domain["os_build"])
                         self.logger.extra["hostname"] = self.hostname
-                        self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
+                        self.output_filename = os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
                     break
 
         if self.args.domain:
@@ -368,7 +368,7 @@ class rdp(connection):
         await asyncio.sleep(5)
         if self.conn is not None and self.conn.desktop_buffer_has_data is True:
             buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-            filename = os.path.expanduser(f"~/.nxc/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
+            filename = os.path.expanduser(f"{NXC_PATH}/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
             buffer.save(filename, "png")
             self.logger.highlight(f"Screenshot saved {filename}")
 
