@@ -3,10 +3,10 @@ import os
 from time import sleep
 from nxc.connection import dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string
+from nxc.paths import TMP_PATH
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.dcom import wmi
 from impacket.dcerpc.v5.dtypes import NULL
-
 
 class WMIEXEC:
     def __init__(self, target, share_name, username, password, domain, smbconnection, doKerberos=False, aesKey=None, kdcHost=None, remoteHost=None, hashes=None, share=None, logger=None, timeout=None, tries=None):
@@ -129,7 +129,7 @@ class WMIEXEC:
     def get_output_fileless(self):
         while True:
             try:
-                with open(os.path.join("/tmp", "nxc_hosted", self.__output)) as output:
+                with open(os.path.join(TMP_PATH, self.__output)) as output:
                     self.output_callback(output.read())
                 break
             except OSError:
