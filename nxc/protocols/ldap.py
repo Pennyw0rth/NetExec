@@ -43,6 +43,8 @@ from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.ntlm_parser import parse_challenge
 
+from nxc.paths import NXC_PATH
+
 ldap_error_status = {
     "1": "STATUS_NOT_SUPPORTED",
     "533": "STATUS_ACCOUNT_DISABLED",
@@ -256,7 +258,7 @@ class ldap(connection):
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
-        self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}".replace(":", "-"))
+        self.output_filename = os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}".replace(":", "-"))
 
         try:
             self.db.add_host(
