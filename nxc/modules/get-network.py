@@ -14,7 +14,6 @@ from impacket.structure import Structure
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from ldap3 import LEVEL
 from os.path import expanduser
-
 from nxc.paths import NXC_PATH
 
 

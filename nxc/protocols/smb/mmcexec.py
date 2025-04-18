@@ -29,7 +29,6 @@ from os.path import join as path_join
 from time import sleep
 from nxc.connection import dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string
-
 from nxc.paths import TMP_PATH
 
 from impacket.dcerpc.v5.dcom.oaut import (

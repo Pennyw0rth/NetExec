@@ -11,6 +11,7 @@ from nxc.helpers.bloodhound import add_user_bh
 from nxc.logger import NXCAdapter
 from nxc.config import host_info_colors
 from nxc.config import process_secret
+from nxc.paths import NXC_PATH
 
 from aardwolf.connection import RDPConnection
 from aardwolf.commons.queuedata.constants import VIDEO_FORMAT
@@ -22,7 +23,6 @@ from asyauth.common.credentials.kerberos import KerberosCredential
 from asyauth.common.constants import asyauthSecret
 from asysocks.unicomm.common.target import UniTarget, UniProto
 
-from nxc.paths import NXC_PATH
 
 
 class rdp(connection):

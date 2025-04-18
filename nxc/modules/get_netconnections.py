@@ -1,8 +1,7 @@
 from datetime import datetime
 from nxc.helpers.logger import write_log
-import json
-
 from nxc.paths import NXC_PATH
+import json
 
 class NXCModule:
     """

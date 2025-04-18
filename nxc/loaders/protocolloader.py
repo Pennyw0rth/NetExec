@@ -4,9 +4,8 @@ from os import listdir
 from os.path import join as path_join
 from os.path import dirname, exists
 
-from nxc.paths import NXC_PATH
-
 import nxc
+from nxc.paths import NXC_PATH
 
 
 class ProtocolLoader:

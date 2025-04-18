@@ -18,7 +18,6 @@ from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.misc import gen_random_string
 from nxc.helpers.ntlm_parser import parse_challenge
 from nxc.logger import NXCAdapter
-
 from nxc.paths import NXC_PATH
 
 urllib3.disable_warnings()

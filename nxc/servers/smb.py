@@ -3,9 +3,7 @@ from threading import enumerate
 from sys import exit
 from impacket import smbserver
 from nxc.logger import nxc_logger
-
 from nxc.paths import TMP_PATH
-
 
 class NXCSMBServer(threading.Thread):
     def __init__(

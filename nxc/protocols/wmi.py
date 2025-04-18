@@ -8,7 +8,6 @@ from nxc.config import process_secret
 from nxc.connection import connection, dcom_FirewallChecker, requires_admin
 from nxc.logger import NXCAdapter
 from nxc.protocols.wmi import wmiexec, wmiexec_event
-
 from nxc.paths import NXC_PATH
 
 from impacket import ntlm

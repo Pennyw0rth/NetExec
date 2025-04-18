@@ -42,7 +42,6 @@ from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.ntlm_parser import parse_challenge
-
 from nxc.paths import NXC_PATH
 
 ldap_error_status = {

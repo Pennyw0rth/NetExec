@@ -6,7 +6,6 @@ from base64 import b64encode
 from io import BytesIO, StringIO
 from xml.etree import ElementTree
 from nxc.helpers.powershell import get_ps_script
-
 from nxc.paths import TMP_PATH
 
 

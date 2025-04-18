@@ -1,6 +1,5 @@
 from datetime import datetime
 from nxc.helpers.logger import write_log
-
 from nxc.paths import NXC_PATH
 
 class NXCModule:

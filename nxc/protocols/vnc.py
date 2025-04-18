@@ -7,13 +7,12 @@ from aardwolf.commons.target import RDPTarget
 from nxc.connection import connection
 from nxc.helpers.logger import highlight
 from nxc.logger import NXCAdapter
+from nxc.paths import NXC_PATH
 from aardwolf.vncconnection import VNCConnection
 from aardwolf.commons.iosettings import RDPIOSettings
 from aardwolf.commons.queuedata.constants import VIDEO_FORMAT
 from asyauth.common.credentials import UniCredential
 from asyauth.common.constants import asyauthSecret, asyauthProtocol
-
-from nxc.paths import NXC_PATH
 
 class vnc(connection):
     def __init__(self, args, db, host):

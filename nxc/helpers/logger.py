@@ -1,6 +1,5 @@
 import os
 from termcolor import colored
-
 from nxc.paths import NXC_PATH
 
 
