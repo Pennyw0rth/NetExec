@@ -1,7 +1,6 @@
-import os
 from os.path import join as path_join
 import configparser
-from nxc.paths import NXC_PATH, DATA_PATH, CONFIG_PATH
+from nxc.paths import DATA_PATH, CONFIG_PATH
 from nxc.first_run import first_run_setup
 from nxc.logger import nxc_logger
 from ast import literal_eval

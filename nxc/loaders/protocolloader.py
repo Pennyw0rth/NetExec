@@ -2,7 +2,7 @@ from types import ModuleType
 from importlib.machinery import SourceFileLoader
 from os import listdir
 from os.path import join as path_join
-from os.path import dirname, exists, expanduser
+from os.path import dirname, exists
 
 from nxc.paths import NXC_PATH
 
