@@ -127,8 +127,9 @@ def main():
 
     # The following is a quick hack for the powershell obfuscation functionality, I know this is yucky
     if hasattr(args, "clear_obfscripts") and args.clear_obfscripts:
-        shutil.rmtree(os.path.expanduser("~/.nxc/obfuscated_scripts/"))
-        os.mkdir(os.path.expanduser("~/.nxc/obfuscated_scripts/"))
+        obfuscated_dir = os.path.join(NXC_PATH, "obfuscated_scripts")
+        shutil.rmtree(obfuscated_dir)
+        os.mkdir(obfuscated_dir)
         nxc_logger.success("Cleared cached obfuscated PowerShell scripts")
 
     if hasattr(args, "obfs") and args.obfs:
