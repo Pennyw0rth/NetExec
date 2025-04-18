@@ -19,6 +19,7 @@ from nxc.helpers.misc import gen_random_string
 from nxc.helpers.ntlm_parser import parse_challenge
 from nxc.logger import NXCAdapter
 
+from nxc.paths import NXC_PATH
 
 urllib3.disable_warnings()
 
@@ -65,7 +66,7 @@ class winrm(connection):
         if self.args.local_auth:
             self.domain = self.hostname
 
-        self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
+        self.output_filename = os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
     def print_host_info(self):
         self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
