@@ -10,7 +10,7 @@ class Context:
             setattr(self, key, value)
 
         self.db = db
-        self.log_folder_path = os.path.join(os.path.expanduser(NXC_PATH), "logs")
+        self.log_folder_path = os.path.join(NXC_PATH, "logs")
         self.localip = None
 
         self.conf = configparser.ConfigParser()
