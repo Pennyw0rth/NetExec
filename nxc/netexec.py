@@ -17,6 +17,7 @@ from nxc.database import create_db_engine
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
 from nxc.helpers import powershell
+from nxc.paths import WORKSPACE_DIR
 import shutil
 import os
 from os.path import exists
@@ -147,7 +148,7 @@ def main():
     protocol_db_object = p_loader.load_protocol(protocol_db_path).database
     nxc_logger.debug(f"Protocol DB Object: {protocol_db_object}")
 
-    db_path = path_join(NXC_PATH, "workspaces", nxc_workspace, f"{args.protocol}.db")
+    db_path = path_join(WORKSPACE_DIR, nxc_workspace, f"{args.protocol}.db")
     nxc_logger.debug(f"DB Path: {db_path}")
 
     db_engine = create_db_engine(db_path)
