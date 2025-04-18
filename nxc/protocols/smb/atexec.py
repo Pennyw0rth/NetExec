@@ -6,6 +6,8 @@ from nxc.helpers.misc import gen_random_string
 from time import sleep
 from datetime import datetime, timedelta
 
+from nxc.paths import TMP_PATH
+
 
 class TSCH_EXEC:
     def __init__(self, target, share_name, username, password, domain, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
@@ -167,7 +169,7 @@ class TSCH_EXEC:
             if fileless:
                 while True:
                     try:
-                        with open(os.path.join("/tmp", "nxc_hosted", self.__output_filename)) as output:
+                        with open(os.path.join(TMP_PATH, self.__output_filename)) as output:
                             self.output_callback(output.read())
                         break
                     except OSError:
