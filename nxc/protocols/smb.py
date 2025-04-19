@@ -2,7 +2,6 @@ import ntpath
 import binascii
 import os
 import re
-from io import StringIO
 from Cryptodome.Hash import MD4
 
 from impacket.smbconnection import SMBConnection, SessionError
@@ -26,6 +25,7 @@ from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.dcerpc.v5.epm import MSRPC_UUID_PORTMAP
 from impacket.dcerpc.v5.samr import SID_NAME_USE
 from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
+from impacket.krb5.ccache import CCache
 from impacket.krb5.kerberosv5 import SessionKeyDecryptionError
 from impacket.krb5.types import KerberosException, Principal
 from impacket.krb5 import constants
@@ -39,6 +39,7 @@ from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
+from nxc.paths import NXC_PATH
 from nxc.protocols.smb.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection
 from nxc.protocols.smb.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
 from nxc.protocols.smb.kerberos import kerberos_login_with_S4U
@@ -159,6 +160,7 @@ class smb(connection):
         self.nthash = ""
         self.remote_ops = None
         self.bootkey = None
+        self.output_file_template = None
         self.output_filename = None
         self.smbv1 = None   # Check if SMBv1 is supported
         self.smbv3 = None   # Check if SMBv3 is supported
@@ -245,7 +247,12 @@ class smb(connection):
                     self.hostname = self.host
                     self.targetDomain = self.host
 
-        self.domain = self.targetDomain if self.args.domain is None else self.args.domain
+        if self.args.domain:
+            self.domain = self.args.domain
+        elif self.args.use_kcache:  # Fixing domain trust, just pull the auth domain out of the ticket
+            self.domain = CCache.parseFile()[0]
+        else:
+            self.domain = self.targetDomain
 
         if self.args.local_auth:
             self.domain = self.hostname
@@ -280,7 +287,17 @@ class smb(connection):
             self.logger.debug(e)
 
         self.os_arch = self.get_os_arch()
-        self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
+        self.output_file_template = os.path.expanduser(f"{NXC_PATH}/logs/{{output_folder}}/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
+
+        try:
+            # DCs seem to want us to logoff first, windows workstations sometimes reset the connection
+            self.conn.logoff()
+        except Exception as e:
+            self.logger.debug(f"Error logging off system: {e}")
+
+        # Check smbv1
+        if not self.args.no_smbv1:
+            self.smbv1 = self.create_smbv1_conn(check=True)
 
         try:
             self.db.add_host(
@@ -293,16 +310,6 @@ class smb(connection):
             )
         except Exception as e:
             self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
-
-        try:
-            # DCs seem to want us to logoff first, windows workstations sometimes reset the connection
-            self.conn.logoff()
-        except Exception as e:
-            self.logger.debug(f"Error logging off system: {e}")
-
-        # Check smbv1
-        if not self.args.no_smbv1:
-            self.smbv1 = self.create_smbv1_conn(check=True)
 
         # DCOM connection with kerberos needed
         self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.targetDomain}"
@@ -821,9 +828,8 @@ class smb(connection):
             if (self.args.execute or self.args.ps_execute):
                 self.logger.success(f"Executed command via {current_method}")
                 if output:
-                    output_lines = StringIO(output).readlines()
-                    for line in output_lines:
-                        self.logger.highlight(line.strip())
+                    for line in output.split("\n"):
+                        self.logger.highlight(line)
             return output
         else:
             self.logger.fail(f"Execute command failed with {current_method}")
@@ -1291,9 +1297,12 @@ class smb(connection):
         return
 
     def users(self):
-        if len(self.args.users) > 0:
+        if self.args.users:
             self.logger.debug(f"Dumping users: {', '.join(self.args.users)}")
-        return UserSamrDump(self).dump(self.args.users)
+        return UserSamrDump(self).dump(requested_users=self.args.users, dump_path=self.args.users_export)
+
+    def users_export(self):
+        self.users()
 
     def computers(self):
         self.logger.fail("[REMOVED] Arg moved to the ldap protocol")
@@ -1460,11 +1469,15 @@ class smb(connection):
 
         policy_handle = resp["PolicyHandle"]
 
-        resp = lsad.hLsarQueryInformationPolicy2(
-            dce,
-            policy_handle,
-            lsad.POLICY_INFORMATION_CLASS.PolicyAccountDomainInformation,
-        )
+        try:
+            resp = lsad.hLsarQueryInformationPolicy2(dce, policy_handle, lsad.POLICY_INFORMATION_CLASS.PolicyAccountDomainInformation)
+        except lsad.DCERPCException as e:
+            if e.error_string == "nca_s_op_rng_error":
+                self.logger.fail("RPC lookup failed: RPC method not implemented")
+            else:
+                self.logger.fail(f"Error querying policy information: {e}")
+            return entries
+
         domain_sid = resp["PolicyInformation"]["PolicyAccountDomainInfo"]["DomainSid"].formatCanonical()
 
         so_far = 0
@@ -1586,6 +1599,7 @@ class smb(connection):
                     )
 
                 self.logger.display("Dumping SAM hashes")
+                self.output_filename = self.output_file_template.format(output_folder="sam")
                 SAM.dump()
                 SAM.export(self.output_filename)
                 self.logger.success(f"Added {highlight(add_sam_hash.sam_hashes)} SAM hashes to the database")
@@ -1698,6 +1712,8 @@ class smb(connection):
             use_kcache=self.use_kcache,
         )
 
+        self.output_file = open(self.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # noqa: SIM115
+
         conn = upgrade_to_dploot_connection(connection=self.conn, target=target)
         if conn is None:
             self.logger.debug("Could not upgrade connection")
@@ -1714,7 +1730,10 @@ class smb(connection):
         # Collect User and Machine Credentials Manager secrets
         def credential_callback(credential):
             tag = "CREDENTIAL"
-            self.logger.highlight(f"[{credential.winuser}][{tag}] {credential.target} - {credential.username}:{credential.password}")
+            line = f"[{credential.winuser}][{tag}] {credential.target} - {credential.username}:{credential.password}"
+            self.logger.highlight(line)
+            if self.output_file:
+                self.output_file.write(line + "\n")
             self.db.add_dpapi_secrets(
                 target.address,
                 tag,
@@ -1739,7 +1758,10 @@ class smb(connection):
         def browser_callback(secret):
             if isinstance(secret, LoginData):
                 secret_url = secret.url + " -" if secret.url != "" else "-"
-                self.logger.highlight(f"[{secret.winuser}][{secret.browser.upper()}] {secret_url} {secret.username}:{secret.password}")
+                line = f"[{secret.winuser}][{secret.browser.upper()}] {secret_url} {secret.username}:{secret.password}"
+                self.logger.highlight(line)
+                if self.output_file:
+                    self.output_file.write(line + "\n")
                 self.db.add_dpapi_secrets(
                     target.address,
                     secret.browser.upper(),
@@ -1749,7 +1771,10 @@ class smb(connection):
                     secret.url,
                 )
             elif isinstance(secret, GoogleRefreshToken):
-                self.logger.highlight(f"[{secret.winuser}][{secret.browser.upper()}] Google Refresh Token: {secret.service}:{secret.token}")
+                line = f"[{secret.winuser}][{secret.browser.upper()}] Google Refresh Token: {secret.service}:{secret.token}"
+                self.logger.highlight(line)
+                if self.output_file:
+                    self.output_file.write(line + "\n")
                 self.db.add_dpapi_secrets(
                     target.address,
                     secret.browser.upper(),
@@ -1759,7 +1784,10 @@ class smb(connection):
                     "Google Refresh Token",
                 )
             elif isinstance(secret, Cookie):
-                self.logger.highlight(f"[{secret.winuser}][{secret.browser.upper()}] {secret.host}{secret.path} - {secret.cookie_name}:{secret.cookie_value}")
+                line = f"[{secret.winuser}][{secret.browser.upper()}] {secret.host}{secret.path} - {secret.cookie_name}:{secret.cookie_value}"
+                self.logger.highlight(line)
+                if self.output_file:
+                    self.output_file.write(line + "\n")
 
         try:
             browser_triage = BrowserTriage(target=target, conn=conn, masterkeys=masterkeys, per_secret_callback=browser_callback)
@@ -1771,7 +1799,10 @@ class smb(connection):
             tag = "IEX"
             if secret.type == "Internet Explorer":
                 resource = secret.resource + " -" if secret.resource != "" else "-"
-                self.logger.highlight(f"[{secret.winuser}][{tag}] {resource} - {secret.username}:{secret.password}")
+                line = f"[{secret.winuser}][{tag}] {resource} - {secret.username}:{secret.password}"
+                self.logger.highlight(line)
+                if self.output_file:
+                    self.output_file.write(line + "\n")
                 self.db.add_dpapi_secrets(
                     target.address,
                     tag,
@@ -1780,6 +1811,7 @@ class smb(connection):
                     secret.password,
                     secret.resource,
                 )
+
         try:
             # Collect User Internet Explorer stored secrets
             vaults_triage = VaultsTriage(target=target, conn=conn, masterkeys=masterkeys, per_vault_callback=vault_callback)
@@ -1791,7 +1823,10 @@ class smb(connection):
             tag = "FIREFOX"
             if isinstance(secret, FirefoxData):
                 url = secret.url + " -" if secret.url != "" else "-"
-                self.logger.highlight(f"[{secret.winuser}][{tag}] {url} {secret.username}:{secret.password}")
+                line = f"[{secret.winuser}][{tag}] {url} {secret.username}:{secret.password}"
+                self.logger.highlight(line)
+                if self.output_file:
+                    self.output_file.write(line + "\n")
                 self.db.add_dpapi_secrets(
                     target.address,
                     tag,
@@ -1801,7 +1836,10 @@ class smb(connection):
                     secret.url,
                 )
             elif isinstance(secret, FirefoxCookie):
-                self.logger.highlight(f"[{secret.winuser}][{tag}] {secret.host}{secret.path} {secret.cookie_name}:{secret.cookie_value}")
+                line = f"[{secret.winuser}][{tag}] {secret.host}{secret.path} {secret.cookie_name}:{secret.cookie_value}"
+                self.logger.highlight(line)
+                if self.output_file:
+                    self.output_file.write(line + "\n")
 
         try:
             # Collect Firefox stored secrets
@@ -1809,6 +1847,9 @@ class smb(connection):
             firefox_triage.run(gather_cookies=dump_cookies)
         except Exception as e:
             self.logger.debug(f"Error while looting firefox: {e}")
+
+        if self.output_file:
+            self.output_file.close()
 
     @requires_admin
     def lsa(self):
@@ -1848,6 +1889,7 @@ class smb(connection):
                         perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
                     )
                 self.logger.success("Dumping LSA secrets")
+                self.output_filename = self.output_file_template.format(output_folder="lsa")
                 LSA.dumpCachedHashes()
                 LSA.exportCached(self.output_filename)
                 LSA.dumpSecrets()
@@ -1915,6 +1957,8 @@ class smb(connection):
                 # of enough privileges to access DRSUAPI.
                 #    if resumeFile is not None:
                 self.logger.fail(e)
+
+        self.output_filename = self.output_file_template.format(output_folder="ntds")
 
         NTDS = NTDSHashes(
             NTDSFileName,
