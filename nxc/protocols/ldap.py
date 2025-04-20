@@ -249,6 +249,8 @@ class ldap(connection):
         if ntlm_challenge:
             ntlm_info = parse_challenge(ntlm_challenge)
             self.server_os = ntlm_info["os_version"]
+        else :
+            self.no_ntlm = True
 
         # using kdcHost is buggy on impacket when using trust relation between ad so we kdcHost must stay to none if targetdomain is not equal to domain
         if not self.kdcHost and self.domain and self.domain == self.targetDomain:
@@ -273,7 +275,8 @@ class ldap(connection):
         self.logger.extra["protocol"] = "LDAP" if str(self.port) == "389" else "LDAPS"
         self.logger.extra["port"] = self.port
         self.logger.extra["hostname"] = self.hostname
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
+        ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) {ntlm}")
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.username = username
@@ -429,9 +432,9 @@ class ldap(connection):
             self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
             proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
             ldap_url = f"{proto}://{self.target}"
-            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3]")
+            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3] {'(SIMPLE Auth)' if self.no_ntlm else ''}")
             self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-            self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
+            self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice='simple' if self.no_ntlm else 'sasl')
             self.check_if_admin()
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
             self.db.add_credential("plaintext", domain, self.username, self.password)
@@ -452,9 +455,9 @@ class ldap(connection):
                     self.logger.extra["protocol"] = "LDAPS"
                     self.logger.extra["port"] = "636"
                     ldaps_url = f"ldaps://{self.target}"
-                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [4]")
+                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [4] {'(SIMPLE Auth)' if self.no_ntlm else ''}")
                     self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
-                    self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
+                    self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice='simple' if self.no_ntlm else 'sasl')
                     self.check_if_admin()
                     self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
                     self.db.add_credential("plaintext", domain, self.username, self.password)
