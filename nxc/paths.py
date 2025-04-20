@@ -2,7 +2,8 @@ import os
 import sys
 import nxc
 
-NXC_PATH = os.path.join(os.getenv('XDG_CONFIG_HOME', os.path.expanduser("~/")), "nxc")
+NXC_APP_NAME = "nxc"
+NXC_PATH = os.path.join(os.getenv('XDG_CONFIG_HOME', os.path.expanduser("~/")), NXC_APP_NAME)
 if os.name == "nt":
     TMP_PATH = os.getenv("LOCALAPPDATA") + "\\Temp\\nxc_hosted"
 elif hasattr(sys, "getandroidapilevel"):
@@ -15,6 +16,6 @@ CONFIG_PATH = os.path.join(NXC_PATH, "nxc.conf")
 WORKSPACE_DIR = os.path.join(NXC_PATH, "workspaces")
 
 if 'XDG_DATA_HOME' in os.environ:
-    DATA_PATH = os.path.join(os.getenv('XDG_DATA_HOME'), "nxc_data")
+    DATA_PATH = os.path.join(os.getenv('XDG_DATA_HOME'), NXC_APP_NAME)
 else:
     DATA_PATH = os.path.join(os.path.dirname(nxc.__file__), "data")
