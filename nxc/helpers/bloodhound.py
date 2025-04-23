@@ -14,9 +14,11 @@ def add_user_bh(user, domain, logger, config):
 
     Raises:
     ------
+        ApiException: If BloodHoundAPI is not available on the specified URI.
         AuthError: If the provided Neo4J credentials are not valid.
         ServiceUnavailable: If Neo4J is not available on the specified URI.
         Exception: If an unexpected error occurs with Neo4J.
+        
     """
     users_owned = []
     if isinstance(user, str):
@@ -24,7 +26,23 @@ def add_user_bh(user, domain, logger, config):
     else:
         users_owned = user
 
-    if config.get("BloodHound", "bh_enabled") != "False":
+    if config.get("BloodHoundAPI", "bh_enabled") != "False":
+        logger.debug(f"Add to bloodhound: {users_owned}")
+        from .bloodhoundAPI import BloodHoundAPI, ApiException
+
+        api = BloodHoundAPI(url=config.get("BloodHoundAPI", "url"), token_id=config.get("BloodHoundAPI", "token_id"), token_key=config.get("BloodHoundAPI", "token_key"), logger=logger)
+        try:
+            for user_info in users_owned:
+                # First,look for the domain in bloodhound
+                domains = api.domains()
+                logger.debug(f"Domains: {domains}")
+                if any(item.get("name") == user_info["domain"] for item in domains):
+                    _add_with_domain_api(user_info, user_info["domain"], api, logger)
+                else:
+                    _add_without_domain_api(user_info, api, logger)
+        except ApiException as e:
+            logger.fail(f"BloodHoundAPI error {e}.")
+    elif config.get("BloodHound", "bh_enabled") != "False":
         # we do a conditional import here to avoid loading these if BH isn't enabled
         from neo4j import GraphDatabase
         from neo4j.exceptions import AuthError, ServiceUnavailable
@@ -60,6 +78,8 @@ def add_user_bh(user, domain, logger, config):
             driver.close()
 
 
+
+
 def _add_with_domain(user_info, domain, tx, logger):
     if user_info["username"][-1] == "$":
         user_owned = f"{user_info['username'][:-1]}.{domain}"
@@ -69,15 +89,13 @@ def _add_with_domain(user_info, domain, tx, logger):
         account_type = "User"
 
     result = tx.run(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) RETURN c").data()
+
     if len(result) == 0:
         logger.fail("Account not found in the BloodHound database.")
         return
-    # add when system_tags is None or does not contains "owned"
-    system_tags = result[0]["c"].get("system_tags")
-    if system_tags is None or "owned" not in system_tags:
-        system_tags = ((system_tags or "").strip() + " owned").strip() 
-        logger.debug(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) SET c.system_tags='{system_tags}' RETURN c.name AS name")
-        result = tx.run(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) SET c.system_tags='{system_tags}' RETURN c.name AS name").data()[0]
+    if result[0]["c"].get("owned") in (False, None):
+        logger.debug(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) SET c.owned=True RETURN c.name AS name")
+        result = tx.run(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) SET c.owned=True RETURN c.name AS name").data()[0]
         logger.highlight(f"Node {result['name']} successfully set as owned in BloodHound")
 
 
@@ -90,15 +108,58 @@ def _add_without_domain(user_info, tx, logger):
         account_type = "User"
 
     result = tx.run(f"MATCH (c:{account_type}) WHERE c.name STARTS WITH '{user_owned}' RETURN c").data()
+
     if len(result) == 0:
         logger.fail("Account not found in the BloodHound database.")
         return
     elif len(result) >= 2:
         logger.fail(f"Multiple accounts found with the name '{user_info['username']}' in the BloodHound database. Please specify the FQDN ex:domain.local")
         return
-    system_tags = result[0]["c"].get("system_tags")
-    if system_tags is None or "owned" not in system_tags:
-        system_tags = ((system_tags or "").strip() + " owned").strip() 
-        logger.debug(f"MATCH (c:{account_type} {{name:'{result[0]['c']['name']}'}}) SET c.system_tags='{system_tags}' RETURN c.name AS name")
-        result = tx.run(f"MATCH (c:{account_type} {{name:'{result[0]['c']['name']}'}}) SET c.system_tags='{system_tags}' RETURN c.name AS name").data()[0]
+    elif result[0]["c"].get("owned") in (False, None):
+        logger.debug(f"MATCH (c:{account_type} {{name:'{result[0]['c']['name']}'}}) SET c.owned=True RETURN c.name AS name")
+        result = tx.run(f"MATCH (c:{account_type} {{name:'{result[0]['c']['name']}'}}) SET c.owned=True RETURN c.name AS name").data()[0]
         logger.highlight(f"Node {result['name']} successfully set as owned in BloodHound")
+
+def _add_with_domain_api(user_info, domain, api, logger):
+    if user_info["username"][-1] == "$":
+        search = f"{user_info['username'][:-1]}.{domain}"
+        logger.debug(f"Searching: {search}")
+        result = api.search(search)
+    else:
+        search = f"{user_info['username']}@{domain}"
+        logger.debug(f"Searching: {search}")
+        result = api.search(search)
+
+    if len(result) == 0:
+        logger.fail("Account not found in the BloodHoundAPI database. {}")
+        return
+    logger.debug(f"Result from API {result}")
+    logger.debug(f"Add to OWNED now: {search}")
+    members = api.get_member_asset_groups(1, result[0]["objectid"])
+    if len(members["members"]) < 1:
+        api.add_to_asset_group(1, result[0]["objectid"])
+        logger.highlight(f"Node {result[0]['name']} successfully set as owned in BloodHound")
+
+
+def _add_without_domain_api(user_info, api, logger):
+    if user_info["username"][-1] == "$":
+        search = f"{user_info['username'][:-1]}"
+        logger.debug(f"Searching: {search}")
+        result = api.search(search)
+    else:
+        search = f"{user_info['username']}"
+        logger.debug(f"Searching: {search}")
+        result = api.search(search)
+
+    if len(result) == 0:
+        logger.fail("Account not found in the BloodHoundAPI database. {}")
+        return
+    elif len(result) >= 2:
+        logger.fail(f"Multiple accounts found with the name '{user_info['username']}' in the BloodHound database. Please specify the FQDN ex:domain.local")
+        return
+    logger.debug(f"Result from API {result}")
+    logger.debug(f"Add to OWNED now: {search}")
+    members = api.get_member_asset_groups(1, result[0]["objectid"])
+    if len(members["members"]) < 1:
+        api.add_to_asset_group(1, result[0]["objectid"])
+        logger.highlight(f"Node {result[0]['name']} successfully set as owned in BloodHound")
