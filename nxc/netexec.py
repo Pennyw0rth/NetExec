@@ -1,3 +1,4 @@
+# PYTHON_ARGCOMPLETE_OK
 import sys
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import identify_target_file
