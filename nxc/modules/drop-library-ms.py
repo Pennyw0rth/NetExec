@@ -58,9 +58,10 @@ class NXCModule:
 
         if not self.cleanup:
             self.server = module_options["SERVER"]
-            with open(self.local_path, "w") as libms:
+            with open(self.local_path, "w", encoding="utf-8") as libms:
+                libms.truncate(0)
                 libms.write('<?xml version="1.0" encoding="UTF-8"?>')
-                libms.write('<libraryDescription xmlns="<http://schemas.microsoft.com/windows/2009/library>">')
+                libms.write('<libraryDescription xmlns="http://schemas.microsoft.com/windows/2009/library">')
                 libms.write("<searchConnectorDescriptionList>")
                 libms.write("<searchConnectorDescription>")
                 libms.write("<simpleLocation>")
