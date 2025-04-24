@@ -42,7 +42,7 @@ class NXCModule:
             context.log.debug(f"CLEANUP is set to {self.cleanup}")
 
         if "NAME" not in module_options:
-            self.lms_name = random.choice(string.ascii_letters, k=8)
+            self.lms_name = "".join(random.choices(string.ascii_letters, k=8))
             context.log.debug(f"NAME is randomly defined : {self.lms_name}")
 
         if "NAME" not in module_options and self.cleanup:
