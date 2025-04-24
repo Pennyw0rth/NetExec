@@ -6,12 +6,13 @@ from nxc.paths import TMP_PATH
 
 class NXCModule:
     """
-    Requested by the issue #512, heavily inspired by drop-sc, scuffy and slinky modules
+    Requested by the issue #652, heavily inspired by drop-sc, scuffy and slinky modules
     https://research.checkpoint.com/2025/cve-2025-24054-ntlm-exploit-in-the-wild/
+    https://cti.monster/blog/2025/03/18/CVE-2025-24071.html
     Module by: @XedSama
     """
     name = "drop-library-ms"
-    description = "Create and upload an arbitrary .library-ms, leveraging CVE-2025-24054 for dumping NTLMv2 hash" #TODO
+    description = "Create and upload an arbitrary .library-ms on writable shares, leveraging CVE-2025-24054 for looting NTLMv2 hash"
     supported_protocols = ["smb"]
     opsec_safe = False
     multiple_hosts = True
