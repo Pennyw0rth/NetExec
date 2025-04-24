@@ -37,14 +37,15 @@ class NXCModule:
         CLEANUP     Cleaning option (True or False)
         """
         self.cleanup = False
+        self.lms_name = "".join(random.choices(string.ascii_letters, k=8))
 
         if "CLEANUP" in module_options:
             self.cleanup = bool(module_options["CLEANUP"])
             context.log.debug(f"CLEANUP is set to {self.cleanup}")
 
-        if "NAME" not in module_options:
-            self.lms_name = "".join(random.choices(string.ascii_letters, k=8))
-            context.log.debug(f"NAME is randomly defined : {self.lms_name}")
+        if "NAME" in module_options:
+            self.lms_name = str(module_options["NAME"])
+            context.log.debug(f"NAME is set to {self.lms_name}")
 
         if "NAME" not in module_options and self.cleanup:
             context.log.fail("NAME option is required when CLEANUP option is set to True")
