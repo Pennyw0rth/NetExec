@@ -257,7 +257,7 @@ class database(BaseDB):
         # TODO: find a way to abstract this away to a single Upsert call
         q = Insert(self.HostsTable)  # .returning(self.HostsTable.c.id)
         update_columns = {col.name: col for col in q.excluded if col.name not in "id"}
-        q = q.on_conflict_do_update(index_elements=['ip'], set_=update_columns)
+        q = q.on_conflict_do_update(index_elements=["ip"], set_=update_columns)
 
         self.db_execute(q, hosts)  # .scalar()
         # we only return updated IDs for now - when RETURNING clause is allowed we can return inserted
