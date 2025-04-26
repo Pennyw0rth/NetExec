@@ -58,7 +58,7 @@ class winrm(connection):
         try:
             ntlm_info = parse_challenge(base64.b64decode(self.challenge_header.split(" ")[1].replace(",", "")))
         except Exception as e:
-            self.logger.debug(f"Error parsing NTLM challenge: {str(e)}")
+            self.logger.debug(f"Error parsing NTLM challenge: {e!s}")
             self.logger.debug(f"Raw challenge: {self.challenge_header.split(' ')[1].replace(',', '')[:20]}...")
             self.logger.error("Invalid NTLM challenge received from server. This may indicate NTLM is not supported and nxc winrm only support NTLM currently")
             self.no_ntlm = True
