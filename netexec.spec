@@ -33,7 +33,6 @@ a = Analysis(
         'impacket.ldap.ldap',
         'jwt',
         'nxc.connection',
-        'nxc.servers.smb',
         'nxc.protocols.smb.wmiexec',
         'nxc.protocols.smb.atexec',
         'nxc.protocols.smb.smbexec',
