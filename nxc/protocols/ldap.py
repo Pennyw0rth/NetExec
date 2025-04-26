@@ -1200,6 +1200,100 @@ class ldap(connection):
             self.logger.fail("No string provided :'(")
 
     def bloodhound(self):
+
+        def get_bloodhound_info():
+            """
+            Detect which BloodHound package is installed (regular or CE) and its version.
+            
+            Returns:
+                tuple: (package_name, version, is_ce)
+                    - package_name: Name of the installed package ('bloodhound', 'bloodhound-ce', or None)
+                    - version: Version string of the installed package (or None if not installed)
+                    - is_ce: Boolean indicating if it's the Community Edition
+            """
+            import importlib.metadata
+            import importlib.util
+            
+            # First check if any BloodHound package is available to import
+            if importlib.util.find_spec("bloodhound") is None:
+                return None, None, False
+            
+            # Try to get version info from both possible packages
+            version = None
+            package_name = None
+            is_ce = False
+            
+            # Check for bloodhound-ce first
+            try:
+                version = importlib.metadata.version("bloodhound-ce")
+                package_name = "bloodhound-ce"
+                is_ce = True
+            except importlib.metadata.PackageNotFoundError:
+                # Check for regular bloodhound
+                try:
+                    version = importlib.metadata.version("bloodhound")
+                    package_name = "bloodhound"
+                    
+                    # Even when installed as 'bloodhound', check if it's actually the CE version
+                    if version and ("ce" in version.lower() or "community" in version.lower()):
+                        is_ce = True
+                except importlib.metadata.PackageNotFoundError:
+                    # No bloodhound package found via metadata
+                    pass
+
+            # In case we can import it but metadata is not working, check the module itself
+            if not version:
+                try:
+                    import bloodhound
+                    version = getattr(bloodhound, "__version__", "unknown")
+                    package_name = "bloodhound"
+                    
+                    # Check if it's CE based on version string
+                    if "ce" in version.lower() or "community" in version.lower():
+                        is_ce = True
+                        package_name = "bloodhound-ce"
+                except ImportError:
+                    pass
+
+            return package_name, version, is_ce
+
+        import configparser
+        config = configparser.ConfigParser()
+        config.read(os.path.expanduser("~/.nxc/nxc.conf"))
+        # Check which version is desired
+        use_bhce = config.getboolean("BloodHound-CE", "bhce_enabled", fallback=False)
+        package_name, version, is_ce = get_bloodhound_info()
+
+        try:
+            if use_bhce and not is_ce:
+                self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
+                self.logger.fail("Your configuration has BloodHound-CE enabled, but the regular BloodHound package is installed. Modify your ~/.nxc/nxc.conf config file or follow the instructions:")
+                self.logger.fail("Please run the following commands to fix this:")
+                self.logger.fail("poetry remove bloodhound")
+                self.logger.fail("poetry add bloodhound-ce")   
+
+                # If using pipx
+                self.logger.fail("Or if you installed with pipx:")
+                self.logger.fail("pipx inject netexec bloodhound-ce --force")
+                self.logger.fail("pipx runpip netexec uninstall -y bloodhound")
+                return False
+
+            elif not use_bhce and is_ce:
+                self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
+                self.logger.fail("Your configuration has regular BloodHound enabled, but the BloodHound-CE package is installed.")
+                self.logger.fail("Please run the following commands to fix this:")
+                self.logger.fail("poetry remove bloodhound-ce")
+                self.logger.fail("poetry add bloodhound")
+
+                # If using pipx
+                self.logger.fail("Or if you installed with pipx:")
+                self.logger.fail("pipx inject netexec bloodhound --force")
+                self.logger.fail("pipx runpip netexec uninstall -y bloodhound-ce")
+                return False
+                
+        except importlib.metadata.PackageNotFoundError:
+            pass
+
         auth = ADAuthentication(
             username=self.username,
             password=self.password,
