@@ -1205,7 +1205,8 @@ class ldap(connection):
             """
             Detect which BloodHound package is installed (regular or CE) and its version.
             
-            Returns:
+            Returns
+            -------
                 tuple: (package_name, version, is_ce)
                     - package_name: Name of the installed package ('bloodhound', 'bloodhound-ce', or None)
                     - version: Version string of the installed package (or None if not installed)
@@ -1264,35 +1265,31 @@ class ldap(connection):
         use_bhce = config.getboolean("BloodHound-CE", "bhce_enabled", fallback=False)
         package_name, version, is_ce = get_bloodhound_info()
 
-        try:
-            if use_bhce and not is_ce:
-                self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
-                self.logger.fail("Your configuration has BloodHound-CE enabled, but the regular BloodHound package is installed. Modify your ~/.nxc/nxc.conf config file or follow the instructions:")
-                self.logger.fail("Please run the following commands to fix this:")
-                self.logger.fail("poetry remove bloodhound")
-                self.logger.fail("poetry add bloodhound-ce")   
+        if use_bhce and not is_ce:
+            self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
+            self.logger.fail("Your configuration has BloodHound-CE enabled, but the regular BloodHound package is installed. Modify your ~/.nxc/nxc.conf config file or follow the instructions:")
+            self.logger.fail("Please run the following commands to fix this:")
+            self.logger.fail("poetry remove bloodhound")
+            self.logger.fail("poetry add bloodhound-ce")   
 
-                # If using pipx
-                self.logger.fail("Or if you installed with pipx:")
-                self.logger.fail("pipx inject netexec bloodhound-ce --force")
-                self.logger.fail("pipx runpip netexec uninstall -y bloodhound")
-                return False
+            # If using pipx
+            self.logger.fail("Or if you installed with pipx:")
+            self.logger.fail("pipx inject netexec bloodhound-ce --force")
+            self.logger.fail("pipx runpip netexec uninstall -y bloodhound")
+            return False
 
-            elif not use_bhce and is_ce:
-                self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
-                self.logger.fail("Your configuration has regular BloodHound enabled, but the BloodHound-CE package is installed.")
-                self.logger.fail("Please run the following commands to fix this:")
-                self.logger.fail("poetry remove bloodhound-ce")
-                self.logger.fail("poetry add bloodhound")
+        elif not use_bhce and is_ce:
+            self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
+            self.logger.fail("Your configuration has regular BloodHound enabled, but the BloodHound-CE package is installed.")
+            self.logger.fail("Please run the following commands to fix this:")
+            self.logger.fail("poetry remove bloodhound-ce")
+            self.logger.fail("poetry add bloodhound")
 
-                # If using pipx
-                self.logger.fail("Or if you installed with pipx:")
-                self.logger.fail("pipx inject netexec bloodhound --force")
-                self.logger.fail("pipx runpip netexec uninstall -y bloodhound-ce")
-                return False
-                
-        except importlib.metadata.PackageNotFoundError:
-            pass
+            # If using pipx
+            self.logger.fail("Or if you installed with pipx:")
+            self.logger.fail("pipx inject netexec bloodhound --force")
+            self.logger.fail("pipx runpip netexec uninstall -y bloodhound-ce")
+            return False
 
         auth = ADAuthentication(
             username=self.username,
@@ -1313,7 +1310,7 @@ class ldap(connection):
         )
         collect = resolve_collection_methods("Default" if not self.args.collection else self.args.collection)
         if not collect:
-            return
+            return None
         self.logger.highlight("Resolved collection methods: " + ", ".join(list(collect)))
 
         self.logger.debug("Using DNS to retrieve domain information")
