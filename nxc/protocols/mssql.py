@@ -191,7 +191,7 @@ class mssql(connection):
             return False
         except Exception:
             error_msg = self.handle_mssql_reply()
-            self.logger.fail(f"{self.domain}\\{self.username}:{kerb_pass} {error_msg if error_msg else ''}")
+            self.logger.fail(f"{self.domain}\\{self.username}:{used_ccache} {error_msg if error_msg else ''}")
             return False
 
     @reconnect_mssql
