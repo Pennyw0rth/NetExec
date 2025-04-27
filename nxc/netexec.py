@@ -203,13 +203,6 @@ def main():
                 if ans.lower() not in ["y", "yes", ""]:
                     exit(1)
 
-            if hasattr(module, "on_request") or hasattr(module, "has_response"):
-                if hasattr(module, "required_server"):
-                    args.server = module.required_server
-
-                if not args.server_port:
-                    args.server_port = server_port_dict[args.server]
-
             # Add modules paths to the protocol object so it can load them itself
             proto_module_paths.append(modules[m]["path"])
         protocol_object.module_paths = proto_module_paths
