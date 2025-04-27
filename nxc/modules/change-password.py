@@ -2,6 +2,7 @@ import sys
 from impacket.dcerpc.v5 import samr, epm, transport
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 
+
 class NXCModule:
     """
     Module for changing or resetting user passwords
@@ -30,7 +31,7 @@ class NXCModule:
         If STATUS_PASSWORD_MUST_CHANGE or STATUS_PASSWORD_EXPIRED (Change password for current user)
             netexec smb <DC_IP> -u username -p oldpass -M change-password -o OLDPASS='oldpass' NEWPASS='newpass'
             netexec smb <DC_IP> -u username -H oldnthash -M change-password -o OLDNTHASH='oldnthash' NEWPASS='newpass'
-        
+
         If want to change other user's password (with forcechangepassword priv or admin rights)
             netexec smb <DC_IP> -u username -p password -M change-password -o USER='target_user' NEWPASS='target_user_newpass'
             netexec smb <DC_IP> -u username -p password -M change-password -o USER='target_user' NEWNTHASH='target_user_newnthash'
@@ -85,14 +86,13 @@ class NXCModule:
     def on_login(self, context, connection):
         target_username = self.target_user or connection.username
         target_domain = connection.domain
-        
+
         # If OLDPASS or OLDHASH are not specified, default to the credentials used for authentication.
         if not self.oldpass:
             self.oldpass = connection.password
         if not self.oldhash:
             self.oldhash = connection.nthash
-        
-        
+
         new_lmhash, new_nthash = "", ""
 
         # Parse new hash values if provided
@@ -156,7 +156,7 @@ class NXCModule:
             # Change password using old and new plaintext passwords
             samr.hSamrUnicodeChangePasswordUser2(self.dce, "\x00", target_username, oldPassword, newPassword, "", "")
             self.context.log.success(f"Successfully changed password for {target_username}")
-        elif newPassword and oldPwdHashNT: 
+        elif newPassword and oldPwdHashNT:
             # Change password using hash for authentication
             samr.hSamrUnicodeChangePasswordUser2(self.dce, "\x00", target_username, oldPassword, newPassword, "", oldPwdHashNT)
             self.context.log.success(f"Successfully changed password for {target_username}")
