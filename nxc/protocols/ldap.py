@@ -848,6 +848,32 @@ class ldap(connection):
                     self.logger.display(f"Skipping non-Active Directory trust '{trust_name}' with type: {trust_type_text} and direction: {direction_text}")
             self.logger.info("Domain Controller enumeration complete.")
 
+    def active_users(self):
+        if len(self.args.active_users) > 0:
+            self.logger.debug(f"Dumping users: {', '.join(self.args.active_users)}")
+            search_filter = f"(|{''.join(f'(sAMAccountName={user})' for user in self.args.active_users)})"
+        else:
+            self.logger.debug("Trying to dump all users")
+            search_filter = "(sAMAccountType=805306368)"
+
+        # Default to these attributes to mirror the SMB --users functionality
+        request_attributes = ["sAMAccountName", "description", "badPwdCount", "pwdLastSet", "userAccountControl"]
+        resp = self.search(search_filter, request_attributes, sizeLimit=0)
+
+        if resp:
+            all_users = parse_result_attributes(resp)
+            # Filter disabled users (ignore accounts without userAccountControl value)
+            active_users = [user for user in all_users if not (int(user.get("userAccountControl", UF_ACCOUNTDISABLE)) & UF_ACCOUNTDISABLE)]
+
+            self.logger.display(f"Total records returned: {len(all_users)}, total {len(all_users) - len(active_users):d} user(s) disabled")
+            self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<9}{'-Description-':<60}")
+
+            for user in active_users:
+                pwd_last_set = user.get("pwdLastSet", "")
+                if pwd_last_set:
+                    pwd_last_set = "<never>" if pwd_last_set == "0" else datetime.fromtimestamp(self.getUnixTime(int(pwd_last_set))).strftime("%Y-%m-%d %H:%M:%S")
+                self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{pwd_last_set:<20}{user.get('badPwdCount', ''):<9}{user.get('description', '')}")
+
     def asreproast(self):
         if self.password == "" and self.nthash == "" and not self.kerberos:
             return False
