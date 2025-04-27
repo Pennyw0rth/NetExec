@@ -96,7 +96,6 @@ def main():
 
     module_server = None
     targets = []
-    server_port_dict = {"http": 80, "https": 443, "smb": 445}
 
     if hasattr(args, "cred_id") and args.cred_id:
         for cred_id in args.cred_id:
