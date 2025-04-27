@@ -87,7 +87,6 @@ class NXCModule:
         target_domain = connection.domain
         
         # If OLDPASS or OLDHASH are not specified, default to the credentials used for authentication.
-
         if not self.oldpass:
             self.oldpass = connection.password
         if not self.oldhash:
@@ -113,7 +112,7 @@ class NXCModule:
                 self.anonymous = True
                 self.dce = self.authenticate(context, connection, protocol="ncacn_ip_tcp", anonymous=self.anonymous)
             elif "STATUS_LOGON_FAILURE" in str(e):
-                context.log.critical("Authentication failure: wrong credentials.")
+                context.log.fail("Authentication failure: wrong credentials.")
                 return False
             else:
                 raise
@@ -140,9 +139,7 @@ class NXCModule:
                     context.log.success(f"Successfully changed password for {target_username}")
                 else:
                     # Change the password with new password
-                    samr.hSamrUnicodeChangePasswordUser2(
-                        self.dce, "\x00", target_username, self.oldpass, newPassword, "", ""
-                    )
+                    samr.hSamrUnicodeChangePasswordUser2(self.dce, "\x00", target_username, self.oldpass, newPassword, "", "")
                     context.log.success(f"Successfully changed password for {target_username}")
             else:
                 # Handle anonymous/null session password change
