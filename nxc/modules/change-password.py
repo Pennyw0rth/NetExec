@@ -16,9 +16,17 @@ class NXCModule:
 
     def options(self, context, module_options):
         """
-        Module options for password change
+        Required (one of):
+        NEWPASS     The new password of the user.
+        NEWNTHASH   The new NT hash of the user.
 
-        Required options:
+        Optional:
+        OLDPASS     The old password of the user (if not specified, the current password will be used)
+        OLDNTHASH   The old NT hash of the user (if not specified, the current password will be used)
+        USER        The user account if the target is not the current user.
+
+        Examples
+        --------
         If STATUS_PASSWORD_MUST_CHANGE or STATUS_PASSWORD_EXPIRED (Change password for current user)
             netexec smb <DC_IP> -u username -p oldpass -M change-password -o OLDPASS='oldpass' NEWPASS='newpass'
             netexec smb <DC_IP> -u username -H oldnthash -M change-password -o OLDNTHASH='oldnthash' NEWPASS='newpass'
@@ -26,8 +34,6 @@ class NXCModule:
         If want to change other user's password (with forcechangepassword priv or admin rights)
             netexec smb <DC_IP> -u username -p password -M change-password -o USER='target_user' NEWPASS='target_user_newpass'
             netexec smb <DC_IP> -u username -p password -M change-password -o USER='target_user' NEWNTHASH='target_user_newnthash'
-        
-        NEWPASS or NEWHASH
         """
         self.context = context
         self.newpass = module_options.get("NEWPASS")
