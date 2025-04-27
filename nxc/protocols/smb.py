@@ -314,6 +314,7 @@ class smb(connection):
         except Exception as e:
             self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
 
+
         # DCOM connection with kerberos needed
         self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.targetDomain}"
 
