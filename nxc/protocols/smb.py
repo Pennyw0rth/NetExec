@@ -453,7 +453,6 @@ class smb(connection):
             )
             if error not in smb_error_status:
                 self.inc_failed_login(username)
-                return False
             return False
 
     def plaintext_login(self, domain, username, password):
@@ -498,7 +497,7 @@ class smb(connection):
                 f'{domain}\\{self.username}:{process_secret(self.password)} {error} {f"({desc})" if self.args.verbose else ""}',
                 color="magenta" if error in smb_error_status else "red",
             )
-            if str(error) == "STATUS_PASSWORD_MUST_CHANGE" or "STATUS_PASSWORD_EXPIRED":
+            if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED"] and self.args.module == ["change-password"]:
                 return True
             if error not in smb_error_status:
                 self.inc_failed_login(username)
@@ -562,7 +561,7 @@ class smb(connection):
                 f"{domain}\\{self.username}:{process_secret(self.hash)} {error} {f'({desc})' if self.args.verbose else ''}",
                 color="magenta" if error in smb_error_status else "red",
             )
-            if str(error) == "STATUS_PASSWORD_MUST_CHANGE" or "STATUS_PASSWORD_EXPIRED":
+            if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED"] and self.args.module == ["change-password"]:
                 return True
             if error not in smb_error_status:
                 self.inc_failed_login(self.username)
