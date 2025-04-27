@@ -168,7 +168,7 @@ class ldap(connection):
         target_domain = ""
         base_dn = ""
         try:
-            proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
+            proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.host}"
             self.logger.info(f"Connecting to {ldap_url} with no baseDN")
             try:
@@ -309,9 +309,9 @@ class ldap(connection):
 
         try:
             # Connect to LDAP
-            self.logger.extra["protocol"] = "LDAPS" if (self.args.gmsa or self.port == 636) else "LDAP"
-            self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
-            proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
+            self.logger.extra["protocol"] = "LDAPS" if self.port == 636 else "LDAP"
+            self.logger.extra["port"] = "636" if self.port == 636 else "389"
+            proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [1]")
             self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
@@ -425,9 +425,9 @@ class ldap(connection):
 
         try:
             # Connect to LDAP
-            self.logger.extra["protocol"] = "LDAPS" if (self.args.gmsa or self.port == 636) else "LDAP"
-            self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
-            proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
+            self.logger.extra["protocol"] = "LDAPS" if self.port == 636 else "LDAP"
+            self.logger.extra["port"] = "636" if self.port == 636 else "389"
+            proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3]")
             self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
@@ -515,9 +515,9 @@ class ldap(connection):
 
         try:
             # Connect to LDAP
-            self.logger.extra["protocol"] = "LDAPS" if (self.args.gmsa or self.port == 636) else "LDAP"
-            self.logger.extra["port"] = "636" if (self.args.gmsa or self.port == 636) else "389"
-            proto = "ldaps" if (self.args.gmsa or self.port == 636) else "ldap"
+            self.logger.extra["protocol"] = "LDAPS" if self.port == 636 else "LDAP"
+            self.logger.extra["port"] = "636" if self.port == 636 else "389"
+            proto = "ldaps" if self.port == 636 else "ldap"
             ldaps_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
             self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)

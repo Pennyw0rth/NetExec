@@ -9,10 +9,11 @@ from io import StringIO
 from datetime import datetime
 from pypsrp.wsman import NAMESPACES
 from pypsrp.client import Client
+from termcolor import colored
 
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 
-from nxc.config import process_secret
+from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.misc import gen_random_string
@@ -35,6 +36,8 @@ class winrm(connection):
         self.nthash = ""
         self.ssl = False
         self.challenge_header = None
+        self.targetDomain = None
+        self.no_ntlm = False
 
         connection.__init__(self, args, db, host)
 
@@ -52,7 +55,15 @@ class winrm(connection):
         )
 
     def enum_host_info(self):
-        ntlm_info = parse_challenge(base64.b64decode(self.challenge_header.split(" ")[1].replace(",", "")))
+        try:
+            ntlm_info = parse_challenge(base64.b64decode(self.challenge_header.split(" ")[1].replace(",", "")))
+        except Exception as e:
+            self.logger.debug(f"Error parsing NTLM challenge: {e!s}")
+            self.logger.debug(f"Raw challenge: {self.challenge_header.split(' ')[1].replace(',', '')[:20]}...")
+            self.logger.error("Invalid NTLM challenge received from server. This may indicate NTLM is not supported and nxc winrm only support NTLM currently")
+            self.no_ntlm = True
+            return False
+
         self.targetDomain = self.domain = ntlm_info["domain"]
         self.hostname = ntlm_info["hostname"]
         self.server_os = ntlm_info["os_version"]
@@ -70,7 +81,8 @@ class winrm(connection):
     def print_host_info(self):
         self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
         self.logger.extra["port"] = self.port
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain})")
+        ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) {ntlm}")
 
     def create_conn_obj(self):
         if self.is_link_local_ipv6:
