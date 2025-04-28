@@ -214,8 +214,6 @@ class ldap(connection):
         self.target = target
         self.targetDomain = target_domain
         self.baseDN = base_dn
-        if self.username == "":
-            self.scope = ldapasn1_impacket.Scope("baseObject")
         return True
 
     def get_ldap_username(self):
@@ -252,6 +250,8 @@ class ldap(connection):
         if ntlm_challenge:
             ntlm_info = parse_challenge(ntlm_challenge)
             self.server_os = ntlm_info["os_version"]
+        else:
+            self.no_ntlm = True
 
         # using kdcHost is buggy on impacket when using trust relation between ad so we kdcHost must stay to none if targetdomain is not equal to domain
         if not self.kdcHost and self.domain and self.domain == self.targetDomain:
@@ -414,7 +414,8 @@ class ldap(connection):
                 return False
 
     def plaintext_login(self, domain, username, password):
-        if username == "" and password == "":
+        if username == "" and password == "" and self.no_ntlm:
+            self.scope = ldapasn1_impacket.Scope("baseObject")
             return True
         self.username = username
         self.password = password
@@ -630,7 +631,7 @@ class ldap(connection):
                 self.logger.debug(f"Search Filter={searchFilter}")
 
                 # Microsoft Active Directory set an hard limit of 1000 entries returned by any search
-                paged_search_control = [ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000)] if self.no_ntlm else ""
+                paged_search_control = [ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000)] if not self.no_ntlm else ""
                 return self.ldap_connection.search(
                     scope=self.scope,
                     searchBase=baseDN,
