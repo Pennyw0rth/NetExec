@@ -630,7 +630,7 @@ class ldap(connection):
                 self.logger.debug(f"Search Filter={searchFilter}")
 
                 # Microsoft Active Directory set an hard limit of 1000 entries returned by any search
-                paged_search_control = ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000) if self.no_ntlm else ""
+                paged_search_control = [ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000)] if self.no_ntlm else ""
                 return self.ldap_connection.search(
                     scope=self.scope,
                     searchBase=baseDN,
