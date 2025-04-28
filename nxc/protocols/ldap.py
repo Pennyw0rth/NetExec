@@ -150,6 +150,7 @@ class ldap(connection):
         self.admin_privs = False
         self.no_ntlm = False
         self.sid_domain = ""
+        self.scope = None
 
         connection.__init__(self, args, db, host)
 
@@ -213,6 +214,8 @@ class ldap(connection):
         self.target = target
         self.targetDomain = target_domain
         self.baseDN = base_dn
+        if self.username == "":
+            self.scope = ldapasn1_impacket.Scope("baseObject")
         return True
 
     def get_ldap_username(self):
@@ -615,7 +618,7 @@ class ldap(connection):
         return t
 
     def search(self, searchFilter, attributes, sizeLimit=0, baseDN=None) -> list:
-        if baseDN is None and self.args.base_dn:
+        if baseDN is None and self.args.base_dn is not None:
             baseDN = self.args.base_dn
         elif baseDN is None:
             baseDN = self.baseDN
@@ -625,13 +628,14 @@ class ldap(connection):
                 self.logger.debug(f"Search Filter={searchFilter}")
 
                 # Microsoft Active Directory set an hard limit of 1000 entries returned by any search
-                paged_search_control = ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000)
+                paged_search_control = ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000) if not self.no_ntlm else ""
                 return self.ldap_connection.search(
+                    scope=self.scope,
                     searchBase=baseDN,
                     searchFilter=searchFilter,
                     attributes=attributes,
                     sizeLimit=sizeLimit,
-                    searchControls=[paged_search_control],
+                    searchControls=paged_search_control,
                 )
         except ldap_impacket.LDAPSearchError as e:
             if e.getErrorString().find("sizeLimitExceeded") >= 0:
