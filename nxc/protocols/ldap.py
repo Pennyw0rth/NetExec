@@ -416,7 +416,9 @@ class ldap(connection):
     def plaintext_login(self, domain, username, password):
         if username == "" and password == "" and self.no_ntlm:
             self.scope = ldapasn1_impacket.Scope("baseObject")
+            self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
             return True
+
         self.username = username
         self.password = password
         self.domain = domain
