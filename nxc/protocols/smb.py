@@ -56,6 +56,8 @@ from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.helpers.logger import highlight
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.powershell import create_ps_command
+from nxc.helpers.misc import detect_ip_or_fqdn
+from nxc.protocols.ldap.resolution import LDAPResolution
 
 from dploot.triage.vaults import VaultsTriage
 from dploot.triage.browser import BrowserTriage, LoginData, GoogleRefreshToken, Cookie
@@ -172,6 +174,7 @@ class smb(connection):
         self.no_ntlm = False
         self.protocol = "SMB"
         self.is_guest = None
+        self.isdc = False
 
         connection.__init__(self, args, db, host)
 
@@ -232,13 +235,17 @@ class smb(connection):
             if not self.targetDomain:   # Not sure if that can even happen but now we are safe
                 self.targetDomain = self.hostname
         else:
-            # If we can't authenticate with NTLM and the target is supplied as a FQDN we must parse it
             try:
-                import socket
-                socket.inet_aton(self.host)
-                self.logger.debug("NTLM authentication not available! Authentication will fail without a valid hostname and domain name")
-                self.hostname = self.host
-                self.targetDomain = self.host
+                if self.is_host_dc() and detect_ip_or_fqdn(self.host):
+                    self.hostname, self.domain = LDAPResolution(self.host).get_resolution()
+                    self.targetDomain = self.domain
+                # If we can't authenticate with NTLM and the target is supplied as a FQDN we must parse it
+                else:
+                    import socket
+                    socket.inet_aton(self.host)
+                    self.logger.debug("NTLM authentication not available! Authentication will fail without a valid hostname and domain name")
+                    self.hostname = self.host
+                    self.targetDomain = self.host
             except OSError:
                 if self.host.count(".") >= 1:
                     self.hostname = self.host.split(".")[0]
@@ -246,6 +253,10 @@ class smb(connection):
                 else:
                     self.hostname = self.host
                     self.targetDomain = self.host
+            except Exception as e:
+                self.logger.debug(f"Error getting hostname from LDAP: {e}")
+                self.hostname = self.host
+                self.targetDomain = self.host
 
         if self.args.domain:
             self.domain = self.args.domain
@@ -330,21 +341,12 @@ class smb(connection):
         self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}) {ntlm}")
 
         if self.args.generate_hosts_file or self.args.generate_krb5_file:
-            from impacket.dcerpc.v5 import nrpc, epm
-            self.logger.debug("Performing authentication attempts...")
-            isdc = False
-            try:
-                epm.hept_map(self.host, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
-                isdc = True
-            except DCERPCException:
-                self.logger.debug("Error while connecting to host: DCERPCException, which means this is probably not a DC!")
-
             if self.args.generate_hosts_file:
                 with open(self.args.generate_hosts_file, "a+") as host_file:
-                    dc_part = f" {self.targetDomain}" if isdc else ""
+                    dc_part = f" {self.targetDomain}" if self.isdc else ""
                     host_file.write(f"{self.host}     {self.hostname}.{self.targetDomain}{dc_part} {self.hostname}\n")
-                    self.logger.debug(f"{self.host}    {self.hostname}.{self.targetDomain}{dc_part} {self.hostname}")
-            elif self.args.generate_krb5_file and isdc:
+                    self.logger.debug(f"Line added to {self.args.generate_hosts_file} {self.host}    {self.hostname}.{self.targetDomain}{dc_part} {self.hostname}")
+            elif self.args.generate_krb5_file and self.isdc:
                 with open(self.args.generate_krb5_file, "w+") as host_file:
                     data = f"""
 [libdefaults]
@@ -702,6 +704,18 @@ class smb(connection):
             self.logger.success(f"Run the following command to use the TGT: export KRB5CCNAME={tgt_file}")
         except Exception as e:
             self.logger.fail(f"Failed to get TGT: {e}")
+
+    def is_host_dc(self):
+        from impacket.dcerpc.v5 import nrpc, epm
+        self.logger.debug("Performing authentication attempts...")
+        try:
+            epm.hept_map(self.host, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
+            self.isdc = True
+            return True
+        except DCERPCException:
+            self.logger.debug("Error while connecting to host: DCERPCException, which means this is probably not a DC!")
+        self.isdc = False
+        return False
 
     @requires_admin
     def execute(self, payload=None, get_output=False, methods=None) -> str:
