@@ -122,7 +122,7 @@ class NXCModule:
                 output = output.decode("cp437")
             if output:
                 for line in output.splitlines():
-                    self.logger.highlight(line.strip())
+                    self.logger.highlight(line.rstrip())
 
         except Exception as e:
             if "SCHED_S_TASK_HAS_NOT_RUN" in str(e):
