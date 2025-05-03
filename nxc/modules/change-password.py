@@ -27,7 +27,7 @@ class NXCModule:
         Examples
         --------
         If STATUS_PASSWORD_MUST_CHANGE or STATUS_PASSWORD_EXPIRED (Change password for current user)
-            netexec smb <DC_IP> -u username -p oldpass -M change-password -o NEWPASS='newpass'
+            netexec smb <DC_IP> -u username -p oldpass -M change-password -o NEWNTHASH='nthash'
             netexec smb <DC_IP> -u username -H oldnthash -M change-password -o NEWPASS='newpass'
 
         If want to change other user's password (with forcechangepassword priv or admin rights)
@@ -73,7 +73,6 @@ class NXCModule:
             dce.bind(samr.MSRPC_UUID_SAMR)
             context.log.info("[+] Successfully bound to SAMR")
             return dce
-
         except DCERPCException as e:
             context.log.fail(f"DCE/RPC Exception: {e!s}")
             raise
@@ -120,7 +119,7 @@ class NXCModule:
         try:
             # Reset the password for a different user
             if target_username != connection.username:
-                user_handle = self.hSamrOpenUser(connection, target_username)
+                user_handle = self._hSamrOpenUser(connection, target_username)
                 samr.hSamrSetNTInternal1(self.dce, user_handle, newPassword, newHash)
                 context.log.success(f"Successfully changed password for {target_username}")
             else:
@@ -130,7 +129,7 @@ class NXCModule:
                     samr.hSamrUnicodeChangePasswordUser2(self.dce, "\x00", target_username, self.oldpass, newPassword, "", oldHash)
                 else:
                     # Change the password with new hash
-                    user_handle = self.hSamrOpenUser(connection, target_username)
+                    user_handle = self._hSamrOpenUser(connection, target_username)
                     samr.hSamrChangePasswordUser(self.dce, user_handle, self.oldpass, "", oldHash, "aad3b435b51404eeaad3b435b51404ee", newHash)
                     context.log.highlight("Note: Target user must change password at next logon.")
                 context.log.success(f"Successfully changed password for {target_username}")
@@ -139,7 +138,7 @@ class NXCModule:
         finally:
             self.dce.disconnect()
 
-    def hSamrOpenUser(self, connection, username):
+    def _hSamrOpenUser(self, connection, username):
         """Get handle to the user object"""
         try:
             # Connect to the target server and retrieve handles
