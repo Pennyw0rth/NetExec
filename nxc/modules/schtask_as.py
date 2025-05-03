@@ -25,12 +25,16 @@ class NXCModule:
         TASK           OPTIONAL: Set a name for the scheduled task name
         FILE           OPTIONAL: Set a name for the command output file
         LOCATION       OPTIONAL: Set a location for the command output file (e.g. '\tmp\')
-        """
 
+        Example:
+        -------
+        nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD=whoami
+        nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD='bin.exe --option' BINARY=bin.exe
+        """
         self.cmd = self.binary = self.user = self.task = self.file = self.location = self.time = None
         self.share = "C$"
         self.tmp_dir = "C:\\Windows\\Temp\\"
-        self.tmp_share = self.tmp_dir.split(":")[1]  
+        self.tmp_share = self.tmp_dir.split(":")[1]
 
         if "CMD" in module_options:
             self.cmd = module_options["CMD"]
@@ -62,11 +66,11 @@ class NXCModule:
         if self.cmd is None:
             self.logger.fail("You need to specify a CMD to run")
             return 1
-        
+
         if self.user is None:
             self.logger.fail("You need to specify a USER to run the command as")
             return 1
-        
+
         if self.binary:
             if not os.path.isfile(self.binary):
                 self.logger.fail(f"Cannot find {self.binary}")
@@ -75,13 +79,13 @@ class NXCModule:
                 self.logger.display(f"Uploading {self.binary}")
                 with open(self.binary, "rb") as binary_to_upload:
                     try:
-                        self.binary_name = os.path.basename(self.binary) 
+                        self.binary_name = os.path.basename(self.binary)
                         connection.conn.putFile(self.share, f"{self.tmp_share}{self.binary_name}", binary_to_upload.read)
                         self.logger.success(f"Binary {self.binary_name} successfully uploaded in {self.tmp_share}{self.binary_name}")
                     except Exception as e:
                         self.logger.fail(f"Error writing file to share {self.tmp_share}: {e}")
                         return 1
-    
+
         # Returnes self.cmd or \Windows\temp\BinToExecute.exe depending if BINARY=BinToExecute.exe
         self.cmd = self.cmd if not self.binary else f"{self.tmp_share}{self.cmd}"
         self.logger.display("Connecting to the remote Service control endpoint")
