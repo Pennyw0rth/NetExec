@@ -29,6 +29,7 @@ from os.path import join as path_join
 from time import sleep
 from nxc.connection import dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string
+from nxc.paths import TMP_PATH
 
 from impacket.dcerpc.v5.dcom.oaut import (
     IID_IDispatch,
@@ -238,7 +239,7 @@ class MMCEXEC:
 
         while True:
             try:
-                with open(path_join("/tmp", "nxc_hosted", self.__output)) as output:
+                with open(path_join(TMP_PATH, self.__output)) as output:
                     self.output_callback(output.read())
                 break
             except OSError:
