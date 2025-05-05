@@ -865,7 +865,7 @@ all = ["flake8 (>=7.1.1)", "mypy (>=1.11.2)", "pytest (>=8.3.2)", "ruff (>=0.6.2
 
 [[package]]
 name = "impacket"
-version = "0.13.0.dev0+20250314.172046.8b4566b1"
+version = "0.13.0.dev0+20250422.104055.27bebb13"
 description = "Network protocols Constructors and Dissectors"
 optional = false
 python-versions = "*"
@@ -890,7 +890,7 @@ six = "*"
 type = "git"
 url = "https://github.com/fortra/impacket.git"
 reference = "HEAD"
-resolved_reference = "8b4566b12fc79acb520d045dbae8f13446a9d4d7"
+resolved_reference = "27bebb1347569fa810e432326266acf17560f274"
 
 [[package]]
 name = "iniconfig"
@@ -1732,14 +1732,14 @@ windows-terminal = ["colorama (>=0.4.6)"]
 
 [[package]]
 name = "pylnk3"
-version = "0.4.2"
+version = "0.4.3"
 description = "Windows LNK File Parser and Creator"
 optional = false
-python-versions = ">=3.6"
+python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "pylnk3-0.4.2-py3-none-any.whl", hash = "sha256:f75c80d85b2063f3549bfc4a00228474b90fa590de9f414f8df075b746b1b427"},
-    {file = "pylnk3-0.4.2.tar.gz", hash = "sha256:caee0136f61a8b788154dc8e7c03ac2dde57adc170f1c4786ab4721491ca6e99"},
+    {file = "pylnk3-0.4.3-py3-none-any.whl", hash = "sha256:fafa9293290163fed30541fb38f7df21a0e3f6fcc8324597a898ce694c9a593d"},
+    {file = "pylnk3-0.4.3.tar.gz", hash = "sha256:fbc5f512b581382c2a4c11e6df3796f9975bcfd99e3fca2afe531ea61b3c4ac2"},
 ]
 
 [[package]]
@@ -2462,4 +2462,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<4.0"
-content-hash = "82a5e366a4270596f82655b99b5f0f22887fc72d5d04eefc3cddc945c9e69794"
+content-hash = "1b8bf07cb55b385df03716a6bd4a553579e1b325ccb53e2f77ce28605e6903c5"

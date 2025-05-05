@@ -389,7 +389,7 @@ class connection:
                         if "\\" in line and len(line.split("\\")) == 2:
                             domain_single, username_single = line.split("\\")
                         else:
-                            domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain else self.domain
+                            domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain is not None else self.domain
                             username_single = line
                         domain.append(domain_single)
                         username.append(username_single.strip())
@@ -398,7 +398,7 @@ class connection:
                 if "\\" in user:
                     domain_single, username_single = user.split("\\")
                 else:
-                    domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain else self.domain
+                    domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain is not None else self.domain
                     username_single = user
                 domain.append(domain_single)
                 username.append(username_single)
