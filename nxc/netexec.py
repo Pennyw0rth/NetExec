@@ -1,3 +1,4 @@
+# PYTHON_ARGCOMPLETE_OK
 import sys
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import identify_target_file
@@ -173,6 +174,9 @@ def main():
         for module in args.module:
             nxc_logger.display(f"{module} module options:\n{modules[module]['options']}")
         exit(0)
+    elif args.show_module_options:
+        nxc_logger.error("--options requires -M/--module")
+        exit(1)
     elif args.module:
         # Check the modules for sanity before loading the protocol
         nxc_logger.debug(f"Modules to be Loaded for sanity check: {args.module}, {type(args.module)}")

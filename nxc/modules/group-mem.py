@@ -11,7 +11,7 @@ class NXCModule:
     """
 
     name = "group-mem"
-    description = "Retrieves all the members within a Group"
+    description = "[REMOVED] Retrieves all the members within a Group"
     supported_protocols = ["ldap"]
     opsec_safe = True
     multiple_hosts = False
@@ -19,7 +19,9 @@ class NXCModule:
     answers = []
 
     def options(self, context, module_options):
-        """
+        r"""
+        [REMOVED] Use the ldap flag '--groups "Administrators"' instead of the module group-mem.
+
         group-mem: Specify group-mem to call the module
         GROUP: Specify the GROUP option to query for that group's members
         Usage: nxc ldap $DC-IP -u Username -p Password -M group-mem -o GROUP="domain admins"
@@ -34,6 +36,9 @@ class NXCModule:
             sys.exit(1)
 
     def on_login(self, context, connection):
+        self.logger.fail("[REMOVED] Use the ldap flag '--groups \"Administrators\"' instead of the module group-mem.")
+        return None
+
         # First look up the SID of the group passed in
         search_filter = "(&(objectCategory=group)(cn=" + self.GROUP + "))"
         attribute = "objectSid"
@@ -68,7 +73,7 @@ class NXCModule:
 def do_search(self, context, connection, searchFilter, attributeName):
     try:
         context.log.debug(f"Search Filter={searchFilter}")
-        resp = connection.ldapConnection.search(searchFilter=searchFilter, attributes=[attributeName], sizeLimit=0)
+        resp = connection.ldap_connection.search(searchFilter=searchFilter, attributes=[attributeName], sizeLimit=0)
         context.log.debug(f"Total number of records returned {len(resp)}")
         for item in resp:
             if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:

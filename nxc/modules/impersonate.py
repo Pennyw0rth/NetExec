@@ -6,7 +6,7 @@
 from base64 import b64decode
 from os import path
 import sys
-
+from datetime import datetime
 from nxc.paths import DATA_PATH
 
 
@@ -29,8 +29,13 @@ class NXCModule:
         self.impersonate = "Impersonate.exe"
         self.useembeded = True
         self.token = self.cmd = ""
+
         with open(path.join(DATA_PATH, ("impersonate_module/impersonate.bs64"))) as impersonate_file:
             self.impersonate_embedded = b64decode(impersonate_file.read())
+
+        # Add some random binary data to defeat AVs which check the file hash
+        self.impersonate_embedded += datetime.now().strftime("%Y%m%d%H%M%S").encode()
+
         if "EXEC" in module_options:
             self.cmd = module_options["EXEC"]
 

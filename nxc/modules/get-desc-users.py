@@ -1,7 +1,7 @@
-from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ldap import ldap as ldap_impacket
 import re
 from nxc.logger import nxc_logger
+from nxc.parsers.ldap_results import parse_result_attributes
 
 
 class NXCModule:
@@ -40,7 +40,7 @@ class NXCModule:
 
         try:
             context.log.debug(f"Search Filter={searchFilter}")
-            resp = connection.ldapConnection.search(
+            resp = connection.ldap_connection.search(
                 searchFilter=searchFilter,
                 attributes=["sAMAccountName", "description"],
                 sizeLimit=0,
@@ -55,24 +55,10 @@ class NXCModule:
                 nxc_logger.debug(e)
                 return False
 
-        answers = []
         context.log.debug(f"Total of records returned {len(resp)}")
-        for item in resp:
-            if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
-                continue
-            sAMAccountName = ""
-            description = ""
-            try:
-                for attribute in item["attributes"]:
-                    if str(attribute["type"]) == "sAMAccountName":
-                        sAMAccountName = str(attribute["vals"][0])
-                    elif str(attribute["type"]) == "description":
-                        description = attribute["vals"][0]
-                if sAMAccountName != "" and description != "":
-                    answers.append([sAMAccountName, description])
-            except Exception as e:
-                context.log.debug("Exception:", exc_info=True)
-                context.log.debug(f"Skipping item, cannot process due to error {e!s}")
+        resp_parsed = parse_result_attributes(resp)
+        answers = [[x["sAMAccountName"], x.get("description")] for x in resp_parsed if x.get("description")]
+
         answers = self.filter_answer(context, answers)
         if len(answers) > 0:
             context.log.success("Found following users: ")
@@ -108,5 +94,5 @@ class NXCModule:
                     answersFiltered.append([answer[0], description])
                 elif (self.FILTER != "" and conditionFilter) and (conditionPasswordPolicy == self.PASSWORDPOLICY):
                     context.log.highlight(f"'{self.FILTER}' found in user: '{answer[0]}' description: '{description}'")
-                    
+
         return answersFiltered

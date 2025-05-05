@@ -16,6 +16,7 @@ from nxc.protocols.mssql.mssqlexec import MSSQLEXEC
 
 from impacket import tds, ntlm
 from impacket.krb5.ccache import CCache
+from impacket.dcerpc.v5.dtypes import SID
 from impacket.tds import (
     SQLErrorException,
     TDS_LOGINACK_TOKEN,
@@ -89,7 +90,7 @@ class mssql(connection):
         else:
             if is_admin:
                 self.admin_privs = True
-    
+
     @reconnect_mssql
     def enum_host_info(self):
         challenge = None
@@ -102,7 +103,7 @@ class mssql(connection):
             login["ClientPID"] = random.randint(0, 1024)
             login["PacketSize"] = self.conn.packetSize
             login["OptionFlags2"] = tds.TDS_INIT_LANG_FATAL | tds.TDS_ODBC_ON | tds.TDS_INTEGRATED_SECURITY_ON
-            
+
             # NTLMSSP Negotiate
             auth = ntlm.getNTLMSSPType1("", "")
             login["SSPI"] = auth.getData()
@@ -142,19 +143,9 @@ class mssql(connection):
 
     def print_host_info(self):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain})")
-        return True
 
     @reconnect_mssql
-    def kerberos_login(
-        self,
-        domain,
-        username,
-        password="",
-        ntlm_hash="",
-        aesKey="",
-        kdcHost="",
-        useCache=False,
-    ):
+    def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.username = username
         self.password = password
         self.domain = domain
@@ -201,7 +192,7 @@ class mssql(connection):
             return False
         except Exception:
             error_msg = self.handle_mssql_reply()
-            self.logger.fail("{}\\{}:{} {}".format(self.domain, self.username, kerb_pass, error_msg if error_msg else ""))
+            self.logger.fail(f"{self.domain}\\{self.username}:{used_ccache} {error_msg if error_msg else ''}")
             return False
 
     @reconnect_mssql
@@ -209,21 +200,13 @@ class mssql(connection):
         self.password = password
         self.username = username
         self.domain = domain
-        
+
         try:
-            res = self.conn.login(
-                None,
-                self.username,
-                self.password,
-                self.domain,
-                None,
-                not self.args.local_auth,
-            )
+            res = self.conn.login(None, self.username, self.password, self.domain, None, not self.args.local_auth)
             if res is not True:
                 raise
             self.check_if_admin()
-            out = f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}"
-            self.logger.success(out)
+            self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
@@ -234,7 +217,7 @@ class mssql(connection):
             return False
         except Exception:
             error_msg = self.handle_mssql_reply()
-            self.logger.fail("{}\\{}:{} {}".format(self.domain, self.username, process_secret(self.password), error_msg if error_msg else ""))
+            self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {error_msg if error_msg else ''}")
             return False
 
     @reconnect_mssql
@@ -243,26 +226,18 @@ class mssql(connection):
         self.domain = domain
         self.lmhash = ""
         self.nthash = ""
-        
+
         if ntlm_hash.find(":") != -1:
             self.lmhash, self.nthash = ntlm_hash.split(":")
         else:
             self.nthash = ntlm_hash
 
         try:
-            res = self.conn.login(
-                None,
-                self.username,
-                "",
-                self.domain,
-                f"{self.lmhash}:{self.nthash}",
-                not self.args.local_auth,
-            )
+            res = self.conn.login(None, self.username, "", self.domain, f"{self.lmhash}:{self.nthash}", not self.args.local_auth)
             if res is not True:
                 raise
             self.check_if_admin()
-            out = f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}"
-            self.logger.success(out)
+            self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}")
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
@@ -273,7 +248,7 @@ class mssql(connection):
             return False
         except Exception:
             error_msg = self.handle_mssql_reply()
-            self.logger.fail("{}\\{}:{} {}".format(self.domain, self.username, process_secret(self.nthash), error_msg if error_msg else ""))
+            self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {error_msg if error_msg else ''}")
             return False
 
     def mssql_query(self):
@@ -306,10 +281,10 @@ class mssql(connection):
         if not payload:
             self.logger.error("No command to execute specified!")
             return None
-        
+
         get_output = True if not self.args.no_output else get_output
         self.logger.debug(f"{get_output=}")
-        
+
         try:
             exec_method = MSSQLEXEC(self.conn, self.logger)
             output = exec_method.execute(payload)
@@ -318,7 +293,7 @@ class mssql(connection):
             self.logger.fail(f"Execute command failed, error: {e!s}")
             return False
         else:
-            self.logger.success("Executed command via mssqlexec")   
+            self.logger.success("Executed command via mssqlexec")
             if output:
                 output_lines = StringIO(output).readlines()
                 for line in output_lines:
@@ -331,24 +306,24 @@ class mssql(connection):
         if not payload:
             self.logger.error("No command to execute specified!")
             return None
-        
+
         response = []
         obfs = obfs if obfs else self.args.obfs
         encode = encode if encode else not self.args.no_encode
         force_ps32 = force_ps32 if force_ps32 else self.args.force_ps32
         get_output = True if not self.args.no_output else get_output
-                
+
         self.logger.debug(f"Starting PS execute: {payload=} {get_output=} {methods=} {force_ps32=} {obfs=} {encode=}")
         amsi_bypass = self.args.amsi_bypass[0] if self.args.amsi_bypass else None
         self.logger.debug(f"AMSI Bypass: {amsi_bypass}")
-        
+
         if os.path.isfile(payload):
             self.logger.debug(f"File payload set: {payload}")
             with open(payload) as commands:
                 response = [self.execute(create_ps_command(c.strip(), force_ps32=force_ps32, obfs=obfs, custom_amsi=amsi_bypass, encode=encode), get_output) for c in commands]
         else:
             response = [self.execute(create_ps_command(payload, force_ps32=force_ps32, obfs=obfs, custom_amsi=amsi_bypass, encode=encode), get_output)]
-            
+
         self.logger.debug(f"ps_execute response: {response}")
         return response
 
@@ -381,7 +356,7 @@ class mssql(connection):
             self.logger.fail(f"Error during upload: {e}")
 
     @requires_admin
-    def get_file(self): 
+    def get_file(self):
         remote_path = self.args.get_file[0]
         download_path = self.args.get_file[1]
         self.logger.display(f'Copying "{remote_path}" to "{download_path}"')
@@ -430,3 +405,46 @@ class mssql(connection):
                     else:
                         _type = f"{key['Type']:d}"
                     return f"(ENVCHANGE({_type}): Old Value: {record['OldValue'].decode('utf-16le')}, New Value: {record['NewValue'].decode('utf-16le')})"
+
+    def rid_brute(self, max_rid=None):
+        entries = []
+        if not max_rid:
+            max_rid = int(self.args.rid_brute)
+
+        try:
+            # Query domain
+            domain = self.conn.sql_query("SELECT DEFAULT_DOMAIN()")[0][""]
+
+            # Query known group to determine raw SID & convert to canon
+            raw_domain_sid = self.conn.sql_query(f"SELECT SUSER_SID('{domain}\\Domain Admins')")[0][""]
+            domain_sid = SID(bytes.fromhex(raw_domain_sid.decode())).formatCanonical()[:-4]
+        except Exception as e:
+            self.logger.fail(f"Error parsing SID. Not domain joined?: {e}")
+
+        so_far = 0
+        simultaneous = 1000
+        for _j in range(max_rid // simultaneous + 1):
+            sids_to_check = (max_rid - so_far) % simultaneous if (max_rid - so_far) // simultaneous == 0 else simultaneous
+            if sids_to_check == 0:
+                break
+
+            # Batch query multiple sids at a time
+            sid_queries = [f"SELECT SUSER_SNAME(SID_BINARY(N'{domain_sid}-{i:d}'))" for i in range(so_far, so_far + sids_to_check)]
+            raw_output = self.conn.sql_query(";".join(sid_queries))
+
+            for n, item in enumerate(raw_output):
+                username = item[""]
+                if username == "NULL":
+                    continue
+                rid = so_far + n
+                self.logger.highlight(f"{rid}: {username}")
+                entries.append(
+                    {
+                        "rid": rid,
+                        "domain": domain,
+                        "username": username.split("\\")[1],
+                    }
+                )
+
+            so_far += simultaneous
+        return entries

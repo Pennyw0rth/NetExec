@@ -19,11 +19,13 @@ def gen_cli_args():
     
     try:
         VERSION, COMMIT = importlib.metadata.version("netexec").split("+")
+        DISTANCE, COMMIT = COMMIT.split(".")
     except ValueError:
         VERSION = importlib.metadata.version("netexec")
         COMMIT = ""
-    CODENAME = "NeedForSpeed"
-    nxc_logger.debug(f"NXC VERSION: {VERSION} - {CODENAME} - {COMMIT}")
+        DISTANCE = ""
+    CODENAME = "SmoothOperator"
+    nxc_logger.debug(f"NXC VERSION: {VERSION} - {CODENAME} - {COMMIT} - {DISTANCE}")
     
     generic_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     generic_group = generic_parser.add_argument_group("Generic", "Generic options for nxc across protocols")
@@ -53,9 +55,9 @@ def gen_cli_args():
     ||   ||    | \ | |   ___  | |_  | ____| __  __   ___    ___
     \\( )//    |  \| |  / _ \ | __| |  _|   \ \/ /  / _ \  / __|
     .=[ ]=.    | |\  | |  __/ | |_  | |___   >  <  |  __/ | (__
-   / /ॱ-ॱ\ \   |_| \_|  \___|  \__| |_____| /_/\_\  \___|  \___|
-   ॱ \   / ॱ
-     ॱ   ॱ
+   / /˙-˙\ \   |_| \_|  \___|  \__| |_____| /_/\_\  \___|  \___|
+   ˙ \   / ˙
+     ˙   ˙
 
     The network execution tool
     Maintained as an open source project by @NeffIsBack, @MJHallenbeck, @_zblurx
@@ -98,6 +100,13 @@ def gen_cli_args():
     kerberos_group.add_argument("--use-kcache", action="store_true", help="Use Kerberos authentication from ccache file (KRB5CCNAME)")
     kerberos_group.add_argument("--aesKey", metavar="AESKEY", nargs="+", help="AES key to use for Kerberos Authentication (128 or 256 bits)")
     kerberos_group.add_argument("--kdcHost", metavar="KDCHOST", help="FQDN of the domain controller. If omitted it will use the domain part (FQDN) specified in the target parameter")
+
+    certificate_group = std_parser.add_argument_group("Certificate", "Options for certificate authentication")
+    certificate_group.add_argument("--pfx-cert", metavar="PFXCERT", help="Use certificate authentication from pfx file .pfx")
+    certificate_group.add_argument("--pfx-base64", metavar="PFXB64", help="Use certificate authentication from pfx file encoded in base64")
+    certificate_group.add_argument("--pfx-pass", metavar="PFXPASS", help="Password of the pfx certificate")
+    certificate_group.add_argument("--pem-cert", metavar="PEMCERT", help="Use certificate authentication from PEM file")
+    certificate_group.add_argument("--pem-key", metavar="PEMKEY", help="Private key for the PEM format")
     
     server_group = std_parser.add_argument_group("Servers", "Options for nxc servers")
     server_group.add_argument("--server", choices={"http", "https"}, default="https", help="use the selected server")
@@ -115,7 +124,7 @@ def gen_cli_args():
     except Exception as e:
         nxc_logger.exception(f"Error loading proto_args from proto_args.py file in protocol folder: {protocol} - {e}")
 
-    argcomplete.autocomplete(parser)
+    argcomplete.autocomplete(parser, always_complete_options=False)
     args = parser.parse_args()
 
     if len(sys.argv) == 1:
@@ -123,7 +132,7 @@ def gen_cli_args():
         sys.exit(1)
 
     if args.version:
-        print(f"{VERSION} - {CODENAME} - {COMMIT}")
+        print(f"{VERSION} - {CODENAME} - {COMMIT} - {DISTANCE}")
         sys.exit(1)
 
     # Multiply output_tries by 10 to enable more fine granural control, see exec methods

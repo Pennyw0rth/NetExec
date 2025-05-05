@@ -146,7 +146,6 @@ class wmi(connection):
         self.logger.extra["protocol"] = "RPC"
         self.logger.extra["port"] = "135"
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain})")
-        return True
 
     def check_if_admin(self):
         try:
