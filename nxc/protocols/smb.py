@@ -70,7 +70,6 @@ from termcolor import colored
 import contextlib
 
 smb_share_name = gen_random_string(5).upper()
-smb_server = None
 
 smb_error_status = [
     "STATUS_ACCOUNT_DISABLED",
