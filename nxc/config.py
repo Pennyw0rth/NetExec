@@ -35,6 +35,8 @@ config_log = nxc_config.getboolean("nxc", "log_mode", fallback=False)
 ignore_opsec = nxc_config.getboolean("nxc", "ignore_opsec", fallback=False)
 host_info_colors = literal_eval(nxc_config.get("nxc", "host_info_colors", fallback=["green", "red", "yellow", "cyan"]))
 
+# Read stealth_label from user config first, then default config
+stealth_label = nxc_config.get("nxc", "stealth_label").strip("'\"") if nxc_config.has_option("nxc", "stealth_label") else nxc_default_config.get("nxc", "stealth_label", fallback="C$ Access!").strip("'\"")
 
 if len(host_info_colors) != 4:
     nxc_logger.error("Config option host_info_colors must have 4 values! Using default values.")

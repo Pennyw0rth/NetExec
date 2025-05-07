@@ -11,6 +11,7 @@ from dns import resolver, rdatatype
 from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
 
 from nxc.config import pwned_label
+from nxc.config import stealth_label
 from nxc.helpers.logger import highlight
 from nxc.loaders.moduleloader import ModuleLoader
 from nxc.logger import nxc_logger, NXCAdapter
@@ -584,6 +585,9 @@ class connection:
 
     def mark_pwned(self):
         return highlight(f"({pwned_label})" if self.admin_privs else "")
+
+    def mark_stealth(self):
+        return highlight(f"({stealth_label})" if self.admin_privs else "")
 
     def load_modules(self):
         self.logger.info(f"Loading modules for target: {self.host}")
