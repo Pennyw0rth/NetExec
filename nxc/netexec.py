@@ -94,7 +94,6 @@ def main():
         nxc_logger.error("KRB5CCNAME environment variable is not set")
         exit(1)
 
-    module_server = None
     targets = []
 
     if hasattr(args, "cred_id") and args.cred_id:
@@ -219,8 +218,6 @@ def main():
     except KeyboardInterrupt:
         nxc_logger.debug("Got keyboard interrupt")
     finally:
-        if module_server:
-            module_server.shutdown()
         db_engine.dispose()
 
 
