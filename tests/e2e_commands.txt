@@ -253,6 +253,9 @@ netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M web_de
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec {DNS} rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --nla-screenshot
+netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --screenshot
+netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig --screenshot
+netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x ipconfig --screenshot
 ##### SSH - Default test passwords and random key; switch these out if you want correct authentication
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
 netexec ssh TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce
