@@ -14,6 +14,7 @@ from nxc.config import process_secret
 
 from aardwolf.connection import RDPConnection
 from aardwolf.commons.queuedata.constants import VIDEO_FORMAT
+from aardwolf.commons.queuedata.keyboard import RDP_KEYBOARD_UNICODE
 from aardwolf.commons.iosettings import RDPIOSettings
 from aardwolf.commons.target import RDPTarget
 from aardwolf.protocol.x224.constants import SUPP_PROTOCOLS
@@ -358,6 +359,34 @@ class rdp(connection):
                 )
             return False
         
+    async def execute_cmd(self, payload, encoding):
+        try:
+            self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
+            await self.connect_rdp()
+        except Exception as e:
+            return
+
+        await asyncio.sleep(5)
+        if self.conn is not None:
+            for char in payload:
+                key_event = RDP_KEYBOARD_UNICODE()
+                key_event.char = char
+                key_event.is_pressed = True
+                await self.conn.ext_in_queue.put(key_event)
+                await asyncio.sleep(0.1)
+
+            # Send enter key
+            await self.conn.send_key_virtual_key('VK_RETURN', True, False)
+            await asyncio.sleep(0.1)
+            await self.conn.send_key_virtual_key('VK_RETURN', False, False)
+
+            if payload != 'exit':
+                await asyncio.sleep(2)
+            else:
+                await self.execute_cmd('exit', encoding)
+
+    
+
     def execute(self, payload=None, get_output=True, shell_type="cmd"):
         if not payload:
             payload = self.args.execute
@@ -366,7 +395,8 @@ class rdp(connection):
             get_output = False
 
         try:
-            result = self.conn.execute_cmd(payload, encoding=self.args.codec) if shell_type == "cmd" else self.conn.execute_ps(payload)
+            # TODO: Use aardwolf io 
+            result = asyncio.run(self.execute_cmd(payload, encoding=self.args.codec) if shell_type == "cmd" else self.conn.execute_ps(payload))
         except Exception as e:
             self.logger.info("Cannot execute command via cmd - now switching to Powershell to attempt execution")
             try:
@@ -375,7 +405,7 @@ class rdp(connection):
                 self.logger.fail(f"Execute command failed, error: {e!s}")
 
     def ps_execute(self):
-        self.sexecute(payload=self.args.ps_execute, get_output=True, shell_type="powershell")
+        self.execute(payload=self.args.ps_execute, get_output=True, shell_type="powershell")
 
     async def screen(self):
         try:
