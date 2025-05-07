@@ -292,10 +292,6 @@ class connection:
                 self.logger.debug(f"Module {module.name} has on_admin_login method")
                 module.on_admin_login(context, self)
 
-            if hasattr(module, "on_shutdown"):
-                self.logger.debug(f"Module {module.name} has on_shutdown method")
-                module.on_shutdown(context, self)
-
     def inc_failed_login(self, username):
         global global_failed_logins
         global user_failed_logins
