@@ -17,6 +17,7 @@ from aardwolf.commons.queuedata.constants import VIDEO_FORMAT
 from aardwolf.commons.queuedata.keyboard import RDP_KEYBOARD_UNICODE
 from aardwolf.commons.iosettings import RDPIOSettings
 from aardwolf.commons.target import RDPTarget
+from aardwolf.keyboard.layoutmanager import KeyboardLayoutManager
 from aardwolf.protocol.x224.constants import SUPP_PROTOCOLS
 from asyauth.common.credentials.ntlm import NTLMCredential
 from asyauth.common.credentials.kerberos import KerberosCredential
@@ -370,9 +371,39 @@ class rdp(connection):
     
     async def _send_enter(self):
         """Helper method to send Enter key to the RDP session"""
-        await self.conn.send_key_virtualkey('VK_RETURN', True, False)
+        await self.conn.send_key_virtualkey("VK_RETURN", True, False)
         await asyncio.sleep(0.05)
-        await self.conn.send_key_virtualkey('VK_RETURN', False, False)
+        await self.conn.send_key_virtualkey("VK_RETURN", False, False)
+        
+    async def _send_win_r(self):
+        """Helper method to send Windows+R key combination to open Run dialog"""
+        try:
+            self.logger.debug("Sending Win+R using scancode method")
+                        
+            layout = KeyboardLayoutManager().get_layout_by_shortname("enus")
+            
+            win_scancode = layout.vk_to_scancode("VK_LWIN")
+            await self.conn.send_key_scancode(win_scancode, True, False)
+            await asyncio.sleep(0.1)
+            
+            r_scancode = layout.char_to_scancode("r")[0]
+            await self.conn.send_key_scancode(r_scancode, True, False)
+            await asyncio.sleep(0.1)
+            
+            await self.conn.send_key_scancode(r_scancode, False, False)
+            await asyncio.sleep(0.1)
+            
+            await self.conn.send_key_scancode(win_scancode, False, False)
+            
+            await asyncio.sleep(0.5)
+            
+            self.logger.debug("Win+R sent successfully")
+            return True
+        except Exception as e:
+            self.logger.debug(f"Error sending Win+R: {e!s}")
+            
+            self.logger.debug("Using fallback approach for opening command prompt")
+            return False
     
     async def execute_cmd(self, payload, encoding=None):
         """Execute a command using cmd.exe"""
@@ -383,13 +414,30 @@ class rdp(connection):
             self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
             await self.connect_rdp()
         except Exception as e:
-            self.logger.debug(f"Error connecting to RDP: {str(e)}")
-            return
+            self.logger.debug(f"Error connecting to RDP: {e!s}")
+            return None
         
         # Wait for desktop to be available
         await asyncio.sleep(3)
         
         try:
+            # Try to open Run dialog using Windows+R
+            self.logger.debug("Attempting to open Run dialog")
+            win_r_success = await self._send_win_r()
+            
+            if win_r_success:
+                # Type cmd.exe in Run dialog
+                self.logger.debug("Launching cmd.exe via Run dialog")
+                await self._send_keystrokes("cmd.exe")
+                await self._send_enter()
+                await asyncio.sleep(1.5)  # Wait for cmd window to open
+            else:
+                # Fallback: Try direct command typing (assumes cmd may already be open)
+                self.logger.debug("Sending cmd.exe command directly")
+                await self._send_keystrokes("cmd.exe")
+                await self._send_enter()
+                await asyncio.sleep(1.5)
+            
             # Type the command
             self.logger.debug(f"Typing command: {payload}")
             await self._send_keystrokes(payload)
@@ -406,7 +454,7 @@ class rdp(connection):
                 try:
                     await self.conn.terminate()
                 except Exception as e:
-                    self.logger.debug(f"Error terminating connection: {str(e)}")
+                    self.logger.debug(f"Error terminating connection: {e!s}")
     
     async def execute_ps(self, payload):
         """Execute a command using PowerShell"""
@@ -417,18 +465,29 @@ class rdp(connection):
             self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
             await self.connect_rdp()
         except Exception as e:
-            self.logger.debug(f"Error connecting to RDP: {str(e)}")
-            return
+            self.logger.debug(f"Error connecting to RDP: {e!s}")
+            return None
         
         # Wait for desktop to be available
         await asyncio.sleep(3)
         
         try:
-            # Launch PowerShell
-            self.logger.debug("Launching PowerShell")
-            await self._send_keystrokes("powershell")
-            await self._send_enter()
-            await asyncio.sleep(1)  # Wait for PowerShell to start
+            # Try to open Run dialog using Windows+R
+            self.logger.debug("Attempting to open Run dialog")
+            win_r_success = await self._send_win_r()
+            
+            if win_r_success:
+                # Type powershell in Run dialog
+                self.logger.debug("Launching PowerShell via Run dialog")
+                await self._send_keystrokes("powershell")
+                await self._send_enter()
+                await asyncio.sleep(1.5)  # Wait for PowerShell window to open
+            else:
+                # Fallback: Try direct PowerShell typing (assumes we might be at a prompt)
+                self.logger.debug("Sending powershell command directly")
+                await self._send_keystrokes("powershell")
+                await self._send_enter()
+                await asyncio.sleep(1.5)
             
             # Type the PowerShell command
             self.logger.debug(f"Typing PowerShell command: {payload}")
@@ -451,7 +510,7 @@ class rdp(connection):
                 try:
                     await self.conn.terminate()
                 except Exception as e:
-                    self.logger.debug(f"Error terminating connection: {str(e)}")
+                    self.logger.debug(f"Error terminating connection: {e!s}")
     
     def execute(self, payload=None, get_output=True, shell_type="cmd"):
         """Execute a command via RDP"""
@@ -470,10 +529,10 @@ class rdp(connection):
                 result = asyncio.run(self.execute_ps(payload))
             
             if result:
-                self.logger.success(f"Command execution completed")
+                self.logger.success("Command execution completed")
             return result
         except Exception as e:
-            self.logger.debug(f"Command execution error: {str(e)}")
+            self.logger.debug(f"Command execution error: {e!s}")
             if shell_type == "cmd":
                 self.logger.info("Cannot execute command via cmd - now switching to PowerShell to attempt execution")
                 try:
