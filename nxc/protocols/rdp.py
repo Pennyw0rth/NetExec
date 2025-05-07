@@ -405,7 +405,7 @@ class rdp(connection):
             self.logger.debug("Using fallback approach for opening command prompt")
             return False
     
-    async def execute_cmd(self, payload, encoding=None):
+    async def execute_cmd(self, payload, encoding=None, capture_screenshot=False):
         """Execute a command using cmd.exe"""
         self.logger.debug(f"Executing command: {payload}")
         
@@ -442,7 +442,25 @@ class rdp(connection):
             self.logger.debug(f"Typing command: {payload}")
             await self._send_keystrokes(payload)
             await self._send_enter()
-            await asyncio.sleep(1)  # Wait for command to execute
+            
+            await asyncio.sleep(3.0)
+            
+            # Take a screenshot if requested
+            if capture_screenshot and self.conn is not None:
+                self.logger.debug("Waiting for screen to update...")
+                await asyncio.sleep(2.0)  # Additional wait to ensure screen is updated
+                
+                self.logger.debug(f"Desktop buffer has data: {self.conn.desktop_buffer_has_data}")
+                try:
+                    self.logger.debug("Capturing command output screenshot")
+                    buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
+                    screenshots_dir = os.path.expanduser("~/.nxc/screenshots")
+                    os.makedirs(screenshots_dir, exist_ok=True)  # Ensure the directory exists
+                    filename = os.path.join(screenshots_dir, f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
+                    buffer.save(filename, "png")
+                    self.logger.highlight(f"Command output screenshot saved: {filename}")
+                except Exception as e:
+                    self.logger.debug(f"Error taking screenshot: {e!s}")
             
             self.logger.debug("Command execution completed")
             return True
@@ -456,7 +474,7 @@ class rdp(connection):
                 except Exception as e:
                     self.logger.debug(f"Error terminating connection: {e!s}")
     
-    async def execute_ps(self, payload):
+    async def execute_ps(self, payload, capture_screenshot=False):
         """Execute a command using PowerShell"""
         self.logger.debug(f"Executing PowerShell command: {payload}")
         
@@ -493,7 +511,25 @@ class rdp(connection):
             self.logger.debug(f"Typing PowerShell command: {payload}")
             await self._send_keystrokes(payload)
             await self._send_enter()
-            await asyncio.sleep(1)  # Wait for command to execute
+            
+            # Wait longer for command to complete execution
+            await asyncio.sleep(3.0)  # Increased wait time to ensure command completes
+            
+            # Take a screenshot if requested
+            if capture_screenshot and self.conn is not None:
+                await asyncio.sleep(2.0)  # Additional wait to ensure screen is updated
+                
+                self.logger.debug(f"Desktop buffer has data: {self.conn.desktop_buffer_has_data}")
+                try:
+                    self.logger.debug("Capturing PowerShell command output screenshot")
+                    buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
+                    screenshots_dir = os.path.expanduser("~/.nxc/screenshots")
+                    os.makedirs(screenshots_dir, exist_ok=True)  # Ensure the directory exists
+                    filename = os.path.join(screenshots_dir, f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
+                    buffer.save(filename, "png")
+                    self.logger.highlight(f"PowerShell command output screenshot saved: {filename}")
+                except Exception as e:
+                    self.logger.debug(f"Error taking screenshot: {e!s}")
             
             # Exit PowerShell
             self.logger.debug("Exiting PowerShell")
@@ -519,14 +555,22 @@ class rdp(connection):
         
         if self.args.no_output:
             get_output = False
+            
+        # Check if screenshot is requested
+        capture_screenshot = hasattr(self.args, "screenshot") and self.args.screenshot
+        
+        # Debug the args object to verify the screenshot flag
+        self.logger.debug(f"Args object has screenshot attribute: {hasattr(self.args, 'screenshot')}")
+        if hasattr(self.args, "screenshot"):
+            self.logger.debug(f"Screenshot flag value: {self.args.screenshot}")
+        
+        if capture_screenshot:
+            self.logger.info("Will capture screenshot of command output")
 
         self.logger.info(f"Executing {shell_type} command: {payload}")
         
         try:
-            if shell_type == "cmd":
-                result = asyncio.run(self.execute_cmd(payload))
-            else:
-                result = asyncio.run(self.execute_ps(payload))
+            result = asyncio.run(self.execute_cmd(payload, capture_screenshot=capture_screenshot)) if shell_type == "cmd" else asyncio.run(self.execute_ps(payload, capture_screenshot=capture_screenshot))
             
             if result:
                 self.logger.success("Command execution completed")
@@ -560,6 +604,15 @@ class rdp(connection):
             self.logger.highlight(f"Screenshot saved {filename}")
 
     def screenshot(self):
+        # Don't take screenshot if we're already taking one during command execution
+        if hasattr(self.args, "execute") and self.args.execute is not None:
+            self.logger.debug("Skipping generic screenshot as -x is specified with --screenshot")
+            return
+        
+        if hasattr(self.args, "ps_execute") and self.args.ps_execute is not None:
+            self.logger.debug("Skipping generic screenshot as -X is specified with --screenshot")
+            return
+            
         asyncio.run(self.screen())
 
     async def nla_screen(self):
