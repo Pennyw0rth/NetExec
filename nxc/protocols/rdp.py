@@ -359,49 +359,128 @@ class rdp(connection):
                 )
             return False
         
-    async def execute_cmd(self, payload, encoding):
+    async def _send_keystrokes(self, text, delay=0.02):
+        """Helper method to send keystrokes to the RDP session"""
+        for char in text:
+            key_event = RDP_KEYBOARD_UNICODE()
+            key_event.char = char
+            key_event.is_pressed = True
+            await self.conn.ext_in_queue.put(key_event)
+            await asyncio.sleep(delay)
+    
+    async def _send_enter(self):
+        """Helper method to send Enter key to the RDP session"""
+        await self.conn.send_key_virtualkey('VK_RETURN', True, False)
+        await asyncio.sleep(0.05)
+        await self.conn.send_key_virtualkey('VK_RETURN', False, False)
+    
+    async def execute_cmd(self, payload, encoding=None):
+        """Execute a command using cmd.exe"""
+        self.logger.debug(f"Executing command: {payload}")
+        
+        # Create a connection
         try:
             self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
             await self.connect_rdp()
         except Exception as e:
+            self.logger.debug(f"Error connecting to RDP: {str(e)}")
             return
-
-        await asyncio.sleep(5)
-        if self.conn is not None:
-            for char in payload:
-                key_event = RDP_KEYBOARD_UNICODE()
-                key_event.char = char
-                key_event.is_pressed = True
-                await self.conn.ext_in_queue.put(key_event)
-                await asyncio.sleep(0.1)
-
-            # Send enter key
-            await self.conn.send_key_virtual_key('VK_RETURN', True, False)
-            await asyncio.sleep(0.1)
-            await self.conn.send_key_virtual_key('VK_RETURN', False, False)
-
-            if payload != 'exit':
-                await asyncio.sleep(2)
-            else:
-                await self.execute_cmd('exit', encoding)
-
+        
+        # Wait for desktop to be available
+        await asyncio.sleep(3)
+        
+        try:
+            # Type the command
+            self.logger.debug(f"Typing command: {payload}")
+            await self._send_keystrokes(payload)
+            await self._send_enter()
+            await asyncio.sleep(1)  # Wait for command to execute
+            
+            self.logger.debug("Command execution completed")
+            return True
+            
+        finally:
+            # Always clean up the connection
+            if self.conn is not None:
+                self.logger.debug("Terminating RDP connection")
+                try:
+                    await self.conn.terminate()
+                except Exception as e:
+                    self.logger.debug(f"Error terminating connection: {str(e)}")
     
-
+    async def execute_ps(self, payload):
+        """Execute a command using PowerShell"""
+        self.logger.debug(f"Executing PowerShell command: {payload}")
+        
+        # Create a connection
+        try:
+            self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
+            await self.connect_rdp()
+        except Exception as e:
+            self.logger.debug(f"Error connecting to RDP: {str(e)}")
+            return
+        
+        # Wait for desktop to be available
+        await asyncio.sleep(3)
+        
+        try:
+            # Launch PowerShell
+            self.logger.debug("Launching PowerShell")
+            await self._send_keystrokes("powershell")
+            await self._send_enter()
+            await asyncio.sleep(1)  # Wait for PowerShell to start
+            
+            # Type the PowerShell command
+            self.logger.debug(f"Typing PowerShell command: {payload}")
+            await self._send_keystrokes(payload)
+            await self._send_enter()
+            await asyncio.sleep(1)  # Wait for command to execute
+            
+            # Exit PowerShell
+            self.logger.debug("Exiting PowerShell")
+            await self._send_keystrokes("exit")
+            await self._send_enter()
+            await asyncio.sleep(0.5)
+            
+            self.logger.debug("PowerShell command execution completed")
+            return True
+            
+        finally:
+            if self.conn is not None:
+                self.logger.debug("Terminating RDP connection")
+                try:
+                    await self.conn.terminate()
+                except Exception as e:
+                    self.logger.debug(f"Error terminating connection: {str(e)}")
+    
     def execute(self, payload=None, get_output=True, shell_type="cmd"):
+        """Execute a command via RDP"""
         if not payload:
             payload = self.args.execute
         
         if self.args.no_output:
             get_output = False
 
+        self.logger.info(f"Executing {shell_type} command: {payload}")
+        
         try:
-            # TODO: Use aardwolf io 
-            result = asyncio.run(self.execute_cmd(payload, encoding=self.args.codec) if shell_type == "cmd" else self.conn.execute_ps(payload))
+            if shell_type == "cmd":
+                result = asyncio.run(self.execute_cmd(payload))
+            else:
+                result = asyncio.run(self.execute_ps(payload))
+            
+            if result:
+                self.logger.success(f"Command execution completed")
+            return result
         except Exception as e:
-            self.logger.info("Cannot execute command via cmd - now switching to Powershell to attempt execution")
-            try:
-                self.execute(payload, get_output, shell_type="poewrshell")
-            except Exception as e:
+            self.logger.debug(f"Command execution error: {str(e)}")
+            if shell_type == "cmd":
+                self.logger.info("Cannot execute command via cmd - now switching to PowerShell to attempt execution")
+                try:
+                    return self.execute(payload, get_output, shell_type="powershell")
+                except Exception as e2:
+                    self.logger.fail(f"Execute command failed, error: {e2!s}")
+            else:
                 self.logger.fail(f"Execute command failed, error: {e!s}")
 
     def ps_execute(self):
