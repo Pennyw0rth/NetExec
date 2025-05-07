@@ -94,9 +94,7 @@ def main():
         nxc_logger.error("KRB5CCNAME environment variable is not set")
         exit(1)
 
-    module_server = None
     targets = []
-    server_port_dict = {"http": 80, "https": 443, "smb": 445}
 
     if hasattr(args, "cred_id") and args.cred_id:
         for cred_id in args.cred_id:
@@ -203,13 +201,6 @@ def main():
                 if ans.lower() not in ["y", "yes", ""]:
                     exit(1)
 
-            if hasattr(module, "on_request") or hasattr(module, "has_response"):
-                if hasattr(module, "required_server"):
-                    args.server = module.required_server
-
-                if not args.server_port:
-                    args.server_port = server_port_dict[args.server]
-
             # Add modules paths to the protocol object so it can load them itself
             proto_module_paths.append(modules[m]["path"])
         protocol_object.module_paths = proto_module_paths
@@ -227,8 +218,6 @@ def main():
     except KeyboardInterrupt:
         nxc_logger.debug("Got keyboard interrupt")
     finally:
-        if module_server:
-            module_server.shutdown()
         db_engine.dispose()
 
 
