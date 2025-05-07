@@ -18,7 +18,6 @@ def proto_args(parser, parents):
     egroup.add_argument("--res", default="1024x768", help="Resolution in WIDTHxHEIGHT format")
 
     cgroup = rdp_parser.add_argument_group("Command Execution", "Options for executing commands")
-    cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
     cgroup.add_argument("-x", metavar="COMMAND", dest="execute", help="execute the specified command")
     cgroup.add_argument("-X", metavar="PS_COMMAND", dest="ps_execute", help="execute the specified PowerShell command")
 
