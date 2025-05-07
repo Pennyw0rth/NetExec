@@ -548,14 +548,12 @@ class rdp(connection):
                 except Exception as e:
                     self.logger.debug(f"Error terminating connection: {e!s}")
     
-    def execute(self, payload=None, get_output=True, shell_type="cmd"):
+    def execute(self, payload=None, shell_type="cmd"):
         """Execute a command via RDP"""
         if not payload:
             payload = self.args.execute
         
-        if self.args.no_output:
-            get_output = False
-            
+
         # Check if screenshot is requested
         capture_screenshot = hasattr(self.args, "screenshot") and self.args.screenshot
         
@@ -580,14 +578,14 @@ class rdp(connection):
             if shell_type == "cmd":
                 self.logger.info("Cannot execute command via cmd - now switching to PowerShell to attempt execution")
                 try:
-                    return self.execute(payload, get_output, shell_type="powershell")
+                    return self.execute(payload, shell_type="powershell")
                 except Exception as e2:
                     self.logger.fail(f"Execute command failed, error: {e2!s}")
             else:
                 self.logger.fail(f"Execute command failed, error: {e!s}")
 
     def ps_execute(self):
-        self.execute(payload=self.args.ps_execute, get_output=True, shell_type="powershell")
+        self.execute(payload=self.args.ps_execute, shell_type="powershell")
 
     async def screen(self):
         try:
