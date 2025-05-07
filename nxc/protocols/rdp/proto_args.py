@@ -17,4 +17,17 @@ def proto_args(parser, parents):
     egroup.add_argument("--screentime", type=int, default=10, help="Time to wait for desktop image")
     egroup.add_argument("--res", default="1024x768", help="Resolution in WIDTHxHEIGHT format")
 
+    cmd_exec_group = rdp_parser.add_argument_group("Command Execution", "Options for executing commands")
+    cmd_exec_group.add_argument("--exec-method", choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default="wmiexec", help="method to execute the command. Ignored if in MSSQL mode", action=DefaultTrackingAction)
+    cmd_exec_group.add_argument("--dcom-timeout", help="DCOM connection timeout", type=int, default=5)
+    cmd_exec_group.add_argument("--get-output-tries", help="Number of times atexec/smbexec/mmcexec tries to get results", type=int, default=10)
+    cmd_exec_group.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output. If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
+    cmd_exec_group.add_argument("--no-output", action="store_true", help="do not retrieve command output")
+
+    cgroup = rdp_parser.add_argument_group("Command Execution", "Options for executing commands")
+    cgroup.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output. If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
+    cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
+    cgroup.add_argument("-x", metavar="COMMAND", dest="execute", help="execute the specified command")
+    cgroup.add_argument("-X", metavar="PS_COMMAND", dest="ps_execute", help="execute the specified PowerShell command")
+
     return parser

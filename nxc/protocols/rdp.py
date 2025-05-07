@@ -357,6 +357,25 @@ class rdp(connection):
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
             return False
+        
+    def execute(self, payload=None, get_output=True, shell_type="cmd"):
+        if not payload:
+            payload = self.args.execute
+        
+        if self.args.no_output:
+            get_output = False
+
+        try:
+            result = self.conn.execute_cmd(payload, encoding=self.args.codec) if shell_type == "cmd" else self.conn.execute_ps(payload)
+        except Exception as e:
+            self.logger.info("Cannot execute command via cmd - now switching to Powershell to attempt execution")
+            try:
+                self.execute(payload, get_output, shell_type="poewrshell")
+            except Exception as e:
+                self.logger.fail(f"Execute command failed, error: {e!s}")
+
+    def ps_execute(self):
+        self.sexecute(payload=self.args.ps_execute, get_output=True, shell_type="powershell")
 
     async def screen(self):
         try:
