@@ -48,9 +48,3 @@ class NXCModule:
         Required if on_login is not present
         This gets called on each authenticated connection with  Administrative privileges
         """
-
-    def on_shutdown(self, context, connection):
-        """Optional.
-        Do something on shutdown
-        """
-
