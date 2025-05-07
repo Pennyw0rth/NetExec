@@ -461,6 +461,12 @@ class rdp(connection):
                     self.logger.highlight(f"Command output screenshot saved: {filename}")
                 except Exception as e:
                     self.logger.debug(f"Error taking screenshot: {e!s}")
+
+            # Exit CMD
+            self.logger.debug("Exiting CMD")
+            await self._send_keystrokes("exit")
+            await self._send_enter()
+            await asyncio.sleep(0.5)
             
             self.logger.debug("Command execution completed")
             return True
