@@ -18,9 +18,9 @@ from impacket.examples.regsecrets import (
     LSASecrets as RegSecretsLSASecrets
 )
 from impacket.nmb import NetBIOSError, NetBIOSTimeout
-from impacket.dcerpc.v5 import transport, lsat, lsad, scmr, rrp, srvs, wkst
+from impacket.dcerpc.v5 import transport, lsat, lsad, rrp, srvs, wkst
 from impacket.dcerpc.v5.rpcrt import DCERPCException
-from impacket.dcerpc.v5.transport import DCERPCTransportFactory, SMBTransport
+from impacket.dcerpc.v5.transport import DCERPCTransportFactory
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.dcerpc.v5.epm import MSRPC_UUID_PORTMAP
 from impacket.dcerpc.v5.samr import SID_NAME_USE
@@ -43,7 +43,6 @@ from nxc.paths import NXC_PATH
 from nxc.protocols.smb.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection
 from nxc.protocols.smb.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
 from nxc.protocols.smb.kerberos import kerberos_login_with_S4U
-from nxc.servers.smb import NXCSMBServer
 from nxc.protocols.smb.wmiexec import WMIEXEC
 from nxc.protocols.smb.atexec import TSCH_EXEC
 from nxc.protocols.smb.smbexec import SMBEXEC
@@ -65,14 +64,12 @@ from dploot.triage.sccm import SCCMTriage, SCCMCred, SCCMSecret, SCCMCollection
 
 from time import time, ctime
 from datetime import datetime
-from functools import wraps
 from traceback import format_exc
 import logging
 from termcolor import colored
 import contextlib
 
 smb_share_name = gen_random_string(5).upper()
-smb_server = None
 
 smb_error_status = [
     "STATUS_ACCOUNT_DISABLED",
@@ -103,50 +100,6 @@ def get_error_string(exception):
     else:
         return str(exception)
 
-
-def requires_smb_server(func):
-    def _decorator(self, *args, **kwargs):
-        global smb_server
-        global smb_share_name
-
-        get_output = False
-        payload = None
-        methods = []
-
-        with contextlib.suppress(IndexError):
-            payload = args[0]
-        with contextlib.suppress(IndexError):
-            get_output = args[1]
-        with contextlib.suppress(IndexError):
-            methods = args[2]
-
-        if "payload" in kwargs:
-            payload = kwargs["payload"]
-        if "get_output" in kwargs:
-            get_output = kwargs["get_output"]
-        if "methods" in kwargs:
-            methods = kwargs["methods"]
-        if not payload and self.args.execute and not self.args.no_output:
-            get_output = True
-        if (get_output or (methods and ("smbexec" in methods))) and not smb_server:
-            self.logger.debug("Starting SMB server")
-            smb_server = NXCSMBServer(
-                self.nxc_logger,
-                smb_share_name,
-                listen_port=self.args.smb_server_port,
-                verbose=self.args.verbose,
-            )
-            smb_server.start()
-
-        output = func(self, *args, **kwargs)
-        if smb_server is not None:
-            smb_server.shutdown()
-            smb_server = None
-        return output
-
-    return wraps(func)(_decorator)
-
-
 class smb(connection):
     def __init__(self, args, db, host):
         self.domain = None
@@ -172,6 +125,7 @@ class smb(connection):
         self.no_ntlm = False
         self.protocol = "SMB"
         self.is_guest = None
+        self.admin_privs = False
 
         connection.__init__(self, args, db, host)
 
@@ -417,7 +371,7 @@ class smb(connection):
             if self.args.delegate:
                 used_ccache = f" through S4U with {username}"
 
-            out = f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}"
+            out = f"{self.domain}\\{self.username}{used_ccache} {self.mark_stealth()}"
             self.logger.success(out)
 
             if not self.args.local_auth and self.username != "" and not self.args.delegate:
@@ -479,7 +433,7 @@ class smb(connection):
             host_id = self.db.get_hosts(self.host)[0].id
             self.db.add_loggedin_relation(user_id, host_id)
 
-            out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_guest()}{self.mark_pwned()}"
+            out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_guest()}{self.mark_stealth()}"
             self.logger.success(out)
 
             if not self.args.local_auth and self.username != "":
@@ -544,7 +498,7 @@ class smb(connection):
             host_id = self.db.get_hosts(self.host)[0].id
             self.db.add_loggedin_relation(user_id, host_id)
 
-            out = f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_guest()}{self.mark_pwned()}"
+            out = f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_guest()}{self.mark_stealth()}"
             self.logger.success(out)
 
             if not self.args.local_auth and self.username != "":
@@ -648,28 +602,32 @@ class smb(connection):
             return self.create_smbv1_conn()
 
     def check_if_admin(self):
-        self.logger.debug(f"Checking if user is admin on {self.host}")
-        rpctransport = SMBTransport(self.conn.getRemoteHost(), 445, r"\svcctl", smb_connection=self.conn)
-        dce = rpctransport.get_dce_rpc()
         try:
-            dce.connect()
-        except Exception:
-            self.admin_privs = False
-        else:
-            with contextlib.suppress(Exception):
-                dce.bind(scmr.MSRPC_UUID_SCMR)
+            if self.password is None and not self.nthash:
+                return
+
+            # Check if we can list the contents of C$
             try:
-                # 0xF003F - SC_MANAGER_ALL_ACCESS
-                # http://msdn.microsoft.com/en-us/library/windows/desktop/ms685981(v=vs.85).aspx
-                scmrobj = scmr.hROpenSCManagerW(dce, f"{self.host}\x00", "ServicesActive\x00", 0xF003F)
-                scmr.hREnumServicesStatusW(dce, scmrobj["lpScHandle"])
-                self.logger.debug(f"User is admin on {self.host}!")
+                self.logger.debug(f"Checking if user is admin on {self.host}")
+                self.logger.debug("Attempting to list the contents of the C$ share")
+                self.conn.listPath("C$", "*")
+                self.logger.debug(f"Successfully accessed C$ on {self.host}")
                 self.admin_privs = True
-            except scmr.DCERPCException:
-                self.admin_privs = False
-            except Exception as e:
-                self.logger.fail(f"Error checking if user is admin on {self.host}: {e}")
-                self.admin_privs = False
+                return
+            except SessionError as e:
+                if "STATUS_ACCESS_DENIED" in str(e):
+                    self.logger.debug(f"Access denied to C$ on {self.host}")
+                    self.admin_privs = False
+                    return
+                else:
+                    self.logger.debug(f"Error checking C$ access: {e!s}")
+
+            # If we get here, we couldn't determine admin status
+            self.admin_privs = False
+
+        except Exception as e:
+            self.logger.debug(f"Error checking if user is admin on {self.host}: {e!s}")
+            self.admin_privs = False
 
     def gen_relay_list(self):
         if self.server_os.lower().find("windows") != -1 and self.signing is False:
