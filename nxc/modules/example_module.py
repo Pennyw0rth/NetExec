@@ -49,3 +49,8 @@ class NXCModule:
         This gets called on each authenticated connection with  Administrative privileges
         """
 
+    def on_shutdown(self, context, connection):
+        """Optional.
+        Do something on shutdown
+        """
+
