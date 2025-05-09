@@ -183,8 +183,8 @@ class database(BaseDB):
                 ip_is_unique = False
                 for constraint in self.HostsTable.constraints:
                     if isinstance(constraint, UniqueConstraint) and constraint.columns[0].name == "ip":
-                            ip_is_unique = True
-                            break
+                        ip_is_unique = True
+                        break
                 if not ip_is_unique:
                     raise NoSuchTableError("ip is not unique in hosts table")
             except (NoInspectionAvailable, NoSuchTableError):
