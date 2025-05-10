@@ -77,3 +77,15 @@ def which(cmd, mode=os.F_OK | os.X_OK, path=None):
                 name = os.path.join(p, thefile)
                 if _access_check(name, mode):
                     return name
+
+def detect_ip_or_fqdn(input_string):
+    # Regex for matching IP address (both IPv4 and IPv6)
+    ip_pattern = re.compile(r"^(\d{1,3}\.){3}\d{1,3}$")  # Simple IPv4 pattern
+    fqdn_pattern = re.compile(r"^[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")  # Simple FQDN pattern
+
+    if ip_pattern.match(input_string):
+        return True
+    elif fqdn_pattern.match(input_string):
+        return False
+    else:
+        return False
