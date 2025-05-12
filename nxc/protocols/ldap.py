@@ -25,6 +25,7 @@ from impacket.dcerpc.v5.samr import (
 )
 from impacket.krb5 import constants
 from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError
+from impacket.krb5.ccache import CCache
 from impacket.krb5.types import Principal, KerberosException
 from impacket.ldap import ldap as ldap_impacket
 from impacket.ldap import ldaptypes
@@ -172,7 +173,7 @@ class ldap(connection):
             ldap_url = f"{proto}://{self.host}"
             self.logger.info(f"Connecting to {ldap_url} with no baseDN")
             try:
-                self.ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.host)
+                self.ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.host, signing=False)
                 if self.ldap_connection:
                     self.logger.debug(f"ldap_connection: {self.ldap_connection}")
             except SysCallError as e:
@@ -232,7 +233,6 @@ class ldap(connection):
     def enum_host_info(self):
         self.hostname = self.target.split(".")[0].upper() if "." in self.target else self.target
         self.remoteName = self.target
-        self.domain = self.targetDomain
 
         ntlm_challenge = None
         bindRequest = ldapasn1_impacket.BindRequest()
@@ -249,6 +249,14 @@ class ldap(connection):
         if ntlm_challenge:
             ntlm_info = parse_challenge(ntlm_challenge)
             self.server_os = ntlm_info["os_version"]
+
+        if self.args.domain:
+            self.domain = self.args.domain
+        elif self.args.use_kcache:  # Fixing domain trust, just pull the auth domain out of the ticket
+            self.domain = CCache.parseFile()[0]
+            self.username = CCache.parseFile()[1]
+        else:
+            self.domain = self.targetDomain
 
         # using kdcHost is buggy on impacket when using trust relation between ad so we kdcHost must stay to none if targetdomain is not equal to domain
         if not self.kdcHost and self.domain and self.domain == self.targetDomain:
@@ -276,7 +284,7 @@ class ldap(connection):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
-        self.username = username
+        self.username = username if not self.username else self.username    # With ccache we get the username from the ticket
         self.password = password
         self.domain = domain
         self.kdcHost = kdcHost
@@ -284,7 +292,7 @@ class ldap(connection):
 
         lmhash = ""
         nthash = ""
-        self.username = username
+
         # This checks to see if we didn't provide the LM Hash
         if ntlm_hash.find(":") != -1:
             lmhash, nthash = ntlm_hash.split(":")
@@ -314,7 +322,7 @@ class ldap(connection):
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [1]")
-            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
+            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
             self.ldap_connection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
             if self.username == "":
                 self.username = self.get_ldap_username()
@@ -366,7 +374,7 @@ class ldap(connection):
                     self.logger.extra["port"] = "636"
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [2]")
-                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
                     self.ldap_connection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
                     if self.username == "":
                         self.username = self.get_ldap_username()
@@ -430,7 +438,7 @@ class ldap(connection):
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3]")
-            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
+            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
             self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
             self.check_if_admin()
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
@@ -453,7 +461,7 @@ class ldap(connection):
                     self.logger.extra["port"] = "636"
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [4]")
-                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
                     self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
                     self.check_if_admin()
                     self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
@@ -520,7 +528,7 @@ class ldap(connection):
             proto = "ldaps" if self.port == 636 else "ldap"
             ldaps_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
-            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
             self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
             self.check_if_admin()
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.hash}")
@@ -543,7 +551,7 @@ class ldap(connection):
                     self.logger.extra["port"] = "636"
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
-                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
                     self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
                     self.check_if_admin()
                     self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.hash}")

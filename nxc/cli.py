@@ -16,7 +16,7 @@ import importlib.metadata
 
 def gen_cli_args():
     setup_debug_logging()
-    
+
     try:
         VERSION, COMMIT = importlib.metadata.version("netexec").split("+")
         DISTANCE, COMMIT = COMMIT.split(".")
@@ -26,28 +26,28 @@ def gen_cli_args():
         DISTANCE = ""
     CODENAME = "SmoothOperator"
     nxc_logger.debug(f"NXC VERSION: {VERSION} - {CODENAME} - {COMMIT} - {DISTANCE}")
-    
+
     generic_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     generic_group = generic_parser.add_argument_group("Generic", "Generic options for nxc across protocols")
     generic_group.add_argument("--version", action="store_true", help="Display nxc version")
     generic_group.add_argument("-t", "--threads", type=int, dest="threads", default=256, help="set how many concurrent threads to use")
     generic_group.add_argument("--timeout", default=None, type=int, help="max timeout in seconds of each thread")
     generic_group.add_argument("--jitter", metavar="INTERVAL", type=str, help="sets a random delay between each authentication")
-    
+
     output_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     output_group = output_parser.add_argument_group("Output", "Options to set verbosity levels and control output")
     output_group.add_argument("--verbose", action="store_true", help="enable verbose output")
     output_group.add_argument("--debug", action="store_true", help="enable debug level information")
     output_group.add_argument("--no-progress", action="store_true", help="do not displaying progress bar during scan")
     output_group.add_argument("--log", metavar="LOG", help="export result into a custom file")
-    
+
     dns_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     dns_group = dns_parser.add_argument_group("DNS")
     dns_group.add_argument("-6", dest="force_ipv6", action="store_true", help="Enable force IPv6")
     dns_group.add_argument("--dns-server", action="store", help="Specify DNS server (default: Use hosts file & System DNS)")
     dns_group.add_argument("--dns-tcp", action="store_true", help="Use TCP instead of UDP for DNS queries")
     dns_group.add_argument("--dns-timeout", action="store", type=int, default=3, help="DNS query timeout in seconds")
-    
+
     parser = argparse.ArgumentParser(
         description=rf"""
      .   .
@@ -107,12 +107,6 @@ def gen_cli_args():
     certificate_group.add_argument("--pfx-pass", metavar="PFXPASS", help="Password of the pfx certificate")
     certificate_group.add_argument("--pem-cert", metavar="PEMCERT", help="Use certificate authentication from PEM file")
     certificate_group.add_argument("--pem-key", metavar="PEMKEY", help="Private key for the PEM format")
-    
-    server_group = std_parser.add_argument_group("Servers", "Options for nxc servers")
-    server_group.add_argument("--server", choices={"http", "https"}, default="https", help="use the selected server")
-    server_group.add_argument("--server-host", type=str, default="0.0.0.0", metavar="HOST", help="IP to bind the server to")
-    server_group.add_argument("--server-port", metavar="PORT", type=int, help="start the server on the specified port")
-    server_group.add_argument("--connectback-host", type=str, metavar="CHOST", help="IP for the remote system to connect back to")    
 
     p_loader = ProtocolLoader()
     protocols = p_loader.get_protocols()
