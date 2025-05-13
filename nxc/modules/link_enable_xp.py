@@ -17,9 +17,9 @@ class NXCModule:
     def options(self, context, module_options):
         """
         Defines the options for enabling or disabling xp_cmdshell on the linked server.
-        ACTION    Specifies whether to enable or disable:
-                  - enable (default)
-                  - disable
+        ACTION           Specifies whether to enable or disable:
+                          - enable (default)
+                          - disable
         LINKED_SERVER    The name of the linked SQL server to target.
         """
         self.action = module_options.get("ACTION", "enable")
