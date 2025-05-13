@@ -30,15 +30,6 @@ class NXCModule:
             self.context.log.fail("Please provide both LINKED_SERVER and CMD options.")
             return
 
-        self.run_xp_cmdshell(self.command)
-
-    def run_xp_cmdshell(self, cmd):
-        """Run the specified command via xp_cmdshell on the linked server."""
-        query = f"EXEC ('xp_cmdshell ''{cmd}''') AT [{self.linked_server}]"
-        self.context.log.display(f"Running command on {self.linked_server}: {cmd}")
-        result = self.query_and_get_output(query)
-        self.context.log.success(f"Command output:\n{result}")
-
-    def query_and_get_output(self, query):
-        """Executes a query and returns the output."""
-        return self.mssql_conn.sql_query(query)
+        self.context.log.display(f"Running command on {self.linked_server}: {self.command}")
+        result = self.mssql_conn.sql_query(f"EXEC ('xp_cmdshell ''{self.command}''') AT [{self.linked_server}]")
+        self.context.log.success(f"Command output: {result}")
