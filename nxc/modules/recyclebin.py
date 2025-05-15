@@ -24,14 +24,9 @@ class NXCModule:
     def on_admin_login(self, context, connection):
         found = 0
         try:
-            remote_ops = RemoteOperations(connection.conn, False)
+            remote_ops = RemoteOperations(connection.conn, connection.kerberos)
             remote_ops.enableRegistry()
-        except DCERPCSessionError as e:
-            context.log.debug(f"Error connecting to RemoteRegistry {e} on host {connection.host}")
-        finally:
-            remote_ops.finish()
 
-        if remote_ops._RemoteOperations__rrp:
             for sid_directory in connection.conn.listPath("C$",  "$Recycle.Bin\\*"):
                 if sid_directory.get_longname() and sid_directory.get_longname() not in self.false_positive:
 
@@ -99,3 +94,7 @@ class NXCModule:
                                     context.log.debug(f"Couldn't open {path} because of {e}")
             if found > 0:
                 context.log.highlight(f"Recycle bin's content downloaded to {export_path}")
+        except DCERPCSessionError as e:
+            context.log.fail(f"Error connecting to RemoteRegistry {e} on host {connection.host}")
+        finally:
+            remote_ops.finish()
