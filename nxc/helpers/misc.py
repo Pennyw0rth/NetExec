@@ -4,6 +4,7 @@ import re
 import inspect
 import os
 
+from ipaddress import ip_address
 
 def identify_target_file(target_file):
     with open(target_file) as target_file_handle:
@@ -78,14 +79,9 @@ def which(cmd, mode=os.F_OK | os.X_OK, path=None):
                 if _access_check(name, mode):
                     return name
 
-def detect_ip_or_fqdn(input_string):
-    # Regex for matching IP address (both IPv4 and IPv6)
-    ip_pattern = re.compile(r"^(\d{1,3}\.){3}\d{1,3}$")  # Simple IPv4 pattern
-    fqdn_pattern = re.compile(r"^[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")  # Simple FQDN pattern
-
-    if ip_pattern.match(input_string):
+def detect_if_ip(target):
+    try:
+        ip_address(target)
         return True
-    elif fqdn_pattern.match(input_string):
-        return False
-    else:
+    except Exception as e:
         return False

@@ -56,7 +56,7 @@ from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.helpers.logger import highlight
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.powershell import create_ps_command
-from nxc.helpers.misc import detect_ip_or_fqdn
+from nxc.helpers.misc import detect_if_ip
 from nxc.protocols.ldap.resolution import LDAPResolution
 
 from dploot.triage.vaults import VaultsTriage
@@ -236,7 +236,7 @@ class smb(connection):
                 self.targetDomain = self.hostname
         else:
             try:
-                if self.is_host_dc() and detect_ip_or_fqdn(self.host):
+                if self.is_host_dc() and detect_if_ip(self.host):
                     self.hostname, self.domain = LDAPResolution(self.host).get_resolution()
                     self.targetDomain = self.domain
                 # If we can't authenticate with NTLM and the target is supplied as a FQDN we must parse it
