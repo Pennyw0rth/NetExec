@@ -49,19 +49,19 @@ class NXCModule:
 
         regexps = [
             # "C:\Windows\system32\net.exe" user /add lodos2005 123456 /domain 
-            "net.+user\s+(?P<username>[^\s]+)\s+(?P<password>[^\s]+)",
+            r"net.+user\s+(?P<username>[^\s]+)\s+(?P<password>[^\s]+)",
             # "C:\Windows\system32\net.exe" use \\server\share /user:contoso\lodos2005 password
-            "net.+use.+/user:(?P<username>[^\s]+)\s+(?P<password>[^\s]+)",
+            r"net.+use.+/user:(?P<username>[^\s]+)\s+(?P<password>[^\s]+)",
             # schtasks.exe /CREATE /S 192.168.20.05 /RU SYSTEM /U lodos2005@contoso /P "123456" /SC ONCE /ST 20:05 /TN Test /TR hostname /F
-            "schtasks.+/U\s+(?P<username>[^\s]+).+/P\s+(?P<password>[^\s]+)",
+            r"schtasks.+/U\s+(?P<username>[^\s]+).+/P\s+(?P<password>[^\s]+)",
             # wmic.exe /node:192.168.20.05 /user:lodos2005@contoso /password:123456 computersystem get
-            "wmic.+/user:\s*(?P<username>[^\s]+).+/password:\s*(?P<password>[^\s]+)",
+            r"wmic.+/user:\s*(?P<username>[^\s]+).+/password:\s*(?P<password>[^\s]+)",
             # psexec \\192.168.20.05 -u lodos2005@contoso -p 123456 hostname
-            "psexec.+-u\s+(?P<username>[^\s]+).+-p\s+(?P<password>[^\s]+)",
+            r"psexec.+-u\s+(?P<username>[^\s]+).+-p\s+(?P<password>[^\s]+)",
             # generic username on command line
-            "(?:(?:(?:-u)|(?:-user)|(?:-username)|(?:--user)|(?:--username)|(?:/u)|(?:/USER)|(?:/USERNAME))(?:\s+|\:)(?P<username>[^\s]+))",
+            r"(?:(?:(?:-u)|(?:-user)|(?:-username)|(?:--user)|(?:--username)|(?:/u)|(?:/USER)|(?:/USERNAME))(?:\s+|\:)(?P<username>[^\s]+))",
             # generic password on command line
-            "(?:(?:(?:-p)|(?:-password)|(?:-passwd)|(?:--password)|(?:--passwd)|(?:/P)|(?:/PASSWD)|(?:/PASS)|(?:/CODE)|(?:/PASSWORD))(?:\s+|\:)(?P<password>[^\s]+))",
+            r"(?:(?:(?:-p)|(?:-password)|(?:-passwd)|(?:--password)|(?:--passwd)|(?:/P)|(?:/PASSWD)|(?:/PASS)|(?:/CODE)|(?:/PASSWORD))(?:\s+|\:)(?P<password>[^\s]+))",
         ]
         # Extracting credentials
         for line in content.split("\n"):
@@ -121,7 +121,7 @@ class NXCModule:
                     continue
                 try:
                     xmlString = ResultSet(record).xml()
-                    regexp = 'CommandLine">(?P<CommandLine>(.|\n)*?)<\/Data>'
+                    regexp = r'CommandLine">(?P<CommandLine>(.|\n)*?)<\/Data>'
                     match = re.search(regexp, xmlString, re.IGNORECASE)
                     if match and match.groupdict().get("CommandLine"):
                         content += "CommandLine: " + match.group("CommandLine") + "\n"
