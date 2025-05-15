@@ -217,8 +217,6 @@ class NXCModule:
             context.log.display(
                 f"secretsdump.py -system '{self.dir_result}/registry/SYSTEM' -security '{self.dir_result}/registry/SECURITY' -ntds '{self.dir_result}/Active Directory/ntds.dit' LOCAL"
             )
-            context.log.display("To extract only enabled accounts from the output file, run the following command: ")
-            context.log.display(f"grep -iv disabled {connection.output_filename}.ntds | cut -d ':' -f1")
         else:
             base_dir = os.path.join(os.environ["HOME"], ".nxc", "logs", "ntds")
 
@@ -256,4 +254,6 @@ class NXCModule:
                     f.writelines(cleaned_lines)
 
             context.log.success(f"impacket-secretsdump output saved to {output_file}")
+            context.log.display("To extract only enabled accounts from the output file, run the following command: ")
+            context.log.display(f"grep -iv disabled {output_file} | cut -d ':' -f1")
 
