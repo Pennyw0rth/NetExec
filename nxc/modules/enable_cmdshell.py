@@ -40,7 +40,7 @@ class NXCModule:
         elif self.action == "disable":
             self.toggle_xp_cmdshell(enable=False)
         else:
-            self.context.log.error("Invalid ACTION. Use 'enable' or 'disable'.")
+            self.context.log.fail("Invalid ACTION. Use 'enable' or 'disable'.")
 
     def backup_show_advanced_options(self):
         """Backs up the current state of 'show advanced options'."""
@@ -52,7 +52,7 @@ class NXCModule:
     def restore_show_advanced_options(self):
         """Restores the original state of 'show advanced options' if needed."""
         if self.advanced_options_backup is not None and self.advanced_options_backup == 0:
-            self.mssql_conn.sql_query("EXEC sp_configure 'show advanced options', '0'; RECONFIGURE")
+            self.mssql_conn.sql_query("EXEC sp_configure 'show advanced options', '0'; RECONFIGURE;")
 
     def toggle_xp_cmdshell(self, enable: bool):
         """Enables or disables xp_cmdshell while preserving 'show advanced options' state."""
@@ -62,15 +62,15 @@ class NXCModule:
         self.backup_show_advanced_options()
 
         # Enable 'show advanced options' if it was disabled
-        self.mssql_conn.sql_query("EXEC sp_configure 'show advanced options', '1'; RECONFIGURE")
+        self.mssql_conn.sql_query("EXEC sp_configure 'show advanced options', '1'; RECONFIGURE;")
 
         try:
             # Enable or disable xp_cmdshell
-            self.mssql_conn.sql_query(f"EXEC sp_configure 'xp_cmdshell', '{state}'; RECONFIGURE")
+            self.mssql_conn.sql_query(f"EXEC sp_configure 'xp_cmdshell', '{state}'; RECONFIGURE;")
             action_text = "enabled" if enable else "disabled"
             self.context.log.success(f"xp_cmdshell successfully {action_text}.")
         except Exception as e:
-            self.context.log.error(f"Failed to execute command: {e}")
+            self.context.log.fail(f"Failed to execute command: {e}")
 
         # Restore 'show advanced options' to its original state if needed
         self.restore_show_advanced_options()
