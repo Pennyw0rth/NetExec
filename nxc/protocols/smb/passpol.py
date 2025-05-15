@@ -23,7 +23,7 @@ def convert(low, high, lockout=False):
     time = ""
     tmp = 0
 
-    if low == 0 and hex(high) == "-0x80000000":
+    if low == 0 and high == -0x8000_0000 or low == 0 and high == -0x8000_0000_0000_0000:
         return "Not Set"
     if low == 0 and high == 0:
         return "None"
@@ -35,7 +35,7 @@ def convert(low, high, lockout=False):
             high = abs(high)
             low = abs(low)
 
-        tmp = low + (high) * 16**8  # convert to 64bit int
+        tmp = low + (high << 32)  # convert to 64bit int
         tmp *= 1e-7  # convert to seconds
     else:
         tmp = abs(high) * (1e-7)

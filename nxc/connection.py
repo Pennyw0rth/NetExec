@@ -1,4 +1,7 @@
 import random
+import sys
+import contextlib
+
 from os.path import isfile
 from threading import BoundedSemaphore
 from functools import wraps
@@ -13,10 +16,9 @@ from nxc.loaders.moduleloader import ModuleLoader
 from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
 from nxc.protocols.ldap.laps import laps_search
+from nxc.helpers.pfx import pfx_auth
 
 from impacket.dcerpc.v5 import transport
-import sys
-import contextlib
 
 sem = BoundedSemaphore(1)
 global_failed_logins = 0
@@ -229,7 +231,8 @@ class connection:
         else:
             self.logger.debug("Created connection object")
             self.enum_host_info()
-            if self.print_host_info() and (self.login() or (self.username == "" and self.password == "")):
+            self.print_host_info()
+            if self.login() or (self.username == "" and self.password == ""):
                 if hasattr(self.args, "module") and self.args.module:
                     self.load_modules()
                     self.logger.debug("Calling modules")
@@ -281,11 +284,6 @@ class connection:
             context = Context(self.db, module_logger, self.args)
             context.localip = self.local_ip
 
-            if hasattr(module, "on_request") or hasattr(module, "has_response"):
-                self.logger.debug(f"Module {module.name} has on_request or has_response methods")
-                self.server.connection = self
-                self.server.context.localip = self.local_ip
-
             if hasattr(module, "on_login"):
                 self.logger.debug(f"Module {module.name} has on_login method")
                 module.on_login(context, self)
@@ -293,10 +291,6 @@ class connection:
             if self.admin_privs and hasattr(module, "on_admin_login"):
                 self.logger.debug(f"Module {module.name} has on_admin_login method")
                 module.on_admin_login(context, self)
-
-            if (not hasattr(module, "on_request") and not hasattr(module, "has_response")) and hasattr(module, "on_shutdown"):
-                self.logger.debug(f"Module {module.name} has on_shutdown method")
-                module.on_shutdown(context, self)
 
     def inc_failed_login(self, username):
         global global_failed_logins
@@ -383,10 +377,10 @@ class connection:
             if isfile(user):
                 with open(user) as user_file:
                     for line in user_file:
-                        if "\\" in line:
+                        if "\\" in line and len(line.split("\\")) == 2:
                             domain_single, username_single = line.split("\\")
                         else:
-                            domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain else self.domain
+                            domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain is not None else self.domain
                             username_single = line
                         domain.append(domain_single)
                         username.append(username_single.strip())
@@ -395,7 +389,7 @@ class connection:
                 if "\\" in user:
                     domain_single, username_single = user.split("\\")
                 else:
-                    domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain else self.domain
+                    domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain is not None else self.domain
                     username_single = user
                 domain.append(domain_single)
                 username.append(username_single)
@@ -546,6 +540,14 @@ class connection:
                 self.kerberos_login(self.domain, username, password, "", "", self.kdcHost, True)
                 self.logger.info("Successfully authenticated using Kerberos cache")
                 return True
+
+        if self.args.pfx_cert or self.args.pfx_base64 or self.args.pem_cert:
+            self.logger.debug("Trying to authenticate using Certificate pfx")
+            if not self.args.username:
+                self.logger.fail("You must specify a username when using certificate authentication")
+                return False
+            with sem:
+                return pfx_auth(self)
 
         if hasattr(self.args, "laps") and self.args.laps:
             self.logger.debug("Trying to authenticate using LAPS")
