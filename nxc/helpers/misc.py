@@ -83,5 +83,5 @@ def detect_if_ip(target):
     try:
         ip_address(target)
         return True
-    except Exception as e:
+    except Exception:
         return False
