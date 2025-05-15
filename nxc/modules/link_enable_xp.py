@@ -17,9 +17,9 @@ class NXCModule:
     def options(self, context, module_options):
         """
         Defines the options for enabling or disabling xp_cmdshell on the linked server.
-        ACTION    Specifies whether to enable or disable:
-                  - enable (default)
-                  - disable
+        ACTION           Specifies whether to enable or disable:
+                          - enable (default)
+                          - disable
         LINKED_SERVER    The name of the linked SQL server to target.
         """
         self.action = module_options.get("ACTION", "enable")
@@ -28,6 +28,10 @@ class NXCModule:
     def on_login(self, context, connection):
         self.context = context
         self.mssql_conn = connection.conn
+
+        # Store the original state of options that have to be enabled/disabled in order to restore them later
+        self.backuped_options = {}
+
         if not self.linked_server:
             self.context.log.fail("Please provide a linked server name using the LINKED_SERVER option.")
             return
@@ -42,22 +46,58 @@ class NXCModule:
 
     def enable_xp_cmdshell(self):
         """Enable xp_cmdshell on the linked server."""
-        query = f"EXEC ('sp_configure ''show advanced options'', 1; RECONFIGURE;') AT [{self.linked_server}]"
-        self.context.log.display(f"Enabling advanced options on {self.linked_server}...")
-        out = self.query_and_get_output(query)
-        query = f"EXEC ('sp_configure ''xp_cmdshell'', 1; RECONFIGURE;') AT [{self.linked_server}]"
-        self.context.log.display(f"Enabling xp_cmdshell on {self.linked_server}...")
-        out = self.query_and_get_output(query)
-        self.context.log.display(out)
+        self.backup_and_enable("advanced options")
+
+        current_value = self.is_option_enabled("xp_cmdshell")
+        self.context.log.display(f"Enabling xp_cmdshell on {self.linked_server}. Current value: {current_value}")
+        self.mssql_conn.sql_query(f"EXEC ('sp_configure ''xp_cmdshell'', 1; RECONFIGURE;') AT [{self.linked_server}]")
         self.context.log.success(f"xp_cmdshell enabled on {self.linked_server}")
+
+        self.restore("advanced options")
 
     def disable_xp_cmdshell(self):
         """Disable xp_cmdshell on the linked server."""
-        query = f"EXEC ('sp_configure ''xp_cmdshell'', 0; RECONFIGURE; sp_configure ''show advanced options'', 0; RECONFIGURE;') AT [{self.linked_server}]"
-        self.context.log.display(f"Disabling xp_cmdshell on {self.linked_server}...")
-        self.query_and_get_output(query)
+        self.backup_and_enable("advanced options")
+
+        current_value = self.is_option_enabled("xp_cmdshell")
+        self.context.log.display(f"Disabling xp_cmdshell on {self.linked_server}. Current value: {current_value}")
+        self.mssql_conn.sql_query(f"EXEC ('sp_configure xp_cmdshell, 0; RECONFIGURE;') AT [{self.linked_server}]")
         self.context.log.success(f"xp_cmdshell disabled on {self.linked_server}")
 
-    def query_and_get_output(self, query):
-        """Executes a query and returns the output."""
-        return self.mssql_conn.sql_query(query)
+        self.restore("advanced options")
+
+    # Adapting methods from MSSQLEXEC for backup and restore functionality
+    def restore(self, option):
+        try:
+            if not self.backuped_options[option]:
+                self.context.log.debug(f"Option '{option}' was not enabled on {self.linked_server} originally, attempting to disable it.")
+                query = f"EXEC ('EXEC master.dbo.sp_configure \"{option}\", 0;RECONFIGURE;') AT [{self.linked_server}]"
+                self.context.log.debug(f"Executing query: {query}")
+                self.mssql_conn.sql_query(query)
+            else:
+                self.context.log.debug(f"Option '{option}' was originally enabled on {self.linked_server}, leaving it enabled.")
+        except Exception as e:
+            self.context.log.error(f"[OPSEC] Error when attempting to restore option '{option}' on {self.linked_server}: {e}")
+
+    def backup_and_enable(self, option):
+        try:
+            self.backuped_options[option] = self.is_option_enabled(option)
+            if not self.backuped_options[option]:
+                self.context.log.debug(f"Option '{option}' is disabled on {self.linked_server}, attempting to enable it.")
+                query = f"EXEC ('EXEC master.dbo.sp_configure \"{option}\", 1;RECONFIGURE;') AT [{self.linked_server}]"
+                self.context.log.debug(f"Executing query: {query}")
+                self.mssql_conn.sql_query(query)
+            else:
+                self.context.log.debug(f"Option '{option}' is already enabled on {self.linked_server}.")
+        except Exception as e:
+            self.context.log.error(f"Error when checking/enabling option '{option}' on {self.linked_server}: {e}")
+
+    def is_option_enabled(self, option):
+        query = f"EXEC ('EXEC master.dbo.sp_configure \"{option}\";') AT [{self.linked_server}]"
+        self.context.log.debug(f"Checking if {option} is enabled on {self.linked_server}: {query}")
+        result = self.mssql_conn.sql_query(query)
+        # Assuming the query returns a list of dictionaries with 'config_value' as the key
+        self.context.log.debug(f"{option} check result: {result}")
+        if result and result[0]["config_value"] == 1:
+            return True
+        return False
