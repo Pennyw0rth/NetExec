@@ -67,29 +67,26 @@ class NXCModule:
                                 # $I files are metadata while $R are actual files so we split the path from the SID
                                 # And check that the filename contains $R only to prevent downloading useless stuff
 
-                                if "$R" in path.split(sid_directory.get_longname())[1] and not path.endswith(false_positiv):
+                                if "$R" in path.split(sid_directory.get_longname())[1] and not path.endswith(false_positive):
+                                    # Create the export path
+                                    export_path = join(NXC_PATH, "modules", "recyclebin")
+                                    makedirs(export_path, exist_ok=True)
+
+                                    # Formatting the destination filename
+                                    file_path = path.split("$")[-1].replace("/", "_")
+                                    filename = f"{connection.host}_{username if username else sid_directory.get_longname()}_recyclebin_{file_path}"
+                                    dest_path = abspath(join(export_path, filename))
                                     try:
-                                        buf = BytesIO()
-                                        connection.conn.getFile("C$", path, buf.write)
-                                        context.log.highlight(f"\t{path}")
-                                        found += 1
-                                        buf.seek(0)
-                                        file_path = path.split("$")[-1].replace("/", "_")
-                                        if username:  # noqa: SIM108
-                                            filename = f"{connection.host}_{username}_recyclebin_{file_path}"
-                                        else:
-                                            filename = f"{connection.host}_{sid_directory.get_longname()}_recyclebin_{file_path}"
-                                        export_path = join(NXC_PATH, "modules", "recyclebin")
-                                        path = abspath(join(export_path, filename))
-                                        makedirs(export_path, exist_ok=True)
-                                        try:
-                                            with open(path, "w+") as file:
-                                                file.write(buf.read().decode("utf-8", errors="ignore"))
-                                        except Exception as e:
-                                            context.log.fail(f"Failed to write recyclebin file to {filename}: {e}")
+                                        with open(dest_path, "wb+") as file:
+                                            connection.conn.getFile("C$", path, file.write)
                                     except Exception as e:
-                                        # Probably trying to getFile a directory which won't work
-                                        context.log.debug(f"Couldn't open {path} because of {e}")
+                                        if "STATUS_FILE_IS_A_DIRECTORY" in str(e):
+                                            context.log.debug(f"Couldn't open {dest_path} because of {e}")
+                                        else:
+                                            context.log.fail(f"Failed to write recyclebin file to {filename}: {e}")
+                                    else:
+                                        context.log.highlight(f"\t{dest_path}")
+                                        found += 1
                 except DCERPCSessionError as e:
                     if "ERROR_FILE_NOT_FOUND" in str(e):
                         continue
