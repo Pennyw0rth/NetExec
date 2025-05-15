@@ -4,7 +4,7 @@ class NXCModule:
     Module by deathflamingo
     """
 
-    name = "link_enable_xp"
+    name = "link_enable_cmdshell"
     description = "Enable or disable xp_cmdshell on a linked SQL server"
     supported_protocols = ["mssql"]
     opsec_safe = False
