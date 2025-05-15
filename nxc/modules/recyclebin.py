@@ -48,7 +48,7 @@ class NXCModule:
                             "C$",
                             folder=spider_folder,
                             regex=[r"(.*)"],
-                            no_print_results=True
+                            silent=True
                         )
 
                         false_positive = (".", "..", "desktop.ini")

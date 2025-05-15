@@ -19,7 +19,7 @@ class SMBSpider:
         self.onlyfiles = True
         self.content = False
         self.results = []
-        self.no_print_results = False
+        self.silent = False
 
     def spider(
         self,
@@ -31,7 +31,7 @@ class SMBSpider:
         depth=None,
         content=False,
         onlyfiles=True,
-        no_print_results = False
+        silent = False
     ):
         if exclude_dirs is None:
             exclude_dirs = []
@@ -50,7 +50,7 @@ class SMBSpider:
         self.exclude_dirs = exclude_dirs
         self.content = content
         self.onlyfiles = onlyfiles
-        self.no_print_results = no_print_results
+        self.silent = silent
 
         if share == "*":
             self.logger.display("Enumerating shares for spidering")
@@ -69,7 +69,7 @@ class SMBSpider:
                 self.logger.fail(f"Error enumerating shares: {e}")
         else:
             self.share = share
-            if not self.no_print_results:
+            if not self.silent:
                 self.logger.display(f"Spidering {folder}")
             self._spider(folder, depth)
 
@@ -118,40 +118,36 @@ class SMBSpider:
             if self.pattern:
                 for pattern in self.pattern:
                     if bytes(result.get_longname().lower(), "utf8").find(bytes(pattern.lower(), "utf8")) != -1:
-                        if not self.onlyfiles and result.is_directory():
-                            if not self.no_print_results:
-                                self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{self.share}/{path}{result.get_longname()} [dir]")
-                        else:
-                            if not self.no_print_results:
-                                self.logger.highlight(
-                                    "//{}/{}/{}{} [lastm:'{}' size:{}]".format(
-                                        self.smbconnection.getRemoteHost(),
-                                        self.share,
-                                        path,
-                                        result.get_longname(),
-                                        "n\\a" if not self.get_lastm_time(result) else self.get_lastm_time(result),
-                                        result.get_filesize(),
-                                    )
+                        if not self.onlyfiles and result.is_directory() and not self.silent:
+                            self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{self.share}/{path}{result.get_longname()} [dir]")
+                        elif not self.silent:
+                            self.logger.highlight(
+                                "//{}/{}/{}{} [lastm:'{}' size:{}]".format(
+                                    self.smbconnection.getRemoteHost(),
+                                    self.share,
+                                    path,
+                                    result.get_longname(),
+                                    "n\\a" if not self.get_lastm_time(result) else self.get_lastm_time(result),
+                                    result.get_filesize(),
                                 )
+                            )
                         self.results.append(f"{path}{result.get_longname()}")
             if self.regex:
                 for regex in self.regex:
                     if regex.findall(bytes(result.get_longname(), "utf8")):
-                        if not self.onlyfiles and result.is_directory():
-                            if not self.no_print_results:
-                                self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{self.share}/{path}{result.get_longname()} [dir]")
-                        else:
-                            if not self.no_print_results:
-                                self.logger.highlight(
-                                    "//{}/{}/{}{} [lastm:'{}' size:{}]".format(
-                                        self.smbconnection.getRemoteHost(),
-                                        self.share,
-                                        path,
-                                        result.get_longname(),
-                                        "n\\a" if not self.get_lastm_time(result) else self.get_lastm_time(result),
-                                        result.get_filesize(),
-                                    )
+                        if not self.onlyfiles and result.is_directory() and not self.silent:
+                            self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{self.share}/{path}{result.get_longname()} [dir]")
+                        elif not self.silent:
+                            self.logger.highlight(
+                                "//{}/{}/{}{} [lastm:'{}' size:{}]".format(
+                                    self.smbconnection.getRemoteHost(),
+                                    self.share,
+                                    path,
+                                    result.get_longname(),
+                                    "n\\a" if not self.get_lastm_time(result) else self.get_lastm_time(result),
+                                    result.get_filesize(),
                                 )
+                            )
                         self.results.append(f"{path}{result.get_longname()}")
 
             if self.content and not result.is_directory():
@@ -184,7 +180,7 @@ class SMBSpider:
                 if self.pattern:
                     for pattern in self.pattern:
                         if contents.lower().find(bytes(pattern.lower(), "utf8")) != -1:
-                            if not self.no_print_results:
+                            if not self.silent:
                                 self.logger.highlight(
                                     "//{}/{}/{}{} [lastm:'{}' size:{} offset:{} pattern:'{}']".format(
                                         self.smbconnection.getRemoteHost(),
@@ -201,7 +197,7 @@ class SMBSpider:
                 if self.regex:
                     for regex in self.regex:
                         if regex.findall(contents):
-                            if not self.no_print_results:
+                            if not self.silent:
                                 self.logger.highlight(
                                     "//{}/{}/{}{} [lastm:'{}' size:{} offset:{} regex:'{}']".format(
                                         self.smbconnection.getRemoteHost(),

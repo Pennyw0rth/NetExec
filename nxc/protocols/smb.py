@@ -1376,7 +1376,7 @@ class smb(connection):
         depth=None,
         content=False,
         only_files=True,
-        no_print_results=True
+        silent=True
     ):
         if exclude_dirs is None:
             exclude_dirs = []
@@ -1385,7 +1385,7 @@ class smb(connection):
         if pattern is None:
             pattern = []
         spider = SMBSpider(self.conn, self.logger)
-        if not no_print_results:
+        if not silent:
             self.logger.display("Started spidering")
         start_time = time()
         if not share:
@@ -1398,11 +1398,11 @@ class smb(connection):
                 self.args.depth,
                 self.args.content,
                 self.args.only_files,
-                self.args.no_print_results
+                self.args.silent
             )
         else:
-            spider.spider(share, folder, pattern, regex, exclude_dirs, depth, content, only_files, no_print_results)
-        if not no_print_results:
+            spider.spider(share, folder, pattern, regex, exclude_dirs, depth, content, only_files, silent)
+        if not silent:
             self.logger.display(f"Done spidering (Completed in {time() - start_time})")
 
         return spider.results
