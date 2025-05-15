@@ -4,6 +4,7 @@ from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 from nxc.helpers.misc import gen_random_string
 from time import sleep
+from datetime import datetime, timedelta
 
 
 class TSCH_EXEC:
@@ -60,17 +61,20 @@ class TSCH_EXEC:
     def output_callback(self, data):
         self.__outputBuffer = data
 
+    def get_end_boundary(self):
+        # Get current date and time + 5 minutes
+        end_boundary = datetime.now() + timedelta(minutes=5)
+
+        # Format it to match the format in the XML: "YYYY-MM-DDTHH:MM:SS.ssssss"
+        return end_boundary.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
+
     def gen_xml(self, command, fileless=False):
-        xml = """<?xml version="1.0" encoding="UTF-16"?>
+        xml = f"""<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <Triggers>
-    <CalendarTrigger>
-      <StartBoundary>2015-07-15T20:35:13.2757294</StartBoundary>
-      <Enabled>true</Enabled>
-      <ScheduleByDay>
-        <DaysInterval>1</DaysInterval>
-      </ScheduleByDay>
-    </CalendarTrigger>
+    <RegistrationTrigger>
+      <EndBoundary>{self.get_end_boundary()}</EndBoundary>
+    </RegistrationTrigger>
   </Triggers>
   <Principals>
     <Principal id="LocalSystem">
@@ -134,7 +138,6 @@ class TSCH_EXEC:
         xml = self.gen_xml(command, fileless)
 
         self.logger.debug(f"Task XML: {xml}")
-        taskCreated = False
         self.logger.info(f"Creating task \\{tmpName}")
         try:
             # windows server 2003 has no MSRPC_UUID_TSCHS, if it bind, it will return abstract_syntax_not_supported
@@ -147,11 +150,6 @@ class TSCH_EXEC:
             else:
                 self.logger.fail(str(e))
             return
-        else:
-            taskCreated = True
-
-        self.logger.info(f"Running task \\{tmpName}")
-        tsch.hSchRpcRun(dce, f"\\{tmpName}")
 
         done = False
         while not done:
@@ -164,10 +162,6 @@ class TSCH_EXEC:
 
         self.logger.info(f"Deleting task \\{tmpName}")
         tsch.hSchRpcDelete(dce, f"\\{tmpName}")
-        taskCreated = False
-
-        if taskCreated is True:
-            tsch.hSchRpcDelete(dce, f"\\{tmpName}")
 
         if self.__retOutput:
             if fileless:
@@ -182,7 +176,7 @@ class TSCH_EXEC:
                 ":".join(map(str, self.__rpctransport.get_socket().getpeername()))
                 smbConnection = self.__rpctransport.get_smb_connection()
 
-                tries = 0
+                tries = 1
                 # Give the command a bit of time to execute before we try to read the output, 0.4 seconds was good in testing
                 sleep(0.4)
                 while True:
@@ -191,7 +185,7 @@ class TSCH_EXEC:
                         smbConnection.getFile(self.__share, self.__output_filename, self.output_callback)
                         break
                     except Exception as e:
-                        if tries > self.__tries:
+                        if tries >= self.__tries:
                             self.logger.fail("ATEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
                             break
                         if "STATUS_BAD_NETWORK_NAME" in str(e):
@@ -203,18 +197,22 @@ class TSCH_EXEC:
                         # When executing powershell and the command is still running, we get a sharing violation
                         # We can use that information to wait longer than if the file is not found (probably av or something)
                         if "STATUS_SHARING_VIOLATION" in str(e):
-                            self.logger.info(f"File {self.__share}\\{self.__output_filename} is still in use with {self.__tries - tries} left, retrying...")
+                            self.logger.info(f"File {self.__share}\\{self.__output_filename} is still in use with {self.__tries - tries} tries left, retrying...")
                             tries += 1
                             sleep(1)
                         elif "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
-                            self.logger.info(f"File {self.__share}\\{self.__output_filename} not found with {self.__tries - tries} left, deducting 10 tries and retrying...")
+                            self.logger.info(f"File {self.__share}\\{self.__output_filename} not found with {self.__tries - tries} tries left, deducting 10 tries and retrying...")
                             tries += 10
                             sleep(1)
                         else:
-                            self.logger.debug(str(e))
+                            self.logger.debug(f"Exception when trying to read output file: {e!s}. {self.__tries - tries} tries left, retrying...")
+                            tries += 1
+                            sleep(1)
 
-                if self.__outputBuffer:
+                try:
                     self.logger.debug(f"Deleting file {self.__share}\\{self.__output_filename}")
                     smbConnection.deleteFile(self.__share, self.__output_filename)
+                except Exception:
+                    pass
 
         dce.disconnect()
