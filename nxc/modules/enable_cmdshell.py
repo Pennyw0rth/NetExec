@@ -1,5 +1,8 @@
 class NXCModule:
-    """Enables or disables xp_cmdshell in MSSQL Server."""
+    """
+    Enables or disables xp_cmdshell in MSSQL Server.
+    Module by crosscutsaw
+    """
 
     name = "enable_cmdshell"
     description = "Enable or disable xp_cmdshell in MSSQL Server"
@@ -15,16 +18,18 @@ class NXCModule:
 
     def options(self, context, module_options):
         """
-        Available options:
-        - ACTION: enable or disable xp_cmdshell
-        Example usage:
+        ACTION      enable or disable xp_cmdshell
+
+        Examples
+        --------
         netexec mssql $TARGET -u $username -p $password -M enable_cmdshell -o ACTION=enable
         netexec mssql $TARGET -u $username -p $password -M enable_cmdshell -o ACTION=disable
         """
         if "ACTION" in module_options:
             self.action = module_options["ACTION"].lower()
         else:
-            context.log.error("Missing required option: ACTION (enable/disable)")
+            context.log.fail("Missing required option: ACTION (enable/disable)")
+            exit(1)
 
     def on_login(self, context, connection):
         self.context = context
