@@ -31,7 +31,7 @@ class SMBSpider:
         depth=None,
         content=False,
         onlyfiles=True,
-        silent = False
+        silent=False
     ):
         if exclude_dirs is None:
             exclude_dirs = []
@@ -153,7 +153,6 @@ class SMBSpider:
             if self.content and not result.is_directory():
                 self.search_content(path, result)
 
-
     def search_content(self, path, result):
         path = path.replace("*", "")
         try:
@@ -225,4 +224,3 @@ class SMBSpider:
     def get_lastm_time(self, result_obj):
         with contextlib.suppress(Exception):
             return strftime("%Y-%m-%d %H:%M", localtime(result_obj.get_mtime_epoch()))
-

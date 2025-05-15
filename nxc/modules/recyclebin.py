@@ -1,4 +1,3 @@
-from io import BytesIO
 from os import makedirs
 from nxc.paths import NXC_PATH
 from os.path import join, abspath
@@ -27,7 +26,7 @@ class NXCModule:
             remote_ops = RemoteOperations(connection.conn, connection.kerberos)
             remote_ops.enableRegistry()
 
-            for sid_directory in connection.conn.listPath("C$",  "$Recycle.Bin\\*"):
+            for sid_directory in connection.conn.listPath("C$", "$Recycle.Bin\\*"):
                 try:
                     if sid_directory.get_longname() and sid_directory.get_longname() not in false_positive_users:
 
