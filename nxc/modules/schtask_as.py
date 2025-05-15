@@ -1,5 +1,5 @@
-import contextlib
 import os
+import contextlib
 from time import sleep
 from datetime import datetime, timedelta
 from impacket.dcerpc.v5.dtypes import NULL
@@ -13,19 +13,34 @@ class NXCModule:
     """
     Execute a scheduled task remotely as a already connected user by @Defte_
     Thanks @Shad0wC0ntr0ller for the idea of removing the hardcoded date that could be used as an IOC
+    Modified by @Defte_ so that output on multiples lines are printed correctly (28/04/2025)
+    Modified by @Defte_ so that we can upload a custom binary to execute using the BINARY option (28/04/2025)
     """
 
     def options(self, context, module_options):
         r"""
+        BINARY         Upload the binary to be executed by CMD
         CMD            Command to execute
         USER           User to execute command as
         TASK           OPTIONAL: Set a name for the scheduled task name
         FILE           OPTIONAL: Set a name for the command output file
         LOCATION       OPTIONAL: Set a location for the command output file (e.g. '\tmp\')
+
+        Example:
+        -------
+        nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD=whoami
+        nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD='bin.exe --option' BINARY=bin.exe
         """
-        self.cmd = self.user = self.task = self.file = self.location = self.time = None
+        self.cmd = self.binary = self.user = self.task = self.file = self.location = self.time = None
+        self.share = "C$"
+        self.tmp_dir = "C:\\Windows\\Temp\\"
+        self.tmp_share = self.tmp_dir.split(":")[1]
+
         if "CMD" in module_options:
             self.cmd = module_options["CMD"]
+
+        if "BINARY" in module_options:
+            self.binary = module_options["BINARY"]
 
         if "USER" in module_options:
             self.user = module_options["USER"]
@@ -47,13 +62,32 @@ class NXCModule:
 
     def on_admin_login(self, context, connection):
         self.logger = context.log
+
         if self.cmd is None:
             self.logger.fail("You need to specify a CMD to run")
             return 1
+
         if self.user is None:
             self.logger.fail("You need to specify a USER to run the command as")
             return 1
 
+        if self.binary:
+            if not os.path.isfile(self.binary):
+                self.logger.fail(f"Cannot find {self.binary}")
+                return 1
+            else:
+                self.logger.display(f"Uploading {self.binary}")
+                with open(self.binary, "rb") as binary_to_upload:
+                    try:
+                        self.binary_name = os.path.basename(self.binary)
+                        connection.conn.putFile(self.share, f"{self.tmp_share}{self.binary_name}", binary_to_upload.read)
+                        self.logger.success(f"Binary {self.binary_name} successfully uploaded in {self.tmp_share}{self.binary_name}")
+                    except Exception as e:
+                        self.logger.fail(f"Error writing file to share {self.tmp_share}: {e}")
+                        return 1
+
+        # Returnes self.cmd or \Windows\temp\BinToExecute.exe depending if BINARY=BinToExecute.exe
+        self.cmd = self.cmd if not self.binary else f"{self.tmp_share}{self.cmd}"
         self.logger.display("Connecting to the remote Service control endpoint")
         try:
             exec_method = TSCH_EXEC(
@@ -87,7 +121,8 @@ class NXCModule:
                 # Required to decode specific French characters otherwise it'll print b"<result>"
                 output = output.decode("cp437")
             if output:
-                self.logger.highlight(output)
+                for line in output.splitlines():
+                    self.logger.highlight(line.rstrip())
 
         except Exception as e:
             if "SCHED_S_TASK_HAS_NOT_RUN" in str(e):
@@ -96,6 +131,13 @@ class NXCModule:
                     exec_method.deleteartifact()
             else:
                 self.logger.fail(f"Failed to execute command: {e}")
+        finally:
+            if self.binary:
+                try:
+                    connection.conn.deleteFile(self.share, f"{self.tmp_share}{self.binary_name}")
+                    context.log.success(f"Binary {self.binary_name} successfully deleted")
+                except Exception as e:
+                    context.log.fail(f"Error deleting {self.binary_name} on {self.share}: {e}")
 
 
 class TSCH_EXEC:

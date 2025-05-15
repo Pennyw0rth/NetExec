@@ -284,11 +284,6 @@ class connection:
             context = Context(self.db, module_logger, self.args)
             context.localip = self.local_ip
 
-            if hasattr(module, "on_request") or hasattr(module, "has_response"):
-                self.logger.debug(f"Module {module.name} has on_request or has_response methods")
-                self.server.connection = self
-                self.server.context.localip = self.local_ip
-
             if hasattr(module, "on_login"):
                 self.logger.debug(f"Module {module.name} has on_login method")
                 module.on_login(context, self)
@@ -296,10 +291,6 @@ class connection:
             if self.admin_privs and hasattr(module, "on_admin_login"):
                 self.logger.debug(f"Module {module.name} has on_admin_login method")
                 module.on_admin_login(context, self)
-
-            if (not hasattr(module, "on_request") and not hasattr(module, "has_response")) and hasattr(module, "on_shutdown"):
-                self.logger.debug(f"Module {module.name} has on_shutdown method")
-                module.on_shutdown(context, self)
 
     def inc_failed_login(self, username):
         global global_failed_logins
@@ -389,7 +380,7 @@ class connection:
                         if "\\" in line and len(line.split("\\")) == 2:
                             domain_single, username_single = line.split("\\")
                         else:
-                            domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain else self.domain
+                            domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain is not None else self.domain
                             username_single = line
                         domain.append(domain_single)
                         username.append(username_single.strip())
@@ -398,7 +389,7 @@ class connection:
                 if "\\" in user:
                     domain_single, username_single = user.split("\\")
                 else:
-                    domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain else self.domain
+                    domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain is not None else self.domain
                     username_single = user
                 domain.append(domain_single)
                 username.append(username_single)

@@ -36,8 +36,8 @@ class NXCModule:
                             buf = BytesIO()
                             connection.conn.getFile("C$", file_path, buf.write)
                             buf.seek(0)
-                            file_content = buf.read().decode("utf-8", errors="ignore").lower()                
-                            keywords = [keyword.upper() for keyword in self.sensitive_keywords if keyword in file_content]
+                            file_content = buf.read().decode("utf-8", errors="ignore")
+                            keywords = [keyword.upper() for keyword in self.sensitive_keywords if keyword.lower() in file_content.lower()]
                             if len(keywords):
                                 context.log.highlight(f"C:\\{file_path} [ {' '.join(keywords)} ]")
                             else:
