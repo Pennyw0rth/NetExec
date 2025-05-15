@@ -31,18 +31,15 @@ class NXCModule:
                 if sid_directory.get_longname() and sid_directory.get_longname() not in self.false_positive:
 
                     # Extracts the username from the SID
-                    if remote_ops._RemoteOperations__rrp:
-                        ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
-                        reg_handle = ans["phKey"]
-                        ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\{sid_directory.get_longname()}")
-                        key_handle = ans["phkResult"]
-                        username = profileimagepath = None
-                        try:
-                            _, profileimagepath = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "ProfileImagePath\x00")
-                            # Get username and remove embedded null byte
-                            username = profileimagepath.split("\\")[-1].replace("\x00", "")
-                        except rrp.DCERPCSessionError as e:
-                            context.log.debug(f"Couldn't get username from SID {e} on host {connection.host}")
+                    reg_handle = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)["phKey"]
+                    key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\{sid_directory.get_longname()}")["phkResult"]
+                    username = profileimagepath = None
+                    try:
+                        _, profileimagepath = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "ProfileImagePath\x00")
+                        # Get username and remove embedded null byte
+                        username = profileimagepath.split("\\")[-1].replace("\x00", "")
+                    except rrp.DCERPCSessionError as e:
+                        context.log.debug(f"Couldn't get username from SID {e} on host {connection.host}")
 
                     # Lists for any file or directory in the recycle bin
                     spider_folder = f"$Recycle.Bin\\{sid_directory.get_longname()}\\"
