@@ -16,12 +16,12 @@ class NXCModule:
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
-    false_positive = [".", "..", "desktop.ini", "Public", "Default", "Default User", "All Users", ".NET v4.5", ".NET v4.5 Classic"]
 
     def options(self, context, module_options):
         """No options available"""
 
     def on_admin_login(self, context, connection):
+        false_positive_users = [".", "..", "desktop.ini", "Public", "Default", "Default User", "All Users", ".NET v4.5", ".NET v4.5 Classic"]
         found = 0
         try:
             remote_ops = RemoteOperations(connection.conn, connection.kerberos)
@@ -29,16 +29,16 @@ class NXCModule:
 
             for sid_directory in connection.conn.listPath("C$",  "$Recycle.Bin\\*"):
                 try:
-                    if sid_directory.get_longname() and sid_directory.get_longname() not in self.false_positive:
+                    if sid_directory.get_longname() and sid_directory.get_longname() not in false_positive_users:
 
                         # Extracts the username from the SID
                         reg_handle = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)["phKey"]
                         key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\{sid_directory.get_longname()}")["phkResult"]
-                        username = profileimagepath = None
+                        username = None
                         try:
                             _, profileimagepath = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "ProfileImagePath\x00")
                             # Get username and remove embedded null byte
-                            username = profileimagepath.split("\\")[-1].replace("\x00", "")
+                            username = profileimagepath.split("\\")[-1].rstrip("\x00")
                         except rrp.DCERPCSessionError as e:
                             context.log.debug(f"Couldn't get username from SID {e} on host {connection.host}")
 
@@ -51,8 +51,8 @@ class NXCModule:
                             no_print_results=True
                         )
 
-                        false_positiv = (".", "..", "desktop.ini")
-                        filtered_file_paths = [path for path in paths if not path.endswith(false_positiv)]
+                        false_positive = (".", "..", "desktop.ini")
+                        filtered_file_paths = [path for path in paths if not path.endswith(false_positive)]
                         if filtered_file_paths:
                             if username is not None:
                                 context.log.highlight(f"CONTENT FOUND {sid_directory.get_longname()} ({username})")
