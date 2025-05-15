@@ -41,14 +41,14 @@ class NXCModule:
     def find_credentials(self, content, context):
         # remove unnecessary words
         content = content.replace("\r\n", "\n")
-        content = content.replace("/add", "") 
-        content = content.replace("/active:yes", "") 
+        content = content.replace("/add", "")
+        content = content.replace("/active:yes", "")
 
         # sort and unique lines
         content = "\n".join(sorted(set(content.split("\n"))))
 
         regexps = [
-            # "C:\Windows\system32\net.exe" user /add lodos2005 123456 /domain 
+            # "C:\Windows\system32\net.exe" user /add lodos2005 123456 /domain
             r"net.+user\s+(?P<username>[^\s]+)\s+(?P<password>[^\s]+)",
             # "C:\Windows\system32\net.exe" use \\server\share /user:contoso\lodos2005 password
             r"net.+use.+/user:(?P<username>[^\s]+)\s+(?P<password>[^\s]+)",
@@ -72,14 +72,14 @@ class NXCModule:
                 if match:
                     # eleminate false positives
                     # C:\Windows\system32\svchost.exe -k DcomLaunch -p -s PlugPlay
-                    if not match.groupdict().get("username") and match.groupdict().get("password") and len(match.group("password")) < 6: 
+                    if not match.groupdict().get("username") and match.groupdict().get("password") and len(match.group("password")) < 6:
                         # if password is found but username is not found, and password is shorter than 6 characters, ignore it
                         continue
-                    if not match.groupdict().get("password") and match.groupdict().get("username"): 
-                        # if username is found but password is not found. we need? ignore it 
+                    if not match.groupdict().get("password") and match.groupdict().get("username"):
+                        # if username is found but password is not found. we need? ignore it
                         continue
                     # C:\Windows\system32\RunDll32.exe C:\Windows\system32\migration\WininetPlugin.dll,MigrateCacheForUser /m /0
-                    if match.groupdict().get("username") and match.groupdict().get("password") and len(match.group("password")) < 6 and len(match.group("username")) < 6: 
+                    if match.groupdict().get("username") and match.groupdict().get("password") and len(match.group("password")) < 6 and len(match.group("username")) < 6:
                         # if username and password is shorter than 6 characters, ignore it
                         continue
 
@@ -131,6 +131,7 @@ class NXCModule:
 
         self.find_credentials(content, context)
 
+
 class MSEven6Trigger:
     def __init__(self, context):
         self.context = context
@@ -178,7 +179,8 @@ class MSEven6Trigger:
         handle = resp["Handle"]
 
         return MSEven6Result(self, handle, limit)
-    
+
+
 class MSEven6Result:
     def __init__(self, conn, handle, limit):
         self._conn = conn
