@@ -145,6 +145,8 @@ class winrm(connection):
         return True
 
     def plaintext_login(self, domain, username, password):
+        # Add server hostname to the Workstation field in NTLM Authenticate Message (Message 3)
+        os.environ["NETBIOS_COMPUTER_NAME"] = self.hostname
         self.admin_privs = False
         self.password = password
         self.username = username
