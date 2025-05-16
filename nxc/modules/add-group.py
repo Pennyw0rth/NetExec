@@ -103,6 +103,7 @@ class NXCModule:
     def _add_user_to_group_smb(self, context, connection):
         """Add user to group using SMB/SAMR protocol"""
         try:
+            context.log.info("Started adding user to group via SMB")
             # Connect to SAMR service
             dce = self._authenticate_dce(context, connection)
             
@@ -148,6 +149,7 @@ class NXCModule:
     def _remove_user_from_group_smb(self, context, connection):
         """Remove user from group using SMB/SAMR protocol"""
         try:
+            context.log.info("Started removing user to group via SMB")
             # Connect to SAMR service
             dce = self._authenticate_dce(context, connection)
             
@@ -194,6 +196,7 @@ class NXCModule:
     def _add_user_to_group_ldap(self, context, connection):
         """Add user to group using LDAP protocol"""
         try:
+            context.log.info("Started adding user to group via LDAP")
             # Search for the target user
             user_dn = self._find_object_dn(self._get_ldap_connection(connection), connection.domain, "sAMAccountName", self.target_user)
             if not user_dn:
@@ -233,6 +236,7 @@ class NXCModule:
     def _remove_user_from_group_ldap(self, context, connection):
         """Remove user from group using LDAP protocol"""
         try:
+            context.log.info("Started removing user to group via LDAP")
             # Search for the target user
             user_dn = self._find_object_dn(self._get_ldap_connection(connection), connection.domain, "sAMAccountName", self.target_user)
             if not user_dn:
