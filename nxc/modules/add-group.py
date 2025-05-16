@@ -7,12 +7,12 @@ from ldap3 import Server, Connection, ALL, MODIFY_ADD, SIMPLE, MODIFY_DELETE
 
 class NXCModule:
     """
-    Module for adding/removing users to/from groups and/or moving users to different OUs
-    Module inspired by the change-password module
+    Module for adding/removing users to/from groups
+    Module by @termanix
     """
 
     name = "add-group"
-    description = "Add or remove users from groups or move them to different OUs"
+    description = "Add or remove users from groups"
     supported_protocols = ["smb", "ldap"]
     opsec_safe = True
     multiple_hosts = False
@@ -21,7 +21,7 @@ class NXCModule:
         """
         Required (at least one of):
         GROUP       Name of the group to add/remove the user to/from
-        OU          Distinguished name of the OU to move the user to
+        OU          TO DO --> Distinguished name of the OU to move the user to
 
         Required:
         USER        Username of the account to modify
@@ -32,12 +32,12 @@ class NXCModule:
         Examples
         --------
         Adding a user to a group:
-            netexec smb <DC_IP> -u adminuser -p password -M manage-user -o USER='targetuser' GROUP='Domain Admins'
-            netexec ldap <DC_IP> -u adminuser -p password -M manage-user -o USER='targetuser' GROUP='Enterprise Admins'
+            netexec smb <DC_IP> -u adminuser -p password -M add-group -o USER='targetuser' GROUP='Domain Admins'
+            netexec ldap <DC_IP> -u adminuser -p password -M add-group -o USER='targetuser' GROUP='Enterprise Admins'
 
         Removing a user from a group:
-            netexec smb <DC_IP> -u adminuser -p password -M manage-user -o USER='targetuser' GROUP='Domain Admins' REMOVE=True
-            netexec ldap <DC_IP> -u adminuser -p password -M manage-user -o USER='targetuser' GROUP='Enterprise Admins' REMOVE=True
+            netexec smb <DC_IP> -u adminuser -p password -M add-group -o USER='targetuser' GROUP='Domain Admins' REMOVE=True
+            netexec ldap <DC_IP> -u adminuser -p password -M add-group -o USER='targetuser' GROUP='Enterprise Admins' REMOVE=True
         """
         self.context = context
         self.group = module_options.get("GROUP")
@@ -45,13 +45,13 @@ class NXCModule:
         self.target_user = module_options.get("USER")
         self.remove = module_options.get("REMOVE", "False").lower() == "true"
 
-        if not self.target_user:
-            context.log.fail("USER parameter is required!")
+        if not (self.target_user and self.group):
+            context.log.fail("USER and GROUP parameter is required!")
             sys.exit(1)
 
-        if not self.group and not self.ou:
+        """if not self.group and not self.ou:
             context.log.fail("Either GROUP or OU parameter is required!")
-            sys.exit(1)
+            sys.exit(1)"""
 
     def on_login(self, context, connection):
         if context.protocol == "smb":
