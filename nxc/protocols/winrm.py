@@ -146,6 +146,7 @@ class winrm(connection):
 
     def plaintext_login(self, domain, username, password):
         # Add server hostname to the Workstation field in NTLM Authenticate Message (Message 3)
+        # This helps fix false negatives during NTLM auth — see issue #694 for details
         os.environ["NETBIOS_COMPUTER_NAME"] = self.hostname
         self.admin_privs = False
         self.password = password
@@ -185,6 +186,9 @@ class winrm(connection):
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
+        # Add server hostname to the Workstation field in NTLM Authenticate Message (Message 3)
+        # This helps fix false negatives during NTLM auth — see issue #694 for details
+        os.environ["NETBIOS_COMPUTER_NAME"] = self.hostname
         self.admin_privs = False
         lmhash = "00000000000000000000000000000000"
         nthash = ""
