@@ -151,6 +151,7 @@ class ldap(connection):
         self.admin_privs = False
         self.no_ntlm = False
         self.sid_domain = ""
+        self.scope = None
 
         connection.__init__(self, args, db, host)
 
@@ -249,6 +250,8 @@ class ldap(connection):
         if ntlm_challenge:
             ntlm_info = parse_challenge(ntlm_challenge)
             self.server_os = ntlm_info["os_version"]
+        else:
+            self.no_ntlm = True
 
         if self.args.domain:
             self.domain = self.args.domain
@@ -419,6 +422,9 @@ class ldap(connection):
                 return False
 
     def plaintext_login(self, domain, username, password):
+        if username == "" and password == "" and self.no_ntlm:
+            self.scope = ldapasn1_impacket.Scope("baseObject")
+
         self.username = username
         self.password = password
         self.domain = domain
@@ -623,7 +629,7 @@ class ldap(connection):
         return t
 
     def search(self, searchFilter, attributes, sizeLimit=0, baseDN=None) -> list:
-        if baseDN is None and self.args.base_dn:
+        if baseDN is None and self.args.base_dn is not None:
             baseDN = self.args.base_dn
         elif baseDN is None:
             baseDN = self.baseDN
@@ -633,13 +639,14 @@ class ldap(connection):
                 self.logger.debug(f"Search Filter={searchFilter}")
 
                 # Microsoft Active Directory set an hard limit of 1000 entries returned by any search
-                paged_search_control = ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000)
+                paged_search_control = [ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000)] if not self.no_ntlm else ""
                 return self.ldap_connection.search(
+                    scope=self.scope,
                     searchBase=baseDN,
                     searchFilter=searchFilter,
                     attributes=attributes,
                     sizeLimit=sizeLimit,
-                    searchControls=[paged_search_control],
+                    searchControls=paged_search_control,
                 )
         except ldap_impacket.LDAPSearchError as e:
             if e.getErrorString().find("sizeLimitExceeded") >= 0:
