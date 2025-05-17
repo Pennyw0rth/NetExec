@@ -35,7 +35,7 @@ class NXCModule:
             sys.exit(1)
 
     def on_login(self, context, connection):
-        search_filter = f"(&(objectCategory=computer)(&(|(operatingSystem=*{self.TEXT}*))(name=*{self.TEXT}*)))"
+        search_filter = f"(&(objectCategory=computer)(|(operatingSystem=*{self.TEXT}*)(name=*{self.TEXT}*)))"
 
         try:
             context.log.debug(f"Search Filter={search_filter}")

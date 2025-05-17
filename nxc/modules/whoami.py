@@ -28,7 +28,7 @@ class NXCModule:
             searchFilter=searchFilter,
             attributes=[
                 "name",
-                "sAmAccountName",
+                "sAMAccountName",
                 "description",
                 "distinguishedName",
                 "pwdLastSet",
@@ -36,29 +36,40 @@ class NXCModule:
                 "lastLogon",
                 "userAccountControl",
                 "servicePrincipalName",
+                "userPrincipalName",
+                "mail",
                 "memberOf",
             ],
-            sizeLimit=999,
+            sizeLimit=9999,
         )
         for response in r[0]["attributes"]:
             if "userAccountControl" in str(response["type"]):
-                if str(response["vals"][0]) == "512":
-                    context.log.highlight("Enabled: Yes")
-                    context.log.highlight("Password Never Expires: No")
-                elif str(response["vals"][0]) == "514":
-                    context.log.highlight("Enabled: No")
-                    context.log.highlight("Password Never Expires: No")
-                elif str(response["vals"][0]) == "66048":
-                    context.log.highlight("Enabled: Yes")
-                    context.log.highlight("Password Never Expires: Yes")
-                elif str(response["vals"][0]) == "66050":
-                    context.log.highlight("Enabled: No")
-                    context.log.highlight("Password Never Expires: Yes")
+               uac_raw = response["vals"][0]
+    
+               # Ensure it's a string, then integer
+               uac = int(uac_raw.decode() if isinstance(uac_raw, bytes) else str(uac_raw))
+
+               # Flags
+               ACCOUNTDISABLE = 0x0002
+               DONT_EXPIRE_PASSWORD = 0x10000
+
+               is_disabled = (uac & ACCOUNTDISABLE) != 0
+               password_never_expires = (uac & DONT_EXPIRE_PASSWORD) != 0
+
+               context.log.highlight(f"Enabled: {'No' if is_disabled else 'Yes'}")
+               context.log.highlight(f"Password Never Expires: {'Yes' if password_never_expires else 'No'}")
             elif "lastLogon" in str(response["type"]):
-                if str(response["vals"][0]) == "1601":
-                    context.log.highlight("Last logon: Never")
-                else:
-                    context.log.highlight(f"Last logon: {response['vals'][0]}")
+               raw = response["vals"][0]
+               # Convert from bytes if needed
+               filetime_str = raw.decode() if isinstance(raw, bytes) else str(raw)
+               filetime_int = int(filetime_str)
+
+               if filetime_int == 1601:
+                 context.log.highlight("Last logon: Never")
+               else:
+                  # Convert FILETIME to datetime
+                  dt = datetime.datetime(1601, 1, 1) + datetime.timedelta(microseconds=filetime_int / 10)
+                  context.log.highlight(f"Last logon: {dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
             elif "memberOf" in str(response["type"]):
                 for group in response["vals"]:
                     context.log.highlight(f"Member of: {group}")
@@ -66,5 +77,16 @@ class NXCModule:
                 context.log.highlight("Service Account Name(s) found - Potentially Kerberoastable user!")
                 for spn in response["vals"]:
                     context.log.highlight(f"Service Account Name: {spn}")
+            elif "pwdLastSet" in str(response["type"]):
+                raw = response["vals"][0]
+                # Convert from bytes if needed
+                filetime_str = raw.decode() if isinstance(raw, bytes) else str(raw)
+                filetime_int = int(filetime_str)
+
+                if filetime_int == 0:
+                    context.log.highlight("Password Last Set: Never")
+                else:
+                    dt = datetime.datetime(1601, 1, 1) + datetime.timedelta(microseconds=filetime_int / 10)
+                    context.log.highlight(f"Password Last Set: {dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
             else:
                 context.log.highlight(response["type"] + ": " + response["vals"][0])
