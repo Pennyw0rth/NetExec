@@ -1,3 +1,6 @@
+from impacket.dcerpc.v5 import samr, transport
+from impacket.dcerpc.v5 import tsts as TSTS
+
 class NXCModule:
     name = "presence"
     description = "Traces Domain and Enterprise Admin presence in the target over SMB"
@@ -5,121 +8,314 @@ class NXCModule:
     opsec_safe = False
     multiple_hosts = True
 
+    def __init__(self):
+        # initialize the sid to user mapping dictionary
+        self.sid_to_user = {}
+
     def options(self, context, module_options):
         """There are no module options."""
+        
+    def on_admin_login(self, context, connection):
+        def safe_str(obj):
+            if obj is None:
+                return "None"
+            if isinstance(obj, str):
+                return obj
+            if isinstance(obj, bytes):
+                try:
+                    return obj.decode('utf-8')
+                except UnicodeDecodeError:
+                    return obj.decode('utf-8', errors='replace')
+            if hasattr(obj, 'to_string'):
+                try:
+                    return obj.to_string()
+                except:
+                    pass
+            try:
+                result = str(obj)
+                if isinstance(result, bytes):
+                    return result.decode('utf-8', errors='replace')
+                return result
+            except Exception:
+                try:
+                    return repr(obj)
+                except:
+                    return "[unrepresentable object]"
 
-    def on_login(self, context, connection):
-        results = {
-            "netbios_name": None,
-            "admin_users": set(),
-            "matched_dirs": [],
-            "matched_tasks": []
-        }
+        def safe_error_str(e):
+            try:
+                return safe_str(e)
+            except Exception:
+                return "[error string unavailable]"
 
-        # Get NetBIOS name
-        results["netbios_name"] = self.get_netbios_name(context, connection)
-        context.log.debug(f"Target NetBIOS Name: {results['netbios_name']}")
+        try:
+            context.log.debug(f"Target NetBIOS Name: {connection.hostname}")
 
-        # Collect Domain & Enterprise Admins
-        for group in ["Domain Admins", "Enterprise Admins"]:
-            command = f'net group "{group}" /domain'
-            output = connection.execute(command, True, methods=["smbexec"])
-            context.log.debug(f"Raw output for {group}: {output}")
-            if output:
-                results["admin_users"].update(self.parse_admins(output))
-            else:
-                context.log.error(f"Failed to retrieve {group} members")
+            string_binding = r'ncacn_np:%s[\pipe\samr]' % connection.host
+            context.log.debug(f"Using string binding: {string_binding}")
 
-        if not results["admin_users"]:
-            context.log.error("No admin users found, stopping execution.")
-            return False
+            rpctransport = transport.DCERPCTransportFactory(string_binding)
+            rpctransport.setRemoteHost(connection.host)
+            rpctransport.set_credentials(
+                connection.username,
+                connection.password,
+                connection.domain,
+                connection.lmhash,
+                connection.nthash,
+                aesKey=getattr(connection, 'aesKey', None)
+            )
 
-        # Check presence in C:\Users
-        results["matched_dirs"] = self.check_users_directory(context, connection, results["admin_users"])
+            dce = rpctransport.get_dce_rpc()
+            dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
+            dce.connect()
+            dce.bind(samr.MSRPC_UUID_SAMR)
 
-        # Check presence in tasklist
-        results["matched_tasks"] = self.check_tasklist(context, connection, results["admin_users"], results["netbios_name"])
+            resp = samr.hSamrConnect2(dce)
+            server_handle = resp['ServerHandle']
+            context.log.debug(f"Obtained server handle: {safe_str(server_handle)}")
 
-        # Log all findings together
-        self.print_grouped_results(context, connection, results)
-        return True
+            try:
+                resp = samr.hSamrEnumerateDomainsInSamServer(dce, server_handle)
+                domain_list = resp['Buffer']['Buffer'] if resp['Buffer'] and resp['Buffer']['Buffer'] else []
+                decoded_domains = [safe_str(d['Name']) for d in domain_list]
+                context.log.info(f"Available domains: {', '.join(decoded_domains)}")
+            except Exception as e:
+                context.log.error(f"Could not enumerate domains: {safe_error_str(e)}")
+                return False
 
-    def get_netbios_name(self, context, connection):
-        """Retrieves the NetBIOS name of the target machine."""
-        command = "hostname"
-        output = connection.execute(command, True, methods=["smbexec"]).strip()
-        return output if output else None
+            admin_users = set()
+            self.sid_to_user = {}  # dictionary mapping sid string to username
 
-    def parse_admins(self, output):
-        """Extracts admin usernames from 'net group' command output."""
-        lines = output.splitlines()
-        users = set()
-        capture = False
+            for domain in domain_list:
+                domain_name = domain['Name']
+                decoded_domain = safe_str(domain_name)
 
-        for line in lines:
-            line = line.strip()
-            if "Members" in line:
-                capture = True
-                continue
-            if not line or "The command completed successfully" in line:
-                break
-            if capture and not any(k in line for k in ["---", "Group name", "Comment"]):
-                for user in line.split():
-                    users.add(user)
-        return users
+                if decoded_domain.lower() == "builtin":
+                    continue
 
-    def check_users_directory(self, context, connection, admin_users):
-        """Checks for admin user folders in both C:\\Users and C:\\Documents and Settings"""
-        matched_dirs = []
-        admin_users_lower = {user.lower() for user in admin_users}
+                context.log.debug(f"Attempting domain: {decoded_domain}")
 
-        for base_path in ["C:\\Users", "C:\\Documents and Settings"]:
-            command = f'dir "{base_path}"'
-            output = connection.execute(command, True, methods=["smbexec"])
-            context.log.debug(f"Raw output for directory {base_path}:\n{output}")
+                try:
+                    resp = samr.hSamrLookupDomainInSamServer(dce, server_handle, domain_name)
+                    domain_sid = resp['DomainId']
+                    domain_sid_str = safe_str(domain_sid.formatCanonical())  # convert domain sid to string
+                    context.log.debug(f"Resolved domain SID for {decoded_domain}: {domain_sid_str}")
+                except Exception as sid_e:
+                    context.log.debug(f"Failed to lookup SID for domain {decoded_domain}: {safe_error_str(sid_e)}")
+                    continue
 
-            if not output:
-                continue
+                try:
+                    resp = samr.hSamrOpenDomain(
+                        dce,
+                        server_handle,
+                        samr.DOMAIN_LOOKUP | samr.DOMAIN_LIST_ACCOUNTS,
+                        domain_sid
+                    )
+                    domain_handle = resp['DomainHandle']
+                except Exception as open_e:
+                    context.log.debug(f"Failed to open domain {decoded_domain}: {safe_error_str(open_e)}")
+                    continue
 
-            for line in output.splitlines():
-                parts = line.split()
-                if len(parts) > 3:
-                    folder_name = parts[-1]
-                    folder_name_lower = folder_name.lower()
+                admin_rids = {
+                    'Domain Admins': 512,
+                    'Enterprise Admins': 519
+                }
 
-                    # Match Administrator.* (but not just "Administrator")
-                    if folder_name_lower.startswith("administrator.") and folder_name_lower != "administrator":
-                        matched_dirs.append(folder_name)
+                for group_name, group_rid in admin_rids.items():
+                    context.log.debug(f"Looking up group: {group_name} with RID {group_rid}")
+
+                    try:
+                        resp = samr.hSamrOpenGroup(
+                            dce,
+                            domain_handle,
+                            samr.GROUP_LIST_MEMBERS,
+                            group_rid
+                        )
+                        group_handle = resp['GroupHandle']
+
+                        try:
+                            resp = samr.hSamrGetMembersInGroup(dce, group_handle)
+                            if resp['Members']['Members']:
+                                for member in resp['Members']['Members']:
+                                    try:
+                                        rid = int.from_bytes(member.getData(), byteorder='little')
+                                        try:
+                                            user_handle = samr.hSamrOpenUser(
+                                                dce,
+                                                domain_handle,
+                                                samr.MAXIMUM_ALLOWED,
+                                                rid
+                                            )["UserHandle"]
+
+                                            user_info = samr.hSamrQueryInformationUser2(
+                                                dce,
+                                                user_handle,
+                                                samr.USER_INFORMATION_CLASS.UserAllInformation
+                                            )["Buffer"]["All"]
+
+                                            username = user_info["UserName"]
+                                            username_str = (
+                                                username.encode('utf-16-le').decode('utf-16-le')
+                                                if isinstance(username, bytes)
+                                                else str(username)
+                                            )
+
+                                            full_username = f"{decoded_domain}\\{username_str}"
+                                            admin_users.add(f"{full_username} (Member of {group_name})")
+
+                                            # map sid string of user to username
+                                            user_sid = f"{domain_sid_str}-{rid}"
+                                            self.sid_to_user[user_sid] = full_username
+
+                                            samr.hSamrCloseHandle(dce, user_handle)
+                                        except Exception as name_e:
+                                            try:
+                                                sid_str = domain_sid.formatCanonical()
+                                                full_sid = f"{sid_str}-{rid}"
+                                            except Exception:
+                                                full_sid = "[unrepresentable SID]"
+                                            context.log.debug(f"Failed to get user info for RID {rid}: {safe_error_str(name_e)}")
+                                            admin_users.add(f"{decoded_domain}\\{full_sid} (Member of {group_name})")
+                                    except Exception as member_e_inner:
+                                        context.log.debug(f"Error processing group member: {safe_error_str(member_e_inner)}")
+                        except Exception as member_e:
+                            context.log.debug(f"Failed to get members of group {group_name}: {safe_error_str(member_e)}")
+                        finally:
+                            try:
+                                samr.hSamrCloseHandle(dce, group_handle)
+                            except:
+                                pass
+
+                    except Exception as group_e:
+                        context.log.debug(f"Failed to process {group_name} group: {safe_error_str(group_e)}")
                         continue
 
-                    for user in admin_users_lower:
-                        if user != "administrator":
-                            if folder_name_lower == user or folder_name_lower.startswith(user + "."):
-                                matched_dirs.append(folder_name)
+            if admin_users:
+                # extract usernames only, remove domain and suffix
+                usernames = set()
+                for user in admin_users:
+                    # user format: domain\username (member of group)
+                    try:
+                        # split on '\' and take second part, then split on ' ' and take first token as username
+                        username_part = user.split('\\')[1]
+                        username = username_part.split(' ')[0]
+                        usernames.add(username)
+                    except Exception:
+                        # fallback to whole user string if parsing fails
+                        usernames.add(user)
+
+                sorted_names = sorted(usernames)
+            else:
+                context.log.info("No privileged users found")
+                sorted_names = []
+
+            matched_dirs = self.check_users_directory(context, connection, sorted_names)
+            matched_tasks = self.check_tasklist(context, connection, sorted_names, connection.hostname)
+
+            # collect results for printing
+            results = {
+                "netbios_name": connection.hostname,
+                "admin_users": sorted_names,
+                "matched_dirs": matched_dirs,
+                "matched_tasks": matched_tasks,
+            }
+
+            # print grouped/logged results nicely
+            self.print_grouped_results(context, connection, results)
+
+            return True
+
+        except Exception as e:
+            context.log.error(f"Unexpected error: {safe_error_str(e)}")
+            return False
+
+    def check_users_directory(self, context, connection, admin_users):
+        matched_dirs = []
+        dirs_found = set()
+
+        # try C$\Users first
+        try:
+            files = connection.conn.listPath("C$\\Users", "*")
+        except SessionError as e:
+            context.log.debug(f"C$\\Users unavailable: {e}, trying Documents and Settings")
+            try:
+                files = connection.conn.listPath("C$\\Documents and Settings", "*")
+            except SessionError as e2:
+                context.log.error(f"Error listing fallback directory: {e2}")
+                return matched_dirs  # return empty
+        else:
+            context.log.debug("Successfully listed C$\\Users")
+
+        # collect folder names ignoring "." and ".."
+        folder_names = [f.get_shortname() for f in files if f.get_shortname() not in [".", ".."]]
+        dirs_found.update(folder_names)
+
+        dirs_lower = {d.lower() for d in dirs_found}
+
+        # for admin users, check for folder presence
+        for user in admin_users:
+            user_lower = user.lower()
+            if user_lower == "administrator":
+                # only match folders like "administrator.something", not "administrator"
+                matched = [d for d in dirs_found if d.lower().startswith("administrator.") and d.lower() != "administrator"]
+                matched_dirs.extend(matched)
+            else:
+                if user_lower in dirs_lower:
+                    matched_dirs.append(user)
+
+        if matched_dirs:
+            pass
+        else:
+            context.log.highlight("[+] No admin users found in directories")
 
         return matched_dirs
 
     def check_tasklist(self, context, connection, admin_users, netbios_name):
-        """Checks 'tasklist /v' output for admin user presence, excluding local machine Administrator."""
-        command = 'tasklist /v'
-        output = connection.execute(command, True, methods=["smbexec"])
-        context.log.debug(f"Raw output for tasklist:\n{output}")
+        """checks tasklist over rpc."""
 
-        matched_tasks = []
+        try:
+            with TSTS.LegacyAPI(connection.conn, netbios_name, kerberos=False) as legacy:
+                handle = legacy.hRpcWinStationOpenServer()
+                processes = legacy.hRpcWinStationGetAllProcesses(handle)
+        except Exception as e:
+            context.log.error(f"Error in check_tasklist RPC method: {e}")
+            return []
 
-        for user in admin_users:
-            if user == "Administrator":
-                pattern = fr"(?i)^(?!.*{re.escape(netbios_name)}\\Administrator\b).*\\Administrator\b"
-                if re.search(pattern, output, re.MULTILINE):
-                    matched_tasks.append("Administrator")
-            else:
-                if user in output:
-                    matched_tasks.append(user)
+        if not processes:
+            context.log.info("No processes enumerated on target")
+            return []
 
-        return matched_tasks
+        context.log.debug(f"Enumerated {len(processes)} processes on {netbios_name}")
+
+        matched_admin_users = {}
+
+        # prepare admin users in lowercase for case-insensitive matching
+        admin_users_lower = {u.lower() for u in admin_users}
+
+        for process in processes:
+            context.log.debug(f"ImageName: {process['ImageName']}, UniqueProcessId: {process['SessionId']}, pSid: {process['pSid']}")
+
+            psid = process['pSid']
+            if not psid:
+                continue
+
+            username = self.sid_to_user.get(psid)
+            if username:
+                # extract username part after '\'
+                user_only = username.split('\\')[-1]
+                if user_only.lower() in admin_users_lower:
+                    # save original casing
+                    matched_admin_users[user_only] = True
+
+        if matched_admin_users:
+            context.log.info(f"Found users in tasklist:\n" + "\n".join(matched_admin_users.keys()))
+        else:
+            context.log.info("No admin user processes found in tasklist")
+
+        return list(matched_admin_users.keys())
 
     def print_grouped_results(self, context, connection, results):
-        """Logs all results grouped per host in order"""
+        """logs all results grouped per host in order"""
         host_info = f"{connection.host}    {connection.port}    {results['netbios_name']}"
 
         if results["admin_users"]:
@@ -127,11 +323,13 @@ class NXCModule:
 
         if results["matched_dirs"]:
             context.log.success(f"Found users in directories:")
-            context.log.highlight(', '.join(results['matched_dirs']))
-            
+            for d in results["matched_dirs"]:
+                context.log.highlight(d)
+
         if results["matched_tasks"]:
             context.log.success(f"Found users in tasklist:")
-            context.log.highlight(', '.join(results['matched_tasks']))
+            for t in results["matched_tasks"]:
+                context.log.highlight(t)
 
         if not results["matched_dirs"] and not results["matched_tasks"]:
             context.log.success(f"No matches found in users directory or tasklist.")
