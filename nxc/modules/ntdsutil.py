@@ -194,9 +194,7 @@ class NXCModule:
         try:
             context.log.success("Dumping the NTDS, this could take a while so go grab a redbull...")
             NTDS.dump()
-            context.log.success(
-                f"Dumped {highlight(add_ntds_hash.ntds_hashes)} NTDS hashes to {connection.output_filename}.ntds of which {highlight(add_ntds_hash.added_to_db)} were added to the database"
-            )
+            context.log.success(f"Dumped {highlight(add_ntds_hash.ntds_hashes)} NTDS hashes to {connection.output_filename}.ntds of which {highlight(add_ntds_hash.added_to_db)} were added to the database)
         except Exception as e:
             context.log.fail(e)
 
