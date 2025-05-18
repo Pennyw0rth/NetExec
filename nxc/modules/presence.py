@@ -1,6 +1,7 @@
 from impacket.dcerpc.v5 import samr, transport
 from impacket.dcerpc.v5 import tsts as TSTS
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
+from contextlib import suppress
 
 class NXCModule:
     name = "presence"
@@ -20,8 +21,8 @@ class NXCModule:
         def safe_str(obj):
             try:
                 if isinstance(obj, bytes):
-                    return obj.decode('utf-8', errors='replace')
-                if hasattr(obj, 'to_string'):
+                    return obj.decode("utf-8", errors="replace")
+                if hasattr(obj, "to_string"):
                     return obj.to_string()
                 return str(obj)
             except Exception:
@@ -30,7 +31,7 @@ class NXCModule:
         try:
             context.log.debug(f"Target NetBIOS Name: {connection.hostname}")
 
-            string_binding = r'ncacn_np:%s[\pipe\samr]' % connection.host
+            string_binding = fr"ncacn_np:{connection.host}[\pipe\samr]"
             context.log.debug(f"Using string binding: {string_binding}")
 
             rpctransport = transport.DCERPCTransportFactory(string_binding)
@@ -41,7 +42,7 @@ class NXCModule:
                 connection.domain,
                 connection.lmhash,
                 connection.nthash,
-                aesKey=getattr(connection, 'aesKey', None)
+                aesKey=getattr(connection, "aesKey", None)
             )
 
             dce = rpctransport.get_dce_rpc()
@@ -50,23 +51,23 @@ class NXCModule:
             dce.bind(samr.MSRPC_UUID_SAMR)
 
             resp = samr.hSamrConnect2(dce)
-            server_handle = resp['ServerHandle']
+            server_handle = resp["ServerHandle"]
             context.log.debug(f"Obtained server handle: {safe_str(server_handle)}")
 
             try:
                 resp = samr.hSamrEnumerateDomainsInSamServer(dce, server_handle)
-                domain_list = resp['Buffer']['Buffer'] if resp['Buffer'] and resp['Buffer']['Buffer'] else []
-                decoded_domains = [safe_str(d['Name']) for d in domain_list]
+                domain_list = resp["Buffer"]["Buffer"] if resp["Buffer"] and resp["Buffer"]["Buffer"] else []
+                decoded_domains = [safe_str(d["Name"]) for d in domain_list]
                 context.log.info(f"Available domains: {', '.join(decoded_domains)}")
             except Exception as e:
-                context.log.error(f"Could not enumerate domains: {str(e)}")
+                context.log.error(f"Could not enumerate domains: {e!s}")
                 return False
 
             admin_users = set()
             self.sid_to_user = {}  # dictionary mapping sid string to username
 
             for domain in domain_list:
-                domain_name = domain['Name']
+                domain_name = domain["Name"]
                 decoded_domain = safe_str(domain_name)
 
                 if decoded_domain.lower() == "builtin":
@@ -76,23 +77,23 @@ class NXCModule:
 
                 try:
                     resp = samr.hSamrLookupDomainInSamServer(dce, server_handle, domain_name)
-                    domain_sid = resp['DomainId']
+                    domain_sid = resp["DomainId"]
                     domain_sid_str = safe_str(domain_sid.formatCanonical())  # convert domain sid to string
                     context.log.debug(f"Resolved domain SID for {decoded_domain}: {domain_sid_str}")
                 except Exception as sid_e:
-                    context.log.debug(f"Failed to lookup SID for domain {decoded_domain}: {str(sid_e)}")
+                    context.log.debug(f"Failed to lookup SID for domain {decoded_domain}: {sid_e!s}")
                     continue
 
                 try:
                     resp = samr.hSamrOpenDomain(dce, server_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_LIST_ACCOUNTS, domain_sid)
-                    domain_handle = resp['DomainHandle']
+                    domain_handle = resp["DomainHandle"]
                 except Exception as open_e:
-                    context.log.debug(f"Failed to open domain {decoded_domain}: {str(open_e)}")
+                    context.log.debug(f"Failed to open domain {decoded_domain}: {open_e!s}")
                     continue
 
                 admin_rids = {
-                    'Domain Admins': 512,
-                    'Enterprise Admins': 519
+                    "Domain Admins": 512,
+                    "Enterprise Admins": 519
                 }
 
                 for group_name, group_rid in admin_rids.items():
@@ -105,14 +106,14 @@ class NXCModule:
                             samr.GROUP_LIST_MEMBERS,
                             group_rid
                         )
-                        group_handle = resp['GroupHandle']
+                        group_handle = resp["GroupHandle"]
 
                         try:
                             resp = samr.hSamrGetMembersInGroup(dce, group_handle)
-                            if resp['Members']['Members']:
-                                for member in resp['Members']['Members']:
+                            if resp["Members"]["Members"]:
+                                for member in resp["Members"]["Members"]:
                                     try:
-                                        rid = int.from_bytes(member.getData(), byteorder='little')
+                                        rid = int.from_bytes(member.getData(), byteorder="little")
                                         try:
                                             user_handle = samr.hSamrOpenUser(
                                                 dce,
@@ -129,7 +130,7 @@ class NXCModule:
 
                                             username = user_info["UserName"]
                                             username_str = (
-                                                username.encode('utf-16-le').decode('utf-16-le')
+                                                username.encode("utf-16-le").decode("utf-16-le")
                                                 if isinstance(username, bytes)
                                                 else str(username)
                                             )
@@ -148,20 +149,18 @@ class NXCModule:
                                                 full_sid = f"{sid_str}-{rid}"
                                             except Exception:
                                                 full_sid = "[unrepresentable SID]"
-                                            context.log.debug(f"Failed to get user info for RID {rid}: {str(name_e)}")
+                                            context.log.debug(f"Failed to get user info for RID {rid}: {name_e!s}")
                                             admin_users.add(f"{decoded_domain}\\{full_sid} (Member of {group_name})")
                                     except Exception as member_e_inner:
-                                        context.log.debug(f"Error processing group member: {str(member_e_inner)}")
+                                        context.log.debug(f"Error processing group member: {member_e_inner!s}")
                         except Exception as member_e:
-                            context.log.debug(f"Failed to get members of group {group_name}: {str(member_e)}")
+                            context.log.debug(f"Failed to get members of group {group_name}: {member_e!s}")
                         finally:
-                            try:
+                            with suppress(Exception):
                                 samr.hSamrCloseHandle(dce, group_handle)
-                            except Exception:
-                                pass
 
                     except Exception as group_e:
-                        context.log.debug(f"Failed to process {group_name} group: {str(group_e)}")
+                        context.log.debug(f"Failed to process {group_name} group: {group_e!s}")
                         continue
 
             if admin_users:
@@ -171,8 +170,8 @@ class NXCModule:
                     # user format: domain\username (member of group)
                     try:
                         # split on '\' and take second part, then split on ' ' and take first token as username
-                        username_part = user.split('\\')[1]
-                        username = username_part.split(' ')[0]
+                        username_part = user.split("\\")[1]
+                        username = username_part.split(" ")[0]
                         usernames.add(username)
                     except Exception:
                         # fallback to whole user string if parsing fails
@@ -245,8 +244,7 @@ class NXCModule:
         return matched_dirs
 
     def check_tasklist(self, context, connection, admin_users, netbios_name):
-        """checks tasklist over rpc."""
-
+        """Checks tasklist over rpc."""
         try:
             with TSTS.LegacyAPI(connection.conn, netbios_name, kerberos=False) as legacy:
                 handle = legacy.hRpcWinStationOpenServer()
@@ -265,14 +263,14 @@ class NXCModule:
         for process in processes:
             context.log.debug(f"ImageName: {process['ImageName']}, UniqueProcessId: {process['SessionId']}, pSid: {process['pSid']}")
 
-            psid = process['pSid']
+            psid = process["pSid"]
             if not psid:
                 continue
 
             username = self.sid_to_user.get(psid)
             if username:
                 # extract username part after '\'
-                user_only = username.split('\\')[-1]
+                user_only = username.split("\\")[-1]
                 if user_only.lower() in admin_users_lower:
                     # save original casing
                     matched_admin_users[user_only] = True
@@ -285,8 +283,7 @@ class NXCModule:
         return list(matched_admin_users.keys())
 
     def print_grouped_results(self, context, connection, results):
-        """logs all results grouped per host in order"""
-
+        """Logs all results grouped per host in order"""
         if results["admin_users"]:
             context.log.success(f"Identified Admin Users: {', '.join(results['admin_users'])}")
 
