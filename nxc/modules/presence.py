@@ -1,5 +1,6 @@
 from impacket.dcerpc.v5 import samr, transport
 from impacket.dcerpc.v5 import tsts as TSTS
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 
 class NXCModule:
     name = "presence"
@@ -17,36 +18,14 @@ class NXCModule:
         
     def on_admin_login(self, context, connection):
         def safe_str(obj):
-            if obj is None:
-                return "None"
-            if isinstance(obj, str):
-                return obj
-            if isinstance(obj, bytes):
-                try:
-                    return obj.decode('utf-8')
-                except UnicodeDecodeError:
+            try:
+                if isinstance(obj, bytes):
                     return obj.decode('utf-8', errors='replace')
-            if hasattr(obj, 'to_string'):
-                try:
+                if hasattr(obj, 'to_string'):
                     return obj.to_string()
-                except:
-                    pass
-            try:
-                result = str(obj)
-                if isinstance(result, bytes):
-                    return result.decode('utf-8', errors='replace')
-                return result
+                return str(obj)
             except Exception:
-                try:
-                    return repr(obj)
-                except:
-                    return "[unrepresentable object]"
-
-        def safe_error_str(e):
-            try:
-                return safe_str(e)
-            except Exception:
-                return "[error string unavailable]"
+                return "[unrepresentable object]"
 
         try:
             context.log.debug(f"Target NetBIOS Name: {connection.hostname}")
@@ -80,7 +59,7 @@ class NXCModule:
                 decoded_domains = [safe_str(d['Name']) for d in domain_list]
                 context.log.info(f"Available domains: {', '.join(decoded_domains)}")
             except Exception as e:
-                context.log.error(f"Could not enumerate domains: {safe_error_str(e)}")
+                context.log.error(f"Could not enumerate domains: {str(e)}")
                 return False
 
             admin_users = set()
@@ -101,19 +80,14 @@ class NXCModule:
                     domain_sid_str = safe_str(domain_sid.formatCanonical())  # convert domain sid to string
                     context.log.debug(f"Resolved domain SID for {decoded_domain}: {domain_sid_str}")
                 except Exception as sid_e:
-                    context.log.debug(f"Failed to lookup SID for domain {decoded_domain}: {safe_error_str(sid_e)}")
+                    context.log.debug(f"Failed to lookup SID for domain {decoded_domain}: {str(sid_e)}")
                     continue
 
                 try:
-                    resp = samr.hSamrOpenDomain(
-                        dce,
-                        server_handle,
-                        samr.DOMAIN_LOOKUP | samr.DOMAIN_LIST_ACCOUNTS,
-                        domain_sid
-                    )
+                    resp = samr.hSamrOpenDomain(dce, server_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_LIST_ACCOUNTS, domain_sid)
                     domain_handle = resp['DomainHandle']
                 except Exception as open_e:
-                    context.log.debug(f"Failed to open domain {decoded_domain}: {safe_error_str(open_e)}")
+                    context.log.debug(f"Failed to open domain {decoded_domain}: {str(open_e)}")
                     continue
 
                 admin_rids = {
@@ -174,20 +148,20 @@ class NXCModule:
                                                 full_sid = f"{sid_str}-{rid}"
                                             except Exception:
                                                 full_sid = "[unrepresentable SID]"
-                                            context.log.debug(f"Failed to get user info for RID {rid}: {safe_error_str(name_e)}")
+                                            context.log.debug(f"Failed to get user info for RID {rid}: {str(name_e)}")
                                             admin_users.add(f"{decoded_domain}\\{full_sid} (Member of {group_name})")
                                     except Exception as member_e_inner:
-                                        context.log.debug(f"Error processing group member: {safe_error_str(member_e_inner)}")
+                                        context.log.debug(f"Error processing group member: {str(member_e_inner)}")
                         except Exception as member_e:
-                            context.log.debug(f"Failed to get members of group {group_name}: {safe_error_str(member_e)}")
+                            context.log.debug(f"Failed to get members of group {group_name}: {str(member_e)}")
                         finally:
                             try:
                                 samr.hSamrCloseHandle(dce, group_handle)
-                            except:
+                            except Exception:
                                 pass
 
                     except Exception as group_e:
-                        context.log.debug(f"Failed to process {group_name} group: {safe_error_str(group_e)}")
+                        context.log.debug(f"Failed to process {group_name} group: {str(group_e)}")
                         continue
 
             if admin_users:
@@ -226,7 +200,7 @@ class NXCModule:
             return True
 
         except Exception as e:
-            context.log.error(f"Unexpected error: {safe_error_str(e)}")
+            context.log.debug(str(e))
             return False
 
     def check_users_directory(self, context, connection, admin_users):
@@ -236,11 +210,11 @@ class NXCModule:
         # try C$\Users first
         try:
             files = connection.conn.listPath("C$\\Users", "*")
-        except SessionError as e:
+        except Exception as e:
             context.log.debug(f"C$\\Users unavailable: {e}, trying Documents and Settings")
             try:
                 files = connection.conn.listPath("C$\\Documents and Settings", "*")
-            except SessionError as e2:
+            except Exception as e2:
                 context.log.error(f"Error listing fallback directory: {e2}")
                 return matched_dirs  # return empty
         else:
@@ -281,10 +255,6 @@ class NXCModule:
             context.log.error(f"Error in check_tasklist RPC method: {e}")
             return []
 
-        if not processes:
-            context.log.info("No processes enumerated on target")
-            return []
-
         context.log.debug(f"Enumerated {len(processes)} processes on {netbios_name}")
 
         matched_admin_users = {}
@@ -308,7 +278,7 @@ class NXCModule:
                     matched_admin_users[user_only] = True
 
         if matched_admin_users:
-            context.log.info(f"Found users in tasklist:\n" + "\n".join(matched_admin_users.keys()))
+            context.log.info("Found users in tasklist:\n" + "\n".join(matched_admin_users.keys()))
         else:
             context.log.info("No admin user processes found in tasklist")
 
@@ -316,20 +286,19 @@ class NXCModule:
 
     def print_grouped_results(self, context, connection, results):
         """logs all results grouped per host in order"""
-        host_info = f"{connection.host}    {connection.port}    {results['netbios_name']}"
 
         if results["admin_users"]:
             context.log.success(f"Identified Admin Users: {', '.join(results['admin_users'])}")
 
         if results["matched_dirs"]:
-            context.log.success(f"Found users in directories:")
+            context.log.success("Found users in directories:")
             for d in results["matched_dirs"]:
                 context.log.highlight(d)
 
         if results["matched_tasks"]:
-            context.log.success(f"Found users in tasklist:")
+            context.log.success("Found users in tasklist:")
             for t in results["matched_tasks"]:
                 context.log.highlight(t)
 
         if not results["matched_dirs"] and not results["matched_tasks"]:
-            context.log.success(f"No matches found in users directory or tasklist.")
+            context.log.success("No matches found in users directory or tasklist.")
