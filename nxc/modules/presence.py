@@ -3,6 +3,7 @@ from impacket.dcerpc.v5 import tsts as TSTS
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 from contextlib import suppress
 
+
 class NXCModule:
     name = "presence"
     description = "Traces Domain and Enterprise Admin presence in the target over SMB"
@@ -16,7 +17,7 @@ class NXCModule:
 
     def options(self, context, module_options):
         """There are no module options."""
-        
+
     def on_admin_login(self, context, connection):
         def safe_str(obj):
             try:
@@ -42,7 +43,7 @@ class NXCModule:
                 connection.domain,
                 connection.lmhash,
                 connection.nthash,
-                aesKey=getattr(connection, "aesKey", None)
+                aesKey=connection.aesKey,
             )
 
             dce = rpctransport.get_dce_rpc()
