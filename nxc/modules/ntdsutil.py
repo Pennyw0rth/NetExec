@@ -233,7 +233,7 @@ class NXCModule:
                 subprocess.run(command, stdout=outfile, stderr=subprocess.STDOUT)
 
             # clean impacket-secretsdump output: remove first 7 lines and last line
-            with open(output_file, "r") as f:
+            with open(output_file) as f:
                 lines = f.readlines()
 
             if len(lines) > 8:
