@@ -19,16 +19,6 @@ class NXCModule:
         """There are no module options."""
 
     def on_admin_login(self, context, connection):
-        def safe_str(obj):
-            try:
-                if isinstance(obj, bytes):
-                    return obj.decode("utf-8", errors="replace")
-                if hasattr(obj, "to_string"):
-                    return obj.to_string()
-                return str(obj)
-            except Exception:
-                return "[unrepresentable object]"
-
         try:
             context.log.debug(f"Target NetBIOS Name: {connection.hostname}")
 
@@ -87,10 +77,6 @@ class NXCModule:
 
                 try:
                     group_handle = samr.hSamrOpenGroup(dce, domain_handle, samr.GROUP_LIST_MEMBERS, group_rid)["GroupHandle"]
-                except Exception as group_e:
-                    context.log.debug(f"Failed to process {group_name} group: {group_e!s}")
-                    return False
-                try:
                     resp = samr.hSamrGetMembersInGroup(dce, group_handle)
                     for member in resp["Members"]["Members"]:
                         rid = int.from_bytes(member.getData(), byteorder="little")
