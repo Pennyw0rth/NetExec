@@ -43,7 +43,7 @@ class NXCModule:
                 "badPwdCount",
                 "memberOf",
             ],
-            sizeLimit=50,
+            sizeLimit=999,
         )
         try:
             resp_parsed = parse_result_attributes(r)
