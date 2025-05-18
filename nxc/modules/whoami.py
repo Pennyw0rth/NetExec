@@ -74,7 +74,7 @@ class NXCModule:
                 context.log.highlight(f"Enabled: {'No' if is_disabled else 'Yes'}")
                 context.log.highlight(f"Password Never Expires: {'Yes' if password_never_expires else 'No'}")
 
-            # Process User PrincipalName 
+            # Process User PrincipalName
             if "userPrincipalName" in response:
                 context.log.highlight(f"User Principal Name: {response['userPrincipalName']}")
 
@@ -116,7 +116,7 @@ class NXCModule:
                 else:
                     context.log.highlight(f"Service Account Name: {spns}")
 
-            # Process DistinguishedName 
+            # Process DistinguishedName
             if "distinguishedName" in response:
                 context.log.highlight(f"Distinguished Name: {response['distinguishedName']}")
 
@@ -128,7 +128,7 @@ class NXCModule:
                         context.log.highlight(f"Member of: {group}")
                 else:
                     context.log.highlight(f"Member of: {groups}")
-            
+
             # Process User Sid
             if "objectSid" in response:
                 context.log.highlight(f"User SID: {response['objectSid']}")
