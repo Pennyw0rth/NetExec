@@ -1,3 +1,4 @@
+import datetime
 class NXCModule:
     """
     Basic enumeration of provided user information and privileges
@@ -37,56 +38,98 @@ class NXCModule:
                 "userAccountControl",
                 "servicePrincipalName",
                 "userPrincipalName",
+                "objectSid",
                 "mail",
+                "badPwdCount",
                 "memberOf",
             ],
-            sizeLimit=9999,
+            sizeLimit=50,
         )
-        for response in r[0]["attributes"]:
-            if "userAccountControl" in str(response["type"]):
-               uac_raw = response["vals"][0]
-    
-               # Ensure it's a string, then integer
-               uac = int(uac_raw.decode() if isinstance(uac_raw, bytes) else str(uac_raw))
+        try:
+            resp_parsed = parse_result_attributes(r)
+        except LDAPFilterSyntaxError as e:
+            self.logger.fail(f"LDAP Filter Syntax Error: {e}")
+            return
 
-               # Flags
-               ACCOUNTDISABLE = 0x0002
-               DONT_EXPIRE_PASSWORD = 0x10000
+        for response in resp_parsed:
 
-               is_disabled = (uac & ACCOUNTDISABLE) != 0
-               password_never_expires = (uac & DONT_EXPIRE_PASSWORD) != 0
+            # Process name
+            if "name" in response:
+                context.log.highlight(f"Name: {response['name']}")
 
-               context.log.highlight(f"Enabled: {'No' if is_disabled else 'Yes'}")
-               context.log.highlight(f"Password Never Expires: {'Yes' if password_never_expires else 'No'}")
-            elif "lastLogon" in str(response["type"]):
-               raw = response["vals"][0]
-               # Convert from bytes if needed
-               filetime_str = raw.decode() if isinstance(raw, bytes) else str(raw)
-               filetime_int = int(filetime_str)
+            # Process Description
+            if "description" in response:
+                context.log.highlight(f"Description: {response['description']}")
 
-               if filetime_int == 1601:
-                 context.log.highlight("Last logon: Never")
-               else:
-                  # Convert FILETIME to datetime
-                  dt = datetime.datetime(1601, 1, 1) + datetime.timedelta(microseconds=filetime_int / 10)
-                  context.log.highlight(f"Last logon: {dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
-            elif "memberOf" in str(response["type"]):
-                for group in response["vals"]:
-                    context.log.highlight(f"Member of: {group}")
-            elif "servicePrincipalName" in str(response["type"]):
-                context.log.highlight("Service Account Name(s) found - Potentially Kerberoastable user!")
-                for spn in response["vals"]:
-                    context.log.highlight(f"Service Account Name: {spn}")
-            elif "pwdLastSet" in str(response["type"]):
-                raw = response["vals"][0]
-                # Convert from bytes if needed
-                filetime_str = raw.decode() if isinstance(raw, bytes) else str(raw)
+            # Process sAMAccountName
+            if "sAMAccountName" in response:
+                context.log.highlight(f"sAMAccountName: {response['sAMAccountName']}")
+
+            # Process userAccountControl
+            if "userAccountControl" in response:
+                uac = int(response["userAccountControl"])
+                ACCOUNTDISABLE = 0x0002
+                DONT_EXPIRE_PASSWORD = 0x10000
+                is_disabled = (uac & ACCOUNTDISABLE) != 0
+                password_never_expires = (uac & DONT_EXPIRE_PASSWORD) != 0
+                context.log.highlight(f"Enabled: {'No' if is_disabled else 'Yes'}")
+                context.log.highlight(f"Password Never Expires: {'Yes' if password_never_expires else 'No'}")
+
+            # Process User PrincipalName 
+            if "userPrincipalName" in response:
+                context.log.highlight(f"User Principal Name: {response['userPrincipalName']}")
+
+            # Process mail
+            if "mail" in response:
+                context.log.highlight(f"Email: {response['mail']}")
+
+            # Process lastLogon
+            if "lastLogon" in response:
+                filetime_str = response["lastLogon"]
                 filetime_int = int(filetime_str)
+                if filetime_int == 0:
+                    context.log.highlight("Last logon: Never")
+                else:
+                    dt = datetime.datetime(1601, 1, 1) + datetime.timedelta(microseconds=filetime_int / 10)
+                    context.log.highlight(f"Last logon: {dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
 
+            # Process pwdLastSet
+            if "pwdLastSet" in response:
+                filetime_str = response["pwdLastSet"]
+                filetime_int = int(filetime_str)
                 if filetime_int == 0:
                     context.log.highlight("Password Last Set: Never")
                 else:
                     dt = datetime.datetime(1601, 1, 1) + datetime.timedelta(microseconds=filetime_int / 10)
                     context.log.highlight(f"Password Last Set: {dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
-            else:
-                context.log.highlight(response["type"] + ": " + response["vals"][0])
+
+            # Process Bad Password Count
+            if "badPwdCount" in response:
+                context.log.highlight(f"Bad Passwod Count: {response['badPwdCount']}")
+
+            # Process servicePrincipalName
+            if "servicePrincipalName" in response:
+                context.log.highlight("Service Account Name(s) found - Potentially Kerberoastable user!")
+                spns = response["servicePrincipalName"]
+                if isinstance(spns, list):
+                    for spn in spns:
+                        context.log.highlight(f"Service Account Name: {spn}")
+                else:
+                    context.log.highlight(f"Service Account Name: {spns}")
+
+            # Process DistinguishedName 
+            if "distinguishedName" in response:
+                context.log.highlight(f"Distinguished Name: {response['distinguishedName']}")
+
+            # Process memberOf
+            if "memberOf" in response:
+                groups = response["memberOf"]
+                if isinstance(groups, list):
+                    for group in groups:
+                        context.log.highlight(f"Member of: {group}")
+                else:
+                    context.log.highlight(f"Member of: {groups}")
+            
+            # Process User Sid
+            if "objectSid" in response:
+                context.log.highlight(f"User SID: {response['objectSid']}")
