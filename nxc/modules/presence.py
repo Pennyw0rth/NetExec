@@ -64,15 +64,15 @@ class NXCModule:
             self.sid_to_user = {}  # dictionary mapping sid string to username
 
             try:
-                resp = samr.c(dce, server_handle, domain)["DomainId"]
-                domain_sid = resp.formatCanonical()
+                resp = samr.hSamrLookupDomainInSamServer(dce, server_handle, domain)
+                domain_sid = resp["DomainId"].formatCanonical()
                 context.log.debug(f"Resolved domain SID for {domain}: {domain_sid}")
             except Exception as e:
                 context.log.debug(f"Failed to lookup SID for domain {domain}: {e!s}")
                 return False
 
             try:
-                domain_handle = samr.hSamrOpenDomain(dce, server_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_LIST_ACCOUNTS, domain)["DomainHandle"]
+                domain_handle = samr.hSamrOpenDomain(dce, server_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_LIST_ACCOUNTS, resp["DomainId"])["DomainHandle"]
             except Exception as e:
                 context.log.debug(f"Failed to open domain {domain}: {e!s}")
                 return False
@@ -87,61 +87,43 @@ class NXCModule:
 
                 try:
                     group_handle = samr.hSamrOpenGroup(dce, domain_handle, samr.GROUP_LIST_MEMBERS, group_rid)["GroupHandle"]
-
-                    try:
-                        resp = samr.hSamrGetMembersInGroup(dce, group_handle)
-                        if resp["Members"]["Members"]:
-                            for member in resp["Members"]["Members"]:
-                                try:
-                                    rid = int.from_bytes(member.getData(), byteorder="little")
-                                    try:
-                                        user_handle = samr.hSamrOpenUser(
-                                            dce,
-                                            domain_handle,
-                                            samr.MAXIMUM_ALLOWED,
-                                            rid
-                                        )["UserHandle"]
-
-                                        user_info = samr.hSamrQueryInformationUser2(
-                                            dce,
-                                            user_handle,
-                                            samr.USER_INFORMATION_CLASS.UserAllInformation
-                                        )["Buffer"]["All"]
-
-                                        username = user_info["UserName"]
-                                        username_str = (
-                                            username.encode("utf-16-le").decode("utf-16-le")
-                                            if isinstance(username, bytes)
-                                            else str(username)
-                                        )
-
-                                        full_username = f"{domain}\\{username_str}"
-                                        admin_users.add(f"{full_username} (Member of {group_name})")
-
-                                        # map sid string of user to username
-                                        user_sid = f"{domain_sid}-{rid}"
-                                        self.sid_to_user[user_sid] = full_username
-
-                                        samr.hSamrCloseHandle(dce, user_handle)
-                                    except Exception as name_e:
-                                        try:
-                                            sid_str = domain_sid.formatCanonical()
-                                            full_sid = f"{sid_str}-{rid}"
-                                        except Exception:
-                                            full_sid = "[unrepresentable SID]"
-                                        context.log.debug(f"Failed to get user info for RID {rid}: {name_e!s}")
-                                        admin_users.add(f"{domain}\\{full_sid} (Member of {group_name})")
-                                except Exception as member_e_inner:
-                                    context.log.debug(f"Error processing group member: {member_e_inner!s}")
-                    except Exception as member_e:
-                        context.log.debug(f"Failed to get members of group {group_name}: {member_e!s}")
-                    finally:
-                        with suppress(Exception):
-                            samr.hSamrCloseHandle(dce, group_handle)
-
                 except Exception as group_e:
                     context.log.debug(f"Failed to process {group_name} group: {group_e!s}")
                     return False
+                try:
+                    resp = samr.hSamrGetMembersInGroup(dce, group_handle)
+                    if resp["Members"]["Members"]:
+                        for member in resp["Members"]["Members"]:
+                            try:
+                                rid = int.from_bytes(member.getData(), byteorder="little")
+                                try:
+                                    user_handle = samr.hSamrOpenUser(dce, domain_handle, samr.MAXIMUM_ALLOWED, rid)["UserHandle"]
+                                    username = samr.hSamrQueryInformationUser2(dce, user_handle, samr.USER_INFORMATION_CLASS.UserAllInformation)["Buffer"]["All"]["UserName"]
+
+                                    full_username = f"{domain}\\{username}"
+                                    admin_users.add(f"{full_username} (Member of {group_name})")
+
+                                    # map sid string of user to username
+                                    user_sid = f"{domain_sid}-{rid}"
+                                    self.sid_to_user[user_sid] = full_username
+
+                                    samr.hSamrCloseHandle(dce, user_handle)
+                                except Exception as name_e:
+                                    try:
+                                        sid_str = domain_sid
+                                        full_sid = f"{sid_str}-{rid}"
+                                    except Exception:
+                                        full_sid = "[unrepresentable SID]"
+                                    context.log.debug(f"Failed to get user info for RID {rid}: {name_e!s}")
+                                    admin_users.add(f"{domain}\\{full_sid} (Member of {group_name})")
+                            except Exception as member_e_inner:
+                                context.log.debug(f"Error processing group member: {member_e_inner!s}")
+                except Exception as e:
+                    context.log.exception(e)
+                    context.log.debug(f"Failed to get members of group {group_name}: {e!s}")
+                finally:
+                    with suppress(Exception):
+                        samr.hSamrCloseHandle(dce, group_handle)
 
             if admin_users:
                 # extract usernames only, remove domain and suffix
