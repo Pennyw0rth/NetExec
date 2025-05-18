@@ -48,11 +48,7 @@ class NXCModule:
             ],
             sizeLimit=999,
         )
-        try:
-            resp_parsed = parse_result_attributes(r)
-        except LDAPFilterSyntaxError as e:
-            self.logger.fail(f"LDAP Filter Syntax Error: {e}")
-            return
+        resp_parsed = parse_result_attributes(r)
 
         for response in resp_parsed:
 
