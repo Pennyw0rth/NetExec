@@ -60,7 +60,7 @@ class NXCModule:
                 decoded_domains = [safe_str(d["Name"]) for d in domain_list]
                 context.log.info(f"Available domains: {', '.join(decoded_domains)}")
             except Exception as e:
-                context.log.error(f"Could not enumerate domains: {e!s}")
+                context.log.fail(f"Could not enumerate domains: {e!s}")
                 return False
 
             admin_users = set()
@@ -208,32 +208,30 @@ class NXCModule:
 
         # try C$\Users first
         try:
-            files = connection.conn.listPath("C$\\Users", "*")
+            files = connection.conn.listPath("C$", "\\Users\\*")
         except Exception as e:
             context.log.debug(f"C$\\Users unavailable: {e}, trying Documents and Settings")
             try:
-                files = connection.conn.listPath("C$\\Documents and Settings", "*")
+                files = connection.conn.listPath("C$", "\\Documents and Settings\\*")
             except Exception as e2:
-                context.log.error(f"Error listing fallback directory: {e2}")
+                context.log.fail(f"Error listing fallback directory: {e2}")
                 return matched_dirs  # return empty
         else:
             context.log.debug("Successfully listed C$\\Users")
 
-        # collect folder names ignoring "." and ".."
-        folder_names = [f.get_shortname() for f in files if f.get_shortname() not in [".", ".."]]
+        # collect folder names (lowercase) ignoring "." and ".."
+        folder_names = [f.get_shortname().lower() for f in files if f.get_shortname() not in [".", ".."]]
         dirs_found.update(folder_names)
-
-        dirs_lower = {d.lower() for d in dirs_found}
 
         # for admin users, check for folder presence
         for user in admin_users:
             user_lower = user.lower()
             if user_lower == "administrator":
                 # only match folders like "administrator.something", not "administrator"
-                matched = [d for d in dirs_found if d.lower().startswith("administrator.") and d.lower() != "administrator"]
+                matched = [d for d in dirs_found if d.startswith("administrator.") and d != "administrator"]
                 matched_dirs.extend(matched)
             else:
-                if user_lower in dirs_lower:
+                if user_lower in dirs_found:
                     matched_dirs.append(user)
 
         if matched_dirs:
@@ -250,7 +248,7 @@ class NXCModule:
                 handle = legacy.hRpcWinStationOpenServer()
                 processes = legacy.hRpcWinStationGetAllProcesses(handle)
         except Exception as e:
-            context.log.error(f"Error in check_tasklist RPC method: {e}")
+            context.log.fail(f"Error in check_tasklist RPC method: {e}")
             return []
 
         context.log.debug(f"Enumerated {len(processes)} processes on {netbios_name}")
