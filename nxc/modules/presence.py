@@ -84,24 +84,18 @@ class NXCModule:
                             user_handle = samr.hSamrOpenUser(dce, domain_handle, samr.MAXIMUM_ALLOWED, rid)["UserHandle"]
                             username = samr.hSamrQueryInformationUser2(dce, user_handle, samr.USER_INFORMATION_CLASS.UserAllInformation)["Buffer"]["All"]["UserName"]
 
-                            full_username = f"{domain}\\{username}"
-                            admin_users.add(f"{full_username} (Member of {group_name})")
+                            admin_users.add(f"{domain}\\{username} (Member of {group_name})")
 
                             # map sid string of user to username
                             user_sid = f"{domain_sid}-{rid}"
-                            self.sid_to_user[user_sid] = full_username
-
-                            samr.hSamrCloseHandle(dce, user_handle)
-                        except Exception as name_e:
-                            try:
-                                sid_str = domain_sid
-                                full_sid = f"{sid_str}-{rid}"
-                            except Exception:
-                                full_sid = "[unrepresentable SID]"
-                            context.log.debug(f"Failed to get user info for RID {rid}: {name_e!s}")
-                            admin_users.add(f"{domain}\\{full_sid} (Member of {group_name})")
+                            self.sid_to_user[user_sid] = f"{domain}\\{username}"
+                        except Exception as e:
+                            context.log.debug(f"Failed to get user info for RID {rid}: {e!s}")
+                            admin_users.add(f"{domain}\\{domain_sid}-{rid} (Member of {group_name})")
+                        finally:
+                            with suppress(Exception):
+                                samr.hSamrCloseHandle(dce, user_handle)
                 except Exception as e:
-                    context.log.exception(e)
                     context.log.debug(f"Failed to get members of group {group_name}: {e!s}")
                 finally:
                     with suppress(Exception):
