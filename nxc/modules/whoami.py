@@ -1,4 +1,7 @@
 import datetime
+from nxc.parsers.ldap_results import parse_result_attributes
+
+
 class NXCModule:
     """
     Basic enumeration of provided user information and privileges
