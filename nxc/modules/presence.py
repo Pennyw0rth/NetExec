@@ -11,10 +11,6 @@ class NXCModule:
     opsec_safe = False
     multiple_hosts = True
 
-    def __init__(self):
-        # initialize the sid to user mapping dictionary
-        self.sid_to_user = {}
-
     def options(self, context, module_options):
         """There are no module options."""
 
