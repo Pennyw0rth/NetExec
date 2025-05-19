@@ -136,25 +136,17 @@ class NXCModule:
             context.log.debug("Successfully listed C$\\Users")
 
         # collect folder names (lowercase) ignoring "." and ".."
-        folder_names = [f.get_shortname().lower() for f in files if f.get_shortname() not in [".", ".."]]
-        dirs_found.update(folder_names)
+        dirs_found.update([f.get_shortname().lower() for f in files if f.get_shortname() not in [".", ".."]])
 
         # for admin users, check for folder presence
         for user in admin_users:
-            user_lower = user.lower()
-            if user_lower == "administrator":
-                # only match folders like "administrator.something", not "administrator"
+            # only match folders like "administrator.something", not "administrator"
+            if user.lower() == "administrator":
                 matched = [d for d in dirs_found if d.startswith("administrator.") and d != "administrator"]
                 matched_dirs.extend(matched)
             else:
-                if user_lower in dirs_found:
+                if user.lower() in dirs_found:
                     matched_dirs.append(user)
-
-        if matched_dirs:
-            pass
-        else:
-            context.log.highlight("[+] No admin users found in directories")
-
         return matched_dirs
 
     def check_tasklist(self, context, connection, admin_users, netbios_name):
