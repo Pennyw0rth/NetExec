@@ -176,12 +176,7 @@ class NXCModule:
 
         for process in processes:
             context.log.debug(f"ImageName: {process['ImageName']}, UniqueProcessId: {process['SessionId']}, pSid: {process['pSid']}")
-
-            psid = process["pSid"]
-            if not psid:
-                continue
-
-            username = self.sid_to_user.get(psid)
+            username = self.sid_to_user.get(process["pSid"])
             if username:
                 # extract username part after '\'
                 user_only = username.split("\\")[-1]
