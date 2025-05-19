@@ -51,6 +51,7 @@ class NXCModule:
                 return False
 
             admin_users = set()
+            usernames = set()
             self.sid_to_user = {}  # dictionary mapping sid string to username
 
             try:
@@ -85,6 +86,7 @@ class NXCModule:
                             username = samr.hSamrQueryInformationUser2(dce, user_handle, samr.USER_INFORMATION_CLASS.UserAllInformation)["Buffer"]["All"]["UserName"]
 
                             admin_users.add(f"{domain}\\{username} (Member of {group_name})")
+                            usernames.add(username)
 
                             # map sid string of user to username
                             user_sid = f"{domain_sid}-{rid}"
@@ -101,41 +103,21 @@ class NXCModule:
                     with suppress(Exception):
                         samr.hSamrCloseHandle(dce, group_handle)
 
-            if admin_users:
-                # extract usernames only, remove domain and suffix
-                usernames = set()
-                for user in admin_users:
-                    # user format: domain\username (member of group)
-                    try:
-                        # split on '\' and take second part, then split on ' ' and take first token as username
-                        username_part = user.split("\\")[1]
-                        username = username_part.split(" ")[0]
-                        usernames.add(username)
-                    except Exception:
-                        # fallback to whole user string if parsing fails
-                        usernames.add(user)
+            usernames = sorted(usernames)
 
-                sorted_names = sorted(usernames)
-            else:
-                context.log.info("No privileged users found")
-                sorted_names = []
-
-            matched_dirs = self.check_users_directory(context, connection, sorted_names)
-            matched_tasks = self.check_tasklist(context, connection, sorted_names, connection.hostname)
+            matched_dirs = self.check_users_directory(context, connection, usernames)
+            matched_tasks = self.check_tasklist(context, connection, usernames, connection.hostname)
 
             # collect results for printing
             results = {
                 "netbios_name": connection.hostname,
-                "admin_users": sorted_names,
+                "admin_users": usernames,
                 "matched_dirs": matched_dirs,
                 "matched_tasks": matched_tasks,
             }
 
             # print grouped/logged results nicely
             self.print_grouped_results(context, connection, results)
-
-            return True
-
         except Exception as e:
             context.log.fail(str(e))
             return False
