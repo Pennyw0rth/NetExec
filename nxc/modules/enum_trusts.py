@@ -1,4 +1,3 @@
-from impacket.ldap import ldapasn1 as ldapasn1_impacket
 
 
 class NXCModule:
@@ -17,4 +16,4 @@ class NXCModule:
         pass
 
     def on_login(self, context, connection):
-        context.log.fail('[REMOVED] This module moved to the --dc-list LDAP flag.')
+        context.log.fail("[REMOVED] This module moved to the --dc-list LDAP flag.")
