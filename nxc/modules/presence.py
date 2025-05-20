@@ -66,7 +66,8 @@ class NXCModule:
 
             admin_rids = {
                 "Domain Admins": 512,
-                "Enterprise Admins": 519
+                "Enterprise Admins": 519,
+                "Administrators": 544,
             }
 
             for group_name, group_rid in admin_rids.items():
