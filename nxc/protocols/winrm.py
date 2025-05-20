@@ -31,7 +31,6 @@ class winrm(connection):
         self.server_os = None
         self.output_filename = None
         self.endpoint = None
-        self.hash = None
         self.lmhash = ""
         self.nthash = ""
         self.ssl = False
@@ -145,6 +144,9 @@ class winrm(connection):
         return True
 
     def plaintext_login(self, domain, username, password):
+        # Add server hostname to the Workstation field in NTLM Authenticate Message (Message 3)
+        # This helps fix false negatives during NTLM auth — see issue #694 for details
+        os.environ["NETBIOS_COMPUTER_NAME"] = self.hostname
         self.admin_privs = False
         self.password = password
         self.username = username
@@ -165,11 +167,13 @@ class winrm(connection):
 
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
             self.db.add_credential("plaintext", domain, self.username, self.password)
-            # TODO: when we can easily get the host_id via RETURNING statements, readd this in
+            user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
+            host_id = self.db.get_hosts(self.host)[0].id
+            self.db.add_loggedin_relation(user_id, host_id)
 
             if self.admin_privs:
                 self.logger.debug("Inside admin privs")
-                self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host)  # , user_id=user_id)
+                self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host, user_id=user_id)  # , user_id=user_id)
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
             if not self.args.local_auth and self.username != "":
@@ -183,6 +187,9 @@ class winrm(connection):
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
+        # Add server hostname to the Workstation field in NTLM Authenticate Message (Message 3)
+        # This helps fix false negatives during NTLM auth — see issue #694 for details
+        os.environ["NETBIOS_COMPUTER_NAME"] = self.hostname
         self.admin_privs = False
         lmhash = "00000000000000000000000000000000"
         nthash = ""
@@ -211,8 +218,13 @@ class winrm(connection):
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}:{process_secret(nthash)} {self.mark_pwned()}")
 
+            self.db.add_credential("hash", domain, self.username, ntlm_hash)
+            user_id = self.db.get_credential("hash", domain, self.username, ntlm_hash)
+            host_id = self.db.get_hosts(self.host)[0].id
+            self.db.add_loggedin_relation(user_id, host_id)
+
             if self.admin_privs:
-                self.db.add_admin_user("hash", domain, self.username, nthash, self.host)
+                self.db.add_admin_user("hash", domain, self.username, nthash, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
             if not self.args.local_auth and self.username != "":
