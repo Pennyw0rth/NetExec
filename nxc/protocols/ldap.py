@@ -414,8 +414,6 @@ class ldap(connection):
                 return False
 
     def plaintext_login(self, domain, username, password):
-        if username == "" and password == "" and self.no_ntlm:
-            self.scope = ldapasn1_impacket.Scope("baseObject")
 
         self.username = username
         self.password = password
@@ -646,7 +644,12 @@ class ldap(connection):
                 self.logger.fail("sizeLimitExceeded exception caught, giving up and processing the data received")
                 e.getAnswers()
             else:
-                self.logger.fail(e)
+                # if empty username and password is possible that we need to change the scope, we try with a baseObject before returning a fail
+                if self.username == "" and self.password == "":
+                    self.scope = ldapasn1_impacket.Scope("baseObject")
+                    return self.search(searchFilter, attributes, sizeLimit, baseDN)
+                else:
+                    self.logger.fail(e)
                 return []
         return []
 
