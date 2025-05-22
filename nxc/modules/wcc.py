@@ -1,12 +1,14 @@
 import json
 import logging
 import operator
+import os.path
 import time
 
 from impacket.system_errors import ERROR_NO_MORE_ITEMS, ERROR_FILE_NOT_FOUND, ERROR_OBJECT_NOT_FOUND
 from termcolor import colored
 
 from nxc.logger import nxc_logger
+from nxc.paths import NXC_PATH
 from impacket.dcerpc.v5 import rrp, samr, scmr
 from impacket.dcerpc.v5.rrp import DCERPCSessionError
 from impacket.dcerpc.v5.rpcrt import DCERPCException
@@ -29,6 +31,7 @@ REG_VALUE_TYPE_32BIT_BE = 5
 REG_VALUE_TYPE_UNICODE_STRING_SEQUENCE = 7
 REG_VALUE_TYPE_64BIT_LE = 11
 
+checks_results = {}
 
 class ConfigCheck:
     """Class for performing the checks and holding the results"""
@@ -101,6 +104,7 @@ class NXCModule:
         wcc_file_handler = logging.FileHandler(log_filename)
         wcc_file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
         self.wcc_logger.addHandler(wcc_file_handler)
+        self.checks_results_path = NXC_PATH + "/tmp/wcc_checks_results.json"
 
         self.host_checker = HostChecker()
 
@@ -147,12 +151,15 @@ class NXCModule:
                     or _filter in check.name.lower()])
             self.host_checker.checks = checks_to_perform
 
-        self.results = {}
         ConfigCheck.module = self
         HostChecker.module = self
+        
+        # Load intermediary results into checks_results
+        if self.output and os.path.isfile(self.checks_results_path):
+            with open(self.checks_results_path) as f:
+                checks_results.update(json.load(f))
 
     def on_admin_login(self, context, connection):
-        self.results.setdefault(connection.host, {"checks": []})
         self.context = context
         self.host_checker.setup_remops(context, connection)
         self.host_checker.run()
@@ -160,22 +167,30 @@ class NXCModule:
             self.export_results()
 
     def add_result(self, host, result):
-        self.results[host]["checks"].append({"Check": result.name, "Description": result.description, "Status": "OK" if result.ok else "KO", "Reasons": result.reasons})
+        checks_results.setdefault(host, {"checks": []})
+        d = {"Check": result.name, "Description": result.description, "Status": "OK" if result.ok else "KO", "Reasons": result.reasons}
+        if d not in checks_results[host]["checks"]:
+            checks_results[host]["checks"].append(d)
 
     def export_results(self):
         with open(self.output, "w") as output:
             if self.output_format == "json":
-                json.dump(self.results, output)
+                json.dump(checks_results, output)
             elif self.output_format == "csv":
                 output.write("Host,Check,Description,Status,Reasons")
-                for host in self.results:
-                    for result in self.results[host]["checks"]:
+                for host in checks_results:
+                    for result in checks_results[host]["checks"]:
                         output.write(f"\n{host}")
                         for field in (result["Check"], result["Description"], result["Status"], " ; ".join(result["Reasons"]).replace("\x00", "")):
                             if "," in field:
                                 field = field.replace('"', '""')
                                 field = f'"{field}"'
                             output.write(f",{field}")
+
+        # Save intermediary results
+        with open(self.checks_results_path, "w") as f:
+            json.dump(checks_results, f)
+
         self.context.log.success(f"Results written to {self.output}")
 
 
