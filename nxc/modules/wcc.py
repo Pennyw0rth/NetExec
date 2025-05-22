@@ -454,13 +454,21 @@ class HostChecker:
         return ok, reasons
 
     def check_nbtns(self):
+        adapters_key = "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}"
         key_name = "HKLM\\SYSTEM\\CurrentControlSet\\Services\\NetBT\\Parameters\\Interfaces"
         subkeys = self.reg_get_subkeys(self.dce, self.connection, key_name)
         success = False
         reasons = []
         missing = 0
         nbtns_enabled = 0
+
         for subkey in subkeys:
+            # Ignore Microsoft Kernel Debug Network Adapter
+            kdnic_key = adapters_key + "\\0000"
+            kdnic_uuid = self.reg_query_value(self.dce, self.connection, kdnic_key, "NetCfgInstanceId")
+            if subkey.lower() == ("Tcpip_" + kdnic_uuid).replace('\x00','').lower():
+                continue
+
             value = self.reg_query_value(self.dce, self.connection, key_name + "\\" + subkey, "NetbiosOptions")
             if type(value) == DCERPCSessionError:
                 if value.error_code == ERROR_OBJECT_NOT_FOUND:
