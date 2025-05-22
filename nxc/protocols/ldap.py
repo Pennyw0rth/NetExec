@@ -643,11 +643,10 @@ class ldap(connection):
                 # We should never reach this code as we use paged search now
                 self.logger.fail("sizeLimitExceeded exception caught, giving up and processing the data received")
                 e.getAnswers()
-            elif "operationsError" in str(e) and self.scope is None:
-                # if empty username and password is possible that we need to change the scope, we try with a baseObject before returning a fail
-                if self.username == "" and self.password == "":
-                    self.scope = ldapasn1_impacket.Scope("baseObject")
-                    return self.search(searchFilter, attributes, sizeLimit, baseDN)
+            # if empty username and password is possible that we need to change the scope, we try with a baseObject before returning a fail
+            elif "operationsError" in str(e) and self.scope is None and self.username == "" and self.password == "":
+                self.scope = ldapasn1_impacket.Scope("baseObject")
+                return self.search(searchFilter, attributes, sizeLimit, baseDN)
             else:
                 self.logger.fail(e)
                 return []
