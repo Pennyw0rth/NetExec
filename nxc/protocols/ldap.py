@@ -639,17 +639,17 @@ class ldap(connection):
                     searchControls=paged_search_control,
                 )
         except ldap_impacket.LDAPSearchError as e:
-            if e.getErrorString().find("sizeLimitExceeded") >= 0:
+            if "sizeLimitExceeded" in str(e):
                 # We should never reach this code as we use paged search now
                 self.logger.fail("sizeLimitExceeded exception caught, giving up and processing the data received")
                 e.getAnswers()
-            else:
+            elif "operationsError" in str(e) and self.scope is None:
                 # if empty username and password is possible that we need to change the scope, we try with a baseObject before returning a fail
                 if self.username == "" and self.password == "":
                     self.scope = ldapasn1_impacket.Scope("baseObject")
                     return self.search(searchFilter, attributes, sizeLimit, baseDN)
-                else:
-                    self.logger.fail(e)
+            else:
+                self.logger.fail(e)
                 return []
         return []
 
