@@ -143,14 +143,7 @@ class NXCModule:
         add_ntds_hash.ntds_hashes = 0
         add_ntds_hash.added_to_db = 0
 
-        if not connection.output_filename:
-            timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
-            hostname = connection.hostname
-            ip = connection.host
-            filename = f"{hostname}_{ip}_{timestamp}.ntds"
-            output_dir = os.path.join(NXC_PATH, "logs", "ntds")
-            os.makedirs(output_dir, exist_ok=True)
-            connection.output_filename = os.path.join(output_dir, filename).rstrip(".ntds")
+        connection.output_filename = connection.output_file_template.format(output_folder="ntds")
 
         NTDS = NTDSHashes(
             f"{self.dir_result}/Active Directory/ntds.dit",
