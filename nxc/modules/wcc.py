@@ -179,6 +179,7 @@ class HostChecker:
             ConfigCheck("CredentialGuard enabled", "Checks if CredentialGuard is enabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard", "EnableVirtualizationBasedSecurity", 1), ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "LsaCfgFlags", 1)]]),
             ConfigCheck("Lsass run as PPL", "Checks if lsass runs as a protected process", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "RunAsPPL", 1)]]),
             ConfigCheck("No Powershell v2", "Checks if powershell v2 is available", checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\PowerShell\\3\\PowerShellEngine", "PSCompatibleVersion", "2.0", not_(operator.contains))]]),
+            ConfigCheck("LLMNR disabled", "Checks if LLMNR is disabled", checker_args=[[self, ("HKLM\\Software\\policies\\Microsoft\\Windows NT\\DNSClient", "EnableMulticast", 0)]]),
             ConfigCheck("LmCompatibilityLevel == 5", "Checks if LmCompatibilityLevel is set to 5", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "LmCompatibilityLevel", 5, operator.ge)]]),
             ConfigCheck("NBTNS disabled", "Checks if NBTNS is disabled on all interfaces", checkers=[self.check_nbtns]),
             ConfigCheck("mDNS disabled", "Checks if mDNS is disabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\DNScache\\Parameters", "EnableMDNS", 0)]]),
@@ -466,7 +467,7 @@ class HostChecker:
             # Ignore Microsoft Kernel Debug Network Adapter
             kdnic_key = adapters_key + "\\0000"
             kdnic_uuid = self.reg_query_value(self.dce, self.connection, kdnic_key, "NetCfgInstanceId")
-            if subkey.lower() == ("Tcpip_" + kdnic_uuid).replace('\x00','').lower():
+            if subkey.lower() == ("Tcpip_" + kdnic_uuid).replace("\x00", "").lower():
                 continue
 
             value = self.reg_query_value(self.dce, self.connection, key_name + "\\" + subkey, "NetbiosOptions")
