@@ -2,7 +2,6 @@ import os
 import shutil
 import tempfile
 import time
-from nxc.paths import NXC_PATH
 
 from impacket.examples.secretsdump import LocalOperations, NTDSHashes
 
