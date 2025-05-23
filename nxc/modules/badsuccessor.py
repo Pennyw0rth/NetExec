@@ -54,6 +54,20 @@ RELEVANT_RIGHTS = {
     "AllExtendedRights": ACCESS_RIGHTS["AllExtendedRights"]
 }
 
+FUNCTIONAL_LEVELS = {
+    "Windows 2000": 0,
+    "Windows Server 2003": 1,
+    "Windows Server 2003 R2": 2,
+    "Windows Server 2008": 3,
+    "Windows Server 2008 R2": 4,
+    "Windows Server 2012": 5,
+    "Windows Server 2012 R2": 6,
+    "Windows Server 2016": 7,
+    "Windows Server 2019": 8,
+    "Windows Server 2022": 9,
+    "Windows Server 2025": 10,
+}
+
 
 class NXCModule:
     """
@@ -92,7 +106,6 @@ class NXCModule:
             return parsed[0]["objectSid"]
 
     def find_bad_successor_ous(self, ldap_session, entries, base_dn):
-
         domain_sid = self.get_domain_sid(ldap_session, base_dn)
         results = {}
         parsed = parse_result_attributes(entries)
@@ -131,7 +144,6 @@ class NXCModule:
                 owner_sid = str(sd["OwnerSid"])
                 if not self.is_excluded_sid(owner_sid, domain_sid):
                     results.setdefault(owner_sid, []).append(dn)
-
         return results
 
     def resolve_sid_to_name(self, ldap_session, sid, base_dn):
@@ -164,7 +176,20 @@ class NXCModule:
             return sid
 
     def on_login(self, context, connection):
+        # Check functional domain level
+        resp = connection.ldap_connection.search(
+            searchBase=connection.ldap_connection._baseDN,
+            searchFilter="(objectClass=domain)",
+            attributes=["msDS-Behavior-Version"]
+        )
+        parsed_resp = parse_result_attributes(resp)
+        functional_domain_level = list(FUNCTIONAL_LEVELS.keys())[list(FUNCTIONAL_LEVELS.values()).index(int(parsed_resp[0]["msDS-Behavior-Version"]))]
+        if int(parsed_resp[0]["msDS-Behavior-Version"]) < FUNCTIONAL_LEVELS["Windows Server 2025"]:
+            context.log.fail(f"Attack won't work, domain functional level '{functional_domain_level}' is lower than Windows Server 2025, enumerating dMSA objects anyways.")
+        else:
+            context.log.success("Domain functional level is Windows Server 2025 or higher, attack is possible.")
 
+        # Enumerate dMSA objects
         controls = security_descriptor_control(sdflags=0x07)  # OWNER_SECURITY_INFORMATION
         resp = connection.ldap_connection.search(
             searchBase=connection.ldap_connection._baseDN,
