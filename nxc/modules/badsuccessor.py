@@ -185,7 +185,7 @@ class NXCModule:
         parsed_resp = parse_result_attributes(resp)
         functional_domain_level = list(FUNCTIONAL_LEVELS.keys())[list(FUNCTIONAL_LEVELS.values()).index(int(parsed_resp[0]["msDS-Behavior-Version"]))]
         if int(parsed_resp[0]["msDS-Behavior-Version"]) < FUNCTIONAL_LEVELS["Windows Server 2025"]:
-            context.log.fail(f"Attack won't work, domain functional level '{functional_domain_level}' is lower than Windows Server 2025, enumerating dMSA objects anyways.")
+            context.log.fail(f"Attack won't work, domain functional level '{functional_domain_level}' is lower than Windows Server 2025, enumerating potential objects anyways.")
         else:
             context.log.success("Domain functional level is Windows Server 2025 or higher, attack is possible.")
 
