@@ -57,11 +57,12 @@ RELEVANT_RIGHTS = {
 class NXCModule:
     """
     -------
-    Module by @mpgn
+    Module by @mpgn based on https://www.akamai.com/blog/security-research/abusing-dmsa-for-privilege-escalation-in-active-directory#credentials
+    and https://raw.githubusercontent.com/akamai/BadSuccessor/refs/heads/main/Get-BadSuccessorOUPermissions.ps1
     """
 
     name = "badsuccessor"
-    description = "I do something"
+    description = "Check if vulnerable to bad successor attack (DMSA)"
     supported_protocols = ['ldap']
     opsec_safe = True
     multiple_hosts = True
