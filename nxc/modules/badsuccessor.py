@@ -73,9 +73,7 @@ class NXCModule:
         self.module_options = None
 
     def options(self, context, module_options):
-        """Required.
-        Module options get parsed here. Additionally, put the modules usage here as well
-        """
+        """No options available"""
 
     def is_excluded_sid(self, sid, domain_sid):
         if sid in EXCLUDED_SIDS:
