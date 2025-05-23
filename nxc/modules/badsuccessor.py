@@ -18,20 +18,20 @@ ACCESS_RIGHTS = {
     "GenericExecute": 0x20000000,  # ADS_RIGHT_GENERIC_EXECUTE
     "GenericAll": 0x10000000,  # ADS_RIGHT_GENERIC_ALL
 
-     # Maximum Allowed access type
+    # Maximum Allowed access type
     "MaximumAllowed": 0x02000000,
 
-     # Access System Acl access type
+    # Access System Acl access type
     "AccessSystemSecurity": 0x01000000,  # ADS_RIGHT_ACCESS_SYSTEM_SECURITY
 
-     # Standard access types
+    # Standard access types
     "Synchronize": 0x00100000,  # ADS_RIGHT_SYNCHRONIZE
     "WriteOwner": 0x00080000,  # ADS_RIGHT_WRITE_OWNER
     "WriteDACL": 0x00040000,  # ADS_RIGHT_WRITE_DAC
     "ReadControl": 0x00020000,  # ADS_RIGHT_READ_CONTROL
     "Delete": 0x00010000,  # ADS_RIGHT_DELETE
 
-     # Specific rights
+    # Specific rights
     "AllExtendedRights": 0x00000100,  # ADS_RIGHT_DS_CONTROL_ACCESS
     "ListObject": 0x00000080,  # ADS_RIGHT_DS_LIST_OBJECT
     "DeleteTree": 0x00000040,  # ADS_RIGHT_DS_DELETE_TREE
@@ -53,6 +53,7 @@ RELEVANT_RIGHTS = {
     "WriteProperties": ACCESS_RIGHTS["WriteProperties"],
     "AllExtendedRights": ACCESS_RIGHTS["AllExtendedRights"]
 }
+
 
 class NXCModule:
     """
@@ -84,8 +85,8 @@ class NXCModule:
     def get_domain_sid(self, ldap_session, base_dn):
         """Retrieve the domain SID from the domain object in LDAP"""
         r = ldap_session.search(
-            searchBase=base_dn, 
-            searchFilter="(objectClass=domain)", 
+            searchBase=base_dn,
+            searchFilter="(objectClass=domain)",
             attributes=["objectSid"]
         )
         parsed = parse_result_attributes(r)
@@ -101,7 +102,7 @@ class NXCModule:
             dn = entry["distinguishedName"]
             sd_data = entry["nTSecurityDescriptor"]
             sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=sd_data)
-            
+
             for ace in sd["Dacl"]["Data"]:
                 if ace["AceType"] != ldaptypes.ACCESS_ALLOWED_ACE.ACE_TYPE:
                     continue
@@ -112,7 +113,7 @@ class NXCModule:
                     if mask & right_value:
                         has_relevant_right = True
                         break
-                
+
                 if not has_relevant_right:
                     continue  # Skip this ACE if it doesn't have any relevant rights
 
@@ -127,7 +128,7 @@ class NXCModule:
                     continue
 
                 results.setdefault(sid, []).append(dn)
-        
+
             if hasattr(sd, "OwnerSid"):
                 owner_sid = str(sd["OwnerSid"])
                 if not self.is_excluded_sid(owner_sid, domain_sid):
@@ -138,13 +139,13 @@ class NXCModule:
     def resolve_sid_to_name(self, ldap_session, sid, base_dn):
         """
         Resolves a SID to a samAccountName using LDAP
-        
+
         Args:
         ----
             ldap_session: The LDAP connection
             sid: The SID to resolve
             base_dn: The base DN for the LDAP search
-            
+
         Returns:
         -------
             str: The samAccountName if found, otherwise the original SID
@@ -156,7 +157,7 @@ class NXCModule:
                 searchFilter=search_filter,
                 attributes=["sAMAccountName"]
             )
-            
+
             parsed = parse_result_attributes(response)
             if parsed and "sAMAccountName" in parsed[0]:
                 return parsed[0]["sAMAccountName"]
@@ -165,14 +166,14 @@ class NXCModule:
             return sid
 
     def on_login(self, context, connection):
-        
+
         controls = security_descriptor_control(sdflags=0x07)  # OWNER_SECURITY_INFORMATION
         resp = connection.ldap_connection.search(
-                    searchBase=connection.ldap_connection._baseDN,
-                    searchFilter="(objectClass=organizationalUnit)",
-                    attributes=["distinguishedName", "nTSecurityDescriptor"],
-                    searchControls=controls)  # Fixed parameter name
-        
+            searchBase=connection.ldap_connection._baseDN,
+            searchFilter="(objectClass=organizationalUnit)",
+            attributes=["distinguishedName", "nTSecurityDescriptor"],
+            searchControls=controls)  # Fixed parameter name
+
         context.log.debug(f"Found {len(resp)} entries")
 
         results = self.find_bad_successor_ous(connection.ldap_connection, resp, connection.ldap_connection._baseDN)
@@ -184,11 +185,11 @@ class NXCModule:
 
         for sid, ous in results.items():
             samaccountname = self.resolve_sid_to_name(
-                connection.ldap_connection, 
-                sid, 
+                connection.ldap_connection,
+                sid,
                 connection.ldap_connection._baseDN
             )
-            
+
             for ou in ous:
                 if sid == samaccountname:
                     context.log.highlight(f"{sid}, {ou}")
