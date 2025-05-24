@@ -36,9 +36,10 @@ class NXCModule:
             search_aws_creds_files_payload = f'find {self.search_path_linux} -type f  -name credentials -o -name credentials.bk -o -name config.bk -o -name config'
             search_aws_creds_files_cmd = f'/bin/bash -c "{search_aws_creds_files_payload}"'
             search_aws_creds_files_output = connection.execute(search_aws_creds_files_cmd, True)
+            context.log.highlight(f"The following files were found: {search_aws_creds_files_output}")
         else:
            # search for aws_credentials-related files on windows systems
            search_aws_creds_files_payload_win = f"Get-ChildItem -Path {self.search_path_win} -Recurse -Force -Include ('credentials','credentials.bk','config','config.bk') -ErrorAction SilentlyContinue | Select FullName -ExpandProperty FullName"
            search_aws_creds_files_cmd_win = f'powershell.exe "{search_aws_creds_files_payload_win}"'
            search_aws_creds_files_output_win = connection.execute(search_aws_creds_files_cmd_win, True)
-
+           context.log.highlight(f"The following files were found: {search_aws_creds_files_output_win}")
