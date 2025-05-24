@@ -7,7 +7,7 @@ class NXCModule:
 
     name = "aws-credentials"
     description = "Search for aws credentials files."
-    supported_protocols = ["ssh", "smb", "winrm"]
+    supported_protocols = ["ssh", "smb", "winrm", "wmi"]
     opsec_safe = True
     multiple_hosts = True
 
