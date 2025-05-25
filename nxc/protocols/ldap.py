@@ -43,6 +43,7 @@ from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.ntlm_parser import parse_challenge
+from nxc.helpers.misc import get_bloodhound_info
 
 ldap_error_status = {
     "1": "STATUS_NOT_SUPPORTED",
@@ -423,7 +424,6 @@ class ldap(connection):
                 return False
 
     def plaintext_login(self, domain, username, password):
-
         self.username = username
         self.password = password
         self.domain = domain
@@ -1220,6 +1220,38 @@ class ldap(connection):
             self.logger.fail("No string provided :'(")
 
     def bloodhound(self):
+        # Check which version is desired
+        use_bhce = self.config.getboolean("BloodHound-CE", "bhce_enabled", fallback=False)
+        package_name, version, is_ce = get_bloodhound_info()
+
+        if use_bhce and not is_ce:
+            self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
+            self.logger.fail("Your configuration has BloodHound-CE enabled, but the regular BloodHound package is installed. Modify your ~/.nxc/nxc.conf config file or follow the instructions:")
+            self.logger.fail("Please run the following commands to fix this:")
+            self.logger.fail("poetry remove bloodhound-ce   # poetry falsely recognizes bloodhound-ce as a the old bloodhound package")
+            self.logger.fail("poetry add bloodhound-ce")   
+            self.logger.fail("")
+
+            # If using pipx
+            self.logger.fail("Or if you installed with pipx:")
+            self.logger.fail("pipx runpip netexec uninstall -y bloodhound")
+            self.logger.fail("pipx inject netexec bloodhound-ce --force")
+            return False
+
+        elif not use_bhce and is_ce:
+            self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
+            self.logger.fail("Your configuration has regular BloodHound enabled, but the BloodHound-CE package is installed.")
+            self.logger.fail("Please run the following commands to fix this:")
+            self.logger.fail("poetry remove bloodhound-ce")
+            self.logger.fail("poetry add bloodhound")
+            self.logger.fail("")
+
+            # If using pipx
+            self.logger.fail("Or if you installed with pipx:")
+            self.logger.fail("pipx runpip netexec uninstall -y bloodhound-ce")
+            self.logger.fail("pipx inject netexec bloodhound --force")
+            return False
+
         auth = ADAuthentication(
             username=self.username,
             password=self.password,
@@ -1239,7 +1271,7 @@ class ldap(connection):
         )
         collect = resolve_collection_methods("Default" if not self.args.collection else self.args.collection)
         if not collect:
-            return
+            return None
         self.logger.highlight("Resolved collection methods: " + ", ".join(list(collect)))
 
         self.logger.debug("Using DNS to retrieve domain information")
