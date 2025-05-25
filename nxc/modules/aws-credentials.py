@@ -37,13 +37,10 @@ class NXCModule:
             output = connection.execute(search_aws_creds_files_cmd)
         else:
             # search for aws_credentials-related files on windows systems
-            search_aws_creds_files_payload_win = f"Get-ChildItem -Path {self.search_path_win} -Recurse -Force -Include ('credentials','credentials.bk','config','config.bk') -ErrorAction SilentlyContinue | Select FullName -ExpandProperty FullName"
+            # we have to exclude "Application Data" as this creates an infinite recursion, see: https://www.reddit.com/r/PowerShell/comments/17pctnv/symbolic_link_application_data_in_appdatalocal/
+            search_aws_creds_files_payload_win = f"Get-ChildItem -Path {self.search_path_win} -Recurse -Include ('credentials','credentials.bk','config','config.bk') -Force -ErrorAction SilentlyContinue | ? {{ $_.FullName -inotmatch 'Application Data' }} | Select FullName -ExpandProperty FullName"
             search_aws_creds_files_cmd_win = f'powershell.exe "{search_aws_creds_files_payload_win}"'
-            # Somehow wmiexec retrieves bugged output (smb), removing it from the list
-            if "smb" in context.protocol:  # noqa: SIM108
-                output = connection.execute(search_aws_creds_files_cmd_win, True, methods=["wmiexec", "atexec", "smbexec", "mmcexec"])
-            else:
-                output = connection.execute(search_aws_creds_files_cmd_win, True)
+            connection.execute(search_aws_creds_files_cmd_win, True)
 
         if output:
             context.log.success("The following files were found:")
