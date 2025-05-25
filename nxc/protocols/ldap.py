@@ -1285,10 +1285,8 @@ class ldap(connection):
             self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
             self.logger.fail("Your configuration has BloodHound-CE enabled, but the regular BloodHound package is installed. Modify your ~/.nxc/nxc.conf config file or follow the instructions:")
             self.logger.fail("Please run the following commands to fix this:")
-            self.logger.fail("poetry remove bloodhound")
+            self.logger.fail("poetry remove bloodhound-ce")
             self.logger.fail("poetry add bloodhound-ce")   
-            self.logger.fail("If you get the error 'Package bloodhound not found', run 'poetry remove bloodhound-ce', then 'poetry add bloodhound-ce' again.")
-            self.logger.fail("")
 
             # If using pipx
             self.logger.fail("Or if you installed with pipx:")
