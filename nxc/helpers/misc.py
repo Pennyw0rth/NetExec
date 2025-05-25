@@ -4,6 +4,7 @@ import re
 import inspect
 import os
 
+from ipaddress import ip_address
 
 def identify_target_file(target_file):
     with open(target_file) as target_file_handle:
@@ -77,3 +78,10 @@ def which(cmd, mode=os.F_OK | os.X_OK, path=None):
                 name = os.path.join(p, thefile)
                 if _access_check(name, mode):
                     return name
+
+def detect_if_ip(target):
+    try:
+        ip_address(target)
+        return True
+    except Exception:
+        return False
