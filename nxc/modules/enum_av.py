@@ -290,6 +290,14 @@ conf = {
             ]
         },
         {
+        "name": "Ivanti Security",
+            "services": [
+                {"name": "STAgent$Shavlik Protect", "description": "Ivanti Security Controls Agent"},
+                {"name": "STDispatch$Shavlik Protect", "description": "Ivanti Security Controls Agent Dispatcher"}
+            ],
+            "pipes": []
+        },
+        {
             "name": "Kaspersky Security for Windows Server",
             "services": [
                 {"name": "kavfsslp", "description": "Kaspersky Security Exploit Prevention Service"},
@@ -333,6 +341,11 @@ conf = {
                 {"name": "SepScanService", "description": "Symantec Endpoint Protection Scan Services"},
                 {"name": "SNAC", "description": "Symantec Network Access Control"}
             ],
+            "pipes": []
+        },
+        {
+            "name": "Rapid7",
+            "services": [{"name": "ir_agent", "description": "Rapid7 Insight Agent"}],
             "pipes": []
         },
         {
@@ -384,7 +397,10 @@ conf = {
                 {"name": "Trend Micro Web Service Communicator", "description": "Trend Micro Web Service Communicator"},
                 {"name": "TMiACAgentSvc", "description": "Trend Micro Application Control Service (Agent)"},
                 {"name": "CETASvc", "description": "Trend Micro Cloud Endpoint Telemetry Service"},
-                {"name": "iVPAgent", "description": "Trend Micro Vulnerability Protection Service (Agent)"}
+                {"name": "iVPAgent", "description": "Trend Micro Vulnerability Protection Service (Agent)"},
+                {"name": "ds_agent", "description": "Trend Micro Deep Security Agent"},
+                {"name": "ds_monitor", "description": "Trend Micro Deep Security Monitor"},
+                {"name": "ds_notifier", "description": "Trend Micro Deep Security Notifier"}
             ],
             "pipes": [
                 {"name": "IPC_XBC_XBC_AGENT_PIPE_*", "processes": ["EndpointBasecamp.exe"]},

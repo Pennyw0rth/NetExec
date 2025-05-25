@@ -123,8 +123,6 @@ class NXCModule:
         self.results.setdefault(connection.host, {"checks": []})
         self.context = context
         HostChecker(context, connection).run()
-
-    def on_shutdown(self, context, connection):
         if self.output is not None:
             self.export_results()
 

@@ -118,10 +118,6 @@ class NXCAdapter(logging.LoggerAdapter):
         if len(self.extra) == 1 and ("module_name" in self.extra):
             return (f"{colored(self.extra['module_name'], 'cyan', attrs=['bold']):<64} {msg}", kwargs)
 
-        # If the logger is being called from nxcServer
-        if len(self.extra) == 2 and ("module_name" in self.extra) and ("host" in self.extra):
-            return (f"{colored(self.extra['module_name'], 'cyan', attrs=['bold']):<24} {self.extra['host']:<39} {msg}", kwargs)
-
         # If the logger is being called from a protocol
         module_name = colored(self.extra["module_name"], "cyan", attrs=["bold"]) if "module_name" in self.extra else colored(self.extra["protocol"], "blue", attrs=["bold"])
 

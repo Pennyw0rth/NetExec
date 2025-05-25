@@ -20,7 +20,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Build Native Binary
       run: |
-        pip install pyinstaller
+        pip install pyinstaller pillow
         pip install .
         pyinstaller netexec.spec
     - name: Upload Windows Binary
