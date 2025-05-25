@@ -423,7 +423,6 @@ class ldap(connection):
                 return False
 
     def plaintext_login(self, domain, username, password):
-
         self.username = username
         self.password = password
         self.domain = domain
@@ -1278,11 +1277,8 @@ class ldap(connection):
 
             return package_name, version, is_ce
 
-        import configparser
-        config = configparser.ConfigParser()
-        config.read(os.path.expanduser("~/.nxc/nxc.conf"))
         # Check which version is desired
-        use_bhce = config.getboolean("BloodHound-CE", "bhce_enabled", fallback=False)
+        use_bhce = self.config.getboolean("BloodHound-CE", "bhce_enabled", fallback=False)
         package_name, version, is_ce = get_bloodhound_info()
 
         if use_bhce and not is_ce:
