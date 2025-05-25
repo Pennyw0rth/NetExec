@@ -99,6 +99,7 @@ def get_error_string(exception):
     else:
         return str(exception)
 
+
 class smb(connection):
     def __init__(self, args, db, host):
         self.domain = None
