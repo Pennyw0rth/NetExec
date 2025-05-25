@@ -56,7 +56,7 @@ class NXCModule:
 class Modify_Func:
     # Slightly modified version of impackets computeResponseNTLMv2
     def mod_computeResponseNTLMv2(flags, serverChallenge, clientChallenge, serverName, domain, user, password, lmhash="", nthash="",
-                    use_ntlmv2=ntlm.USE_NTLMv2, channel_binding_value=b""):
+                    use_ntlmv2=ntlm.USE_NTLMv2, channel_binding_value=b"", service="cifs"):
 
         responseServerVersion = b"\x01"
         hiResponseServerVersion = b"\x01"
