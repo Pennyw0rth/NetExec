@@ -40,7 +40,7 @@ class NXCModule:
             # we have to exclude "Application Data" as this creates an infinite recursion, see: https://www.reddit.com/r/PowerShell/comments/17pctnv/symbolic_link_application_data_in_appdatalocal/
             search_aws_creds_files_payload_win = f"Get-ChildItem -Path {self.search_path_win} -Recurse -Include ('credentials','credentials.bk','config','config.bk') -Force -ErrorAction SilentlyContinue | ? {{ $_.FullName -inotmatch 'Application Data' }} | Select FullName -ExpandProperty FullName"
             search_aws_creds_files_cmd_win = f'powershell.exe "{search_aws_creds_files_payload_win}"'
-            connection.execute(search_aws_creds_files_cmd_win, True)
+            output = connection.execute(search_aws_creds_files_cmd_win, True)
 
         if output:
             context.log.success("The following files were found:")
