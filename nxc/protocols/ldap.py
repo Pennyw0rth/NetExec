@@ -1285,13 +1285,14 @@ class ldap(connection):
             self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
             self.logger.fail("Your configuration has BloodHound-CE enabled, but the regular BloodHound package is installed. Modify your ~/.nxc/nxc.conf config file or follow the instructions:")
             self.logger.fail("Please run the following commands to fix this:")
-            self.logger.fail("poetry remove bloodhound-ce")
+            self.logger.fail("poetry remove bloodhound-ce   # poetry falsely recognizes bloodhound-ce as a the old bloodhound package")
             self.logger.fail("poetry add bloodhound-ce")   
+            self.logger.fail("")
 
             # If using pipx
             self.logger.fail("Or if you installed with pipx:")
-            self.logger.fail("pipx inject netexec bloodhound-ce --force")
             self.logger.fail("pipx runpip netexec uninstall -y bloodhound")
+            self.logger.fail("pipx inject netexec bloodhound-ce --force")
             return False
 
         elif not use_bhce and is_ce:
@@ -1300,11 +1301,12 @@ class ldap(connection):
             self.logger.fail("Please run the following commands to fix this:")
             self.logger.fail("poetry remove bloodhound-ce")
             self.logger.fail("poetry add bloodhound")
+            self.logger.fail("")
 
             # If using pipx
             self.logger.fail("Or if you installed with pipx:")
-            self.logger.fail("pipx inject netexec bloodhound --force")
             self.logger.fail("pipx runpip netexec uninstall -y bloodhound-ce")
+            self.logger.fail("pipx inject netexec bloodhound --force")
             return False
 
         auth = ADAuthentication(
