@@ -34,15 +34,18 @@ class NXCModule:
         if "ssh" in context.protocol:
             search_aws_creds_files_payload = f"find {self.search_path_linux} -type f  -name credentials -o -name credentials.bk -o -name config.bk -o -name config"
             search_aws_creds_files_cmd = f'/bin/bash -c "{search_aws_creds_files_payload}"'
-            search_aws_creds_files_output = connection.execute(search_aws_creds_files_cmd)
-            context.log.highlight(f"The following files were found: {search_aws_creds_files_output}")
+            output = connection.execute(search_aws_creds_files_cmd)
         else:
             # search for aws_credentials-related files on windows systems
             search_aws_creds_files_payload_win = f"Get-ChildItem -Path {self.search_path_win} -Recurse -Force -Include ('credentials','credentials.bk','config','config.bk') -ErrorAction SilentlyContinue | Select FullName -ExpandProperty FullName"
             search_aws_creds_files_cmd_win = f'powershell.exe "{search_aws_creds_files_payload_win}"'
             # Somehow wmiexec retrieves bugged output (smb), removing it from the list
             if "smb" in context.protocol:  # noqa: SIM108
-                search_aws_creds_files_output_win = connection.execute(search_aws_creds_files_cmd_win, True, methods=["atexec", "smbexec", "mmcexec"])
+                output = connection.execute(search_aws_creds_files_cmd_win, True, methods=["wmiexec", "atexec", "smbexec", "mmcexec"])
             else:
-                search_aws_creds_files_output_win = connection.execute(search_aws_creds_files_cmd_win, True)
-            context.log.highlight(f"The following files were found: {search_aws_creds_files_output_win}")
+                output = connection.execute(search_aws_creds_files_cmd_win, True)
+
+        if output:
+            context.log.success("The following files were found:")
+            for line in output.splitlines():
+                context.log.highlight(line.rstrip())
