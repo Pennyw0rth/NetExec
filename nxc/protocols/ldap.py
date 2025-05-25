@@ -196,7 +196,7 @@ class ldap(connection):
             target = resp_parsed["dnsHostName"]
             base_dn = resp_parsed["defaultNamingContext"]
             target_domain = sub(
-                ",DC=",
+                r",DC=",
                 ".",
                 base_dn[base_dn.lower().find("dc="):],
                 flags=IGNORECASE,
