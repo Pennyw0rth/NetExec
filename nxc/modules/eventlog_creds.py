@@ -41,8 +41,6 @@ class NXCModule:
     def find_credentials(self, content, context):
         # remove unnecessary words
         content = content.replace("\r\n", "\n")
-        content = content.replace("/add", "")
-        content = content.replace("/active:yes", "")
 
         # sort and unique lines
         content = "\n".join(sorted(set(content.split("\n"))))
@@ -66,9 +64,16 @@ class NXCModule:
         # Extracting credentials
         for line in content.split("\n"):
             for reg in regexps:
-                # verbose context.log.debug("Line: " + line)
-                # verbose context.log.debug("Reg: " + reg)
-                match = re.search(reg, line, re.IGNORECASE)
+                # Remove unnecessary words
+                line_stripped = line.replace("/add", "") \
+                    .replace("/active:yes", "") \
+                    .replace("/delete", "") \
+                    .replace("/domain", "") \
+                # Remove command lines that were executed with nxc
+                line_stripped = re.sub(r"1> \\Windows\\Temp\\[\w]{6} 2>&1", "", line_stripped)
+
+                # Use regex to find credentials
+                match = re.search(reg, line_stripped, re.IGNORECASE)
                 if match:
                     # eleminate false positives
                     # C:\Windows\system32\svchost.exe -k DcomLaunch -p -s PlugPlay
@@ -128,7 +133,6 @@ class NXCModule:
                         content += "CommandLine: " + match.group("CommandLine") + "\n"
                 except Exception as e:
                     context.log.error(f"Error: {e}")
-                    continue
 
         self.find_credentials(content, context)
 
