@@ -151,6 +151,7 @@ class ldap(connection):
         self.admin_privs = False
         self.no_ntlm = False
         self.sid_domain = ""
+        self.scope = None
 
         connection.__init__(self, args, db, host)
 
@@ -249,6 +250,8 @@ class ldap(connection):
         if ntlm_challenge:
             ntlm_info = parse_challenge(ntlm_challenge)
             self.server_os = ntlm_info["os_version"]
+        else:
+            self.no_ntlm = True
 
         if self.args.domain:
             self.domain = self.args.domain
@@ -372,6 +375,7 @@ class ldap(connection):
                     # Connect to LDAPS
                     self.logger.extra["protocol"] = "LDAPS"
                     self.logger.extra["port"] = "636"
+                    self.port = 636
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [2]")
                     self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
@@ -419,6 +423,7 @@ class ldap(connection):
                 return False
 
     def plaintext_login(self, domain, username, password):
+
         self.username = username
         self.password = password
         self.domain = domain
@@ -459,6 +464,7 @@ class ldap(connection):
                     # Connect to LDAPS
                     self.logger.extra["protocol"] = "LDAPS"
                     self.logger.extra["port"] = "636"
+                    self.port = 636
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [4]")
                     self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
@@ -549,6 +555,7 @@ class ldap(connection):
                     # We need to try SSL
                     self.logger.extra["protocol"] = "LDAPS"
                     self.logger.extra["port"] = "636"
+                    self.port = 636
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
                     self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
@@ -623,7 +630,7 @@ class ldap(connection):
         return t
 
     def search(self, searchFilter, attributes, sizeLimit=0, baseDN=None) -> list:
-        if baseDN is None and self.args.base_dn:
+        if baseDN is None and self.args.base_dn is not None:
             baseDN = self.args.base_dn
         elif baseDN is None:
             baseDN = self.baseDN
@@ -633,19 +640,24 @@ class ldap(connection):
                 self.logger.debug(f"Search Filter={searchFilter}")
 
                 # Microsoft Active Directory set an hard limit of 1000 entries returned by any search
-                paged_search_control = ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000)
+                paged_search_control = [ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000)] if not self.no_ntlm else ""
                 return self.ldap_connection.search(
+                    scope=self.scope,
                     searchBase=baseDN,
                     searchFilter=searchFilter,
                     attributes=attributes,
                     sizeLimit=sizeLimit,
-                    searchControls=[paged_search_control],
+                    searchControls=paged_search_control,
                 )
         except ldap_impacket.LDAPSearchError as e:
-            if e.getErrorString().find("sizeLimitExceeded") >= 0:
+            if "sizeLimitExceeded" in str(e):
                 # We should never reach this code as we use paged search now
                 self.logger.fail("sizeLimitExceeded exception caught, giving up and processing the data received")
                 e.getAnswers()
+            # if empty username and password is possible that we need to change the scope, we try with a baseObject before returning a fail
+            elif "operationsError" in str(e) and self.scope is None and self.username == "" and self.password == "":
+                self.scope = ldapasn1_impacket.Scope("baseObject")
+                return self.search(searchFilter, attributes, sizeLimit, baseDN)
             else:
                 self.logger.fail(e)
                 return []
