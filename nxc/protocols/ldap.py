@@ -1287,6 +1287,8 @@ class ldap(connection):
             self.logger.fail("Please run the following commands to fix this:")
             self.logger.fail("poetry remove bloodhound")
             self.logger.fail("poetry add bloodhound-ce")   
+            self.logger.fail("If you get the error 'Package bloodhound not found', run 'poetry remove bloodhound-ce', then 'poetry add bloodhound-ce' again.")
+            self.logger.fail("")
 
             # If using pipx
             self.logger.fail("Or if you installed with pipx:")
