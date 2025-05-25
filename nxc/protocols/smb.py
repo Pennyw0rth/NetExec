@@ -236,11 +236,13 @@ class smb(connection):
                 self.targetDomain = self.hostname
         else:
             try:
+                # If we know the host is a DC we can still get the hostname over LDAP if NTLM is not available
                 if self.is_host_dc() and detect_if_ip(self.host):
                     self.hostname, self.domain = LDAPResolution(self.host).get_resolution()
                     self.targetDomain = self.domain
                 # If we can't authenticate with NTLM and the target is supplied as a FQDN we must parse it
                 else:
+                    # Check if the host is a valid IP address, if not we parse the FQDN in the Exception
                     import socket
                     socket.inet_aton(self.host)
                     self.logger.debug("NTLM authentication not available! Authentication will fail without a valid hostname and domain name")
