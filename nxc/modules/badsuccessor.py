@@ -176,18 +176,21 @@ class NXCModule:
             return sid
 
     def on_login(self, context, connection):
-        # Check functional domain level
+        # Check for a domain controller with Windows Server 2025
         resp = connection.ldap_connection.search(
             searchBase=connection.ldap_connection._baseDN,
-            searchFilter="(objectClass=domain)",
-            attributes=["msDS-Behavior-Version"]
+            searchFilter="(&(objectCategory=computer)(primaryGroupId=516))",
+            attributes=["operatingSystem", "dNSHostName"]
         )
         parsed_resp = parse_result_attributes(resp)
-        functional_domain_level = list(FUNCTIONAL_LEVELS.keys())[list(FUNCTIONAL_LEVELS.values()).index(int(parsed_resp[0]["msDS-Behavior-Version"]))]
-        if int(parsed_resp[0]["msDS-Behavior-Version"]) < FUNCTIONAL_LEVELS["Windows Server 2025"]:
-            context.log.fail(f"Attack won't work, domain functional level '{functional_domain_level}' is lower than Windows Server 2025, enumerating potential objects anyways.")
-        else:
-            context.log.success("Domain functional level is Windows Server 2025 or higher, attack is possible.")
+
+        for dc in parsed_resp:
+            if "2025" in dc["operatingSystem"]:
+                out = connection.resolver(dc["dNSHostName"])
+                dc_ip = out[0] if out else "Unknown IP"
+                context.log.success(f"Found domain controller with operating system Windows Server 2025: {dc_ip} ({dc['dNSHostName']})")
+            else:
+                context.log.fail("No domain controller with operating system Windows Server 2025 found, attack not possible. Enumerate dMSA objects anyway.")
 
         # Enumerate dMSA objects
         controls = security_descriptor_control(sdflags=0x07)  # OWNER_SECURITY_INFORMATION
