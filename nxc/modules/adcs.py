@@ -70,7 +70,10 @@ class NXCModule:
                     searchBase="CN=Configuration," + base_dn_root,
                 )
         except LDAPSearchError as e:
-            context.log.fail(f"Obtained unexpected exception: {e}")
+            if "noSuchObject" in str(e):
+                context.log.fail("No ADCS infrastructure found.")
+            else:
+                context.log.fail(f"Obtained unexpected exception: {e}")
 
     def process_servers(self, item):
         """Function that is called to process the items obtain by the LDAP search when listing PKI Enrollment Servers."""
