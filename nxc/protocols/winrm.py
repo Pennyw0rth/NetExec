@@ -238,12 +238,9 @@ class winrm(connection):
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {e!s}")
             return False
 
-    def execute(self, payload=None, get_output=True, shell_type="cmd"):
+    def execute(self, payload=None, get_output=False, shell_type="cmd"):
         if not payload:
             payload = self.args.execute
-
-        if self.args.no_output:
-            get_output = False
 
         try:
             result = self.conn.execute_cmd(payload, encoding=self.args.codec) if shell_type == "cmd" else self.conn.execute_ps(payload)
@@ -260,13 +257,16 @@ class winrm(connection):
             else:
                 self.logger.fail(f"Execute command failed, error: {e!s}")
         else:
+            if get_output:
+                return result[0]
             self.logger.success(f"Executed command (shell type: {shell_type})")
-            buf = StringIO(result[0]).readlines() if get_output else ""
-            for line in buf:
-                self.logger.highlight(line.strip())
+            if not self.args.no_output:
+                for line in StringIO(result[0]).readlines():
+                    self.logger.highlight(line.strip())
 
-    def ps_execute(self):
-        self.execute(payload=self.args.ps_execute, get_output=True, shell_type="powershell")
+    def ps_execute(self, payload=None, get_output=False):
+        command = payload if payload else self.args.ps_execute
+        self.execute(payload=command, get_output=get_output, shell_type="powershell")
 
     # Dos attack prevent:
     # if someboby executed "reg save HKLM\sam C:\windows\temp\sam" before, but didn't remove "C:\windows\temp\sam" file,
