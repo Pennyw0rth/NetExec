@@ -4,6 +4,7 @@ import re
 import inspect
 import os
 
+from ipaddress import ip_address
 
 def identify_target_file(target_file):
     with open(target_file) as target_file_handle:
@@ -78,7 +79,6 @@ def which(cmd, mode=os.F_OK | os.X_OK, path=None):
                 if _access_check(name, mode):
                     return name
 
-
 def get_bloodhound_info():
     """
     Detect which BloodHound package is installed (regular or CE) and its version.
@@ -135,3 +135,11 @@ def get_bloodhound_info():
             pass
 
     return package_name, version, is_ce
+
+def detect_if_ip(target):
+    try:
+        ip_address(target)
+        return True
+    except Exception:
+        return False
+
