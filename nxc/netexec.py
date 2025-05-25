@@ -40,7 +40,7 @@ if platform.system() != "Windows":
     resource.setrlimit(resource.RLIMIT_NOFILE, file_limit)
 
 
-async def start_run(protocol_obj, args, db, targets):
+async def start_run(protocol_obj, args, db, targets):  # noqa: RUF029
     futures = []
     nxc_logger.debug("Creating ThreadPoolExecutor")
     if args.no_progress or len(targets) == 1:
@@ -58,7 +58,7 @@ async def start_run(protocol_obj, args, db, targets):
             nxc_logger.debug(f"Creating thread for {protocol_obj}")
             futures = [executor.submit(protocol_obj, args, db, target) for target in targets]
             for _ in as_completed(futures):
-                current += 1
+                current += 1  # noqa: SIM113
                 progress.update(tasks, completed=current)
     for future in as_completed(futures):
         try:
@@ -102,8 +102,8 @@ def main():
                 start_id, end_id = cred_id.split("-")
                 try:
                     for n in range(int(start_id), int(end_id) + 1):
-                        args.cred_id.append(n)
-                    args.cred_id.remove(cred_id)
+                        args.cred_id.append(n)    # noqa: B909
+                    args.cred_id.remove(cred_id)  # noqa: B909
                 except Exception as e:
                     nxc_logger.error(f"Error parsing database credential id: {e}")
                     exit(1)

@@ -6,7 +6,7 @@ import os
 from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
 from binascii import hexlify
 from datetime import datetime
-from re import sub, I
+from re import sub, IGNORECASE
 from zipfile import ZipFile
 from termcolor import colored
 from dns import resolver
@@ -197,10 +197,10 @@ class ldap(connection):
             target = resp_parsed["dnsHostName"]
             base_dn = resp_parsed["defaultNamingContext"]
             target_domain = sub(
-                ",DC=",
+                r",DC=",
                 ".",
                 base_dn[base_dn.lower().find("dc="):],
-                flags=I,
+                flags=IGNORECASE,
             )[3:]
         except ConnectionRefusedError as e:
             self.logger.debug(f"{e} on host {self.host}")
@@ -365,7 +365,7 @@ class ldap(connection):
             return False
         except (KeyError, KerberosException, OSError) as e:
             self.logger.fail(
-                f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (process_secret(kerb_pass))} {e!s}",
+                f"{self.domain}\\{self.username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {e!s}",
                 color="red",
             )
             return False
@@ -404,21 +404,21 @@ class ldap(connection):
                 except SessionError as e:
                     error, desc = e.getErrorString()
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (process_secret(kerb_pass))} {error!s}",
+                        f"{self.domain}\\{self.username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {error!s}",
                         color="magenta" if error in ldap_error_status else "red",
                     )
                     return False
                 except Exception as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                        f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status.get(error_code, '')}",
                         color="magenta" if error_code in ldap_error_status else "red",
                     )
                     return False
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (process_secret(kerb_pass))} {error_code!s}",
+                    f"{self.domain}\\{self.username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {error_code!s}",
                     color="magenta" if error_code in ldap_error_status else "red",
                 )
                 return False
@@ -484,13 +484,13 @@ class ldap(connection):
                 except Exception as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                        f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status.get(error_code, '')}",
                         color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                     )
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                    f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status.get(error_code, '')}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
             return False
@@ -576,13 +576,13 @@ class ldap(connection):
                 except ldap_impacket.LDAPSessionError as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                        f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status.get(error_code, '')}",
                         color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                     )
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                    f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status.get(error_code, '')}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
             return False

@@ -6,6 +6,7 @@ import os
 
 from ipaddress import ip_address
 
+
 def identify_target_file(target_file):
     with open(target_file) as target_file_handle:
         for i, line in enumerate(target_file_handle):
@@ -23,7 +24,7 @@ def gen_random_string(length=10):
 
 
 def validate_ntlm(data):
-    allowed = re.compile("^[0-9a-f]{32}", re.IGNORECASE)
+    allowed = re.compile(r"^[0-9a-f]{32}", re.IGNORECASE)
     return bool(allowed.match(data))
 
 
@@ -78,6 +79,7 @@ def which(cmd, mode=os.F_OK | os.X_OK, path=None):
                 name = os.path.join(p, thefile)
                 if _access_check(name, mode):
                     return name
+
 
 def get_bloodhound_info():
     """
@@ -135,6 +137,7 @@ def get_bloodhound_info():
             pass
 
     return package_name, version, is_ce
+
 
 def detect_if_ip(target):
     try:

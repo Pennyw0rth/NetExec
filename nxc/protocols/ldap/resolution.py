@@ -8,6 +8,7 @@ from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.logger import nxc_logger
 
+
 class LDAPResolution:
 
     def __init__(self, host):
@@ -38,7 +39,7 @@ class LDAPResolution:
             target = resp_parsed["dnsHostName"]
             base_dn = resp_parsed["defaultNamingContext"]
             target_domain = sub(
-                ",DC=",
+                r",DC=",
                 ".",
                 base_dn[base_dn.lower().find("dc="):],
                 flags=I,

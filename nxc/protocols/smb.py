@@ -67,7 +67,6 @@ from dploot.triage.sccm import SCCMTriage, SCCMCred, SCCMSecret, SCCMCollection
 from time import time, ctime
 from datetime import datetime
 from traceback import format_exc
-import logging
 from termcolor import colored
 import contextlib
 
@@ -101,6 +100,7 @@ def get_error_string(exception):
             return es
     else:
         return str(exception)
+
 
 class smb(connection):
     def __init__(self, args, db, host):
@@ -936,19 +936,19 @@ class smb(connection):
             return
         self.enumerate_sessions_info(sessions)
 
-        maxSessionNameLen = max([len(sessions[i]["SessionName"]) + 1 for i in sessions])
+        maxSessionNameLen = max(len(sessions[i]["SessionName"]) + 1 for i in sessions)
         maxSessionNameLen = maxSessionNameLen if len("SESSIONNAME") < maxSessionNameLen else len("SESSIONNAME") + 1
-        maxUsernameLen = max([len(sessions[i]["Username"] + sessions[i]["Domain"]) + 1 for i in sessions]) + 1
+        maxUsernameLen = max(len(sessions[i]["Username"] + sessions[i]["Domain"]) + 1 for i in sessions) + 1
         maxUsernameLen = maxUsernameLen if len("Username") < maxUsernameLen else len("Username") + 1
-        maxIdLen = max([len(str(i)) for i in sessions])
+        maxIdLen = max(len(str(i)) for i in sessions)
         maxIdLen = maxIdLen if len("ID") < maxIdLen else len("ID") + 1
-        maxStateLen = max([len(sessions[i]["state"]) + 1 for i in sessions])
+        maxStateLen = max(len(sessions[i]["state"]) + 1 for i in sessions)
         maxStateLen = maxStateLen if len("STATE") < maxStateLen else len("STATE") + 1
-        maxRemoteIp = max([len(sessions[i]["RemoteIp"]) + 1 for i in sessions])
+        maxRemoteIp = max(len(sessions[i]["RemoteIp"]) + 1 for i in sessions)
         maxRemoteIp = maxRemoteIp if len("RemoteAddress") < maxRemoteIp else len("RemoteAddress") + 1
-        maxClientName = max([len(sessions[i]["ClientName"]) + 1 for i in sessions])
+        maxClientName = max(len(sessions[i]["ClientName"]) + 1 for i in sessions)
         maxClientName = maxClientName if len("ClientName") < maxClientName else len("ClientName") + 1
-        template = ("{SESSIONNAME: <%d} "
+        template = ("{SESSIONNAME: <%d} "  # noqa: UP031
                     "{USERNAME: <%d} "
                     "{ID: <%d} "
                     "{IPv4: <16} "
@@ -1017,9 +1017,9 @@ class smb(connection):
             if not res:
                 return
             self.logger.success("Enumerated processes")
-            maxImageNameLen = max([len(i["ImageName"]) for i in res])
-            maxSidLen = max([len(i["pSid"]) for i in res])
-            template = "{: <%d} {: <8} {: <11} {: <%d} {: >12}" % (maxImageNameLen, maxSidLen)
+            maxImageNameLen = max(len(i["ImageName"]) for i in res)
+            maxSidLen = max(len(i["pSid"]) for i in res)
+            template = "{: <%d} {: <8} {: <11} {: <%d} {: >12}" % (maxImageNameLen, maxSidLen)  # noqa: UP031
             self.logger.highlight(template.format("Image Name", "PID", "Session#", "SID", "Mem Usage"))
             self.logger.highlight(template.replace(": ", ":=").format("", "", "", "", ""))
             for procInfo in res:
@@ -1152,7 +1152,7 @@ class smb(connection):
             self.logger.highlight(f"{name:<15} {','.join(perms):<15} {remark}")
         return permissions
 
-    def dir(self):  # noqa: A003
+    def dir(self):
         search_path = ntpath.join(self.args.dir, "*")
         try:
             contents = self.conn.listPath(self.args.share, search_path)
@@ -1436,7 +1436,7 @@ class smb(connection):
 
         try:
             string_binding = KNOWN_PROTOCOLS[self.port]["bindstr"]
-            logging.debug(f"StringBinding {string_binding}")
+            self.logger.debug(f"StringBinding {string_binding}")
             rpc_transport = transport.DCERPCTransportFactory(string_binding)
             rpc_transport.setRemoteHost(self.host)
 
