@@ -865,7 +865,7 @@ all = ["flake8 (>=7.1.1)", "mypy (>=1.11.2)", "pytest (>=8.3.2)", "ruff (>=0.6.2
 
 [[package]]
 name = "impacket"
-version = "0.13.0.dev0+20250422.104055.27bebb13"
+version = "0.13.0.dev0+20250513.162347.b7288f23"
 description = "Network protocols Constructors and Dissectors"
 optional = false
 python-versions = "*"
@@ -888,9 +888,9 @@ six = "*"
 
 [package.source]
 type = "git"
-url = "https://github.com/fortra/impacket.git"
-reference = "HEAD"
-resolved_reference = "27bebb1347569fa810e432326266acf17560f274"
+url = "https://github.com/zblurx/impacket.git"
+reference = "ldap_signing"
+resolved_reference = "b7288f233c154b6f73610797f8e0fa3a1541b3a9"
 
 [[package]]
 name = "iniconfig"
@@ -2462,4 +2462,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<4.0"
-content-hash = "1b8bf07cb55b385df03716a6bd4a553579e1b325ccb53e2f77ce28605e6903c5"
+content-hash = "2ff9e8ff4aee99b6cb0587e226399d29196c7003418f900d4713c533e2659cdb"
