@@ -26,7 +26,7 @@ from impacket.dcerpc.v5.epm import MSRPC_UUID_PORTMAP
 from impacket.dcerpc.v5.samr import SID_NAME_USE
 from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
 from impacket.krb5.ccache import CCache
-from impacket.krb5.kerberosv5 import SessionKeyDecryptionError
+from impacket.krb5.kerberosv5 import SessionKeyDecryptionError, getKerberosTGT
 from impacket.krb5.types import KerberosException, Principal
 from impacket.krb5 import constants
 from impacket.dcerpc.v5.dtypes import NULL
@@ -43,7 +43,6 @@ from nxc.paths import NXC_PATH
 from nxc.protocols.smb.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection
 from nxc.protocols.smb.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
 from nxc.protocols.smb.kerberos import kerberos_login_with_S4U
-from nxc.servers.smb import NXCSMBServer
 from nxc.protocols.smb.wmiexec import WMIEXEC
 from nxc.protocols.smb.atexec import TSCH_EXEC
 from nxc.protocols.smb.smbexec import SMBEXEC
@@ -65,14 +64,12 @@ from dploot.triage.sccm import SCCMTriage, SCCMCred, SCCMSecret, SCCMCollection
 
 from time import time, ctime
 from datetime import datetime
-from functools import wraps
 from traceback import format_exc
 import logging
 from termcolor import colored
 import contextlib
 
 smb_share_name = gen_random_string(5).upper()
-smb_server = None
 
 smb_error_status = [
     "STATUS_ACCOUNT_DISABLED",
@@ -102,50 +99,6 @@ def get_error_string(exception):
             return es
     else:
         return str(exception)
-
-
-def requires_smb_server(func):
-    def _decorator(self, *args, **kwargs):
-        global smb_server
-        global smb_share_name
-
-        get_output = False
-        payload = None
-        methods = []
-
-        with contextlib.suppress(IndexError):
-            payload = args[0]
-        with contextlib.suppress(IndexError):
-            get_output = args[1]
-        with contextlib.suppress(IndexError):
-            methods = args[2]
-
-        if "payload" in kwargs:
-            payload = kwargs["payload"]
-        if "get_output" in kwargs:
-            get_output = kwargs["get_output"]
-        if "methods" in kwargs:
-            methods = kwargs["methods"]
-        if not payload and self.args.execute and not self.args.no_output:
-            get_output = True
-        if (get_output or (methods and ("smbexec" in methods))) and not smb_server:
-            self.logger.debug("Starting SMB server")
-            smb_server = NXCSMBServer(
-                self.nxc_logger,
-                smb_share_name,
-                listen_port=self.args.smb_server_port,
-                verbose=self.args.verbose,
-            )
-            smb_server.start()
-
-        output = func(self, *args, **kwargs)
-        if smb_server is not None:
-            smb_server.shutdown()
-            smb_server = None
-        return output
-
-    return wraps(func)(_decorator)
-
 
 class smb(connection):
     def __init__(self, args, db, host):
@@ -456,7 +409,6 @@ class smb(connection):
             )
             if error not in smb_error_status:
                 self.inc_failed_login(username)
-                return False
             return False
 
     def plaintext_login(self, domain, username, password):
@@ -501,6 +453,8 @@ class smb(connection):
                 f'{domain}\\{self.username}:{process_secret(self.password)} {error} {f"({desc})" if self.args.verbose else ""}',
                 color="magenta" if error in smb_error_status else "red",
             )
+            if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED"] and self.args.module == ["change-password"]:
+                return True
             if error not in smb_error_status:
                 self.inc_failed_login(username)
                 return False
@@ -563,7 +517,8 @@ class smb(connection):
                 f"{domain}\\{self.username}:{process_secret(self.hash)} {error} {f'({desc})' if self.args.verbose else ''}",
                 color="magenta" if error in smb_error_status else "red",
             )
-
+            if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED"] and self.args.module == ["change-password"]:
+                return True
             if error not in smb_error_status:
                 self.inc_failed_login(self.username)
                 return False
@@ -674,6 +629,34 @@ class smb(connection):
             with sem, open(self.args.gen_relay_list, "a+") as relay_list:
                 if self.host not in relay_list.read():
                     relay_list.write(self.host + "\n")
+
+    def generate_tgt(self):
+        self.logger.info(f"Attempting to get TGT for {self.username}@{self.domain}")
+        userName = Principal(self.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+
+        try:
+            tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(
+                clientName=userName,
+                password=self.password,
+                domain=self.domain.upper(),
+                lmhash=binascii.unhexlify(self.lmhash) if self.lmhash else "",
+                nthash=binascii.unhexlify(self.nthash) if self.nthash else "",
+                aesKey=self.aesKey,
+                kdcHost=self.kdcHost
+            )
+
+            self.logger.debug(f"TGT successfully obtained for {self.username}@{self.domain}")
+            self.logger.debug(f"Using cipher: {cipher}")
+
+            ccache = CCache()
+            ccache.fromTGT(tgt, oldSessionKey, sessionKey)
+            tgt_file = f"{self.args.generate_tgt}.ccache"
+            ccache.saveFile(tgt_file)
+
+            self.logger.success(f"TGT saved to: {tgt_file}")
+            self.logger.success(f"Run the following command to use the TGT: export KRB5CCNAME={tgt_file}")
+        except Exception as e:
+            self.logger.fail(f"Failed to get TGT: {e}")
 
     @requires_admin
     def execute(self, payload=None, get_output=False, methods=None) -> str:
@@ -1393,6 +1376,7 @@ class smb(connection):
         depth=None,
         content=False,
         only_files=True,
+        silent=True
     ):
         if exclude_dirs is None:
             exclude_dirs = []
@@ -1401,8 +1385,8 @@ class smb(connection):
         if pattern is None:
             pattern = []
         spider = SMBSpider(self.conn, self.logger)
-
-        self.logger.display("Started spidering")
+        if not silent:
+            self.logger.display("Started spidering")
         start_time = time()
         if not share:
             spider.spider(
@@ -1414,11 +1398,12 @@ class smb(connection):
                 self.args.depth,
                 self.args.content,
                 self.args.only_files,
+                self.args.silent
             )
         else:
-            spider.spider(share, folder, pattern, regex, exclude_dirs, depth, content, only_files)
-
-        self.logger.display(f"Done spidering (Completed in {time() - start_time})")
+            spider.spider(share, folder, pattern, regex, exclude_dirs, depth, content, only_files, silent)
+        if not silent:
+            self.logger.display(f"Done spidering (Completed in {time() - start_time})")
 
         return spider.results
 

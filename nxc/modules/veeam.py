@@ -25,7 +25,7 @@ class NXCModule:
             self.psScriptPostgresql = psFile.read()
 
     def options(self, context, module_options):
-        """No options"""
+        """No options available"""
 
     def checkVeeamInstalled(self, context, connection):
         context.log.display("Looking for Veeam installation...")
