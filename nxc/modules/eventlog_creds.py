@@ -182,7 +182,7 @@ class MSEven6Trigger:
 
 
 class MSEven6Result:
-    def __init__(self, conn, handle, limit):
+    def __init__(self, conn, handle, limit=None):
         self._conn = conn
         self._handle = handle
         self._hardlimit = limit
@@ -192,11 +192,12 @@ class MSEven6Result:
         return self
 
     def __next__(self):
-        self._hardlimit -= 1
-        if self._hardlimit < 0:
-            raise StopIteration
+        if self._hardlimit is not None:
+            self._hardlimit -= 1
+            if self._hardlimit < 0:
+                raise StopIteration
         if self._resp is not None and self._resp["NumActualRecords"] == 0:
-            return None
+            raise StopIteration
 
         if self._resp is None or self._index == self._resp["NumActualRecords"]:
             req = even6.EvtRpcQueryNext()
