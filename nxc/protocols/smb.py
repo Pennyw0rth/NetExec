@@ -1392,7 +1392,6 @@ class smb(connection):
         if self.args.pattern is None:
             self.args.pattern = [""]
 
-
         spidering = SMBSpider(
                 self.conn,
                 self.logger,
