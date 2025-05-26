@@ -1382,30 +1382,20 @@ class smb(connection):
             dcom.disconnect()
         return records if records else False
 
-    def spider(
-        self,
-        share=None,
-        folder=".",
-        pattern=None,
-        regex=None,
-        exclude_dirs=None,
-        depth=None,
-        content=False,
-        only_files=True,
-        silent=True
-    ):
-        if exclude_dirs is None:
-            exclude_dirs = []
-        if regex is None:
-            regex = []
-        if pattern is None:
-            pattern = []
-        spider = SMBSpider(self.conn, self.logger)
-        if not silent:
-            self.logger.display("Started spidering")
-        start_time = time()
-        if not share:
-            spider.spider(
+    def spider(self):
+        if self.args.regex:
+            try:
+                self.args.regex = [re.compile(bytes(rx, "utf8")) for rx in self.args.regex]
+            except Exception as e:
+                self.logger.fail(f"Regex compilation error: {e}")
+
+        if self.args.pattern is None:
+            self.args.pattern = [""]
+
+
+        spidering = SMBSpider(
+                self.conn,
+                self.logger,
                 self.args.spider,
                 self.args.spider_folder,
                 self.args.pattern,
@@ -1414,14 +1404,12 @@ class smb(connection):
                 self.args.depth,
                 self.args.content,
                 self.args.only_files,
-                self.args.silent
             )
-        else:
-            spider.spider(share, folder, pattern, regex, exclude_dirs, depth, content, only_files, silent)
-        if not silent:
-            self.logger.display(f"Done spidering (Completed in {time() - start_time})")
 
-        return spider.results
+        self.logger.display("Started spidering")
+        start_time = time()
+        spidering.spider()
+        self.logger.display(f"Done spidering (Completed in {time() - start_time})")
 
     def rid_brute(self, max_rid=None):
         entries = []
