@@ -6,7 +6,7 @@ import os
 from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
 from binascii import hexlify
 from datetime import datetime
-from re import sub, I
+from re import sub, IGNORECASE
 from zipfile import ZipFile
 from termcolor import colored
 from dns import resolver
@@ -43,6 +43,7 @@ from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.ntlm_parser import parse_challenge
+from nxc.helpers.misc import get_bloodhound_info
 
 ldap_error_status = {
     "1": "STATUS_NOT_SUPPORTED",
@@ -174,7 +175,7 @@ class ldap(connection):
             ldap_url = f"{proto}://{self.host}"
             self.logger.info(f"Connecting to {ldap_url} with no baseDN")
             try:
-                self.ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.host, signing=False)
+                self.ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.host)
                 if self.ldap_connection:
                     self.logger.debug(f"ldap_connection: {self.ldap_connection}")
             except SysCallError as e:
@@ -196,10 +197,10 @@ class ldap(connection):
             target = resp_parsed["dnsHostName"]
             base_dn = resp_parsed["defaultNamingContext"]
             target_domain = sub(
-                ",DC=",
+                r",DC=",
                 ".",
                 base_dn[base_dn.lower().find("dc="):],
-                flags=I,
+                flags=IGNORECASE,
             )[3:]
         except ConnectionRefusedError as e:
             self.logger.debug(f"{e} on host {self.host}")
@@ -325,7 +326,7 @@ class ldap(connection):
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [1]")
-            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
+            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
             self.ldap_connection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
             if self.username == "":
                 self.username = self.get_ldap_username()
@@ -364,7 +365,7 @@ class ldap(connection):
             return False
         except (KeyError, KerberosException, OSError) as e:
             self.logger.fail(
-                f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (process_secret(kerb_pass))} {e!s}",
+                f"{self.domain}\\{self.username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {e!s}",
                 color="red",
             )
             return False
@@ -378,7 +379,7 @@ class ldap(connection):
                     self.port = 636
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [2]")
-                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
+                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
                     self.ldap_connection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
                     if self.username == "":
                         self.username = self.get_ldap_username()
@@ -403,27 +404,26 @@ class ldap(connection):
                 except SessionError as e:
                     error, desc = e.getErrorString()
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (process_secret(kerb_pass))} {error!s}",
+                        f"{self.domain}\\{self.username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {error!s}",
                         color="magenta" if error in ldap_error_status else "red",
                     )
                     return False
                 except Exception as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                        f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status.get(error_code, '')}",
                         color="magenta" if error_code in ldap_error_status else "red",
                     )
                     return False
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{self.domain}\\{self.username}{' from ccache' if useCache else ':%s' % (process_secret(kerb_pass))} {error_code!s}",
+                    f"{self.domain}\\{self.username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {error_code!s}",
                     color="magenta" if error_code in ldap_error_status else "red",
                 )
                 return False
 
     def plaintext_login(self, domain, username, password):
-
         self.username = username
         self.password = password
         self.domain = domain
@@ -443,7 +443,7 @@ class ldap(connection):
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3]")
-            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
+            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
             self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
             self.check_if_admin()
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
@@ -467,7 +467,7 @@ class ldap(connection):
                     self.port = 636
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [4]")
-                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
+                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
                     self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
                     self.check_if_admin()
                     self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
@@ -484,13 +484,13 @@ class ldap(connection):
                 except Exception as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                        f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status.get(error_code, '')}",
                         color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                     )
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                    f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status.get(error_code, '')}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
             return False
@@ -534,7 +534,7 @@ class ldap(connection):
             proto = "ldaps" if self.port == 636 else "ldap"
             ldaps_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
-            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
+            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
             self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
             self.check_if_admin()
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.hash}")
@@ -558,7 +558,7 @@ class ldap(connection):
                     self.port = 636
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
-                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
+                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
                     self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
                     self.check_if_admin()
                     self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.hash}")
@@ -576,13 +576,13 @@ class ldap(connection):
                 except ldap_impacket.LDAPSessionError as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                        f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status.get(error_code, '')}",
                         color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                     )
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                    f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status.get(error_code, '')}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
             return False
@@ -1220,6 +1220,38 @@ class ldap(connection):
             self.logger.fail("No string provided :'(")
 
     def bloodhound(self):
+        # Check which version is desired
+        use_bhce = self.config.getboolean("BloodHound-CE", "bhce_enabled", fallback=False)
+        package_name, version, is_ce = get_bloodhound_info()
+
+        if use_bhce and not is_ce:
+            self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
+            self.logger.fail("Your configuration has BloodHound-CE enabled, but the regular BloodHound package is installed. Modify your ~/.nxc/nxc.conf config file or follow the instructions:")
+            self.logger.fail("Please run the following commands to fix this:")
+            self.logger.fail("poetry remove bloodhound-ce   # poetry falsely recognizes bloodhound-ce as a the old bloodhound package")
+            self.logger.fail("poetry add bloodhound-ce")   
+            self.logger.fail("")
+
+            # If using pipx
+            self.logger.fail("Or if you installed with pipx:")
+            self.logger.fail("pipx runpip netexec uninstall -y bloodhound")
+            self.logger.fail("pipx inject netexec bloodhound-ce --force")
+            return False
+
+        elif not use_bhce and is_ce:
+            self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
+            self.logger.fail("Your configuration has regular BloodHound enabled, but the BloodHound-CE package is installed.")
+            self.logger.fail("Please run the following commands to fix this:")
+            self.logger.fail("poetry remove bloodhound-ce")
+            self.logger.fail("poetry add bloodhound")
+            self.logger.fail("")
+
+            # If using pipx
+            self.logger.fail("Or if you installed with pipx:")
+            self.logger.fail("pipx runpip netexec uninstall -y bloodhound-ce")
+            self.logger.fail("pipx inject netexec bloodhound --force")
+            return False
+
         auth = ADAuthentication(
             username=self.username,
             password=self.password,
@@ -1239,7 +1271,7 @@ class ldap(connection):
         )
         collect = resolve_collection_methods("Default" if not self.args.collection else self.args.collection)
         if not collect:
-            return
+            return None
         self.logger.highlight("Resolved collection methods: " + ", ".join(list(collect)))
 
         self.logger.debug("Using DNS to retrieve domain information")

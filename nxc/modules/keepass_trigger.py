@@ -4,7 +4,7 @@ from time import sleep
 from csv import reader
 from base64 import b64encode
 from io import BytesIO, StringIO
-from xml.etree import ElementTree
+from xml.etree import ElementTree as ET
 from nxc.helpers.powershell import get_ps_script
 
 
@@ -358,7 +358,7 @@ class NXCModule:
             sys.exit(1)
 
         try:
-            keepass_config_xml_root = ElementTree.fromstring(buffer.getvalue())
+            keepass_config_xml_root = ET.fromstring(buffer.getvalue())
         except Exception as e:
             context.log.fail(f"Error while parsing file '{self.keepass_config_path}', exiting: {e}")
             sys.exit(1)
@@ -377,7 +377,7 @@ class NXCModule:
 
     def extract_password(self, context):
         xml_doc_path = os.path.abspath(self.local_export_path + "/" + self.export_name)
-        xml_tree = ElementTree.parse(xml_doc_path)
+        xml_tree = ET.parse(xml_doc_path)
         root = xml_tree.getroot()
 
         root_entries = root.find("./Root/Entry")
