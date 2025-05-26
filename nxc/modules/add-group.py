@@ -5,6 +5,7 @@ from impacket.dcerpc.v5.rpcrt import DCERPCException
 from nxc.parsers.ldap_results import parse_result_attributes
 from ldap3 import Server, Connection, ALL, MODIFY_ADD, SIMPLE, MODIFY_DELETE
 
+
 class NXCModule:
     """
     Module for adding/removing users to/from groups
@@ -191,7 +192,6 @@ class NXCModule:
         finally:
             if "dce" in locals():
                 dce.disconnect()
-
 
     def _add_user_to_group_ldap(self, context, connection):
         """Add user to group using LDAP protocol"""
