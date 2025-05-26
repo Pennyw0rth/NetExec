@@ -197,9 +197,15 @@ class NXCModule:
         """Add user to group using LDAP protocol"""
         try:
             context.log.info("Started adding user to group via LDAP")
-            # Search for the target user
-            user_dn = self._find_object_dn(self._get_ldap_connection(connection), connection.domain, "sAMAccountName", self.target_user)
+            # Search for the current user
+            user_dn = self._find_object_dn(self._get_ldap_connection(connection), connection.domain, "sAMAccountName", connection.username)
             if not user_dn:
+                context.log.fail(f"User {connection.username} not found")
+                return
+
+            # Search for the target user
+            target_user_dn = self._find_object_dn(self._get_ldap_connection(connection), connection.domain, "sAMAccountName", self.target_user)
+            if not target_user_dn:
                 context.log.fail(f"User {self.target_user} not found")
                 return
 
@@ -211,7 +217,7 @@ class NXCModule:
 
             context.log.info("Checking for if the target user is in target group.")
             # Check if user is already in target group
-            if self._is_user_in_group(context, connection, user_dn, group_dn):
+            if self._is_user_in_group(context, connection, target_user_dn, group_dn):
                 context.log.display(f"User {self.target_user} is already a member of group {self.group}")
                 return
 
@@ -222,7 +228,7 @@ class NXCModule:
             context.log.info("LDAP3 connection established.") 
  
             # Add user to group by modifying the group's "member" attribute
-            success = conn.modify(group_dn, {"member": [(MODIFY_ADD, [user_dn])]})
+            success = conn.modify(group_dn, {"member": [(MODIFY_ADD, [target_user_dn])]})
             if success:
                 context.log.success(f"Successfully added {self.target_user} to group {self.group}")
             else:
@@ -237,9 +243,15 @@ class NXCModule:
         """Remove user from group using LDAP protocol"""
         try:
             context.log.info("Started removing user to group via LDAP")
-            # Search for the target user
-            user_dn = self._find_object_dn(self._get_ldap_connection(connection), connection.domain, "sAMAccountName", self.target_user)
+            # Search for the current user
+            user_dn = self._find_object_dn(self._get_ldap_connection(connection), connection.domain, "sAMAccountName", connection.username)
             if not user_dn:
+                context.log.fail(f"User {connection.username} not found")
+                return
+
+            # Search for the target user
+            target_user_dn = self._find_object_dn(self._get_ldap_connection(connection), connection.domain, "sAMAccountName", self.target_user)
+            if not target_user_dn:
                 context.log.fail(f"User {self.target_user} not found")
                 return
 
@@ -251,7 +263,7 @@ class NXCModule:
             
             context.log.info("Checking for if the target user is not in target group.")
             # Check if user is already in target group
-            if not self._is_user_in_group(context, connection, user_dn, group_dn):
+            if not self._is_user_in_group(context, connection, target_user_dn, group_dn):
                 context.log.display(f"User {self.target_user} is not already a member of group {self.group}")
                 return
 
@@ -262,7 +274,7 @@ class NXCModule:
             context.log.info("LDAP3 connection established.") 
 
             # Remove user from group by modifying the group's "member" attribute
-            success = conn.modify(group_dn, {"member": [(MODIFY_DELETE, [user_dn])]})
+            success = conn.modify(group_dn, {"member": [(MODIFY_DELETE, [target_user_dn])]})
             if success:
                 context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
             else:
@@ -273,7 +285,7 @@ class NXCModule:
         except Exception as e:
             context.log.fail(f"Failed to remove user from group via LDAP: {e}")
     
-    def _is_user_in_group(self, context, connection, user_dn, group_dn):
+    def _is_user_in_group(self, context, connection, target_user_dn, group_dn):
         """Check if the given user DN is already a member of the target group DN."""
         try:
             search_filter = f"(cn={self.group})"
@@ -283,8 +295,8 @@ class NXCModule:
             resp_parsed = parse_result_attributes(resp)
 
             for dn in resp_parsed:
-                if user_dn in dn["member"]:
-                    return user_dn
+                if target_user_dn in dn["member"]:
+                    return target_user_dn
 
         except Exception as e:
             context.log.debug(f"Error checking group membership: {e}")
