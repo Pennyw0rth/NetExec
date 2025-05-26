@@ -98,6 +98,4 @@ class NXCModule:
         result = self.mssql_conn.sql_query(query)
         # Assuming the query returns a list of dictionaries with 'config_value' as the key
         self.context.log.debug(f"{option} check result: {result}")
-        if result and result[0]["config_value"] == 1:
-            return True
-        return False
+        return bool(result and result[0]["config_value"] == 1)
