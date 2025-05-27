@@ -2,6 +2,7 @@ from impacket.dcerpc.v5 import samr, transport
 from impacket.dcerpc.v5 import tsts as TSTS
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 from contextlib import suppress
+import traceback
 
 
 class NXCModule:
@@ -15,9 +16,9 @@ class NXCModule:
         """There are no module options."""
 
     def on_admin_login(self, context, connection):
-        try:
-            context.log.debug(f"Target NetBIOS Name: {connection.hostname}")
+        admin_users = []
 
+        try:
             string_binding = fr"ncacn_np:{connection.host}[\pipe\samr]"
             context.log.debug(f"Using string binding: {string_binding}")
 
@@ -37,32 +38,17 @@ class NXCModule:
             dce.connect()
             dce.bind(samr.MSRPC_UUID_SAMR)
 
-            server_handle = samr.hSamrConnect2(dce)["ServerHandle"]
-
             try:
-                resp = samr.hSamrEnumerateDomainsInSamServer(dce, server_handle)
-                domain = resp["Buffer"]["Buffer"][0]["Name"]
-            except Exception as e:
-                context.log.fail(f"Could not enumerate domains: {e!s}")
-                return False
-
-            admin_users = set()
-            usernames = set()
-            self.sid_to_user = {}  # dictionary mapping sid string to username
-
-            try:
+                server_handle = samr.hSamrConnect2(dce)["ServerHandle"]
+                domain = samr.hSamrEnumerateDomainsInSamServer(dce, server_handle)["Buffer"]["Buffer"][0]["Name"]
                 resp = samr.hSamrLookupDomainInSamServer(dce, server_handle, domain)
                 domain_sid = resp["DomainId"].formatCanonical()
+                domain_handle = samr.hSamrOpenDomain(dce, server_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_LIST_ACCOUNTS, resp["DomainId"])["DomainHandle"]
                 context.log.debug(f"Resolved domain SID for {domain}: {domain_sid}")
             except Exception as e:
-                context.log.debug(f"Failed to lookup SID for domain {domain}: {e!s}")
-                return False
-
-            try:
-                domain_handle = samr.hSamrOpenDomain(dce, server_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_LIST_ACCOUNTS, resp["DomainId"])["DomainHandle"]
-            except Exception as e:
-                context.log.debug(f"Failed to open domain {domain}: {e!s}")
-                return False
+                context.log.fail(f"Failed to open domain {domain}: {e!s}")
+                context.log.debug(traceback.format_exc())
+                return
 
             admin_rids = {
                 "Domain Admins": 512,
