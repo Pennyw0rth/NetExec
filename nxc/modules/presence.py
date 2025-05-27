@@ -53,7 +53,6 @@ class NXCModule:
             admin_rids = {
                 "Domain Admins": 512,
                 "Enterprise Admins": 519,
-                "Administrators": 544,
             }
 
             # Enumerate admin groups and their members
@@ -113,7 +112,9 @@ class NXCModule:
 
         # for admin users, check for folder presence
         for user in admin_users:
-            if user["username"].lower() in dirs_found:
+            # Look for administrator.domain to check if SID 500 Administrator is present (second check)
+            if user["username"].lower() in dirs_found or \
+                (user["username"].lower() == "administrator" and f"{user['username'].lower()}.{user['domain']}" in dirs_found):
                 user["in_directory"] = True
                 context.log.debug(f"Found user {user['username']} in directories")
 
