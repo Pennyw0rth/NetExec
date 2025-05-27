@@ -19,11 +19,11 @@ class NXCModule:
         admin_users = []
 
         try:
-            string_binding = fr"ncacn_np:{connection.host}[\pipe\samr]"
+            string_binding = fr"ncacn_np:{connection.kdcHost}[\pipe\samr]"
             context.log.debug(f"Using string binding: {string_binding}")
 
             rpctransport = transport.DCERPCTransportFactory(string_binding)
-            rpctransport.setRemoteHost(connection.host)
+            rpctransport.setRemoteHost(connection.kdcHost)
             rpctransport.set_credentials(
                 connection.username,
                 connection.password,
