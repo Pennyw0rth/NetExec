@@ -145,7 +145,8 @@ class NXCModule:
 
     def print_grouped_results(self, context, admin_users):
         """Logs all results grouped per host in order"""
-        context.log.success(f"Identified Admin Users: {', '.join([user['username'] for user in admin_users])})")
+        # Make less verbose for scanning large ranges
+        context.log.info(f"Identified Admin Users: {', '.join([user['username'] for user in admin_users])}")
 
         dir_users = [user for user in admin_users if user["in_directory"]]
         if dir_users:
