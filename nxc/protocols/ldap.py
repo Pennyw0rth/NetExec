@@ -238,7 +238,7 @@ class ldap(connection):
         ldap_url = f"ldap://{self.target}"
         ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
         try:
-            ldap_connection.login(user="a", password="", domain=self.domain)
+            ldap_connection.login(domain=self.domain)
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("strongerAuthRequired") >= 0:
                 self.signing_required = True
