@@ -68,7 +68,12 @@ class NXCModule:
                             user_handle = samr.hSamrOpenUser(dce, domain_handle, samr.MAXIMUM_ALLOWED, rid)["UserHandle"]
                             username = samr.hSamrQueryInformationUser2(dce, user_handle, samr.USER_INFORMATION_CLASS.UserAllInformation)["Buffer"]["All"]["UserName"]
 
-                            admin_users.append({"username": username, "sid": f"{domain_sid}-{rid}", "domain": domain, "group": group_name, "in_tasks": False, "in_directory": False})
+                            # If user already exists, append group name
+                            if any(u["sid"] == f"{domain_sid}-{rid}" for u in admin_users):
+                                user = next(u for u in admin_users if u["sid"] == f"{domain_sid}-{rid}")
+                                user["group"].append(group_name)
+                            else:
+                                admin_users.append({"username": username, "sid": f"{domain_sid}-{rid}", "domain": domain, "group": [group_name], "in_tasks": False, "in_directory": False})
                             context.log.debug(f"Found user: {username} with RID {rid} in group {group_name}")
                         except Exception as e:
                             context.log.debug(f"Failed to get user info for RID {rid}: {e!s}")
@@ -116,7 +121,7 @@ class NXCModule:
             if user["username"].lower() in dirs_found or \
                 (user["username"].lower() == "administrator" and f"{user['username'].lower()}.{user['domain']}" in dirs_found):
                 user["in_directory"] = True
-                context.log.debug(f"Found user {user['username']} in directories")
+                context.log.info(f"Found user {user['username']} in directories")
 
     def check_tasklist(self, context, connection, admin_users):
         """Checks tasklist over rpc."""
@@ -136,7 +141,7 @@ class NXCModule:
             for user in admin_users:
                 if process["pSid"] == user["sid"]:
                     user["in_tasks"] = True
-                    context.log.debug(f"Matched process {process['ImageName']} with user {user['username']}")
+                    context.log.info(f"Matched process {process['ImageName']} with user {user['username']}")
 
     def print_grouped_results(self, context, admin_users):
         """Logs all results grouped per host in order"""
@@ -146,13 +151,13 @@ class NXCModule:
         if dir_users:
             context.log.success("Found users in directories:")
             for user in dir_users:
-                context.log.highlight(f"{user['username']} ({user['group']})")
+                context.log.highlight(f"{user['username']} ({', '.join(user['group'])})")
 
         tasklist_users = [user for user in admin_users if user["in_tasks"]]
         if tasklist_users:
             context.log.success("Found users in tasklist:")
             for user in tasklist_users:
-                context.log.highlight(f"{user['username']} ({user['group']})")
+                context.log.highlight(f"{user['username']} ({', '.join(user['group'])})")
 
         # Making this less verbose to better scan large ranges
         if not dir_users and not tasklist_users:
