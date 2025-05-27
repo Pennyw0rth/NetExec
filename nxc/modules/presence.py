@@ -109,7 +109,7 @@ class NXCModule:
             context.log.debug("Successfully listed C$\\Users")
 
         # collect folder names (lowercase) ignoring "." and ".."
-        dirs_found.update([f.get_shortname().lower() for f in files if f.get_shortname() not in [".", ".."]])
+        dirs_found.update([f.get_shortname().lower() for f in files if f.get_shortname().lower() not in [".", "..", "administrator"]])
 
         # for admin users, check for folder presence
         for user in admin_users:
