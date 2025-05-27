@@ -149,6 +149,8 @@ class ldap(connection):
         self.output_filename = None
         self.smbv1 = None
         self.signing = False
+        self.signing_required = False
+        self.cbt_status = 0
         self.admin_privs = False
         self.no_ntlm = False
         self.sid_domain = ""
@@ -231,6 +233,37 @@ class ldap(connection):
                     value = response_value.asOctets().decode(response_value.encoding)[2:]
                     return value.split("\\")[1]
         return ""
+    
+    def check_ldap_signing(self):
+        ldap_url = f"ldap://{self.target}"
+        ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
+        try:
+            ldap_connection.login(user="a", password="", domain=self.domain)
+        except ldap_impacket.LDAPSessionError as e:
+            if str(e).find("strongerAuthRequired") >= 0:
+                self.signing_required = True
+
+    def check_ldaps_cbt(self):
+        ldap_url = f"ldaps://{self.target}"
+        ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
+        ldap_connection._LDAPConnection__channel_binding_value = None
+        try:
+            ldap_connection.login(user=" ",domain=self.domain)
+        except ldap_impacket.LDAPSessionError as e:
+            
+            if str(e).find("data 80090346") >= 0:
+                self.cbt_status = 1
+                # CBT is required or when supported
+                ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
+                tmp = bytearray(ldap_connection._LDAPConnection__channel_binding_value)
+                tmp[15] = (tmp[3] + 1) % 256
+                ldap_connection._LDAPConnection__channel_binding_value = bytes(tmp)
+                try:
+                    ldap_connection.login(user=" ",domain=self.domain)
+                except ldap_impacket.LDAPSessionError as e:
+                    if str(e).find("data 80090346") >= 0:
+                        self.cbt_status = 2
+
 
     def enum_host_info(self):
         self.hostname = self.target.split(".")[0].upper() if "." in self.target else self.target
@@ -262,6 +295,9 @@ class ldap(connection):
         else:
             self.domain = self.targetDomain
 
+        self.check_ldap_signing()
+        self.check_ldaps_cbt()
+
         # using kdcHost is buggy on impacket when using trust relation between ad so we kdcHost must stay to none if targetdomain is not equal to domain
         if not self.kdcHost and self.domain and self.domain == self.targetDomain:
             result = self.resolver(self.domain)
@@ -282,10 +318,12 @@ class ldap(connection):
 
     def print_host_info(self):
         self.logger.debug("Printing host info for LDAP")
+        signing = colored(f"signing:Enforced", host_info_colors[0], attrs=["bold"]) if self.signing_required else colored(f"signing:None", host_info_colors[1], attrs=["bold"])
+        cbt_status = colored(f"channel binding:Always", host_info_colors[0], attrs=["bold"]) if self.cbt_status == 2 else colored(f"channel binding:{'Never' if self.cbt_status == 0 else 'When Supported'}", host_info_colors[1], attrs=["bold"])
         self.logger.extra["protocol"] = "LDAP" if str(self.port) == "389" else "LDAPS"
         self.logger.extra["port"] = self.port
         self.logger.extra["hostname"] = self.hostname
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({cbt_status})")
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.username = username if not self.username else self.username    # With ccache we get the username from the ticket
