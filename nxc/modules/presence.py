@@ -56,6 +56,7 @@ class NXCModule:
                 "Administrators": 544,
             }
 
+            # Enumerate admin groups and their members
             for group_name, group_rid in admin_rids.items():
                 context.log.debug(f"Looking up group: {group_name} with RID {group_rid}")
 
@@ -68,15 +69,10 @@ class NXCModule:
                             user_handle = samr.hSamrOpenUser(dce, domain_handle, samr.MAXIMUM_ALLOWED, rid)["UserHandle"]
                             username = samr.hSamrQueryInformationUser2(dce, user_handle, samr.USER_INFORMATION_CLASS.UserAllInformation)["Buffer"]["All"]["UserName"]
 
-                            admin_users.add(f"{domain}\\{username} (Member of {group_name})")
-                            usernames.add(username)
-
-                            # map sid string of user to username
-                            user_sid = f"{domain_sid}-{rid}"
-                            self.sid_to_user[user_sid] = f"{domain}\\{username}"
+                            admin_users.append({"username": username, "sid": f"{domain_sid}-{rid}", "domain": domain, "group": group_name, "in_tasks": False, "in_directory": False})
+                            context.log.debug(f"Found user: {username} with RID {rid} in group {group_name}")
                         except Exception as e:
                             context.log.debug(f"Failed to get user info for RID {rid}: {e!s}")
-                            admin_users.add(f"{domain}\\{domain_sid}-{rid} (Member of {group_name})")
                         finally:
                             with suppress(Exception):
                                 samr.hSamrCloseHandle(dce, user_handle)
@@ -86,27 +82,17 @@ class NXCModule:
                     with suppress(Exception):
                         samr.hSamrCloseHandle(dce, group_handle)
 
-            usernames = sorted(usernames)
-
-            matched_dirs = self.check_users_directory(context, connection, usernames)
-            matched_tasks = self.check_tasklist(context, connection, usernames, connection.hostname)
-
-            # collect results for printing
-            results = {
-                "netbios_name": connection.hostname,
-                "admin_users": usernames,
-                "matched_dirs": matched_dirs,
-                "matched_tasks": matched_tasks,
-            }
+            # Update user objects to check if they are in tasklist or users directory
+            self.check_users_directory(context, connection, admin_users)
+            self.check_tasklist(context, connection, admin_users)
 
             # print grouped/logged results nicely
-            self.print_grouped_results(context, connection, results)
+            self.print_grouped_results(context, admin_users)
         except Exception as e:
             context.log.fail(str(e))
-            return False
+            context.log.debug(traceback.format_exc())
 
     def check_users_directory(self, context, connection, admin_users):
-        matched_dirs = []
         dirs_found = set()
 
         # try C$\Users first
@@ -118,7 +104,7 @@ class NXCModule:
                 files = connection.conn.listPath("C$", "\\Documents and Settings\\*")
             except Exception as e:
                 context.log.fail(f"Error listing fallback directory: {e}")
-                return matched_dirs  # return empty
+                return
         else:
             context.log.debug("Successfully listed C$\\Users")
 
@@ -127,63 +113,46 @@ class NXCModule:
 
         # for admin users, check for folder presence
         for user in admin_users:
-            # only match folders like "administrator.something", not "administrator"
-            if user.lower() == "administrator":
-                matched = [d for d in dirs_found if d.startswith("administrator.") and d != "administrator"]
-                matched_dirs.extend(matched)
-            else:
-                if user.lower() in dirs_found:
-                    matched_dirs.append(user)
-        return matched_dirs
+            if user["username"].lower() in dirs_found:
+                user["in_directory"] = True
+                context.log.debug(f"Found user {user['username']} in directories")
 
-    def check_tasklist(self, context, connection, admin_users, netbios_name):
+    def check_tasklist(self, context, connection, admin_users):
         """Checks tasklist over rpc."""
         try:
-            with TSTS.LegacyAPI(connection.conn, netbios_name, kerberos=False) as legacy:
+            with TSTS.LegacyAPI(connection.conn, connection.host, kerberos=False) as legacy:
                 handle = legacy.hRpcWinStationOpenServer()
                 processes = legacy.hRpcWinStationGetAllProcesses(handle)
         except Exception as e:
             context.log.fail(f"Error in check_tasklist RPC method: {e}")
             return []
 
-        context.log.debug(f"Enumerated {len(processes)} processes on {netbios_name}")
-
-        matched_admin_users = {}
-
-        # prepare admin users in lowercase for case-insensitive matching
-        admin_users_lower = {u.lower() for u in admin_users}
+        context.log.debug(f"Enumerated {len(processes)} processes on {connection.host}")
 
         for process in processes:
             context.log.debug(f"ImageName: {process['ImageName']}, UniqueProcessId: {process['SessionId']}, pSid: {process['pSid']}")
-            username = self.sid_to_user.get(process["pSid"])
-            if username:
-                # extract username part after '\'
-                user_only = username.split("\\")[-1]
-                if user_only.lower() in admin_users_lower:
-                    # save original casing
-                    matched_admin_users[user_only] = True
+            # Check if process SID matches any admin user SID
+            for user in admin_users:
+                if process["pSid"] == user["sid"]:
+                    user["in_tasks"] = True
+                    context.log.debug(f"Matched process {process['ImageName']} with user {user['username']}")
 
-        if matched_admin_users:
-            context.log.info("Found users in tasklist:\n" + "\n".join(matched_admin_users.keys()))
-        else:
-            context.log.info("No admin user processes found in tasklist")
-
-        return list(matched_admin_users.keys())
-
-    def print_grouped_results(self, context, connection, results):
+    def print_grouped_results(self, context, admin_users):
         """Logs all results grouped per host in order"""
-        if results["admin_users"]:
-            context.log.success(f"Identified Admin Users: {', '.join(results['admin_users'])}")
+        context.log.success(f"Identified Admin Users: {', '.join([user['username'] for user in admin_users])})")
 
-        if results["matched_dirs"]:
+        dir_users = [user for user in admin_users if user["in_directory"]]
+        if dir_users:
             context.log.success("Found users in directories:")
-            for d in results["matched_dirs"]:
-                context.log.highlight(d)
+            for user in dir_users:
+                context.log.highlight(f"{user['username']} ({user['group']})")
 
-        if results["matched_tasks"]:
+        tasklist_users = [user for user in admin_users if user["in_tasks"]]
+        if tasklist_users:
             context.log.success("Found users in tasklist:")
-            for t in results["matched_tasks"]:
-                context.log.highlight(t)
+            for user in tasklist_users:
+                context.log.highlight(f"{user['username']} ({user['group']})")
 
-        if not results["matched_dirs"] and not results["matched_tasks"]:
-            context.log.success("No matches found in users directory or tasklist.")
+        # Making this less verbose to better scan large ranges
+        if not dir_users and not tasklist_users:
+            context.log.info("No matches found in users directory or tasklist.")
