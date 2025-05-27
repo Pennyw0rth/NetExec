@@ -6,6 +6,11 @@ import traceback
 
 
 class NXCModule:
+    """
+    Module to find Domain and Enterprise Admin presence on target systems over SMB.
+    Made by @crosscutsaw, @NeffIsBack
+    """
+
     name = "presence"
     description = "Traces Domain and Enterprise Admin presence in the target over SMB"
     supported_protocols = ["smb"]
