@@ -246,7 +246,7 @@ class ldap(connection):
                 self.logger.debug(f"LDAP signing is enforced on {self.host}")
                 self.signing_required = True
             else:
-                raise
+                self.logger.debug(f"LDAPSessionError while checking for signing requirements (likely NTLM disabled): {e!s}")
 
     def check_ldaps_cbt(self):
         self.cbt_status = "Never"
@@ -257,7 +257,9 @@ class ldap(connection):
             ldap_connection.login(user=" ", domain=self.domain)
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("data 80090346") >= 0:
+                self.logger.debug(f"LDAPS channel binding enforced on host {self.host}")
                 self.cbt_status = "Always"  # CBT is Required
+            # Login failed (wrong credentials). test if we get an error with an existing, but wrong CBT -> When supported
             elif str(e).find("data 52e") >= 0:
                 ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
                 new_cbv = bytearray(ldap_connection._LDAPConnection__channel_binding_value)
@@ -267,9 +269,10 @@ class ldap(connection):
                     ldap_connection.login(user=" ", domain=self.domain)
                 except ldap_impacket.LDAPSessionError as e:
                     if str(e).find("data 80090346") >= 0:
+                        self.logger.debug(f"LDAPS channel binding is set to 'When Supported' on host {self.host}")
                         self.cbt_status = "When Supported"  # CBT is When Supported
             else:
-                raise
+                self.logger.debug(f"LDAPSessionError while checking for channel binding requirements (likely NTLM disabled): {e!s}")
         except SysCallError as e:
             self.logger.debug(f"Received SysCallError when trying to enumerate channel binding support: {e!s}")
             if e.args[1] == "ECONNRESET":
