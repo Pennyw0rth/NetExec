@@ -250,10 +250,9 @@ class ldap(connection):
         try:
             ldap_connection.login(user=" ",domain=self.domain)
         except ldap_impacket.LDAPSessionError as e:
-            
             if str(e).find("data 80090346") >= 0:
-                self.cbt_status = 1
-                # CBT is required or when supported
+                self.cbt_status = 2 # CBT is Required
+            elif str(e).find("data 52e") >= 0:
                 ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
                 tmp = bytearray(ldap_connection._LDAPConnection__channel_binding_value)
                 tmp[15] = (tmp[3] + 1) % 256
@@ -262,8 +261,7 @@ class ldap(connection):
                     ldap_connection.login(user=" ",domain=self.domain)
                 except ldap_impacket.LDAPSessionError as e:
                     if str(e).find("data 80090346") >= 0:
-                        self.cbt_status = 2
-
+                        self.cbt_status = 1 # CBT is When Supported
 
     def enum_host_info(self):
         self.hostname = self.target.split(".")[0].upper() if "." in self.target else self.target
@@ -320,10 +318,11 @@ class ldap(connection):
         self.logger.debug("Printing host info for LDAP")
         signing = colored(f"signing:Enforced", host_info_colors[0], attrs=["bold"]) if self.signing_required else colored(f"signing:None", host_info_colors[1], attrs=["bold"])
         cbt_status = colored(f"channel binding:Always", host_info_colors[0], attrs=["bold"]) if self.cbt_status == 2 else colored(f"channel binding:{'Never' if self.cbt_status == 0 else 'When Supported'}", host_info_colors[1], attrs=["bold"])
+        ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
         self.logger.extra["protocol"] = "LDAP" if str(self.port) == "389" else "LDAPS"
         self.logger.extra["port"] = self.port
         self.logger.extra["hostname"] = self.hostname
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({cbt_status})")
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({cbt_status}) {ntlm}")
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.username = username if not self.username else self.username    # With ccache we get the username from the ticket
