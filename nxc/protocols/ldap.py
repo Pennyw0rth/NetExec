@@ -813,76 +813,75 @@ class ldap(connection):
         resp = self.search(search_filter, attributes, 0)
         trust_resp_parse = parse_result_attributes(resp)
 
-        if trust_resp_parse:
-            for trust in trust_resp_parse:
+        for trust in trust_resp_parse:
+            try:
+                trust_name = trust["name"]
+                trust_flat_name = trust["flatName"]
+                trust_direction = int(trust["trustDirection"])
+                trust_type = int(trust["trustType"])
+                trust_attributes = trust["trustAttributes"]
+                
+                # See: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/e9a2d23c-c31e-4a6f-88a0-6646fdb51a3c
+                trust_attribute_flags = {
+                    0x1:    "Non-Transitive",
+                    0x2:    "Uplevel-Only",
+                    0x4:    "Quarantined Domain",
+                    0x8:    "Forest Transitive",
+                    0x10:   "Cross Organization",
+                    0x20:   "Within Forest",
+                    0x40:   "Treat as External",
+                    0x80:   "Uses RC4 Encryption",
+                    0x200:  "Cross Organization No TGT Delegation",
+                    0x800:  "Cross Organization Enable TGT Delegation",
+                    0x2000: "PAM Trust"
+                }
+
+                # For check if multiple posibble flags, like Uplevel-Only, Treat as External
+                trust_attributes_text = ", ".join([
+                    text for flag, text in trust_attribute_flags.items()
+                    if int(trust_attributes) & flag
+                ]) or "Other"  # If Trust attrs not known
+
+                # Convert trust direction/type to human-readable format
+                direction_text = {
+                    0: "Disabled",
+                    1: "Inbound",
+                    2: "Outbound",
+                    3: "Bidirectional",
+                }[trust_direction]
+
+                trust_type_text = {
+                    1: "Windows NT",
+                    2: "Active Directory",
+                    3: "Kerberos",
+                    4: "Unknown",
+                    5: "Azure Active Directory",
+                }[trust_type]
+
+                self.logger.info(f"Processing trusted domain: {trust_name} ({trust_flat_name})")
+                self.logger.info(f"Trust type: {trust_type_text}, Direction: {direction_text}, Trust Attributes: {trust_attributes_text}")
+
+            except Exception as e:
+                self.logger.fail(f"Failed {e} in trust entry: {trust}")
+
+            # Only process if it's an Active Directory trust
+            if int(trust_type) == 2:
+                # Try to find domain controllers in trusted domain using DNS
+                # Check if we can resolve the trusted domain's DC using DNS
+                dc_dns_name = f"_ldap._tcp.dc._msdcs.{trust_name}"
                 try:
-                    trust_name = trust["name"]
-                    trust_flat_name = trust["flatName"]
-                    trust_direction = int(trust["trustDirection"])
-                    trust_type = int(trust["trustType"])
-                    trust_attributes = trust["trustAttributes"]
-                    
-                    # See: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/e9a2d23c-c31e-4a6f-88a0-6646fdb51a3c
-                    trust_attribute_flags = {
-                        0x1:    "Non-Transitive",
-                        0x2:    "Uplevel-Only",
-                        0x4:    "Quarantined Domain",
-                        0x8:    "Forest Transitive",
-                        0x10:   "Cross Organization",
-                        0x20:   "Within Forest",
-                        0x40:   "Treat as External",
-                        0x80:   "Uses RC4 Encryption",
-                        0x200:  "Cross Organization No TGT Delegation",
-                        0x800:  "Cross Organization Enable TGT Delegation",
-                        0x2000: "PAM Trust"
-                    }
-
-                    # For check if multiple posibble flags, like Uplevel-Only, Treat as External
-                    trust_attributes_text = ", ".join([
-                        text for flag, text in trust_attribute_flags.items()
-                        if int(trust_attributes) & flag
-                    ]) or "Other"  # If Trust attrs not known
-
-                    # Convert trust direction/type to human-readable format
-                    direction_text = {
-                        0: "Disabled",
-                        1: "Inbound",
-                        2: "Outbound",
-                        3: "Bidirectional",
-                    }[trust_direction]
-
-                    trust_type_text = {
-                        1: "Windows NT",
-                        2: "Active Directory",
-                        3: "Kerberos",
-                        4: "Unknown",
-                        5: "Azure Active Directory",
-                    }[trust_type]
-
-                    self.logger.info(f"Processing trusted domain: {trust_name} ({trust_flat_name})")
-                    self.logger.info(f"Trust type: {trust_type_text}, Direction: {direction_text}, Trust Attributes: {trust_attributes_text}")
-
+                    srv_records = resolv.resolve(dc_dns_name, "SRV", tcp=self.args.dns_tcp)
+                    self.logger.info(f"Found domain controllers for trusted domain {trust_name} via DNS:")
+                    for srv in srv_records:
+                        dc_hostname = str(srv.target).rstrip(".")
+                        self.logger.highlight(f"Found DC in trusted domain: {colored(dc_hostname, host_info_colors[0])}")
+                        self.logger.highlight(f"{trust_name} -> {direction_text} -> {trust_attributes_text}")
+                        resolve_and_display_hostname(dc_hostname)
                 except Exception as e:
-                    self.logger.fail(f"Failed {e} in trust entry: {trust}")
-
-                # Only process if it's an Active Directory trust
-                if int(trust_type) == 2:
-                    # Try to find domain controllers in trusted domain using DNS
-                    # Check if we can resolve the trusted domain's DC using DNS
-                    dc_dns_name = f"_ldap._tcp.dc._msdcs.{trust_name}"
-                    try:
-                        srv_records = resolv.resolve(dc_dns_name, "SRV", tcp=self.args.dns_tcp)
-                        self.logger.info(f"Found domain controllers for trusted domain {trust_name} via DNS:")
-                        for srv in srv_records:
-                            dc_hostname = str(srv.target).rstrip(".")
-                            self.logger.highlight(f"Found DC in trusted domain: {colored(dc_hostname, host_info_colors[0])}")
-                            self.logger.highlight(f"{trust_name} -> {direction_text} -> {trust_attributes_text}")
-                            resolve_and_display_hostname(dc_hostname)
-                    except Exception as e:
-                        self.logger.fail(f"Failed to resolve DCs for {trust_name} via DNS: {e}")
-                else:
-                    self.logger.display(f"Skipping non-Active Directory trust '{trust_name}' with type: {trust_type_text} and direction: {direction_text}")
-            self.logger.info("Domain Controller enumeration complete.")
+                    self.logger.fail(f"Failed to resolve DCs for {trust_name} via DNS: {e}")
+            else:
+                self.logger.display(f"Skipping non-Active Directory trust '{trust_name}' with type: {trust_type_text} and direction: {direction_text}")
+        self.logger.info("Domain Controller enumeration complete.")
 
     def active_users(self):
         if len(self.args.active_users) > 0:
