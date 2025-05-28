@@ -233,7 +233,7 @@ class ldap(connection):
                     value = response_value.asOctets().decode(response_value.encoding)[2:]
                     return value.split("\\")[1]
         return ""
-    
+
     def check_ldap_signing(self):
         self.signing_required = False
         ldap_url = f"ldap://{self.target}"
@@ -279,7 +279,6 @@ class ldap(connection):
                 self.cbt_status = "No TLS cert"
             else:
                 raise
-
 
     def enum_host_info(self):
         self.hostname = self.target.split(".")[0].upper() if "." in self.target else self.target
@@ -339,6 +338,7 @@ class ldap(connection):
         signing = colored("signing:Enforced", host_info_colors[0], attrs=["bold"]) if self.signing_required else colored("signing:None", host_info_colors[1], attrs=["bold"])
         cbt_status = colored(f"channel binding:{self.cbt_status}", host_info_colors[3], attrs=["bold"]) if self.cbt_status == "Always" else colored(f"channel binding:{self.cbt_status}", host_info_colors[2], attrs=["bold"])
         ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
+
         self.logger.extra["protocol"] = "LDAP" if str(self.port) == "389" else "LDAPS"
         self.logger.extra["port"] = self.port
         self.logger.extra["hostname"] = self.hostname
@@ -1286,7 +1286,7 @@ class ldap(connection):
             self.logger.fail("Your configuration has BloodHound-CE enabled, but the regular BloodHound package is installed. Modify your ~/.nxc/nxc.conf config file or follow the instructions:")
             self.logger.fail("Please run the following commands to fix this:")
             self.logger.fail("poetry remove bloodhound-ce   # poetry falsely recognizes bloodhound-ce as a the old bloodhound package")
-            self.logger.fail("poetry add bloodhound-ce")   
+            self.logger.fail("poetry add bloodhound-ce")
             self.logger.fail("")
 
             # If using pipx
