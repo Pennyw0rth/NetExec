@@ -149,6 +149,8 @@ class ldap(connection):
         self.output_filename = None
         self.smbv1 = None
         self.signing = False
+        self.signing_required = None
+        self.cbt_status = None
         self.admin_privs = False
         self.no_ntlm = False
         self.sid_domain = ""
@@ -232,6 +234,52 @@ class ldap(connection):
                     return value.split("\\")[1]
         return ""
 
+    def check_ldap_signing(self):
+        self.signing_required = False
+        ldap_url = f"ldap://{self.target}"
+        try:
+            ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
+            ldap_connection.login(domain=self.domain)
+            self.logger.debug(f"LDAP signing is not enforced on {self.host}")
+        except ldap_impacket.LDAPSessionError as e:
+            if str(e).find("strongerAuthRequired") >= 0:
+                self.logger.debug(f"LDAP signing is enforced on {self.host}")
+                self.signing_required = True
+            else:
+                self.logger.debug(f"LDAPSessionError while checking for signing requirements (likely NTLM disabled): {e!s}")
+
+    def check_ldaps_cbt(self):
+        self.cbt_status = "Never"
+        ldap_url = f"ldaps://{self.target}"
+        try:
+            ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
+            ldap_connection._LDAPConnection__channel_binding_value = None
+            ldap_connection.login(user=" ", domain=self.domain)
+        except ldap_impacket.LDAPSessionError as e:
+            if str(e).find("data 80090346") >= 0:
+                self.logger.debug(f"LDAPS channel binding enforced on host {self.host}")
+                self.cbt_status = "Always"  # CBT is Required
+            # Login failed (wrong credentials). test if we get an error with an existing, but wrong CBT -> When supported
+            elif str(e).find("data 52e") >= 0:
+                ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
+                new_cbv = bytearray(ldap_connection._LDAPConnection__channel_binding_value)
+                new_cbv[15] = (new_cbv[3] + 1) % 256
+                ldap_connection._LDAPConnection__channel_binding_value = bytes(new_cbv)
+                try:
+                    ldap_connection.login(user=" ", domain=self.domain)
+                except ldap_impacket.LDAPSessionError as e:
+                    if str(e).find("data 80090346") >= 0:
+                        self.logger.debug(f"LDAPS channel binding is set to 'When Supported' on host {self.host}")
+                        self.cbt_status = "When Supported"  # CBT is When Supported
+            else:
+                self.logger.debug(f"LDAPSessionError while checking for channel binding requirements (likely NTLM disabled): {e!s}")
+        except SysCallError as e:
+            self.logger.debug(f"Received SysCallError when trying to enumerate channel binding support: {e!s}")
+            if e.args[1] == "ECONNRESET":
+                self.cbt_status = "No TLS cert"
+            else:
+                raise
+
     def enum_host_info(self):
         self.hostname = self.target.split(".")[0].upper() if "." in self.target else self.target
         self.remoteName = self.target
@@ -262,6 +310,9 @@ class ldap(connection):
         else:
             self.domain = self.targetDomain
 
+        self.check_ldap_signing()
+        self.check_ldaps_cbt()
+
         # using kdcHost is buggy on impacket when using trust relation between ad so we kdcHost must stay to none if targetdomain is not equal to domain
         if not self.kdcHost and self.domain and self.domain == self.targetDomain:
             result = self.resolver(self.domain)
@@ -282,10 +333,14 @@ class ldap(connection):
 
     def print_host_info(self):
         self.logger.debug("Printing host info for LDAP")
+        signing = colored("signing:Enforced", host_info_colors[0], attrs=["bold"]) if self.signing_required else colored("signing:None", host_info_colors[1], attrs=["bold"])
+        cbt_status = colored(f"channel binding:{self.cbt_status}", host_info_colors[3], attrs=["bold"]) if self.cbt_status == "Always" else colored(f"channel binding:{self.cbt_status}", host_info_colors[2], attrs=["bold"])
+        ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
+
         self.logger.extra["protocol"] = "LDAP" if str(self.port) == "389" else "LDAPS"
         self.logger.extra["port"] = self.port
         self.logger.extra["hostname"] = self.hostname
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain})")
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({cbt_status}) {ntlm}")
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.username = username if not self.username else self.username    # With ccache we get the username from the ticket
@@ -1304,7 +1359,7 @@ class ldap(connection):
             self.logger.fail("Your configuration has BloodHound-CE enabled, but the regular BloodHound package is installed. Modify your ~/.nxc/nxc.conf config file or follow the instructions:")
             self.logger.fail("Please run the following commands to fix this:")
             self.logger.fail("poetry remove bloodhound-ce   # poetry falsely recognizes bloodhound-ce as a the old bloodhound package")
-            self.logger.fail("poetry add bloodhound-ce")   
+            self.logger.fail("poetry add bloodhound-ce")
             self.logger.fail("")
 
             # If using pipx
