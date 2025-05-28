@@ -788,18 +788,17 @@ class ldap(connection):
                                 elif record_type == "NS":
                                     self.logger.highlight(f"{prefix}{name} NS = {colored(rdata.to_text(), host_info_colors[0])}")
                                     found_record = True
-                        except resolv.NXDOMAIN:
+                        except resolver.NXDOMAIN:
                             self.logger.fail(f"{prefix}{name} = Host not found (NXDOMAIN)")
-                        except resolv.Timeout:
+                        except resolver.Timeout:
                             self.logger.fail(f"{prefix}{name} = Connection timed out")
-                        except resolv.NoAnswer:
+                        except resolver.NoAnswer:
                             self.logger.fail(f"{prefix}{name} = DNS server did not respond")
                         except Exception as e:
                             self.logger.fail(f"{prefix}{name} encountered an unexpected error: {e}")
                 else:
-                    self.logger.fail(f"{prefix}dNSHostName value is empty, unable to process.")
+                    self.logger.fail(f"{prefix} dNSHostName value is empty, unable to process.")
             except Exception as e:
-                self.logger.fail("General Error:", exc_info=True)
                 self.logger.fail(f"Skipping item(dNSHostName) {prefix}{name}, error: {e}")
 
         # Find all domain controllers in the current domain
