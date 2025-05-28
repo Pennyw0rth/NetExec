@@ -874,7 +874,7 @@ class ldap(connection):
                     self.logger.info(f"Found domain controllers for trusted domain {trust_name} via DNS:")
                     for srv in srv_records:
                         dc_hostname = str(srv.target).rstrip(".")
-                        self.logger.success(f"Found DC in trusted domain: {dc_hostname}")
+                        self.logger.success(f"Found DC in trusted domain: {colored(dc_hostname, host_info_colors[0], attrs=['bold'])}")
                         self.logger.highlight(f"{trust_name} -> {direction_text} -> {trust_attributes_text}")
                         resolve_and_display_hostname(dc_hostname)
                 except Exception as e:
