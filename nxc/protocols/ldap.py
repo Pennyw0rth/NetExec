@@ -819,7 +819,7 @@ class ldap(connection):
                 trust_flat_name = trust["flatName"]
                 trust_direction = int(trust["trustDirection"])
                 trust_type = int(trust["trustType"])
-                trust_attributes = trust["trustAttributes"]
+                trust_attributes = int(trust["trustAttributes"])
                 
                 # See: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/e9a2d23c-c31e-4a6f-88a0-6646fdb51a3c
                 trust_attribute_flags = {
@@ -837,10 +837,10 @@ class ldap(connection):
                 }
 
                 # For check if multiple posibble flags, like Uplevel-Only, Treat as External
-                trust_attributes_text = ", ".join([
+                trust_attributes_text = ", ".join(
                     text for flag, text in trust_attribute_flags.items()
-                    if int(trust_attributes) & flag
-                ]) or "Other"  # If Trust attrs not known
+                    if trust_attributes & flag
+                ) or "Other"  # If Trust attrs not known
 
                 # Convert trust direction/type to human-readable format
                 direction_text = {
