@@ -792,8 +792,6 @@ class ldap(connection):
                         self.logger.fail(f"{prefix}{name} = DNS server did not respond")
                     except Exception as e:
                         self.logger.fail(f"{prefix}{name} encountered an unexpected error: {e}")
-                else:
-                    self.logger.fail(f"{prefix} dNSHostName value is empty, unable to process.")
             except Exception as e:
                 self.logger.fail(f"Skipping item(dNSHostName) {prefix}{name}, error: {e}")
 
@@ -801,7 +799,7 @@ class ldap(connection):
         self.logger.info("Enumerating Domain Controllers in current domain...")
         search_filter = "(&(objectCategory=computer)(primaryGroupId=516))"
         attributes = ["dNSHostName"]
-        resp = self.search(search_filter, attributes, 0)
+        resp = self.search(search_filter, attributes)
         resp_parse = parse_result_attributes(resp)
         for item in resp_parse:
             if "dNSHostName" in item:  # Get dNSHostName attribute
@@ -824,6 +822,7 @@ class ldap(connection):
                     trust_type = int(trust["trustType"])
                     trust_attributes = trust["trustAttributes"]
                     
+                    # See: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/e9a2d23c-c31e-4a6f-88a0-6646fdb51a3c
                     trust_attribute_flags = {
                         0x1:    "Non-Transitive",
                         0x2:    "Uplevel-Only",
@@ -833,7 +832,8 @@ class ldap(connection):
                         0x20:   "Within Forest",
                         0x40:   "Treat as External",
                         0x80:   "Uses RC4 Encryption",
-                        0x100:  "Cross Organization No TGT Delegation",
+                        0x200:  "Cross Organization No TGT Delegation",
+                        0x800:  "Cross Organization Enable TGT Delegation",
                         0x2000: "PAM Trust"
                     }
 
@@ -855,7 +855,7 @@ class ldap(connection):
                         1: "Windows NT",
                         2: "Active Directory",
                         3: "Kerberos",
-                        4: "DCE",
+                        4: "Unknown",
                         5: "Azure Active Directory",
                     }[trust_type]
 
