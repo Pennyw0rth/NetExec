@@ -240,8 +240,10 @@ class ldap(connection):
         ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
         try:
             ldap_connection.login(domain=self.domain)
+            self.logger.debug(f"LDAP signing is not enforced on {self.host}")
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("strongerAuthRequired") >= 0:
+                self.logger.debug(f"LDAP signing is enforced on {self.host}")
                 self.signing_required = True
 
     def check_ldaps_cbt(self):
