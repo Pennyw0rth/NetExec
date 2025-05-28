@@ -149,8 +149,8 @@ class ldap(connection):
         self.output_filename = None
         self.smbv1 = None
         self.signing = False
-        self.signing_required = False
-        self.cbt_status = 0
+        self.signing_required = None
+        self.cbt_status = None
         self.admin_privs = False
         self.no_ntlm = False
         self.sid_domain = ""
@@ -235,6 +235,7 @@ class ldap(connection):
         return ""
     
     def check_ldap_signing(self):
+        self.signing_required = False
         ldap_url = f"ldap://{self.target}"
         ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
         try:
@@ -244,6 +245,7 @@ class ldap(connection):
                 self.signing_required = True
 
     def check_ldaps_cbt(self):
+        self.cbt_status = "Never"
         ldap_url = f"ldaps://{self.target}"
         ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
         ldap_connection._LDAPConnection__channel_binding_value = None
@@ -251,7 +253,7 @@ class ldap(connection):
             ldap_connection.login(user=" ",domain=self.domain)
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("data 80090346") >= 0:
-                self.cbt_status = 2 # CBT is Required
+                self.cbt_status = "Always" # CBT is Required
             elif str(e).find("data 52e") >= 0:
                 ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
                 tmp = bytearray(ldap_connection._LDAPConnection__channel_binding_value)
@@ -261,7 +263,7 @@ class ldap(connection):
                     ldap_connection.login(user=" ",domain=self.domain)
                 except ldap_impacket.LDAPSessionError as e:
                     if str(e).find("data 80090346") >= 0:
-                        self.cbt_status = 1 # CBT is When Supported
+                        self.cbt_status = "When Supported" # CBT is When Supported
 
     def enum_host_info(self):
         self.hostname = self.target.split(".")[0].upper() if "." in self.target else self.target
@@ -309,7 +311,9 @@ class ldap(connection):
                 self.host,
                 self.hostname,
                 self.domain,
-                self.server_os
+                self.server_os,
+                self.signing_required,
+                self.cbt_status
             )
         except Exception as e:
             self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
@@ -317,7 +321,7 @@ class ldap(connection):
     def print_host_info(self):
         self.logger.debug("Printing host info for LDAP")
         signing = colored(f"signing:Enforced", host_info_colors[0], attrs=["bold"]) if self.signing_required else colored(f"signing:None", host_info_colors[1], attrs=["bold"])
-        cbt_status = colored(f"channel binding:Always", host_info_colors[0], attrs=["bold"]) if self.cbt_status == 2 else colored(f"channel binding:{'Never' if self.cbt_status == 0 else 'When Supported'}", host_info_colors[1], attrs=["bold"])
+        cbt_status = colored(f"channel binding:{self.cbt_status}", host_info_colors[3], attrs=["bold"]) if self.cbt_status == "Always" else colored(f"channel binding:{self.cbt_status}", host_info_colors[2], attrs=["bold"])
         ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
         self.logger.extra["protocol"] = "LDAP" if str(self.port) == "389" else "LDAPS"
         self.logger.extra["port"] = self.port
