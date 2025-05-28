@@ -256,9 +256,9 @@ class ldap(connection):
                 self.cbt_status = "Always"  # CBT is Required
             elif str(e).find("data 52e") >= 0:
                 ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-                tmp = bytearray(ldap_connection._LDAPConnection__channel_binding_value)
-                tmp[15] = (tmp[3] + 1) % 256
-                ldap_connection._LDAPConnection__channel_binding_value = bytes(tmp)
+                new_cbv = bytearray(ldap_connection._LDAPConnection__channel_binding_value)
+                new_cbv[15] = (new_cbv[3] + 1) % 256
+                ldap_connection._LDAPConnection__channel_binding_value = bytes(new_cbv)
                 try:
                     ldap_connection.login(user=" ", domain=self.domain)
                 except ldap_impacket.LDAPSessionError as e:
