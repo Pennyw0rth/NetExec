@@ -767,35 +767,31 @@ class ldap(connection):
             prefix = f"[{domain_name}] " if domain_name else ""
             try:
                 # Resolve using DNS server for A, AAAA, CNAME, PTR, and NS records
-                if name:
-                    found_record = False
-                    for record_type in ["A", "AAAA", "CNAME", "PTR", "NS"]:
-                        if found_record:  # Flag to check if any record is found
-                            break  # If a record has been found, stop checking further
-                        try:
-                            answers = resolv.resolve(name, record_type, tcp=self.args.dns_tcp)
-                            for rdata in answers:
-                                if record_type in ["A", "AAAA"]:
-                                    ip_address = rdata.to_text()
-                                    self.logger.highlight(f"{prefix}{name} = {colored(ip_address, host_info_colors[0])}")
-                                    found_record = True   # Set flag to true since a record is found
-                                elif record_type == "CNAME":
-                                    self.logger.highlight(f"{prefix}{name} CNAME = {colored(rdata.to_text(), host_info_colors[0])}")
-                                    found_record = True
-                                elif record_type == "PTR":
-                                    self.logger.highlight(f"{prefix}{name} PTR = {colored(rdata.to_text(), host_info_colors[0])}")
-                                    found_record = True
-                                elif record_type == "NS":
-                                    self.logger.highlight(f"{prefix}{name} NS = {colored(rdata.to_text(), host_info_colors[0])}")
-                                    found_record = True
-                        except resolver.NXDOMAIN:
-                            self.logger.fail(f"{prefix}{name} = Host not found (NXDOMAIN)")
-                        except resolver.Timeout:
-                            self.logger.fail(f"{prefix}{name} = Connection timed out")
-                        except resolver.NoAnswer:
-                            self.logger.fail(f"{prefix}{name} = DNS server did not respond")
-                        except Exception as e:
-                            self.logger.fail(f"{prefix}{name} encountered an unexpected error: {e}")
+                for record_type in ["A", "AAAA", "CNAME", "PTR", "NS"]:
+                    try:
+                        answers = resolv.resolve(name, record_type, tcp=self.args.dns_tcp)
+                        for rdata in answers:
+                            if record_type in ["A", "AAAA"]:
+                                ip_address = rdata.to_text()
+                                self.logger.highlight(f"{prefix}{name} = {colored(ip_address, host_info_colors[0])}")
+                                return
+                            elif record_type == "CNAME":
+                                self.logger.highlight(f"{prefix}{name} CNAME = {colored(rdata.to_text(), host_info_colors[0])}")
+                                return
+                            elif record_type == "PTR":
+                                self.logger.highlight(f"{prefix}{name} PTR = {colored(rdata.to_text(), host_info_colors[0])}")
+                                return
+                            elif record_type == "NS":
+                                self.logger.highlight(f"{prefix}{name} NS = {colored(rdata.to_text(), host_info_colors[0])}")
+                                return
+                    except resolver.NXDOMAIN:
+                        self.logger.fail(f"{prefix}{name} = Host not found (NXDOMAIN)")
+                    except resolver.Timeout:
+                        self.logger.fail(f"{prefix}{name} = Connection timed out")
+                    except resolver.NoAnswer:
+                        self.logger.fail(f"{prefix}{name} = DNS server did not respond")
+                    except Exception as e:
+                        self.logger.fail(f"{prefix}{name} encountered an unexpected error: {e}")
                 else:
                     self.logger.fail(f"{prefix} dNSHostName value is empty, unable to process.")
             except Exception as e:
