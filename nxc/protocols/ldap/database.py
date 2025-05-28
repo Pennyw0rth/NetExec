@@ -59,7 +59,7 @@ class database(BaseDB):
                 )
                 sys.exit()
 
-    def add_host(self, ip, hostname, domain, os, signing = None, cbt_status = None):
+    def add_host(self, ip, hostname, domain, os, signing=None, cbt_status=None):
         """Check if this host has already been added to the database, if not, add it in."""
         hosts = []
         updated_ids = []
@@ -74,8 +74,8 @@ class database(BaseDB):
                 "hostname": hostname,
                 "domain": domain,
                 "os": os,
-                "signing" : signing,
-                "cbt_status" : cbt_status
+                "signing": signing,
+                "cbt_status": cbt_status
             }
             hosts = [new_host]
         # update existing hosts data

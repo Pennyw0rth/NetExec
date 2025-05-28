@@ -28,7 +28,7 @@ class navigator(DatabaseNavigator):
                 os = host[4]
 
             signing = "Enforced" if bool(host[5]) else "None"
-            cbt_status =  host[6]
+            cbt_status = host[6]
 
             data.append(
                 [
@@ -38,7 +38,7 @@ class navigator(DatabaseNavigator):
                     domain,
                     os,
                     signing,
-                    cbt_status              ]
+                    cbt_status]
             )
         print_table(data, title="Hosts")
 
@@ -80,7 +80,7 @@ class navigator(DatabaseNavigator):
                         os = host[4]
 
                     signing = "Enforced" if bool(host[5]) else "None"
-                    cbt_status =  host[6]
+                    cbt_status = host[6]
 
                     data.append(
                         [

@@ -250,20 +250,20 @@ class ldap(connection):
         ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
         ldap_connection._LDAPConnection__channel_binding_value = None
         try:
-            ldap_connection.login(user=" ",domain=self.domain)
+            ldap_connection.login(user=" ", domain=self.domain)
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("data 80090346") >= 0:
-                self.cbt_status = "Always" # CBT is Required
+                self.cbt_status = "Always"  # CBT is Required
             elif str(e).find("data 52e") >= 0:
                 ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
                 tmp = bytearray(ldap_connection._LDAPConnection__channel_binding_value)
                 tmp[15] = (tmp[3] + 1) % 256
                 ldap_connection._LDAPConnection__channel_binding_value = bytes(tmp)
                 try:
-                    ldap_connection.login(user=" ",domain=self.domain)
+                    ldap_connection.login(user=" ", domain=self.domain)
                 except ldap_impacket.LDAPSessionError as e:
                     if str(e).find("data 80090346") >= 0:
-                        self.cbt_status = "When Supported" # CBT is When Supported
+                        self.cbt_status = "When Supported"  # CBT is When Supported
 
     def enum_host_info(self):
         self.hostname = self.target.split(".")[0].upper() if "." in self.target else self.target
@@ -320,7 +320,7 @@ class ldap(connection):
 
     def print_host_info(self):
         self.logger.debug("Printing host info for LDAP")
-        signing = colored(f"signing:Enforced", host_info_colors[0], attrs=["bold"]) if self.signing_required else colored(f"signing:None", host_info_colors[1], attrs=["bold"])
+        signing = colored("signing:Enforced", host_info_colors[0], attrs=["bold"]) if self.signing_required else colored("signing:None", host_info_colors[1], attrs=["bold"])
         cbt_status = colored(f"channel binding:{self.cbt_status}", host_info_colors[3], attrs=["bold"]) if self.cbt_status == "Always" else colored(f"channel binding:{self.cbt_status}", host_info_colors[2], attrs=["bold"])
         ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
         self.logger.extra["protocol"] = "LDAP" if str(self.port) == "389" else "LDAPS"
