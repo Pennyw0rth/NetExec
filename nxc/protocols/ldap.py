@@ -326,9 +326,7 @@ class ldap(connection):
                 self.host,
                 self.hostname,
                 self.domain,
-                self.server_os,
-                self.signing_required,
-                self.cbt_status
+                self.server_os
             )
         except Exception as e:
             self.logger.debug(f"Error adding host {self.host} into db: {e!s}")

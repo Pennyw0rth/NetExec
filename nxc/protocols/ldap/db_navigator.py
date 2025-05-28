@@ -10,9 +10,7 @@ class navigator(DatabaseNavigator):
                 "IP",
                 "Hostname",
                 "Domain",
-                "OS",
-                "Signing",
-                "Channel Binding"
+                "OS"
             ]
         ]
 
@@ -27,18 +25,14 @@ class navigator(DatabaseNavigator):
             except Exception:
                 os = host[4]
 
-            signing = "Enforced" if bool(host[5]) else "None"
-            cbt_status = host[6]
-
             data.append(
                 [
                     host_id,
                     ip,
                     hostname,
                     domain,
-                    os,
-                    signing,
-                    cbt_status]
+                    os
+                ]
             )
         print_table(data, title="Hosts")
 
@@ -60,9 +54,7 @@ class navigator(DatabaseNavigator):
                         "IP",
                         "Hostname",
                         "Domain",
-                        "OS",
-                        "Signing",
-                        "Channel Binding"
+                        "OS"
                     ]
                 ]
                 host_id_list = []
@@ -79,18 +71,13 @@ class navigator(DatabaseNavigator):
                     except Exception:
                         os = host[4]
 
-                    signing = "Enforced" if bool(host[5]) else "None"
-                    cbt_status = host[6]
-
                     data.append(
                         [
                             host_id,
                             ip,
                             hostname,
                             domain,
-                            os,
-                            signing,
-                            cbt_status
+                            os
                         ]
                     )
                 print_table(data, title="Host")
@@ -100,7 +87,7 @@ class navigator(DatabaseNavigator):
         hosts [filter_term]
         By default prints all hosts
         Table format:
-        | 'HostID', 'IP', 'Hostname', 'Domain', 'OS', 'Signing, 'Channel Binding' |
+        | 'HostID', 'IP', 'Hostname', 'Domain', 'OS' |
         Subcommands:
             filter_term - filters hosts with filter_term
                 If a single host is returned (e.g. `hosts 15`, it prints the following tables:
