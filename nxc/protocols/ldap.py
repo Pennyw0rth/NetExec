@@ -237,21 +237,23 @@ class ldap(connection):
     def check_ldap_signing(self):
         self.signing_required = False
         ldap_url = f"ldap://{self.target}"
-        ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
         try:
+            ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
             ldap_connection.login(domain=self.domain)
             self.logger.debug(f"LDAP signing is not enforced on {self.host}")
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("strongerAuthRequired") >= 0:
                 self.logger.debug(f"LDAP signing is enforced on {self.host}")
                 self.signing_required = True
+            else:
+                raise
 
     def check_ldaps_cbt(self):
         self.cbt_status = "Never"
         ldap_url = f"ldaps://{self.target}"
-        ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-        ldap_connection._LDAPConnection__channel_binding_value = None
         try:
+            ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
+            ldap_connection._LDAPConnection__channel_binding_value = None
             ldap_connection.login(user=" ", domain=self.domain)
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("data 80090346") >= 0:
@@ -266,6 +268,15 @@ class ldap(connection):
                 except ldap_impacket.LDAPSessionError as e:
                     if str(e).find("data 80090346") >= 0:
                         self.cbt_status = "When Supported"  # CBT is When Supported
+            else:
+                raise
+        except SysCallError as e:
+            self.logger.debug(f"Received SysCallError when trying to enumerate channel binding support: {e!s}")
+            if e.args[1] == "ECONNRESET":
+                self.cbt_status = "No TLS cert"
+            else:
+                raise
+
 
     def enum_host_info(self):
         self.hostname = self.target.split(".")[0].upper() if "." in self.target else self.target
