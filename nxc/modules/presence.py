@@ -45,13 +45,13 @@ class NXCModule:
         rpctransport = transport.DCERPCTransportFactory(string_binding)
         rpctransport.setRemoteHost(connection.kdcHost)
         rpctransport.set_credentials(
-                connection.username,
-                connection.password,
-                connection.domain,
-                connection.lmhash,
-                connection.nthash,
-                aesKey=connection.aesKey,
-            )
+            connection.username,
+            connection.password,
+            connection.domain,
+            connection.lmhash,
+            connection.nthash,
+            aesKey=connection.aesKey,
+        )
 
         dce = rpctransport.get_dce_rpc()
         dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
@@ -71,9 +71,9 @@ class NXCModule:
             return []
 
         admin_rids = {
-                "Domain Admins": 512,
-                "Enterprise Admins": 519,
-            }
+            "Domain Admins": 512,
+            "Enterprise Admins": 519,
+        }
 
         # Enumerate admin groups and their members
         for group_name, group_rid in admin_rids.items():
@@ -131,14 +131,14 @@ class NXCModule:
         for user in admin_users:
             # Look for administrator.domain to check if SID 500 Administrator is present (second check)
             if user["username"].lower() in dirs_found or \
-                (user["username"].lower() == "administrator" and f"{user['username'].lower()}.{user['domain']}" in dirs_found):
+                    (user["username"].lower() == "administrator" and f"{user['username'].lower()}.{user['domain']}" in dirs_found):
                 user["in_directory"] = True
                 context.log.info(f"Found user {user['username']} in directories")
 
     def check_tasklist(self, context, connection, admin_users):
         """Checks tasklist over rpc."""
         try:
-            with TSTS.LegacyAPI(connection.conn, connection.host, kerberos=False) as legacy:
+            with TSTS.LegacyAPI(connection.conn, connection.host, kerberos=connection.kerberos) as legacy:
                 handle = legacy.hRpcWinStationOpenServer()
                 processes = legacy.hRpcWinStationGetAllProcesses(handle)
         except Exception as e:
