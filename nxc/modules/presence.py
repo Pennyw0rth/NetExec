@@ -1,6 +1,7 @@
-from impacket.dcerpc.v5 import samr, transport
+import re
+from impacket.dcerpc.v5 import samr, tsch, transport
 from impacket.dcerpc.v5 import tsts as TSTS
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 from contextlib import suppress
 import traceback
 
@@ -27,9 +28,10 @@ class NXCModule:
                 context.log.fail("No admin users found.")
                 return
 
-            # Update user objects to check if they are in tasklist or users directory
+            # Update user objects to check if they are in tasklist, users directory or in scheduled tasks
             self.check_users_directory(context, connection, admin_users)
             self.check_tasklist(context, connection, admin_users)
+            self.check_scheduled_tasks(context, connection, admin_users)
 
             # print grouped/logged results nicely
             self.print_grouped_results(context, admin_users)
@@ -62,9 +64,9 @@ class NXCModule:
             server_handle = samr.hSamrConnect2(dce)["ServerHandle"]
             domain = samr.hSamrEnumerateDomainsInSamServer(dce, server_handle)["Buffer"]["Buffer"][0]["Name"]
             resp = samr.hSamrLookupDomainInSamServer(dce, server_handle, domain)
-            domain_sid = resp["DomainId"].formatCanonical()
+            self.domain_sid = resp["DomainId"].formatCanonical()
             domain_handle = samr.hSamrOpenDomain(dce, server_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_LIST_ACCOUNTS, resp["DomainId"])["DomainHandle"]
-            context.log.debug(f"Resolved domain SID for {domain}: {domain_sid}")
+            context.log.debug(f"Resolved domain SID for {domain}: {self.domain_sid}")
         except Exception as e:
             context.log.fail(f"Failed to open domain {domain}: {e!s}")
             context.log.debug(traceback.format_exc())
@@ -89,11 +91,11 @@ class NXCModule:
                         username = samr.hSamrQueryInformationUser2(dce, user_handle, samr.USER_INFORMATION_CLASS.UserAllInformation)["Buffer"]["All"]["UserName"]
 
                         # If user already exists, append group name
-                        if any(u["sid"] == f"{domain_sid}-{rid}" for u in admin_users):
-                            user = next(u for u in admin_users if u["sid"] == f"{domain_sid}-{rid}")
+                        if any(u["sid"] == f"{self.domain_sid}-{rid}" for u in admin_users):
+                            user = next(u for u in admin_users if u["sid"] == f"{self.domain_sid}-{rid}")
                             user["group"].append(group_name)
                         else:
-                            admin_users.append({"username": username, "sid": f"{domain_sid}-{rid}", "domain": domain, "group": [group_name], "in_tasks": False, "in_directory": False})
+                            admin_users.append({"username": username, "sid": f"{self.domain_sid}-{rid}", "domain": domain, "group": [group_name], "in_tasks": False, "in_directory": False, "in_scheduled_tasks": False})
                         context.log.debug(f"Found user: {username} with RID {rid} in group {group_name}")
                     except Exception as e:
                         context.log.debug(f"Failed to get user info for RID {rid}: {e!s}")
@@ -155,23 +157,85 @@ class NXCModule:
                     user["in_tasks"] = True
                     context.log.info(f"Matched process {process['ImageName']} with user {user['username']}")
 
+    def check_scheduled_tasks(self, context, connection, admin_users):
+        """Checks scheduled tasks over rpc."""
+        target = connection.hostname if connection.kerberos else connection.host
+        stringbinding = f"ncacn_np:{target}[\\pipe\\atsvc]"
+        rpctransport = transport.DCERPCTransportFactory(stringbinding)
+        rpctransport.setRemoteHost(connection.hostname)
+        rpctransport.set_credentials(
+            connection.username,
+            connection.password,
+            connection.domain,
+            connection.lmhash,
+            connection.nthash,
+            aesKey=connection.aesKey,
+        )
+        rpctransport.set_kerberos(connection.kerberos, connection.kdcHost)
+
+        try:
+            dce = rpctransport.get_dce_rpc()
+            if connection.kerberos:
+                dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+            dce.set_credentials(*rpctransport.get_credentials())
+            dce.connect()
+            dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
+            dce.bind(tsch.MSRPC_UUID_TSCHS)
+
+            # Also extract non admins where we can get the password
+            self.non_admin_sids = []
+            
+            tasks = tsch.hSchRpcEnumTasks(dce, "\\")["pNames"]
+            for task in tasks:
+                xml = tsch.hSchRpcRetrieveTask(dce, task["Data"])["pXml"]
+                # Extract SID and LogonType from the XML, if LogonType is "Password" we should be able to extract the password
+                sid = re.search(fr"<UserId>({self.domain_sid}-\d{{3,}})</UserId>", xml)
+                logon_type = re.search(r"<LogonType>(\w+)</LogonType>", xml)
+
+                # Check if SID and LogonType are found, then check if SID matches any admin user
+                if sid and logon_type and logon_type.group(1) == "Password":
+                    context.log.debug(f"Found scheduled task '{task['Data']}' with SID {sid} and LogonType {logon_type.group(1)}")
+                    if any(user["sid"] == sid.group(1) for user in admin_users):
+                        user = next(user for user in admin_users if user["sid"] == sid.group(1))
+                        user["in_scheduled_tasks"] = True
+                    else:
+                        # If not an admin user, add to non_admin_sids for further processing
+                        self.non_admin_sids.append(sid.group(1))
+            
+        except Exception as e:
+            context.log.fail(f"Failed to enumerate scheduled tasks: {e}")
+            context.log.debug(traceback.format_exc())
+
     def print_grouped_results(self, context, admin_users):
         """Logs all results grouped per host in order"""
         # Make less verbose for scanning large ranges
         context.log.info(f"Identified Admin Users: {', '.join([user['username'] for user in admin_users])}")
 
+        # Print directory users
         dir_users = [user for user in admin_users if user["in_directory"]]
         if dir_users:
-            context.log.success("Found users in directories:")
+            context.log.success("Found admins in directories:")
             for user in dir_users:
                 context.log.highlight(f"{user['username']} ({', '.join(user['group'])})")
 
+        # Print tasklist users
         tasklist_users = [user for user in admin_users if user["in_tasks"]]
         if tasklist_users:
-            context.log.success("Found users in tasklist:")
+            context.log.success("Found admins in tasklist:")
             for user in tasklist_users:
                 context.log.highlight(f"{user['username']} ({', '.join(user['group'])})")
 
+        # Print scheduled tasks users
+        scheduled_tasks_users = [user for user in admin_users if user["in_scheduled_tasks"]]
+        if scheduled_tasks_users:
+            context.log.success("Found admins in scheduled tasks:")
+            for user in scheduled_tasks_users:
+                context.log.highlight(f"{user['username']} ({', '.join(user['group'])})")
+        if self.non_admin_sids:
+            context.log.success(f"Found {len(self.non_admin_sids)} non-admin scheduled tasks with passwords stored in dpapi:")
+            for sid in self.non_admin_sids:
+                context.log.highlight(sid)
+
         # Making this less verbose to better scan large ranges
         if not dir_users and not tasklist_users:
-            context.log.info("No matches found in users directory or tasklist.")
+            context.log.info("No matches found in users directory, tasklist or scheduled tasks.")
