@@ -184,7 +184,7 @@ class NXCModule:
 
             # Also extract non admins where we can get the password
             self.non_admin_sids = []
-            
+
             tasks = tsch.hSchRpcEnumTasks(dce, "\\")["pNames"]
             for task in tasks:
                 xml = tsch.hSchRpcRetrieveTask(dce, task["Data"])["pXml"]
@@ -201,7 +201,7 @@ class NXCModule:
                     else:
                         # If not an admin user, add to non_admin_sids for further processing
                         self.non_admin_sids.append(sid.group(1))
-            
+
         except Exception as e:
             context.log.fail(f"Failed to enumerate scheduled tasks: {e}")
             context.log.debug(traceback.format_exc())
