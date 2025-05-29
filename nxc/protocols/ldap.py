@@ -1073,7 +1073,8 @@ class ldap(connection):
             self.logger.fail(f"LDAP Filter Syntax Error: {e}")
             return
         for idx, entry in enumerate(resp_parsed):
-            self.logger.success(f"Response for object: {resp[idx]['objectName']}")
+            print(resp[idx])
+            # self.logger.success(f"Response for object: {resp[idx]['objectName']}")
             for attribute in entry:
                 if isinstance(entry[attribute], list) and entry[attribute]:
                     # Display first item in the same line as attribute
