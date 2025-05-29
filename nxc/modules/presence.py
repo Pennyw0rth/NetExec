@@ -244,9 +244,9 @@ class NXCModule:
             for user in scheduled_tasks_users:
                 context.log.highlight(f"{user['username']} ({', '.join(user['group'])})")
         if self.non_admins:
-            context.log.success(f"Found {len(self.non_admins)} non-admin scheduled tasks with passwords stored in dpapi:")
+            context.log.info(f"Found {len(self.non_admins)} non-admin scheduled tasks:")
             for sid in self.non_admins:
-                context.log.highlight(sid)
+                context.log.info(sid)
 
         # Making this less verbose to better scan large ranges
         if not dir_users and not tasklist_users:
