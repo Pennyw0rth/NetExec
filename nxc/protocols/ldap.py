@@ -1074,7 +1074,15 @@ class ldap(connection):
             return
         for idx, entry in enumerate(resp_parsed):
             print(resp[idx])
-            # self.logger.success(f"Response for object: {resp[idx]['objectName']}")
+            try:
+                self.logger.success(f"Response for object: {resp[idx]['objectName']}")
+            except Exception as e:
+                self.logger.fail(f"FORMATTING CRASHED: {e}")
+                self.logger.fail(f"Response for object with idx '{idx}': {resp[idx].get('objectName', 'Unknown')}")
+                self.logger.fail(f"Parsed object: {entry}")
+                self.logger.fail("Full traceback available in debug log")
+                import traceback
+                self.logger.debug(traceback.format_exc())
             for attribute in entry:
                 if isinstance(entry[attribute], list) and entry[attribute]:
                     # Display first item in the same line as attribute
