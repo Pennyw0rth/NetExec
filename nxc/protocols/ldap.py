@@ -875,7 +875,7 @@ class ldap(connection):
                 trust_direction = int(trust["trustDirection"])
                 trust_type = int(trust["trustType"])
                 trust_attributes = int(trust["trustAttributes"])
-                
+
                 # See: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/e9a2d23c-c31e-4a6f-88a0-6646fdb51a3c
                 trust_attribute_flags = {
                     0x1:    "Non-Transitive",
