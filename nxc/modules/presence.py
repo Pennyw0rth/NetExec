@@ -39,13 +39,10 @@ class NXCModule:
             context.log.fail(str(e))
             context.log.debug(traceback.format_exc())
 
-    def enumerate_admin_users(self, context, connection):
-        admin_users = []
-        string_binding = fr"ncacn_np:{connection.kdcHost}[\pipe\samr]"
-        context.log.debug(f"Using string binding: {string_binding}")
-
+    def get_dce_rpc(self, target, string_binding, dce_binding, connection):
+        # Create a DCE/RPC transport object with the specified string binding
         rpctransport = transport.DCERPCTransportFactory(string_binding)
-        rpctransport.setRemoteHost(connection.kdcHost)
+        rpctransport.setRemoteHost(target)
         rpctransport.set_credentials(
             connection.username,
             connection.password,
@@ -54,11 +51,28 @@ class NXCModule:
             connection.nthash,
             aesKey=connection.aesKey,
         )
+        rpctransport.set_kerberos(connection.kerberos, connection.kdcHost)
 
+        # Connect to the DCE/RPC endpoint
         dce = rpctransport.get_dce_rpc()
-        dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
+        if connection.kerberos:
+            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+        dce.set_credentials(*rpctransport.get_credentials())
         dce.connect()
-        dce.bind(samr.MSRPC_UUID_SAMR)
+        dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
+        dce.bind(dce_binding)
+        return dce
+
+    def enumerate_admin_users(self, context, connection):
+        admin_users = []
+
+        try:
+            string_binding = fr"ncacn_np:{connection.kdcHost}[\pipe\samr]"
+            dce = self.get_dce_rpc(connection.kdcHost, string_binding, samr.MSRPC_UUID_SAMR, connection)
+        except Exception as e:
+            context.log.fail(f"Failed to connect to SAMR: {e}")
+            context.log.debug(traceback.format_exc())
+            return admin_users
 
         try:
             server_handle = samr.hSamrConnect2(dce)["ServerHandle"]
@@ -70,7 +84,7 @@ class NXCModule:
         except Exception as e:
             context.log.fail(f"Failed to open domain {domain}: {e!s}")
             context.log.debug(traceback.format_exc())
-            return []
+            return admin_users
 
         admin_rids = {
             "Domain Admins": 512,
@@ -140,7 +154,7 @@ class NXCModule:
     def check_tasklist(self, context, connection, admin_users):
         """Checks tasklist over rpc."""
         try:
-            with TSTS.LegacyAPI(connection.conn, connection.host, kerberos=connection.kerberos) as legacy:
+            with TSTS.LegacyAPI(connection.conn, connection.remoteName, kerberos=connection.kerberos) as legacy:
                 handle = legacy.hRpcWinStationOpenServer()
                 processes = legacy.hRpcWinStationGetAllProcesses(handle)
         except Exception as e:
@@ -159,31 +173,14 @@ class NXCModule:
 
     def check_scheduled_tasks(self, context, connection, admin_users):
         """Checks scheduled tasks over rpc."""
-        target = connection.hostname if connection.kerberos else connection.host
-        stringbinding = f"ncacn_np:{target}[\\pipe\\atsvc]"
-        rpctransport = transport.DCERPCTransportFactory(stringbinding)
-        rpctransport.setRemoteHost(connection.hostname)
-        rpctransport.set_credentials(
-            connection.username,
-            connection.password,
-            connection.domain,
-            connection.lmhash,
-            connection.nthash,
-            aesKey=connection.aesKey,
-        )
-        rpctransport.set_kerberos(connection.kerberos, connection.kdcHost)
-
         try:
-            dce = rpctransport.get_dce_rpc()
-            if connection.kerberos:
-                dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-            dce.set_credentials(*rpctransport.get_credentials())
-            dce.connect()
-            dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
-            dce.bind(tsch.MSRPC_UUID_TSCHS)
+            target = connection.remoteName if connection.kerberos else connection.host
+            stringbinding = f"ncacn_np:{target}[\\pipe\\atsvc]"
+            dce = self.get_dce_rpc(target, stringbinding, tsch.MSRPC_UUID_TSCHS, connection)
 
             # Also extract non admins where we can get the password
-            self.non_admin_sids = []
+            self.non_admins = []
+            non_admin_sids = set()
 
             tasks = tsch.hSchRpcEnumTasks(dce, "\\")["pNames"]
             for task in tasks:
@@ -200,7 +197,22 @@ class NXCModule:
                         user["in_scheduled_tasks"] = True
                     else:
                         # If not an admin user, add to non_admin_sids for further processing
-                        self.non_admin_sids.append(sid.group(1))
+                        non_admin_sids.add(sid.group(1))
+
+            if non_admin_sids:
+                string_binding = fr"ncacn_np:{connection.kdcHost}[\pipe\samr]"
+                dce = self.get_dce_rpc(connection.kdcHost, string_binding, samr.MSRPC_UUID_SAMR, connection)
+
+                # Get Domain Handle
+                server_handle = samr.hSamrConnect2(dce)["ServerHandle"]
+                domain = samr.hSamrEnumerateDomainsInSamServer(dce, server_handle)["Buffer"]["Buffer"][0]["Name"]
+                domain_sid = samr.hSamrLookupDomainInSamServer(dce, server_handle, domain)["DomainId"]
+                domain_handle = samr.hSamrOpenDomain(dce, server_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_LIST_ACCOUNTS, domain_sid)["DomainHandle"]
+
+                for sid in non_admin_sids:
+                    user_handle = samr.hSamrOpenUser(dce, domain_handle, samr.MAXIMUM_ALLOWED, int(sid.split("-")[-1]))["UserHandle"]
+                    username = samr.hSamrQueryInformationUser2(dce, user_handle, samr.USER_INFORMATION_CLASS.UserAllInformation)["Buffer"]["All"]["UserName"]
+                    self.non_admins.append(username)
 
         except Exception as e:
             context.log.fail(f"Failed to enumerate scheduled tasks: {e}")
@@ -231,9 +243,9 @@ class NXCModule:
             context.log.success("Found admins in scheduled tasks:")
             for user in scheduled_tasks_users:
                 context.log.highlight(f"{user['username']} ({', '.join(user['group'])})")
-        if self.non_admin_sids:
-            context.log.success(f"Found {len(self.non_admin_sids)} non-admin scheduled tasks with passwords stored in dpapi:")
-            for sid in self.non_admin_sids:
+        if self.non_admins:
+            context.log.success(f"Found {len(self.non_admins)} non-admin scheduled tasks with passwords stored in dpapi:")
+            for sid in self.non_admins:
                 context.log.highlight(sid)
 
         # Making this less verbose to better scan large ranges
