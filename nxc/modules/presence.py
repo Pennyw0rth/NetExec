@@ -21,75 +21,11 @@ class NXCModule:
         """There are no module options."""
 
     def on_admin_login(self, context, connection):
-        admin_users = []
-
         try:
-            string_binding = fr"ncacn_np:{connection.kdcHost}[\pipe\samr]"
-            context.log.debug(f"Using string binding: {string_binding}")
-
-            rpctransport = transport.DCERPCTransportFactory(string_binding)
-            rpctransport.setRemoteHost(connection.kdcHost)
-            rpctransport.set_credentials(
-                connection.username,
-                connection.password,
-                connection.domain,
-                connection.lmhash,
-                connection.nthash,
-                aesKey=connection.aesKey,
-            )
-
-            dce = rpctransport.get_dce_rpc()
-            dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
-            dce.connect()
-            dce.bind(samr.MSRPC_UUID_SAMR)
-
-            try:
-                server_handle = samr.hSamrConnect2(dce)["ServerHandle"]
-                domain = samr.hSamrEnumerateDomainsInSamServer(dce, server_handle)["Buffer"]["Buffer"][0]["Name"]
-                resp = samr.hSamrLookupDomainInSamServer(dce, server_handle, domain)
-                domain_sid = resp["DomainId"].formatCanonical()
-                domain_handle = samr.hSamrOpenDomain(dce, server_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_LIST_ACCOUNTS, resp["DomainId"])["DomainHandle"]
-                context.log.debug(f"Resolved domain SID for {domain}: {domain_sid}")
-            except Exception as e:
-                context.log.fail(f"Failed to open domain {domain}: {e!s}")
-                context.log.debug(traceback.format_exc())
+            admin_users = self.enumerate_admin_users(context, connection)
+            if not admin_users:
+                context.log.fail("No admin users found.")
                 return
-
-            admin_rids = {
-                "Domain Admins": 512,
-                "Enterprise Admins": 519,
-            }
-
-            # Enumerate admin groups and their members
-            for group_name, group_rid in admin_rids.items():
-                context.log.debug(f"Looking up group: {group_name} with RID {group_rid}")
-
-                try:
-                    group_handle = samr.hSamrOpenGroup(dce, domain_handle, samr.GROUP_LIST_MEMBERS, group_rid)["GroupHandle"]
-                    resp = samr.hSamrGetMembersInGroup(dce, group_handle)
-                    for member in resp["Members"]["Members"]:
-                        rid = int.from_bytes(member.getData(), byteorder="little")
-                        try:
-                            user_handle = samr.hSamrOpenUser(dce, domain_handle, samr.MAXIMUM_ALLOWED, rid)["UserHandle"]
-                            username = samr.hSamrQueryInformationUser2(dce, user_handle, samr.USER_INFORMATION_CLASS.UserAllInformation)["Buffer"]["All"]["UserName"]
-
-                            # If user already exists, append group name
-                            if any(u["sid"] == f"{domain_sid}-{rid}" for u in admin_users):
-                                user = next(u for u in admin_users if u["sid"] == f"{domain_sid}-{rid}")
-                                user["group"].append(group_name)
-                            else:
-                                admin_users.append({"username": username, "sid": f"{domain_sid}-{rid}", "domain": domain, "group": [group_name], "in_tasks": False, "in_directory": False})
-                            context.log.debug(f"Found user: {username} with RID {rid} in group {group_name}")
-                        except Exception as e:
-                            context.log.debug(f"Failed to get user info for RID {rid}: {e!s}")
-                        finally:
-                            with suppress(Exception):
-                                samr.hSamrCloseHandle(dce, user_handle)
-                except Exception as e:
-                    context.log.debug(f"Failed to get members of group {group_name}: {e!s}")
-                finally:
-                    with suppress(Exception):
-                        samr.hSamrCloseHandle(dce, group_handle)
 
             # Update user objects to check if they are in tasklist or users directory
             self.check_users_directory(context, connection, admin_users)
@@ -100,6 +36,77 @@ class NXCModule:
         except Exception as e:
             context.log.fail(str(e))
             context.log.debug(traceback.format_exc())
+
+    def enumerate_admin_users(self, context, connection):
+        admin_users = []
+        string_binding = fr"ncacn_np:{connection.kdcHost}[\pipe\samr]"
+        context.log.debug(f"Using string binding: {string_binding}")
+
+        rpctransport = transport.DCERPCTransportFactory(string_binding)
+        rpctransport.setRemoteHost(connection.kdcHost)
+        rpctransport.set_credentials(
+                connection.username,
+                connection.password,
+                connection.domain,
+                connection.lmhash,
+                connection.nthash,
+                aesKey=connection.aesKey,
+            )
+
+        dce = rpctransport.get_dce_rpc()
+        dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
+        dce.connect()
+        dce.bind(samr.MSRPC_UUID_SAMR)
+
+        try:
+            server_handle = samr.hSamrConnect2(dce)["ServerHandle"]
+            domain = samr.hSamrEnumerateDomainsInSamServer(dce, server_handle)["Buffer"]["Buffer"][0]["Name"]
+            resp = samr.hSamrLookupDomainInSamServer(dce, server_handle, domain)
+            domain_sid = resp["DomainId"].formatCanonical()
+            domain_handle = samr.hSamrOpenDomain(dce, server_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_LIST_ACCOUNTS, resp["DomainId"])["DomainHandle"]
+            context.log.debug(f"Resolved domain SID for {domain}: {domain_sid}")
+        except Exception as e:
+            context.log.fail(f"Failed to open domain {domain}: {e!s}")
+            context.log.debug(traceback.format_exc())
+            return []
+
+        admin_rids = {
+                "Domain Admins": 512,
+                "Enterprise Admins": 519,
+            }
+
+        # Enumerate admin groups and their members
+        for group_name, group_rid in admin_rids.items():
+            context.log.debug(f"Looking up group: {group_name} with RID {group_rid}")
+
+            try:
+                group_handle = samr.hSamrOpenGroup(dce, domain_handle, samr.GROUP_LIST_MEMBERS, group_rid)["GroupHandle"]
+                resp = samr.hSamrGetMembersInGroup(dce, group_handle)
+                for member in resp["Members"]["Members"]:
+                    rid = int.from_bytes(member.getData(), byteorder="little")
+                    try:
+                        user_handle = samr.hSamrOpenUser(dce, domain_handle, samr.MAXIMUM_ALLOWED, rid)["UserHandle"]
+                        username = samr.hSamrQueryInformationUser2(dce, user_handle, samr.USER_INFORMATION_CLASS.UserAllInformation)["Buffer"]["All"]["UserName"]
+
+                        # If user already exists, append group name
+                        if any(u["sid"] == f"{domain_sid}-{rid}" for u in admin_users):
+                            user = next(u for u in admin_users if u["sid"] == f"{domain_sid}-{rid}")
+                            user["group"].append(group_name)
+                        else:
+                            admin_users.append({"username": username, "sid": f"{domain_sid}-{rid}", "domain": domain, "group": [group_name], "in_tasks": False, "in_directory": False})
+                        context.log.debug(f"Found user: {username} with RID {rid} in group {group_name}")
+                    except Exception as e:
+                        context.log.debug(f"Failed to get user info for RID {rid}: {e!s}")
+                    finally:
+                        with suppress(Exception):
+                            samr.hSamrCloseHandle(dce, user_handle)
+            except Exception as e:
+                context.log.debug(f"Failed to get members of group {group_name}: {e!s}")
+            finally:
+                with suppress(Exception):
+                    samr.hSamrCloseHandle(dce, group_handle)
+
+        return admin_users
 
     def check_users_directory(self, context, connection, admin_users):
         dirs_found = set()
