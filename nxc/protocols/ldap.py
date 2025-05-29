@@ -483,7 +483,7 @@ class ldap(connection):
         self.password = password
         self.domain = domain
 
-        if self.password == "" and self.args.asreproast:
+        if self.username and self.password == "" and self.args.asreproast:
             hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
@@ -965,9 +965,6 @@ class ldap(connection):
                 self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{pwd_last_set:<20}{user.get('badPwdCount', ''):<9}{user.get('description', '')}")
 
     def asreproast(self):
-        if self.password == "" and self.nthash == "" and not self.kerberos:
-            return False
-
         # Building the search filter
         search_filter = f"(&(UserAccountControl:1.2.840.113556.1.4.803:={UF_DONT_REQUIRE_PREAUTH})(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE}))(!(objectCategory=computer)))"
         resp = self.search(search_filter, attributes=["sAMAccountName"], sizeLimit=0)
