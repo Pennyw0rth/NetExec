@@ -1,4 +1,6 @@
 from nxc.helpers.modules import add_loot_data
+
+
 class NXCModule:
     """
     Example:

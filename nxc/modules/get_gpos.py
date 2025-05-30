@@ -1,5 +1,6 @@
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 
+
 class NXCModule:
     """Module by @Marshall-Hallenbeck
     Retrieves Group Policy Objects (GPOs) in Active Directory
