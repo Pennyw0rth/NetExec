@@ -1573,6 +1573,7 @@ class smb(connection):
             self.get_file_single(src, dest)
     
     def download_folder(self, folder, dest, recursive=False, silent=False, base_dir=None):
+        self.logger.debug(f"Downloading folder with args: {folder}, {dest}, Recursive: {recursive}, Silent: {silent}, Base dir: {base_dir}")
         normalized_folder = ntpath.normpath(folder)
         base_folder = os.path.basename(normalized_folder)
         self.logger.debug(f"Base folder: {base_folder}")
@@ -1586,26 +1587,33 @@ class smb(connection):
 
         for item in items:
             item_name = item.get_longname()
-            if item_name not in [".", ".."]:
-                dir_path = ntpath.normpath(ntpath.join(normalized_folder, item_name))
-                if item.is_directory() and recursive:
-                    self.download_folder(dir_path, dest, silent, recursive, base_dir or folder)
-                elif not item.is_directory():
-                    remote_file_path = ntpath.join(folder, item_name)
-                    # change the Windows path to Linux and then join it with the base directory to get our actual save path
-                    relative_path = os.path.join(*folder.replace(base_dir or folder, "").lstrip("\\").split("\\"))
-                    local_folder_path = os.path.join(dest, relative_path)
-                    local_file_path = os.path.join(local_folder_path, item_name)
-                    self.logger.debug(f"{dest=} {remote_file_path=} {relative_path=} {local_folder_path=} {local_file_path=}")
-                    
-                    os.makedirs(local_folder_path, exist_ok=True)
-                    try:
-                        self.get_file_single(remote_file_path, local_file_path, silent)
-                    except FileNotFoundError:
-                        self.logger.fail(f"Error downloading file '{remote_file_path}' due to file not found (probably a race condition between listing and downloading)")
+            if item_name in [".", ".."]:
+                continue
+            
+            dir_path = ntpath.normpath(ntpath.join(normalized_folder, item_name))
+            self.logger.debug(f"Parsing item: {item_name}, {dir_path}")
+            
+            if item.is_directory() and recursive:
+                self.logger.debug(f"Found new directory to parse: {dir_path}")
+                self.download_folder(dir_path, dest, recursive, silent, base_dir or folder)
+            elif not item.is_directory():
+                remote_file_path = ntpath.join(folder, item_name)
+                # change the Windows path to Linux and then join it with the base directory to get our actual save path
+                relative_path = os.path.join(*folder.replace(base_dir or folder, "").lstrip("\\").split("\\"))
+                local_folder_path = os.path.join(dest, relative_path)
+                local_file_path = os.path.join(local_folder_path, item_name)
+                self.logger.debug(f"{dest=} {remote_file_path=} {relative_path=} {local_folder_path=} {local_file_path=}")
+                
+                os.makedirs(local_folder_path, exist_ok=True)
+                try:
+                    self.get_file_single(remote_file_path, local_file_path, silent)
+                except FileNotFoundError:
+                    self.logger.fail(f"Error downloading file '{remote_file_path}' due to file not found (probably a race condition between listing and downloading)")
+        return
 
     def get_folder(self):
-        recursive = self.args.recursive        
+        recursive = self.args.recursive
+        self.logger.debug(f"Recursive option set to {recursive}")
         for folder, dest in self.args.get_folder:
             self.download_folder(folder, dest, recursive)
             self.logger.success(f"Folder '{folder}' was downloaded to '{dest}'")
