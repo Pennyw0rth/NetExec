@@ -1078,7 +1078,7 @@ class ldap(connection):
                 self.logger.success(f"Response for object: {resp[idx]['objectName']}")
             except Exception as e:
                 self.logger.critical(f"FORMATTING CRASHED: {e}")
-                self.logger.fail(f"Response for object with idx '{idx}': {resp[idx].get('objectName', 'Unknown')}")
+                # self.logger.fail(f"Response for object with idx '{idx}': {resp[idx].get('objectName', 'Unknown')}")
                 self.logger.fail(f"Raw object: {resp[idx]}")
                 self.logger.fail(f"Parsed object: {entry}")
                 self.logger.fail("Full traceback available in debug log")
