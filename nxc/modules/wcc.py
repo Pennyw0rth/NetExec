@@ -123,8 +123,6 @@ class NXCModule:
         self.results.setdefault(connection.host, {"checks": []})
         self.context = context
         HostChecker(context, connection).run()
-
-    def on_shutdown(self, context, connection):
         if self.output is not None:
             self.export_results()
 
@@ -174,7 +172,7 @@ class HostChecker:
             ConfigCheck("IPv4 preferred over IPv6", "Checks if IPv4 is preferred over IPv6", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters", "DisabledComponents", (32, 255), in_)]]),
             ConfigCheck("Spooler service disabled", "Checks if the spooler service is disabled", checkers=[self.check_spooler_service]),
             ConfigCheck("WDigest authentication disabled", "Checks if WDigest authentication is disabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest", "UseLogonCredential", 0)]]),
-            ConfigCheck("WSUS configuration", "Checks if WSUS configuration uses HTTPS", checkers=[self.check_wsus_running, None], checker_args=[[], [self, ("HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate", "WUServer", "https://", startswith), ("HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate", "UseWUServer", 0, operator.eq)]], checker_kwargs=[{}, {"options": {"lastWins": True}}]),
+            ConfigCheck("WSUS configuration", "Checks if WSUS configuration uses HTTPS", checkers=[self.check_wsus_running, None], checker_args=[[], [self, ("HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate", "WUServer", "https://", startswith), ("HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU", "UseWUServer", 0, operator.eq)]], checker_kwargs=[{}, {"options": {"lastWins": True}}]),
             ConfigCheck("Small LSA cache", "Checks how many logons are kept in the LSA cache", checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon", "CachedLogonsCount", 2, le)]]),
             ConfigCheck("AppLocker rules defined", "Checks if there are AppLocker rules defined", checkers=[self.check_applocker]),
             ConfigCheck("RDP expiration time", "Checks RDP session timeout", checker_args=[[self, ("HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services", "MaxDisconnectionTime", 0, operator.gt), ("HKCU\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services", "MaxDisconnectionTime", 0, operator.gt)]]),
@@ -308,7 +306,7 @@ class HostChecker:
 
             value = self.reg_query_value(self.dce, self.connection, key, value_name)
 
-            if type(value) == DCERPCSessionError:
+            if isinstance(value, DCERPCSessionError):
                 if options["KOIfMissing"]:
                     ok = False
                 if value.error_code in (ERROR_NO_MORE_ITEMS, ERROR_FILE_NOT_FOUND):
@@ -464,7 +462,7 @@ class HostChecker:
         nbtns_enabled = 0
         for subkey in subkeys:
             value = self.reg_query_value(self.dce, self.connection, key_name + "\\" + subkey, "NetbiosOptions")
-            if type(value) == DCERPCSessionError:
+            if isinstance(value, DCERPCSessionError):
                 if value.error_code == ERROR_OBJECT_NOT_FOUND:
                     missing += 1
                 continue

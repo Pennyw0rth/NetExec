@@ -22,8 +22,6 @@ class NXCModule:
         self.context = context
         self.users = [user.lower() for user in module_options["USERS"].split(",")] if "USERS" in module_options else None
 
-
-
     def on_admin_login(self, context, connection):
         self.context = context
         self.connection = connection
@@ -111,7 +109,6 @@ class NXCModule:
         if total_files_downloaded > 0 and host_output_path:
             context.log.success(f"{total_files_downloaded} file(s) downloaded from host {connection.host} to {host_output_path}.")
                             
-
     def find_screenshots_folders(self, user_folder_name):
         """
         Dynamically searches for all Screenshots folders in the user's home directory.

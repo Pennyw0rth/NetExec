@@ -51,20 +51,3 @@ class NXCModule:
         Required if on_login is not present
         This gets called on each authenticated connection with Administrative privileges
         """
-        # Use this function to add loot data you want to save to $NXC_PATH/loot/$MODULE_NAME/$FILENAME
-        add_loot_data(self.name, "custom_loot_file.txt", "Data can be anything you want, passwords, hashes, or anything")
-
-    def on_request(self, context, request):
-        """Optional.
-        If the payload needs to retrieve additional files, add this function to the module
-        """
-
-    def on_response(self, context, response):
-        """Optional.
-        If the payload sends back its output to our server, add this function to the module to handle its output
-        """
-
-    def on_shutdown(self, context, connection):
-        """Optional.
-        Do something on shutdown
-        """

@@ -1,7 +1,7 @@
 def proto_args(parser, parents):
     nfs_parser = parser.add_parser("nfs", help="own stuff using NFS", parents=parents)
     nfs_parser.add_argument("--port", type=int, default=111, help="NFS portmapper port (default: %(default)s)")
-    nfs_parser.add_argument("--nfs-timeout", type=int, default=30, help="NFS connection timeout (default: %(default)ss)")
+    nfs_parser.add_argument("--nfs-timeout", type=int, default=5, help="NFS connection timeout (default: %(default)ss)")
 
     dgroup = nfs_parser.add_argument_group("NFS Mapping/Enumeration", "Options for Mapping/Enumerating NFS")
     dgroup.add_argument("--share", help="Specify a share, e.g. for --ls, --get-file, --put-file")

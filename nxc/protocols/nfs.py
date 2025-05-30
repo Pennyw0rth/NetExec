@@ -246,22 +246,23 @@ class nfs(connection):
                     mnt_info = self.mount.mnt(share, self.auth)
                     self.logger.debug(f"Mounted {share} - {mnt_info}")
                     if mnt_info["status"] != 0:
-                        self.logger.fail(f"Error mounting share {share}: {NFSSTAT3[mnt_info['status']]}")
-                        continue
-                    file_handle = mnt_info["mountinfo"]["fhandle"]
+                        self.logger.debug(f"Error mounting share {share}: {NFSSTAT3[mnt_info['status']]}")
+                        self.logger.highlight(f"{'-':<11}{'---':<9}{'---'}/{'---':<12} {share:<30} {', '.join(network) if network else 'No network':<15}")
+                    else:
+                        file_handle = mnt_info["mountinfo"]["fhandle"]
 
-                    info = self.nfs3.fsstat(file_handle, self.auth)
-                    free_space = info["resok"]["fbytes"]
-                    total_space = info["resok"]["tbytes"]
-                    used_space = total_space - free_space
+                        info = self.nfs3.fsstat(file_handle, self.auth)
+                        free_space = info["resok"]["fbytes"]
+                        total_space = info["resok"]["tbytes"]
+                        used_space = total_space - free_space
 
-                    # Autodetectting the uid needed for the share
-                    attrs = self.nfs3.getattr(file_handle, auth=self.auth)
-                    self.auth["uid"] = attrs["attributes"]["uid"]
+                        # Autodetectting the uid needed for the share
+                        attrs = self.nfs3.getattr(file_handle, auth=self.auth)
+                        self.auth["uid"] = attrs["attributes"]["uid"]
 
-                    read_perm, write_perm, exec_perm = self.get_permissions(file_handle)
-                    self.mount.umnt(self.auth)
-                    self.logger.highlight(f"{self.auth['uid']:<11}{'r' if read_perm else '-'}{'w' if write_perm else '-'}{('x' if exec_perm else '-'):<7}{convert_size(used_space)}/{convert_size(total_space):<9} {share:<30} {', '.join(network) if network else 'No network':<15}")
+                        read_perm, write_perm, exec_perm = self.get_permissions(file_handle)
+                        self.mount.umnt(self.auth)
+                        self.logger.highlight(f"{self.auth['uid']:<11}{'r' if read_perm else '-'}{'w' if write_perm else '-'}{('x' if exec_perm else '-'):<7}{convert_size(used_space) + '/' + convert_size(total_space):<16} {share:<30} {', '.join(network) if network else 'No network':<15}")
                 except Exception as e:
                     self.logger.fail(f"Failed to list share: {share} - {e}")
 
@@ -561,8 +562,8 @@ class nfs(connection):
         # Format for the file id see: https://elixir.bootlin.com/linux/v6.13.4/source/include/linux/exportfs.h#L25
         fh = bytearray(mount_fh)
         if filesystem in [FileID.ext, FileID.unknown]:
-            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x02\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x02\x00\x00\x00"))    # noqa: E226 FURB113
-            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x80\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x80\x00\x00\x00"))    # noqa: E226
+            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x02\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x02\x00\x00\x00"))  # noqa: E226
+            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x80\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x80\x00\x00\x00"))  # noqa: E226
         if filesystem in [FileID.btrfs, FileID.unknown]:
             # Iterate over btrfs subvolumes, use 16 as default similar to the guys from nfs-security-tooling
             for i in range(16):
@@ -727,7 +728,7 @@ def convert_size(size_bytes):
     if size_bytes == 0:
         return "0B"
     size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
-    i = int(math.floor(math.log(size_bytes, 1024)))
+    i = math.floor(math.log(size_bytes, 1024))
     p = math.pow(1024, i)
     s = round(size_bytes / p, 1)
     return f"{s}{size_name[i]}"
