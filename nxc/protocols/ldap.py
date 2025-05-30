@@ -1069,6 +1069,7 @@ class ldap(connection):
         try:
             resp = self.search(search_filter, attributes, 0)
             resp_parsed = parse_result_attributes(resp)
+            self.logger.display(f"Total of records returned {len(resp_parsed)}, raw response: {len(resp)}")
         except LDAPFilterSyntaxError as e:
             self.logger.fail(f"LDAP Filter Syntax Error: {e}")
             return
