@@ -335,15 +335,15 @@ files = [
 ]
 
 [[package]]
-name = "bloodhound"
+name = "bloodhound-ce"
 version = "1.8.0"
-description = "Python based ingestor for BloodHound"
+description = "Python based ingestor for BloodHound Community Edition"
 optional = false
 python-versions = "*"
 groups = ["main"]
 files = [
-    {file = "bloodhound-1.8.0-py3-none-any.whl", hash = "sha256:97dcef77fa38dbab7219909c117eb9fd7263aff107cee0bf6fc7a0d0db9a61ac"},
-    {file = "bloodhound-1.8.0.tar.gz", hash = "sha256:35ed0f1fdda2b1d79a4e9d891cabe2c55309a32743aeed16d885f3d809f409b3"},
+    {file = "bloodhound_ce-1.8.0-py3-none-any.whl", hash = "sha256:0d5f39c2ab157448313f6c0ea8afdcf081238682f445c81e065684395ba5484b"},
+    {file = "bloodhound_ce-1.8.0.tar.gz", hash = "sha256:f663d6181e2a1ab8de9d57948011662e2a47880d8caca9b85369a7efaed13a70"},
 ]
 
 [package.dependencies]
@@ -865,7 +865,7 @@ all = ["flake8 (>=7.1.1)", "mypy (>=1.11.2)", "pytest (>=8.3.2)", "ruff (>=0.6.2
 
 [[package]]
 name = "impacket"
-version = "0.13.0.dev0+20250422.104055.27bebb13"
+version = "0.13.0.dev0+20250527.165759.abfaea2b"
 description = "Network protocols Constructors and Dissectors"
 optional = false
 python-versions = "*"
@@ -888,9 +888,9 @@ six = "*"
 
 [package.source]
 type = "git"
-url = "https://github.com/fortra/impacket.git"
+url = "https://github.com/Pennyw0rth/impacket.git"
 reference = "HEAD"
-resolved_reference = "27bebb1347569fa810e432326266acf17560f274"
+resolved_reference = "abfaea2b613cab86a94ae7e5edbf5801ef347f30"
 
 [[package]]
 name = "iniconfig"
@@ -1327,14 +1327,14 @@ unicrypto = ">=0.0.10"
 
 [[package]]
 name = "msldap"
-version = "0.5.14"
+version = "0.5.15"
 description = "Python library to play with MS LDAP"
 optional = false
 python-versions = ">=3.7"
 groups = ["main"]
 files = [
-    {file = "msldap-0.5.14-py3-none-any.whl", hash = "sha256:5f04edf85323d816d57adb1793a3d3c2784dd20174888304103731c7289e1490"},
-    {file = "msldap-0.5.14.tar.gz", hash = "sha256:66f3cb68efe000b221a88cec3faf3b1119a4911b101838839a116ccd15fb6254"},
+    {file = "msldap-0.5.15-py3-none-any.whl", hash = "sha256:ee4224cf3964c386a52424a4b6d763a866b4d7ae6d5597a0af58611588668531"},
+    {file = "msldap-0.5.15.tar.gz", hash = "sha256:b8024a2c0559158ec407cb6317201ecc83627248baaeecee5dfd4419ca773e3d"},
 ]
 
 [package.dependencies]
@@ -2018,29 +2018,30 @@ jupyter = ["ipywidgets (>=7.5.1,<9)"]
 
 [[package]]
 name = "ruff"
-version = "0.0.292"
-description = "An extremely fast Python linter, written in Rust."
+version = "0.11.3"
+description = "An extremely fast Python linter and code formatter, written in Rust."
 optional = false
 python-versions = ">=3.7"
 groups = ["dev"]
 files = [
-    {file = "ruff-0.0.292-py3-none-macosx_10_7_x86_64.whl", hash = "sha256:02f29db018c9d474270c704e6c6b13b18ed0ecac82761e4fcf0faa3728430c96"},
-    {file = "ruff-0.0.292-py3-none-macosx_10_9_x86_64.macosx_11_0_arm64.macosx_10_9_universal2.whl", hash = "sha256:69654e564342f507edfa09ee6897883ca76e331d4bbc3676d8a8403838e9fade"},
-    {file = "ruff-0.0.292-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:6c3c91859a9b845c33778f11902e7b26440d64b9d5110edd4e4fa1726c41e0a4"},
-    {file = "ruff-0.0.292-py3-none-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:f4476f1243af2d8c29da5f235c13dca52177117935e1f9393f9d90f9833f69e4"},
-    {file = "ruff-0.0.292-py3-none-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:be8eb50eaf8648070b8e58ece8e69c9322d34afe367eec4210fdee9a555e4ca7"},
-    {file = "ruff-0.0.292-py3-none-manylinux_2_17_ppc64.manylinux2014_ppc64.whl", hash = "sha256:9889bac18a0c07018aac75ef6c1e6511d8411724d67cb879103b01758e110a81"},
-    {file = "ruff-0.0.292-py3-none-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:6bdfabd4334684a4418b99b3118793f2c13bb67bf1540a769d7816410402a205"},
-    {file = "ruff-0.0.292-py3-none-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:aa7c77c53bfcd75dbcd4d1f42d6cabf2485d2e1ee0678da850f08e1ab13081a8"},
-    {file = "ruff-0.0.292-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:8e087b24d0d849c5c81516ec740bf4fd48bf363cfb104545464e0fca749b6af9"},
-    {file = "ruff-0.0.292-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:f160b5ec26be32362d0774964e218f3fcf0a7da299f7e220ef45ae9e3e67101a"},
-    {file = "ruff-0.0.292-py3-none-musllinux_1_2_armv7l.whl", hash = "sha256:ac153eee6dd4444501c4bb92bff866491d4bfb01ce26dd2fff7ca472c8df9ad0"},
-    {file = "ruff-0.0.292-py3-none-musllinux_1_2_i686.whl", hash = "sha256:87616771e72820800b8faea82edd858324b29bb99a920d6aa3d3949dd3f88fb0"},
-    {file = "ruff-0.0.292-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:b76deb3bdbea2ef97db286cf953488745dd6424c122d275f05836c53f62d4016"},
-    {file = "ruff-0.0.292-py3-none-win32.whl", hash = "sha256:e854b05408f7a8033a027e4b1c7f9889563dd2aca545d13d06711e5c39c3d003"},
-    {file = "ruff-0.0.292-py3-none-win_amd64.whl", hash = "sha256:f27282bedfd04d4c3492e5c3398360c9d86a295be00eccc63914438b4ac8a83c"},
-    {file = "ruff-0.0.292-py3-none-win_arm64.whl", hash = "sha256:7f67a69c8f12fbc8daf6ae6d36705037bde315abf8b82b6e1f4c9e74eb750f68"},
-    {file = "ruff-0.0.292.tar.gz", hash = "sha256:1093449e37dd1e9b813798f6ad70932b57cf614e5c2b5c51005bf67d55db33ac"},
+    {file = "ruff-0.11.3-py3-none-linux_armv6l.whl", hash = "sha256:cb893a5eedff45071d52565300a20cd4ac088869e156b25e0971cb98c06f5dd7"},
+    {file = "ruff-0.11.3-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:58edd48af0e201e2f494789de80f5b2f2b46c9a2991a12ea031254865d5f6aa3"},
+    {file = "ruff-0.11.3-py3-none-macosx_11_0_arm64.whl", hash = "sha256:520f6ade25cea98b2e5cb29eb0906f6a0339c6b8e28a024583b867f48295f1ed"},
+    {file = "ruff-0.11.3-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d1ca4405a93ebbc05e924358f872efceb1498c3d52a989ddf9476712a5480b16"},
+    {file = "ruff-0.11.3-py3-none-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:f4341d38775a6be605ce7cd50e951b89de65cbd40acb0399f95b8e1524d604c8"},
+    {file = "ruff-0.11.3-py3-none-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:72bf5b49e4b546f4bea6c05448ab71919b09cf75363adf5e3bf5276124afd31c"},
+    {file = "ruff-0.11.3-py3-none-manylinux_2_17_ppc64.manylinux2014_ppc64.whl", hash = "sha256:9fa791ee6c3629ba7f9ba2c8f2e76178b03f3eaefb920e426302115259819237"},
+    {file = "ruff-0.11.3-py3-none-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:2c81d3fe718f4d303aaa4ccdcd0f43e23bb2127da3353635f718394ca9b26721"},
+    {file = "ruff-0.11.3-py3-none-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:4e4c38e9b6c01caaba46b6d8e732791f4c78389a9923319991d55b298017ce02"},
+    {file = "ruff-0.11.3-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:9686f5d1a2b4c918b5a6e9876bfe7f47498a990076624d41f57d17aadd02a4dd"},
+    {file = "ruff-0.11.3-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:4800ddc4764d42d8961ce4cb972bcf5cc2730d11cca3f11f240d9f7360460408"},
+    {file = "ruff-0.11.3-py3-none-musllinux_1_2_armv7l.whl", hash = "sha256:e63a2808879361aa9597d88d86380d8fb934953ef91f5ff3dafe18d9cb0b1e14"},
+    {file = "ruff-0.11.3-py3-none-musllinux_1_2_i686.whl", hash = "sha256:8f8b1c4ae62638cc220df440140c21469232d8f2cb7f5059f395f7f48dcdb59e"},
+    {file = "ruff-0.11.3-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:3ea2026be50f6b1fbedd2d1757d004e1e58bd0f414efa2a6fa01235468d4c82a"},
+    {file = "ruff-0.11.3-py3-none-win32.whl", hash = "sha256:73d8b90d12674a0c6e98cd9e235f2dcad09d1a80e559a585eac994bb536917a3"},
+    {file = "ruff-0.11.3-py3-none-win_amd64.whl", hash = "sha256:faf1bfb0a51fb3a82aa1112cb03658796acef978e37c7f807d3ecc50b52ecbf6"},
+    {file = "ruff-0.11.3-py3-none-win_arm64.whl", hash = "sha256:67f8b68d7ab909f08af1fb601696925a89d65083ae2bb3ab286e572b5dc456aa"},
+    {file = "ruff-0.11.3.tar.gz", hash = "sha256:8d5fcdb3bb359adc12b757ed832ee743993e7474b9de714bb9ea13c4a8458bf9"},
 ]
 
 [[package]]
@@ -2462,4 +2463,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<4.0"
-content-hash = "1b8bf07cb55b385df03716a6bd4a553579e1b325ccb53e2f77ce28605e6903c5"
+content-hash = "e02f61c9bb3bccd22fc51f90a9e09552afe50cb309155959dbb3ff06fea4d736"

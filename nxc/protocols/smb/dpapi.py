@@ -45,6 +45,7 @@ def get_domain_backup_key(context):
             context.logger.fail(f"Could not get domain backupkey: {e}")
     return pvkbytes
 
+
 def collect_masterkeys_from_target(context, target, dploot_connection, user=True, system=True):
     masterkeys = []
     plaintexts = {}
@@ -84,6 +85,7 @@ def collect_masterkeys_from_target(context, target, dploot_connection, user=True
         context.logger.debug(f"Could not get masterkeys: {e}")
 
     return masterkeys
+
 
 def upgrade_to_dploot_connection(target, connection=None):
     conn = None

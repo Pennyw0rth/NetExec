@@ -15,7 +15,6 @@ import re
 import configparser
 
 
-
 class NXCModule:
     """Module by @NeffIsBack"""
 
