@@ -364,7 +364,7 @@ class ldap(connection):
         if nthash:
             self.nthash = nthash
 
-        if self.password == "" and self.args.asreproast:
+        if self.username and self.password == "" and self.args.asreproast:
             hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
@@ -483,7 +483,7 @@ class ldap(connection):
         self.password = password
         self.domain = domain
 
-        if self.password == "" and self.args.asreproast:
+        if self.username and self.password == "" and self.args.asreproast:
             hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
@@ -574,7 +574,7 @@ class ldap(connection):
         self.username = username
         self.domain = domain
 
-        if self.hash == "" and self.args.asreproast:
+        if self.username and self.hash == "" and self.args.asreproast:
             hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
@@ -875,7 +875,7 @@ class ldap(connection):
                 trust_direction = int(trust["trustDirection"])
                 trust_type = int(trust["trustType"])
                 trust_attributes = int(trust["trustAttributes"])
-                
+
                 # See: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/e9a2d23c-c31e-4a6f-88a0-6646fdb51a3c
                 trust_attribute_flags = {
                     0x1:    "Non-Transitive",
@@ -965,9 +965,6 @@ class ldap(connection):
                 self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{pwd_last_set:<20}{user.get('badPwdCount', ''):<9}{user.get('description', '')}")
 
     def asreproast(self):
-        if self.password == "" and self.nthash == "" and not self.kerberos:
-            return False
-
         # Building the search filter
         search_filter = f"(&(UserAccountControl:1.2.840.113556.1.4.803:={UF_DONT_REQUIRE_PREAUTH})(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE}))(!(objectCategory=computer)))"
         resp = self.search(search_filter, attributes=["sAMAccountName"], sizeLimit=0)
