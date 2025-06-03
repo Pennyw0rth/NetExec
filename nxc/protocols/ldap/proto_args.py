@@ -13,6 +13,8 @@ def proto_args(parser, parents):
     egroup = ldap_parser.add_argument_group("Retrieve hash on the remote DC", "Options to get hashes from Kerberos")
     egroup.add_argument("--asreproast", help="Output AS_REP response to crack with hashcat to file")
     egroup.add_argument("--kerberoasting", help="Output TGS ticket to crack with hashcat to file")
+    egroup.add_argument("--userenum",metavar=("USERS_FILE", "OUTPUT_FILE"),nargs="+", help="Enumerate users by checking AS-REP without preauth (optionally save valid usernames to a file)")
+    egroup.add_argument("--no-preauth-user", "-npu",dest="no_preauth_user", help="No-preauth user for AS-REQ Kerberoast (use with -u users/SPNs).")
 
     vgroup = ldap_parser.add_argument_group("Retrieve useful information on the domain")
     vgroup.add_argument("--base-dn", metavar="BASE_DN", dest="base_dn", type=str, default=None, help="base DN for search queries")
