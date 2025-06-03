@@ -865,7 +865,7 @@ all = ["flake8 (>=7.1.1)", "mypy (>=1.11.2)", "pytest (>=8.3.2)", "ruff (>=0.6.2
 
 [[package]]
 name = "impacket"
-version = "0.13.0.dev0+20250513.162347.b7288f23"
+version = "0.13.0.dev0+20250527.165759.abfaea2b"
 description = "Network protocols Constructors and Dissectors"
 optional = false
 python-versions = "*"
@@ -888,9 +888,9 @@ six = "*"
 
 [package.source]
 type = "git"
-url = "https://github.com/zblurx/impacket.git"
-reference = "ldap_signing"
-resolved_reference = "b7288f233c154b6f73610797f8e0fa3a1541b3a9"
+url = "https://github.com/Pennyw0rth/impacket.git"
+reference = "HEAD"
+resolved_reference = "abfaea2b613cab86a94ae7e5edbf5801ef347f30"
 
 [[package]]
 name = "iniconfig"
@@ -1327,14 +1327,14 @@ unicrypto = ">=0.0.10"
 
 [[package]]
 name = "msldap"
-version = "0.5.14"
+version = "0.5.15"
 description = "Python library to play with MS LDAP"
 optional = false
 python-versions = ">=3.7"
 groups = ["main"]
 files = [
-    {file = "msldap-0.5.14-py3-none-any.whl", hash = "sha256:5f04edf85323d816d57adb1793a3d3c2784dd20174888304103731c7289e1490"},
-    {file = "msldap-0.5.14.tar.gz", hash = "sha256:66f3cb68efe000b221a88cec3faf3b1119a4911b101838839a116ccd15fb6254"},
+    {file = "msldap-0.5.15-py3-none-any.whl", hash = "sha256:ee4224cf3964c386a52424a4b6d763a866b4d7ae6d5597a0af58611588668531"},
+    {file = "msldap-0.5.15.tar.gz", hash = "sha256:b8024a2c0559158ec407cb6317201ecc83627248baaeecee5dfd4419ca773e3d"},
 ]
 
 [package.dependencies]
@@ -2463,4 +2463,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<4.0"
-content-hash = "e748a99b7137fb81541ad5152dd98603856a2bfea56d7b9ff23913e950ea2f70"
+content-hash = "e02f61c9bb3bccd22fc51f90a9e09552afe50cb309155959dbb3ff06fea4d736"

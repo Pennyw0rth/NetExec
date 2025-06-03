@@ -416,14 +416,14 @@ class connection:
                     with open(ntlm_hash) as ntlm_hash_file:
                         for i, line in enumerate(ntlm_hash_file):
                             line = line.strip()
-                            if len(line) != 32 and len(line) != 65:
+                            if len(line) != 32 and len(line) != 65 and len(line) != 0:
                                 self.logger.fail(f"Invalid NTLM hash length on line {(i + 1)} (len {len(line)}): {line}")
                                 continue
                             else:
                                 secret.append(line)
                                 cred_type.append("hash")
                 else:
-                    if len(ntlm_hash) != 32 and len(ntlm_hash) != 65:
+                    if len(ntlm_hash) != 32 and len(ntlm_hash) != 65 and len(ntlm_hash) != 0:
                         self.logger.fail(f"Invalid NTLM hash length {len(ntlm_hash)}, authentication not sent")
                         exit(1)
                     else:
