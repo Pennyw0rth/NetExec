@@ -364,7 +364,7 @@ class ldap(connection):
         if nthash:
             self.nthash = nthash
 
-        if self.password == "" and self.args.asreproast:
+        if self.username and self.password == "" and self.args.asreproast:
             hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
@@ -574,7 +574,7 @@ class ldap(connection):
         self.username = username
         self.domain = domain
 
-        if self.hash == "" and self.args.asreproast:
+        if self.username and self.hash == "" and self.args.asreproast:
             hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
                 self.logger.highlight(f"{hash_tgt}")
