@@ -1070,6 +1070,8 @@ class ldap(connection):
             self.logger.fail(f"LDAP Filter Syntax Error: {e}")
             return
         for idx, entry in enumerate(resp_parsed):
+            if not isinstance(resp[idx], ldapasn1_impacket.SearchResultEntry):
+                idx += 1  # Skip non-entry responses
             self.logger.success(f"Response for object: {resp[idx]['objectName']}")
             for attribute in entry:
                 if isinstance(entry[attribute], list) and entry[attribute]:
