@@ -1050,7 +1050,7 @@ class ldap(connection):
                         self.logger.debug(f"Exception: {e}", exc_info=True)
                         self.logger.fail(f"Principal: {downLevelLogonName} - {e}")
                 else:
-                    self.logger.fail(f"Error retrieving TGT for {self.username}\\{self.domain} from {self.kdcHost}")
+                    self.logger.fail(f"Error retrieving TGT for {self.domain}\\{self.username} from {self.kdcHost}")
 
     def query(self):
         """
@@ -1117,8 +1117,7 @@ class ldap(connection):
                          f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE})))")
         # f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_SERVER_TRUST_ACCOUNT})))")  This would filter out RBCD to DCs
 
-        attributes = ["sAMAccountName", "pwdLastSet", "userAccountControl", "objectCategory",
-                      "msDS-AllowedToActOnBehalfOfOtherIdentity", "msDS-AllowedToDelegateTo"]
+        attributes = ["sAMAccountName", "pwdLastSet", "userAccountControl", "objectCategory", "msDS-AllowedToActOnBehalfOfOtherIdentity", "msDS-AllowedToDelegateTo"]
 
         resp = self.search(search_filter, attributes)
         answers = []
