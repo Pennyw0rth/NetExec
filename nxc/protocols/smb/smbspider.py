@@ -19,6 +19,7 @@ class SMBSpider:
         self.regex = regex
 
     def spider(self):
+        self.logger.display(self.onlyfiles)
         if self.share == "*":
             self.logger.display("Enumerating shares for spidering")
             for share in self.smbconnection.listShares():
@@ -65,17 +66,21 @@ class SMBSpider:
     def dir_list(self, files, path):
         path = path.replace("*", "")
         for result in files:
+            if result.get_longname() in [".", ".."]:
+                continue
             filename = bytes(result.get_longname().lower(), "utf-8")
             if self.pattern and any(bytes(pattern.lower(), "utf-8") in filename for pattern in self.pattern):
-                if not self.onlyfiles and result.is_directory():
-                    self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{self.share}/{path}{result.get_longname()} [dir]")
+                if result.is_directory():
+                    if not self.onlyfiles:
+                        self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{self.share}/{path}{result.get_longname()} [dir]")
                 else:
                     self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{self.share}/{path}{result.get_longname()} [lastm:'{self.get_lastm_time(result)}' size:{result.get_filesize()}]")
             if self.regex:
                 for regex in self.regex:
                     if regex.findall(filename):
-                        if not self.onlyfiles and result.is_directory():
-                            self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{self.share}/{path}{result.get_longname()} [dir]")
+                        if result.is_directory():
+                            if not self.onlyfiles:
+                                self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{self.share}/{path}{result.get_longname()} [dir]")
                         else:
                             self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{self.share}/{path}{result.get_longname()} [lastm:'{self.get_lastm_time(result)}' size:{result.get_filesize()}]")
             if self.content and not result.is_directory():

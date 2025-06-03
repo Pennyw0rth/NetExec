@@ -1388,8 +1388,7 @@ class smb(connection):
                 self.args.regex = [re.compile(bytes(rx, "utf8")) for rx in self.args.regex]
             except Exception as e:
                 self.logger.fail(f"Regex compilation error: {e}")
-
-        if self.args.pattern is None:
+        elif self.args.pattern is None:
             self.args.pattern = [""]
 
         spidering = SMBSpider(
