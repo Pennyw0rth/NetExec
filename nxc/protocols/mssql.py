@@ -306,7 +306,6 @@ class mssql(connection):
 
         # Added by @Deft_ to enumerate MSSQL version and encryption option
         self.mssql_version, self.encryption = self.check_encryption()
-        print(self.mssql_version, self.encryption)
 
         try:
             login = tds.TDS_LOGIN()
