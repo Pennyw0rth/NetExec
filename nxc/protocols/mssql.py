@@ -35,7 +35,13 @@ from impacket.tds import (
 )
 
 # Added by @Deft to support version enum and encryption via PRELOGIN
-from impacket.tds import TDS_PRELOGIN, TDS_ENCRYPT_NOT_SUP
+from impacket.tds import (
+    TDS_PRELOGIN,        # Used to structure to initialize first packet to MSSQL
+    TDS_ENCRYPT_OFF,     # Encryption is available but off
+    TDS_ENCRYPT_ON,      # Encryption is available and on
+    TDS_ENCRYPT_NOT_SUP, # Encryption is not available
+    TDS_ENCRYPT_REQ      # Encryption is required
+)
 
 # This was taken from https://github.com/CompassSecurity/mssqlrelay/blob/main/mssqlrelay/commands/check.py 
 # And added by @Deft_ to support version enum, thanks @sploutchy for the work!!
@@ -355,7 +361,7 @@ class mssql(connection):
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
-        encryption = colored("encryption:Enforced", host_info_colors[0], attrs=["bold"]) if self.encryption != TDS_ENCRYPT_NOT_SUP else colored("encryption:None", host_info_colors[1], attrs=["bold"])
+        encryption = colored("encryption:True", host_info_colors[0], attrs=["bold"]) if self.encryption != TDS_ENCRYPT_NOT_SUP else colored("encryption:False", host_info_colors[1], attrs=["bold"])
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) (mssql:{self.mssql_version}) ({encryption})")
 
     @reconnect_mssql
