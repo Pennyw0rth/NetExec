@@ -16,8 +16,8 @@ class NXCModule:
     Thanks @Shad0wC0ntr0ller for the idea of removing the hardcoded date that could be used as an IOC
     Modified by @Defte_ so that output on multiples lines are printed correctly (28/04/2025)
     Modified by @Defte_ so that we can upload a custom binary to execute using the BINARY option (28/04/2025)
-    Modified by @Kahvi-0xFF to add the TASK, FILE and LOCATION options. 
-    Modified by @Kahvi-0xFF add a feature to shuffle the XML file attributes
+    Modified by @Kahvi0xff to add the TASK, FILE and LOCATION options. 
+    Modified by @Kahvi0xff add a feature to shuffle the XML file attributes
     """
 
     def options(self, context, module_options):
