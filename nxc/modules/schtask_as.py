@@ -34,7 +34,7 @@ class NXCModule:
         nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD=whoami
         nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD='bin.exe --option' BINARY=bin.exe
         """
-        self.cmd = self.binary = self.user = self.task = self.file = self.location = self.time = None
+        self.cmd = self.binary = self.user = self.task = self.file = self.location = self.execm = self.time = None
         self.share = "C$"
         self.tmp_dir = "C:\\Windows\\Temp\\"
         self.tmp_share = self.tmp_dir.split(":")[1]
@@ -44,6 +44,9 @@ class NXCModule:
 
         if "BINARY" in module_options:
             self.binary = module_options["BINARY"]
+
+        if "EXECM" in module_options:
+            self.execm = module_options["EXECM"]
 
         if "USER" in module_options:
             self.user = module_options["USER"]
@@ -104,6 +107,7 @@ class NXCModule:
                 self.file,
                 self.task,
                 self.location,
+                self.execm,
                 connection.kerberos,
                 connection.aesKey,
                 connection.host,
@@ -144,7 +148,7 @@ class NXCModule:
 
 
 class TSCH_EXEC:
-    def __init__(self, target, share_name, username, password, domain, user, cmd, file, task, location, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
+    def __init__(self, target, share_name, username, password, domain, user, cmd, file, task, location, execm, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -167,6 +171,7 @@ class TSCH_EXEC:
         self.file = file
         self.task = task
         self.location = location
+        self.execm = execm
 
         if hashes is not None:
             if hashes.find(":") != -1:
@@ -252,7 +257,9 @@ class TSCH_EXEC:
         randomized_IdleSettings = "\n".join(IdleSettings)
         
         random_digit = random.randint(2, 6)
-        
+            
+        exemethod = "cmd.exe" if self.execm is None else self.execm    
+                     
         xml = f"""<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.{random_digit}" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <Triggers>
@@ -275,7 +282,7 @@ class TSCH_EXEC:
   </Settings>
   <Actions Context="LocalSystem">
     <Exec>
-      <Command>cmd.exe</Command>
+      <Command>{exemethod}</Command>
 """
         if self.__retOutput:
             fileLocation = "\\Windows\\Temp\\" if self.location is None else self.location
