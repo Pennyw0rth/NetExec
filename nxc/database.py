@@ -170,10 +170,10 @@ class BaseDB:
                 
                 return reflected_table
             except (NoInspectionAvailable, NoSuchTableError, ValueError) as e:
-                print(e)
                 print(
                     f"""
-                    [-] Error reflecting table {table.__tablename__} for the {self.protocol} protocol - this means there is a DB schema mismatch
+                    [-] Error reflecting table {table.__tablename__} for the {self.protocol} protocol:
+                    [-] {e} - This means there is a DB schema mismatch
                     [-] This is probably because a newer version of nxc is being run on an old DB schema
                     [-] Optionally save the old DB data (`cp {self.db_path} ~/nxc_{self.protocol.lower()}.bak`)
                     [-] Then remove the {self.protocol} DB (`rm -f {self.db_path}`) and run nxc to initialize the new DB"""
