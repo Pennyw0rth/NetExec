@@ -34,7 +34,6 @@ class NXCModule:
             netexec smb <DC_IP> -u username -p password -M change-password -o USER='target_user' NEWPASS='target_user_newpass'
             netexec smb <DC_IP> -u username -p password -M change-password -o USER='target_user' NEWNTHASH='target_user_newnthash'
         """
-        self.context = context
         self.newpass = module_options.get("NEWPASS")
         self.newhash = module_options.get("NEWNTHASH")
         self.target_user = module_options.get("USER")
@@ -78,6 +77,7 @@ class NXCModule:
             raise
 
     def on_login(self, context, connection):
+        self.context = context
         target_username = self.target_user or connection.username
         target_domain = connection.domain
 
