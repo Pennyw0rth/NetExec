@@ -97,9 +97,9 @@ class NXCModule:
                 if self.is_meaningful_content(string)]
 
     def on_admin_login(self, context, connection):
-        found = 0
         context.log.display("Searching for Notepad cache...")
         for directory in connection.conn.listPath("C$", "Users\\*"):
+            found = 0
             if directory.get_longname() in self.false_positive or not directory.is_directory():
                 continue
 
