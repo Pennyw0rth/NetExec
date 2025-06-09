@@ -177,6 +177,16 @@ class database(BaseDB):
                 self.DpapiBackupkey = Table("dpapi_backupkey", self.metadata, autoload_with=self.db_engine)
                 self.ConfChecksTable = Table("conf_checks", self.metadata, autoload_with=self.db_engine)
                 self.ConfChecksResultsTable = Table("conf_checks_results", self.metadata, autoload_with=self.db_engine)
+
+                # Check if Database Schema is correct, due to hanging issues reported on discord introduced by https://github.com/Pennyw0rth/NetExec/pull/658
+                from sqlalchemy.schema import UniqueConstraint
+                ip_is_unique = False
+                for constraint in self.HostsTable.constraints:
+                    if isinstance(constraint, UniqueConstraint) and constraint.columns[0].name == "ip":
+                        ip_is_unique = True
+                        break
+                if not ip_is_unique:
+                    raise NoSuchTableError("ip is not unique in hosts table")
             except (NoInspectionAvailable, NoSuchTableError):
                 print(
                     f"""

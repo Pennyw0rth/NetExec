@@ -40,7 +40,7 @@ if platform.system() != "Windows":
     resource.setrlimit(resource.RLIMIT_NOFILE, file_limit)
 
 
-async def start_run(protocol_obj, args, db, targets):
+async def start_run(protocol_obj, args, db, targets):  # noqa: RUF029
     futures = []
     nxc_logger.debug("Creating ThreadPoolExecutor")
     if args.no_progress or len(targets) == 1:
@@ -58,7 +58,7 @@ async def start_run(protocol_obj, args, db, targets):
             nxc_logger.debug(f"Creating thread for {protocol_obj}")
             futures = [executor.submit(protocol_obj, args, db, target) for target in targets]
             for _ in as_completed(futures):
-                current += 1
+                current += 1  # noqa: SIM113
                 progress.update(tasks, completed=current)
     for future in as_completed(futures):
         try:
@@ -69,7 +69,7 @@ async def start_run(protocol_obj, args, db, targets):
 
 def main():
     first_run_setup(nxc_logger)
-    args = gen_cli_args()
+    args, version_info = gen_cli_args()
 
     # if these are the same, it might double log to file (two FileHandlers will be added)
     # but this should never happen by accident
@@ -78,6 +78,8 @@ def main():
     if hasattr(args, "log") and args.log:
         nxc_logger.add_file_log(args.log)
 
+    CODENAME, VERSION, COMMIT, DISTANCE = version_info
+    nxc_logger.debug(f"NXC VERSION: {VERSION} - {CODENAME} - {COMMIT} - {DISTANCE}")
     nxc_logger.debug(f"PYTHON VERSION: {sys.version}")
     nxc_logger.debug(f"RUNNING ON: {platform.system()} Release: {platform.release()}")
     nxc_logger.debug(f"Passed args: {args}")
@@ -94,9 +96,7 @@ def main():
         nxc_logger.error("KRB5CCNAME environment variable is not set")
         exit(1)
 
-    module_server = None
     targets = []
-    server_port_dict = {"http": 80, "https": 443, "smb": 445}
 
     if hasattr(args, "cred_id") and args.cred_id:
         for cred_id in args.cred_id:
@@ -104,8 +104,8 @@ def main():
                 start_id, end_id = cred_id.split("-")
                 try:
                     for n in range(int(start_id), int(end_id) + 1):
-                        args.cred_id.append(n)
-                    args.cred_id.remove(cred_id)
+                        args.cred_id.append(n)    # noqa: B909
+                    args.cred_id.remove(cred_id)  # noqa: B909
                 except Exception as e:
                     nxc_logger.error(f"Error parsing database credential id: {e}")
                     exit(1)
@@ -203,13 +203,6 @@ def main():
                 if ans.lower() not in ["y", "yes", ""]:
                     exit(1)
 
-            if hasattr(module, "on_request") or hasattr(module, "has_response"):
-                if hasattr(module, "required_server"):
-                    args.server = module.required_server
-
-                if not args.server_port:
-                    args.server_port = server_port_dict[args.server]
-
             # Add modules paths to the protocol object so it can load them itself
             proto_module_paths.append(modules[m]["path"])
         protocol_object.module_paths = proto_module_paths
@@ -227,8 +220,6 @@ def main():
     except KeyboardInterrupt:
         nxc_logger.debug("Got keyboard interrupt")
     finally:
-        if module_server:
-            module_server.shutdown()
         db_engine.dispose()
 
 

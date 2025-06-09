@@ -67,6 +67,7 @@ def proto_args(parser, parents):
     spidering_group.add_argument("--exclude-dirs", type=str, metavar="DIR_LIST", default="", help="directories to exclude from spidering")
     spidering_group.add_argument("--depth", type=int, help="max spider recursion depth")
     spidering_group.add_argument("--only-files", action="store_true", help="only spider files")
+    spidering_group.add_argument("--silent", action="store_true", help="Do not print found files/directories", default=False)
     segroup = spidering_group.add_mutually_exclusive_group()
     segroup.add_argument("--pattern", nargs="+", help="pattern(s) to search for in folders, filenames and file content")
     segroup.add_argument("--regex", nargs="+", help="regex(s) to search for in folders, filenames and file content")
@@ -95,6 +96,7 @@ def proto_args(parser, parents):
     posh_group.add_argument("--no-encode", action="store_true", default=False, help="Do not encode the PowerShell command ran on target")
 
     return parser
+
 
 def get_conditional_action(baseAction):
     class ConditionalAction(baseAction):

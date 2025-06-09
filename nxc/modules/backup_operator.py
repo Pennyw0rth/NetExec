@@ -9,6 +9,7 @@ from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 
 from nxc.paths import NXC_PATH
 
+
 class NXCModule:
     name = "backup_operator"
     description = "Exploit user in backup operator group to dump NTDS @mpgn_x64"

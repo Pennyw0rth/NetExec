@@ -27,7 +27,7 @@ class NXCModule:
         SERVER             PKI Enrollment Server to enumerate templates for. Default is None, use CN name
         BASE_DN            The base domain name for the LDAP query
         """
-        self.regex = re.compile("(https?://.+)")
+        self.regex = re.compile(r"(https?://.+)")
 
         self.server = None
         self.base_dn = None
@@ -70,7 +70,10 @@ class NXCModule:
                     searchBase="CN=Configuration," + base_dn_root,
                 )
         except LDAPSearchError as e:
-            context.log.fail(f"Obtained unexpected exception: {e}")
+            if "noSuchObject" in str(e):
+                context.log.fail("No ADCS infrastructure found.")
+            else:
+                context.log.fail(f"Obtained unexpected exception: {e}")
 
     def process_servers(self, item):
         """Function that is called to process the items obtain by the LDAP search when listing PKI Enrollment Servers."""

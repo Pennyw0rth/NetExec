@@ -21,9 +21,8 @@ class NXCModule:
     """
 
     def options(self, context, module_options):
-        """Showservers    Toggle printing of servers (default: true)"""
+        """SHOWSERVERS    Toggle printing of servers (default: true)"""
         self.showservers = True
-        self.base_dn = None
 
         if module_options and "SHOWSERVERS" in module_options:
             if module_options["SHOWSERVERS"].lower() == "true" or module_options["SHOWSERVERS"] == "1":
@@ -31,9 +30,8 @@ class NXCModule:
             elif module_options["SHOWSERVERS"].lower() == "false" or module_options["SHOWSERVERS"] == "0":
                 self.showservers = False
             else:
-                print("Could not parse showservers option.")
-        if module_options and "BASE_DN" in module_options:
-            self.base_dn = module_options["BASE_DN"]
+                context.log.fail("Could not parse showservers option for 'SHOWSERVERS'. Please use 'true' or 'false'.")
+                exit(1)
 
     name = "subnets"
     description = "Retrieves the different Sites and Subnets of an Active Directory"
@@ -42,7 +40,7 @@ class NXCModule:
     multiple_hosts = False
 
     def on_login(self, context, connection):
-        dn = connection.ldap_connection._baseDN if self.base_dn is None else self.base_dn
+        dn = connection.args.base_dn if connection.args.base_dn else connection.ldap_connection._baseDN
 
         context.log.display("Getting the Sites and Subnets from domain")
 

@@ -5,6 +5,7 @@ from nxc.helpers.logger import highlight
 from nxc.logger import NXCAdapter
 from ftplib import FTP, error_perm
 
+
 class ftp(connection):
     def __init__(self, args, db, host):
         self.protocol = "FTP"

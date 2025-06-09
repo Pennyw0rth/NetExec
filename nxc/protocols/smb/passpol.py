@@ -23,7 +23,7 @@ def convert(low, high, lockout=False):
     time = ""
     tmp = 0
 
-    if low == 0 and high == -0x8000_0000 or low == 0 and high == -0x8000_0000_0000_0000:
+    if (low == 0 and high == -0x8000_0000) or (low == 0 and high == -0x8000_0000_0000_0000):
         return "Not Set"
     if low == 0 and high == 0:
         return "None"
