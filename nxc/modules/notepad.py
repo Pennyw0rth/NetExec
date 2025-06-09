@@ -5,6 +5,7 @@ import re
 import time
 from nxc.paths import NXC_PATH
 
+
 class NXCModule:
     # Extracts content from Windows Notepad binary tab state files
     # Module by @termanix
@@ -25,7 +26,7 @@ class NXCModule:
     def extract_strings(self, data, min_length=4):
         """Extract printable strings from binary data, similar to the strings command."""
         results = []
-        
+
         # ASCII strings extraction
         ascii_strings = re.findall(b"[ -~]{%d,}" % min_length, data)
         for s in ascii_strings:
@@ -33,7 +34,7 @@ class NXCModule:
                 results.append(("ASCII", s.decode("ascii")))
             except Exception as e:
                 self.context.log.fail(f"Failed extracting ASCII strings: {e}")
-            
+
         # UTF-16LE strings extraction (common in Windows)
         utf16_pattern = re.compile(b"(?:[\x20-\x7E]\x00){%d,}" % min_length)
         utf16_strings = utf16_pattern.findall(data)
@@ -43,7 +44,7 @@ class NXCModule:
                 results.append(("UTF-16LE", decoded))
             except Exception as e:
                 self.context.log.fail(f"Failed extracting UTF-16LE strings: {e}")
-        
+
         return results
 
     def is_meaningful_content(self, string):
@@ -51,25 +52,22 @@ class NXCModule:
         # Filter out strings that are just repetitions of the same character
         if len(set(string)) <= 2 and len(string) > 4:
             return False
-        
+
         # Filter out strings that don't have any letters or numbers
         if not any(c.isalnum() for c in string):
             return False
-        
+
         # Filter out strings that look like memory addresses or hex dumps
         if re.match(r"^[0-9A-F]+$", string) and len(string) >= 8:
             return False
-        
+
         # Filter out strings that are just whitespace or control characters
         if string.isspace():
             return False
-        
+
         # Filter out common binary file markers that aren't actual content
         common_garbage = ["NULL", "true", "false", "xmlns", "http://", "https://", "COM1", "COM2", "COM3"]
-        if string in common_garbage:
-            return False
-            
-        return True
+        return string not in common_garbage
 
     def read_and_decode_file(self, connection, context, file_path, user):
         buf = BytesIO()
@@ -90,15 +88,14 @@ class NXCModule:
             else:
                 # If it's a different error, just skip this file
                 context.log.debug(f"Error accessing {file_path}: {e}")
-                
+
         buf.seek(0)
         binary_data = buf.read()
-        
+
         # Extract meaningful strings
-        return [(encoding, string) for encoding, string in self.extract_strings(binary_data) 
+        return [(encoding, string) for encoding, string in self.extract_strings(binary_data)
                 if self.is_meaningful_content(string)]
 
-    
     def on_admin_login(self, context, connection):
         found = 0
         context.log.display("Searching for Notepad cache...")
@@ -114,7 +111,7 @@ class NXCModule:
                         for file in connection.conn.listPath("C$", f"{notepad_dir}\\*"):
                             if file.get_longname() not in self.false_positive and file.get_longname().endswith(".bin"):
                                 file_path = f"{notepad_dir}{file.get_longname()}"
-                                
+
                                 # Read the binary file
                                 meaningful_strings = self.read_and_decode_file(connection, context, file_path, directory.get_longname())
 
@@ -124,7 +121,7 @@ class NXCModule:
 
                                     # Output content
                                     content_lines = []
-                                    
+
                                     # First loop to handle meaningful strings
                                     for _, string in meaningful_strings:
                                         if bool(re.match(self.FILE_PATH_REGEX, string)):  # Only needed if checking locally
@@ -138,7 +135,7 @@ class NXCModule:
                                         else:
                                             context.log.highlight(f"\t{string}")
                                             content_lines.append(string)  # Store the string value only
-                                    
+
                                     # Save to file
                                     filename = f"{connection.host}_{directory.get_longname()}_notepad_tabstate_{found}.txt"
                                     export_path = join(NXC_PATH, "modules", "notepad")
