@@ -1390,6 +1390,8 @@ class smb(connection):
                 self.logger.fail(f"Regex compilation error: {e}")
         elif self.args.pattern is None:
             self.args.pattern = [""]
+        if self.args.exclude_folders is None:
+            self.args.exclude_folders = []
 
         spidering = SMBSpider(
                 self.conn,
@@ -1398,16 +1400,21 @@ class smb(connection):
                 self.args.spider_folder,
                 self.args.pattern,
                 self.args.regex,
-                self.args.exclude_dirs,
+                self.args.exclude_folders,
                 self.args.depth,
                 self.args.content,
                 self.args.only_files,
+                self.args.only_folders,
+                self.args.spider_all
             )
 
         self.logger.display("Started spidering")
         start_time = time()
         spidering.spider()
         self.logger.display(f"Done spidering (Completed in {time() - start_time})")
+
+    def spider_all(self):
+        self.spider()
 
     def rid_brute(self, max_rid=None):
         entries = []
