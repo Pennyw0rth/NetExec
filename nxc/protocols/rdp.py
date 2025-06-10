@@ -9,8 +9,7 @@ from impacket.krb5.ccache import CCache
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.logger import NXCAdapter
-from nxc.config import host_info_colors
-from nxc.config import process_secret
+from nxc.config import host_info_colors, process_secret
 from nxc.paths import NXC_PATH
 
 from aardwolf.connection import RDPConnection

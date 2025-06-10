@@ -9,7 +9,7 @@ from nxc.cli import gen_cli_args
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.loaders.moduleloader import ModuleLoader
 from nxc.first_run import first_run_setup
-from nxc.paths import NXC_PATH, WORKSPACE_DIR
+from nxc.paths import CONFIG_PATH, NXC_PATH, WORKSPACE_DIR
 from nxc.console import nxc_console
 from nxc.logger import nxc_logger
 from nxc.config import nxc_config, nxc_workspace, config_log, ignore_opsec
@@ -195,7 +195,7 @@ def main():
                     nxc_logger.debug("ignore_opsec is set in the configuration, skipping prompt")
                     nxc_logger.display("Ignore OPSEC in configuration is set and OPSEC unsafe module loaded")
                 else:
-                    ans = input(highlight("[!] Module is not opsec safe, are you sure you want to run this? [Y/n] For global configuration, change ignore_opsec value to True on ~/nxc/nxc.conf", "red"))
+                    ans = input(highlight(f"[!] Module is not opsec safe, are you sure you want to run this? [Y/n] For global configuration, change ignore_opsec value to True on {CONFIG_PATH}", "red"))
                     if ans.lower() not in ["y", "yes", ""]:
                         exit(1)
 

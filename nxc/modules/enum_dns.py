@@ -2,6 +2,7 @@ from datetime import datetime
 from nxc.helpers.logger import write_log
 from nxc.paths import NXC_PATH
 
+
 class NXCModule:
     """
     Uses WMI to dump DNS from an AD DNS Server.
@@ -34,7 +35,7 @@ class NXCModule:
         else:
             domains = [self.domains]
         data = ""
-        
+
         for domain in domains:
             output = connection.wmi(
                 f"Select TextRepresentation FROM MicrosoftDNS_ResourceRecord WHERE DomainName = {domain}",
