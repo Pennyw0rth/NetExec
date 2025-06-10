@@ -4,6 +4,7 @@ from nxc.context import Context
 from impacket.smb3structs import FILE_SHARE_WRITE, FILE_SHARE_DELETE, FILE_ATTRIBUTE_ENCRYPTED
 from impacket.smbconnection import SessionError, SMBConnection
 
+
 def get_error_string(exception):
     if hasattr(exception, "getErrorString"):
         try:
@@ -44,10 +45,7 @@ class NXCModule:
             shares = conn.listShares()
         except SessionError as e:
             error = get_error_string(e)
-            context.log.fail(
-                f"Error enumerating shares: {error}",
-                color="magenta",
-            )
+            context.log.fail(f"Error enumerating shares: {error}", color="magenta")
             return
 
         # Check if named pipe is already available
@@ -59,10 +57,7 @@ class NXCModule:
                 return
         except SessionError as e:
             error = get_error_string(e)
-            context.log.fail(
-                f"Error enumerating named pipes: {error}",
-                color="magenta",
-            )
+            context.log.fail(f"Error enumerating named pipes: {error}", color="magenta")
             return
 
         # Write an encrypted file on the share root.
@@ -107,8 +102,5 @@ class NXCModule:
             if error == "STATUS_OBJECT_NAME_NOT_FOUND":
                 context.log.debug("efsrpc pipe was not activated.")
             else:
-                context.log.fail(
-                    f"Error waiting for named pipe: {error}",
-                    color="magenta",
-                )
+                context.log.fail(f"Error waiting for named pipe: {error}", color="magenta")
             return
