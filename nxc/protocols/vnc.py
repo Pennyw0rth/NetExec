@@ -14,6 +14,7 @@ from aardwolf.commons.queuedata.constants import VIDEO_FORMAT
 from asyauth.common.credentials import UniCredential
 from asyauth.common.constants import asyauthSecret, asyauthProtocol
 
+
 class vnc(connection):
     def __init__(self, args, db, host):
         self.iosettings = RDPIOSettings()

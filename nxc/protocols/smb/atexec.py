@@ -7,6 +7,7 @@ from nxc.paths import TMP_PATH
 from time import sleep
 from datetime import datetime, timedelta
 
+
 class TSCH_EXEC:
     def __init__(self, target, share_name, username, password, domain, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
         self.__target = target

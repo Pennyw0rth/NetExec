@@ -23,7 +23,6 @@ from asyauth.common.constants import asyauthSecret
 from asysocks.unicomm.common.target import UniTarget, UniProto
 
 
-
 class rdp(connection):
     def __init__(self, args, db, host):
         self.domain = None
