@@ -1,14 +1,12 @@
-import sys
 
-from sqlalchemy import func, Table, select, delete
+from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, func, select, delete
 from sqlalchemy.dialects.sqlite import Insert  # used for upsert
-from sqlalchemy.exc import (
-    NoInspectionAvailable,
-    NoSuchTableError,
-)
+from sqlalchemy.ext.declarative import declarative_base
 
 from nxc.database import BaseDB, format_host_query
 from nxc.logger import nxc_logger
+
+Base = declarative_base()
 
 
 class database(BaseDB):
@@ -18,44 +16,39 @@ class database(BaseDB):
 
         super().__init__(db_engine)
 
+    class User(Base):
+        __tablename__ = "users"
+        id = Column(Integer)
+        domain = Column(String)
+        username = Column(String)
+        password = Column(String)
+        credtype = Column(String)
+        pillaged_from_hostid = Column(Integer)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            ForeignKeyConstraint(["pillaged_from_hostid"], ["hosts.id"]),
+        )
+
+    class Host(Base):
+        __tablename__ = "hosts"
+        id = Column(Integer)
+        ip = Column(String)
+        hostname = Column(String)
+        domain = Column(String)
+        os = Column(String)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+        )
+
     @staticmethod
     def db_schema(db_conn):
-        db_conn.execute(
-            """CREATE TABLE "users" (
-            "id" integer PRIMARY KEY,
-            "domain" text,
-            "username" text,
-            "password" text,
-            "credtype" text,
-            "pillaged_from_hostid" integer,
-            FOREIGN KEY(pillaged_from_hostid) REFERENCES hosts(id)
-            )"""
-        )
-
-        db_conn.execute(
-            """CREATE TABLE "hosts" (
-            "id" integer PRIMARY KEY,
-            "ip" text,
-            "hostname" text,
-            "domain" text,
-            "os" text
-            )"""
-        )
+        Base.metadata.create_all(db_conn)
 
     def reflect_tables(self):
-        with self.db_engine.connect():
-            try:
-                self.UsersTable = Table("users", self.metadata, autoload_with=self.db_engine)
-                self.HostsTable = Table("hosts", self.metadata, autoload_with=self.db_engine)
-            except (NoInspectionAvailable, NoSuchTableError):
-                print(
-                    f"""
-                    [-] Error reflecting tables for the {self.protocol} protocol - this means there is a DB schema mismatch
-                    [-] This is probably because a newer version of nxc is being run on an old DB schema
-                    [-] Optionally save the old DB data (`cp {self.db_path} ~/nxc_{self.protocol.lower()}.bak`)
-                    [-] Then remove the nxc {self.protocol} DB (`rm -f {self.db_path}`) and run nxc to initialize the new DB"""
-                )
-                sys.exit()
+        self.UsersTable = self.reflect_table(self.User)
+        self.HostsTable = self.reflect_table(self.Host)
 
     def add_host(self, ip, hostname, domain, os):
         """Check if this host has already been added to the database, if not, add it in."""

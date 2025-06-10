@@ -1,14 +1,12 @@
-import sys
 
-from sqlalchemy import Table, select, delete, func
+from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, select, delete, func
 from sqlalchemy.dialects.sqlite import Insert
-from sqlalchemy.exc import (
-    NoInspectionAvailable,
-    NoSuchTableError,
-)
+from sqlalchemy.ext.declarative import declarative_base
 
 from nxc.database import BaseDB, format_host_query
 from nxc.logger import nxc_logger
+
+Base = declarative_base()
 
 
 class database(BaseDB):
@@ -19,58 +17,59 @@ class database(BaseDB):
 
         super().__init__(db_engine)
 
+    class Credential(Base):
+        __tablename__ = "credentials"
+        id = Column(Integer)
+        username = Column(String)
+        password = Column(String)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+        )
+
+    class Host(Base):
+        __tablename__ = "hosts"
+        id = Column(Integer)
+        host = Column(String)
+        port = Column(Integer)
+        banner = Column(String)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+        )
+
+    class LoggedInRelation(Base):
+        __tablename__ = "loggedin_relations"
+        id = Column(Integer)
+        credid = Column(Integer)
+        hostid = Column(Integer)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            ForeignKeyConstraint(["credid"], ["credentials.id"]),
+            ForeignKeyConstraint(["hostid"], ["hosts.id"]),
+        )
+
+    class DirectoryListing(Base):
+        __tablename__ = "directory_listings"
+        id = Column(Integer)
+        lir_id = Column(Integer)
+        data = Column(String)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            ForeignKeyConstraint(["lir_id"], ["loggedin_relations.id"]),
+        )
+        
     @staticmethod
     def db_schema(db_conn):
-        db_conn.execute(
-            """CREATE TABLE "credentials" (
-            "id" integer PRIMARY KEY,
-            "username" text,
-            "password" text
-            )"""
-        )
-
-        db_conn.execute(
-            """CREATE TABLE "hosts" (
-            "id" integer PRIMARY KEY,
-            "host" text,
-            "port" integer,
-            "banner" text
-            )"""
-        )
-        db_conn.execute(
-            """CREATE TABLE "loggedin_relations" (
-            "id" integer PRIMARY KEY,
-            "credid" integer,
-            "hostid" integer,
-            FOREIGN KEY(credid) REFERENCES credentials(id),
-            FOREIGN KEY(hostid) REFERENCES hosts(id)
-        )"""
-        )
-        db_conn.execute(
-            """CREATE TABLE "directory_listings" (
-            "id" integer PRIMARY KEY,
-            "lir_id" integer,
-            "data" text,
-            FOREIGN KEY(lir_id) REFERENCES loggedin_relations(id)
-        )"""
-        )
+        Base.metadata.create_all(db_conn)
 
     def reflect_tables(self):
-        with self.db_engine.connect():
-            try:
-                self.CredentialsTable = Table("credentials", self.metadata, autoload_with=self.db_engine)
-                self.HostsTable = Table("hosts", self.metadata, autoload_with=self.db_engine)
-                self.LoggedinRelationsTable = Table("loggedin_relations", self.metadata, autoload_with=self.db_engine)
-                self.DirectoryListingsTable = Table("directory_listings", self.metadata, autoload_with=self.db_engine)
-            except (NoInspectionAvailable, NoSuchTableError):
-                print(
-                    f"""
-                    [-] Error reflecting tables for the {self.protocol} protocol - this means there is a DB schema mismatch
-                    [-] This is probably because a newer version of nxc is being run on an old DB schema
-                    [-] Optionally save the old DB data (`cp {self.db_path} ~/nxc_{self.protocol.lower()}.bak`)
-                    [-] Then remove the {self.protocol} DB (`rm -f {self.db_path}`) and run nxc to initialize the new DB"""
-                )
-                sys.exit()
+        self.CredentialsTable = self.reflect_table(self.Credential)
+        self.HostsTable = self.reflect_table(self.Host)
+        self.LoggedinRelationsTable = self.reflect_table(self.LoggedInRelation)
+        self.DirectoryListingsTable = self.reflect_table(self.DirectoryListing)
 
     def add_host(self, host, port, banner):
         """Check if this host is already in the DB, if not add it"""
