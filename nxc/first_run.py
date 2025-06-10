@@ -8,13 +8,12 @@ from nxc.logger import nxc_logger
 
 
 def first_run_setup(logger=nxc_logger):
-    if not exists(TMP_PATH):
-        mkdir(TMP_PATH)
-
     if not exists(NXC_PATH):
         logger.display("First time use detected")
         logger.display("Creating home directory structure")
         mkdir(NXC_PATH)
+    if not exists(TMP_PATH):
+        mkdir(TMP_PATH)
 
     folders = (
         "logs",

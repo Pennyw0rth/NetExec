@@ -1,20 +1,13 @@
-import os
-import sys
+from os.path import join, normpath, expanduser, dirname
+from os import environ, getenv
 import nxc
 
-if "XDG_CONFIG_HOME" in os.environ:  # noqa: SIM108
-    NXC_PATH = os.path.join(os.getenv("XDG_CONFIG_HOME"), "nxc")
+if "NXC_PATH" in environ:  # noqa: SIM108
+    NXC_PATH = normpath(getenv("NXC_PATH"))
 else:
-    NXC_PATH = os.path.normpath(os.path.expanduser("~/.nxc"))
-    
-if os.name == "nt":
-    TMP_PATH = os.getenv("LOCALAPPDATA") + "\\Temp\\nxc_hosted"
-elif hasattr(sys, "getandroidapilevel"):
-    TMP_PATH = os.path.join("/data", "data", "com.termux", "files", "usr", "tmp", "nxc_hosted")
-else:
-    TMP_PATH = os.path.join("/tmp", "nxc_hosted")
+    NXC_PATH = normpath(expanduser("~/.nxc"))
 
-CERT_PATH = os.path.join(NXC_PATH, "nxc.pem")
-CONFIG_PATH = os.path.join(NXC_PATH, "nxc.conf")
-WORKSPACE_DIR = os.path.join(NXC_PATH, "workspaces")
-DATA_PATH = os.path.join(os.path.dirname(nxc.__file__), "data")
+TMP_PATH = join(NXC_PATH, "tmp")
+CONFIG_PATH = join(NXC_PATH, "nxc.conf")
+WORKSPACE_DIR = join(NXC_PATH, "workspaces")
+DATA_PATH = join(dirname(nxc.__file__), "data")
