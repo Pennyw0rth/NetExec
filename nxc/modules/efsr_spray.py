@@ -4,23 +4,6 @@ from nxc.context import Context
 from impacket.smb3structs import FILE_SHARE_WRITE, FILE_SHARE_DELETE, FILE_ATTRIBUTE_ENCRYPTED
 from impacket.smbconnection import SessionError, SMBConnection
 
-# Copy-pasta from protocols/smb.py
-smb_error_status = [
-    "STATUS_ACCOUNT_DISABLED",
-    "STATUS_ACCOUNT_EXPIRED",
-    "STATUS_ACCOUNT_RESTRICTION",
-    "STATUS_INVALID_LOGON_HOURS",
-    "STATUS_INVALID_WORKSTATION",
-    "STATUS_LOGON_TYPE_NOT_GRANTED",
-    "STATUS_PASSWORD_EXPIRED",
-    "STATUS_PASSWORD_MUST_CHANGE",
-    "STATUS_ACCESS_DENIED",
-    "STATUS_NO_SUCH_FILE",
-    "KDC_ERR_CLIENT_REVOKED",
-    "KDC_ERR_PREAUTH_FAILED",
-]
-
-
 def get_error_string(exception):
     if hasattr(exception, "getErrorString"):
         try:
@@ -63,7 +46,7 @@ class NXCModule:
             error = get_error_string(e)
             context.log.fail(
                 f"Error enumerating shares: {error}",
-                color="magenta" if error in smb_error_status else "red",
+                color="magenta",
             )
             return
 
@@ -78,7 +61,7 @@ class NXCModule:
             error = get_error_string(e)
             context.log.fail(
                 f"Error enumerating named pipes: {error}",
-                color="magenta" if error in smb_error_status else "red",
+                color="magenta",
             )
             return
 
@@ -126,6 +109,6 @@ class NXCModule:
             else:
                 context.log.fail(
                     f"Error waiting for named pipe: {error}",
-                    color="magenta" if error in smb_error_status else "red",
+                    color="magenta",
                 )
             return
