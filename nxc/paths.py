@@ -2,8 +2,8 @@ import os
 import sys
 import nxc
 
-if 'XDG_CONFIG_HOME' in os.environ:
-    NXC_PATH = os.path.join(os.getenv('XDG_CONFIG_HOME'), "nxc")
+if "XDG_CONFIG_HOME" in os.environ:  # noqa: SIM108
+    NXC_PATH = os.path.join(os.getenv("XDG_CONFIG_HOME"), "nxc")
 else:
     NXC_PATH = os.path.expanduser("~/.nxc")
     
