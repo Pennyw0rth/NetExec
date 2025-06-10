@@ -1412,7 +1412,7 @@ class smb(connection):
         self.logger.display("Started spidering")
         start_time = time()
         spidering.spider()
-        self.logger.display(f"Done spidering (Completed in {time() - start_time})")
+        self.logger.display(f"Done spidering (Completed in {round(time() - start_time, 3)} seconds)")
 
     def spider_all(self):
         self.spider()

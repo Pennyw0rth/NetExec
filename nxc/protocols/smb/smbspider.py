@@ -50,9 +50,9 @@ class SMBSpider:
 
         try:
             filelist = self.smbconnection.listPath(self.share, subfolder)
-            self.dir_list(filelist, subfolder)
             if depth is not None and depth <= 0:
                 return
+            self.dir_list(filelist, subfolder)
         except SessionError as e:
             if "STATUS_ACCESS_DENIED" in str(e):
                 self.logger.debug(f"Failed listing files on share {self.share} in directory {subfolder}")
