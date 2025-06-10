@@ -3,6 +3,7 @@ from impacket.dcerpc.v5 import tsch, transport
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 from nxc.helpers.misc import gen_random_string
+from nxc.paths import TMP_PATH
 from time import sleep
 from datetime import datetime, timedelta
 
@@ -167,7 +168,7 @@ class TSCH_EXEC:
             if fileless:
                 while True:
                     try:
-                        with open(os.path.join("/tmp", "nxc_hosted", self.__output_filename)) as output:
+                        with open(os.path.join(TMP_PATH, self.__output_filename)) as output:
                             self.output_callback(output.read())
                         break
                     except OSError:
