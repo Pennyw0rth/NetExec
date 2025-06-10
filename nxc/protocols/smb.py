@@ -170,6 +170,7 @@ class smb(connection):
 
     def enum_host_info(self):
         self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
+        self.is_host_dc()
 
         try:
             self.conn.login("", "")
@@ -191,7 +192,7 @@ class smb(connection):
         else:
             try:
                 # If we know the host is a DC we can still get the hostname over LDAP if NTLM is not available
-                if self.is_host_dc() and detect_if_ip(self.host):
+                if self.isdc and detect_if_ip(self.host):
                     self.hostname, self.domain = LDAPResolution(self.host).get_resolution()
                     self.targetDomain = self.domain
                 # If we can't authenticate with NTLM and the target is supplied as a FQDN we must parse it
