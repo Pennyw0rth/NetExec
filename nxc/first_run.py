@@ -18,7 +18,6 @@ def first_run_setup(logger=nxc_logger):
     folders = (
         "logs",
         "modules",
-        "protocols",
         "workspaces",
         "obfuscated_scripts",
         "screenshots",
@@ -45,7 +44,3 @@ def first_run_setup(logger=nxc_logger):
         logger.display("Copying default configuration file")
         default_path = path_join(DATA_PATH, "nxc.conf")
         shutil.copy(default_path, NXC_PATH)
-
-    # if not exists(CERT_PATH):
-    #         if os.name != 'nt':
-    #         if e.errno == errno.ENOENT:
