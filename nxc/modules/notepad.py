@@ -4,6 +4,22 @@ from os.path import join, abspath
 import re
 import time
 from nxc.paths import NXC_PATH
+from impacket.smbconnection import SessionError
+
+smb_error_status = [
+    "STATUS_ACCOUNT_DISABLED",
+    "STATUS_ACCOUNT_EXPIRED",
+    "STATUS_ACCOUNT_RESTRICTION",
+    "STATUS_INVALID_LOGON_HOURS",
+    "STATUS_INVALID_WORKSTATION",
+    "STATUS_LOGON_TYPE_NOT_GRANTED",
+    "STATUS_PASSWORD_EXPIRED",
+    "STATUS_PASSWORD_MUST_CHANGE",
+    "STATUS_ACCESS_DENIED",
+    "STATUS_NO_SUCH_FILE",
+    "KDC_ERR_CLIENT_REVOKED",
+    "KDC_ERR_PREAUTH_FAILED",
+]
 
 
 class NXCModule:
@@ -92,9 +108,11 @@ class NXCModule:
         buf.seek(0)
         binary_data = buf.read()
 
-        # Extract meaningful strings
-        return [(encoding, string) for encoding, string in self.extract_strings(binary_data)
-                if self.is_meaningful_content(string)]
+        # Return only the meaningful strings
+        return [
+            string for _, string in self.extract_strings(binary_data)
+            if self.is_meaningful_content(string)
+        ]
 
     def on_admin_login(self, context, connection):
         context.log.display("Searching for Notepad cache...")
@@ -106,56 +124,65 @@ class NXCModule:
             # Path for Windows Notepad tab state files
             notepad_dir = f"Users\\{directory.get_longname()}\\AppData\\Local\\Packages\\Microsoft.WindowsNotepad_8wekyb3d8bbwe\\LocalState\\TabState\\"
             try:
-                if not connection.conn.listPath("C$", f"{notepad_dir}\\*"):
-                    continue
-                try:
-                    for file in connection.conn.listPath("C$", f"{notepad_dir}\\*"):
-                        if file.get_longname() not in self.false_positive and file.get_longname().endswith(".bin"):
-                            file_path = f"{notepad_dir}{file.get_longname()}"
+                for file in connection.conn.listPath("C$", f"{notepad_dir}\\*"):
+                    if file.get_longname() not in self.false_positive and file.get_longname().endswith(".bin"):
+                        file_path = f"{notepad_dir}{file.get_longname()}"
 
-                            # Read the binary file
-                            meaningful_strings = self.read_and_decode_file(connection, context, file_path, directory.get_longname())
+                        # Read the binary file
+                        meaningful_strings = self.read_and_decode_file(connection, context, file_path, directory.get_longname())
 
-                            if meaningful_strings:
-                                found += 1
-                                context.log.highlight(f"C:\\{file_path}")
+                        if meaningful_strings:
+                            found += 1
+                            context.log.highlight(f"C:\\{file_path}")
 
-                                # Output content
-                                content_lines = []
+                            # Output content
+                            content_lines = []
 
-                                # First loop to handle meaningful strings
-                                for _, string in meaningful_strings:
-                                    if bool(re.match(self.FILE_PATH_REGEX, string)):  # Only needed if checking locally
-                                        # Read the file into a buffer
-                                        meaningful_strings = self.read_and_decode_file(connection, context, string[2:], directory.get_longname())
+                            # First loop to handle meaningful strings
+                            for string in meaningful_strings:
+                                if bool(re.match(self.FILE_PATH_REGEX, string)):  # Only needed if checking locally
+                                    # Read the file into a buffer
+                                    meaningful_strings = self.read_and_decode_file(connection, context, string[2:], directory.get_longname())
 
-                                        # Second loop to handle content inside the file
-                                        for _, string in meaningful_strings:
-                                            context.log.highlight(f"\t{string}")
-                                            content_lines.append(string)  # Store the string value only
-                                    else:
+                                    # Second loop to handle content inside the file
+                                    for string in meaningful_strings:
                                         context.log.highlight(f"\t{string}")
                                         content_lines.append(string)  # Store the string value only
+                                else:
+                                    context.log.highlight(f"\t{string}")
+                                    content_lines.append(string)  # Store the string value only
 
-                                # Save to file
-                                filename = f"{connection.host}_{directory.get_longname()}_notepad_tabstate_{found}.txt"
-                                export_path = join(NXC_PATH, "modules", "notepad")
-                                path = abspath(join(export_path, filename))
-                                makedirs(export_path, exist_ok=True)
+                            # Save to file
+                            filename = f"{connection.host}_{directory.get_longname()}_notepad_tabstate_{found}.txt"
+                            export_path = join(NXC_PATH, "modules", "notepad")
+                            path = abspath(join(export_path, filename))
+                            makedirs(export_path, exist_ok=True)
 
-                                try:
-                                    with open(path, "w+") as output_file:
-                                        output_file.write(f"Source: C:\\{file_path}\n\n")
-                                        output_file.write("\n".join(content_lines))  # Write strings line by line
-                                    context.log.highlight(f"Notepad tab state content written to: {path}")
-                                except Exception as e:
-                                    context.log.fail(f"Failed to write Notepad tab state to {filename}: {e}")
-
-                except Exception as e:
-                    context.log.fail(f"Failed on connection and reading bin files: {e}")
-                    context.log.debug(f"Failed: {e}")
-            except Exception as e:
-                context.log.fail(f"{directory.get_longname()} User has no any notepad cache file")
-                context.log.debug(f"Failed for user {directory.get_longname()}: {e}")
+                            with open(path, "w+") as output_file:
+                                output_file.write(f"Source: C:\\{file_path}\n\n")
+                                output_file.write("\n".join(content_lines))  # Write strings line by line
+                            context.log.success(f"Notepad tab state content written to: {path}")
+            except SessionError as e:
+                error = self.get_error_string(e)
+                if error == "STATUS_OBJECT_NAME_NOT_FOUND" or error == "STATUS_OBJECT_PATH_NOT_FOUND":
+                    context.log.debug(f"Failed for user {directory.get_longname()}: {e}")
+                else:
+                    context.log.fail(
+                        f"Error enumerating shares: {error}",
+                        color="magenta" if error in smb_error_status else "red",
+                    )
         if found == 0:
             context.log.info("No Notepad tab state files with meaningful content found")
+
+    def get_error_string(self, exception):
+        if hasattr(exception, "getErrorString"):
+            try:
+                es = exception.getErrorString()
+            except KeyError:
+                return f"Could not get nt error code {exception.getErrorCode()} from impacket: {exception}"
+            if type(es) is tuple:
+                return es[0]
+            else:
+                return es
+        else:
+            return str(exception)
