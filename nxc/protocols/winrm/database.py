@@ -128,7 +128,6 @@ class database(BaseDB):
 
     def add_credential(self, credtype, domain, username, password, pillaged_from=None):
         """Check if this credential has already been added to the database, if not add it in."""
-        domain = domain.split(".")[0].upper()
         credentials = []
 
         credential_data = {}
@@ -274,6 +273,16 @@ class database(BaseDB):
             q = select(self.UsersTable)
 
         return self.db_execute(q).all()
+
+    def get_credential(self, cred_type, domain, username, password):
+        q = select(self.UsersTable).filter(
+            self.UsersTable.c.domain == domain,
+            self.UsersTable.c.username == username,
+            self.UsersTable.c.password == password,
+            self.UsersTable.c.credtype == cred_type,
+        )
+        results = self.db_execute(q).first()
+        return results.id
 
     def is_credential_local(self, credential_id):
         q = select(self.UsersTable.c.domain).filter(self.UsersTable.c.id == credential_id)

@@ -123,8 +123,6 @@ class NXCModule:
         self.results.setdefault(connection.host, {"checks": []})
         self.context = context
         HostChecker(context, connection).run()
-
-    def on_shutdown(self, context, connection):
         if self.output is not None:
             self.export_results()
 
@@ -308,7 +306,7 @@ class HostChecker:
 
             value = self.reg_query_value(self.dce, self.connection, key, value_name)
 
-            if type(value) == DCERPCSessionError:
+            if isinstance(value, DCERPCSessionError):
                 if options["KOIfMissing"]:
                     ok = False
                 if value.error_code in (ERROR_NO_MORE_ITEMS, ERROR_FILE_NOT_FOUND):
@@ -464,7 +462,7 @@ class HostChecker:
         nbtns_enabled = 0
         for subkey in subkeys:
             value = self.reg_query_value(self.dce, self.connection, key_name + "\\" + subkey, "NetbiosOptions")
-            if type(value) == DCERPCSessionError:
+            if isinstance(value, DCERPCSessionError):
                 if value.error_code == ERROR_OBJECT_NOT_FOUND:
                     missing += 1
                 continue

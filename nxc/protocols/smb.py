@@ -26,7 +26,7 @@ from impacket.dcerpc.v5.epm import MSRPC_UUID_PORTMAP
 from impacket.dcerpc.v5.samr import SID_NAME_USE
 from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
 from impacket.krb5.ccache import CCache
-from impacket.krb5.kerberosv5 import SessionKeyDecryptionError
+from impacket.krb5.kerberosv5 import SessionKeyDecryptionError, getKerberosTGT
 from impacket.krb5.types import KerberosException, Principal
 from impacket.krb5 import constants
 from impacket.dcerpc.v5.dtypes import NULL
@@ -43,7 +43,6 @@ from nxc.paths import NXC_PATH
 from nxc.protocols.smb.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection
 from nxc.protocols.smb.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
 from nxc.protocols.smb.kerberos import kerberos_login_with_S4U
-from nxc.servers.smb import NXCSMBServer
 from nxc.protocols.smb.wmiexec import WMIEXEC
 from nxc.protocols.smb.atexec import TSCH_EXEC
 from nxc.protocols.smb.smbexec import SMBEXEC
@@ -56,6 +55,8 @@ from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.helpers.logger import highlight
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.powershell import create_ps_command
+from nxc.helpers.misc import detect_if_ip
+from nxc.protocols.ldap.resolution import LDAPResolution
 
 from dploot.triage.vaults import VaultsTriage
 from dploot.triage.browser import BrowserTriage, LoginData, GoogleRefreshToken, Cookie
@@ -65,14 +66,11 @@ from dploot.triage.sccm import SCCMTriage, SCCMCred, SCCMSecret, SCCMCollection
 
 from time import time, ctime
 from datetime import datetime
-from functools import wraps
 from traceback import format_exc
-import logging
 from termcolor import colored
 import contextlib
 
 smb_share_name = gen_random_string(5).upper()
-smb_server = None
 
 smb_error_status = [
     "STATUS_ACCOUNT_DISABLED",
@@ -104,49 +102,6 @@ def get_error_string(exception):
         return str(exception)
 
 
-def requires_smb_server(func):
-    def _decorator(self, *args, **kwargs):
-        global smb_server
-        global smb_share_name
-
-        get_output = False
-        payload = None
-        methods = []
-
-        with contextlib.suppress(IndexError):
-            payload = args[0]
-        with contextlib.suppress(IndexError):
-            get_output = args[1]
-        with contextlib.suppress(IndexError):
-            methods = args[2]
-
-        if "payload" in kwargs:
-            payload = kwargs["payload"]
-        if "get_output" in kwargs:
-            get_output = kwargs["get_output"]
-        if "methods" in kwargs:
-            methods = kwargs["methods"]
-        if not payload and self.args.execute and not self.args.no_output:
-            get_output = True
-        if (get_output or (methods and ("smbexec" in methods))) and not smb_server:
-            self.logger.debug("Starting SMB server")
-            smb_server = NXCSMBServer(
-                self.nxc_logger,
-                smb_share_name,
-                listen_port=self.args.smb_server_port,
-                verbose=self.args.verbose,
-            )
-            smb_server.start()
-
-        output = func(self, *args, **kwargs)
-        if smb_server is not None:
-            smb_server.shutdown()
-            smb_server = None
-        return output
-
-    return wraps(func)(_decorator)
-
-
 class smb(connection):
     def __init__(self, args, db, host):
         self.domain = None
@@ -172,6 +127,7 @@ class smb(connection):
         self.no_ntlm = False
         self.protocol = "SMB"
         self.is_guest = None
+        self.isdc = False
 
         connection.__init__(self, args, db, host)
 
@@ -213,6 +169,7 @@ class smb(connection):
 
     def enum_host_info(self):
         self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
+        self.is_host_dc()
 
         try:
             self.conn.login("", "")
@@ -232,13 +189,19 @@ class smb(connection):
             if not self.targetDomain:   # Not sure if that can even happen but now we are safe
                 self.targetDomain = self.hostname
         else:
-            # If we can't authenticate with NTLM and the target is supplied as a FQDN we must parse it
             try:
-                import socket
-                socket.inet_aton(self.host)
-                self.logger.debug("NTLM authentication not available! Authentication will fail without a valid hostname and domain name")
-                self.hostname = self.host
-                self.targetDomain = self.host
+                # If we know the host is a DC we can still get the hostname over LDAP if NTLM is not available
+                if self.isdc and detect_if_ip(self.host):
+                    self.hostname, self.domain = LDAPResolution(self.host).get_resolution()
+                    self.targetDomain = self.domain
+                # If we can't authenticate with NTLM and the target is supplied as a FQDN we must parse it
+                else:
+                    # Check if the host is a valid IP address, if not we parse the FQDN in the Exception
+                    import socket
+                    socket.inet_aton(self.host)
+                    self.logger.debug("NTLM authentication not available! Authentication will fail without a valid hostname and domain name")
+                    self.hostname = self.host
+                    self.targetDomain = self.host
             except OSError:
                 if self.host.count(".") >= 1:
                     self.hostname = self.host.split(".")[0]
@@ -246,6 +209,10 @@ class smb(connection):
                 else:
                     self.hostname = self.host
                     self.targetDomain = self.host
+            except Exception as e:
+                self.logger.debug(f"Error getting hostname from LDAP: {e}")
+                self.hostname = self.host
+                self.targetDomain = self.host
 
         if self.args.domain:
             self.domain = self.args.domain
@@ -287,7 +254,10 @@ class smb(connection):
             self.logger.debug(e)
 
         self.os_arch = self.get_os_arch()
-        self.output_file_template = os.path.expanduser(f"{NXC_PATH}/logs/{{output_folder}}/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
+        # Construct the output file template using os.path.join for OS compatibility
+        base_log_dir = os.path.join(os.path.expanduser(NXC_PATH), "logs")
+        filename_pattern = f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
+        self.output_file_template = os.path.join(base_log_dir, "{output_folder}", filename_pattern)
 
         try:
             # DCs seem to want us to logoff first, windows workstations sometimes reset the connection
@@ -327,21 +297,12 @@ class smb(connection):
         self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}) {ntlm}")
 
         if self.args.generate_hosts_file or self.args.generate_krb5_file:
-            from impacket.dcerpc.v5 import nrpc, epm
-            self.logger.debug("Performing authentication attempts...")
-            isdc = False
-            try:
-                epm.hept_map(self.host, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
-                isdc = True
-            except DCERPCException:
-                self.logger.debug("Error while connecting to host: DCERPCException, which means this is probably not a DC!")
-
             if self.args.generate_hosts_file:
                 with open(self.args.generate_hosts_file, "a+") as host_file:
-                    dc_part = f" {self.targetDomain}" if isdc else ""
+                    dc_part = f" {self.targetDomain}" if self.isdc else ""
                     host_file.write(f"{self.host}     {self.hostname}.{self.targetDomain}{dc_part} {self.hostname}\n")
-                    self.logger.debug(f"{self.host}    {self.hostname}.{self.targetDomain}{dc_part} {self.hostname}")
-            elif self.args.generate_krb5_file and isdc:
+                    self.logger.debug(f"Line added to {self.args.generate_hosts_file} {self.host}    {self.hostname}.{self.targetDomain}{dc_part} {self.hostname}")
+            elif self.args.generate_krb5_file and self.isdc:
                 with open(self.args.generate_krb5_file, "w+") as host_file:
                     data = f"""
 [libdefaults]
@@ -453,7 +414,6 @@ class smb(connection):
             )
             if error not in smb_error_status:
                 self.inc_failed_login(username)
-                return False
             return False
 
     def plaintext_login(self, domain, username, password):
@@ -498,6 +458,8 @@ class smb(connection):
                 f'{domain}\\{self.username}:{process_secret(self.password)} {error} {f"({desc})" if self.args.verbose else ""}',
                 color="magenta" if error in smb_error_status else "red",
             )
+            if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED"] and self.args.module == ["change-password"]:
+                return True
             if error not in smb_error_status:
                 self.inc_failed_login(username)
                 return False
@@ -560,7 +522,8 @@ class smb(connection):
                 f"{domain}\\{self.username}:{process_secret(self.hash)} {error} {f'({desc})' if self.args.verbose else ''}",
                 color="magenta" if error in smb_error_status else "red",
             )
-
+            if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED"] and self.args.module == ["change-password"]:
+                return True
             if error not in smb_error_status:
                 self.inc_failed_login(self.username)
                 return False
@@ -671,6 +634,46 @@ class smb(connection):
             with sem, open(self.args.gen_relay_list, "a+") as relay_list:
                 if self.host not in relay_list.read():
                     relay_list.write(self.host + "\n")
+
+    def generate_tgt(self):
+        self.logger.info(f"Attempting to get TGT for {self.username}@{self.domain}")
+        userName = Principal(self.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+
+        try:
+            tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(
+                clientName=userName,
+                password=self.password,
+                domain=self.domain.upper(),
+                lmhash=binascii.unhexlify(self.lmhash) if self.lmhash else "",
+                nthash=binascii.unhexlify(self.nthash) if self.nthash else "",
+                aesKey=self.aesKey,
+                kdcHost=self.kdcHost
+            )
+
+            self.logger.debug(f"TGT successfully obtained for {self.username}@{self.domain}")
+            self.logger.debug(f"Using cipher: {cipher}")
+
+            ccache = CCache()
+            ccache.fromTGT(tgt, oldSessionKey, sessionKey)
+            tgt_file = f"{self.args.generate_tgt}.ccache"
+            ccache.saveFile(tgt_file)
+
+            self.logger.success(f"TGT saved to: {tgt_file}")
+            self.logger.success(f"Run the following command to use the TGT: export KRB5CCNAME={tgt_file}")
+        except Exception as e:
+            self.logger.fail(f"Failed to get TGT: {e}")
+
+    def is_host_dc(self):
+        from impacket.dcerpc.v5 import nrpc, epm
+        self.logger.debug("Performing authentication attempts...")
+        try:
+            epm.hept_map(self.host, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
+            self.isdc = True
+            return True
+        except DCERPCException:
+            self.logger.debug("Error while connecting to host: DCERPCException, which means this is probably not a DC!")
+        self.isdc = False
+        return False
 
     @requires_admin
     def execute(self, payload=None, get_output=False, methods=None) -> str:
@@ -934,19 +937,19 @@ class smb(connection):
             return
         self.enumerate_sessions_info(sessions)
 
-        maxSessionNameLen = max([len(sessions[i]["SessionName"]) + 1 for i in sessions])
+        maxSessionNameLen = max(len(sessions[i]["SessionName"]) + 1 for i in sessions)
         maxSessionNameLen = maxSessionNameLen if len("SESSIONNAME") < maxSessionNameLen else len("SESSIONNAME") + 1
-        maxUsernameLen = max([len(sessions[i]["Username"] + sessions[i]["Domain"]) + 1 for i in sessions]) + 1
+        maxUsernameLen = max(len(sessions[i]["Username"] + sessions[i]["Domain"]) + 1 for i in sessions) + 1
         maxUsernameLen = maxUsernameLen if len("Username") < maxUsernameLen else len("Username") + 1
-        maxIdLen = max([len(str(i)) for i in sessions])
+        maxIdLen = max(len(str(i)) for i in sessions)
         maxIdLen = maxIdLen if len("ID") < maxIdLen else len("ID") + 1
-        maxStateLen = max([len(sessions[i]["state"]) + 1 for i in sessions])
+        maxStateLen = max(len(sessions[i]["state"]) + 1 for i in sessions)
         maxStateLen = maxStateLen if len("STATE") < maxStateLen else len("STATE") + 1
-        maxRemoteIp = max([len(sessions[i]["RemoteIp"]) + 1 for i in sessions])
+        maxRemoteIp = max(len(sessions[i]["RemoteIp"]) + 1 for i in sessions)
         maxRemoteIp = maxRemoteIp if len("RemoteAddress") < maxRemoteIp else len("RemoteAddress") + 1
-        maxClientName = max([len(sessions[i]["ClientName"]) + 1 for i in sessions])
+        maxClientName = max(len(sessions[i]["ClientName"]) + 1 for i in sessions)
         maxClientName = maxClientName if len("ClientName") < maxClientName else len("ClientName") + 1
-        template = ("{SESSIONNAME: <%d} "
+        template = ("{SESSIONNAME: <%d} "  # noqa: UP031
                     "{USERNAME: <%d} "
                     "{ID: <%d} "
                     "{IPv4: <16} "
@@ -1015,9 +1018,9 @@ class smb(connection):
             if not res:
                 return
             self.logger.success("Enumerated processes")
-            maxImageNameLen = max([len(i["ImageName"]) for i in res])
-            maxSidLen = max([len(i["pSid"]) for i in res])
-            template = "{: <%d} {: <8} {: <11} {: <%d} {: >12}" % (maxImageNameLen, maxSidLen)
+            maxImageNameLen = max(len(i["ImageName"]) for i in res)
+            maxSidLen = max(len(i["pSid"]) for i in res)
+            template = "{: <%d} {: <8} {: <11} {: <%d} {: >12}" % (maxImageNameLen, maxSidLen)  # noqa: UP031
             self.logger.highlight(template.format("Image Name", "PID", "Session#", "SID", "Mem Usage"))
             self.logger.highlight(template.replace(": ", ":=").format("", "", "", "", ""))
             for procInfo in res:
@@ -1150,7 +1153,7 @@ class smb(connection):
             self.logger.highlight(f"{name:<15} {','.join(perms):<15} {remark}")
         return permissions
 
-    def dir(self):  # noqa: A003
+    def dir(self):
         search_path = ntpath.join(self.args.dir, "*")
         try:
             contents = self.conn.listPath(self.args.share, search_path)
@@ -1390,6 +1393,7 @@ class smb(connection):
         depth=None,
         content=False,
         only_files=True,
+        silent=True
     ):
         if exclude_dirs is None:
             exclude_dirs = []
@@ -1398,8 +1402,8 @@ class smb(connection):
         if pattern is None:
             pattern = []
         spider = SMBSpider(self.conn, self.logger)
-
-        self.logger.display("Started spidering")
+        if not silent:
+            self.logger.display("Started spidering")
         start_time = time()
         if not share:
             spider.spider(
@@ -1411,11 +1415,12 @@ class smb(connection):
                 self.args.depth,
                 self.args.content,
                 self.args.only_files,
+                self.args.silent
             )
         else:
-            spider.spider(share, folder, pattern, regex, exclude_dirs, depth, content, only_files)
-
-        self.logger.display(f"Done spidering (Completed in {time() - start_time})")
+            spider.spider(share, folder, pattern, regex, exclude_dirs, depth, content, only_files, silent)
+        if not silent:
+            self.logger.display(f"Done spidering (Completed in {time() - start_time})")
 
         return spider.results
 
@@ -1432,7 +1437,7 @@ class smb(connection):
 
         try:
             string_binding = KNOWN_PROTOCOLS[self.port]["bindstr"]
-            logging.debug(f"StringBinding {string_binding}")
+            self.logger.debug(f"StringBinding {string_binding}")
             rpc_transport = transport.DCERPCTransportFactory(string_binding)
             rpc_transport.setRemoteHost(self.host)
 

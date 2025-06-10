@@ -38,7 +38,7 @@ def db_setup(db_engine):
     delete_workspace("test")
 
 
-@pytest.fixture()
+@pytest.fixture
 def db(db_setup):
     yield db_setup
     db_setup.clear_database()

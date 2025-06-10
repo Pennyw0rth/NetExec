@@ -33,10 +33,8 @@ def get_dns_resolver(server, context):
     # Is our host an IP? In that case make sure the server IP is used
     # if not assume lookups are working already
     try:
-        if server.startswith("ldap://"):
-            server = server[7:]
-        if server.startswith("ldaps://"):
-            server = server[8:]
+        server = server.removeprefix("ldap://")
+        server = server.removeprefix("ldaps://")
         socket.inet_aton(server)
         dnsresolver.nameservers = [server]
     except OSError:
@@ -45,7 +43,7 @@ def get_dns_resolver(server, context):
 
 
 def ldap2domain(ldap):
-    return re.sub(",DC=", ".", ldap[ldap.lower().find("dc="):], flags=re.I)[3:]
+    return re.sub(r",DC=", ".", ldap[ldap.lower().find("dc="):], flags=re.IGNORECASE)[3:]
 
 
 def new_record(rtype, serial):
