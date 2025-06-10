@@ -20,7 +20,7 @@ for section in nxc_default_config.sections():
     if not nxc_config.has_section(section):
         nxc_logger.display(f"Adding missing section '{section}' to nxc.conf")
         nxc_config.add_section(section)
-        with open(path_join(NXC_PATH, "nxc.conf"), "w") as config_file:
+        with open(CONFIG_PATH, "w") as config_file:
             nxc_config.write(config_file)
     for option in nxc_default_config.options(section):
         if not nxc_config.has_option(section, option):
