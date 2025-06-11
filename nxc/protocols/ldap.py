@@ -44,6 +44,7 @@ from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.ntlm_parser import parse_challenge
 from nxc.helpers.misc import get_bloodhound_info
+from nxc.paths import CONFIG_PATH, NXC_PATH
 
 ldap_error_status = {
     "1": "STATUS_NOT_SUPPORTED",
@@ -319,7 +320,7 @@ class ldap(connection):
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
-        self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}".replace(":", "-"))
+        self.output_filename = os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}".replace(":", "-"))
 
         try:
             self.db.add_host(
@@ -1354,7 +1355,7 @@ class ldap(connection):
 
         if use_bhce and not is_ce:
             self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
-            self.logger.fail("Your configuration has BloodHound-CE enabled, but the regular BloodHound package is installed. Modify your ~/.nxc/nxc.conf config file or follow the instructions:")
+            self.logger.fail(f"Your configuration has BloodHound-CE enabled, but the regular BloodHound package is installed. Modify your {CONFIG_PATH} config file or follow the instructions:")
             self.logger.fail("Please run the following commands to fix this:")
             self.logger.fail("poetry remove bloodhound-ce   # poetry falsely recognizes bloodhound-ce as a the old bloodhound package")
             self.logger.fail("poetry add bloodhound-ce")

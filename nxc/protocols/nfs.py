@@ -622,7 +622,11 @@ class nfs(connection):
         # NORMAL LS CALL (without root escape)
         if self.args.share:
             mount_info = self.mount.mnt(self.args.share, self.auth)
-            mount_fh = mount_info["mountinfo"]["fhandle"]
+            if mount_info["status"] != 0:
+                self.logger.fail(f"Could not mount share {self.args.share}: {NFSSTAT3[mount_info['status']]}")
+                return
+            else:
+                mount_fh = mount_info["mountinfo"]["fhandle"]
         elif self.root_escape:
             # Interestingly we don't actually have to mount the share if we already got the handle
             self.logger.success(f"Successful escape on share: {self.escape_share}")
