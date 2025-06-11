@@ -56,7 +56,7 @@ class mssql(connection):
     def proto_flow(self):
         self.logger.debug("Kicking off MSSQL proto_flow")
 
-        if self.args.no_sqlbrowser == False:
+        if not self.args.no_sqlbrowser:
             sqlbrowser_instance_port = self.enum_sqlbrowser()
             # If port has not been manually enforced, connect to instance port instead
             if sqlbrowser_instance_port != 0 and self.port == 1433:
@@ -64,7 +64,7 @@ class mssql(connection):
 
         # Proceed with normal proto_flow
         super().proto_flow()
-        
+
     def enum_sqlbrowser(self):
         try:
             conn = tds.MSSQL(self.host, self.port, self.remoteName)
@@ -81,18 +81,18 @@ class mssql(connection):
             logger.info("Checking for SQL browser presence")
             instances = conn.getInstances()
             if len(instances) > 0:
-                logger.success('SQL Browser is enabled')
+                logger.success("SQL Browser is enabled")
                 for index, instance in enumerate(instances):
                     logger.success(f"#{index} Instance {instance['InstanceName']} (port:{instance['tcp']}) (clustered:{instance['IsClustered']}) (version:{instance['Version']})")
 
                 if len(instances) == 1:
-                    port = instances[0]['tcp']
-                    logger.info(f'Redirecting to port {port}')
+                    port = instances[0]["tcp"]
+                    logger.info(f"Redirecting to port {port}")
                     self.sqlbrowser_redirect = True
-                    return instances[0]['tcp']
+                    return instances[0]["tcp"]
 
                 else:
-                    logger.success('Multiple instances reported, specify port manually using --port <port>')
+                    logger.success("Multiple instances reported, specify port manually using --port <port>")
 
         except Exception as e:
             self.logger.debug(f"Error connecting to SQLBROWSER service on host: {self.host}, reason: {e}")
