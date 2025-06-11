@@ -1,4 +1,31 @@
 from ipaddress import ip_address, ip_network, summarize_address_range, ip_interface
+import socket
+
+
+def get_local_ip():
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+    except Exception:
+        # Fallback Method
+        try:
+            hostname = socket.gethostname()
+            local_ip = socket.gethostbyname(hostname)
+            # Filter out localhost
+            if local_ip != "127.0.0.1":
+                return local_ip
+        except Exception:
+            pass
+    return None
+
+
+def parse_exclusions(exclusions):
+    excluded_ips = set()
+    for exclusion in exclusions:
+        for ip in parse_targets(exclusion):
+            excluded_ips.add(ip)
+    return excluded_ips
 
 
 def parse_targets(target):

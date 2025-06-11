@@ -2,7 +2,7 @@
 import sys
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import identify_target_file
-from nxc.parsers.ip import parse_targets
+from nxc.parsers.ip import parse_targets, parse_exclusions, get_local_ip
 from nxc.parsers.nmap import parse_nmap_xml
 from nxc.parsers.nessus import parse_nessus_file
 from nxc.cli import gen_cli_args
@@ -124,6 +124,29 @@ def main():
                             targets.extend(parse_targets(target_entry.strip()))
             else:
                 targets.extend(parse_targets(target))
+
+    # Handle exclusions
+    excluded_ips = set()
+
+    # Process --exclude argument
+    if hasattr(args, "exclude") and args.exclude:
+        nxc_logger.debug(f"Processing exclusions: {args.exclude}")
+        excluded_ips.update(parse_exclusions(args.exclude))
+
+    # Process --skip-self argument
+    if hasattr(args, "skip_self") and args.skip_self:
+        local_ip = get_local_ip()
+        if local_ip:
+            nxc_logger.debug(f"Local IP detected: {local_ip}")
+            excluded_ips.add(local_ip)
+        else:
+            nxc_logger.warning("Could not determine local IP address for --skip-self")
+
+    # Filter out excluded targets
+    if excluded_ips:
+        original_count = len(targets)
+        targets = [target for target in targets if target not in excluded_ips]
+        nxc_logger.debug(f"Excluded {original_count - len(targets)} hosts from scan")
 
     # The following is a quick hack for the powershell obfuscation functionality, I know this is yucky
     if hasattr(args, "clear_obfscripts") and args.clear_obfscripts:
