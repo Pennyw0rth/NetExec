@@ -40,7 +40,7 @@ class NXCModule:
         self.file_name = module_options.get("FILE_NAME", ntpath.normpath("\\" + gen_random_string() + ".txt"))
         self.share_name = module_options.get("SHARE_NAME")
         if module_options.get("EXCLUDED_SHARES"):
-            self.excluded_shares += module_options.get("EXCLUDED_SHARES","").split(",")
+            self.excluded_shares += module_options.get("EXCLUDED_SHARES", "").split(",")
 
     def on_login(self, context: Context, connection):
         conn: SMBConnection = connection.conn  # Because typing is broken due to smb being a folder and a file >:(
