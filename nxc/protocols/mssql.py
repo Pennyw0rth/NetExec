@@ -53,6 +53,51 @@ class mssql(connection):
             }
         )
 
+    def proto_flow(self):
+        self.logger.debug("Kicking off MSSQL proto_flow")
+
+        if self.args.no_sqlbrowser == False:
+            sqlbrowser_instance_port = self.enum_sqlbrowser()
+            # If port has not been manually enforced, connect to instance port instead
+            if sqlbrowser_instance_port != 0 and self.port == 1433:
+                self.port = sqlbrowser_instance_port
+
+        # Proceed with normal proto_flow
+        super().proto_flow()
+        
+    def enum_sqlbrowser(self):
+        try:
+            conn = tds.MSSQL(self.host, self.port, self.remoteName)
+
+            logger = NXCAdapter(
+                extra={
+                    "protocol": "SQLBROWSER",
+                    "host": self.host,
+                    "port": "1434",
+                    "hostname": "None"
+                }
+            )
+
+            logger.info("Checking for SQL browser presence")
+            instances = conn.getInstances()
+            if len(instances) > 0:
+                logger.success('SQL Browser is enabled')
+                for index, instance in enumerate(instances):
+                    logger.success(f"#{index} Instance {instance['InstanceName']} (port:{instance['tcp']}) (clustered:{instance['IsClustered']}) (version:{instance['Version']})")
+
+                if len(instances) == 1:
+                    port = instances[0]['tcp']
+                    logger.info(f'Redirecting to port {port}')
+                    self.sqlbrowser_redirect = True
+                    return instances[0]['tcp']
+
+                else:
+                    logger.success('Multiple instances reported, specify port manually using --port <port>')
+
+        except Exception as e:
+            self.logger.debug(f"Error connecting to SQLBROWSER service on host: {self.host}, reason: {e}")
+        return 0
+
     def create_conn_obj(self):
         try:
             self.conn = tds.MSSQL(self.host, self.port, self.remoteName)
