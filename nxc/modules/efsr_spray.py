@@ -29,14 +29,18 @@ class NXCModule:
     supported_protocols = ["smb"]
     opsec_safe = True  # Does the module touch disk?
     multiple_hosts = True  # Does the module support multiple hosts?
+    excluded_shares = ["SYSVOL"]
 
     def options(self, context: Context, module_options: dict[str, str]):
         """
-        FILE_NAME     Name of the file which will be tried to create and afterwards delete
-        SHARE_NAME    If set, ONLY this share will be used
+        FILE_NAME      Name of the file which will be tried to create and afterwards delete
+        SHARE_NAME     If set, ONLY this share will be used
+        EXCLUDED_SHARES List of share names which will not be used, seperated by comma
         """
         self.file_name = module_options.get("FILE_NAME", ntpath.normpath("\\" + gen_random_string() + ".txt"))
         self.share_name = module_options.get("SHARE_NAME")
+        if module_options.get("EXCLUDED_SHARES"):
+            self.excluded_shares += module_options.get("EXCLUDED_SHARES","").split(",")
 
     def on_login(self, context: Context, connection):
         conn: SMBConnection = connection.conn  # Because typing is broken due to smb being a folder and a file >:(
@@ -66,6 +70,9 @@ class NXCModule:
         for share in shares:
             share_name = share["shi1_netname"][:-1]
             if self.share_name is not None and self.share_name != share_name:
+                continue
+
+            if share_name in self.excluded_shares:
                 continue
 
             try:
