@@ -12,7 +12,7 @@ from nxc.first_run import first_run_setup
 from nxc.paths import CONFIG_PATH, NXC_PATH, WORKSPACE_DIR
 from nxc.console import nxc_console
 from nxc.logger import nxc_logger
-from nxc.config import nxc_config, nxc_workspace, config_log, ignore_opsec
+from nxc.config import nxc_config, nxc_workspace, config_log, ignore_opsec, exclude_hosts, skip_self
 from nxc.database import create_db_engine
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
@@ -125,22 +125,22 @@ def main():
             else:
                 targets.extend(parse_targets(target))
 
-    # Handle exclusions
+    # Handle exclusions from config
     excluded_ips = set()
 
-    # Process --exclude argument
-    if hasattr(args, "exclude") and args.exclude:
-        nxc_logger.debug(f"Processing exclusions: {args.exclude}")
-        excluded_ips.update(parse_exclusions(args.exclude))
+    # Process exclude_hosts from config
+    if exclude_hosts:
+        nxc_logger.debug(f"Processing exclusions from config: {exclude_hosts}")
+        excluded_ips.update(parse_exclusions(exclude_hosts))
 
-    # Process --skip-self argument
-    if hasattr(args, "skip_self") and args.skip_self:
+    # Process skip_self from config
+    if skip_self:
         local_ip = get_local_ip()
         if local_ip:
             nxc_logger.debug(f"Local IP detected: {local_ip}")
             excluded_ips.add(local_ip)
         else:
-            nxc_logger.warning("Could not determine local IP address for --skip-self")
+            nxc_logger.warning("Could not determine local IP address for skip_self")
 
     # Filter out excluded targets
     if excluded_ips:

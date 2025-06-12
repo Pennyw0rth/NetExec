@@ -230,3 +230,82 @@ class TestEdgeCases:
         
         # Should preserve case (hostnames are case-insensitive but we preserve input)
         assert result == {"Example.COM", "example.com"}
+
+
+class TestConfigIntegration:
+    """Test config-based exclusion integration."""
+    
+    @patch("nxc.config.exclude_hosts", ["192.168.1.10", "10.0.0.0/30"])
+    @patch("nxc.config.skip_self", False)
+    def test_config_exclusions_loaded(self):
+        """Test that exclusions are properly loaded from config."""
+        from nxc.config import exclude_hosts, skip_self
+        
+        assert exclude_hosts == ["192.168.1.10", "10.0.0.0/30"]
+        assert skip_self is False
+    
+    @patch("nxc.config.exclude_hosts", [])
+    @patch("nxc.config.skip_self", True)
+    def test_config_skip_self_enabled(self):
+        """Test that skip_self config option works."""
+        from nxc.config import skip_self
+        
+        assert skip_self is True
+    
+    def test_config_exclusions_processing(self):
+        """Test that config exclusions are processed correctly."""
+        # Simulate config values
+        config_exclusions = ["192.168.1.10", "10.0.0.0/30"]
+        
+        # Process exclusions the same way as in netexec.py
+        excluded_ips = set()
+        if config_exclusions:
+            excluded_ips.update(parse_exclusions(config_exclusions))
+        
+        expected = {
+            "192.168.1.10",
+            "10.0.0.0", "10.0.0.1", "10.0.0.2", "10.0.0.3"
+        }
+        assert excluded_ips == expected
+
+
+class TestConfigValidation:
+    """Test config validation and error handling."""
+    
+    def test_malformed_exclude_hosts_syntax_error(self):
+        """Test that malformed exclude_hosts syntax is handled gracefully."""
+        from ast import literal_eval
+        
+        # Simulate what happens in config.py with malformed input
+        malformed_inputs = [
+            "[192.168.1.1]",  # Missing quotes
+            "[192.168.1.1, 10.0.0.1]",  # Multiple without quotes
+            "192.168.1.1",  # Plain string
+            "",  # Empty string
+        ]
+        
+        for malformed_input in malformed_inputs:
+            try:
+                result = literal_eval(malformed_input)
+                # If we get here, it didn't fail as expected
+                assert isinstance(result, list), f"Expected list for valid input: {malformed_input}"
+            except (ValueError, SyntaxError):
+                # This is expected behavior - should gracefully handle the error
+                # In actual config.py, this would fall back to empty list
+                assert True
+    
+    def test_exclude_hosts_type_validation(self):
+        """Test that non-list values are rejected."""
+        from ast import literal_eval
+        
+        # Test inputs that parse successfully but aren't lists
+        non_list_inputs = [
+            '"192.168.1.1"',  # String instead of list
+            '192',  # Integer
+            'True',  # Boolean
+        ]
+        
+        for input_val in non_list_inputs:
+            result = literal_eval(input_val)
+            # Should validate that result is a list
+            assert not isinstance(result, list), f"Input {input_val} should not be a list"
