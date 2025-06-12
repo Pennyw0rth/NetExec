@@ -166,7 +166,7 @@ class NXCModule:
         base_dn = None
 
         try:
-            ldap_server = ldap3.Server(connection.host, use_ssl=True, port=636, tls=tls)
+            ldap_server = ldap3.Server(connection.host, use_ssl=True, port=636, tls=tls, get_info=ldap3.ALL)
             ldap_connection = ldap3.Connection(
                 ldap_server,
                 user=f"{connection.domain}\\{connection.username}",
@@ -178,19 +178,9 @@ class NXCModule:
             context.log.success("Connected to LDAP over SSL (LDAPS).")
 
             try:
-                ldap_connection.search(
-                    search_base="",
-                    search_filter="(objectClass=*)",
-                    search_scope=ldap3.BASE,
-                    attributes=["defaultNamingContext"],
-                )
-                if ldap_connection.entries:
-                    base_dn = ldap_connection.entries[0]["defaultNamingContext"].value
-                    context.log.success(f"Retrieved base DN over LDAPS: {base_dn}")
-                else:
-                    context.log.warning("defaultNamingContext not found in Root DSE. Falling back to domain name derivation.")
+                base_dn = ldap_server.info.other.get("defaultNamingContext", [None])[0]
             except Exception as e:
-                context.log.warning(f"Failed to query Root DSE for defaultNamingContext over LDAPS: {e}")
+                context.log.warning(f"Failed to query Root DSE for defaultNamingContext over plaintext LDAP: {e}")
 
             if not base_dn:
                 domain_parts = connection.domain.split(".")
@@ -205,7 +195,7 @@ class NXCModule:
             context.log.info("Falling back to plain LDAP...")
 
         try:
-            ldap_server = ldap3.Server(connection.host, use_ssl=False, port=389)
+            ldap_server = ldap3.Server(connection.host, use_ssl=False, port=389, get_info=ldap3.ALL)
             ldap_connection = ldap3.Connection(
                 ldap_server,
                 user=f"{connection.domain}\\{connection.username}",
@@ -217,19 +207,9 @@ class NXCModule:
             context.log.info("Connected to LDAP successfully (plaintext).")
 
             try:
-                ldap_connection.search(
-                    search_base="",
-                    search_filter="(objectClass=*)",
-                    search_scope=ldap3.BASE,
-                    attributes=["defaultNamingContext"],
-                )
-                if ldap_connection.entries:
-                    base_dn = ldap_connection.entries[0]["defaultNamingContext"].value
-                    context.log.success(f"Retrieved base DN over plain LDAP: {base_dn}")
-                else:
-                    context.log.warning("defaultNamingContext not found in Root DSE. Falling back to domain name derivation.")
+                base_dn = ldap_server.info.other.get("defaultNamingContext", [None])[0]
             except Exception as e:
-                context.log.warning(f"Failed to query Root DSE for defaultNamingContext over plain LDAP: {e}")
+                context.log.warning(f"Failed to query Root DSE for defaultNamingContext over plaintext LDAP: {e}")
 
             if not base_dn:
                 domain_parts = connection.domain.split(".")
