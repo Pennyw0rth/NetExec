@@ -18,7 +18,7 @@ class NXCModule:
     Modified by @Defte_ so that output on multiples lines are printed correctly (28/04/2025)
     Modified by @Defte_ so that we can upload a custom binary to execute using the BINARY option (28/04/2025)
     Modified by @Kahvi0xff to add the TASK, FILE and LOCATION options. 
-    Modified by @Kahvi0xff add a feature to shuffle the XML file attributes and remove the hard requirement of CMD.exe
+    Modified by @Kahvi0xff add a feature to shuffle the XML file attributes
     """
 
     def options(self, context, module_options):
@@ -139,7 +139,7 @@ class NXCModule:
         finally:
             if self.binary:
                 try:
-                    context.log.success(f"Sleeping for 10 seconds to let binary run")
+                    context.log.success("Sleeping for 10 seconds to let binary run")
                     sleep(10)
                     connection.conn.deleteFile(self.share, f"{self.tmp_share}{self.binary_name}")
                     context.log.success(f"Binary {self.binary_name} successfully deleted")
@@ -227,7 +227,7 @@ class TSCH_EXEC:
     def gen_xml(self, command, fileless=False):
         global cmdstdout
         global cmd_path
-       #Random setting order to help with detection
+        #Random setting order to help with detection
         settings = [
             "    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>",
             "    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>",
@@ -408,7 +408,7 @@ class TSCH_EXEC:
                            else:
                                self.logger.debug(str(e))
                 else:
-                  self.logger.info("No output file was saved to be retrived")
+                   self.logger.info("No output file was saved to be retrived")
 
                 if self.__outputBuffer:
                     self.logger.debug(f"Deleting file {self.__share}\\{self.__output_filename}")
