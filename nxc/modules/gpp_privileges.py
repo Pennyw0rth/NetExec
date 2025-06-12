@@ -101,7 +101,6 @@ class NXCModule:
         shares = connection.shares()
         for share in shares:
             if share["name"] == "SYSVOL" and "READ" in share["access"]:
-                context.log.info("Found SYSVOL share")
                 context.log.display("Searching for GptTmpl.inf files")
 
                 paths = connection.spider("SYSVOL", pattern=["GptTmpl.inf"])
@@ -133,9 +132,7 @@ class NXCModule:
 
                         context.log.success(f"Privileges extracted from {path}:")
                         for privilege, sids in privileges.items():
-                            resolved_sids = [
-                                self.resolve_sid(context, sid, ldap_connection) for sid in sids
-                            ]
+                            resolved_sids = [self.resolve_sid(context, sid, ldap_connection) for sid in sids]
                             context.log.highlight(f"{privilege}: {', '.join(resolved_sids)}")
 
                         if ldap_connection:
