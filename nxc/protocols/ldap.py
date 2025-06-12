@@ -804,7 +804,7 @@ class ldap(connection):
         # Building the search filter
         if self.args.ous:
             self.logger.debug(f"Dumping OU users: {self.args.ous}")
-            search_filter = f"(&(objectCategory=person)(objectClass=user))"
+            search_filter = "(&(objectCategory=person)(objectClass=user))"
             attributes = ["cn", "sAMAccountName", "distinguishedName"]
         else:
             search_filter = "(objectCategory=organizationalUnit)"
@@ -817,7 +817,7 @@ class ldap(connection):
         
         if self.args.ous:
             if not resp_parsed:
-                self.logger.fail(f"No users found")
+                self.logger.fail("No users found")
             else:
                 # First check if OU exists by looking for it in all OUs
                 ou_search_filter = "(objectCategory=organizationalUnit)"
@@ -826,7 +826,7 @@ class ldap(connection):
                 
                 ou_exists = False
                 for ou in ou_parsed:
-                    if ou.get('ou', '').upper() == self.args.ous.upper():
+                    if ou.get("ou", "").upper() == self.args.ous.upper():
                         ou_exists = True
                         break
                 
@@ -835,9 +835,9 @@ class ldap(connection):
                 else:
                     found_users = []
                     for user in resp_parsed:
-                        dn = user.get('distinguishedName', '').upper()
+                        dn = user.get("distinguishedName", "").upper()
                         if f"OU={self.args.ous.upper()}" in dn:
-                            username = user.get('sAMAccountName', user.get('cn', 'Unknown'))
+                            username = user.get("sAMAccountName", user.get("cn", "Unknown"))
                             self.logger.highlight(username)
                             found_users.append(username)
                     
@@ -846,8 +846,8 @@ class ldap(connection):
         else:
             for item in resp_parsed:
                 try:
-                    ou_name = item.get('ou', 'Unknown')
-                    dn = item.get('distinguishedName', '')
+                    ou_name = item.get("ou", "Unknown")
+                    dn = item.get("distinguishedName", "")
                     self.logger.highlight(f"{ou_name:<40} {dn}")
                 except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
