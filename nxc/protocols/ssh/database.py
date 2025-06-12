@@ -1,5 +1,4 @@
 import configparser
-import os
 import sys
 
 from sqlalchemy import Table, select, func, delete
@@ -11,11 +10,11 @@ from sqlalchemy.exc import (
 
 from nxc.database import BaseDB, format_host_query
 from nxc.logger import nxc_logger
-from nxc.paths import NXC_PATH
+from nxc.paths import CONFIG_PATH
 
 # we can't import config.py due to a circular dependency, so we have to create redundant code unfortunately
 nxc_config = configparser.ConfigParser()
-nxc_config.read(os.path.join(NXC_PATH, "nxc.conf"))
+nxc_config.read(CONFIG_PATH)
 nxc_workspace = nxc_config.get("nxc", "workspace", fallback="default")
 
 
