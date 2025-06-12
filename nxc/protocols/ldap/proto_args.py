@@ -24,6 +24,7 @@ def proto_args(parser, parents):
     vgroup.add_argument("--users", nargs="*", help="Enumerate domain users")
     vgroup.add_argument("--users-export", help="Enumerate domain users and export them to the specified file")
     vgroup.add_argument("--groups", nargs="?", const="", help="Enumerate domain groups, if a group is specified than its members are enumerated")
+    vgroup.add_argument("--ous", nargs="?", const="", help="Specify OU name to query or list all OUs")
     vgroup.add_argument("--computers", action="store_true", help="Enumerate domain computers")
     vgroup.add_argument("--dc-list", action="store_true", help="Enumerate Domain Controllers")
     vgroup.add_argument("--get-sid", action="store_true", help="Get domain sid")

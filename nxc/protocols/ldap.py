@@ -800,6 +800,59 @@ class ldap(connection):
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
 
+    def ous(self):
+        # Building the search filter
+        if self.args.ous:
+            self.logger.debug(f"Dumping OU users: {self.args.ous}")
+            search_filter = f"(&(objectCategory=person)(objectClass=user))"
+            attributes = ["cn", "sAMAccountName", "distinguishedName"]
+        else:
+            search_filter = "(objectCategory=organizationalUnit)"
+            attributes = ["ou", "distinguishedName"]
+        
+        resp = self.search(search_filter, attributes, 0)
+        resp_parsed = parse_result_attributes(resp)
+        
+        self.logger.debug(f"Total of records returned {len(resp_parsed)}")
+        
+        if self.args.ous:
+            if not resp_parsed:
+                self.logger.fail(f"No users found")
+            else:
+                # First check if OU exists by looking for it in all OUs
+                ou_search_filter = "(objectCategory=organizationalUnit)"
+                ou_resp = self.search(ou_search_filter, ["ou"], 0)
+                ou_parsed = parse_result_attributes(ou_resp)
+                
+                ou_exists = False
+                for ou in ou_parsed:
+                    if ou.get('ou', '').upper() == self.args.ous.upper():
+                        ou_exists = True
+                        break
+                
+                if not ou_exists:
+                    self.logger.fail(f"OU {self.args.ous} not found")
+                else:
+                    found_users = []
+                    for user in resp_parsed:
+                        dn = user.get('distinguishedName', '').upper()
+                        if f"OU={self.args.ous.upper()}" in dn:
+                            username = user.get('sAMAccountName', user.get('cn', 'Unknown'))
+                            self.logger.highlight(username)
+                            found_users.append(username)
+                    
+                    if not found_users:
+                        self.logger.fail(f"OU {self.args.ous} has no users")
+        else:
+            for item in resp_parsed:
+                try:
+                    ou_name = item.get('ou', 'Unknown')
+                    dn = item.get('distinguishedName', '')
+                    self.logger.highlight(f"{ou_name:<40} {dn}")
+                except Exception as e:
+                    self.logger.debug("Exception:", exc_info=True)
+                    self.logger.debug(f"Skipping item, cannot process due to error {e}")
+
     def computers(self):
         resp = self.search(f"(sAMAccountType={SAM_MACHINE_ACCOUNT})", ["name"], 0)
         resp_parsed = parse_result_attributes(resp)
