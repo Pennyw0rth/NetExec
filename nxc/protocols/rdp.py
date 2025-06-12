@@ -9,8 +9,8 @@ from impacket.krb5.ccache import CCache
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.logger import NXCAdapter
-from nxc.config import host_info_colors
-from nxc.config import process_secret
+from nxc.config import host_info_colors, process_secret
+from nxc.paths import NXC_PATH
 
 from aardwolf.connection import RDPConnection
 from aardwolf.commons.queuedata.constants import VIDEO_FORMAT
@@ -139,7 +139,7 @@ class rdp(connection):
                         self.hostname = info_domain["computername"]
                         self.server_os = info_domain["os_guess"] + " Build " + str(info_domain["os_build"])
                         self.logger.extra["hostname"] = self.hostname
-                        self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
+                        self.output_filename = os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
                     break
 
         if self.args.domain:
@@ -166,6 +166,7 @@ class rdp(connection):
         return True
 
     def check_nla(self):
+        self.logger.debug(f"Checking NLA for {self.host}")
         for proto in self.protoflags_nla:
             try:
                 self.iosettings.supported_protocols = proto
@@ -266,7 +267,7 @@ class rdp(connection):
                     if word in str(e):
                         reason = self.rdp_error_status[word]
                 self.logger.fail(
-                    (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {f'({reason})' if reason else str(e)}"),
+                    (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} ({reason if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "KDC_ERR_C_PRINCIPAL_UNKNOWN") else "red"),
                 )
             elif "Authentication failed!" in str(e):
@@ -281,7 +282,7 @@ class rdp(connection):
                 if str(e) == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
                 self.logger.fail(
-                    (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {f'({reason})' if reason else ''}"),
+                    (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} ({reason if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
             return False
@@ -315,7 +316,7 @@ class rdp(connection):
                 if str(e) == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
                 self.logger.fail(
-                    (f"{domain}\\{username}:{process_secret(password)} {f'({reason})' if reason else ''}"),
+                    (f"{domain}\\{username}:{process_secret(password)} ({reason if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
             return False
@@ -350,7 +351,7 @@ class rdp(connection):
                     reason = "User valid but cannot connect"
 
                 self.logger.fail(
-                    (f"{domain}\\{username}:{process_secret(ntlm_hash)} {f'({reason})' if reason else ''}"),
+                    (f"{domain}\\{username}:{process_secret(ntlm_hash)} ({reason if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
             return False
@@ -365,7 +366,7 @@ class rdp(connection):
         await asyncio.sleep(5)
         if self.conn is not None and self.conn.desktop_buffer_has_data is True:
             buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-            filename = os.path.expanduser(f"~/.nxc/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
+            filename = os.path.expanduser(f"{NXC_PATH}/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
             buffer.save(filename, "png")
             self.logger.highlight(f"Screenshot saved {filename}")
 
@@ -373,18 +374,25 @@ class rdp(connection):
         asyncio.run(self.screen())
 
     async def nla_screen(self):
-        # Otherwise it crash
-        self.iosettings.supported_protocols = None
         self.auth = NTLMCredential(secret="", username="", domain="", stype=asyauthSecret.PASS)
-        self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
-        await self.connect_rdp()
-        await asyncio.sleep(int(self.args.screentime))
 
-        if self.conn is not None and self.conn.desktop_buffer_has_data is True:
-            buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-            filename = os.path.expanduser(f"~/.nxc/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
-            buffer.save(filename, "png")
-            self.logger.highlight(f"NLA Screenshot saved {filename}")
+        for proto in self.protoflags_nla:
+            try:
+                self.iosettings.supported_protocols = proto
+                self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
+
+                await self.connect_rdp()
+            except Exception as e:
+                self.logger.debug(f"Failed to connect for nla_screenshot with {proto} {e}")
+                return
+
+            await asyncio.sleep(int(self.args.screentime))
+            if self.conn is not None and self.conn.desktop_buffer_has_data is True:
+                buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
+                filename = os.path.expanduser(f"{NXC_PATH}/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
+                buffer.save(filename, "png")
+                self.logger.highlight(f"NLA Screenshot saved {filename}")
+                return
 
     def nla_screenshot(self):
         if not self.nla:

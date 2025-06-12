@@ -35,11 +35,11 @@ class NXCModule:
             sys.exit(1)
 
     def on_login(self, context, connection):
-        search_filter = f"(&(objectCategory=computer)(&(|(operatingSystem=*{self.TEXT}*))(name=*{self.TEXT}*)))"
+        search_filter = f"(&(objectCategory=computer)(|(operatingSystem=*{self.TEXT}*)(name=*{self.TEXT}*)))"
 
         try:
             context.log.debug(f"Search Filter={search_filter}")
-            resp = connection.ldapConnection.search(searchFilter=search_filter, attributes=["dNSHostName", "operatingSystem"], sizeLimit=0)
+            resp = connection.ldap_connection.search(searchFilter=search_filter, attributes=["dNSHostName", "operatingSystem"], sizeLimit=0)
         except LDAPSearchError as e:
             if e.getErrorString().find("sizeLimitExceeded") >= 0:
                 context.log.debug("sizeLimitExceeded exception caught, giving up and processing the data received")

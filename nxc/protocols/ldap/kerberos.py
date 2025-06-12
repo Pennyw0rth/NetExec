@@ -28,6 +28,7 @@ class KerberosAttacks:
         self.username = connection.username
         self.password = connection.password
         self.domain = connection.domain
+        self.host = connection.host
         self.targetDomain = connection.targetDomain
         self.hash = connection.hash
         self.lmhash = ""
@@ -63,7 +64,7 @@ class KerberosAttacks:
         # last 12 bytes of the encrypted ticket represent the checksum of the decrypted
         # ticket
         if decoded_tgs["ticket"]["enc-part"]["etype"] == constants.EncryptionTypes.rc4_hmac.value:
-            entry = "$krb5tgs$%d$*%s$%s$%s*$%s$%s" % (
+            entry = "$krb5tgs${}$*{}${}${}*${}${}".format(
                 constants.EncryptionTypes.rc4_hmac.value,
                 username,
                 decoded_tgs["ticket"]["realm"],
@@ -72,7 +73,7 @@ class KerberosAttacks:
                 hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][16:].asOctets()).decode(),
             )
         elif decoded_tgs["ticket"]["enc-part"]["etype"] == constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value:
-            entry = "$krb5tgs$%d$%s$%s$*%s*$%s$%s" % (
+            entry = "$krb5tgs${}${}${}$*{}*${}${}".format(
                 constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value,
                 username,
                 decoded_tgs["ticket"]["realm"],
@@ -81,7 +82,7 @@ class KerberosAttacks:
                 hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][:-12:].asOctets()).decode,
             )
         elif decoded_tgs["ticket"]["enc-part"]["etype"] == constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value:
-            entry = "$krb5tgs$%d$%s$%s$*%s*$%s$%s" % (
+            entry = "$krb5tgs${}${}${}$*{}*${}${}".format(
                 constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value,
                 username,
                 decoded_tgs["ticket"]["realm"],
@@ -90,7 +91,7 @@ class KerberosAttacks:
                 hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][:-12:].asOctets()).decode(),
             )
         elif decoded_tgs["ticket"]["enc-part"]["etype"] == constants.EncryptionTypes.des_cbc_md5.value:
-            entry = "$krb5tgs$%d$*%s$%s$%s*$%s$%s" % (
+            entry = "$krb5tgs${}$*{}${}${}*${}${}".format(
                 constants.EncryptionTypes.des_cbc_md5.value,
                 username,
                 decoded_tgs["ticket"]["realm"],
@@ -222,6 +223,10 @@ class KerberosAttacks:
         seq_set_iter(req_body, "etype", supported_ciphers)
 
         message = encoder.encode(as_req)
+
+        # If kdcHost isn't set, use the target IP for DNS resolution
+        if not self.kdcHost:
+            self.kdcHost = self.host
 
         try:
             r = sendReceive(message, domain, self.kdcHost)

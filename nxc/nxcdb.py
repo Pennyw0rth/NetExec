@@ -47,8 +47,7 @@ def write_csv(filename, headers, entries):
 def write_list(filename, entries):
     """Writes a file with a simple list"""
     with open(os.path.expanduser(filename), "w") as export_file:
-        for line in entries:
-            export_file.write(line + "\n")
+        export_file.writelines(line + "\n" for line in entries)
 
 
 def complete_import(text, line):
@@ -153,7 +152,7 @@ class DatabaseNavigator(cmd.Cmd):
                     if cred[4] == "hash":
                         usernames.append(cred[2])
                         passwords.append(cred[3])
-                output_list = [":".join(combination) for combination in zip(usernames, passwords)]
+                output_list = [":".join(combination) for combination in zip(usernames, passwords, strict=True)]
                 write_list(filename, output_list)
             else:
                 print(f"[-] No such export option: {line[1]}")
@@ -515,7 +514,6 @@ class NXCDBMenu(cmd.Cmd):
     @staticmethod
     def do_EOF(line):
         sys.exit()
-
 
     @staticmethod
     def help_exit():

@@ -1,11 +1,12 @@
 import ntpath
-from dploot.lib.smb import DPLootSMBConnection
 from dploot.lib.target import Target
 from Cryptodome.Cipher import AES
 from lxml import objectify
 from base64 import b64decode
 import hashlib
 from dataclasses import dataclass
+
+from nxc.protocols.smb.dpapi import upgrade_to_dploot_connection
 
 
 @dataclass
@@ -14,6 +15,7 @@ class MRemoteNgEncryptionAttributes:
     block_cipher_mode: str
     encryption_engine: str
     full_file_encryption: bool
+
 
 class NXCModule:
     """
@@ -94,7 +96,10 @@ class NXCModule:
             use_kcache=use_kcache,
         )
 
-        dploot_conn = self.upgrade_connection(target=target, connection=connection.conn)
+        dploot_conn = upgrade_to_dploot_connection(connection=connection.conn, target=target)
+        if dploot_conn is None:
+            context.log.debug("Could not upgrade connection")
+            return
 
         # 2. Dump users list
         users = self.get_users(dploot_conn)
@@ -116,14 +121,6 @@ class NXCModule:
             if content is not None:
                 self.context.log.info(f"Found confCons.xml file: {self.custom_path}")
                 self.handle_confCons_file(content)
-
-    def upgrade_connection(self, target: Target, connection=None):
-        conn = DPLootSMBConnection(target)
-        if connection is not None:
-            conn.smb_session = connection
-        else:
-            conn.connect()
-        return conn
     
     def get_users(self, conn):
         users = []
@@ -185,7 +182,6 @@ class NXCModule:
                             content = conn.readFile(self.context.share, new_path)
                             self.handle_confCons_file(content)
                             
-
     def extract_remoteng_passwords(self, encrypted_password, encryption_attributes: MRemoteNgEncryptionAttributes):
         encrypted_password = b64decode(encrypted_password)
         if encrypted_password == b"":
