@@ -96,7 +96,6 @@ class NXCModule:
                     if error == "STATUS_OBJECT_NAME_NOT_FOUND":
                         pass
                     context.log.fail(f"Error DELETING created temp file {self.file_name} on share {share_name}: {error}")
-                    return
             except SessionError as e:
                 context.log.debug(f"Error writing encrypted file on share {share_name}: {get_error_string(e)} (This does not necessarily mean that the attack failed!)")
 
