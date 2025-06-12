@@ -98,45 +98,47 @@ class NXCModule:
         self.no_ldap = module_options.get("NO_LDAP", False)
 
     def on_login(self, context, connection):
-        shares = connection.shares()
-        for share in shares:
-            if share["name"] == "SYSVOL" and "READ" in share["access"]:
-                context.log.display("Searching for GptTmpl.inf files")
+        try:
+            connection.conn.listPath("SYSVOL", "*")
+        except Exception as e:
+            context.log.fail(f"Failed to list shares: {e}")
+            return
 
-                paths = connection.spider("SYSVOL", pattern=["GptTmpl.inf"])
+        context.log.display("Searching for GptTmpl.inf files")
+        paths = connection.spider("SYSVOL", pattern=["GptTmpl.inf"])
 
-                if not paths:
-                    context.log.warning("No GptTmpl.inf files found in SYSVOL.")
-                    return
+        if not paths:
+            context.log.warning("No GptTmpl.inf files found in SYSVOL.")
+            return
 
-                for path in paths:
-                    if "6AC1786C-016F-11D2-945F-00C04fB984F9" in path:  # Default Domain Policy
-                        context.log.success(f"Found Default Domain Policy GptTmpl.inf: {path}")
-                    else:
-                        context.log.info(f"Found GptTmpl.inf: {path}")
+        for path in paths:
+            if "6AC1786C-016F-11D2-945F-00C04fB984F9" in path:  # Default Domain Policy
+                context.log.success(f"Found Default Domain Policy GptTmpl.inf: {path}")
+            else:
+                context.log.info(f"Found GptTmpl.inf: {path}")
 
-                    buf = BytesIO()
-                    connection.conn.getFile("SYSVOL", path, buf.write)
+            buf = BytesIO()
+            connection.conn.getFile("SYSVOL", path, buf.write)
 
-                    try:
-                        content = buf.getvalue().decode("utf-16le")
-                    except UnicodeDecodeError as e:
-                        context.log.error(f"Failed to decode {path} as UTF-16LE: {e}")
-                        continue
+            try:
+                content = buf.getvalue().decode("utf-16le")
+            except UnicodeDecodeError as e:
+                context.log.error(f"Failed to decode {path} as UTF-16LE: {e}")
+                continue
 
-                    privileges = self.extract_privileges(content)
-                    if privileges:
-                        ldap_connection = None
-                        if not self.no_ldap:
-                            ldap_connection = self.initialize_ldap_connection(context, connection)
+            privileges = self.extract_privileges(content)
+            if privileges:
+                ldap_connection = None
+                if not self.no_ldap:
+                    ldap_connection = self.initialize_ldap_connection(context, connection)
 
-                        context.log.success(f"Privileges extracted from {path}:")
-                        for privilege, sids in privileges.items():
-                            resolved_sids = [self.resolve_sid(context, sid, ldap_connection) for sid in sids]
-                            context.log.highlight(f"{privilege}: {', '.join(resolved_sids)}")
+                context.log.success(f"Privileges extracted from {path}:")
+                for privilege, sids in privileges.items():
+                    resolved_sids = [self.resolve_sid(context, sid, ldap_connection) for sid in sids]
+                    context.log.highlight(f"{privilege}: {', '.join(resolved_sids)}")
 
-                        if ldap_connection:
-                            ldap_connection.unbind()
+                if ldap_connection:
+                    ldap_connection.unbind()
 
     def extract_privileges(self, content):
         """Parses the content of GptTmpl.inf to extract privilege rights."""
