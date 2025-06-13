@@ -275,7 +275,7 @@ class connection:
                 extra={
                     "module_name": module.name.upper(),
                     "host": self.host,
-                    "port": self.args.port,
+                    "port": self.port,
                     "hostname": self.hostname,
                 },
             )
@@ -293,8 +293,7 @@ class connection:
                 module.on_admin_login(context, self)
 
     def inc_failed_login(self, username):
-        global global_failed_logins
-        global user_failed_logins
+        global global_failed_logins, user_failed_logins
 
         if username not in user_failed_logins:
             user_failed_logins[username] = 0
@@ -304,8 +303,7 @@ class connection:
         self.failed_logins += 1
 
     def over_fail_limit(self, username):
-        global global_failed_logins
-        global user_failed_logins
+        global global_failed_logins, user_failed_logins
 
         if global_failed_logins == self.args.gfail_limit:
             return True
@@ -313,7 +311,7 @@ class connection:
         if self.failed_logins == self.args.fail_limit:
             return True
 
-        if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:
+        if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:  # noqa: SIM103
             return True
 
         return False
@@ -418,14 +416,14 @@ class connection:
                     with open(ntlm_hash) as ntlm_hash_file:
                         for i, line in enumerate(ntlm_hash_file):
                             line = line.strip()
-                            if len(line) != 32 and len(line) != 65:
+                            if len(line) != 32 and len(line) != 65 and len(line) != 0:
                                 self.logger.fail(f"Invalid NTLM hash length on line {(i + 1)} (len {len(line)}): {line}")
                                 continue
                             else:
                                 secret.append(line)
                                 cred_type.append("hash")
                 else:
-                    if len(ntlm_hash) != 32 and len(ntlm_hash) != 65:
+                    if len(ntlm_hash) != 32 and len(ntlm_hash) != 65 and len(ntlm_hash) != 0:
                         self.logger.fail(f"Invalid NTLM hash length {len(ntlm_hash)}, authentication not sent")
                         exit(1)
                     else:

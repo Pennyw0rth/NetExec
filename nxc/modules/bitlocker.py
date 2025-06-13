@@ -4,6 +4,7 @@ from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 
+
 class NXCModule:
     name = "bitlocker"
     description = "Enumerating BitLocker Status on target(s) If it is enabled or disabled."

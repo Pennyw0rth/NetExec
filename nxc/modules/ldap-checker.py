@@ -23,7 +23,7 @@ class NXCModule:
     Original work thankfully taken from @zyn3rgy's Ldap Relay Scan project: https://github.com/zyn3rgy/LdapRelayScan
     """
     name = "ldap-checker"
-    description = "Checks whether LDAP signing and channel binding are required and / or enforced"
+    description = "[REMOVED] Checks whether LDAP signing and channel binding are required and / or enforced"
     supported_protocols = ["ldap"]
     opsec_safe = True
     multiple_hosts = True
@@ -112,7 +112,6 @@ class NXCModule:
             context.log.fail(f"Exception in run_ldaps_withEPA: {e}")
             return None
             
-    
     # Domain Controllers do not have a certificate setup for
     # LDAPS on port 636 by default. If this has not been setup,
     # the TLS handshake will hang and you will not be able to
@@ -174,6 +173,8 @@ class NXCModule:
     # Determine authentication context and proceed to
     # enumerate LDAP signing and channel binding settings    
     def on_login(self, context, connection):
+        context.log.fail("[REMOVED] Now natively supported in the host banner")
+        return
         stype = asyauthSecret.PASS
         secret = connection.password
         if connection.nthash:

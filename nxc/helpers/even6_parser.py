@@ -5,6 +5,7 @@ import uuid
 
 from datetime import datetime
 
+
 class Substitution:
     def __init__(self, buf, offset):
         (sub_token, sub_id, sub_type) = struct.unpack_from("<BHB", buf, offset)
@@ -46,6 +47,7 @@ class Substitution:
         else:
             print("Unknown value type", hex(value.type))
 
+
 class Value:
     def __init__(self, buf, offset):
         token, string_type, length = struct.unpack_from("<BBH", buf, offset)
@@ -55,6 +57,7 @@ class Value:
 
     def xml(self, template=None):
         return self._val
+
 
 class Attribute:
     def __init__(self, buf, offset):
@@ -75,12 +78,14 @@ class Attribute:
         val = self._value.xml(template)
         return None if val is None else f'{self._name.val}="{val}"'
 
+
 class Name:
     def __init__(self, buf, offset):
         hashs, length = struct.unpack_from("<HH", buf, offset)
 
         self.val = buf[offset + 4:offset + 4 + length * 2].decode("utf16")
         self.length = 4 + (length + 1) * 2
+
 
 class Element:
     def __init__(self, buf, offset):
@@ -151,6 +156,7 @@ class Element:
             children = (x.xml(template) for x in self._children)
             return "<{}{}>{}</{}>".format(self._name.val, attrs, "".join(children), self._name.val)
 
+
 class ValueSpec:
     def __init__(self, buf, offset, value_offset):
         self.length, self.type, value_eof = struct.unpack_from("<HBB", buf, offset)
@@ -158,6 +164,7 @@ class ValueSpec:
 
         if self.type == 0x21:
             self.template = BinXML(buf, value_offset)
+
 
 class TemplateInstance:
     def __init__(self, buf, offset):
@@ -179,6 +186,7 @@ class TemplateInstance:
     def xml(self, template=None):
         return self._xml.xml(self)
 
+
 class BinXML:
     def __init__(self, buf, offset):
         header_token, major_version, minor_version, flags, next_token = struct.unpack_from("<BBBBB", buf, offset)
@@ -194,6 +202,7 @@ class BinXML:
 
     def xml(self, template=None):
         return self._element.xml(template)
+
 
 class ResultSet:
     def __init__(self, buf):

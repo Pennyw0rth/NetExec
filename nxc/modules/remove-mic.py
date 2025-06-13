@@ -52,10 +52,11 @@ class NXCModule:
         else:
             context.log.highlight("Potentially vulnerable to CVE-2019-1040, next step: https://dirkjanm.io/exploiting-CVE-2019-1040-relay-vulnerabilities-for-rce-and-domain-admin/")
 
+
 class Modify_Func:
     # Slightly modified version of impackets computeResponseNTLMv2
     def mod_computeResponseNTLMv2(flags, serverChallenge, clientChallenge, serverName, domain, user, password, lmhash="", nthash="",
-                    use_ntlmv2=ntlm.USE_NTLMv2, channel_binding_value=b""):
+                    use_ntlmv2=ntlm.USE_NTLMv2, channel_binding_value=b"", service="cifs"):
 
         responseServerVersion = b"\x01"
         hiResponseServerVersion = b"\x01"
@@ -162,14 +163,12 @@ class Modify_Func:
         if ntlmChallenge["flags"] & ntlm.NTLMSSP_NEGOTIATE_ALWAYS_SIGN == ntlm.NTLMSSP_NEGOTIATE_ALWAYS_SIGN:
             responseFlags ^= ntlm.NTLMSSP_NEGOTIATE_ALWAYS_SIGN
 
-
         keyExchangeKey = ntlm.KXKEY(ntlmChallenge["flags"], sessionBaseKey, lmResponse, ntlmChallenge["challenge"], password,
                             lmhash, nthash, use_ntlmv2)
 
         # Special case for anonymous login
         if user == "" and password == "" and lmhash == "" and nthash == "":
             keyExchangeKey = b"\x00" * 16
-
 
         if ntlmChallenge["flags"] & ntlm.NTLMSSP_NEGOTIATE_KEY_EXCH:
             exportedSessionKey = ntlm.b("".join([random.choice(string.digits + string.ascii_letters) for _ in range(16)]))
