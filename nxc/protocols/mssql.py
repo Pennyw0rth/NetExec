@@ -75,24 +75,20 @@ class mssql(connection):
             valid_instance = None
             for index, instance in enumerate(self.mssql_instances):
                 sqlbrowser_logger.success(f"#{index} {instance.get('InstanceName')} (port:{instance.get('tcp', 'None')}) (np:{instance.get('np', 'None')}) (version:{instance.get('Version')})")
-                if (not valid_instance and instance.get("np")) or instance.get("tcp"):
+                if not valid_instance and instance.get("tcp"):
                     valid_instance = instance
             
             if not valid_instance:
-                sqlbrowser_logger.fail(f"SQL Browser detected {len(self.mssql_instances)} instances but none of them are exposed to the network.")
+                sqlbrowser_logger.fail(f"SQL Browser detected {len(self.mssql_instances)} instances but none of them is exposed to TCP.")
                 return
             
             # Only fallback when TCP is detected, until an implementation for np is done
-            if valid_instance.get("tcp"):
-                port = valid_instance.get("tcp")
-                sqlbrowser_logger.success(f"Falling back to instance #{self.mssql_instances.index(valid_instance)} on port {port}")
-                self.port = port
-                # Reset proto_logger to update the port
-                self.proto_logger()
-                self.conn = tds.MSSQL(self.host, self.port, self.remoteName)
-            
-            elif valid_instance.get("np"):
-                pass
+            port = valid_instance.get("tcp")
+            sqlbrowser_logger.success(f"Falling back to instance #{self.mssql_instances.index(valid_instance)} on port {port}")
+            self.port = port
+            # Reset proto_logger to update the port
+            self.proto_logger()
+            self.conn = tds.MSSQL(self.host, self.port, self.remoteName)
 
     def create_conn_obj(self):
         try:
