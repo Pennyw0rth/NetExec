@@ -408,7 +408,7 @@ class TSCH_EXEC:
                            else:
                                self.logger.debug(str(e))
                 else:
-                   self.logger.info("No output file was saved to be retrived")
+                   self.logger.display("No output file was saved to be retrived")
 
                 if self.__outputBuffer:
                     self.logger.debug(f"Deleting file {self.__share}\\{self.__output_filename}")
