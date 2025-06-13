@@ -111,41 +111,22 @@ class KerberosAttacks:
         etype  = enc['etype']
         cipher = enc['cipher'].asOctets()
 
-        if etype == constants.EncryptionTypes.rc4_hmac.value:                  # 23
+        service = spn.split('/')[0]
+        spn_fmt = spn.replace(":", "~")
+
+        if etype == constants.EncryptionTypes.rc4_hmac.value:  # 23
             chk  = hexlify(cipher[:16]).decode()
             data = hexlify(cipher[16:]).decode()
-            entry = "$krb5tgs${}$*{}${}${}*${}${}".format(
-                etype,
-                spn.split('/')[0],
-                realm,
-                spn.replace(":", "~"),
-                chk,
-                data,
-            )
+            entry = f"$krb5tgs${etype}*{service}${realm}${spn_fmt}*${chk}${data}"
 
-        elif etype == constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value: # 17
+        elif etype in (
+            constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value,  # 17
+            constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value,  # 18
+        ):
             chk  = hexlify(cipher[-12:]).decode()
             data = hexlify(cipher[:-12]).decode()
-            entry = "$krb5tgs${}${}${}$*{}*${}${}".format(
-                etype,
-                spn.split('/')[0],
-                realm,
-                spn.replace(":", "~"),
-                chk,
-                data,
-            )
+            entry = f"$krb5tgs${etype}${service}${realm}$*{spn_fmt}*${chk}${data}"
 
-        elif etype == constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value: # 18
-            chk  = hexlify(cipher[-12:]).decode()
-            data = hexlify(cipher[:-12]).decode()
-            entry = "$krb5tgs${}${}${}$*{}*${}${}".format(
-                etype,
-                spn.split('/')[0],
-                realm,
-                spn.replace(":", "~"),
-                chk,
-                data,
-            )
         else:
             self.logger.fail(f"[{spn}] etype {etype} not supported")
             return None

@@ -1027,8 +1027,6 @@ class ldap(connection):
 
              return
 
-
-
         # Building the search filter
         searchFilter = "(&(servicePrincipalName=*)(!(objectCategory=computer)))"
         attributes = [
@@ -1484,5 +1482,3 @@ class ldap(connection):
                 if each_file.startswith(self.output_filename.split("/")[-1]) and each_file.endswith("json"):
                     z.write(each_file)
                     os.remove(each_file)
-
-
