@@ -37,7 +37,22 @@ audit_mode = nxc_config.get("nxc", "audit_mode", fallback=False)
 reveal_chars_of_pwd = int(nxc_config.get("nxc", "reveal_chars_of_pwd", fallback=0))
 config_log = nxc_config.getboolean("nxc", "log_mode", fallback=False)
 ignore_opsec = nxc_config.getboolean("nxc", "ignore_opsec", fallback=False)
-host_info_colors = literal_eval(nxc_config.get("nxc", "host_info_colors", fallback=["green", "red", "yellow", "cyan"]))
+try:
+    host_info_colors = literal_eval(nxc_config.get("nxc", "host_info_colors", fallback=["green", "red", "yellow", "cyan"]))
+except (ValueError, SyntaxError) as e:
+    nxc_logger.error(f"Invalid host_info_colors format in config: {e}. Using default values.")
+    host_info_colors = literal_eval(nxc_default_config.get("nxc", "host_info_colors"))
+
+try:
+    exclude_hosts = literal_eval(nxc_config.get("nxc", "exclude_hosts", fallback="[]"))
+    if not isinstance(exclude_hosts, list):
+        nxc_logger.error(f"exclude_hosts must be a list, got {type(exclude_hosts).__name__}. Using empty list.")
+        exclude_hosts = []
+except (ValueError, SyntaxError) as e:
+    nxc_logger.error(f"Invalid exclude_hosts format in config: {e}. Using empty list.")
+    exclude_hosts = []
+
+skip_self = nxc_config.getboolean("nxc", "skip_self", fallback=False)
 
 
 if len(host_info_colors) != 4:

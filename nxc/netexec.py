@@ -2,7 +2,7 @@
 import sys
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import identify_target_file
-from nxc.parsers.ip import parse_targets
+from nxc.parsers.ip import parse_targets, parse_exclusions, get_local_ip
 from nxc.parsers.nmap import parse_nmap_xml
 from nxc.parsers.nessus import parse_nessus_file
 from nxc.cli import gen_cli_args
@@ -12,7 +12,7 @@ from nxc.first_run import first_run_setup
 from nxc.paths import CONFIG_PATH, NXC_PATH, WORKSPACE_DIR
 from nxc.console import nxc_console
 from nxc.logger import nxc_logger
-from nxc.config import nxc_config, nxc_workspace, config_log, ignore_opsec
+from nxc.config import nxc_config, nxc_workspace, config_log, ignore_opsec, exclude_hosts, skip_self
 from nxc.database import create_db_engine
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
@@ -124,6 +124,29 @@ def main():
                             targets.extend(parse_targets(target_entry.strip()))
             else:
                 targets.extend(parse_targets(target))
+
+    # Handle exclusions from config
+    excluded_ips = set()
+
+    # Process exclude_hosts from config
+    if exclude_hosts:
+        nxc_logger.debug(f"Processing exclusions from config: {exclude_hosts}")
+        excluded_ips.update(parse_exclusions(exclude_hosts))
+
+    # Process skip_self from config
+    if skip_self:
+        local_ip = get_local_ip()
+        if local_ip:
+            nxc_logger.debug(f"Local IP detected: {local_ip}")
+            excluded_ips.add(local_ip)
+        else:
+            nxc_logger.warning("Could not determine local IP address for skip_self")
+
+    # Filter out excluded targets
+    if excluded_ips:
+        original_count = len(targets)
+        targets = [target for target in targets if target not in excluded_ips]
+        nxc_logger.debug(f"Excluded {original_count - len(targets)} hosts from scan")
 
     # The following is a quick hack for the powershell obfuscation functionality, I know this is yucky
     if hasattr(args, "clear_obfscripts") and args.clear_obfscripts:
