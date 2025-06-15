@@ -3,8 +3,9 @@ import importlib
 import traceback
 import sys
 
-from os import listdir
-from os.path import dirname
+from os import listdir, sep
+from os import walk as dir_walk
+from os.path import dirname, splitext, relpath, abspath
 from os.path import join as path_join
 
 from nxc.context import Context
@@ -126,4 +127,29 @@ class ModuleLoader:
                         modules.update(module_data)
                     except Exception as e:
                         self.logger.debug(f"Error loading module {module}: {e}")
+        return modules
+
+    def load_all_modules_from_subdirs(parent_dirs):
+        if isinstance(parent_dirs, str):
+            parent_dirs = [parent_dirs]
+        modules = []
+        for parent_dir in parent_dirs:
+            abs_parent_dir = abspath(parent_dir)
+            if abs_parent_dir not in sys.path:
+                sys.path.insert(0, abs_parent_dir)
+            for root, dirs, files in dir_walk(abs_parent_dir):
+                if root == abs_parent_dir:
+                    continue
+                for file in files:
+                    if file.endswith('.py') and not (file.startswith("__") or file.startswith("dtypes")):
+                        module_path = path_join(root, file)
+                        rel_mod_path = relpath(module_path, abs_parent_dir)
+                        module_name = splitext(rel_mod_path)[0].replace(sep, ".")
+                        try:
+                            spec = importlib.util.spec_from_file_location(module_name, module_path)
+                            module = importlib.util.module_from_spec(spec)
+                            spec.loader.exec_module(module)
+                            modules.append(module)
+                        except Exception as e:
+                            print(f"Failed to load {module_name}: {e}")
         return modules
