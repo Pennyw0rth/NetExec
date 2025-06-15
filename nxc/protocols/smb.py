@@ -663,7 +663,7 @@ class smb(connection):
         except Exception as e:
             self.logger.fail(f"Failed to get TGT: {e}")
 
-    def check_dc_ports(self, timeout=2):
+    def check_dc_ports(self, timeout=1):
         """Check multiple DC-specific ports in case first check fails"""
         import socket
         dc_ports = [88, 389, 636, 3268]  # Kerberos, LDAP, LDAPS, Global Catalog
@@ -687,30 +687,48 @@ class smb(connection):
         from impacket.dcerpc.v5 import transport, nrpc
 
         self.logger.debug("Performing authentication attempts...")
+        
+        # First check if port 135 is open
+        if self._is_port_open(135):
+            self.logger.debug("Port 135 is open, attempting MSRPC connection...")
+            try:
+                rpctransport = transport.DCERPCTransportFactory(f"ncacn_ip_tcp:{self.host}[135]")
+                rpctransport.set_connect_timeout(5)
+
+                dce = rpctransport.get_dce_rpc()
+                dce.connect()
+                dce.bind(nrpc.MSRPC_UUID_NRPC)
+
+                self.isdc = True
+                dce.disconnect()
+                return True
+            except DCERPCException:
+                self.logger.debug("Error while connecting to host: DCERPCException, which means this is probably not a DC!")
+            except TimeoutError:
+                self.logger.debug("Timeout while connecting to host: likely not a DC or host is unreachable.")
+            except Exception as e:
+                self.logger.debug(f"Error while connecting to host: {e}")
+            self.isdc = False
+            return False
+        else:
+            self.logger.debug("Port 135 is closed, skipping MSRPC check...")
+            # Fallback to checking DC ports
+            if self.check_dc_ports():
+                self.logger.debug("Host appears to be a DC (multiple DC ports open)")
+                self.isdc = True
+                return True
+
+    def _is_port_open(self, port, timeout=1):
+        """Check if a specific port is open on the target host."""
+        import socket
         try:
-            rpctransport = transport.DCERPCTransportFactory(f"ncacn_ip_tcp:{self.host}[135]")
-            rpctransport.set_connect_timeout(5)
-
-            dce = rpctransport.get_dce_rpc()
-            dce.connect()
-            dce.bind(nrpc.MSRPC_UUID_NRPC)
-
-            self.isdc = True
-            dce.disconnect()
-            return True
-        except DCERPCException:
-            self.logger.debug("Error while connecting to host: DCERPCException, which means this is probably not a DC!")
-        except TimeoutError:
-            self.logger.debug("Timeout while connecting to host: likely not a DC or host is unreachable.")
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(timeout)
+                result = sock.connect_ex((self.host, port))
+                return result == 0
         except Exception as e:
-            self.logger.debug(f"Error while connecting to host: {e}")
-
-        if self.check_dc_ports():
-            self.logger.debug("Host appears to be a DC (multiple DC ports open)")
-            self.isdc = True
-            return True
-        self.isdc = False
-        return False
+            self.logger.debug(f"Error checking port {port} on {self.host}: {e}")
+            return False
 
     @requires_admin
     def execute(self, payload=None, get_output=False, methods=None) -> str:
