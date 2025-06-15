@@ -663,13 +663,32 @@ class smb(connection):
         except Exception as e:
             self.logger.fail(f"Failed to get TGT: {e}")
 
-    def is_host_dc(self):
-        from impacket.dcerpc.v5 import transport, nrpc, epm
+    def check_dc_ports(self, timeout=2):
+        """Check multiple DC-specific ports in case first check fails"""
         import socket
+        dc_ports = [88, 389, 636, 3268]  # Kerberos, LDAP, LDAPS, Global Catalog
+        open_ports = 0
+
+        for port in dc_ports:
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(timeout)
+                result = sock.connect_ex((self.host, port))
+                if result == 0:
+                    self.logger.debug(f"Port {port} is open on {self.host}")
+                    open_ports += 1
+                sock.close()
+            except Exception:
+                pass
+        # If 3 or more DC ports are open, likely a DC
+        return open_ports >= 3
+
+    def is_host_dc(self):
+        from impacket.dcerpc.v5 import transport, nrpc
 
         self.logger.debug("Performing authentication attempts...")
         try:
-            rpctransport = transport.DCERPCTransportFactory(f'ncacn_ip_tcp:{self.host}[135]')
+            rpctransport = transport.DCERPCTransportFactory(f"ncacn_ip_tcp:{self.host}[135]")
             rpctransport.set_connect_timeout(5)
 
             dce = rpctransport.get_dce_rpc()
@@ -681,10 +700,15 @@ class smb(connection):
             return True
         except DCERPCException:
             self.logger.debug("Error while connecting to host: DCERPCException, which means this is probably not a DC!")
-        except socket.timeout:
+        except TimeoutError:
             self.logger.debug("Timeout while connecting to host: likely not a DC or host is unreachable.")
         except Exception as e:
             self.logger.debug(f"Error while connecting to host: {e}")
+
+        if self.check_dc_ports():
+            self.logger.debug("Host appears to be a DC (multiple DC ports open)")
+            self.isdc = True
+            return True
         self.isdc = False
         return False
 
