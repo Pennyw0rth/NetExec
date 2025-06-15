@@ -664,14 +664,27 @@ class smb(connection):
             self.logger.fail(f"Failed to get TGT: {e}")
 
     def is_host_dc(self):
-        from impacket.dcerpc.v5 import nrpc, epm
+        from impacket.dcerpc.v5 import transport, nrpc, epm
+        import socket
+
         self.logger.debug("Performing authentication attempts...")
         try:
-            epm.hept_map(self.host, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
+            rpctransport = transport.DCERPCTransportFactory(f'ncacn_ip_tcp:{self.host}[135]')
+            rpctransport.set_connect_timeout(5)
+
+            dce = rpctransport.get_dce_rpc()
+            dce.connect()
+            dce.bind(nrpc.MSRPC_UUID_NRPC)
+
             self.isdc = True
+            dce.disconnect()
             return True
         except DCERPCException:
             self.logger.debug("Error while connecting to host: DCERPCException, which means this is probably not a DC!")
+        except socket.timeout:
+            self.logger.debug("Timeout while connecting to host: likely not a DC or host is unreachable.")
+        except Exception as e:
+            self.logger.debug(f"Error while connecting to host: {e}")
         self.isdc = False
         return False
 
