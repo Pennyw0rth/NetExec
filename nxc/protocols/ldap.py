@@ -981,7 +981,7 @@ class ldap(connection):
                         hash_asreproast.write(f"{hash_TGT}\n")
 
     def kerberoasting(self):
-        if self.args.no_preauth_user:
+        if self.args.no_preauth:
              if not self.args.username:
                  self.logger.fail("Use -u/--username to supply a list of usernames or SPNs (file or comma-separated list)")
                  return
@@ -1005,7 +1005,7 @@ class ldap(connection):
                      continue
 
                  hashline = KerberosAttacks(self).get_tgs_no_preauth(
-                     self.args.no_preauth_user,
+                     self.args.no_preauth,
                      spn
                  )
                  if hashline:
