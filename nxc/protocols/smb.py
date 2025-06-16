@@ -666,7 +666,7 @@ class smb(connection):
     def check_dc_ports(self, timeout=1):
         """Check multiple DC-specific ports in case first check fails"""
         import socket
-        dc_ports = [88, 389, 636, 3268]  # Kerberos, LDAP, LDAPS, Global Catalog
+        dc_ports = [88, 389, 636, 3268, 9389]  # Kerberos, LDAP, LDAPS, Global Catalog, ADWS
         open_ports = 0
 
         for port in dc_ports:
@@ -693,7 +693,7 @@ class smb(connection):
             self.logger.debug("Port 135 is open, attempting MSRPC connection...")
             try:
                 rpctransport = transport.DCERPCTransportFactory(f"ncacn_ip_tcp:{self.host}[135]")
-                rpctransport.set_connect_timeout(5)
+                rpctransport.set_connect_timeout(2)
 
                 dce = rpctransport.get_dce_rpc()
                 dce.connect()
