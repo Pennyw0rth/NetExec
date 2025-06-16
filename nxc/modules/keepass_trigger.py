@@ -6,6 +6,7 @@ from base64 import b64encode
 from io import BytesIO, StringIO
 from xml.etree import ElementTree as ET
 from nxc.helpers.powershell import get_ps_script
+from nxc.paths import TMP_PATH
 
 
 class NXCModule:
@@ -39,7 +40,7 @@ class NXCModule:
         self.share = "C$"
         self.remote_temp_script_path = "C:\\Windows\\Temp\\temp.ps1"
         self.keepass_binary_path = "C:\\Program Files\\KeePass Password Safe 2\\KeePass.exe"
-        self.local_export_path = "/tmp"
+        self.local_export_path = TMP_PATH
         self.trigger_name = "export_database"
         self.poll_frequency_seconds = 5
         self.dummy_service_name = "OneDrive Sync KeePass"
