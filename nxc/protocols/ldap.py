@@ -1004,13 +1004,15 @@ class ldap(connection):
                     skipped.append(base_name)
                     continue
 
+                if not self.username:
+                    self.logger.fail("Likely executed without password flag. Please run the command with -p ''")
+                    return
                 hashline = KerberosAttacks(self).get_tgs_no_preauth(self.username, spn)
                 if hashline:
                     hashes.append(hashline)
 
             if skipped:
                 self.logger.display(f"Skipping account: {', '.join(skipped)}")
-
             if hashes:
                 self.logger.display(f"Total of records returned {len(hashes)}")
             else:
@@ -1021,7 +1023,6 @@ class ldap(connection):
                 if self.args.kerberoasting:
                     with open(self.args.kerberoasting, "a+", encoding="utf-8") as f:
                         f.write(line + "\n")
-
             return
 
         # Building the search filter
