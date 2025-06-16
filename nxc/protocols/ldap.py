@@ -986,15 +986,11 @@ class ldap(connection):
 
     def kerberoasting(self):
         if self.args.no_preauth:
-            if not self.args.username:
-                self.logger.fail("Use -u/--username to supply a list of usernames or SPNs (file or comma-separated list)")
-                return
-
             usernames = []
-            for item in self.args.username:
+            for item in self.args.no_preauth:
                 if os.path.isfile(item):
                     with open(item, encoding="utf-8") as f:
-                        usernames.extend(l.strip() for l in f if l.strip())
+                        usernames.extend(line.strip() for line in f if line.strip())
                 else:
                     usernames.append(item.strip())
 
@@ -1008,10 +1004,7 @@ class ldap(connection):
                     skipped.append(base_name)
                     continue
 
-                hashline = KerberosAttacks(self).get_tgs_no_preauth(
-                    self.args.no_preauth,
-                    spn
-                )
+                hashline = KerberosAttacks(self).get_tgs_no_preauth(self.username, spn)
                 if hashline:
                     hashes.append(hashline)
 
