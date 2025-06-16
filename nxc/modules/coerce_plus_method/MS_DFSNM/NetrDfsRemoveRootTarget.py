@@ -24,7 +24,7 @@ class NetrDfsRemoveRootTargetResponse(NDRCALL):
     structure = ()
 
 
-def request(dce, listener):
+def request(dce, target, listener):
     request = NetrDfsRemoveRootTarget()
     request["pDfsPath"] = f"\\\\{listener}\\a\x00"
     request["pTargetPath"] = NULL

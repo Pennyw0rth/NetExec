@@ -21,7 +21,7 @@ class NetrDfsManagerInitializeResponse(NDRCALL):
     structure = ()
 
 
-def request(dce, listener):
+def request(dce, target, listener):
     request = NetrDfsManagerInitialize()
     request["ServerName"] = f"{listener}\x00"
     request["Flags"] = 0  # Flags: This parameter MUST be zero.

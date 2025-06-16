@@ -17,7 +17,7 @@ class IsPathSupportedResponse(NDRCALL):
     structure = ()
 
 
-def request(dce, listener):
+def request(dce, target, listener):
     request = IsPathSupported()
     request["ShareName"] = f"{listener}\x00"
     dce.request(request)

@@ -22,7 +22,7 @@ class RpcRemoteFindFirstPrinterChangeNotificationResponse(NDRCALL):
     structure = ()
 
 
-def request(dce, listener, target):
+def request(dce, target, listener):
     resp = hRpcOpenPrinter(dce, f"\\\\{target}\x00")
 
     # https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rprn/eb66b221-1c1f-4249-b8bc-c5befec2314d
@@ -35,18 +35,3 @@ def request(dce, listener, target):
     request["cbBuffer"] = NULL
     request["pBuffer"] = NULL
     dce.request(request)
-
-"""
-
-try:
-    resp = rprn.hRpcOpenPrinter(dce, f"\\\\{target}\x00")
-except Exception as e:
-    if str(e).find("Broken pipe") >= 0:
-        # The connection timed-out. Let's try to bring it back next round
-        self.context.log.debug("Connection failed - skipping host!")
-        return None
-    elif str(e).upper().find("ACCESS_DENIED"):
-        # We're not admin, bye
-        self.context.log.debug("Access denied - RPC call was denied")
-        return None
-"""

@@ -29,7 +29,7 @@ class NetrDfsAddRootTargetResponse(NDRCALL):
     structure = ()
 
 
-def request(dce, listener):
+def request(dce, target, listener):
     request = NetrDfsAddRootTarget()
     request["pDfsPath"] = f"\\\\{listener}\\a\x00"
     request["pTargetPath"] = NULL

