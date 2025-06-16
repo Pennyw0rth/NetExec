@@ -53,13 +53,13 @@ class NXCModule:
 
     def on_login(self, context, connection):
         target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
-        testCoercer = Coercer(context, self.method_modules)
-        protocol_config, aliasName = testCoercer.config()
+        Coercer_ = Coercer(context, self.method_modules)
+        protocol_config, aliasName = Coercer_.config()
         for ms_protocolName, coerce_methods in protocol_config.items():
             accessible_Pipe = []
             for coerce_method in coerce_methods:
                 try:
-                    dce = testCoercer.connect(
+                    dce = Coercer_.connect(
                         username=connection.username,
                         password=connection.password,
                         domain=connection.domain,
@@ -74,7 +74,7 @@ class NXCModule:
                     if dce is not None:
                         accessible_Pipe.append(coerce_method["pipeName"])
                         if self.listener is not None:  # exploit
-                            testCoercer.exploit(
+                            Coercer_.exploit(
                                 dce=dce,
                                 target=target,
                                 listener=self.listener,
@@ -97,7 +97,7 @@ class Coercer:
     def __init__(self, context, methods):
         self.context = context
         self.methods = methods
-    
+
     def config(self):
         alias = {
             "MS_FSRVP": "ShadowCoerce",
