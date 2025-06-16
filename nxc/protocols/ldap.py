@@ -982,50 +982,50 @@ class ldap(connection):
 
     def kerberoasting(self):
         if self.args.no_preauth:
-             if not self.args.username:
-                 self.logger.fail("Use -u/--username to supply a list of usernames or SPNs (file or comma-separated list)")
-                 return
+            if not self.args.username:
+                self.logger.fail("Use -u/--username to supply a list of usernames or SPNs (file or comma-separated list)")
+                return
 
-             usernames = []
-             for item in self.args.username:
-                 if os.path.isfile(item):
-                     with open(item, encoding="utf-8") as f:
-                         usernames.extend(l.strip() for l in f if l.strip())
-                 else:
-                     usernames.append(item.strip())
+            usernames = []
+            for item in self.args.username:
+                if os.path.isfile(item):
+                    with open(item, encoding="utf-8") as f:
+                        usernames.extend(l.strip() for l in f if l.strip())
+                else:
+                    usernames.append(item.strip())
 
-             skipped = []
-             hashes  = []
+            skipped = []
+            hashes = []
 
-             for spn in usernames:
-                 base_name = spn.split("/", 1)[0].split("@", 1)[0].rstrip()
+            for spn in usernames:
+                base_name = spn.split("/", 1)[0].split("@", 1)[0].rstrip()
 
-                 if base_name.lower() == "krbtgt" or base_name.endswith("$"):
-                     skipped.append(base_name)
-                     continue
+                if base_name.lower() == "krbtgt" or base_name.endswith("$"):
+                    skipped.append(base_name)
+                    continue
 
-                 hashline = KerberosAttacks(self).get_tgs_no_preauth(
-                     self.args.no_preauth,
-                     spn
-                 )
-                 if hashline:
-                     hashes.append(hashline)
+                hashline = KerberosAttacks(self).get_tgs_no_preauth(
+                    self.args.no_preauth,
+                    spn
+                )
+                if hashline:
+                    hashes.append(hashline)
 
-             if skipped:
-                 self.logger.display(f"Skipping account: {', '.join(skipped)}")
+            if skipped:
+                self.logger.display(f"Skipping account: {', '.join(skipped)}")
 
-             if hashes:
-                 self.logger.display(f"Total of records returned {len(hashes)}")
-             else:
-                 self.logger.highlight("No entries found!")
+            if hashes:
+                self.logger.display(f"Total of records returned {len(hashes)}")
+            else:
+                self.logger.highlight("No entries found!")
 
-             for line in hashes:
-                 self.logger.highlight(line)
-                 if self.args.kerberoasting:
-                     with open(self.args.kerberoasting, "a+", encoding="utf-8") as f:
-                         f.write(line + "\n")
+            for line in hashes:
+                self.logger.highlight(line)
+                if self.args.kerberoasting:
+                    with open(self.args.kerberoasting, "a+", encoding="utf-8") as f:
+                        f.write(line + "\n")
 
-             return
+            return
 
         # Building the search filter
         searchFilter = "(&(servicePrincipalName=*)(!(objectCategory=computer)))"
