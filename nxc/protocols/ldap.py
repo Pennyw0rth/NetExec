@@ -312,7 +312,10 @@ class ldap(connection):
             self.domain = self.targetDomain
 
         self.check_ldap_signing()
-        self.check_ldaps_cbt()
+        if getattr(self.args, "port_explicitly_set", False) and self.port == 389:
+            self.cbt_status = "Unknown"
+        else:
+            self.check_ldaps_cbt()
 
         # using kdcHost is buggy on impacket when using trust relation between ad so we kdcHost must stay to none if targetdomain is not equal to domain
         if not self.kdcHost and self.domain and self.domain == self.targetDomain:
