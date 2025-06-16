@@ -409,7 +409,11 @@ class ldap(connection):
                 f"{domain}\\{self.username}{' account vulnerable to asreproast attack'} {''}",
                 color="yellow",
             )
-            return False
+            # If no preauth is set, we want to be able to execute commands such as --kerberoasting
+            if self.args.no_preauth:  # noqa: SIM103
+                return True
+            else:
+                return False
         except SessionError as e:
             error, desc = e.getErrorString()
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
