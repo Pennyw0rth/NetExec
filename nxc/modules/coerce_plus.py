@@ -97,6 +97,7 @@ class Coercer:
     def __init__(self, context, methods):
         self.context = context
         self.methods = methods
+        self.timeout = 2
 
     def config(self):
         alias = {
@@ -191,6 +192,8 @@ class Coercer:
             rpctransport.set_kerberos(doKerberos, kdcHost=dcHost)
 
         rpctransport.setRemoteHost(target)
+        rpctransport.set_connect_timeout(self.timeout)
+
         dce = rpctransport.get_dce_rpc()
         if doKerberos:
             dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
