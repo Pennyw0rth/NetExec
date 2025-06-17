@@ -2046,7 +2046,7 @@ class smb(connection):
                     if dce is not None:
                         accessible_Pipe.append(coerce_method["pipeName"])
                         if self.args.coercer_listener is not None: # Do exploit
-                            Coercer_.exploit(
+                            exploit_success = Coercer_.exploit(
                                 dce=dce,
                                 target=self.remoteName,
                                 listener=self.args.coercer_listener,
@@ -2055,6 +2055,8 @@ class smb(connection):
                                 exploitName=aliasName[ms_protocolName],
                                 pipeName=coerce_method["pipeName"]
                             )
+                            if exploit_success and not self.args.coercer_always_continue:
+                                break
                         dce.disconnect()
                     else:
                         self.logger.debug(f'{ms_protocolName}: PIPE: {coerce_method["pipeName"]} is not accessible on target: {self.remoteName}')

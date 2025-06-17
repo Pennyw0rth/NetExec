@@ -140,10 +140,11 @@ class Coercer:
                     # For wspcoerce, it won't return rpc error when it success.
                     self.logger.highlight(f"{exploitName}: Exploit Success, {pipeName}\\{CoerceMethod}")
                     exploit_success = True
+
             if always_continue:
                 exploit_success = False
             if exploit_success:
-                break
+                return exploit_success
     
     def handle_exception(self, CoerceMethod, exploitName, pipeName, e):
         if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
