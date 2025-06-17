@@ -526,7 +526,7 @@ class rdp(connection):
             
             # Take a screenshot if requested
             if capture_screenshot and self.conn is not None:
-                self.logger.highlight("Waiting for screen to update...")se
+                self.logger.highlight("Waiting for screen to update...")
                 await asyncio.sleep(self.args.screentime)  # Additional wait to ensure screen is updated
                 
                 self.logger.debug(f"Desktop buffer has data: {self.conn.desktop_buffer_has_data}")
