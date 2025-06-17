@@ -1,7 +1,7 @@
 from impacket.dcerpc.v5.ndr import NDRCALL
 from impacket.dcerpc.v5.dtypes import WSTR, DWORD, NDRPOINTERNULL
 
-from nxc.modules.coerce_plus_method.MS_EFSR.dtypes import ENCRYPTION_CERTIFICATE_LIST
+from nxc.data.coercer_method.MS_EFSR.dtypes import ENCRYPTION_CERTIFICATE_LIST
 from nxc.data.coercer_method.DCERPCSessionError import DCERPCSessionError
 
 

@@ -1,7 +1,7 @@
 from impacket.structure import Structure
 from impacket.smb3structs import FILE_READ_DATA, FILE_SHARE_READ, FSCTL_PIPE_TRANSCEIVE, SMB2_0_IOCTL_IS_FSCTL
 
-from nxc.modules.coerce_plus_method.MS_WSP.dtypes import CPMConnectIn, CPMCreateQueryIn, CPMDisconnect
+from nxc.data.coercer_method.MS_WSP.dtypes import CPMConnectIn, CPMCreateQueryIn, CPMDisconnect
 
 
 class CPMConnectIn_(Structure):
