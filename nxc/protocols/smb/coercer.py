@@ -126,6 +126,7 @@ class Coercer:
         return dce
     
     def exploit(self, dce, target, listener, always_continue, ms_protocolName, exploitName, pipeName):
+        exploit_success = False
         for method in self.methods:
             ProtocolName = method.__package__
             CoerceMethod = method.__name__.split(".")[1]
@@ -134,18 +135,23 @@ class Coercer:
                 try:
                     method.request(dce, target, listener)
                 except Exception as e:
-                    self.handle_exception(CoerceMethod, exploitName, pipeName, always_continue, e)
+                    exploit_success = self.handle_exception(CoerceMethod, exploitName, pipeName, e)
                 else:
                     # For wspcoerce, it won't return rpc error when it success.
                     self.logger.highlight(f"{exploitName}: Exploit Success, {pipeName}\\{CoerceMethod}")
+                    exploit_success = True
+            if always_continue:
+                exploit_success = False
+            if exploit_success:
+                break
     
-    def handle_exception(self, CoerceMethod, exploitName, pipeName, always_continue, e):
+    def handle_exception(self, CoerceMethod, exploitName, pipeName, e):
         if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:
             self.logger.debug(f"{exploitName}: Exploit Success with {CoerceMethod} method")
             self.logger.highlight(f"{exploitName}: Exploit Success, {pipeName}\\{CoerceMethod}")
-            if not always_continue:
-                return True
+            return True
         elif str(e).find("ERROR_NOT_SUPPORTED") >= 0:
             self.logger.debug(f"{exploitName}: Not Vulnerable")
         else:
             self.logger.debug(f"Something went wrong, check error status => {e!s}")
+        return False

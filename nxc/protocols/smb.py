@@ -2017,9 +2017,15 @@ class smb(connection):
             path_join(NXC_PATH, "data", "coercer_method"),
         ]
         method_modules = ModuleLoader.load_all_modules_from_subdirs(method_paths)
-
         Coercer_ = Coercer(self.logger, self.args.coercer_timeout, method_modules)
         protocol_config, aliasName = Coercer_.config()
+
+        if self.args.coercer != "all":
+            ms_protocolName = [k for k, v in aliasName.items() if v == self.args.coercer][0]
+            protocol_config = {
+                ms_protocolName: protocol_config[ms_protocolName],
+            }
+
         for ms_protocolName, coerce_methods in protocol_config.items():
             accessible_Pipe = []
             for coerce_method in coerce_methods:
@@ -2044,7 +2050,7 @@ class smb(connection):
                                 dce=dce,
                                 target=self.remoteName,
                                 listener=self.args.coercer_listener,
-                                always_continue=True,
+                                always_continue=self.args.coercer_always_continue,
                                 ms_protocolName=ms_protocolName,
                                 exploitName=aliasName[ms_protocolName],
                                 pipeName=coerce_method["pipeName"]
