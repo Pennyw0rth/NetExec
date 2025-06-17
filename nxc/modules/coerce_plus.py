@@ -8,7 +8,7 @@ from nxc.loaders.moduleloader import ModuleLoader
 
 from impacket.uuid import uuidtup_to_bin, bin_to_string
 from impacket.dcerpc.v5 import transport, epm
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_AUTHN_WINNT
 
 
 class NXCModule:
@@ -193,8 +193,7 @@ class Coercer:
             rpctransport.set_kerberos(doKerberos, kdcHost=dcHost)
 
         dce = rpctransport.get_dce_rpc()
-        if doKerberos:
-            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+        dce.set_auth_level(RPC_C_AUTHN_GSS_NEGOTIATE if doKerberos else RPC_C_AUTHN_WINNT)
         dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
 
         self.context.log.debug(f"Connecting to {stringBinding}")
