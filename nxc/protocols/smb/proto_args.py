@@ -98,7 +98,7 @@ def proto_args(parser, parents):
     coercer_group = smb_parser.add_argument_group("Coerce Auth", "Options for Coerce authentication module")
     coercer_group.add_argument("--coercer-method", dest="coercer", action="store", default="all", help="AAAAAAAAAA")
     coercer_group.add_argument("--coercer-listener", action="store", help="BBBBBBBBBB")
-    coercer_group.add_argument("--coercer-tiemout", type=int, default=3, action="store", help="testCCCCCCCCCC")
+    coercer_group.add_argument("--coercer-timeout", type=int, default=3, action="store", help="testCCCCCCCCCC")
 
     return parser
 
