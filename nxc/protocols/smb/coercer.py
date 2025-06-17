@@ -25,24 +25,34 @@ class Coercer:
                     "pipeName":  "Fssagentrpc",
                     "MSRPC_UUID": ("a8e0653c-2744-4389-a61d-7373df8b2292", "3.0"),
                 },
+                {
+                    "protocol": "ncacn_ip_tcp",
+                    "pipeName": "[dcerpc]",
+                    "MSRPC_UUID": ("a8e0653c-2744-4389-a61d-7373df8b2292", "3.0"),
+                },
             ],
             "MS_DFSNM": [
                 {
                     "protocol": "ncacn_np",
                     "pipeName": "netdfs",
                     "MSRPC_UUID": ("4fc742e0-4a10-11cf-8273-00aa004ae673", "3.0"),
+                },
+                {
+                    "protocol": "ncacn_ip_tcp",
+                    "pipeName": "[dcerpc]",
+                    "MSRPC_UUID": ("4fc742e0-4a10-11cf-8273-00aa004ae673", "3.0"),
                 }
             ],
             "MS_EFSR": [
                 {
                     "protocol": "ncacn_np",
-                    "pipeName": "lsarpc",
-                    "MSRPC_UUID": ("c681d488-d850-11d0-8c52-00c04fd90f7e", "1.0"),
+                    "pipeName": "efsrpc",
+                    "MSRPC_UUID": ("df1941c5-fe89-4e79-bf10-463657acf44d", "1.0"),
                 },
                 {
                     "protocol": "ncacn_np",
-                    "pipeName": "efsrpc",
-                    "MSRPC_UUID": ("df1941c5-fe89-4e79-bf10-463657acf44d", "1.0"),
+                    "pipeName": "lsarpc",
+                    "MSRPC_UUID": ("c681d488-d850-11d0-8c52-00c04fd90f7e", "1.0"),
                 },
                 {
                     "protocol": "ncacn_np",
@@ -58,7 +68,17 @@ class Coercer:
                     "protocol": "ncacn_np",
                     "pipeName": "netlogon",
                     "MSRPC_UUID": ("c681d488-d850-11d0-8c52-00c04fd90f7e", "1.0"),
-                }
+                },
+                {
+                    "protocol": "ncacn_ip_tcp",
+                    "pipeName": "[dcerpc]",
+                    "MSRPC_UUID": ("df1941c5-fe89-4e79-bf10-463657acf44d", "1.0"),
+                },
+                {
+                    "protocol": "ncacn_ip_tcp",
+                    "pipeName": "[dcerpc]",
+                    "MSRPC_UUID": ("c681d488-d850-11d0-8c52-00c04fd90f7e", "1.0"),
+                },
             ],
             "MS_RPRN": [
                 {
@@ -78,6 +98,11 @@ class Coercer:
                     "pipeName": "eventlog",
                     "MSRPC_UUID": ("82273fdc-e32a-18c3-3f78-827929dc23ea", "0.0"),
                 },
+                {
+                    "protocol": "ncacn_ip_tcp",
+                    "pipeName": "[dcerpc]",
+                    "MSRPC_UUID": ("82273fdc-e32a-18c3-3f78-827929dc23ea", "0.0"),
+                },
             ],
             "MS_WSP": [
                 {
@@ -90,6 +115,7 @@ class Coercer:
         return config, alias
 
     def connect(self, target, username, password, domain, lmhash, nthash, aesKey, doKerberos, dcHost, target_ip, coerce_method):
+        # To-do: port
         if coerce_method["protocol"] == "ncacn_np":
             stringBinding = f'{coerce_method["protocol"]}:{target}[\\PIPE\\{coerce_method["pipeName"]}]'
         elif coerce_method["protocol"] == "ncacn_ip_tcp":
@@ -111,7 +137,7 @@ class Coercer:
             rpctransport.set_kerberos(doKerberos, kdcHost=dcHost)
 
         dce = rpctransport.get_dce_rpc()
-        dce.set_auth_level(RPC_C_AUTHN_GSS_NEGOTIATE if doKerberos else RPC_C_AUTHN_WINNT)
+        dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE if doKerberos else RPC_C_AUTHN_WINNT)
         dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
 
         self.logger.debug(f"Connecting to {stringBinding}")

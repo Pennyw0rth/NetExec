@@ -2055,8 +2055,8 @@ class smb(connection):
                                 exploitName=aliasName[ms_protocolName],
                                 pipeName=coerce_method["pipeName"]
                             )
-                            if exploit_success and not self.args.coercer_always_continue:
-                                break
+                            #if exploit_success and not self.args.coercer_always_continue:
+                            #    break
                         dce.disconnect()
                     else:
                         self.logger.debug(f'{ms_protocolName}: PIPE: {coerce_method["pipeName"]} is not accessible on target: {self.remoteName}')
