@@ -684,7 +684,7 @@ class smb(connection):
         return open_ports >= 3
 
     def is_host_dc(self):
-        from impacket.dcerpc.v5 import transport, nrpc
+        from impacket.dcerpc.v5 import nrpc, epm
 
         self.logger.debug("Performing authentication attempts...")
         
@@ -692,15 +692,8 @@ class smb(connection):
         if self._is_port_open(135):
             self.logger.debug("Port 135 is open, attempting MSRPC connection...")
             try:
-                rpctransport = transport.DCERPCTransportFactory(f"ncacn_ip_tcp:{self.host}[135]")
-                rpctransport.set_connect_timeout(2)
-
-                dce = rpctransport.get_dce_rpc()
-                dce.connect()
-                dce.bind(nrpc.MSRPC_UUID_NRPC)
-
+                epm.hept_map(self.host, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
                 self.isdc = True
-                dce.disconnect()
                 return True
             except DCERPCException:
                 self.logger.debug("Error while connecting to host: DCERPCException, which means this is probably not a DC!")
