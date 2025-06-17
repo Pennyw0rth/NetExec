@@ -195,13 +195,10 @@ class Coercer:
         if doKerberos:
             dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
         dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
+
         self.context.log.debug(f"Connecting to {stringBinding}")
         try:
             dce.connect()
-        except Exception as e:
-            self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-            return None
-        try:
             dce.bind(uuidtup_to_bin(coerce_method["MSRPC_UUID"]))
         except Exception as e:
             self.context.log.debug(f"Something went wrong, check error status => {e!s}")
