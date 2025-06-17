@@ -1,6 +1,6 @@
 from impacket.dcerpc.v5.rprn import PRINTER_CHANGE_ADD_JOB, RpcRemoteFindFirstPrinterChangeNotificationEx, hRpcOpenPrinter
 
-from nxc.modules.coerce_plus_method.DCERPCSessionError import DCERPCSessionError
+from nxc.data.coercer_method.DCERPCSessionError import DCERPCSessionError
 
 
 def request(dce, target, listener):

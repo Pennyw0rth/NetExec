@@ -2,7 +2,7 @@ from impacket.dcerpc.v5.ndr import NDRCALL
 from impacket.dcerpc.v5.rprn import PRINTER_HANDLE, PRINTER_CHANGE_ADD_JOB, hRpcOpenPrinter
 from impacket.dcerpc.v5.dtypes import LPWSTR, DWORD, LPBYTE, NULL
 
-from nxc.modules.coerce_plus_method.DCERPCSessionError import DCERPCSessionError
+from nxc.data.coercer_method.DCERPCSessionError import DCERPCSessionError
 
 
 class RpcRemoteFindFirstPrinterChangeNotification(NDRCALL):

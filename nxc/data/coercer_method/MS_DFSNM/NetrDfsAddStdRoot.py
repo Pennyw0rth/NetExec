@@ -1,7 +1,7 @@
 from impacket.dcerpc.v5.ndr import NDRCALL
 from impacket.dcerpc.v5.dtypes import WSTR, DWORD
 
-from nxc.modules.coerce_plus_method.DCERPCSessionError import DCERPCSessionError
+from nxc.data.coercer_method.DCERPCSessionError import DCERPCSessionError
 
 class NetrDfsAddStdRoot(NDRCALL):
     """Structure to make the RPC call to NetrDfsAddStdRoot() in MS-DFSNM Protocol"""
