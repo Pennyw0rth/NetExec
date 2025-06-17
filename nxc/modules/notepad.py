@@ -122,6 +122,7 @@ class NXCModule:
         ]
 
     def on_admin_login(self, context, connection):
+        self.context = context
         context.log.display("Searching for Notepad cache...")
         for directory in connection.conn.listPath("C$", "Users\\*"):
             found = 0
@@ -169,8 +170,6 @@ class NXCModule:
                                 output_file.write(f"Source: C:\\{file_path}\n\n")
                                 output_file.write("\n".join(content_lines))  # Write strings line by line
                             context.log.success(f"Notepad tab state content written to: {path}")
-                        else:
-                            break
             except SessionError as e:
                 error = self.get_error_string(e)
                 if error == "STATUS_OBJECT_NAME_NOT_FOUND" or error == "STATUS_OBJECT_PATH_NOT_FOUND":
