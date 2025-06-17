@@ -418,7 +418,7 @@ class rdp(connection):
             return None
         
         # Wait for desktop to be available
-        await asyncio.sleep(3)
+        await asyncio.sleep(self.args.cmd_delay)
         
         try:
             # Try to open Run dialog using Windows+R
@@ -430,37 +430,40 @@ class rdp(connection):
                 self.logger.debug("Launching cmd.exe via Run dialog")
                 await self._send_keystrokes("cmd.exe")
                 await self._send_enter()
-                await asyncio.sleep(1.5)  # Wait for cmd window to open
+                await asyncio.sleep(self.args.cmd_delay)  # Wait for cmd window to open
             else:
                 # Fallback: Try direct command typing (assumes cmd may already be open)
                 self.logger.debug("Sending cmd.exe command directly")
                 await self._send_keystrokes("cmd.exe")
                 await self._send_enter()
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(self.args.cmd_delay)
             
             # Type the command
             self.logger.debug(f"Typing command: {payload}")
             await self._send_keystrokes(payload)
             await self._send_enter()
             
-            await asyncio.sleep(3.0)
+            await asyncio.sleep(self.args.cmd_delay)
             
             # Take a screenshot if requested
             if capture_screenshot and self.conn is not None:
-                self.logger.debug("Waiting for screen to update...")
-                await asyncio.sleep(2.0)  # Additional wait to ensure screen is updated
+                self.logger.highlight("Waiting for screen to update...")
+                await asyncio.sleep(self.args.screentime)  # Additional wait to ensure screen is updated
                 
                 self.logger.debug(f"Desktop buffer has data: {self.conn.desktop_buffer_has_data}")
-                try:
-                    self.logger.debug("Capturing command output screenshot")
-                    buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-                    screenshots_dir = os.path.expanduser("~/.nxc/screenshots")
-                    os.makedirs(screenshots_dir, exist_ok=True)  # Ensure the directory exists
-                    filename = os.path.join(screenshots_dir, f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
-                    buffer.save(filename, "png")
-                    self.logger.highlight(f"Command output screenshot saved: {filename}")
-                except Exception as e:
-                    self.logger.debug(f"Error taking screenshot: {e!s}")
+                if self.conn.desktop_buffer_has_data:
+                    try:
+                        self.logger.debug("Capturing command output screenshot")
+                        buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
+                        screenshots_dir = os.path.expanduser("~/.nxc/screenshots")
+                        os.makedirs(screenshots_dir, exist_ok=True)  # Ensure the directory exists
+                        filename = os.path.join(screenshots_dir, f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
+                        buffer.save(filename, "png")
+                        self.logger.highlight(f"Command output screenshot saved: {filename}")
+                    except Exception as e:
+                        self.logger.debug(f"Error taking screenshot: {e!s}")
+                else:
+                    self.logger.debug("No desktop buffer data available for screenshot")
 
             # Exit CMD
             self.logger.debug("Exiting CMD")
@@ -493,7 +496,7 @@ class rdp(connection):
             return None
         
         # Wait for desktop to be available
-        await asyncio.sleep(3)
+        await asyncio.sleep(self.args.cmd_delay)
         
         try:
             # Try to open Run dialog using Windows+R
@@ -505,13 +508,13 @@ class rdp(connection):
                 self.logger.debug("Launching PowerShell via Run dialog")
                 await self._send_keystrokes("powershell")
                 await self._send_enter()
-                await asyncio.sleep(1.5)  # Wait for PowerShell window to open
+                await asyncio.sleep(self.args.cmd_delay)  # Wait for PowerShell window to open
             else:
                 # Fallback: Try direct PowerShell typing (assumes we might be at a prompt)
                 self.logger.debug("Sending powershell command directly")
                 await self._send_keystrokes("powershell")
                 await self._send_enter()
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(self.args.cmd_delay)
             
             # Type the PowerShell command
             self.logger.debug(f"Typing PowerShell command: {payload}")
@@ -519,23 +522,27 @@ class rdp(connection):
             await self._send_enter()
             
             # Wait longer for command to complete execution
-            await asyncio.sleep(3.0)  # Increased wait time to ensure command completes
+            await asyncio.sleep(self.args.cmd_delay)  # Increased wait time to ensure command completes
             
             # Take a screenshot if requested
             if capture_screenshot and self.conn is not None:
-                await asyncio.sleep(2.0)  # Additional wait to ensure screen is updated
+                self.logger.highlight("Waiting for screen to update...")se
+                await asyncio.sleep(self.args.screentime)  # Additional wait to ensure screen is updated
                 
                 self.logger.debug(f"Desktop buffer has data: {self.conn.desktop_buffer_has_data}")
-                try:
-                    self.logger.debug("Capturing PowerShell command output screenshot")
-                    buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-                    screenshots_dir = os.path.expanduser("~/.nxc/screenshots")
-                    os.makedirs(screenshots_dir, exist_ok=True)  # Ensure the directory exists
-                    filename = os.path.join(screenshots_dir, f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
-                    buffer.save(filename, "png")
-                    self.logger.highlight(f"PowerShell command output screenshot saved: {filename}")
-                except Exception as e:
-                    self.logger.debug(f"Error taking screenshot: {e!s}")
+                if self.conn.desktop_buffer_has_data:
+                    try:
+                        self.logger.debug("Capturing PowerShell command output screenshot")
+                        buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
+                        screenshots_dir = os.path.expanduser("~/.nxc/screenshots")
+                        os.makedirs(screenshots_dir, exist_ok=True)  # Ensure the directory exists
+                        filename = os.path.join(screenshots_dir, f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
+                        buffer.save(filename, "png")
+                        self.logger.highlight(f"PowerShell command output screenshot saved: {filename}")
+                    except Exception as e:
+                        self.logger.debug(f"Error taking screenshot: {e!s}")
+                else:
+                    self.logger.debug("No desktop buffer data available for screenshot")
             
             # Exit PowerShell
             self.logger.debug("Exiting PowerShell")
@@ -571,7 +578,7 @@ class rdp(connection):
         if capture_screenshot:
             self.logger.info("Will capture screenshot of command output")
 
-        self.logger.info(f"Executing {shell_type} command: {payload}")
+        self.logger.success(f"Executing {shell_type} command: {payload} with delay {self.args.cmd_delay} seconds")
         
         try:
             result = asyncio.run(self.execute_cmd(payload, capture_screenshot=capture_screenshot)) if shell_type == "cmd" else asyncio.run(self.execute_ps(payload, capture_screenshot=capture_screenshot))

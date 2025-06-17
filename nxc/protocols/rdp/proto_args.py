@@ -20,5 +20,6 @@ def proto_args(parser, parents):
     cgroup = rdp_parser.add_argument_group("Command Execution", "Options for executing commands")
     cgroup.add_argument("-x", metavar="COMMAND", dest="execute", help="execute the specified command")
     cgroup.add_argument("-X", metavar="PS_COMMAND", dest="ps_execute", help="execute the specified PowerShell command")
+    cgroup.add_argument("--cmd-delay", type=int, default=3, help="Sleep time before executing command")
 
     return parser
