@@ -7,7 +7,7 @@ from nxc.paths import NXC_PATH
 from nxc.loaders.moduleloader import ModuleLoader
 
 from impacket.uuid import uuidtup_to_bin, bin_to_string
-from impacket.dcerpc.v5 import transport, rprn, even, epm
+from impacket.dcerpc.v5 import transport, epm
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 
 
@@ -157,7 +157,7 @@ class Coercer:
                 },
                 {
                     "protocol": "ncacn_ip_tcp",
-                    "pipeName": "",
+                    "pipeName": "[dcerpc]",
                     "MSRPC_UUID": ("12345678-1234-abcd-ef00-0123456789ab", "1.0"),
                 },
             ],
@@ -174,25 +174,23 @@ class Coercer:
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, coerce_method):
         if coerce_method["protocol"] == "ncacn_np":
             stringBinding = f'{coerce_method["protocol"]}:{target}[\\PIPE\\{coerce_method["pipeName"]}]'
-        else:
-            return
+        elif coerce_method["protocol"] == "ncacn_ip_tcp":
+            stringBinding = epm.hept_map(target, uuidtup_to_bin(coerce_method["MSRPC_UUID"]), protocol="ncacn_ip_tcp")
 
         rpctransport = transport.DCERPCTransportFactory(stringBinding)
-        if hasattr(rpctransport, "set_credentials"):
-            rpctransport.set_credentials(
-                username=username,
-                password=password,
-                domain=domain,
-                lmhash=lmhash,
-                nthash=nthash,
-                aesKey=aesKey,
-            )
+        rpctransport.setRemoteHost(target)
+        rpctransport.set_connect_timeout(self.timeout)
+        rpctransport.set_credentials(
+            username=username,
+            password=password,
+            domain=domain,
+            lmhash=lmhash,
+            nthash=nthash,
+            aesKey=aesKey,
+        )
 
         if doKerberos:
             rpctransport.set_kerberos(doKerberos, kdcHost=dcHost)
-
-        rpctransport.setRemoteHost(target)
-        rpctransport.set_connect_timeout(self.timeout)
 
         dce = rpctransport.get_dce_rpc()
         if doKerberos:
