@@ -2,12 +2,14 @@ from impacket.uuid import uuidtup_to_bin
 from impacket.dcerpc.v5 import transport, epm
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_AUTHN_WINNT
 
+from nxc.loaders.coercerloader import CoercerLoader
+
 
 class Coercer:
-    def __init__(self, logger, timeout, methods):
+    def __init__(self, logger, timeout):
         self.logger = logger
         self.timeout = timeout
-        self.methods = methods
+        self.methods = CoercerLoader.load_all_coercer_methods()
 
     def config(self):
         alias = {

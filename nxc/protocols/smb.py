@@ -2008,10 +2008,7 @@ class smb(connection):
         # And SMBTransport did samething in dcerpc connect
         # https://github.com/fortra/impacket/blob/master/impacket/dcerpc/v5/transport.py#L497
 
-        from nxc.loaders.coercerloader import CoercerLoader
-        method_modules = CoercerLoader.load_all_coercer_methods()
-
-        Coercer_ = Coercer(self.logger, self.args.coercer_timeout, method_modules)
+        Coercer_ = Coercer(self.logger, self.args.coercer_timeout)
         protocol_config, aliasName = Coercer_.config()
 
         if self.args.coercer != "all":
