@@ -25,11 +25,6 @@ class Coercer:
                     "pipeName":  "Fssagentrpc",
                     "MSRPC_UUID": ("a8e0653c-2744-4389-a61d-7373df8b2292", "3.0"),
                 },
-                {
-                    "protocol": "ncacn_ip_tcp",
-                    "pipeName": "[dcerpc]",
-                    "MSRPC_UUID": ("a8e0653c-2744-4389-a61d-7373df8b2292", "3.0"),
-                },
             ],
             "MS_DFSNM": [
                 {
@@ -37,11 +32,6 @@ class Coercer:
                     "pipeName": "netdfs",
                     "MSRPC_UUID": ("4fc742e0-4a10-11cf-8273-00aa004ae673", "3.0"),
                 },
-                {
-                    "protocol": "ncacn_ip_tcp",
-                    "pipeName": "[dcerpc]",
-                    "MSRPC_UUID": ("4fc742e0-4a10-11cf-8273-00aa004ae673", "3.0"),
-                }
             ],
             "MS_EFSR": [
                 {
@@ -69,16 +59,6 @@ class Coercer:
                     "pipeName": "netlogon",
                     "MSRPC_UUID": ("c681d488-d850-11d0-8c52-00c04fd90f7e", "1.0"),
                 },
-                {
-                    "protocol": "ncacn_ip_tcp",
-                    "pipeName": "[dcerpc]",
-                    "MSRPC_UUID": ("df1941c5-fe89-4e79-bf10-463657acf44d", "1.0"),
-                },
-                {
-                    "protocol": "ncacn_ip_tcp",
-                    "pipeName": "[dcerpc]",
-                    "MSRPC_UUID": ("c681d488-d850-11d0-8c52-00c04fd90f7e", "1.0"),
-                },
             ],
             "MS_RPRN": [
                 {
@@ -96,11 +76,6 @@ class Coercer:
                 {
                     "protocol": "ncacn_np",
                     "pipeName": "eventlog",
-                    "MSRPC_UUID": ("82273fdc-e32a-18c3-3f78-827929dc23ea", "0.0"),
-                },
-                {
-                    "protocol": "ncacn_ip_tcp",
-                    "pipeName": "[dcerpc]",
                     "MSRPC_UUID": ("82273fdc-e32a-18c3-3f78-827929dc23ea", "0.0"),
                 },
             ],
