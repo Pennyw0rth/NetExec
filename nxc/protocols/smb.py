@@ -2037,9 +2037,9 @@ class smb(connection):
                         aesKey=self.aesKey,
                         coerce_method=coerce_method
                     )
-                    if dce is not None:
+                    if dce:
                         accessible_Pipe.append(coerce_method["pipeName"])
-                        if self.args.coercer_listener is not None:  # Do exploit
+                        if self.args.coercer_listener:  # Do exploit
                             Coercer_.exploit(
                                 dce=dce,
                                 target=self.remoteName,
