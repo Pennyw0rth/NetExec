@@ -170,7 +170,7 @@ class Coercer:
             if always_continue:
                 exploit_success = False
             if exploit_success:
-                return exploit_success
+                return
     
     def handle_exception(self, CoerceMethod, exploitName, pipeName, e):
         if str(e).find("rpc_s_access_denied") >= 0 or str(e).find("ERROR_BAD_NETPATH") >= 0 or str(e).find("RPC_S_INVALID_NET_ADDR") >= 0:

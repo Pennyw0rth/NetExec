@@ -6,10 +6,10 @@ from nxc.data.coercer_method.MS_WSP.dtypes import CPMConnectIn, CPMCreateQueryIn
 
 class CPMConnectIn_(Structure):
     structure = (
-        ('dwClientVersion', '<L=0x00000001'),
-        ('dwServerVersion', '<L=0x00000001'),
-        ('dwFlags', '<L=0'),
-        ('dwReserved', '<L=0'),
+        ("dwClientVersion", "<L=0x00000001"),
+        ("dwServerVersion", "<L=0x00000001"),
+        ("dwFlags", "<L=0"),
+        ("dwReserved", "<L=0"),
     )
 
 

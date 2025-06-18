@@ -2,7 +2,9 @@ from impacket.dcerpc.v5.ndr import NDRCALL
 from impacket.dcerpc.v5.dtypes import WSTR, DWORD, NDRPOINTERNULL
 
 from nxc.data.coercer_method.MS_EFSR.dtypes import ENCRYPTION_CERTIFICATE_LIST
-from nxc.data.coercer_method.DCERPCSessionError import DCERPCSessionError
+
+
+DCERPCSessionError = __import__("nxc.data.coercer_method.DCERPCSessionError", fromlist=["DCERPCSessionError"]).DCERPCSessionError
 
 
 class EfsRpcAddUsersToFileEx(NDRCALL):

@@ -1,7 +1,8 @@
 from impacket.dcerpc.v5.even import ElfrOpenBELW
 from impacket.dcerpc.v5.dtypes import NULL
 
-from nxc.data.coercer_method.DCERPCSessionError import DCERPCSessionError
+
+DCERPCSessionError = __import__("nxc.data.coercer_method.DCERPCSessionError", fromlist=["DCERPCSessionError"]).DCERPCSessionError
 
 
 def request(dce, target, listener):

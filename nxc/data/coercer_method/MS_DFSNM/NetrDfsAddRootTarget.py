@@ -1,7 +1,9 @@
 from impacket.dcerpc.v5.ndr import NDRCALL
 from impacket.dcerpc.v5.dtypes import LPWSTR, ULONG, BOOL, NULL
 
-from nxc.data.coercer_method.DCERPCSessionError import DCERPCSessionError
+
+DCERPCSessionError = __import__("nxc.data.coercer_method.DCERPCSessionError", fromlist=["DCERPCSessionError"]).DCERPCSessionError
+
 
 class NetrDfsAddRootTarget(NDRCALL):
     """

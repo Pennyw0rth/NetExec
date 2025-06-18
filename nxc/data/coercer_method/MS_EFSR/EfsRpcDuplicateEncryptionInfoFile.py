@@ -2,7 +2,9 @@ from impacket.dcerpc.v5.ndr import NDRCALL
 from impacket.dcerpc.v5.dtypes import WSTR, DWORD, BOOL
 
 from nxc.data.coercer_method.MS_EFSR.dtypes import EFS_RPC_BLOB
-from nxc.data.coercer_method.DCERPCSessionError import DCERPCSessionError
+
+
+DCERPCSessionError = __import__("nxc.data.coercer_method.DCERPCSessionError", fromlist=["DCERPCSessionError"]).DCERPCSessionError
 
 
 class EfsRpcDuplicateEncryptionInfoFile(NDRCALL):

@@ -11,7 +11,7 @@ import struct
 import uuid
 
 from enum import IntEnum
-from typing import List, Any
+from typing import Any
 from dataclasses import dataclass, field
 
 
@@ -38,7 +38,7 @@ DBPROPSET_MSIDXS_ROWSETEXT = uuid.UUID("AA6EE6B0-E828-11D0-B23E-00AA0047FC01")
 NULL_UUID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 ONE_UUID = uuid.UUID("00000000-0001-0000-0000-000000000000")
 
-#Chapter and bookmark handle well known values
+# Chapter and bookmark handle well known values
 DB_NULL_HCHAPTER = 0x00000000
 DBBMK_FIRST = 0xFFFFFFFC
 DBBMK_LAST = 0xFFFFFFFD
@@ -179,7 +179,7 @@ class WspMessageType(IntEnum):
     # CPMRestartPositionIn
     CPMRESTARTPOSITIONIN = 0x000000E8
     
-    # CPMSetCatStateIn (not supported)
+    # CPMSetCatStateIn is not support
     CPMSETCATSTATEIN = 0x000000EC
     
     # CPMGetRowsetNotifyIn or CPMGetRowsetNotifyOut
@@ -407,7 +407,7 @@ class PropSpec:
 
 @dataclass
 class CColumnSet:
-    indexes: List[int] = field(default_factory=list)
+    indexes: list[int] = field(default_factory=list)
 
     def to_bytes(self, buffer: bytearray):
         buffer.extend(struct.pack("<I", len(self.indexes)))
@@ -427,7 +427,7 @@ class CDbColId:
         AddAlign(buffer, self.GUID.bytes_le, 8)
         buffer.extend(struct.pack("<I", self.ulId))
         if self.eKind == CDbColId_eKind_Values.DBKIND_GUID_NAME:
-            raise NotImplementedError()
+            raise NotImplementedError
 
 
 @dataclass
@@ -482,9 +482,7 @@ def vType_to_bytes(vType, vValue, buffer: bytearray):
         buffer.extend(struct.pack("<f", vValue))
     elif vType == CBaseStorageVariant_vType_Values.VT_INT:
         buffer.extend(struct.pack("<i", vValue))
-    elif vType == CBaseStorageVariant_vType_Values.VT_UINT:
-        buffer.extend(struct.pack("<I", vValue))
-    elif vType == CBaseStorageVariant_vType_Values.VT_ERROR:
+    elif vType == CBaseStorageVariant_vType_Values.VT_UINT or vType == CBaseStorageVariant_vType_Values.VT_ERROR:
         buffer.extend(struct.pack("<I", vValue))
     elif vType == CBaseStorageVariant_vType_Values.VT_I8:
         buffer.extend(struct.pack("<l", vValue))
@@ -502,21 +500,11 @@ def vType_to_bytes(vType, vValue, buffer: bytearray):
         vValue.to_bytes(buffer)
     elif vType == CBaseStorageVariant_vType_Values.VT_CLSID:
         buffer.extend(vValue.bytes_le)
-    elif vType == CBaseStorageVariant_vType_Values.VT_BLOB:
-        vValue.to_bytes(buffer)
-    elif vType == CBaseStorageVariant_vType_Values.VT_BLOB_OBJECT:
-        vValue.to_bytes(buffer)
-    elif vType == CBaseStorageVariant_vType_Values.VT_BSTR:
-        vValue.to_bytes(buffer)
-    elif vType == CBaseStorageVariant_vType_Values.VT_LPSTR:
-        vValue.to_bytes(buffer)
-    elif vType == CBaseStorageVariant_vType_Values.VT_LPWSTR:
-        vValue.to_bytes(buffer)
-    elif vType == CBaseStorageVariant_vType_Values.VT_COMPRESSED_LPWSTR:
+    elif vType == CBaseStorageVariant_vType_Values.VT_BLOB or vType == CBaseStorageVariant_vType_Values.VT_BLOB_OBJECT or vType == CBaseStorageVariant_vType_Values.VT_BSTR or vType == CBaseStorageVariant_vType_Values.VT_LPSTR or vType == CBaseStorageVariant_vType_Values.VT_LPWSTR or vType == CBaseStorageVariant_vType_Values.VT_COMPRESSED_LPWSTR:
         vValue.to_bytes(buffer)
     else:
         print(hex(vType), vValue)
-        raise NotImplementedError()
+        raise NotImplementedError
 
 
 @dataclass
@@ -529,7 +517,8 @@ class VT_ARRAY:
         buffer.extend(struct.pack("<H", 0))  # ffeatures
 
         temp_buffer = bytearray()
-        first_element = vType_to_bytes(
+        # first_element
+        _ = vType_to_bytes(
             self.vType ^ CBaseStorageVariant_vType_Values.VT_ARRAY,
             self.vData[0],
             temp_buffer,
@@ -589,7 +578,7 @@ class CProp:
 @dataclass
 class CPropSet:
     guidPropertySet: uuid.UUID
-    aProps: List[CProp] = field(default_factory=list)
+    aProps: list[CProp] = field(default_factory=list)
 
     def to_bytes(self, buffer: bytearray):
         buffer.extend(self.guidPropertySet.bytes_le)
@@ -636,7 +625,7 @@ class CRestriction:
 
 @dataclass
 class CRestrictionArray:
-    restrictions: List[CRestriction] = field(default_factory=list)
+    restrictions: list[CRestriction] = field(default_factory=list)
 
     def to_bytes(self, buffer: bytearray):
         buffer.extend(struct.pack("<B", len(self.restrictions)))
@@ -648,7 +637,7 @@ class CRestrictionArray:
 
 @dataclass
 class CSortSet:
-    sortArray: List[int] = field(default_factory=list)
+    sortArray: list[int] = field(default_factory=list)
 
     def to_bytes(self, buffer: bytearray):
         buffer.extend(struct.pack("<I", len(self.sortArray)))
@@ -659,7 +648,7 @@ class CSortSet:
 @dataclass
 class CInGroupSortAggregSets:
     Reserved: int = 0
-    SortSets: List[CSortSet] = field(default_factory=list)
+    SortSets: list[CSortSet] = field(default_factory=list)
 
     def to_bytes(self, buffer: bytearray):
         buffer.extend(struct.pack("<II", len(self.SortSets), self.Reserved))
@@ -670,7 +659,7 @@ class CInGroupSortAggregSets:
 @dataclass
 class CCategSpec:
     def to_bytes(self, buffer):
-        return bytes()
+        return b""
 
 
 @dataclass
@@ -685,7 +674,7 @@ class CCategorizationSpec:
 
 @dataclass
 class CCategorizationSet:
-    categories: List[CCategorizationSpec] = field(default_factory=list)
+    categories: list[CCategorizationSpec] = field(default_factory=list)
 
     def to_bytes(self, buffer: bytearray):
         buffer.extend(struct.pack("<I", len(self.categories)))
@@ -716,7 +705,7 @@ class CRowsetProperties:
 
 @dataclass
 class CPidMapper:
-    PropSpecs: List[PropSpec] = field(default_factory=list)
+    PropSpecs: list[PropSpec] = field(default_factory=list)
 
     def to_bytes(self, buffer: bytearray):
         buffer.extend(struct.pack("<I", len(self.PropSpecs)))
@@ -732,7 +721,7 @@ class CColumnGroup:
 
 @dataclass
 class CColumnGroupArray:
-    aGroupArray: List[CColumnGroup] = field(default_factory=list)
+    aGroupArray: list[CColumnGroup] = field(default_factory=list)
 
     def to_bytes(self, buffer: bytearray):
         buffer.extend(struct.pack("<I", len(self.aGroupArray)))

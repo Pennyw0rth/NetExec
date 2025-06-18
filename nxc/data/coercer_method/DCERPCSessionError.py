@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # File name          : DCERPCSessionError.py
 # Author             : Podalirius (@podalirius_)
 # Date created       : 15 Sep 2022
@@ -17,6 +15,6 @@ class DCERPCSessionError(DCERPCException):
         if key in system_errors.ERROR_MESSAGES:
             error_msg_short = system_errors.ERROR_MESSAGES[key][0]
             error_msg_verbose = system_errors.ERROR_MESSAGES[key][1]
-            return 'SessionError: code: 0x%x - %s - %s' % (self.error_code, error_msg_short, error_msg_verbose)
+            return f"SessionError: code: 0x{self.error_code:x} - {error_msg_short} - {error_msg_verbose}"
         else:
-            return 'SessionError: unknown error code: 0x%x' % self.error_code
+            return f"SessionError: unknown error code: 0x{self.error_code:x}"
