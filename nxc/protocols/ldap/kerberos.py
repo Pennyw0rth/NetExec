@@ -105,17 +105,17 @@ class KerberosAttacks:
         return entry
 
     def output_tgs_from_asrep(self, asrep_blob, spn, fd=None):
-        asrep  = decoder.decode(asrep_blob, asn1Spec=AS_REP())[0]
-        realm  = self.domain.upper()
-        enc    = asrep['ticket']['enc-part']
-        etype  = enc['etype']
-        cipher = enc['cipher'].asOctets()
+        asrep = decoder.decode(asrep_blob, asn1Spec=AS_REP())[0]
+        realm = self.domain.upper()
+        enc = asrep["ticket"]["enc-part"]
+        etype = enc["etype"]
+        cipher = enc["cipher"].asOctets()
 
-        service = spn.split('/')[0]
+        service = spn.split("/")[0]
         spn_fmt = spn.replace(":", "~")
 
         if etype == constants.EncryptionTypes.rc4_hmac.value:  # 23
-            chk  = hexlify(cipher[:16]).decode()
+            chk = hexlify(cipher[:16]).decode()
             data = hexlify(cipher[16:]).decode()
             entry = f"$krb5tgs${etype}*{service}${realm}${spn_fmt}*${chk}${data}"
 
@@ -123,7 +123,7 @@ class KerberosAttacks:
             constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value,  # 17
             constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value,  # 18
         ):
-            chk  = hexlify(cipher[-12:]).decode()
+            chk = hexlify(cipher[-12:]).decode()
             data = hexlify(cipher[:-12]).decode()
             entry = f"$krb5tgs${etype}${service}${realm}$*{spn_fmt}*${chk}${data}"
 
