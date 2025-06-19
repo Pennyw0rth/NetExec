@@ -276,7 +276,7 @@ class ldap(connection):
                 self.logger.debug(f"LDAPSessionError while checking for channel binding requirements (likely NTLM disabled): {e!s}")
         except SysCallError as e:
             self.logger.debug(f"Received SysCallError when trying to enumerate channel binding support: {e!s}")
-            if e.args[1] in ["ECONNRESET", "WSAECONNRESET"]:
+            if e.args[1] in ["ECONNRESET", "WSAECONNRESET", "Unexpected EOF"]:
                 self.cbt_status = "No TLS cert"
             else:
                 raise
