@@ -181,10 +181,10 @@ class NXCAdapter(logging.LoggerAdapter):
         file_handler = RotatingFileHandler(output_file, maxBytes=100000, encoding="utf-8")
 
         with file_handler._open() as f:
-            if file_creation:
-                f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | {' '.join(sys.argv)}\n\n")
-            else:
-                f.write(f"\n{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | {' '.join(sys.argv)}\n\n")
+            if not file_creation:
+                f.write("\n")
+
+            f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | {' '.join(sys.argv)}\n\n")
 
         file_handler.setFormatter(file_formatter)
         self.logger.addHandler(file_handler)
