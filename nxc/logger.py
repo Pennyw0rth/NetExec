@@ -182,9 +182,9 @@ class NXCAdapter(logging.LoggerAdapter):
 
         with file_handler._open() as f:
             if file_creation:
-                f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]> {' '.join(sys.argv)}\n\n")
+                f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | {' '.join(sys.argv)}\n\n")
             else:
-                f.write(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]> {' '.join(sys.argv)}\n\n")
+                f.write(f"\n{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | {' '.join(sys.argv)}\n\n")
 
         file_handler.setFormatter(file_formatter)
         self.logger.addHandler(file_handler)
