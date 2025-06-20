@@ -1455,7 +1455,7 @@ class ldap(connection):
 
         if self.args.kerberos:
             self.logger.highlight("Using kerberos auth")
-            # Don’t re-request a TGT if we’re using an existing cache
+            # Don't re-request a TGT if we're using an existing cache
             if self.args.use_kcache:
                 self.logger.highlight("Loading TGT from Kerberos cache")
                 if not auth.load_ccache():
