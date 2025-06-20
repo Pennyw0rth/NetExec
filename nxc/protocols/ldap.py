@@ -1436,7 +1436,7 @@ class ldap(connection):
             nt_hash=self.nthash,
             aeskey=self.aesKey,
             kdc=self.kdcHost,
-            auth_method="auto",
+            auth_method="kerberos" if self.no_ntlm else "auto",
         )
         ad = AD(
             auth=auth,
@@ -1454,11 +1454,16 @@ class ldap(connection):
         ad.dns_resolve(domain=self.domain)
 
         if self.args.kerberos:
-            self.logger.highlight("Using kerberos auth without ccache, getting TGT")
-            auth.get_tgt()
-        if self.args.use_kcache:
-            self.logger.highlight("Using kerberos auth from ccache")
-            auth.load_ccache()
+            self.logger.highlight("Using kerberos auth")
+            # Don’t re-request a TGT if we’re using an existing cache
+            if self.args.use_kcache:
+                self.logger.highlight("Loading TGT from Kerberos cache")
+                if not auth.load_ccache():
+                    self.logger.error("Failed to load ccache, aborting BloodHound collection")
+                    return False
+            else:
+                self.logger.highlight("Requesting fresh TGT for Kerberos auth")
+                auth.get_tgt()
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S") + "_"
         bloodhound = BloodHound(ad, self.hostname, self.host, self.port)
