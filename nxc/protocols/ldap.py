@@ -323,7 +323,8 @@ class ldap(connection):
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
-        self.output_filename = os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}".replace(":", "-"))
+        filename = f"{self.hostname}_{self.host}".replace(":", "-")
+        self.output_filename = os.path.expanduser(os.path.join(NXC_PATH, "logs", filename))
 
         try:
             self.db.add_host(
