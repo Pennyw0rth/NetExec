@@ -21,14 +21,13 @@ dependencies = [
     "argcomplete>=3.1.4",
     "asyauth>=0.0.20",
     "beautifulsoup4>=4.11,<5",
-    "bloodhound>=1.8.0",
+    "bloodhound-ce>=1.8.0",
     "dploot>=3.1.0",
     "dsinternals>=1.2.4",
     "jwt>=1.3.1",
     "lsassy>=3.1.11",
     "masky>=0.2.0",
     "minikerberos>=0.4.1",
-    "msldap>=0.5.10",
     "neo4j>=5.0.0",
     "paramiko>=3.3.1",
     "pyasn1-modules>=0.3.0",
@@ -44,7 +43,7 @@ dependencies = [
     "terminaltables>=3.1.0",
     "xmltodict>=0.13.0",
     # Git Dependencies
-    "impacket @ git+https://github.com/fortra/impacket.git",
+    "impacket @ git+https://github.com/Pennyw0rth/impacket.git",
     "oscrypto @ git+https://github.com/wbond/oscrypto",
     "pynfsclient @ git+https://github.com/Pennyw0rth/NfsClient",
 ]
@@ -85,38 +84,40 @@ build-backend = "poetry_dynamic_versioning.backend"
 flake8 = "*"
 shiv = "*"
 pytest = "^7.2.2"
-ruff = "=0.0.292"
+ruff = "*"
 
 [tool.ruff]
-select = [
-    "E", "F", "D", "UP", "YTT", "ASYNC", "B", "A", "C4", "ISC", "ICN", "PIE", "PT",
-    "Q", "RSE", "RET", "SIM", "TID", "ERA", "FLY", "PERF", "FURB", "LOG", "RUF"
-]
-ignore = [
-    "E501", "F405", "D100", "D101", "D102", "D103", "D104", "D105", "D106",
-    "D107", "D203", "D204", "D205", "D212", "D213", "D400", "D401", "D415",
-    "D417", "D419", "RET503", "RET505", "RET506", "RET507", "RET508",
-    "PERF203", "RUF012"
-]
-
-# Allow autofix for all enabled rules (when `--fix`) is provided.
-fixable = ["ALL"]
-unfixable = []
-
+target-version = "py310"
 exclude = [
     ".bzr", ".direnv", ".eggs", ".git", ".git-rewrite", ".hg", ".mypy_cache",
     ".nox", ".pants.d", ".pytype", ".ruff_cache", ".svn", ".tox", ".venv",
     "__pypackages__", "_build", "buck-out", "build", "dist", "node_modules", "venv"
 ]
-per-file-ignores = {}
 line-length = 65000
+preview = true
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "D", "UP", "YTT", "ASYNC", "B", "A", "C4", "ISC", "ICN", "PIE", "PT",
+    "Q", "RSE", "RET", "SIM", "TID", "ERA", "FLY", "PERF", "LOG", "RUF"
+]
+ignore = [
+    "A004", "E501", "F405", "D100", "D101", "D102", "D103", "D104", "D105", "D106",
+    "D107", "D203", "D204", "D205", "D212", "D213", "D400", "D401", "D413", "D415",
+    "D417", "D419", "FURB", "RET503", "RET505", "RET506", "RET507", "RET508",
+    "PERF203", "RUF012", "RUF052", "RUF059"
+]
+
+# THE SETTINGS BELOW ARE DEFAULTS, left in here to override potential vs-code settings
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+per-file-ignores = {}
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
-target-version = "py310"
-
-[tool.ruff.flake8-quotes]
+[tool.ruff.lint.flake8-quotes]
 docstring-quotes = "double"
 inline-quotes = "double"
 multiline-quotes = "double"

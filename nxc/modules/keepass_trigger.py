@@ -4,8 +4,9 @@ from time import sleep
 from csv import reader
 from base64 import b64encode
 from io import BytesIO, StringIO
-from xml.etree import ElementTree
+from xml.etree import ElementTree as ET
 from nxc.helpers.powershell import get_ps_script
+from nxc.paths import TMP_PATH
 
 
 class NXCModule:
@@ -39,7 +40,7 @@ class NXCModule:
         self.share = "C$"
         self.remote_temp_script_path = "C:\\Windows\\Temp\\temp.ps1"
         self.keepass_binary_path = "C:\\Program Files\\KeePass Password Safe 2\\KeePass.exe"
-        self.local_export_path = "/tmp"
+        self.local_export_path = TMP_PATH
         self.trigger_name = "export_database"
         self.poll_frequency_seconds = 5
         self.dummy_service_name = "OneDrive Sync KeePass"
@@ -358,7 +359,7 @@ class NXCModule:
             sys.exit(1)
 
         try:
-            keepass_config_xml_root = ElementTree.fromstring(buffer.getvalue())
+            keepass_config_xml_root = ET.fromstring(buffer.getvalue())
         except Exception as e:
             context.log.fail(f"Error while parsing file '{self.keepass_config_path}', exiting: {e}")
             sys.exit(1)
@@ -377,7 +378,7 @@ class NXCModule:
 
     def extract_password(self, context):
         xml_doc_path = os.path.abspath(self.local_export_path + "/" + self.export_name)
-        xml_tree = ElementTree.parse(xml_doc_path)
+        xml_tree = ET.parse(xml_doc_path)
         root = xml_tree.getroot()
 
         root_entries = root.find("./Root/Entry")
