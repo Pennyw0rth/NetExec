@@ -830,7 +830,7 @@ class ldap(connection):
             found_users = []
             target_ou = self.args.ous.upper()
             for user in resp_parsed:
-                dn = user.get("distinguishedName", "").upper()
+                dn = user["distinguishedName"].upper()
                 if f"OU={target_ou}" in dn:
                     username = user.get("sAMAccountName", user.get("cn", "Unknown"))
                     self.logger.highlight(username)
@@ -842,7 +842,7 @@ class ldap(connection):
             for item in resp_parsed:
                 try:
                     ou_name = item.get("ou", "Unknown")
-                    dn = item.get("distinguishedName", "")
+                    dn = item["distinguishedName"]
                     self.logger.highlight(f"{ou_name:<40} {dn}")
                 except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
