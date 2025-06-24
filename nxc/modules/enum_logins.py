@@ -28,15 +28,22 @@ class NXCModule:
         else:
             self.context.log.fail("No logins found.")
 
-    def get_logins(self) -> list:
-        """
-        Fetches a list of SQL Server logins with their types.
+    def get_domain_name(self) -> str:
+        query = "SELECT DEFAULT_DOMAIN() as domain_name;"
+        try:
+            res = self.mssql_conn.sql_query(query)
+            if res and res[0].get("domain_name"):
+                return res[0]["domain_name"].upper()
+            return ""
+        except Exception as e:
+            self.context.log.debug(f"Error querying domain name: {e}")
+            return ""
 
-        Returns
-        -------
-        list: List of tuples containing (login_name, login_type, status).
-        """
-        query = """
+    def get_logins(self) -> list:
+        domain_name = self.get_domain_name()
+        domain_prefix = f"{domain_name}\\" if domain_name else ""
+
+        query = f"""
         SELECT 
             name,
             type,
@@ -45,8 +52,8 @@ class NXCModule:
                 WHEN 'SQL_LOGIN' THEN 'SQL User'
                 WHEN 'WINDOWS_LOGIN' THEN 
                     CASE 
-                        WHEN name LIKE 'NT AUTHORITY\\%' OR name LIKE 'NT SERVICE\\%' THEN 'Local User'
-                        WHEN name LIKE '%\\%' THEN 'Domain User'
+                        WHEN name LIKE '{domain_prefix}%' THEN 'Domain User'
+                        WHEN name LIKE '%\\%' THEN 'Local User'
                         ELSE 'Local User'
                     END
                 WHEN 'WINDOWS_GROUP' THEN 'Windows Group'
@@ -75,5 +82,4 @@ class NXCModule:
             return []
 
     def options(self, context, module_options):
-        pass
         pass
