@@ -45,6 +45,7 @@ class NXCModule:
                 WHEN 'SQL_LOGIN' THEN 'SQL User'
                 WHEN 'WINDOWS_LOGIN' THEN 
                     CASE 
+                        WHEN name LIKE 'NT AUTHORITY\\%' OR name LIKE 'NT SERVICE\\%' THEN 'Local User'
                         WHEN name LIKE '%\\%' THEN 'Domain User'
                         ELSE 'Local User'
                     END
@@ -58,7 +59,6 @@ class NXCModule:
         FROM sys.server_principals 
         WHERE type IN ('S', 'U', 'G', 'C', 'K')
         AND name NOT LIKE '##%'
-        AND name NOT IN ('sa') OR name = 'sa'
         ORDER BY login_type, name;
         """
         try:
@@ -75,4 +75,5 @@ class NXCModule:
             return []
 
     def options(self, context, module_options):
+        pass
         pass
