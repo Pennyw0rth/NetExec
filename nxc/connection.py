@@ -136,7 +136,11 @@ class connection:
         # Authentication info
         self.password = ""
         self.username = ""
-        self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey or (hasattr(self.args, "delegate") and self.args.delegate))
+        self.kerberos = bool(self.args.kerberos or
+                             self.args.use_kcache or
+                             self.args.aesKey or
+                             (hasattr(self.args, "delegate") and self.args.delegate) or
+                             (hasattr(self.args, "no_preauth_targets") and self.args.no_preauth_targets))
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
         self.admin_privs = False
