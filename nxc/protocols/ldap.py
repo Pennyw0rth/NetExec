@@ -415,7 +415,7 @@ class ldap(connection):
                 color="yellow",
             )
             # If no preauth is set, we want to be able to execute commands such as --kerberoasting
-            if self.args.no_preauth:  # noqa: SIM103
+            if self.args.no_preauth_targets:  # noqa: SIM103
                 return True
             else:
                 return False
@@ -990,9 +990,9 @@ class ldap(connection):
                         hash_asreproast.write(f"{hash_TGT}\n")
 
     def kerberoasting(self):
-        if self.args.no_preauth:
+        if self.args.no_preauth_targets:
             usernames = []
-            for item in self.args.no_preauth:
+            for item in self.args.no_preauth_targets:
                 if os.path.isfile(item):
                     with open(item, encoding="utf-8") as f:
                         usernames.extend(line.strip() for line in f if line.strip())
