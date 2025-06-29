@@ -111,7 +111,7 @@ class WMIEXEC:
 
         command = self.__shell + data
         if self.__retOutput:
-            command += " 1> " + f"{self.__output}" + " 2>&1"
+            command += f" 1> {self.__output} 2>&1"
 
         self.logger.debug("Executing command: " + command)
         self.__win32Process.Create(command, self.__pwd, None)
