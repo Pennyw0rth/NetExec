@@ -29,7 +29,7 @@ $client = new-object System.Data.SqlClient.SqlConnection -ArgumentList "Data Sou
 try {
     $client.Open()
 } catch {
-    Write-Host "[!] Could not connect to localdb..."
+    Write-Host "[!] Could not connect to localdb, Entra ID sync probably not installed"
     return
 }
 
