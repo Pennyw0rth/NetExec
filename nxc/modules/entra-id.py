@@ -1,6 +1,9 @@
 
 import re
+
+from termcolor import colored
 from nxc.parsers.ldap_results import parse_result_attributes
+from nxc.config import host_info_colors
 
 
 class NXCModule:
@@ -75,4 +78,4 @@ class NXCModule:
         if hosts:
             self.context.log.success("Found Entra ID sync servers:")
         for host in hosts:
-            self.context.log.highlight(f"{host['hostname']}: {host['ip'].get('host', '<not found>')} (MSOL Account: {host.get('msol_account', 'N/A')})")
+            self.context.log.highlight(f"{host['hostname']}: {colored(host['ip'].get('host', '<not found>'), host_info_colors[0])}" + colored(f" (MSOL Account: {host.get('msol_account', 'N/A')})", "yellow", attrs=["bold"]))
