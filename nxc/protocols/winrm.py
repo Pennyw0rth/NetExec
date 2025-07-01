@@ -266,7 +266,9 @@ class winrm(connection):
 
     def ps_execute(self, payload=None, get_output=False):
         command = payload if payload else self.args.ps_execute
-        self.execute(payload=command, get_output=get_output, shell_type="powershell")
+        result = self.execute(payload=command, get_output=get_output, shell_type="powershell")
+        if get_output:
+            return result
 
     # Dos attack prevent:
     # if someboby executed "reg save HKLM\sam C:\windows\temp\sam" before, but didn't remove "C:\windows\temp\sam" file,
