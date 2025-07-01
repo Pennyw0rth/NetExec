@@ -1,5 +1,4 @@
 from impacket.ldap import ldap as ldap_impacket
-import re
 from nxc.logger import nxc_logger
 from nxc.parsers.ldap_results import parse_result_attributes
 
@@ -17,9 +16,7 @@ class NXCModule:
     multiple_hosts = True
 
     def options(self, context, module_options):
-        """
-        FILTER    Apply the FILTER (grep-like) (default: '')
-        """
+        """FILTER    Apply the FILTER (grep-like) (default: '')"""
         self.FILTER = ""
         if "FILTER" in module_options:
             self.FILTER = module_options["FILTER"]
