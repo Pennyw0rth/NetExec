@@ -79,7 +79,8 @@ class NXCModule:
                         successful_tgts += 1
 
                 # Summary of TGT results
-                context.log.success(f"Successfully obtained TGT for {successful_tgts} pre-created computer accounts. Saved to {ccache_base_dir}")
+                if successful_tgts > 0:
+                    context.log.success(f"Successfully obtained TGT for {successful_tgts} pre-created computer accounts. Saved to {ccache_base_dir}")
 
             except Exception as e:
                 context.log.fail(f"Error occurred during search: {e}")
