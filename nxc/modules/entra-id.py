@@ -30,10 +30,12 @@ class NXCModule:
             searchFilter="(sAMAccountName=MSOL_*)",
             attributes=["sAMAccountName", "cn", "description"],
         ))
+        self.context.log.info(f"Found the following MSOL accounts: {msol_parsed}")
         adsync_parsed = parse_result_attributes(connection.search(
             searchFilter="(sAMAccountName=ADSyncMSA*)",
             attributes=["sAMAccountName", "cn", "msDS-HostServiceAccountBL"],
         ))
+        self.context.log.info(f"Found the following ADSyncMSA accounts: {adsync_parsed}")
 
         hosts = []
         for acc in msol_parsed:
