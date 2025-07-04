@@ -975,6 +975,33 @@ class smb(connection):
                         self.logger.debug(f"Error getting client address for session {SessionId}: {e}")
 
     @requires_admin
+    def taskkill(self):
+        with TSTS.LegacyAPI(self.conn, self.host, self.kerberos) as legacy:
+            handle = legacy.hRpcWinStationOpenServer()
+            if self.args.taskkill.isdigit():
+                pidList = [int(self.args.taskkill)]
+            else:
+                r = legacy.hRpcWinStationGetAllProcesses(handle)
+                if not r:
+                    self.logger.error("Could not get process list")
+                    return
+
+                pidList = [i["UniqueProcessId"] for i in r if i["ImageName"].lower() == self.args.taskkill.lower()]
+                if not pidList:
+                    self.logger.fail(f"Could not find process named {self.args.taskkill}")
+                    return
+
+            for pid in pidList:
+                try:
+                    if legacy.hRpcWinStationTerminateProcess(handle, pid)["ErrorCode"]:
+                        self.logger.highlight(f"Terminated PID {pid} ({self.args.taskkill})")
+                    else:
+                        self.logger.fail(f"Failed terminating PID {pid}")
+                except Exception:
+                    import traceback
+                    self.logger.error(f"Error terminating PID {pid}: {traceback.format_exc()}")
+
+    @requires_admin
     def qwinsta(self):
         desktop_states = {
             "WTS_SESSIONSTATE_UNKNOWN": "",
