@@ -964,15 +964,19 @@ class smb(connection):
                     sessions[SessionId]["DisconnectTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["DisconnectTime"]
                     sessions[SessionId]["LogonTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["LogonTime"]
                     sessions[SessionId]["LastInputTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["LastInputTime"]
-            with TSTS.RCMPublic(self.conn, self.host, self.kerberos) as rcm:
-                for SessionId in sessions:
-                    try:
-                        client = rcm.hRpcGetRemoteAddress(SessionId)
-                        if not client:
-                            continue
-                        sessions[SessionId]["RemoteIp"] = client["pRemoteAddress"]["ipv4"]["in_addr"]
-                    except Exception as e:
-                        self.logger.debug(f"Error getting client address for session {SessionId}: {e}")
+            
+            try:
+                with TSTS.RCMPublic(self.conn, self.host, self.kerberos) as rcm:
+                    for SessionId in sessions:
+                        try:
+                            client = rcm.hRpcGetRemoteAddress(SessionId)
+                            if not client:
+                                continue
+                            sessions[SessionId]["RemoteIp"] = client["pRemoteAddress"]["ipv4"]["in_addr"]
+                        except Exception as e:
+                            self.logger.debug(f"Error getting client address for session {SessionId}: {e}")
+            except SessionError:
+                self.logger.fail("RDP is probably not enabled, cannot list remote IPv4 addresses.")
 
     @requires_admin
     def qwinsta(self):
@@ -1056,31 +1060,34 @@ class smb(connection):
 
     @requires_admin
     def tasklist(self):
-        with TSTS.LegacyAPI(self.conn, self.host, self.kerberos) as legacy:
-            try:
-                handle = legacy.hRpcWinStationOpenServer()
-                res = legacy.hRpcWinStationGetAllProcesses(handle)
-            except Exception as e:
-                # TODO: Issue https://github.com/fortra/impacket/issues/1816
-                self.logger.debug(f"Exception while calling hRpcWinStationGetAllProcesses: {e}")
-                return
-            if not res:
-                return
-            self.logger.success("Enumerated processes")
-            maxImageNameLen = max(len(i["ImageName"]) for i in res)
-            maxSidLen = max(len(i["pSid"]) for i in res)
-            template = "{: <%d} {: <8} {: <11} {: <%d} {: >12}" % (maxImageNameLen, maxSidLen)  # noqa: UP031
-            self.logger.highlight(template.format("Image Name", "PID", "Session#", "SID", "Mem Usage"))
-            self.logger.highlight(template.replace(": ", ":=").format("", "", "", "", ""))
-            for procInfo in res:
-                row = template.format(
-                    procInfo["ImageName"],
-                    procInfo["UniqueProcessId"],
-                    procInfo["SessionId"],
-                    procInfo["pSid"],
-                    "{:,} K".format(procInfo["WorkingSetSize"] // 1000),
-                )
-                self.logger.highlight(row)
+        try:
+            with TSTS.LegacyAPI(self.conn, self.host, self.kerberos) as legacy:
+                try:
+                    handle = legacy.hRpcWinStationOpenServer()
+                    res = legacy.hRpcWinStationGetAllProcesses(handle)
+                except Exception as e:
+                    # TODO: Issue https://github.com/fortra/impacket/issues/1816
+                    self.logger.debug(f"Exception while calling hRpcWinStationGetAllProcesses: {e}")
+                    return
+                if not res:
+                    return
+                self.logger.success("Enumerated processes")
+                maxImageNameLen = max(len(i["ImageName"]) for i in res)
+                maxSidLen = max(len(i["pSid"]) for i in res)
+                template = "{: <%d} {: <8} {: <11} {: <%d} {: >12}" % (maxImageNameLen, maxSidLen)  # noqa: UP031
+                self.logger.highlight(template.format("Image Name", "PID", "Session#", "SID", "Mem Usage"))
+                self.logger.highlight(template.replace(": ", ":=").format("", "", "", "", ""))
+                for procInfo in res:
+                    row = template.format(
+                        procInfo["ImageName"],
+                        procInfo["UniqueProcessId"],
+                        procInfo["SessionId"],
+                        procInfo["pSid"],
+                        "{:,} K".format(procInfo["WorkingSetSize"] // 1000),
+                    )
+                    self.logger.highlight(row)
+        except SessionError:
+            self.logger.fail("Cannot list remote tasks, RDP is probably disabled.")
 
     def shares(self):
         temp_dir = ntpath.normpath("\\" + gen_random_string())
