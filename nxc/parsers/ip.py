@@ -1,5 +1,6 @@
 from ipaddress import ip_address, ip_network, summarize_address_range, ip_interface
 import netifaces
+from nxc.logger import nxc_logger
 
 
 def get_local_ips():
@@ -27,6 +28,11 @@ def parse_exclusions(exclusions):
     excluded_ips = set()
     for exclusion in exclusions:
         for ip in parse_targets(exclusion):
+            try:
+                ip = ip_address(ip)
+            except ValueError:
+                nxc_logger.error(f"Invalid IP address or range: {ip}, check your config. Exiting.")
+                exit(1)
             excluded_ips.add(ip)
     return excluded_ips
 
