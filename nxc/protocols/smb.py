@@ -978,6 +978,7 @@ class smb(connection):
             except SessionError:
                 self.logger.fail("RDP is probably not enabled, cannot list remote IPv4 addresses.")
 
+
     @requires_admin
     def taskkill(self):
         with TSTS.LegacyAPI(self.conn, self.host, self.kerberos) as legacy:
@@ -1006,29 +1007,30 @@ class smb(connection):
 
     @requires_admin
     def qwinsta(self):
+        import os
+
         desktop_states = {
             "WTS_SESSIONSTATE_UNKNOWN": "",
             "WTS_SESSIONSTATE_LOCK": "Locked",
             "WTS_SESSIONSTATE_UNLOCK": "Unlocked",
         }
+
         sessions = self.get_session_list()
-        if not len(sessions):
+        if not sessions:
             return
+
         self.enumerate_sessions_info(sessions)
 
         maxSessionNameLen = max(len(sessions[i]["SessionName"]) + 1 for i in sessions)
-        maxSessionNameLen = maxSessionNameLen if len("SESSIONNAME") < maxSessionNameLen else len("SESSIONNAME") + 1
+        maxSessionNameLen = max(maxSessionNameLen, len("SESSIONNAME") + 1)
         maxUsernameLen = max(len(sessions[i]["Username"] + sessions[i]["Domain"]) + 1 for i in sessions) + 1
-        maxUsernameLen = maxUsernameLen if len("Username") < maxUsernameLen else len("Username") + 1
+        maxUsernameLen = max(maxUsernameLen, len("USERNAME") + 1)
         maxIdLen = max(len(str(i)) for i in sessions)
-        maxIdLen = maxIdLen if len("ID") < maxIdLen else len("ID") + 1
+        maxIdLen = max(maxIdLen, len("ID") + 1)
         maxStateLen = max(len(sessions[i]["state"]) + 1 for i in sessions)
-        maxStateLen = maxStateLen if len("STATE") < maxStateLen else len("STATE") + 1
-        maxRemoteIp = max(len(sessions[i]["RemoteIp"]) + 1 for i in sessions)
-        maxRemoteIp = maxRemoteIp if len("RemoteAddress") < maxRemoteIp else len("RemoteAddress") + 1
-        maxClientName = max(len(sessions[i]["ClientName"]) + 1 for i in sessions)
-        maxClientName = maxClientName if len("ClientName") < maxClientName else len("ClientName") + 1
-        template = ("{SESSIONNAME: <%d} "  # noqa: UP031
+        maxStateLen = max(maxStateLen, len("STATE") + 1)
+
+        template = ("{SESSIONNAME: <%d} "
                     "{USERNAME: <%d} "
                     "{ID: <%d} "
                     "{IPv4: <16} "
@@ -1037,7 +1039,6 @@ class smb(connection):
                     "{CONNTIME: <20} "
                     "{DISCTIME: <20} ") % (maxSessionNameLen, maxUsernameLen, maxIdLen, maxStateLen)
 
-        result = []
         header = template.format(
             SESSIONNAME="SESSIONNAME",
             USERNAME="USERNAME",
@@ -1059,30 +1060,58 @@ class smb(connection):
             CONNTIME="",
             DISCTIME="",
         )
-        result.extend((header, header2))
+
+        result = [header, header2]
+
+        usernames = None
+        if self.args.qwinsta and self.args.qwinsta is not True:
+            arg = self.args.qwinsta
+            if os.path.isfile(arg):
+                with open(arg, "r") as f:
+                    usernames = [line.strip().lower() for line in f if line.strip()]
+            else:
+                usernames = [arg.lower()]
+
+        found_user = False
 
         for i in sessions:
+            username = sessions[i]["Username"]
+            domain = sessions[i]["Domain"]
+            user_full = f"{domain}\\{username}" if username else ""
+
+            if usernames:
+                if username.lower() not in usernames:
+                    continue
+
+            found_user = True
+
             connectTime = sessions[i]["ConnectTime"]
             connectTime = connectTime.strftime(r"%Y/%m/%d %H:%M:%S") if connectTime.year > 1601 else "None"
 
             disconnectTime = sessions[i]["DisconnectTime"]
             disconnectTime = disconnectTime.strftime(r"%Y/%m/%d %H:%M:%S") if disconnectTime.year > 1601 else "None"
-            userName = sessions[i]["Domain"] + "\\" + sessions[i]["Username"] if len(sessions[i]["Username"]) else ""
 
-            result.append(template.format(
+            row = template.format(
                 SESSIONNAME=sessions[i]["SessionName"],
-                USERNAME=userName,
+                USERNAME=user_full,
                 ID=i,
                 IPv4=sessions[i]["RemoteIp"],
                 STATE=sessions[i]["state"],
                 DSTATE=desktop_states[sessions[i]["flags"]],
                 CONNTIME=connectTime,
                 DISCTIME=disconnectTime,
-            ))
-
-        self.logger.success("Enumerated qwinsta sessions")
-        for row in result:
-            self.logger.highlight(row)
+            )
+            result.append(row)
+        
+        if found_user:
+            self.logger.success("Enumerated qwinsta sessions")
+            for row in result:
+                self.logger.highlight(row)
+        else:
+            if usernames:
+                self.logger.fail(f"No user session found matching: {', '.join(usernames)}")
+            else:
+                self.logger.fail("No sessions found")
 
     @requires_admin
     def tasklist(self):
