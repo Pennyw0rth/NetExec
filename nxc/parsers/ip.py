@@ -1,22 +1,28 @@
 from ipaddress import ip_address, ip_network, summarize_address_range, ip_interface
-import socket
+import netifaces
 
 
 def get_local_ip():
+    """Get the local IP address using netifaces library."""
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect(("8.8.8.8", 80))
-            return s.getsockname()[0]
+        interfaces = netifaces.interfaces()
+        for interface in interfaces:
+            # Skip loopback interface
+            if interface == "lo" or interface.startswith("lo"):
+                continue
+
+            addresses = netifaces.ifaddresses(interface)
+
+            if netifaces.AF_INET in addresses:
+                for addr_info in addresses[netifaces.AF_INET]:
+                    ip = addr_info.get("addr")
+                    # Skip localhost and link-local addresses
+                    if ip and not ip.startswith("127.") and not ip.startswith("169.254."):
+                        return ip
+                        
     except Exception:
-        # Fallback Method
-        try:
-            hostname = socket.gethostname()
-            local_ip = socket.gethostbyname(hostname)
-            # Filter out localhost
-            if local_ip != "127.0.0.1":
-                return local_ip
-        except Exception:
-            pass
+        pass
+    
     return None
 
 

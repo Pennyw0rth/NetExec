@@ -140,7 +140,7 @@ def main():
             nxc_logger.debug(f"Local IP detected: {local_ip}")
             excluded_ips.add(local_ip)
         else:
-            nxc_logger.warning("Could not determine local IP address for skip_self")
+            nxc_logger.error("Could not determine local IP address for skip_self")
 
     # Filter out excluded targets
     if excluded_ips:

@@ -1,4 +1,4 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from nxc.parsers.ip import get_local_ip, parse_exclusions, parse_targets
 
@@ -6,62 +6,62 @@ from nxc.parsers.ip import get_local_ip, parse_exclusions, parse_targets
 class TestGetLocalIP:
     """Test local IP detection functionality."""
     
-    @patch("socket.socket")
-    def test_get_local_ip_success(self, mock_socket):
-        """Test successful local IP detection via UDP socket."""
-        mock_sock = MagicMock()
-        mock_sock.getsockname.return_value = ("192.168.1.100", 12345)
-        mock_socket.return_value.__enter__.return_value = mock_sock
+    @patch("netifaces.interfaces")
+    @patch("netifaces.ifaddresses")
+    def test_get_local_ip_success(self, mock_ifaddresses, mock_interfaces):
+        """Test successful local IP detection via netifaces."""
+        # Mock available interfaces
+        mock_interfaces.return_value = ["lo", "eth0", "wlan0"]
+        
+        # Mock addresses for each interface
+        import netifaces
+        mock_ifaddresses.side_effect = lambda iface: {
+            "lo": {netifaces.AF_INET: [{"addr": "127.0.0.1"}]},
+            "eth0": {netifaces.AF_INET: [{"addr": "192.168.1.100"}]},
+            "wlan0": {}
+        }.get(iface, {})
         
         result = get_local_ip()
         
         assert result == "192.168.1.100"
-        mock_sock.connect.assert_called_once_with(("8.8.8.8", 80))
-        mock_sock.getsockname.assert_called_once()
+        mock_interfaces.assert_called_once()
 
-    @patch("socket.socket")
-    @patch("socket.gethostname")
-    @patch("socket.gethostbyname")
-    def test_get_local_ip_fallback_success(self, mock_gethostbyname, mock_gethostname, mock_socket):
-        """Test fallback method when UDP socket fails."""
-        # Make UDP socket fail
-        mock_socket.side_effect = Exception("Network unreachable")
+    @patch("netifaces.interfaces")
+    @patch("netifaces.ifaddresses")
+    def test_get_local_ip_skip_localhost(self, mock_ifaddresses, mock_interfaces):
+        """Test that localhost addresses are skipped."""
+        # Mock only loopback interface
+        mock_interfaces.return_value = ["lo"]
         
-        # Setup fallback method
-        mock_gethostname.return_value = "test-machine"
-        mock_gethostbyname.return_value = "10.0.0.50"
-        
-        result = get_local_ip()
-        
-        assert result == "10.0.0.50"
-        mock_gethostname.assert_called_once()
-        mock_gethostbyname.assert_called_once_with("test-machine")
-
-    @patch("socket.socket")
-    @patch("socket.gethostname")
-    @patch("socket.gethostbyname")
-    def test_get_local_ip_fallback_localhost_filtered(self, mock_gethostbyname, mock_gethostname, mock_socket):
-        """Test fallback method filters out localhost."""
-        # Make UDP socket fail
-        mock_socket.side_effect = Exception("Network unreachable")
-        
-        # Setup fallback to return localhost
-        mock_gethostname.return_value = "localhost"
-        mock_gethostbyname.return_value = "127.0.0.1"
+        import netifaces
+        mock_ifaddresses.return_value = {
+            netifaces.AF_INET: [{"addr": "127.0.0.1"}]
+        }
         
         result = get_local_ip()
         
         assert result is None
 
-    @patch("socket.socket")
-    @patch("socket.gethostname")
-    def test_get_local_ip_all_methods_fail(self, mock_gethostname, mock_socket):
-        """Test when all methods fail to detect local IP."""
-        # Make UDP socket fail
-        mock_socket.side_effect = Exception("Network unreachable")
+    @patch("netifaces.interfaces")
+    @patch("netifaces.ifaddresses")
+    def test_get_local_ip_skip_link_local(self, mock_ifaddresses, mock_interfaces):
+        """Test that link-local addresses (169.254.x.x) are skipped."""
+        mock_interfaces.return_value = ["eth0"]
         
-        # Make hostname resolution fail
-        mock_gethostname.side_effect = Exception("Hostname resolution failed")
+        import netifaces
+        mock_ifaddresses.return_value = {
+            netifaces.AF_INET: [{"addr": "169.254.1.1"}]
+        }
+        
+        result = get_local_ip()
+        
+        assert result is None
+
+    @patch("netifaces.interfaces")
+    def test_get_local_ip_exception_handling(self, mock_interfaces):
+        """Test when netifaces raises an exception."""
+        # Make interfaces() raise an exception
+        mock_interfaces.side_effect = Exception("Network error")
         
         result = get_local_ip()
         
@@ -301,8 +301,8 @@ class TestConfigValidation:
         # Test inputs that parse successfully but aren't lists
         non_list_inputs = [
             '"192.168.1.1"',  # String instead of list
-            '192',  # Integer
-            'True',  # Boolean
+            "192",  # Integer
+            "True",  # Boolean
         ]
         
         for input_val in non_list_inputs:
