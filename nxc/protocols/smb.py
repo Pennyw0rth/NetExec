@@ -979,6 +979,32 @@ class smb(connection):
                 self.logger.fail("RDP is probably not enabled, cannot list remote IPv4 addresses.")
 
     @requires_admin
+    def taskkill(self):
+        with TSTS.LegacyAPI(self.conn, self.host, self.kerberos) as legacy:
+            handle = legacy.hRpcWinStationOpenServer()
+            if self.args.taskkill.isdigit():
+                pidList = [int(self.args.taskkill)]
+            else:
+                res = legacy.hRpcWinStationGetAllProcesses(handle)
+                if not res:
+                    self.logger.error("Could not get process list")
+                    return
+
+                pidList = [i["UniqueProcessId"] for i in res if i["ImageName"].lower() == self.args.taskkill.lower()]
+                if not pidList:
+                    self.logger.fail(f"Could not find process named {self.args.taskkill}")
+                    return
+
+            for pid in pidList:
+                try:
+                    if legacy.hRpcWinStationTerminateProcess(handle, pid)["ErrorCode"]:
+                        self.logger.highlight(f"Terminated PID {pid} ({self.args.taskkill})")
+                    else:
+                        self.logger.fail(f"Failed terminating PID {pid}")
+                except Exception as e:
+                    self.logger.exception(f"Error terminating PID {pid}: {e}")
+
+    @requires_admin
     def qwinsta(self):
         desktop_states = {
             "WTS_SESSIONSTATE_UNKNOWN": "",
