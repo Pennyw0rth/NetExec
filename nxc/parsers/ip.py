@@ -1,4 +1,40 @@
 from ipaddress import ip_address, ip_network, summarize_address_range, ip_interface
+import netifaces
+from nxc.logger import nxc_logger
+
+
+def get_local_ips():
+    """Get the local IP address using netifaces library."""
+    interfaces = netifaces.interfaces()
+    ips = set()
+
+    for interface in interfaces:
+        # Skip loopback interface
+        if interface == "lo" or interface.startswith("lo"):
+            continue
+
+        addresses = netifaces.ifaddresses(interface)
+
+        if netifaces.AF_INET in addresses:
+            for addr_info in addresses[netifaces.AF_INET]:
+                ip = addr_info.get("addr")
+                # Skip localhost and link-local addresses
+                if ip and not ip.startswith("127.") and not ip.startswith("169.254."):
+                    ips.add(ip)
+    return ips
+
+
+def parse_exclusions(exclusions):
+    excluded_ips = set()
+    for exclusion in exclusions:
+        for ip in parse_targets(exclusion):
+            try:
+                _ = ip_address(ip)
+            except ValueError:
+                nxc_logger.error(f"Invalid IP address or range: {ip}, check your config. Exiting.")
+                exit(1)
+            excluded_ips.add(ip)
+    return excluded_ips
 
 
 def parse_targets(target):
