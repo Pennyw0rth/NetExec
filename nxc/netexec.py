@@ -2,7 +2,7 @@
 import sys
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import identify_target_file
-from nxc.parsers.ip import parse_targets, parse_exclusions, get_local_ip
+from nxc.parsers.ip import parse_targets, parse_exclusions, get_local_ips
 from nxc.parsers.nmap import parse_nmap_xml
 from nxc.parsers.nessus import parse_nessus_file
 from nxc.cli import gen_cli_args
@@ -135,10 +135,10 @@ def main():
 
     # Process skip_self from config
     if skip_self:
-        local_ip = get_local_ip()
-        if local_ip:
-            nxc_logger.debug(f"Local IP detected: {local_ip}")
-            excluded_ips.add(local_ip)
+        local_ips = get_local_ips()
+        if local_ips:
+            nxc_logger.debug(f"Local IPs detected: {local_ips}")
+            excluded_ips.update(local_ips)
         else:
             nxc_logger.error("Could not determine local IP address for skip_self")
 

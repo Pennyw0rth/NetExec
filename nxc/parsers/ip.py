@@ -2,28 +2,26 @@ from ipaddress import ip_address, ip_network, summarize_address_range, ip_interf
 import netifaces
 
 
-def get_local_ip():
+def get_local_ips():
     """Get the local IP address using netifaces library."""
-    try:
-        interfaces = netifaces.interfaces()
-        for interface in interfaces:
-            # Skip loopback interface
-            if interface == "lo" or interface.startswith("lo"):
-                continue
+    interfaces = netifaces.interfaces()
+    ips = set()
 
-            addresses = netifaces.ifaddresses(interface)
+    for interface in interfaces:
+        # Skip loopback interface
+        if interface == "lo" or interface.startswith("lo"):
+            continue
 
-            if netifaces.AF_INET in addresses:
-                for addr_info in addresses[netifaces.AF_INET]:
-                    ip = addr_info.get("addr")
-                    # Skip localhost and link-local addresses
-                    if ip and not ip.startswith("127.") and not ip.startswith("169.254."):
-                        return ip
-                        
-    except Exception:
-        pass
+        addresses = netifaces.ifaddresses(interface)
+
+        if netifaces.AF_INET in addresses:
+            for addr_info in addresses[netifaces.AF_INET]:
+                ip = addr_info.get("addr")
+                # Skip localhost and link-local addresses
+                if ip and not ip.startswith("127.") and not ip.startswith("169.254."):
+                    ips.add(ip)
     
-    return None
+    return ips
 
 
 def parse_exclusions(exclusions):
