@@ -978,16 +978,21 @@ class smb(connection):
             except SessionError:
                 self.logger.fail("RDP is probably not enabled, cannot list remote IPv4 addresses.")
 
+
     @requires_admin
     def qwinsta(self):
+        import os
+
         desktop_states = {
             "WTS_SESSIONSTATE_UNKNOWN": "",
             "WTS_SESSIONSTATE_LOCK": "Locked",
             "WTS_SESSIONSTATE_UNLOCK": "Unlocked",
         }
+
         sessions = self.get_session_list()
-        if not len(sessions):
+        if not sessions:
             return
+
         self.enumerate_sessions_info(sessions)
 
         maxSessionNameLen = max(len(sessions[i]["SessionName"]) + 1 for i in sessions)
@@ -998,10 +1003,6 @@ class smb(connection):
         maxIdLen = max(maxIdLen, len("ID") + 1)
         maxStateLen = max(len(sessions[i]["state"]) + 1 for i in sessions)
         maxStateLen = max(maxStateLen, len("STATE") + 1)
-        maxRemoteIp = max(len(sessions[i]["RemoteIp"]) + 1 for i in sessions)
-        maxRemoteIp = max(maxRemoteIp, len("RemoteAddress") + 1)
-        maxClientName = max(len(sessions[i]["ClientName"]) + 1 for i in sessions)
-        maxClientName = max(maxClientName, len("ClientName") + 1)
 
         template = ("{SESSIONNAME: <%d} "
                     "{USERNAME: <%d} "
@@ -1036,6 +1037,15 @@ class smb(connection):
 
         result = [header, header2]
 
+        usernames = None
+        if self.args.qwinsta and self.args.qwinsta is not True:
+            arg = self.args.qwinsta
+            if os.path.isfile(arg):
+                with open(arg, "r") as f:
+                    usernames = [line.strip().lower() for line in f if line.strip()]
+            else:
+                usernames = [arg.lower()]
+
         found_user = False
 
         for i in sessions:
@@ -1043,20 +1053,18 @@ class smb(connection):
             domain = sessions[i]["Domain"]
             user_full = f"{domain}\\{username}" if username else ""
 
-            # If args.qwinsta is not True then a username was supplised to look for
-            if self.args.qwinsta and self.args.qwinsta is not True:
-                if username.lower() != self.args.qwinsta.lower():
-                    # If the provided username doesn't match, we pass to the next session
+            if usernames:
+                if username.lower() not in usernames:
                     continue
 
-            # If the username matches or no username was supplied, we activate that falag
             found_user = True
 
-            # Then we get the connectTime, disconnectTime and format the row to be printed
             connectTime = sessions[i]["ConnectTime"]
             connectTime = connectTime.strftime(r"%Y/%m/%d %H:%M:%S") if connectTime.year > 1601 else "None"
+
             disconnectTime = sessions[i]["DisconnectTime"]
             disconnectTime = disconnectTime.strftime(r"%Y/%m/%d %H:%M:%S") if disconnectTime.year > 1601 else "None"
+
             row = template.format(
                 SESSIONNAME=sessions[i]["SessionName"],
                 USERNAME=user_full,
@@ -1068,14 +1076,16 @@ class smb(connection):
                 DISCTIME=disconnectTime,
             )
             result.append(row)
-
-        # This flag should be on if a username was supplied and found or if no username was supplied
+        
         if found_user:
             self.logger.success("Enumerated qwinsta sessions")
             for row in result:
                 self.logger.highlight(row)
         else:
-            self.logger.fail(f"No user session found matching '{self.args.qwinsta}'")
+            if usernames:
+                self.logger.fail(f"No user session found matching: {', '.join(usernames)}")
+            else:
+                self.logger.fail("No sessions found")
 
     @requires_admin
     def tasklist(self):
