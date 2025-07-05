@@ -145,8 +145,9 @@ def main():
     # Filter out excluded targets
     if excluded_ips:
         original_count = len(targets)
+        excluded_targets = [target for target in targets if target in excluded_ips]
         targets = [target for target in targets if target not in excluded_ips]
-        nxc_logger.debug(f"Excluded {original_count - len(targets)} hosts from scan: {excluded_ips}")
+        nxc_logger.debug(f"Excluded {original_count - len(targets)} hosts from scan: {excluded_targets}")
 
     # The following is a quick hack for the powershell obfuscation functionality, I know this is yucky
     if hasattr(args, "clear_obfscripts") and args.clear_obfscripts:
