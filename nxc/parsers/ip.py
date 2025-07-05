@@ -20,7 +20,6 @@ def get_local_ips():
                 # Skip localhost and link-local addresses
                 if ip and not ip.startswith("127.") and not ip.startswith("169.254."):
                     ips.add(ip)
-    
     return ips
 
 
