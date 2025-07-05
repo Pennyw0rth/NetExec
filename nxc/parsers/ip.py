@@ -29,7 +29,7 @@ def parse_exclusions(exclusions):
     for exclusion in exclusions:
         for ip in parse_targets(exclusion):
             try:
-                ip = ip_address(ip)
+                _ = ip_address(ip)
             except ValueError:
                 nxc_logger.error(f"Invalid IP address or range: {ip}, check your config. Exiting.")
                 exit(1)
