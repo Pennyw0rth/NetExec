@@ -1095,7 +1095,7 @@ class smb(connection):
                     if self.args.tasklist is not True:
                         # So we look for it and print its information if found
                         if self.args.tasklist.lower() == procInfo["ImageName"].lower():
-                            found_task = True          
+                            found_task = True
                             self.logger.highlight(format_row(procInfo))
                     # Else, no process was supplied, we print the entire list of remote processes
                     else:
