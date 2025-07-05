@@ -981,12 +981,12 @@ class smb(connection):
             if self.args.taskkill.isdigit():
                 pidList = [int(self.args.taskkill)]
             else:
-                r = legacy.hRpcWinStationGetAllProcesses(handle)
-                if not r:
+                res = legacy.hRpcWinStationGetAllProcesses(handle)
+                if not res:
                     self.logger.error("Could not get process list")
                     return
 
-                pidList = [i["UniqueProcessId"] for i in r if i["ImageName"].lower() == self.args.taskkill.lower()]
+                pidList = [i["UniqueProcessId"] for i in res if i["ImageName"].lower() == self.args.taskkill.lower()]
                 if not pidList:
                     self.logger.fail(f"Could not find process named {self.args.taskkill}")
                     return
@@ -997,9 +997,8 @@ class smb(connection):
                         self.logger.highlight(f"Terminated PID {pid} ({self.args.taskkill})")
                     else:
                         self.logger.fail(f"Failed terminating PID {pid}")
-                except Exception:
-                    import traceback
-                    self.logger.error(f"Error terminating PID {pid}: {traceback.format_exc()}")
+                except Exception as e:
+                    self.logger.exception(f"Error terminating PID {pid}: {e}")
 
     @requires_admin
     def qwinsta(self):
