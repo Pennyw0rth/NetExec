@@ -78,6 +78,7 @@ smb_error_status = [
     "STATUS_ACCOUNT_RESTRICTION",
     "STATUS_INVALID_LOGON_HOURS",
     "STATUS_INVALID_WORKSTATION",
+    "STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT",
     "STATUS_LOGON_TYPE_NOT_GRANTED",
     "STATUS_PASSWORD_EXPIRED",
     "STATUS_PASSWORD_MUST_CHANGE",
@@ -663,17 +664,65 @@ class smb(connection):
         except Exception as e:
             self.logger.fail(f"Failed to get TGT: {e}")
 
+    def check_dc_ports(self, timeout=1):
+        """Check multiple DC-specific ports in case first check fails"""
+        import socket
+        dc_ports = [88, 389, 636, 3268, 9389]  # Kerberos, LDAP, LDAPS, Global Catalog, ADWS
+        open_ports = 0
+
+        for port in dc_ports:
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(timeout)
+                result = sock.connect_ex((self.host, port))
+                if result == 0:
+                    self.logger.debug(f"Port {port} is open on {self.host}")
+                    open_ports += 1
+                sock.close()
+            except Exception:
+                pass
+        # If 3 or more DC ports are open, likely a DC
+        return open_ports >= 3
+
     def is_host_dc(self):
         from impacket.dcerpc.v5 import nrpc, epm
+
         self.logger.debug("Performing authentication attempts...")
+        
+        # First check if port 135 is open
+        if self._is_port_open(135):
+            self.logger.debug("Port 135 is open, attempting MSRPC connection...")
+            try:
+                epm.hept_map(self.host, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
+                self.isdc = True
+                return True
+            except DCERPCException:
+                self.logger.debug("Error while connecting to host: DCERPCException, which means this is probably not a DC!")
+            except TimeoutError:
+                self.logger.debug("Timeout while connecting to host: likely not a DC or host is unreachable.")
+            except Exception as e:
+                self.logger.debug(f"Error while connecting to host: {e}")
+            self.isdc = False
+            return False
+        else:
+            self.logger.debug("Port 135 is closed, skipping MSRPC check...")
+            # Fallback to checking DC ports
+            if self.check_dc_ports():
+                self.logger.debug("Host appears to be a DC (multiple DC ports open)")
+                self.isdc = True
+                return True
+
+    def _is_port_open(self, port, timeout=1):
+        """Check if a specific port is open on the target host."""
+        import socket
         try:
-            epm.hept_map(self.host, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
-            self.isdc = True
-            return True
-        except DCERPCException:
-            self.logger.debug("Error while connecting to host: DCERPCException, which means this is probably not a DC!")
-        self.isdc = False
-        return False
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(timeout)
+                result = sock.connect_ex((self.host, port))
+                return result == 0
+        except Exception as e:
+            self.logger.debug(f"Error checking port {port} on {self.host}: {e}")
+            return False
 
     @requires_admin
     def execute(self, payload=None, get_output=False, methods=None) -> str:
@@ -915,15 +964,19 @@ class smb(connection):
                     sessions[SessionId]["DisconnectTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["DisconnectTime"]
                     sessions[SessionId]["LogonTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["LogonTime"]
                     sessions[SessionId]["LastInputTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["LastInputTime"]
-            with TSTS.RCMPublic(self.conn, self.host, self.kerberos) as rcm:
-                for SessionId in sessions:
-                    try:
-                        client = rcm.hRpcGetRemoteAddress(SessionId)
-                        if not client:
-                            continue
-                        sessions[SessionId]["RemoteIp"] = client["pRemoteAddress"]["ipv4"]["in_addr"]
-                    except Exception as e:
-                        self.logger.debug(f"Error getting client address for session {SessionId}: {e}")
+            
+            try:
+                with TSTS.RCMPublic(self.conn, self.host, self.kerberos) as rcm:
+                    for SessionId in sessions:
+                        try:
+                            client = rcm.hRpcGetRemoteAddress(SessionId)
+                            if not client:
+                                continue
+                            sessions[SessionId]["RemoteIp"] = client["pRemoteAddress"]["ipv4"]["in_addr"]
+                        except Exception as e:
+                            self.logger.debug(f"Error getting client address for session {SessionId}: {e}")
+            except SessionError:
+                self.logger.fail("RDP is probably not enabled, cannot list remote IPv4 addresses.")
 
     @requires_admin
     def qwinsta(self):
@@ -1007,31 +1060,34 @@ class smb(connection):
 
     @requires_admin
     def tasklist(self):
-        with TSTS.LegacyAPI(self.conn, self.host, self.kerberos) as legacy:
-            try:
-                handle = legacy.hRpcWinStationOpenServer()
-                res = legacy.hRpcWinStationGetAllProcesses(handle)
-            except Exception as e:
-                # TODO: Issue https://github.com/fortra/impacket/issues/1816
-                self.logger.debug(f"Exception while calling hRpcWinStationGetAllProcesses: {e}")
-                return
-            if not res:
-                return
-            self.logger.success("Enumerated processes")
-            maxImageNameLen = max(len(i["ImageName"]) for i in res)
-            maxSidLen = max(len(i["pSid"]) for i in res)
-            template = "{: <%d} {: <8} {: <11} {: <%d} {: >12}" % (maxImageNameLen, maxSidLen)  # noqa: UP031
-            self.logger.highlight(template.format("Image Name", "PID", "Session#", "SID", "Mem Usage"))
-            self.logger.highlight(template.replace(": ", ":=").format("", "", "", "", ""))
-            for procInfo in res:
-                row = template.format(
-                    procInfo["ImageName"],
-                    procInfo["UniqueProcessId"],
-                    procInfo["SessionId"],
-                    procInfo["pSid"],
-                    "{:,} K".format(procInfo["WorkingSetSize"] // 1000),
-                )
-                self.logger.highlight(row)
+        try:
+            with TSTS.LegacyAPI(self.conn, self.host, self.kerberos) as legacy:
+                try:
+                    handle = legacy.hRpcWinStationOpenServer()
+                    res = legacy.hRpcWinStationGetAllProcesses(handle)
+                except Exception as e:
+                    # TODO: Issue https://github.com/fortra/impacket/issues/1816
+                    self.logger.debug(f"Exception while calling hRpcWinStationGetAllProcesses: {e}")
+                    return
+                if not res:
+                    return
+                self.logger.success("Enumerated processes")
+                maxImageNameLen = max(len(i["ImageName"]) for i in res)
+                maxSidLen = max(len(i["pSid"]) for i in res)
+                template = "{: <%d} {: <8} {: <11} {: <%d} {: >12}" % (maxImageNameLen, maxSidLen)  # noqa: UP031
+                self.logger.highlight(template.format("Image Name", "PID", "Session#", "SID", "Mem Usage"))
+                self.logger.highlight(template.replace(": ", ":=").format("", "", "", "", ""))
+                for procInfo in res:
+                    row = template.format(
+                        procInfo["ImageName"],
+                        procInfo["UniqueProcessId"],
+                        procInfo["SessionId"],
+                        procInfo["pSid"],
+                        "{:,} K".format(procInfo["WorkingSetSize"] // 1000),
+                    )
+                    self.logger.highlight(row)
+        except SessionError:
+            self.logger.fail("Cannot list remote tasks, RDP is probably disabled.")
 
     def shares(self):
         temp_dir = ntpath.normpath("\\" + gen_random_string())

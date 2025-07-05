@@ -1,10 +1,10 @@
-from nxc.helpers.args import DisplayDefaultsNotNone
+from nxc.helpers.args import DefaultTrackingAction, DisplayDefaultsNotNone
 
 
 def proto_args(parser, parents):
     ldap_parser = parser.add_parser("ldap", help="own stuff using LDAP", parents=parents, formatter_class=DisplayDefaultsNotNone)
     ldap_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
-    ldap_parser.add_argument("--port", type=int, default=389, help="LDAP port")
+    ldap_parser.add_argument("--port", type=int, default=389, action=DefaultTrackingAction, help="LDAP port")
 
     dgroup = ldap_parser.add_mutually_exclusive_group()
     dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, default=None, help="domain to authenticate to")
@@ -13,6 +13,7 @@ def proto_args(parser, parents):
     egroup = ldap_parser.add_argument_group("Retrieve hash on the remote DC", "Options to get hashes from Kerberos")
     egroup.add_argument("--asreproast", help="Output AS_REP response to crack with hashcat to file")
     egroup.add_argument("--kerberoasting", help="Output TGS ticket to crack with hashcat to file")
+    egroup.add_argument("--no-preauth-targets", nargs=1, dest="no_preauth_targets", help="Targeted kerberoastable users")
 
     vgroup = ldap_parser.add_argument_group("Retrieve useful information on the domain")
     vgroup.add_argument("--base-dn", metavar="BASE_DN", dest="base_dn", type=str, default=None, help="base DN for search queries")
