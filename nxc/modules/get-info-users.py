@@ -23,22 +23,13 @@ class NXCModule:
 
     def on_login(self, context, connection):
         # Building the search filter
-        searchFilter = "(objectclass=user)"
+        searchFilter = "(info=*)"
 
-        try:
-            context.log.debug(f"Search Filter={searchFilter}")
-            resp = connection.ldap_connection.search(
-                searchFilter=searchFilter,
-                attributes=["sAMAccountName", "info"],
-                sizeLimit=0,
-            )
-        except ldap_impacket.LDAPSearchError as e:
-            if e.getErrorString().find("sizeLimitExceeded") >= 0:
-                context.log.debug("sizeLimitExceeded exception caught, giving up and processing the data received")
-                resp = e.getAnswers()
-            else:
-                nxc_logger.debug(e)
-                return False
+        context.log.debug(f"Search Filter={searchFilter}")
+        resp = connection.search(
+            searchFilter=searchFilter,
+            attributes=["sAMAccountName", "info"]
+        )
 
         context.log.debug(f"Total of records returned {len(resp)}")
         resp_parsed = parse_result_attributes(resp)
@@ -51,26 +42,17 @@ class NXCModule:
                 context.log.highlight(f"User: {answer[0]} Info: {answer[1]}")
 
     def filter_answer(self, context, answers):
-        # No option to filter
+        answersFiltered = []
+         # No option to filter
         if self.FILTER == "":
             context.log.debug("No filter option enabled")
             return answers
-        
-        answersFiltered = []
+        # Filter
         context.log.debug("Prepare to filter")
-        if len(answers) > 0:
-            for answer in answers:
-                conditionFilter = False
-                info = str(answer[1])
-                # Filter
-                if self.FILTER != "":
-                    conditionFilter = False
-                    if self.FILTER in info:
-                        conditionFilter = True
-
-                if conditionFilter:
-                    context.log.highlight(f"'{self.FILTER}' found in Info: '{info}'")
-                elif self.FILTER == "":
-                    answersFiltered.append([answer[0], info])
+        for answer in answers:
+            if self.FILTER and self.FILTER in str(answer[1]):
+                answersFiltered.append(answer)
+            elif not self.FILTER:
+                answersFiltered.append(answer)
 
         return answersFiltered
