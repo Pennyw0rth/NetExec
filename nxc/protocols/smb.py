@@ -1060,6 +1060,16 @@ class smb(connection):
 
     @requires_admin
     def tasklist(self):
+        # Formats a row to be printed on screen
+        def format_row(procInfo):
+            return template.format(
+                procInfo["ImageName"],
+                procInfo["UniqueProcessId"],
+                procInfo["SessionId"],
+                procInfo["pSid"],
+                "{:,} K".format(procInfo["WorkingSetSize"] // 1000),
+            )
+        
         try:
             with TSTS.LegacyAPI(self.conn, self.host, self.kerberos) as legacy:
                 try:
@@ -1077,15 +1087,24 @@ class smb(connection):
                 template = "{: <%d} {: <8} {: <11} {: <%d} {: >12}" % (maxImageNameLen, maxSidLen)  # noqa: UP031
                 self.logger.highlight(template.format("Image Name", "PID", "Session#", "SID", "Mem Usage"))
                 self.logger.highlight(template.replace(": ", ":=").format("", "", "", "", ""))
+                found_task = False
+
+                # For each process on the remote host
                 for procInfo in res:
-                    row = template.format(
-                        procInfo["ImageName"],
-                        procInfo["UniqueProcessId"],
-                        procInfo["SessionId"],
-                        procInfo["pSid"],
-                        "{:,} K".format(procInfo["WorkingSetSize"] // 1000),
-                    )
-                    self.logger.highlight(row)
+                    # If args.tasklist is not True then a process name was supplied
+                    if self.args.tasklist is not True:
+                        # So we look for it and print its information if found
+                        if self.args.tasklist.lower() == procInfo["ImageName"].lower():
+                            found_task = True          
+                            self.logger.highlight(format_row(procInfo))
+                    # Else, no process was supplied, we print the entire list of remote processes
+                    else:
+                        self.logger.highlight(format_row(procInfo))
+
+                # If a process was suppliad to args.tasklist and it was not found, we print a fail message
+                if self.args.tasklist is not True and not found_task:
+                    self.logger.fail(f"Didn't find process {self.args.tasklist}")
+            
         except SessionError:
             self.logger.fail("Cannot list remote tasks, RDP is probably disabled.")
 
