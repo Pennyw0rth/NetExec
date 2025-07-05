@@ -1067,7 +1067,7 @@ class smb(connection):
                 procInfo["UniqueProcessId"],
                 procInfo["SessionId"],
                 procInfo["pSid"],
-                "{:,} K".format(procInfo["WorkingSetSize"] // 1000),
+                f"{procInfo['WorkingSetSize'] // 1000:,} K",
             )
         
         try:
@@ -1084,7 +1084,7 @@ class smb(connection):
                 self.logger.success("Enumerated processes")
                 maxImageNameLen = max(len(i["ImageName"]) for i in res)
                 maxSidLen = max(len(i["pSid"]) for i in res)
-                template = "{: <%d} {: <8} {: <11} {: <%d} {: >12}" % (maxImageNameLen, maxSidLen)  # noqa: UP031
+                template = f"{{: <{maxImageNameLen}}} {{: <8}} {{: <11}} {{: <{maxSidLen}}} {{: >12}}"
                 self.logger.highlight(template.format("Image Name", "PID", "Session#", "SID", "Mem Usage"))
                 self.logger.highlight(template.replace(": ", ":=").format("", "", "", "", ""))
                 found_task = False
