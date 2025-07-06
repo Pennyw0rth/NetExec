@@ -1024,6 +1024,7 @@ class smb(connection):
             self.logger.fail("Couldn't connect to remote host")
             return False
 
+        self.logger.display(f"Dumping LSASS using {self.args.lsass} method")
         dumper = Dumper(session, timeout=10, time_between_commands=7).load(self.args.lsass)
         if dumper is None:
             self.logger.fail(f"Unable to load dump method '{self.args.lsass}'")
