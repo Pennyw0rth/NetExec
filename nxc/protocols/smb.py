@@ -1203,10 +1203,10 @@ class smb(connection):
         for share in permissions:
             name = share["name"]
             remark = share["remark"]
-            perms = share["access"]
+            perms = ",".join(share["access"])
             if self.args.filter_shares and not any(x in perms for x in self.args.filter_shares):
                 continue
-            self.logger.highlight(f"{name:<15} {','.join(perms):<15} {remark}")
+            self.logger.highlight(f"{name:<15} {perms:<15} {remark}")
         return permissions
 
     def dir(self):
