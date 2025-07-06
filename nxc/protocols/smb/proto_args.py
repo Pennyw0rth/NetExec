@@ -36,7 +36,7 @@ def proto_args(parser, parents):
     cred_gathering_group.add_argument("--pvk", action="store", help="DPAPI option. File with domain backupkey")
     cred_gathering_group.add_argument("--enabled", action="store_true", help="Only dump enabled targets from DC")
     cred_gathering_group.add_argument("--user", dest="userntds", type=str, help="Dump selected user from DC")
-    cred_gathering_group.add_argument("--lsass", type=str, default="comsvcs", choices=Dumper.list_dump_methods(), help="Dumps the LSASS process based on specified method (default method is comsvcs)")
+    cred_gathering_group.add_argument("--lsass", type=str, const="comsvcs", nargs="?", choices=Dumper.list_dump_methods(), help="Dumps the LSASS process based on specified method (default is comsvcs)")
 
     mapping_enum_group = smb_parser.add_argument_group("Mapping/Enumeration", "Options for Mapping/Enumerating")
     mapping_enum_group.add_argument("--shares", action="store_true", help="Enumerate shares and access")
