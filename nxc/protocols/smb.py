@@ -1522,6 +1522,7 @@ class smb(connection):
             self.logger.debug(f"StringBinding {string_binding}")
             rpc_transport = transport.DCERPCTransportFactory(string_binding)
             rpc_transport.setRemoteHost(self.host)
+            rpc_transport.setRemoteName(self.hostname or self.host)
 
             if hasattr(rpc_transport, "set_credentials"):
                 # This method exists only for selected protocol sequences.
