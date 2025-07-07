@@ -21,5 +21,6 @@ def proto_args(parser, parents):
     cgroup.add_argument("-x", metavar="COMMAND", dest="execute", help="execute the specified command")
     cgroup.add_argument("-X", metavar="PS_COMMAND", dest="ps_execute", help="execute the specified PowerShell command")
     cgroup.add_argument("--cmd-delay", type=int, default=3, help="Sleep time before executing command")
+    cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
 
     return parser
