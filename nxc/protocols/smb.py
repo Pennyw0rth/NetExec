@@ -1531,16 +1531,16 @@ class smb(connection):
             max_rid = int(self.args.rid_brute)
 
         KNOWN_PROTOCOLS = {
-            135: {"bindstr": rf"ncacn_ip_tcp:{self.host}"},
-            139: {"bindstr": rf"ncacn_np:{self.host}[\pipe\lsarpc]"},
-            445: {"bindstr": rf"ncacn_np:{self.host}[\pipe\lsarpc]"},
+            135: {"bindstr": rf"ncacn_ip_tcp:{self.remoteName}"},
+            139: {"bindstr": rf"ncacn_np:{self.remoteName}[\pipe\lsarpc]"},
+            445: {"bindstr": rf"ncacn_np:{self.remoteName}[\pipe\lsarpc]"},
         }
 
         try:
             string_binding = KNOWN_PROTOCOLS[self.port]["bindstr"]
             self.logger.debug(f"StringBinding {string_binding}")
             rpc_transport = transport.DCERPCTransportFactory(string_binding)
-            rpc_transport.setRemoteHost(self.host)
+            rpc_transport.setRemoteHost(self.remoteName)
 
             if hasattr(rpc_transport, "set_credentials"):
                 # This method exists only for selected protocol sequences.
