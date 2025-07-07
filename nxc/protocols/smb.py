@@ -978,6 +978,7 @@ class smb(connection):
             except SessionError:
                 self.logger.fail("RDP is probably not enabled, cannot list remote IPv4 addresses.")
 
+
     @requires_admin
     def qwinsta(self):
         import os
@@ -1040,7 +1041,7 @@ class smb(connection):
         if self.args.qwinsta and self.args.qwinsta is not True:
             arg = self.args.qwinsta
             if os.path.isfile(arg):
-                with open(arg, "r") as f:
+                with open(arg) as f:
                     usernames = [line.strip().lower() for line in f if line.strip()]
             else:
                 usernames = [arg.lower()]
@@ -1052,9 +1053,8 @@ class smb(connection):
             domain = sessions[i]["Domain"]
             user_full = f"{domain}\\{username}" if username else ""
 
-            if usernames:
-                if username.lower() not in usernames:
-                    continue
+            if usernames and username.lower() not in usernames:
+                continue
 
             found_user = True
 
