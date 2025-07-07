@@ -1515,7 +1515,7 @@ class smb(connection):
             135: {"bindstr": rf"ncacn_ip_tcp:{self.remoteName}"},
             139: {"bindstr": rf"ncacn_np:{self.remoteName}[\pipe\lsarpc]"},
             445: {"bindstr": rf"ncacn_np:{self.remoteName}[\pipe\lsarpc]"},
-         }
+        }
 
         try:
             string_binding = KNOWN_PROTOCOLS[self.port]["bindstr"]
