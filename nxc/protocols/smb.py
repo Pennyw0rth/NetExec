@@ -978,7 +978,6 @@ class smb(connection):
             except SessionError:
                 self.logger.fail("RDP is probably not enabled, cannot list remote IPv4 addresses.")
 
-
     @requires_admin
     def qwinsta(self):
         import os
