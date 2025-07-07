@@ -57,7 +57,6 @@ class NXCModule:
     name = "schtask_as"
     description = "Remotely execute a scheduled task as a logged on user"
     supported_protocols = ["smb"]
-    opsec_safe = True
     multiple_hosts = False
 
     def on_admin_login(self, context, connection):

@@ -12,7 +12,6 @@ class NXCModule:
     name = "reg-winlogon"
     description = "Collect autologon credential stored in the registry"
     supported_protocols = ["smb"]
-    opsec_safe = True
     multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):

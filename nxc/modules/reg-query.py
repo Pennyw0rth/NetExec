@@ -7,7 +7,6 @@ class NXCModule:
     name = "reg-query"
     description = "Performs a registry query on the machine"
     supported_protocols = ["smb"]
-    opsec_safe = True
     multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):

@@ -8,7 +8,6 @@ class NXCModule:
     name = "aws-credentials"
     description = "Search for aws credentials files."
     supported_protocols = ["ssh", "smb", "winrm"]
-    opsec_safe = True
     multiple_hosts = True
 
     def __init__(self):

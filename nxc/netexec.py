@@ -12,7 +12,7 @@ from nxc.first_run import first_run_setup
 from nxc.paths import CONFIG_PATH, NXC_PATH, WORKSPACE_DIR
 from nxc.console import nxc_console
 from nxc.logger import nxc_logger
-from nxc.config import nxc_config, nxc_workspace, config_log, ignore_opsec
+from nxc.config import nxc_config, nxc_workspace, config_log
 from nxc.database import create_db_engine
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
@@ -189,15 +189,6 @@ def main():
 
             nxc_logger.debug(f"Loading module for sanity check {m} at path {modules[m]['path']}")
             module = loader.init_module(modules[m]["path"])
-
-            if not module.opsec_safe:
-                if ignore_opsec:
-                    nxc_logger.debug("ignore_opsec is set in the configuration, skipping prompt")
-                    nxc_logger.display("Ignore OPSEC in configuration is set and OPSEC unsafe module loaded")
-                else:
-                    ans = input(highlight(f"[!] Module is not opsec safe, are you sure you want to run this? [Y/n] For global configuration, change ignore_opsec value to True on {CONFIG_PATH}", "red"))
-                    if ans.lower() not in ["y", "yes", ""]:
-                        exit(1)
 
             if not module.multiple_hosts and len(targets) > 1:
                 ans = input(highlight("[!] Running this module on multiple hosts doesn't really make any sense, are you sure you want to continue? [Y/n] ", "red"))

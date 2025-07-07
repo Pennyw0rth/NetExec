@@ -7,7 +7,6 @@ class NXCModule:
     name = "install_elevated"
     description = "Checks for AlwaysInstallElevated"
     supported_protocols = ["smb"]
-    opsec_safe = True
     multiple_hosts = True
 
     def options(self, context, module_options):

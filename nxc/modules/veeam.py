@@ -15,7 +15,6 @@ class NXCModule:
     name = "veeam"
     description = "Extracts credentials from local Veeam SQL Database"
     supported_protocols = ["smb"]
-    opsec_safe = True
     multiple_hosts = True
 
     def __init__(self):
