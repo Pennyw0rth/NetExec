@@ -1966,7 +1966,7 @@ class smb(connection):
         def add_ntds_hash(ntds_hash, host_id):
             add_ntds_hash.ntds_hashes += 1
             if "history" in ntds_hash.lower():
-                self.logger.highlight(f"[HISTORY] {ntds_hash}")
+                self.logger.highlight(ntds_hash)
             else:
                 if self.args.enabled:
                     if "Enabled" in ntds_hash:
@@ -1998,7 +1998,7 @@ class smb(connection):
         add_ntds_hash.ntds_hashes = 0
         add_ntds_hash.added_to_db = 0
 
-        NTDSHistory = False  
+        NTDSHistory = False
 
         if self.remote_ops:
             try:
