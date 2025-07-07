@@ -978,7 +978,6 @@ class smb(connection):
             except SessionError:
                 self.logger.fail("RDP is probably not enabled, cannot list remote IPv4 addresses.")
 
-
     @requires_admin
     def qwinsta(self):
         import os
@@ -1081,11 +1080,6 @@ class smb(connection):
             self.logger.success("Enumerated qwinsta sessions")
             for row in result:
                 self.logger.highlight(row)
-        else:
-            if usernames:
-                self.logger.fail(f"No user session found matching: {', '.join(usernames)}")
-            else:
-                self.logger.fail("No sessions found")
 
     @requires_admin
     def tasklist(self):
