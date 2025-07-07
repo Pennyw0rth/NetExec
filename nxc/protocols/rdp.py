@@ -32,7 +32,6 @@ class rdp(connection):
         self.domain = None
         self.server_os = None
         self.iosettings = RDPIOSettings()
-        self.iosettings.channels = []
         self.iosettings.video_out_format = VIDEO_FORMAT.RAW
         self.iosettings.clipboard_use_pyperclip = False
         self.protoflags_nla = [
@@ -407,7 +406,9 @@ class rdp(connection):
     
     async def execute_cmd(self, payload, encoding=None, capture_screenshot=False):
         """Execute a command using cmd.exe"""
-        self.logger.debug(f"Executing command: {payload}")
+        # Append | clip to send output to clipboard
+        payload_with_clip = f"{payload} | clip & exit"
+        self.logger.debug(f"Executing command: {payload_with_clip}")
         
         # Create a connection
         try:
@@ -416,6 +417,28 @@ class rdp(connection):
         except Exception as e:
             self.logger.debug(f"Error connecting to RDP: {e!s}")
             return None
+
+        self.logger.debug("Waiting for clipboard to be ready...")
+        clipboard_ready = False
+        await asyncio.sleep(self.args.cmd_delay)
+
+        timeout_counter = 0
+        while not clipboard_ready and timeout_counter < 100:  # 10 second timeout
+            try:
+                data = await asyncio.wait_for(self.conn.ext_out_queue.get(), timeout=0.1)
+                if hasattr(data, "type") and data.type.name == "CLIPBOARD_READY":
+                    clipboard_ready = True
+                    self.logger.debug("Clipboard is ready!")
+                    break
+            except asyncio.TimeoutError:
+                timeout_counter += 1
+                continue
+            except Exception as e:
+                self.logger.debug(f"Error waiting for clipboard: {e!s}")
+                break
+        
+        if not clipboard_ready:
+            self.logger.fail("Warning: Clipboard may not be fully initialized, no output can be retrieved")
         
         # Wait for desktop to be available
         await asyncio.sleep(self.args.cmd_delay)
@@ -438,41 +461,27 @@ class rdp(connection):
                 await self._send_enter()
                 await asyncio.sleep(self.args.cmd_delay)
             
-            # Type the command
-            self.logger.debug(f"Typing command: {payload}")
-            await self._send_keystrokes(payload)
+            # Type the command with | clip
+            self.logger.debug(f"Typing command: {payload_with_clip}")
+            await self._send_keystrokes(payload_with_clip)
             await self._send_enter()
             
+            # Wait for command to execute
             await asyncio.sleep(self.args.cmd_delay)
-            
-            # Take a screenshot if requested
-            if capture_screenshot and self.conn is not None:
-                self.logger.highlight("Waiting for screen to update...")
-                await asyncio.sleep(self.args.screentime)  # Additional wait to ensure screen is updated
-                
-                self.logger.debug(f"Desktop buffer has data: {self.conn.desktop_buffer_has_data}")
-                if self.conn.desktop_buffer_has_data:
-                    try:
-                        self.logger.debug("Capturing command output screenshot")
-                        buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-                        screenshots_dir = os.path.expanduser("~/.nxc/screenshots")
-                        os.makedirs(screenshots_dir, exist_ok=True)  # Ensure the directory exists
-                        filename = os.path.join(screenshots_dir, f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
-                        buffer.save(filename, "png")
-                        self.logger.highlight(f"Command output screenshot saved: {filename}")
-                    except Exception as e:
-                        self.logger.debug(f"Error taking screenshot: {e!s}")
-                else:
-                    self.logger.debug("No desktop buffer data available for screenshot")
 
-            # Exit CMD
-            self.logger.debug("Exiting CMD")
-            await self._send_keystrokes("exit")
-            await self._send_enter()
-            await asyncio.sleep(0.5)
+            # Get the current clipboard text
+            self.logger.debug("Getting clipboard content...")
+            clipboard_text = await self.conn.get_current_clipboard_text()
             
+            if clipboard_text:
+                self.logger.debug("Command output retrieved from clipboard:")
+                for line in clipboard_text.lstrip().strip("\n").splitlines():
+                    self.logger.highlight(line)
+            else:
+                self.logger.warning("Clipboard is empty or contains non-text data")
+
             self.logger.debug("Command execution completed")
-            return True
+            return clipboard_text
             
         finally:
             # Always clean up the connection
@@ -485,7 +494,9 @@ class rdp(connection):
     
     async def execute_ps(self, payload, capture_screenshot=False):
         """Execute a command using PowerShell"""
-        self.logger.debug(f"Executing PowerShell command: {payload}")
+        # Append | clip to send output to clipboard
+        payload_with_clip = f"{payload} | clip & exit"
+        self.logger.debug(f"Executing PowerShell command: {payload_with_clip}")
         
         # Create a connection
         try:
@@ -494,6 +505,28 @@ class rdp(connection):
         except Exception as e:
             self.logger.debug(f"Error connecting to RDP: {e!s}")
             return None
+
+        self.logger.debug("Waiting for clipboard to be ready...")
+        clipboard_ready = False
+        await asyncio.sleep(self.args.cmd_delay)
+
+        timeout_counter = 0
+        while not clipboard_ready and timeout_counter < 100:  # 10 second timeout
+            try:
+                data = await asyncio.wait_for(self.conn.ext_out_queue.get(), timeout=0.1)
+                if hasattr(data, "type") and data.type.name == "CLIPBOARD_READY":
+                    clipboard_ready = True
+                    self.logger.debug("Clipboard is ready!")
+                    break
+            except asyncio.TimeoutError:
+                timeout_counter += 1
+                continue
+            except Exception as e:
+                self.logger.debug(f"Error waiting for clipboard: {e!s}")
+                break
+        
+        if not clipboard_ready:
+            self.logger.fail("Warning: Clipboard may not be fully initialized, no output can be retrieved")
         
         # Wait for desktop to be available
         await asyncio.sleep(self.args.cmd_delay)
@@ -516,42 +549,27 @@ class rdp(connection):
                 await self._send_enter()
                 await asyncio.sleep(self.args.cmd_delay)
             
-            # Type the PowerShell command
-            self.logger.debug(f"Typing PowerShell command: {payload}")
-            await self._send_keystrokes(payload)
+            # Type the PowerShell command with | clip
+            self.logger.debug(f"Typing PowerShell command: {payload_with_clip}")
+            await self._send_keystrokes(payload_with_clip)
             await self._send_enter()
             
-            # Wait longer for command to complete execution
-            await asyncio.sleep(self.args.cmd_delay)  # Increased wait time to ensure command completes
+            # Wait for command to execute
+            await asyncio.sleep(self.args.cmd_delay)
+
+            # Get the current clipboard text
+            self.logger.debug("Getting clipboard content...")
+            clipboard_text = await self.conn.get_current_clipboard_text()
             
-            # Take a screenshot if requested
-            if capture_screenshot and self.conn is not None:
-                self.logger.highlight("Waiting for screen to update...")
-                await asyncio.sleep(self.args.screentime)  # Additional wait to ensure screen is updated
-                
-                self.logger.debug(f"Desktop buffer has data: {self.conn.desktop_buffer_has_data}")
-                if self.conn.desktop_buffer_has_data:
-                    try:
-                        self.logger.debug("Capturing PowerShell command output screenshot")
-                        buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-                        screenshots_dir = os.path.expanduser("~/.nxc/screenshots")
-                        os.makedirs(screenshots_dir, exist_ok=True)  # Ensure the directory exists
-                        filename = os.path.join(screenshots_dir, f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
-                        buffer.save(filename, "png")
-                        self.logger.highlight(f"PowerShell command output screenshot saved: {filename}")
-                    except Exception as e:
-                        self.logger.debug(f"Error taking screenshot: {e!s}")
-                else:
-                    self.logger.debug("No desktop buffer data available for screenshot")
-            
-            # Exit PowerShell
-            self.logger.debug("Exiting PowerShell")
-            await self._send_keystrokes("exit")
-            await self._send_enter()
-            await asyncio.sleep(0.5)
-            
-            self.logger.debug("PowerShell command execution completed")
-            return True
+            if clipboard_text:
+                self.logger.debug("PowerShell command output retrieved from clipboard:")
+                for line in clipboard_text.strip("\n"):
+                    self.logger.highlight(line)
+            else:
+                self.logger.warning("Clipboard is empty or contains non-text data")
+
+            self.logger.debug("Command execution completed")
+            return clipboard_text
             
         finally:
             if self.conn is not None:
@@ -578,16 +596,16 @@ class rdp(connection):
         if capture_screenshot:
             self.logger.info("Will capture screenshot of command output")
 
-        self.logger.success(f"Executing {shell_type} command: {payload} with delay {self.args.cmd_delay} seconds")
+        self.logger.success(f"Executing command: {payload} with delay {self.args.cmd_delay} seconds")
         
         try:
             result = asyncio.run(self.execute_cmd(payload, capture_screenshot=capture_screenshot)) if shell_type == "cmd" else asyncio.run(self.execute_ps(payload, capture_screenshot=capture_screenshot))
             
             if result:
-                self.logger.success("Command execution completed")
+                self.logger.debug("Command execution completed")
             return result
         except Exception as e:
-            self.logger.debug(f"Command execution error: {e!s}")
+            self.logger.error(f"Command execution error: {e!s}")
             if shell_type == "cmd":
                 self.logger.info("Cannot execute command via cmd - now switching to PowerShell to attempt execution")
                 try:
