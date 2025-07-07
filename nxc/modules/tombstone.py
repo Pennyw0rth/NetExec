@@ -10,7 +10,7 @@ from ldap3 import MODIFY_REPLACE, MODIFY_DELETE
 class NXCModule:
     """Module by Fabrizzio: @Fabrizzio53"""
 
-    name = "gravedigger"
+    name = "tombstone"
     description = "Query, restore and delete AD object"
     supported_protocols = ["ldap"]
     opsec_safe = True
@@ -27,11 +27,11 @@ class NXCModule:
         ID: The id of which object you want to restore.
         DN: The DN of which object you want to delete.
         SCHEME: Force to use ldap or ldaps when trying to restore or delete an object, by default it uses ldaps.
-        Usage: nxc ldap $DC-IP -u Username -p Password -M gravedigger"
-               nxc ldap $DC-IP -u Username -p Password -M gravedigger -o ACTION=restore ID=5ad162c9-97b1-4a90-a17c-5c2aedb7d1e3
-               nxc ldap $DC-IP -u Username -p Password -M gravedigger -o ACTION=delete DN="CN=test,OU=Users,DC=test,DC=local"
-               nxc ldap $DC-IP -u Username -p Password -M gravedigger -o ACTION=restore ID=5ad162c9-97b1-4a90-a17c-5c2aedb7d1e3 SCHEME=ldap
-               nxc ldap $DC-IP -u Username -p Password -M gravedigger -o ACTION=query
+        Usage: nxc ldap $DC-IP -u Username -p Password -M tombstone"
+               nxc ldap $DC-IP -u Username -p Password -M tombstone -o ACTION=restore ID=5ad162c9-97b1-4a90-a17c-5c2aedb7d1e3
+               nxc ldap $DC-IP -u Username -p Password -M tombstone -o ACTION=delete DN="CN=test,OU=Users,DC=test,DC=local"
+               nxc ldap $DC-IP -u Username -p Password -M tombstone -o ACTION=restore ID=5ad162c9-97b1-4a90-a17c-5c2aedb7d1e3 SCHEME=ldap
+               nxc ldap $DC-IP -u Username -p Password -M tombstone -o ACTION=query
         """
         self.action = "query"
         self.id = ""
@@ -47,11 +47,11 @@ class NXCModule:
             self.ssl = False
         
         if "ACTION" in module_options and self.action == "restore" and "ID" not in module_options:
-            context.log.error("ID is necessary when calling gravedigger with the restore action")
+            context.log.error("ID is necessary when calling tombstone with the restore action")
             sys.exit(1)
 
         if "ACTION" in module_options and self.action == "delete" and "DN" not in module_options:
-            context.log.error("DN is necessary when calling gravedigger with the delete action")
+            context.log.error("DN is necessary when calling tombstone with the delete action")
             sys.exit(1)
 
     def domain_to_dn(self, domain):
