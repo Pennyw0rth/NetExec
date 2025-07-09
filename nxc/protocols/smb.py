@@ -1198,7 +1198,7 @@ class smb(connection):
                     self.logger.debug(f"Error adding share: {error}")
 
         if self.args.filter_shares:
-            self.logger.display("[ REMOVED ] Use the --shares read,write options instead.")
+            self.logger.display("[REMOVED] Use the --shares read,write options instead.")
 
         self.logger.display("Enumerated shares")
         self.logger.highlight(f"{'Share':<15} {'Permissions':<15} {'Remark'}")

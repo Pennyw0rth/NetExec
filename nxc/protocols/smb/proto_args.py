@@ -37,7 +37,7 @@ def proto_args(parser, parents):
     cred_gathering_group.add_argument("--user", dest="userntds", type=str, help="Dump selected user from DC")
 
     mapping_enum_group = smb_parser.add_argument_group("Mapping/Enumeration", "Options for Mapping/Enumerating")
-    mapping_enum_group.add_argument("--shares", type=str, nargs="?", const="read,write", help="Enumerate shares and access, filter on specified argument (read ; write ; read,write)")
+    mapping_enum_group.add_argument("--shares", type=str, nargs="?", const="", help="Enumerate shares and access, filter on specified argument (read ; write ; read,write)")
     mapping_enum_group.add_argument("--dir", nargs="?", type=str, const="", help="List the content of a path (default path: '%(const)s')")
     mapping_enum_group.add_argument("--interfaces", action="store_true", help="Enumerate network interfaces")
     mapping_enum_group.add_argument("--no-write-check", action="store_true", help="Skip write check on shares (avoid leaving traces when missing delete permissions)")
