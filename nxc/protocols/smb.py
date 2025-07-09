@@ -1242,16 +1242,20 @@ class smb(connection):
                     error = get_error_string(e)
                     self.logger.debug(f"Error adding share: {error}")
 
+        if self.args.filter_shares:
+            self.logger.display("[REMOVED] Use the --shares read,write options instead.")
+
         self.logger.display("Enumerated shares")
         self.logger.highlight(f"{'Share':<15} {'Permissions':<15} {'Remark'}")
         self.logger.highlight(f"{'-----':<15} {'-----------':<15} {'------'}")
+        
         for share in permissions:
             name = share["name"]
             remark = share["remark"]
-            perms = share["access"]
-            if self.args.filter_shares and not any(x in perms for x in self.args.filter_shares):
+            perms = ",".join(share["access"])
+            if self.args.shares and self.args.shares.lower() not in perms.lower():
                 continue
-            self.logger.highlight(f"{name:<15} {','.join(perms):<15} {remark}")
+            self.logger.highlight(f"{name:<15} {perms:<15} {remark}")
         return permissions
 
     def dir(self):
