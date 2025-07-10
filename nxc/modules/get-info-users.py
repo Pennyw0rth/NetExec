@@ -20,10 +20,8 @@ class NXCModule:
 
     def on_login(self, context, connection):
         # Building the search filter
-        searchFilter = "(info=*)"
-
         resp = connection.search(
-            searchFilter=searchFilter,
+            searchFilter="(info=*)",
             attributes=["sAMAccountName", "info"]
         )
 
@@ -32,23 +30,17 @@ class NXCModule:
         answers = [[x["sAMAccountName"], x["info"]] for x in resp_parsed]
 
         answers = self.filter_answer(context, answers)
-        if len(answers) > 0:
+        if answers:
             context.log.success("Found following users: ")
             for answer in answers:
                 context.log.highlight(f"User: {answer[0]} Info: {answer[1]}")
 
     def filter_answer(self, context, answers):
-        answersFiltered = []
         # No option to filter
-        if self.FILTER == "":
+        if not self.FILTER:
             context.log.debug("No filter option enabled")
             return answers
         # Filter
         context.log.debug(f"Filter info field with: {self.FILTER}")
-        for answer in answers:
-            if self.FILTER and self.FILTER in str(answer[1]):
-                answersFiltered.append(answer)
-            elif not self.FILTER:
-                answersFiltered.append(answer)
+        return [answer for answer in answers if self.FILTER in answer[1]]
 
-        return answersFiltered
