@@ -53,7 +53,7 @@ def proto_args(parser, parents):
     mapping_enum_group.add_argument("--local-groups", nargs="?", const="", metavar="GROUP", help="Enumerate local groups, if a group is specified then its members are Enumerated")
     mapping_enum_group.add_argument("--pass-pol", action="store_true", help="dump password policy")
     mapping_enum_group.add_argument("--rid-brute", nargs="?", type=int, const=4000, metavar="MAX_RID", help="Enumerate users by bruteforcing RIDs")
-    mapping_enum_group.add_argument("--qwinsta", action="store_true", help="Enumerate RDP connections")
+    mapping_enum_group.add_argument("--qwinsta", type=str, nargs="?", const="", help="Enumerate user sessions. If a username is given, filter for it; if a file is given, filter for listed usernames. If no value is given, list all.")
     mapping_enum_group.add_argument("--tasklist", type=str, nargs="?", const=True, help="Enumerate running processes and filter for the specified one if specified")
     mapping_enum_group.add_argument("--taskkill", type=str, help="Kills a specific PID or a proces name's PID's")
     
