@@ -1,5 +1,3 @@
-from impacket.ldap import ldap as ldap_impacket
-from nxc.logger import nxc_logger
 from nxc.parsers.ldap_results import parse_result_attributes
 
 
@@ -8,9 +6,8 @@ class NXCModule:
     Get the info field of users
     Module by @sepauli
     """
-
     name = "get-info-users"
-    description = "Get the info field of the users. May contained password"
+    description = "Get the info field of all users. May contain password"
     supported_protocols = ["ldap"]
     opsec_safe = True
     multiple_hosts = True
@@ -25,7 +22,6 @@ class NXCModule:
         # Building the search filter
         searchFilter = "(info=*)"
 
-        context.log.debug(f"Search Filter={searchFilter}")
         resp = connection.search(
             searchFilter=searchFilter,
             attributes=["sAMAccountName", "info"]
@@ -33,7 +29,7 @@ class NXCModule:
 
         context.log.debug(f"Total of records returned {len(resp)}")
         resp_parsed = parse_result_attributes(resp)
-        answers = [[x["sAMAccountName"], x.get("info")] for x in resp_parsed if x.get("info")]
+        answers = [[x["sAMAccountName"], x["info"]] for x in resp_parsed]
 
         answers = self.filter_answer(context, answers)
         if len(answers) > 0:
@@ -43,12 +39,12 @@ class NXCModule:
 
     def filter_answer(self, context, answers):
         answersFiltered = []
-         # No option to filter
+        # No option to filter
         if self.FILTER == "":
             context.log.debug("No filter option enabled")
             return answers
         # Filter
-        context.log.debug("Prepare to filter")
+        context.log.debug(f"Filter info field with: {self.FILTER}")
         for answer in answers:
             if self.FILTER and self.FILTER in str(answer[1]):
                 answersFiltered.append(answer)
