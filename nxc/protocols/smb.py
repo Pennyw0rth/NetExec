@@ -1031,11 +1031,11 @@ class smb(connection):
             CONNTIME="",
             DISCTIME="",
         )
-
         result = [header, header2]
 
+        # Check if we need to filter for usernames
         usernames = None
-        if self.args.qwinsta and self.args.qwinsta is not True:
+        if self.args.qwinsta:
             arg = self.args.qwinsta
             if os.path.isfile(arg):
                 with open(arg) as f:
