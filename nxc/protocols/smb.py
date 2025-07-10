@@ -1003,14 +1003,14 @@ class smb(connection):
         maxStateLen = max(len(sessions[i]["state"]) + 1 for i in sessions)
         maxStateLen = max(maxStateLen, len("STATE") + 1)
 
-        template = ("{SESSIONNAME: <%d} "
-                    "{USERNAME: <%d} "
-                    "{ID: <%d} "
+        template = (f"{{SESSIONNAME: <{maxSessionNameLen}}} "
+                    f"{{USERNAME: <{maxUsernameLen}}} "
+                    f"{{ID: <{maxIdLen}}} "
                     "{IPv4: <16} "
-                    "{STATE: <%d} "
+                    f"{{STATE: <{maxStateLen}}} "
                     "{DSTATE: <9} "
                     "{CONNTIME: <20} "
-                    "{DISCTIME: <20} ") % (maxSessionNameLen, maxUsernameLen, maxIdLen, maxStateLen)
+                    "{DISCTIME: <20} ")
 
         header = template.format(
             SESSIONNAME="SESSIONNAME",
