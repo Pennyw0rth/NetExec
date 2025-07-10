@@ -979,6 +979,32 @@ class smb(connection):
                 self.logger.fail("RDP is probably not enabled, cannot list remote IPv4 addresses.")
 
     @requires_admin
+    def taskkill(self):
+        with TSTS.LegacyAPI(self.conn, self.host, self.kerberos) as legacy:
+            handle = legacy.hRpcWinStationOpenServer()
+            if self.args.taskkill.isdigit():
+                pidList = [int(self.args.taskkill)]
+            else:
+                res = legacy.hRpcWinStationGetAllProcesses(handle)
+                if not res:
+                    self.logger.error("Could not get process list")
+                    return
+
+                pidList = [i["UniqueProcessId"] for i in res if i["ImageName"].lower() == self.args.taskkill.lower()]
+                if not pidList:
+                    self.logger.fail(f"Could not find process named {self.args.taskkill}")
+                    return
+
+            for pid in pidList:
+                try:
+                    if legacy.hRpcWinStationTerminateProcess(handle, pid)["ErrorCode"]:
+                        self.logger.highlight(f"Terminated PID {pid} ({self.args.taskkill})")
+                    else:
+                        self.logger.fail(f"Failed terminating PID {pid}")
+                except Exception as e:
+                    self.logger.exception(f"Error terminating PID {pid}: {e}")
+
+    @requires_admin
     def qwinsta(self):
         desktop_states = {
             "WTS_SESSIONSTATE_UNKNOWN": "",
@@ -1077,6 +1103,16 @@ class smb(connection):
 
     @requires_admin
     def tasklist(self):
+        # Formats a row to be printed on screen
+        def format_row(procInfo):
+            return template.format(
+                procInfo["ImageName"],
+                procInfo["UniqueProcessId"],
+                procInfo["SessionId"],
+                procInfo["pSid"],
+                f"{procInfo['WorkingSetSize'] // 1000:,} K",
+            )
+        
         try:
             with TSTS.LegacyAPI(self.conn, self.host, self.kerberos) as legacy:
                 try:
@@ -1091,18 +1127,27 @@ class smb(connection):
                 self.logger.success("Enumerated processes")
                 maxImageNameLen = max(len(i["ImageName"]) for i in res)
                 maxSidLen = max(len(i["pSid"]) for i in res)
-                template = "{: <%d} {: <8} {: <11} {: <%d} {: >12}" % (maxImageNameLen, maxSidLen)  # noqa: UP031
+                template = f"{{: <{maxImageNameLen}}} {{: <8}} {{: <11}} {{: <{maxSidLen}}} {{: >12}}"
                 self.logger.highlight(template.format("Image Name", "PID", "Session#", "SID", "Mem Usage"))
                 self.logger.highlight(template.replace(": ", ":=").format("", "", "", "", ""))
+                found_task = False
+
+                # For each process on the remote host
                 for procInfo in res:
-                    row = template.format(
-                        procInfo["ImageName"],
-                        procInfo["UniqueProcessId"],
-                        procInfo["SessionId"],
-                        procInfo["pSid"],
-                        "{:,} K".format(procInfo["WorkingSetSize"] // 1000),
-                    )
-                    self.logger.highlight(row)
+                    # If args.tasklist is not True then a process name was supplied
+                    if self.args.tasklist is not True:
+                        # So we look for it and print its information if found
+                        if self.args.tasklist.lower() in procInfo["ImageName"].lower():
+                            found_task = True
+                            self.logger.highlight(format_row(procInfo))
+                    # Else, no process was supplied, we print the entire list of remote processes
+                    else:
+                        self.logger.highlight(format_row(procInfo))
+
+                # If a process was suppliad to args.tasklist and it was not found, we print a fail message
+                if self.args.tasklist is not True and not found_task:
+                    self.logger.fail(f"Didn't find process {self.args.tasklist}")
+            
         except SessionError:
             self.logger.fail("Cannot list remote tasks, RDP is probably disabled.")
 
@@ -1214,16 +1259,20 @@ class smb(connection):
                     error = get_error_string(e)
                     self.logger.debug(f"Error adding share: {error}")
 
+        if self.args.filter_shares:
+            self.logger.display("[REMOVED] Use the --shares read,write options instead.")
+
         self.logger.display("Enumerated shares")
         self.logger.highlight(f"{'Share':<15} {'Permissions':<15} {'Remark'}")
         self.logger.highlight(f"{'-----':<15} {'-----------':<15} {'------'}")
+        
         for share in permissions:
             name = share["name"]
             remark = share["remark"]
-            perms = share["access"]
-            if self.args.filter_shares and not any(x in perms for x in self.args.filter_shares):
+            perms = ",".join(share["access"])
+            if self.args.shares and self.args.shares.lower() not in perms.lower():
                 continue
-            self.logger.highlight(f"{name:<15} {','.join(perms):<15} {remark}")
+            self.logger.highlight(f"{name:<15} {perms:<15} {remark}")
         return permissions
 
     def dir(self):
@@ -1503,16 +1552,16 @@ class smb(connection):
             max_rid = int(self.args.rid_brute)
 
         KNOWN_PROTOCOLS = {
-            135: {"bindstr": rf"ncacn_ip_tcp:{self.host}"},
-            139: {"bindstr": rf"ncacn_np:{self.host}[\pipe\lsarpc]"},
-            445: {"bindstr": rf"ncacn_np:{self.host}[\pipe\lsarpc]"},
+            135: {"bindstr": rf"ncacn_ip_tcp:{self.remoteName}"},
+            139: {"bindstr": rf"ncacn_np:{self.remoteName}[\pipe\lsarpc]"},
+            445: {"bindstr": rf"ncacn_np:{self.remoteName}[\pipe\lsarpc]"},
         }
 
         try:
             string_binding = KNOWN_PROTOCOLS[self.port]["bindstr"]
             self.logger.debug(f"StringBinding {string_binding}")
             rpc_transport = transport.DCERPCTransportFactory(string_binding)
-            rpc_transport.setRemoteHost(self.host)
+            rpc_transport.setRemoteHost(self.remoteName)
 
             if hasattr(rpc_transport, "set_credentials"):
                 # This method exists only for selected protocol sequences.
