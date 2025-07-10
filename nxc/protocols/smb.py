@@ -688,7 +688,7 @@ class smb(connection):
         from impacket.dcerpc.v5 import nrpc, epm
 
         self.logger.debug("Performing authentication attempts...")
-        
+
         # First check if port 135 is open
         if self._is_port_open(135):
             self.logger.debug("Port 135 is open, attempting MSRPC connection...")
@@ -964,7 +964,7 @@ class smb(connection):
                     sessions[SessionId]["DisconnectTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["DisconnectTime"]
                     sessions[SessionId]["LogonTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["LogonTime"]
                     sessions[SessionId]["LastInputTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["LastInputTime"]
-            
+
             try:
                 with TSTS.RCMPublic(self.conn, self.host, self.kerberos) as rcm:
                     for SessionId in sessions:
@@ -992,6 +992,7 @@ class smb(connection):
 
         self.enumerate_sessions_info(sessions)
 
+        # Calculate max lengths for formatting
         maxSessionNameLen = max(len(sessions[i]["SessionName"]) + 1 for i in sessions)
         maxSessionNameLen = max(maxSessionNameLen, len("SESSIONNAME") + 1)
         maxUsernameLen = max(len(sessions[i]["Username"] + sessions[i]["Domain"]) + 1 for i in sessions) + 1
@@ -1001,6 +1002,7 @@ class smb(connection):
         maxStateLen = max(len(sessions[i]["state"]) + 1 for i in sessions)
         maxStateLen = max(maxStateLen, len("STATE") + 1)
 
+        # Create the template for formatting
         template = (f"{{SESSIONNAME: <{maxSessionNameLen}}} "
                     f"{{USERNAME: <{maxUsernameLen}}} "
                     f"{{ID: <{maxIdLen}}} "
@@ -1009,7 +1011,6 @@ class smb(connection):
                     "{DSTATE: <9} "
                     "{CONNTIME: <20} "
                     "{DISCTIME: <20} ")
-
         header = template.format(
             SESSIONNAME="SESSIONNAME",
             USERNAME="USERNAME",
@@ -1020,7 +1021,6 @@ class smb(connection):
             CONNTIME="ConnectTime",
             DISCTIME="DisconnectTime",
         )
-
         header2 = template.replace(" <", "=<").format(
             SESSIONNAME="",
             USERNAME="",
@@ -1043,17 +1043,14 @@ class smb(connection):
             else:
                 usernames = [arg.lower()]
 
-        found_user = False
-
         for i in sessions:
             username = sessions[i]["Username"]
             domain = sessions[i]["Domain"]
             user_full = f"{domain}\\{username}" if username else ""
 
+            # If usernames are provided, filter them
             if usernames and username.lower() not in usernames:
                 continue
-
-            found_user = True
 
             connectTime = sessions[i]["ConnectTime"]
             connectTime = connectTime.strftime(r"%Y/%m/%d %H:%M:%S") if connectTime.year > 1601 else "None"
@@ -1072,8 +1069,8 @@ class smb(connection):
                 DISCTIME=disconnectTime,
             )
             result.append(row)
-        
-        if found_user:
+
+        if len(result) > 2:
             self.logger.success("Enumerated qwinsta sessions")
             for row in result:
                 self.logger.highlight(row)
