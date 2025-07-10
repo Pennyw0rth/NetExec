@@ -980,8 +980,6 @@ class smb(connection):
 
     @requires_admin
     def qwinsta(self):
-        import os
-
         desktop_states = {
             "WTS_SESSIONSTATE_UNKNOWN": "",
             "WTS_SESSIONSTATE_LOCK": "Locked",
