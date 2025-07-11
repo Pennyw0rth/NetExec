@@ -18,7 +18,6 @@ class NXCModule:
     name = "enum_av"
     description = "Gathers information on all endpoint protection solutions installed on the the remote host(s) via LsarLookupNames (no privilege needed)"
     supported_protocols = ["smb"]
-    opsec_safe = True
     multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):

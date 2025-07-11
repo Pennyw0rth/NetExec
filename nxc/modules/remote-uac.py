@@ -7,7 +7,6 @@ class NXCModule:
     name = "remote-uac"
     description = "Enable or disable remote UAC"
     supported_protocols = ["smb"]
-    opsec_safe = True
     multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):

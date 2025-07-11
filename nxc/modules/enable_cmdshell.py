@@ -7,7 +7,6 @@ class NXCModule:
     name = "enable_cmdshell"
     description = "Enable or disable xp_cmdshell in MSSQL Server"
     supported_protocols = ["mssql"]
-    opsec_safe = False
     multiple_hosts = True
 
     def __init__(self):

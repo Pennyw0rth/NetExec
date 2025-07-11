@@ -7,7 +7,6 @@ class NXCModule:
     name = "mssql_coerce"
     description = "Execute arbitrary SQL commands on the target MSSQL server"
     supported_protocols = ["mssql"]
-    opsec_safe = True
     multiple_hosts = True
 
     def __init__(self):

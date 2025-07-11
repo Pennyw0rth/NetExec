@@ -6,7 +6,6 @@ class NXCModule:
     name = "masky"
     description = "Remotely dump domain user credentials via an ADCS and a KDC"
     supported_protocols = ["smb"]
-    opsec_safe = True
     multiple_hosts = True
 
     def options(self, context, module_options):

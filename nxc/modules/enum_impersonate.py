@@ -7,7 +7,6 @@ class NXCModule:
     name = "enum_impersonate"
     description = "Enumerate users with impersonation privileges"
     supported_protocols = ["mssql"]
-    opsec_safe = True
     multiple_hosts = True
 
     def __init__(self):

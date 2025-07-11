@@ -21,7 +21,6 @@ class NXCModule:
     name = "winscp"
     description = "Looks for WinSCP.ini files in the registry and default locations and tries to extract credentials."
     supported_protocols = ["smb"]
-    opsec_safe = True
     multiple_hosts = True
 
     def options(self, context, module_options):

@@ -13,7 +13,6 @@ class NXCModule:
     name = "get-desc-users"
     description = "Get description of the users. May contained password"
     supported_protocols = ["ldap"]
-    opsec_safe = True  # Does the module touch disk?
     multiple_hosts = True  # Does it make sense to run this module on multiple hosts at a time?
 
     def options(self, context, module_options):

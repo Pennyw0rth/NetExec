@@ -11,7 +11,6 @@ class NXCModule:
     name = "msol"
     description = "Dump MSOL cleartext password from the localDB on the Azure AD-Connect Server"
     supported_protocols = ["smb"]
-    opsec_safe = True
     multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):

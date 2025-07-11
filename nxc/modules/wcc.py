@@ -87,7 +87,6 @@ class NXCModule:
     name = "wcc"
     description = "Check various security configuration items on Windows machines"
     supported_protocols = ["smb"]
-    opsec_safe = True
     multiple_hosts = True
 
     def __init__(self):
