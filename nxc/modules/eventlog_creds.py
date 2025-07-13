@@ -14,7 +14,6 @@ class NXCModule:
     description = "Extracting Credentials From Windows Logs (Event ID: 4688 and SYSMON)"
     supported_protocols = ["smb"]  # Example: ['smb', 'mssql']
     opsec_safe = True  # Does the module touch disk?
-    multiple_hosts = True  # Does it make sense to run this module on multiple hosts at a time?
 
     def __init__(self):
         self.context = None
@@ -68,7 +67,7 @@ class NXCModule:
                 line_stripped = line.replace("/add", "") \
                     .replace("/active:yes", "") \
                     .replace("/delete", "") \
-                    .replace("/domain", "") \
+                    .replace("/domain", "")
                 # Remove command lines that were executed with nxc
                 line_stripped = re.sub(r"1> \\Windows\\Temp\\[\w]{6} 2>&1", "", line_stripped)
 

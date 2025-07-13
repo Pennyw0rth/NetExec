@@ -26,8 +26,7 @@ class NXCModule:
     description = "Check if host vulnerable to CVE-2019-1040"
     supported_protocols = ["smb"]
     opsec_safe = True
-    multiple_hosts = False
-
+    
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options

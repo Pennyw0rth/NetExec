@@ -8,8 +8,7 @@ class NXCModule:
     description = "Enumerate SQL Server logins (SQL, Domain, Local users)"
     supported_protocols = ["mssql"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def __init__(self):
         self.mssql_conn = None
         self.context = None

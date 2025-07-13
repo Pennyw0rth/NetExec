@@ -14,8 +14,7 @@ class NXCModule:
     description = "Exploit user in backup operator group to dump NTDS @mpgn_x64"
     supported_protocols = ["smb"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options

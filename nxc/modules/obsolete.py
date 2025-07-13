@@ -14,8 +14,7 @@ class NXCModule:
     description = "Extract all obsolete operating systems from LDAP"
     supported_protocols = ["ldap"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def ldap_time_to_datetime(self, ldap_time):
         """Convert an LDAP timestamp to a datetime object."""
         if ldap_time == "0":  # Account for never-set passwords

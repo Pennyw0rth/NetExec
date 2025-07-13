@@ -14,8 +14,7 @@ class NXCModule:
     description = "Extracts privileges assigned via GPOs and resolves SIDs via LDAP."
     supported_protocols = ["smb"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     WELL_KNOWN_SIDS = {
         "S-1-0": "Null Authority",
         "S-1-0-0": "Nobody",

@@ -13,8 +13,7 @@ class NXCModule:
     description = "Kicks off a Metasploit Payload using the exploit/multi/script/web_delivery module"
     supported_protocols = ["smb", "mssql"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def options(self, context, module_options):
         """
         URL  URL for the download cradle

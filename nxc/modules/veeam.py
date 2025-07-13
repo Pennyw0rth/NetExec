@@ -16,8 +16,7 @@ class NXCModule:
     description = "Extracts credentials from local Veeam SQL Database"
     supported_protocols = ["smb"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def __init__(self):
         with open(get_ps_script("veeam_dump_module/veeam_dump_mssql.ps1")) as psFile:
             self.psScriptMssql = psFile.read()

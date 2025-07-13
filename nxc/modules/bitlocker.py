@@ -10,8 +10,7 @@ class NXCModule:
     description = "Enumerating BitLocker Status on target(s) If it is enabled or disabled."
     supported_protocols = ["smb", "wmi"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options

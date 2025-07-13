@@ -16,8 +16,7 @@ class NXCModule:
     description = "Module to check for the SMB dialect 3.1.1 and compression capability of the host, which is an indicator for the SMBGhost vulnerability (CVE-2020-0796)."
     supported_protocols = ["smb"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options

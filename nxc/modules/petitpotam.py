@@ -3,8 +3,7 @@ class NXCModule:
     description = "[REMOVED] Module to check if the DC is vulnerable to PetitPotam, credit to @topotam"
     supported_protocols = ["smb"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def options(self, context, module_options):
         """
         LISTENER            IP of your listener

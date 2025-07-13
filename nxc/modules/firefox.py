@@ -13,8 +13,7 @@ class NXCModule:
     description = "[REMOVED] Dump credentials from Firefox"
     supported_protocols = ["smb"]
     opsec_safe = True  # Does the module touch disk?
-    multiple_hosts = True  # Does it make sense to run this module on multiple hosts at a time?
-
+      
     def options(self, context, module_options):
         """
         [REMOVED] use the --dpapi flag instead of the module firefox.

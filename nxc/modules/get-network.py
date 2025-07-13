@@ -85,8 +85,7 @@ class NXCModule:
     description = "Query all DNS records with the corresponding IP from the domain."
     supported_protocols = ["ldap"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def options(self, context, module_options):
         """
         ALL           Get DNS and IP (default: false)

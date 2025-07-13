@@ -12,8 +12,7 @@ class NXCModule:
     description = "Dump access token from Token Broker Cache. More info here https://blog.xpnsec.com/wam-bam/. Module by zblurx"
     supported_protocols = ["smb"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def options(self, context, module_options):
         """ """
 

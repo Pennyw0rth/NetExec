@@ -12,7 +12,7 @@ class NXCModule:
     description = "Extracts PowerShell history for all users and looks for sensitive commands."
     supported_protocols = ["smb"]
     opsec_safe = True
-    multiple_hosts = True
+    
     false_positive = [".", "..", "desktop.ini", "Public", "Default", "Default User", "All Users", ".NET v4.5", ".NET v4.5 Classic"]
     sensitive_keywords = [
         "password", "passw", "secret", "credential", "key",

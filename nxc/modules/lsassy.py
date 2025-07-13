@@ -17,8 +17,7 @@ class NXCModule:
     description = "Dump lsass and parse the result remotely with lsassy"
     supported_protocols = ["smb"]
     opsec_safe = True  # writes temporary files, and it's possible for them to not be deleted
-    multiple_hosts = True
-
+    
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options

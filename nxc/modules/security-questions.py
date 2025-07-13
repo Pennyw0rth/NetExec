@@ -18,8 +18,7 @@ class NXCModule:
     description = "Gets security questions and answers for users on computer"
     supported_protocols = ["smb"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def options(self, context, module):
         pass
 

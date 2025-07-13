@@ -10,8 +10,7 @@ class NXCModule:
     description = "Get key of all wireless interfaces"
     supported_protocols = ["smb"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def options(self, context, module_options):
         """ """
 

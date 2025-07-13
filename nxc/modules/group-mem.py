@@ -14,7 +14,7 @@ class NXCModule:
     description = "[REMOVED] Retrieves all the members within a Group"
     supported_protocols = ["ldap"]
     opsec_safe = True
-    multiple_hosts = False
+    
     primaryGroupID = ""
     answers = []
 

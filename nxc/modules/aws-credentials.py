@@ -9,8 +9,7 @@ class NXCModule:
     description = "Search for aws credentials files."
     supported_protocols = ["ssh", "smb", "winrm"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def __init__(self):
         self.search_path_linux = "'/home/' '/tmp/'"
         self.search_path_win = "'C:\\Users\\', 'C:\\ProgramData\\AWSCLI\\', 'C:\\Temp\\'"

@@ -14,8 +14,7 @@ class NXCModule:
     description = "Lists and exports users' recycle bins"
     supported_protocols = ["smb"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def options(self, context, module_options):
         """No options available"""
 

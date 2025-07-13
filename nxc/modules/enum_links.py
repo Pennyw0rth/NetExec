@@ -8,8 +8,7 @@ class NXCModule:
     description = "Enumerate linked SQL Servers and their login configurations."
     supported_protocols = ["mssql"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def __init__(self):
         self.mssql_conn = None
         self.context = None

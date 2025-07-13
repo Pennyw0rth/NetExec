@@ -9,8 +9,7 @@ class NXCModule:
     description = "Checks for credentials in IIS Application Pool configuration files using appcmd.exe"
     supported_protocols = ["smb"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def __init__(self):
         pass
 

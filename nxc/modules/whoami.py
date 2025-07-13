@@ -12,8 +12,7 @@ class NXCModule:
     description = "Get details of provided user"
     supported_protocols = ["ldap"]
     opsec_safe = True  # Does the module touch disk?
-    multiple_hosts = True  # Does it make sense to run this module on multiple hosts at a time?
-
+      
     def options(self, context, module_options):
         """USER  Enumerate information about a different SamAccountName"""
         self.username = None

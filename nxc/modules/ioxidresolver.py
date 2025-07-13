@@ -14,8 +14,7 @@ class NXCModule:
     description = "This module helps you to identify hosts that have additional active interfaces"
     supported_protocols = ["smb", "wmi"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def options(self, context, module_options):
         """DIFFERENT show only ip address if different from target ip (Default: False)"""
         self.pivot = module_options.get("DIFFERENT", "false").lower() in ["true", "1"]

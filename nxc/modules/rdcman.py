@@ -10,8 +10,7 @@ class NXCModule:
     description = "Remotely dump Remote Desktop Connection Manager (sysinternals) credentials"
     supported_protocols = ["smb"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def options(self, context, module_options):
         """ """
 

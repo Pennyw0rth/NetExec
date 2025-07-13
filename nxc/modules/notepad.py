@@ -29,8 +29,7 @@ class NXCModule:
     description = "Extracts content from Windows Notepad tab state binary files."
     supported_protocols = ["smb"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def __init__(self, context=None):
         self.context = context
         self.false_positive = [".", "..", "desktop.ini", "Public", "Default", "Default User", "All Users", ".NET v4.5", ".NET v4.5 Classic"]

@@ -20,7 +20,6 @@ class NXCModule:
     description = "Dump NTDS with ntdsutil"
     supported_protocols = ["smb"]
     opsec_safe = True
-    multiple_hosts = False
 
     def options(self, context, module_options):
         """

@@ -473,7 +473,6 @@ class NXCModule:
     description = "List files recursively and save a JSON share-file metadata to the 'OUTPUT_FOLDER'. See module options for finer configuration."
     supported_protocols = ["smb"]
     opsec_safe = True  # Does the module touch disk?
-    multiple_hosts = True  # Does the module support multiple hosts?
 
     def options(self, context, module_options):
         """

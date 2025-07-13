@@ -80,8 +80,7 @@ class NXCModule:
     description = "Check if vulnerable to bad successor attack (DMSA)"
     supported_protocols = ["ldap"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def __init__(self):
         self.context = None
         self.module_options = None

@@ -13,8 +13,7 @@ class NXCModule:
     description = "Drop a searchConnector-ms file on each writable share"
     supported_protocols = ["smb"]
     opsec_safe = False
-    multiple_hosts = True
-
+    
     def options(self, context, module_options):
         """
         Technique discovered by @DTMSecurity and @domchell to remotely coerce an host to start WebClient service.

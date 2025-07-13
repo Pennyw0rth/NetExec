@@ -16,8 +16,7 @@ class NXCModule:
     description = "Traces Domain and Enterprise Admin presence in the target over SMB"
     supported_protocols = ["smb"]
     opsec_safe = True
-    multiple_hosts = True
-
+    
     def options(self, context, module_options):
         """There are no module options."""
 

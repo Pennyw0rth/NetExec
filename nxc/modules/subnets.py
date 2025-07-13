@@ -37,8 +37,7 @@ class NXCModule:
     description = "Retrieves the different Sites and Subnets of an Active Directory"
     supported_protocols = ["ldap"]
     opsec_safe = True
-    multiple_hosts = False
-
+    
     def on_login(self, context, connection):
         dn = connection.args.base_dn if connection.args.base_dn else connection.ldap_connection._baseDN
 
