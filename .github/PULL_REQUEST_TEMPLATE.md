@@ -7,6 +7,7 @@ List any dependencies that are required for this change.
 - [ ] Bug fix (non-breaking change which fixes an issue)
 - [ ] New feature (non-breaking change which adds functionality)
 - [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] Deprecation of feature or functionality
 - [ ] This change requires a documentation update
 - [ ] This requires a third party update (such as Impacket, Dploot, lsassy, etc)
 
@@ -23,7 +24,7 @@ If appropriate include before and after screenshot(s) to show which results are 
 ## Checklist:
 
 - [ ] I have ran Ruff against my changes (via poetry: `poetry run python -m ruff check . --preview`, use `--fix` to automatically fix what it can)
-- [ ] I have added or updated the tests/e2e_commands.txt file if necessary
+- [ ] I have added or updated the `tests/e2e_commands.txt` file if necessary (new modules or features are _required_ to be added to the e2e tests)
 - [ ] New and existing e2e tests pass locally with my changes
 - [ ] If reliant on changes of third party dependencies, such as Impacket, dploot, lsassy, etc, I have linked the relevant PRs in those projects
 - [ ] I have performed a self-review of my own code
