@@ -1,4 +1,4 @@
-# Before filing this bug report, MAKE SURE you have already downloaded the newest version of NetExec from GitHub and installed it! Many issues have already been reported and fixed, _especially_ if you are running the native Kali version! Please delete this line before submitting your issue if you have done so.
+# ❗❗❗ Before filing this bug report, MAKE SURE you have already downloaded the newest version of NetExec from GitHub and installed it! Many issues have already been reported and fixed, _especially_ if you are running the native Kali version! Please delete this line before submitting your issue if you have done so.❗❗❗
 
 ---
 name: Bug report
