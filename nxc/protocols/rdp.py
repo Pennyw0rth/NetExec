@@ -422,12 +422,12 @@ class rdp(connection):
 
         try:
             if get_output:
-                self.logger.debug("Waiting for clipboard to be ready...")
+                self.logger.success("Waiting for clipboard to be ready...")
                 clipboard_ready = False
                 await asyncio.sleep(self.args.cmd_delay)
 
                 timeout_counter = 0
-                while not clipboard_ready and timeout_counter < 200:  # 10 second timeout
+                while not clipboard_ready and timeout_counter < 300:  # 30 second timeout
                     try:
                         data = await asyncio.wait_for(self.conn.ext_out_queue.get(), timeout=0.1)
                         if hasattr(data, "type") and data.type.name == "CLIPBOARD_READY":
@@ -449,6 +449,8 @@ class rdp(connection):
             if not clipboard_ready and get_output:
                 self.logger.fail("Clipboard cannot be initialized, no output can be retrieved")
                 return ""
+            else:
+                self.logger.success("Clipboard is ready, proceeding with command execution")
 
             # Wait for desktop to be available
             await asyncio.sleep(self.args.cmd_delay)
