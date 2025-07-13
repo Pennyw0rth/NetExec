@@ -125,6 +125,11 @@ class NXCModule:
             context.log.highlight(f"The object was not found with id {self.id}.")
             return None
 
+        #If Kerberos True, then fqdn is used, similar to the -dc-host from impacket, set the machine_name to a fqdn and don't call _get_machine_name (good when NTLM is disabled)
+        if self.__doKerberos == True:
+
+            self.__kdcHost = self.__host
+
         ldap_server, ldap_session = init_ldap_session(self.__domain, self.__username, self.__password, self.__lmhash, self.__nthash, self.__doKerberos, self.__host, self.__kdcHost, self.__aesKey, self.ssl)
 
         control = ("1.2.840.113556.1.4.417", True, None)      
@@ -147,6 +152,11 @@ class NXCModule:
             context.log.highlight(f"Error at trying to recover the object {ldap_session.result['description']}")
 
     def delete_object(self, context, connection):
+
+        #If Kerberos True, then fqdn is used, similar to the -dc-host from impacket, set the machine_name to a fqdn and don't call _get_machine_name (good when NTLM is disabled)
+        if self.__doKerberos == True:
+
+            self.__kdcHost = self.__host
 
         ldap_server, ldap_session = init_ldap_session(self.__domain, self.__username, self.__password, self.__lmhash, self.__nthash, self.__doKerberos, self.__host, self.__kdcHost, self.__aesKey, self.ssl)
         
