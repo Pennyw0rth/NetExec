@@ -2,7 +2,6 @@
 # Credit to https://github.com/dirkjanm/adidnsdump @_dirkjan
 # module by @mpgn_x64
 import re
-from os.path import expanduser
 import codecs
 import socket
 from datetime import datetime
@@ -14,6 +13,8 @@ from impacket.ldap import ldap
 from impacket.structure import Structure
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from ldap3 import LEVEL
+from os.path import expanduser
+from nxc.paths import NXC_PATH
 
 
 def get_dns_zones(connection, root, debug=False):
@@ -32,10 +33,8 @@ def get_dns_resolver(server, context):
     # Is our host an IP? In that case make sure the server IP is used
     # if not assume lookups are working already
     try:
-        if server.startswith("ldap://"):
-            server = server[7:]
-        if server.startswith("ldaps://"):
-            server = server[8:]
+        server = server.removeprefix("ldap://")
+        server = server.removeprefix("ldaps://")
         socket.inet_aton(server)
         dnsresolver.nameservers = [server]
     except OSError:
@@ -44,7 +43,7 @@ def get_dns_resolver(server, context):
 
 
 def ldap2domain(ldap):
-    return re.sub(",DC=", ".", ldap[ldap.lower().find("dc="):], flags=re.I)[3:]
+    return re.sub(r",DC=", ".", ldap[ldap.lower().find("dc="):], flags=re.IGNORECASE)[3:]
 
 
 def new_record(rtype, serial):
@@ -181,7 +180,7 @@ class NXCModule:
                             )
 
         context.log.highlight(f"Found {len(outdata)} records")
-        path = expanduser(f"~/.nxc/logs/{connection.domain}_network_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")
+        path = expanduser(f"{NXC_PATH}/logs/{connection.domain}_network_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")
         with codecs.open(path, "w", "utf-8") as outfile:
             for row in outdata:
                 if self.showhosts:

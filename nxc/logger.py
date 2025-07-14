@@ -80,7 +80,7 @@ def no_debug(func):
 
 
 class NXCAdapter(logging.LoggerAdapter):
-    def __init__(self, extra=None):
+    def __init__(self, extra=None, merge_extra=False):
         logging.basicConfig(
             format="%(message)s",
             datefmt="[%X]",
@@ -93,6 +93,7 @@ class NXCAdapter(logging.LoggerAdapter):
         )
         self.logger = logging.getLogger("nxc")
         self.extra = extra
+        self.merge_extra = merge_extra
         self.output_file = None
 
         logging.getLogger("impacket").disabled = True
@@ -102,7 +103,7 @@ class NXCAdapter(logging.LoggerAdapter):
         logging.getLogger("dploot").disabled = True
         logging.getLogger("neo4j").setLevel(logging.ERROR)
 
-    def format(self, msg, *args, **kwargs):  # noqa: A003
+    def format(self, msg, *args, **kwargs):
         """Format msg for output
 
         This is used instead of process() since process() applies to _all_ messages, including debug calls
@@ -116,10 +117,6 @@ class NXCAdapter(logging.LoggerAdapter):
         # If the logger is being called when hooking the 'options' module function
         if len(self.extra) == 1 and ("module_name" in self.extra):
             return (f"{colored(self.extra['module_name'], 'cyan', attrs=['bold']):<64} {msg}", kwargs)
-
-        # If the logger is being called from nxcServer
-        if len(self.extra) == 2 and ("module_name" in self.extra) and ("host" in self.extra):
-            return (f"{colored(self.extra['module_name'], 'cyan', attrs=['bold']):<24} {self.extra['host']:<39} {msg}", kwargs)
 
         # If the logger is being called from a protocol
         module_name = colored(self.extra["module_name"], "cyan", attrs=["bold"]) if "module_name" in self.extra else colored(self.extra["protocol"], "blue", attrs=["bold"])
@@ -185,9 +182,9 @@ class NXCAdapter(logging.LoggerAdapter):
 
         with file_handler._open() as f:
             if file_creation:
-                f.write(f"[{datetime.now().strftime('%d-%m-%Y %H:%M:%S')}]> {' '.join(sys.argv)}\n\n")
+                f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]> {' '.join(sys.argv)}\n\n")
             else:
-                f.write(f"\n[{datetime.now().strftime('%d-%m-%Y %H:%M:%S')}]> {' '.join(sys.argv)}\n\n")
+                f.write(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]> {' '.join(sys.argv)}\n\n")
 
         file_handler.setFormatter(file_formatter)
         self.logger.addHandler(file_handler)

@@ -79,7 +79,8 @@ class NXCModule:
                         successful_tgts += 1
 
                 # Summary of TGT results
-                context.log.success(f"Successfully obtained TGT for {successful_tgts} pre-created computer accounts. Saved to {ccache_base_dir}")
+                if successful_tgts > 0:
+                    context.log.success(f"Successfully obtained TGT for {successful_tgts} pre-created computer accounts. Saved to {ccache_base_dir}")
 
             except Exception as e:
                 context.log.fail(f"Error occurred during search: {e}")
@@ -94,7 +95,7 @@ class NXCModule:
     def get_tgt(self, context, username, domain, kdcHost, ccache_base_dir):
         try:
             userName = Principal(username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
-            password = username  # Password is the machine name in lowercase
+            password = username[:14]  # Password is the first 14 characters of the machine name in lowercase
             context.log.info(f"Getting TGT for {username}@{domain}")
 
             tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(

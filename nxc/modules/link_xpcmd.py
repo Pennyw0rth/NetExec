@@ -30,15 +30,22 @@ class NXCModule:
             self.context.log.fail("Please provide both LINKED_SERVER and CMD options.")
             return
 
-        self.run_xp_cmdshell(self.command)
-
-    def run_xp_cmdshell(self, cmd):
-        """Run the specified command via xp_cmdshell on the linked server."""
-        query = f"EXEC ('xp_cmdshell ''{cmd}''') AT [{self.linked_server}]"
-        self.context.log.display(f"Running command on {self.linked_server}: {cmd}")
-        result = self.query_and_get_output(query)
-        self.context.log.success(f"Command output:\n{result}")
-
-    def query_and_get_output(self, query):
-        """Executes a query and returns the output."""
-        return self.mssql_conn.sql_query(query)
+        self.context.log.display(f"Running command on {self.linked_server}: {self.command}")
+        query = f"EXEC ('xp_cmdshell ''{self.command}''') AT [{self.linked_server}]"
+        result = self.mssql_conn.sql_query(query)
+        
+        if result:
+            output_lines = []
+            for row in result:
+                output_value = row.get("output")
+                if output_value and output_value != "NULL":
+                    output_lines.append(str(output_value))
+            
+            if output_lines:
+                self.context.log.success("Executed command via linked server")
+                for line in output_lines:
+                    self.context.log.highlight(line.strip())
+            else:
+                self.context.log.display("Command executed but returned no output")
+        else:
+            self.context.log.fail("No result returned from query")

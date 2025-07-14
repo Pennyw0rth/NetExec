@@ -48,7 +48,7 @@ class MSSQLEXEC:
 
     def backup_and_enable(self, option):
         try:
-            self.backuped_options[option] = self.is_option_enabled("show advanced options")
+            self.backuped_options[option] = self.is_option_enabled(option)
             if not self.backuped_options[option]:
                 self.logger.debug(f"Option '{option}' is disabled, attempting to enable it.")
                 query = f"EXEC master.dbo.sp_configure '{option}', 1;RECONFIGURE;"
@@ -65,9 +65,7 @@ class MSSQLEXEC:
         result = self.mssql_conn.sql_query(query)
         # Assuming the query returns a list of dictionaries with 'config_value' as the key
         self.logger.debug(f"{option} check result: {result}")
-        if result and result[0]["config_value"] == 1:
-            return True
-        return False
+        return bool(result and result[0]["config_value"] == 1)
 
     def put_file(self, data, remote):
         try:

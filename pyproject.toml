@@ -1,135 +1,123 @@
-[tool.poetry]
+[project]
 name = "netexec"
-version = "1.3.0"
+dynamic = ["version"]
 description = "The Network Execution tool"
-authors = [
-    "Marshall Hallenbeck <marshall.hallenbeck@gmail.com>",
-    "Alexander Neff <alex99.neff@gmx.de>",
-    "Thomas Seigneuret <seigneuret.thomas@pm.me>"
-]
 readme = "README.md"
+requires-python = ">=3.10,<4.0"
+license = { text = "BSD-2-Clause" }
+authors = [
+    { name = "Marshall Hallenbeck", email = "marshall.hallenbeck@gmail.com" },
+    { name = "Alexander Neff", email = "alex99.neff@gmx.de" },
+    { name = "Thomas Seigneuret", email = "seigneuret.thomas@pm.me" }
+]
+classifiers = [
+    "Environment :: Console",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security"
+]
+dependencies = [
+    "aardwolf>=0.2.8",
+    "argcomplete>=3.1.4",
+    "asyauth>=0.0.20",
+    "beautifulsoup4>=4.11,<5",
+    "bloodhound-ce>=1.8.0",
+    "dploot>=3.1.0",
+    "dsinternals>=1.2.4",
+    "jwt>=1.3.1",
+    "lsassy>=3.1.11",
+    "masky>=0.2.0",
+    "minikerberos>=0.4.1",
+    "neo4j>=5.0.0",
+    "paramiko>=3.3.1",
+    "pyasn1-modules>=0.3.0",
+    "pylnk3>=0.4.3",
+    "pypsrp>=0.8.1",
+    "pypykatz>=0.6.8",
+    "python-dateutil>=2.8.2",
+    "python-libnmap>=0.7.3",
+    "requests>=2.27.1",
+    "rich>=13.3.5",
+    "sqlalchemy>=2.0.4",
+    "termcolor>=2.4.0",
+    "terminaltables>=3.1.0",
+    "xmltodict>=0.13.0",
+    # Git Dependencies
+    "impacket @ git+https://github.com/Pennyw0rth/impacket.git",
+    "oscrypto @ git+https://github.com/wbond/oscrypto",
+    "pynfsclient @ git+https://github.com/Pennyw0rth/NfsClient",
+]
+
+[project.urls]
 homepage = "https://github.com/Pennyw0rth/NetExec"
 repository = "https://github.com/Pennyw0rth/NetExec"
+
+[project.scripts]
+nxc = "nxc.netexec:main"
+netexec = "nxc.netexec:main"
+NetExec = "nxc.netexec:main"
+nxcdb = "nxc.nxcdb:main"
+
+[tool.poetry]
 exclude = []
 include = [
     "nxc/data/*",
     "nxc/modules/*"
 ]
-license = "BSD-2-Clause"
-classifiers = [
-    'Environment :: Console',
-    'License :: OSI Approved :: BSD License',
-    'Programming Language :: Python :: 3',
-    'Topic :: Security',
-]
-packages = [
-    { include = "nxc"}
-]
+packages = [{ include = "nxc" }]
+version = "0.0.0" # Poetry placeholder, do not remove
 
-[tool.poetry.scripts]
-nxc = 'nxc.netexec:main'
-netexec = 'nxc.netexec:main'
-NetExec = 'nxc.netexec:main'
-nxcdb = 'nxc.nxcdb:main'
+[tool.poetry.requires-plugins]
+poetry-dynamic-versioning = { version = ">=1.7.0,<2.0.0", extras = ["plugin"] }
 
-[tool.poetry.dependencies]
-python = "^3.10.0"
-aardwolf = "^0.2.8"
-aioconsole = "^0.6.2"
-aiosqlite = "^0.19.0"
-argcomplete = "^3.1.4"
-asyauth = ">=0.0.20"
-beautifulsoup4 = ">=4.11,<5"
-bloodhound = "^1.8.0"
-dploot = "^3.1.0"
-dsinternals = "^1.2.4"
-impacket =  { git = "https://github.com/fortra/impacket.git" }
-jwt = ">=1.3.1"
-lsassy = ">=3.1.11"
-masky = "^0.2.0"
-minikerberos = "^0.4.1"
-msgpack = "^1.0.0"
-msldap = "^0.5.10"
-neo4j = "^5.0.0"
-oscrypto = { git = "https://github.com/wbond/oscrypto" }
-paramiko = "^3.3.1"
-poetry-dynamic-versioning = "^1.2.0"
-pyasn1-modules = "^0.3.0"
-pylnk3 = "^0.4.2"
-pynfsclient = { git = "https://github.com/Pennyw0rth/NfsClient" }
-pypsrp = "^0.8.1"
-pypykatz = "^0.6.8"
-pywerview = "^0.3.3" # pywerview 5 requires libkrb5-dev installed which is not default on kali (as of 9/23)
-python-dateutil = ">=2.8.2"
-python-libnmap = "^0.7.3"
-requests = ">=2.27.1"
-rich = "^13.3.5"
-sqlalchemy = "^2.0.4"
-termcolor = ">=2.4.0"
-terminaltables = "^3.1.0"
-xmltodict = "^0.13.0"
-
-[tool.poetry.group.dev.dependencies]
-flake8 = "*"
-shiv = "*"
-pytest = "^7.2.2"
-ruff = "=0.0.292"
+[tool.poetry-dynamic-versioning]
+enable = true
+style = "pep440"
+pattern = "(?P<base>\\d+\\.\\d+\\.\\d+)"
+format = "{base}+{distance}.{commit}"
 
 [build-system]
 requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
 build-backend = "poetry_dynamic_versioning.backend"
 
-[tool.poetry-dynamic-versioning]
-enable = true
-pattern = "(?P<base>\\d+\\.\\d+\\.\\d+)"
-format = "{base}+{commit}"
+[tool.poetry.group.dev.dependencies]
+flake8 = "*"
+shiv = "*"
+pytest = "^7.2.2"
+ruff = "*"
 
 [tool.ruff]
-# Ruff doesn't enable pycodestyle warnings (`W`) or
-# McCabe complexity (`C901`) by default.
-# Other options: pep8-naming (N), flake8-annotations (ANN), flake8-blind-except (BLE), flake8-commas (COM), flake8-pyi (PYI), flake8-pytest-style (PT), flake8-unused-arguments (ARG), etc
-# Should tackle flake8-use-pathlib (PTH) at some point
-select = ["E", "F", "D", "UP", "YTT", "ASYNC", "B", "A", "C4", "ISC", "ICN", "PIE", "PT", "Q", "RSE", "RET", "SIM", "TID", "ERA", "FLY", "PERF", "FURB", "LOG", "RUF"]
-ignore = [ "E501", "F405", "D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107", "D203", "D204", "D205", "D212", "D213", "D400", "D401", "D415", "D417", "D419", "RET503", "RET505", "RET506", "RET507", "RET508", "PERF203", "RUF012"]
+target-version = "py310"
+exclude = [
+    ".bzr", ".direnv", ".eggs", ".git", ".git-rewrite", ".hg", ".mypy_cache",
+    ".nox", ".pants.d", ".pytype", ".ruff_cache", ".svn", ".tox", ".venv",
+    "__pypackages__", "_build", "buck-out", "build", "dist", "node_modules", "venv"
+]
+line-length = 65000
+preview = true
 
+[tool.ruff.lint]
+select = [
+    "E", "F", "D", "UP", "YTT", "ASYNC", "B", "A", "C4", "ISC", "ICN", "PIE", "PT",
+    "Q", "RSE", "RET", "SIM", "TID", "ERA", "FLY", "PERF", "LOG", "RUF"
+]
+ignore = [
+    "A004", "E501", "F405", "D100", "D101", "D102", "D103", "D104", "D105", "D106",
+    "D107", "D203", "D204", "D205", "D212", "D213", "D400", "D401", "D413", "D415",
+    "D417", "D419", "FURB", "RET503", "RET505", "RET506", "RET507", "RET508",
+    "PERF203", "RUF012", "RUF052", "RUF059"
+]
+
+# THE SETTINGS BELOW ARE DEFAULTS, left in here to override potential vs-code settings
 # Allow autofix for all enabled rules (when `--fix`) is provided.
 fixable = ["ALL"]
 unfixable = []
-
-# Exclude a variety of commonly ignored directories.
-exclude = [
-    ".bzr",
-    ".direnv",
-    ".eggs",
-    ".git",
-    ".git-rewrite",
-    ".hg",
-    ".mypy_cache",
-    ".nox",
-    ".pants.d",
-    ".pytype",
-    ".ruff_cache",
-    ".svn",
-    ".tox",
-    ".venv",
-    "__pypackages__",
-    "_build",
-    "buck-out",
-    "build",
-    "dist",
-    "node_modules",
-    "venv",
-]
 per-file-ignores = {}
-
-line-length = 65000
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
-target-version = "py310"
-
-[tool.ruff.flake8-quotes]
+[tool.ruff.lint.flake8-quotes]
 docstring-quotes = "double"
 inline-quotes = "double"
 multiline-quotes = "double"
