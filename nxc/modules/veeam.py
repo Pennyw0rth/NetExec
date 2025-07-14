@@ -135,18 +135,18 @@ class NXCModule:
         self.psScriptMssql = self.psScriptMssql.replace("REPLACE_ME_SqlInstance", SqlInstance)
         self.psScriptMssql = self.psScriptMssql.replace("REPLACE_ME_SqlServer", SqlServer)
         self.psScriptMssql = self.psScriptMssql.replace("REPLACE_ME_b64Salt", salt)
-        psScipt_b64 = b64encode(self.psScriptMssql.encode("UTF-16LE")).decode("utf-8")
+        psScript_b64 = b64encode(self.psScriptMssql.encode("UTF-16LE")).decode("utf-8")
 
-        return connection.execute(f"powershell.exe -e {psScipt_b64} -OutputFormat Text", True)
+        return connection.execute(f"powershell.exe -e {psScript_b64} -OutputFormat Text", True)
 
     def executePsPostgreSql(self, connection, PostgreSqlExec, PostgresUserForWindowsAuth, SqlDatabaseName, salt):
         self.psScriptPostgresql = self.psScriptPostgresql.replace("REPLACE_ME_PostgreSqlExec", PostgreSqlExec)
         self.psScriptPostgresql = self.psScriptPostgresql.replace("REPLACE_ME_PostgresUserForWindowsAuth", PostgresUserForWindowsAuth)
         self.psScriptPostgresql = self.psScriptPostgresql.replace("REPLACE_ME_SqlDatabaseName", SqlDatabaseName)
         self.psScriptPostgresql = self.psScriptPostgresql.replace("REPLACE_ME_b64Salt", salt)
-        psScipt_b64 = b64encode(self.psScriptPostgresql.encode("UTF-16LE")).decode("utf-8")
+        psScript_b64 = b64encode(self.psScriptPostgresql.encode("UTF-16LE")).decode("utf-8")
 
-        return connection.execute(f"powershell.exe -e {psScipt_b64} -OutputFormat Text", True)
+        return connection.execute(f"powershell.exe -e {psScript_b64} -OutputFormat Text", True)
 
     def printCreds(self, context, output):
         # Format output if returned in some XML Format
