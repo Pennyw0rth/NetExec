@@ -1,5 +1,4 @@
 from nxc.parsers.ldap_results import parse_result_attributes
-from impacket.ldap.ldapasn1 import SearchResultEntry
 
 
 class NXCModule:
