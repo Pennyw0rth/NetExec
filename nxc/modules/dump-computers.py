@@ -34,37 +34,27 @@ class NXCModule:
                 self.fqdn_only = True
 
     def on_login(self, context, connection):
-        search_filter = "(objectCategory=computer)"
-        context.log.debug(f"Search Filter = {search_filter}")
-
-        entries = connection.search(
-            searchFilter=search_filter,
+        resp = connection.search(
+            searchFilter="(objectCategory=computer)",
             attributes=["dNSHostName", "operatingSystem"]
         )
+        resp_parsed = parse_result_attributes(resp)
 
         answers = []
-        context.log.debug(f"Total number of records returned: {len(entries)}")
+        context.log.debug(f"Total number of records returned: {len(resp_parsed)}")
 
-        for item in entries:
-            if not isinstance(item, SearchResultEntry):
-                continue
+        for item in resp_parsed:
+            dns_host_name = item["dNSHostName"]
+            operating_system = item.get("operatingSystem", "Unknown OS")
 
-            try:
-                parsed = parse_result_attributes([item])[0]
-                dns_host_name = parsed.get("dNSHostName", "")
-                operating_system = parsed.get("operatingSystem", "")
-
-                if dns_host_name:
-                    netbios_name = dns_host_name.split(".")[0]
-                    if self.netbios_only:
-                        answer = netbios_name
-                    elif self.fqdn_only:
-                        answer = dns_host_name
-                    else:
-                        answer = f"{dns_host_name} ({operating_system})"
-                    answers.append(answer)
-            except Exception:
-                context.log.debug("Failed to parse entry", exc_info=True)
+            if self.netbios_only:
+                netbios_name = dns_host_name.split(".")[0]
+                answer = netbios_name
+            elif self.fqdn_only:
+                answer = dns_host_name
+            else:
+                answer = f"{dns_host_name} ({operating_system})"
+            answers.append(answer)
 
         if answers:
             context.log.success("Found the following computers:")
