@@ -1,6 +1,7 @@
 from nxc.parsers.ldap_results import parse_result_attributes
 from impacket.ldap.ldapasn1 import SearchResultEntry
 
+
 class NXCModule:
     name = "dump-computers"
     description = "Dumps all computers in the domain"
@@ -10,23 +11,15 @@ class NXCModule:
 
     def options(self, context, module_options):
         """
-        dump-computers: Specify dump-computers to call the module
-        Usage:        
-        > prints fqdn and machine version
+        TYPE        Only dump NETBIOS or FQDN instead of 'FQDN (OS Version)'
+        OUTPUT      Output to file in addition to printing to console
+
+        Examples
+        --------
         netexec ldap $DC-IP -u $username -p $password -M dump-computers
-
-        > prints only netbios name (no machine version)
         netexec ldap $DC-IP -u $username -p $password -M dump-computers -o TYPE=netbios
-
-        > prints only fqdn (no machine version)
         netexec ldap $DC-IP -u $username -p $password -M dump-computers -o TYPE=fqdn
-
-        > prints fqdn and machine version, output to file
-        netexec ldap $DC-IP -u $username -p $password -M dump-computers -o OUTPUT=<location>
-
-        > prints netbios or fqdn (no machine version), output to file
         netexec ldap $DC-IP -u $username -p $password -M dump-computers -o TYPE=netbios OUTPUT=<location>
-        netexec ldap $DC-IP -u $username -p $password -M dump-computers -o TYPE=fqdn OUTPUT=<location>
         """
         self.output_file = None
         self.netbios_only = False
@@ -35,10 +28,9 @@ class NXCModule:
         if "OUTPUT" in module_options:
             self.output_file = module_options["OUTPUT"]
         if "TYPE" in module_options:
-            t = module_options["TYPE"].lower()
-            if t == "netbios":
+            if module_options["TYPE"].lower() == "netbios":
                 self.netbios_only = True
-            elif t == "fqdn":
+            elif module_options["TYPE"].lower() == "fqdn":
                 self.fqdn_only = True
 
     def on_login(self, context, connection):
