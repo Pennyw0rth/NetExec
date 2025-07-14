@@ -56,17 +56,14 @@ class NXCModule:
                 answer = f"{dns_host_name} ({operating_system})"
             answers.append(answer)
 
-        if answers:
-            context.log.success("Found the following computers:")
-            for answer in answers:
-                context.log.highlight(answer)
+        context.log.success("Found the following computers:")
+        for answer in answers:
+            context.log.highlight(answer)
 
-            if self.output_file:
-                try:
-                    with open(self.output_file, "w") as f:
-                        f.write("\n".join(answers) + "\n")
-                    context.log.success(f"Results saved to {self.output_file}")
-                except Exception as e:
-                    context.log.error(f"Failed to write to file {self.output_file}: {e}")
-        else:
-            context.log.success("No computers found in the domain.")
+        if self.output_file:
+            try:
+                with open(self.output_file, "w") as f:
+                    f.write("\n".join(answers) + "\n")
+                context.log.success(f"Results saved to {self.output_file}")
+            except Exception as e:
+                context.log.error(f"Failed to write to file {self.output_file}: {e}")
