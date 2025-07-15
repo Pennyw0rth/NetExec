@@ -1411,7 +1411,7 @@ class ldap(connection):
         
         # Are there even any FGPPs?
         self.logger.success("Attempting to enumerate policies...")
-        resp = self.ldap_connection.search(searchBase=f"CN=Password Settings Container,CN=System,{''.join([f'DC={dc},' for dc in self.domain.split('.')]).rstrip(',')}", searchFilter="(objectclass=*)")
+        resp = self.search(searchFilter="(objectclass=*)", baseDN=f"CN=Password Settings Container,CN=System,{self.baseDN}", attributes=[])
         if len(resp) > 1:
             self.logger.highlight(f"{len(resp) - 1} PSO Objects found!")
             self.logger.highlight("")
