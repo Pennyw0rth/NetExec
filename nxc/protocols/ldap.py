@@ -689,6 +689,11 @@ class ldap(connection):
                 if item:
                     self.admin_privs = True
 
+    def getUnixTime(self, t):
+        t -= 116444736000000000
+        t /= 10000000
+        return t
+
     def search(self, searchFilter, attributes, sizeLimit=0, baseDN=None) -> list:
         if baseDN is None and self.args.base_dn is not None:
             baseDN = self.args.base_dn
