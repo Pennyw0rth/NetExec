@@ -1398,8 +1398,11 @@ class ldap(connection):
         Initial FGPP/PSO script written by @n00py: https://github.com/n00py/GetFGPP
         """
         # Convert LDAP time to human readable format
-        pso_days = lambda ldap_time: f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).days} days"
-        pso_mins = lambda ldap_time: f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).minutes} minutes"
+        def pso_days(ldap_time):
+            return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).days} days"
+        
+        def pso_mins(ldap_time):
+            return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).minutes} minutes"
         
         # Are there even any FGPPs?
         self.logger.success("Attempting to enumerate policies...")
@@ -1497,7 +1500,6 @@ class ldap(connection):
             # If using pipx
             self.logger.fail("Or if you installed with pipx:")
             self.logger.fail("pipx runpip netexec uninstall -y bloodhound")
-           
             self.logger.fail("pipx inject netexec bloodhound-ce --force")
             return False
 
