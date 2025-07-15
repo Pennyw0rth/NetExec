@@ -1,6 +1,3 @@
-from dateutil.relativedelta import relativedelta as rd
-from impacket.ldap import ldapasn1 as ldapasn1_impacket
-
 
 class NXCModule:
     """
@@ -21,4 +18,4 @@ class NXCModule:
         """No options available."""
 
     def on_login(self, context, connection):
-        context.log.fail('[REMOVED] This module moved to the core option --pso')
+        context.log.fail("[REMOVED] This module moved to the core option --pso")
