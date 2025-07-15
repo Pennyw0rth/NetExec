@@ -12,7 +12,6 @@ class NXCModule:
     name = "entra-id"
     description = "Find the Entra ID sync server"
     supported_protocols = ["ldap"]
-    opsec_safe = True
     multiple_hosts = True
 
     def __init__(self):

@@ -10,7 +10,6 @@ class NXCModule:
     name = "test_connection"
     description = "Pings a host"
     supported_protocols = ["smb", "mssql"]
-    opsec_safe = True
     multiple_hosts = True
 
     def options(self, context, module_options):

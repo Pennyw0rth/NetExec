@@ -9,7 +9,6 @@ class NXCModule:
     name = "hyperv-host"
     description = "Performs a registry query on the VM to lookup its HyperV Host"
     supported_protocols = ["smb"]
-    opsec_safe = True
     multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):

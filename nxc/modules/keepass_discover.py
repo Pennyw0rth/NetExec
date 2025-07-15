@@ -12,7 +12,6 @@ class NXCModule:
     name = "keepass_discover"
     description = "Search for KeePass-related files and process."
     supported_protocols = ["smb"]
-    opsec_safe = True  # only legitimate commands are executed on the remote host (search process and files)
     multiple_hosts = True
 
     def __init__(self):
