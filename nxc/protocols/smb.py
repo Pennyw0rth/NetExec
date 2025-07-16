@@ -805,18 +805,7 @@ class smb(connection):
                     self.logger.debug("Error executing command via mmcexec, traceback:")
                     self.logger.debug(format_exc())
                     continue
-            elif method == "atexec":
-                # This is the default NT Authority SYSTEM account
-                run_task_as = "S-1-5-18"
-                # Check if a task should be run by another user
-                if getattr(self.args, "run_task_as", False):
-                    run_task_as = self.args.run_task_as
-
-                # Generates the task name randomly or from supplied argument
-                task_name = gen_random_string(8)
-                if getattr(self.args, "task_name", False):
-                    task_name = self.args.task_name
-
+            elif method == "atexec":               
                 try:
                     exec_method = TSCH_EXEC(
                         self.host if not self.kerberos else self.hostname + "." + self.domain,
@@ -824,8 +813,9 @@ class smb(connection):
                         self.username,
                         self.password,
                         self.domain,
-                        task_name,
-                        run_task_as,
+                        self.args.task_name,
+                        self.args.run_task_as,
+                        self.args.upload_task_binary,
                         self.kerberos,
                         self.aesKey,
                         self.host,
@@ -892,6 +882,7 @@ class smb(connection):
                 if output:
                     for line in output.split("\n"):
                         self.logger.highlight(line)
+
             return output
         else:
             self.logger.fail(f"Execute command failed with {current_method}")

