@@ -427,7 +427,7 @@ class rdp(connection):
                 await asyncio.sleep(self.args.cmd_delay)
 
                 timeout_counter = 0
-                while not clipboard_ready and timeout_counter < 300:  # 30 second timeout
+                while not clipboard_ready and timeout_counter < (self.args.clipboard_delay * 10):  # Convert seconds to deciseconds
                     try:
                         data = await asyncio.wait_for(self.conn.ext_out_queue.get(), timeout=0.1)
                         if hasattr(data, "type") and data.type.name == "CLIPBOARD_READY":
@@ -568,16 +568,7 @@ class rdp(connection):
             buffer.save(filename, "png")
             self.logger.highlight(f"Screenshot saved {filename}")
 
-    def screenshot(self):
-        # Don't take screenshot if we're already taking one during command execution
-        if hasattr(self.args, "execute") and self.args.execute is not None:
-            self.logger.debug("Skipping generic screenshot as -x is specified with --screenshot")
-            return
-        
-        if hasattr(self.args, "ps_execute") and self.args.ps_execute is not None:
-            self.logger.debug("Skipping generic screenshot as -X is specified with --screenshot")
-            return
-            
+    def screenshot(self):            
         asyncio.run(self.screen())
 
     async def nla_screen(self):
