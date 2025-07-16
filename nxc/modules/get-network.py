@@ -15,6 +15,7 @@ from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from ldap3 import LEVEL
 from os.path import expanduser
 from nxc.paths import NXC_PATH
+from nxc.parsers.ldap_results import parse_result_attributes
 
 
 def get_dns_zones(connection, root, debug=False):
@@ -64,20 +65,22 @@ RECORD_TYPE_MAPPING = {
     5: "CNAME",
     6: "SOA",
     12: "PTR",
-    # 15: 'MX',
-    # 16: 'TXT',
+    15: "MX",
+    16: "TXT",
     28: "AAAA",
     33: "SRV",
 }
 
-
-def searchResEntry_to_dict(results):
-    data = {}
-    for attr in results["attributes"]:
-        key = str(attr["type"])
-        value = str(attr["vals"][0])
-        data[key] = value
-    return data
+ZERO = 0
+A = 1
+NS = 2
+CNAME = 5
+SOA = 6
+PTR = 12
+MX = 15
+TXT = 16
+AAAA = 28
+SRV = 33
 
 
 class NXCModule:
@@ -116,67 +119,58 @@ class NXCModule:
         dns_root = f"CN=MicrosoftDNS,DC=DomainDnsZones,{connection.baseDN}"
         search_target = f"DC={zone},{dns_root}"
         context.log.display("Querying zone for records")
-        sfilter = "(DC=*)"
 
-        try:
-            list_sites = connection.ldap_connection.search(
-                searchBase=search_target,
-                searchFilter=sfilter,
-                attributes=["dnsRecord", "dNSTombstoned", "name"],
-                sizeLimit=100000,
-            )
-        except ldap.LDAPSearchError as e:
-            if e.getErrorString().find("sizeLimitExceeded") >= 0:
-                context.log.debug("sizeLimitExceeded exception caught, giving up and processing the data received")
-                # We reached the sizeLimit, process the answers we have already and that's it. Until we implement
-                # paged queries
-                list_sites = e.getAnswers()
-            else:
-                raise
+        list_sites = connection.search(
+            searchFilter="(DC=*)",
+            attributes=["dnsRecord", "dNSTombstoned", "name"],
+            baseDN=search_target,
+        )
+        list_sites_parsed = parse_result_attributes(list_sites)
         get_dns_resolver(connection.host, context.log)
 
         outdata = []
-
-        for item in list_sites:
-            if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
-                continue
-            site = searchResEntry_to_dict(item)
+        for site in list_sites_parsed:
             recordname = site["name"]
 
             if "dnsRecord" in site:
-                record = bytes(site["dnsRecord"].encode("latin1"))
-                dr = DNS_RECORD(record)
-                if RECORD_TYPE_MAPPING[dr["Type"]] == "A":
-                    if dr["Type"] == 1:
-                        address = DNS_RPC_RECORD_A(dr["Data"])
-                        if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
-                            outdata.append(
-                                {
-                                    "name": recordname,
-                                    "type": RECORD_TYPE_MAPPING[dr["Type"]],
-                                    "value": address.formatCanonical(),
-                                }
-                            )
-                    if dr["Type"] in [a for a in RECORD_TYPE_MAPPING if RECORD_TYPE_MAPPING[a] in ["CNAME", "NS", "PTR"]]:
-                        address = DNS_RPC_RECORD_NODE_NAME(dr["Data"])
-                        if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
-                            outdata.append(
-                                {
-                                    "name": recordname,
-                                    "type": RECORD_TYPE_MAPPING[dr["Type"]],
-                                    "value": address[next(iter(address.fields))].toFqdn(),
-                                }
-                            )
-                    elif dr["Type"] == 28:
-                        address = DNS_RPC_RECORD_AAAA(dr["Data"])
-                        if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
-                            outdata.append(
-                                {
-                                    "name": recordname,
-                                    "type": RECORD_TYPE_MAPPING[dr["Type"]],
-                                    "value": address.formatCanonical(),
-                                }
-                            )
+                if isinstance(site["dnsRecord"], list):  # noqa: SIM108
+                    records = [bytes(r) for r in site["dnsRecord"]]
+                else:
+                    records = [bytes(site["dnsRecord"])]
+
+                for record in records:
+                    dr = DNS_RECORD(record)
+                    if dr["Type"] == A:
+                        if dr["Type"] == 1:
+                            address = DNS_RPC_RECORD_A(dr["Data"])
+                            if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
+                                outdata.append(
+                                    {
+                                        "name": recordname,
+                                        "type": RECORD_TYPE_MAPPING[dr["Type"]],
+                                        "value": address.formatCanonical(),
+                                    }
+                                )
+                        if dr["Type"] in [CNAME, NS, PTR]:
+                            address = DNS_RPC_RECORD_NODE_NAME(dr["Data"])
+                            if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
+                                outdata.append(
+                                    {
+                                        "name": recordname,
+                                        "type": RECORD_TYPE_MAPPING[dr["Type"]],
+                                        "value": address[next(iter(address.fields))].toFqdn(),
+                                    }
+                                )
+                        elif dr["Type"] == AAAA:
+                            address = DNS_RPC_RECORD_AAAA(dr["Data"])
+                            if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
+                                outdata.append(
+                                    {
+                                        "name": recordname,
+                                        "type": RECORD_TYPE_MAPPING[dr["Type"]],
+                                        "value": address.formatCanonical(),
+                                    }
+                                )
 
         context.log.highlight(f"Found {len(outdata)} records")
         path = expanduser(f"{NXC_PATH}/logs/{connection.domain}_network_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")
