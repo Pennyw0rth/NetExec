@@ -121,36 +121,35 @@ class NXCModule:
                 for record in records:
                     dr = DNS_RECORD(record)
                     if dr["Type"] == A:
-                        if dr["Type"] == 1:
-                            address = DNS_RPC_RECORD_A(dr["Data"])
-                            if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
-                                outdata.append(
-                                    {
-                                        "name": recordname,
-                                        "type": RECORD_TYPE_MAPPING[dr["Type"]],
-                                        "value": address.formatCanonical(),
-                                    }
-                                )
-                        if dr["Type"] in [CNAME, NS, PTR]:
-                            address = DNS_RPC_RECORD_NODE_NAME(dr["Data"])
-                            if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
-                                outdata.append(
-                                    {
-                                        "name": recordname,
-                                        "type": RECORD_TYPE_MAPPING[dr["Type"]],
-                                        "value": address[next(iter(address.fields))].toFqdn(),
-                                    }
-                                )
-                        elif dr["Type"] == AAAA:
-                            address = DNS_RPC_RECORD_AAAA(dr["Data"])
-                            if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
-                                outdata.append(
-                                    {
-                                        "name": recordname,
-                                        "type": RECORD_TYPE_MAPPING[dr["Type"]],
-                                        "value": address.formatCanonical(),
-                                    }
-                                )
+                        address = DNS_RPC_RECORD_A(dr["Data"])
+                        if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
+                            outdata.append(
+                                {
+                                    "name": recordname,
+                                    "type": RECORD_TYPE_MAPPING[dr["Type"]],
+                                    "value": address.formatCanonical(),
+                                }
+                            )
+                    if dr["Type"] in [CNAME, NS, PTR]:
+                        address = DNS_RPC_RECORD_NODE_NAME(dr["Data"])
+                        if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
+                            outdata.append(
+                                {
+                                    "name": recordname,
+                                    "type": RECORD_TYPE_MAPPING[dr["Type"]],
+                                    "value": address[next(iter(address.fields))].toFqdn(),
+                                }
+                            )
+                    elif dr["Type"] == AAAA:
+                        address = DNS_RPC_RECORD_AAAA(dr["Data"])
+                        if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
+                            outdata.append(
+                                {
+                                    "name": recordname,
+                                    "type": RECORD_TYPE_MAPPING[dr["Type"]],
+                                    "value": address.formatCanonical(),
+                                }
+                            )
 
         context.log.highlight(f"Found {len(outdata)} records")
         path = expanduser(f"{NXC_PATH}/logs/{connection.domain}_network_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")
