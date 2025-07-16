@@ -806,6 +806,11 @@ class smb(connection):
                     self.logger.debug(format_exc())
                     continue
             elif method == "atexec":
+                # This is the default NT Authority SYSTEM account
+                run_task_as = "S-1-5-18"
+                # Check if a task should be run by another user
+                if getattr(self.args, "run_task_as", False):
+                    run_task_as = self.args.run_task_as
                 try:
                     exec_method = TSCH_EXEC(
                         self.host if not self.kerberos else self.hostname + "." + self.domain,
@@ -813,6 +818,7 @@ class smb(connection):
                         self.username,
                         self.password,
                         self.domain,
+                        run_task_as,
                         self.kerberos,
                         self.aesKey,
                         self.host,

@@ -1,4 +1,5 @@
 import os
+from textwrap import dedent
 from impacket.dcerpc.v5 import tsch, transport
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
@@ -9,7 +10,7 @@ from datetime import datetime, timedelta
 
 
 class TSCH_EXEC:
-    def __init__(self, target, share_name, username, password, domain, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
+    def __init__(self, target, share_name, username, password, domain, run_task_as, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -27,6 +28,7 @@ class TSCH_EXEC:
         self.__output_filename = None
         self.__share = share
         self.logger = logger
+        self.run_task_as = run_task_as 
 
         if hashes is not None:
             # This checks to see if we didn't provide the LM Hash
@@ -71,40 +73,40 @@ class TSCH_EXEC:
 
     def gen_xml(self, command, fileless=False):
         xml = f"""<?xml version="1.0" encoding="UTF-16"?>
-<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-  <Triggers>
-    <RegistrationTrigger>
-      <EndBoundary>{self.get_end_boundary()}</EndBoundary>
-    </RegistrationTrigger>
-  </Triggers>
-  <Principals>
-    <Principal id="LocalSystem">
-      <UserId>S-1-5-18</UserId>
-      <RunLevel>HighestAvailable</RunLevel>
-    </Principal>
-  </Principals>
-  <Settings>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-    <AllowHardTerminate>true</AllowHardTerminate>
-    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
-    <IdleSettings>
-      <StopOnIdleEnd>true</StopOnIdleEnd>
-      <RestartOnIdle>false</RestartOnIdle>
-    </IdleSettings>
-    <AllowStartOnDemand>true</AllowStartOnDemand>
-    <Enabled>true</Enabled>
-    <Hidden>true</Hidden>
-    <RunOnlyIfIdle>false</RunOnlyIfIdle>
-    <WakeToRun>false</WakeToRun>
-    <ExecutionTimeLimit>P3D</ExecutionTimeLimit>
-    <Priority>7</Priority>
-  </Settings>
-  <Actions Context="LocalSystem">
-    <Exec>
-      <Command>cmd.exe</Command>
-"""
+        <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+        <Triggers>
+            <RegistrationTrigger>
+            <EndBoundary>{self.get_end_boundary()}</EndBoundary>
+            </RegistrationTrigger>
+        </Triggers>
+        <Principals>
+            <Principal id="LocalSystem">
+            <UserId>{self.run_task_as}</UserId>
+            <RunLevel>HighestAvailable</RunLevel>
+            </Principal>
+        </Principals>
+        <Settings>
+            <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+            <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+            <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+            <AllowHardTerminate>true</AllowHardTerminate>
+            <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+            <IdleSettings>
+            <StopOnIdleEnd>true</StopOnIdleEnd>
+            <RestartOnIdle>false</RestartOnIdle>
+            </IdleSettings>
+            <AllowStartOnDemand>true</AllowStartOnDemand>
+            <Enabled>true</Enabled>
+            <Hidden>true</Hidden>
+            <RunOnlyIfIdle>false</RunOnlyIfIdle>
+            <WakeToRun>false</WakeToRun>
+            <ExecutionTimeLimit>P3D</ExecutionTimeLimit>
+            <Priority>7</Priority>
+        </Settings>
+        <Actions Context="LocalSystem">
+            <Exec>
+            <Command>cmd.exe</Command>
+        """
         if self.__retOutput:
             self.__output_filename = "\\Windows\\Temp\\" + gen_random_string(6)
             if fileless:
@@ -120,11 +122,12 @@ class TSCH_EXEC:
         xml += argument_xml
 
         xml += """
-    </Exec>
-  </Actions>
-</Task>
-"""
-        return xml
+            </Exec>
+        </Actions>
+        </Task>
+        """
+        # Removing identation in the final computed XML file
+        return dedent(xml)
 
     def execute_handler(self, command, fileless=False):
         dce = self.__rpctransport.get_dce_rpc()
@@ -147,9 +150,11 @@ class TSCH_EXEC:
             tsch.hSchRpcRegisterTask(dce, f"\\{tmpName}", xml, tsch.TASK_CREATE, NULL, tsch.TASK_LOGON_NONE)
         except Exception as e:
             if e.error_code and hex(e.error_code) == "0x80070005":
-                self.logger.fail("ATEXEC: Create schedule task got blocked.")
+                self.logger.fail("Scheduled task creation was blocked.")
+            elif hex(e.error_code) == "0x80070534":
+                self.logger.fail(f"User {self.run_task_as} does not have a valid windows station session, cannot run the task.")
             else:
-                self.logger.fail(str(e))
+                self.logger.fail(f"Unknown atexec error: {e}")
             return
 
         done = False
