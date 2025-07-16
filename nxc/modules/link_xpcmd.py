@@ -7,7 +7,7 @@ class NXCModule:
     name = "link_xpcmd"
     description = "Run xp_cmdshell commands on a linked SQL server"
     supported_protocols = ["mssql"]
-    multiple_hosts = False
+
 
     def __init__(self):
         self.linked_server = None

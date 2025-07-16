@@ -13,7 +13,6 @@ class NXCModule:
     name = "ioxidresolver"
     description = "This module helps you to identify hosts that have additional active interfaces"
     supported_protocols = ["smb", "wmi"]
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """DIFFERENT show only ip address if different from target ip (Default: False)"""

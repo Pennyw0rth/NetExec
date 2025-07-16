@@ -16,7 +16,7 @@ class NXCModule:
     name = "pre2k"
     description = "Identify pre-created computer accounts, save the results to a file, and obtain TGTs for each"
     supported_protocols = ["ldap"]
-    multiple_hosts = False
+
 
     def options(self, context, module_options):
         pass

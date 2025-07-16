@@ -9,7 +9,7 @@ class NXCModule:
     name = "example module"
     description = "I do something"
     supported_protocols = []  # Example: ['smb', 'mssql']
-    multiple_hosts = True  # Does it make sense to run this module on multiple hosts at a time?
+
 
     def __init__(self):
         self.context = None

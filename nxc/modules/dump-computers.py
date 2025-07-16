@@ -5,7 +5,7 @@ class NXCModule:
     name = "dump-computers"
     description = "Dumps all computers in the domain"
     supported_protocols = ["ldap"]
-    multiple_hosts = False
+
 
     def options(self, context, module_options):
         """

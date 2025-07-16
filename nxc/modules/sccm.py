@@ -22,7 +22,6 @@ class NXCModule:
     name = "sccm"
     description = "Find a SCCM infrastructure in the Active Directory"
     supported_protocols = ["ldap"]
-    multiple_hosts = True
 
     def __init__(self):
         self.sccm_site_servers = []     # List of dns host names of the SCCM site servers

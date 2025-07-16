@@ -24,7 +24,7 @@ class NXCModule:
     name = "enum_ca"
     description = "Anonymously uses RPC endpoints to hunt for ADCS CAs"
     supported_protocols = ["smb"]  # Example: ['smb', 'mssql']
-    multiple_hosts = True  # Does it make sense to run this module on multiple hosts at a time?
+
 
     def __init__(self, context=None, module_options=None):
         self.context = context

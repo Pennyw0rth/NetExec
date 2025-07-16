@@ -25,7 +25,6 @@ class NXCModule:
     name = "ldap-checker"
     description = "[REMOVED] Checks whether LDAP signing and channel binding are required and / or enforced"
     supported_protocols = ["ldap"]
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """No options available."""

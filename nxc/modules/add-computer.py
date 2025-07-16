@@ -16,7 +16,7 @@ class NXCModule:
     name = "add-computer"
     description = "Adds or deletes a domain computer"
     supported_protocols = ["smb"]
-    multiple_hosts = False
+
 
     def options(self, context, module_options):
         """

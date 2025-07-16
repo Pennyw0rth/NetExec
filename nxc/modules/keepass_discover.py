@@ -12,7 +12,6 @@ class NXCModule:
     name = "keepass_discover"
     description = "Search for KeePass-related files and process."
     supported_protocols = ["smb"]
-    multiple_hosts = True
 
     def __init__(self):
         self.search_type = "ALL"

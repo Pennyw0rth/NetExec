@@ -14,7 +14,6 @@ class NXCModule:
     name = "impersonate"
     description = "List and impersonate tokens to run command as locally logged on users"
     supported_protocols = ["smb"]
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """

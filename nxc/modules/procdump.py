@@ -15,7 +15,6 @@ class NXCModule:
     name = "procdump"
     description = "Get lsass dump using procdump64 and parse the result with pypykatz"
     supported_protocols = ["smb"]
-    multiple_hosts = True
 
     def options(self, context, module_options):
         r"""

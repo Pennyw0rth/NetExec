@@ -14,7 +14,6 @@ class NXCModule:
     name = "zerologon"
     description = "Module to check if the DC is vulnerable to Zerologon aka CVE-2020-1472"
     supported_protocols = ["smb", "wmi"]
-    multiple_hosts = False
 
     def __init__(self, context=None, module_options=None):
         self.context = context

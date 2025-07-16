@@ -12,7 +12,7 @@ class NXCModule:
     name = "firefox"
     description = "[REMOVED] Dump credentials from Firefox"
     supported_protocols = ["smb"]
-    multiple_hosts = True  # Does it make sense to run this module on multiple hosts at a time?
+
 
     def options(self, context, module_options):
         """

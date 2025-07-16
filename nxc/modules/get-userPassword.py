@@ -12,7 +12,6 @@ class NXCModule:
     name = "get-userPassword"
     description = "Get userPassword attribute from all users in ldap"
     supported_protocols = ["ldap"]
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """

@@ -16,7 +16,7 @@ class NXCModule:
     name = "find-computer"
     description = "Finds computers in the domain via the provided text"
     supported_protocols = ["ldap"]
-    multiple_hosts = False
+
 
     def options(self, context, module_options):
         """

@@ -11,7 +11,7 @@ class NXCModule:
     name = "pso"
     description = "Module to get the Fine Grained Password Policy/PSOs"
     supported_protocols = ["ldap"]
-    multiple_hosts = False
+
 
     def __init__(self, context=None, module_options=None):
         self.context = context
