@@ -14,7 +14,6 @@ class NXCModule:
     description = "Extracting Credentials From Windows Logs (Event ID: 4688 and SYSMON)"
     supported_protocols = ["smb"]  # Example: ['smb', 'mssql']
 
-
     def __init__(self):
         self.context = None
         self.module_options = None

@@ -6,7 +6,6 @@ class NXCModule:
     description = "Dumps all computers in the domain"
     supported_protocols = ["ldap"]
 
-
     def options(self, context, module_options):
         """
         TYPE        Only dump NETBIOS or FQDN instead of 'FQDN (OS Version)'

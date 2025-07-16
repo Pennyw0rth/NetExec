@@ -8,7 +8,6 @@ class NXCModule:
     description = "Execute commands on a SQL Server linked server"
     supported_protocols = ["mssql"]
 
-
     def __init__(self):
         self.mssql_conn = None
         self.context = None

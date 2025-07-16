@@ -200,7 +200,6 @@ class NXCModule:
     description = "Read and backup the Discretionary Access Control List of objects. Be careful, this module cannot read the DACLS recursively, see more explanation in the options."
     supported_protocols = ["ldap"]
 
-
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options

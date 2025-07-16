@@ -25,7 +25,6 @@ class NXCModule:
     description = "Anonymously uses RPC endpoints to hunt for ADCS CAs"
     supported_protocols = ["smb"]  # Example: ['smb', 'mssql']
 
-
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options

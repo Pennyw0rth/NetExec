@@ -10,7 +10,6 @@ class NXCModule:
     description = "I do something"
     supported_protocols = []  # Example: ['smb', 'mssql']
 
-
     def __init__(self):
         self.context = None
         self.module_options = None

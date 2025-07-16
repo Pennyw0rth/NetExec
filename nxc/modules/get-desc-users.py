@@ -14,7 +14,6 @@ class NXCModule:
     description = "Get description of the users. May contained password"
     supported_protocols = ["ldap"]
 
-
     def options(self, context, module_options):
         """
         FILTER    Apply the FILTER (grep-like) (default: '')

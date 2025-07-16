@@ -13,7 +13,6 @@ class NXCModule:
     description = "[REMOVED] Dump credentials from Firefox"
     supported_protocols = ["smb"]
 
-
     def options(self, context, module_options):
         """
         [REMOVED] use the --dpapi flag instead of the module firefox.

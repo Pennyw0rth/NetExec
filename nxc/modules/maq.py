@@ -20,7 +20,6 @@ class NXCModule:
     description = "Retrieves the MachineAccountQuota domain-level attribute"
     supported_protocols = ["ldap"]
 
-
     def on_login(self, context, connection):
         context.log.display("Getting the MachineAccountQuota")
         result = connection.search("(objectClass=*)", ["ms-DS-MachineAccountQuota"])
