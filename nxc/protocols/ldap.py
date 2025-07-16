@@ -1410,7 +1410,7 @@ class ldap(connection):
             return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).minutes} minutes"
         
         # Are there even any FGPPs?
-        self.logger.success("Attempting to enumerate policies...")
+        self.logger.info("Attempting to enumerate policies...")
         resp = self.search(searchFilter="(objectclass=*)", baseDN=f"CN=Password Settings Container,CN=System,{self.baseDN}", attributes=[])
         if len(resp) > 1:
             self.logger.highlight(f"{len(resp) - 1} PSO Objects found!")
@@ -1419,57 +1419,42 @@ class ldap(connection):
 
         # Who do they apply to?
         resp = self.search(searchFilter="(objectclass=*)", attributes=["DistinguishedName", "msDS-PSOApplied"])
-        for attrs in resp:
-            if isinstance(attrs, ldapasn1_impacket.SearchResultEntry) is not True:
-                continue
-            for attr in attrs["attributes"]:
-                if str(attr["type"]) in "msDS-PSOApplied":
-                    self.logger.highlight(f"Object: {attrs['objectName']}")
-                    self.logger.highlight("Applied Policy: ")
-                    for value in attr["vals"]:
-                        self.logger.highlight(f"\t{value}")
-                    self.logger.highlight("")
+        resp_parsed = parse_result_attributes(resp)
+        for attrs in resp_parsed:
+            if "msDS-PSOApplied" in attrs:
+                # Get the distinguished name from the original response for objectName
+                for orig_resp in resp:
+                    if isinstance(orig_resp, ldapasn1_impacket.SearchResultEntry):
+                        self.logger.highlight(f"Object: {orig_resp['objectName']}")
+                        break
+                self.logger.highlight("Applied Policy: ")
+                pso_applied = attrs["msDS-PSOApplied"]
+                self.logger.highlight(f"\t{pso_applied}")
+                self.logger.highlight("")
 
         # Let's find out even more details!
-        self.logger.success("Attempting to enumerate details...\n")
+        self.logger.info("Attempting to enumerate details...\n")
         resp = self.search(searchFilter="(objectclass=msDS-PasswordSettings)",
                           attributes=["name", "msds-lockoutthreshold", "msds-psoappliesto", "msds-minimumpasswordlength",
                                      "msds-passwordhistorylength", "msds-lockoutobservationwindow", "msds-lockoutduration",
                                      "msds-passwordsettingsprecedence", "msds-passwordcomplexityenabled", "Description",
                                      "msds-passwordreversibleencryptionenabled", "msds-minimumpasswordage", "msds-maximumpasswordage"])
-        for attrs in resp:
-            if not isinstance(attrs, ldapasn1_impacket.SearchResultEntry):
-                continue
-            policyName, description, passwordLength, passwordhistorylength, lockoutThreshold, observationWindow, lockoutDuration, complexity, minPassAge, maxPassAge, reverseibleEncryption, precedence, policyApplies = ("",) * 13
-            for attr in attrs["attributes"]:
-                if str(attr["type"]) == "name":
-                    policyName = attr["vals"][0]
-                elif str(attr["type"]) == "msDS-LockoutThreshold":
-                    lockoutThreshold = attr["vals"][0]
-                elif str(attr["type"]) == "msDS-MinimumPasswordLength":
-                    passwordLength = attr["vals"][0]
-                elif str(attr["type"]) == "msDS-PasswordHistoryLength":
-                    passwordhistorylength = attr["vals"][0]
-                elif str(attr["type"]) == "msDS-LockoutObservationWindow":
-                    observationWindow = attr["vals"][0]
-                elif str(attr["type"]) == "msDS-LockoutDuration":
-                    lockoutDuration = attr["vals"][0]
-                elif str(attr["type"]) == "msDS-PasswordSettingsPrecedence":
-                    precedence = attr["vals"][0]
-                elif str(attr["type"]) == "msDS-PasswordComplexityEnabled":
-                    complexity = attr["vals"][0]
-                elif str(attr["type"]) == "msDS-PasswordReversibleEncryptionEnabled":
-                    reverseibleEncryption = attr["vals"][0]
-                elif str(attr["type"]) == "msDS-MinimumPasswordAge":
-                    minPassAge = attr["vals"][0]
-                elif str(attr["type"]) == "msDS-MaximumPasswordAge":
-                    maxPassAge = attr["vals"][0]
-                elif str(attr["type"]) == "description":
-                    description = attr["vals"][0]
-                elif str(attr["type"]) == "msDS-PSOAppliesTo":
-                    policyApplies = ""
-                    for value in attr["vals"]:
-                        policyApplies += f"{value};"
+        resp_parsed = parse_result_attributes(resp)
+        for attrs in resp_parsed:
+            policyName = attrs.get("name", "")
+            description = attrs.get("description", "")
+            passwordLength = attrs.get("msDS-MinimumPasswordLength", "")
+            passwordhistorylength = attrs.get("msDS-PasswordHistoryLength", "")
+            lockoutThreshold = attrs.get("msDS-LockoutThreshold", "")
+            observationWindow = attrs.get("msDS-LockoutObservationWindow", "")
+            lockoutDuration = attrs.get("msDS-LockoutDuration", "")
+            complexity = attrs.get("msDS-PasswordComplexityEnabled", "")
+            minPassAge = attrs.get("msDS-MinimumPasswordAge", "")
+            maxPassAge = attrs.get("msDS-MaximumPasswordAge", "")
+            reverseibleEncryption = attrs.get("msDS-PasswordReversibleEncryptionEnabled", "")
+            precedence = attrs.get("msDS-PasswordSettingsPrecedence", "")
+            policyApplies = attrs.get("msDS-PSOAppliesTo", "")
+
             self.logger.highlight(f"Policy Name: {policyName}")
             if description:
                 self.logger.highlight(f"Description: {description}")
@@ -1484,9 +1469,12 @@ class ldap(connection):
             self.logger.highlight(f"Reversible Encryption: {reverseibleEncryption}")
             self.logger.highlight(f"Precedence: {precedence} (Lower is Higher Priority)")
             self.logger.highlight("Policy Applies to:")
-            for value in str(policyApplies)[:-1].split(";"):
-                if value:
-                    self.logger.highlight(f"\t{value}")
+            if isinstance(policyApplies, list):
+                for value in policyApplies:
+                    if value:
+                        self.logger.highlight(f"\t{value}")
+            elif policyApplies:
+                self.logger.highlight(f"\t{policyApplies}")
             self.logger.highlight("")
 
     def bloodhound(self):
