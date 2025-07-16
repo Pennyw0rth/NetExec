@@ -10,7 +10,6 @@ class NXCModule:
     name = "met_inject"
     description = "Downloads the Meterpreter stager and injects it into memory"
     supported_protocols = ["smb", "mssql"]
-    multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):
         self.rand = None

@@ -14,7 +14,6 @@ class NXCModule:
     name = "pi"
     description = "Run command as logged on users via Process Injection"
     supported_protocols = ["smb"]
-    multiple_hosts = True
 
     def options(self, context, module_options):
         r"""

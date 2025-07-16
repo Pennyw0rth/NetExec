@@ -13,7 +13,6 @@ class NXCModule:
     name = "obsolete"
     description = "Extract all obsolete operating systems from LDAP"
     supported_protocols = ["ldap"]
-    multiple_hosts = True
 
     def ldap_time_to_datetime(self, ldap_time):
         """Convert an LDAP timestamp to a datetime object."""

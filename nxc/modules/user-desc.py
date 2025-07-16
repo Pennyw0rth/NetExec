@@ -16,7 +16,6 @@ class NXCModule:
     name = "user-desc"
     description = "Get user descriptions stored in Active Directory"
     supported_protocols = ["ldap"]
-    multiple_hosts = True
 
     def __init__(self, context=None, multiple_options=None):
         self.keywords = None

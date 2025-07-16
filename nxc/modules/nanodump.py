@@ -16,7 +16,6 @@ class NXCModule:
     name = "nanodump"
     description = "Get lsass dump using nanodump and parse the result with pypykatz"
     supported_protocols = ["smb", "mssql"]
-    multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):
         self.connection = None

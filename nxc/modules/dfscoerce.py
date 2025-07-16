@@ -2,7 +2,6 @@ class NXCModule:
     name = "dfscoerce"
     description = "[REMOVED] Module to check if the DC is vulnerable to DFSCoerce, credit to @filip_dragovic/@Wh04m1001 and @topotam"
     supported_protocols = ["smb"]
-    multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):
         self.context = context

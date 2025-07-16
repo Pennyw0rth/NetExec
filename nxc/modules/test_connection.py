@@ -10,7 +10,6 @@ class NXCModule:
     name = "test_connection"
     description = "Pings a host"
     supported_protocols = ["smb", "mssql"]
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """HOST      Host to ping"""

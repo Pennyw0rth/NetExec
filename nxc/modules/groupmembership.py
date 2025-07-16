@@ -15,7 +15,6 @@ class NXCModule:
     name = "groupmembership"
     description = "Query the groups to which a user belongs."
     supported_protocols = ["ldap"]
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """USER	Choose a username to query group membership"""

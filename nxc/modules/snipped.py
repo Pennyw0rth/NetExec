@@ -9,7 +9,6 @@ class NXCModule:
     name = "snipped"
     description = "Downloads screenshots taken by the (new) Snipping Tool."
     supported_protocols = ["smb"]
-    multiple_hosts = True
 
     def __init__(self):
         self.context = None
