@@ -805,7 +805,7 @@ class smb(connection):
                     self.logger.debug("Error executing command via mmcexec, traceback:")
                     self.logger.debug(format_exc())
                     continue
-            elif method == "atexec":               
+            elif method == "atexec":
                 try:
                     exec_method = TSCH_EXEC(
                         self.host if not self.kerberos else self.hostname + "." + self.domain,
