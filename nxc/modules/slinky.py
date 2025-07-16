@@ -67,7 +67,7 @@ class NXCModule:
 
         if not self.cleanup:
             self.server = module_options["SERVER"]
-            target_path = f"\\\\{self.server}\\share\\{self.lnk_name}.png"
+            target_path = f"\\\\{self.server}\\share\\{self.lnk_name}.exe"
             pylnk3.for_file(target_path, self.local_lnk_path)
 
     def on_login(self, context, connection):
