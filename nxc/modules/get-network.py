@@ -7,11 +7,7 @@ import socket
 from datetime import datetime
 from struct import unpack
 
-import dns.name
-import dns.resolver
-from impacket.ldap import ldap
 from impacket.structure import Structure
-from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from ldap3 import LEVEL
 from os.path import expanduser
 from nxc.paths import NXC_PATH
@@ -28,23 +24,8 @@ def get_dns_zones(connection, root, debug=False):
     return zones
 
 
-def get_dns_resolver(server, context):
-    # Create a resolver object
-    dnsresolver = dns.resolver.Resolver()
-    # Is our host an IP? In that case make sure the server IP is used
-    # if not assume lookups are working already
-    try:
-        server = server.removeprefix("ldap://")
-        server = server.removeprefix("ldaps://")
-        socket.inet_aton(server)
-        dnsresolver.nameservers = [server]
-    except OSError:
-        context.info("Using System DNS to resolve unknown entries. Make sure resolving your target domain works here or specify an IP as target host to use that server for queries")
-    return dnsresolver
-
-
-def ldap2domain(ldap):
-    return re.sub(r",DC=", ".", ldap[ldap.lower().find("dc="):], flags=re.IGNORECASE)[3:]
+def ldap2domain(baseDN):
+    return re.sub(r",DC=", ".", baseDN[baseDN.lower().find("dc="):], flags=re.IGNORECASE)[3:]
 
 
 def new_record(rtype, serial):
@@ -126,7 +107,6 @@ class NXCModule:
             baseDN=search_target,
         )
         list_sites_parsed = parse_result_attributes(list_sites)
-        get_dns_resolver(connection.host, context.log)
 
         outdata = []
         for site in list_sites_parsed:
