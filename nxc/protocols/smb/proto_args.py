@@ -80,6 +80,8 @@ def proto_args(parser, parents):
     cmd_exec_group = smb_parser.add_argument_group("Command Execution", "Options for executing commands")
     cmd_exec_group.add_argument("--exec-method", "--em", choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default="wmiexec", help="method to execute the command. Ignored if in MSSQL mode", action=DefaultTrackingAction)
     cmd_exec_group.add_argument("--run-task-as", "--rta", help="Specify the username to run the scheduled tasks as", type=str, dest="run_task_as")
+    cmd_exec_group.add_argument("--task-name", "--tn", help="Specify the name of the scheduled task to create", type=str, dest="task_name")
+
     cmd_exec_group.add_argument("--dcom-timeout", help="DCOM connection timeout", type=int, default=5)
     cmd_exec_group.add_argument("--get-output-tries", help="Number of times atexec/smbexec/mmcexec tries to get results", type=int, default=10)
     cmd_exec_group.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output. If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")

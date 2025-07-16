@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 
 class TSCH_EXEC:
-    def __init__(self, target, share_name, username, password, domain, run_task_as, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
+    def __init__(self, target, share_name, username, password, domain, task_name, run_task_as, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -28,6 +28,7 @@ class TSCH_EXEC:
         self.__output_filename = None
         self.__share = share
         self.logger = logger
+        self.task_name = task_name
         self.run_task_as = run_task_as 
 
         if hashes is not None:
@@ -137,17 +138,15 @@ class TSCH_EXEC:
         dce.set_credentials(*self.__rpctransport.get_credentials())
         dce.connect()
 
-        tmpName = gen_random_string(8)
-
         xml = self.gen_xml(command, fileless)
 
         self.logger.debug(f"Task XML: {xml}")
-        self.logger.info(f"Creating task \\{tmpName}")
+        self.logger.info(f"Creating task \\{self.task_name}")
         try:
             # windows server 2003 has no MSRPC_UUID_TSCHS, if it bind, it will return abstract_syntax_not_supported
             dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
             dce.bind(tsch.MSRPC_UUID_TSCHS)
-            tsch.hSchRpcRegisterTask(dce, f"\\{tmpName}", xml, tsch.TASK_CREATE, NULL, tsch.TASK_LOGON_NONE)
+            tsch.hSchRpcRegisterTask(dce, f"\\{self.task_name}", xml, tsch.TASK_CREATE, NULL, tsch.TASK_LOGON_NONE)
         except Exception as e:
             if e.error_code and hex(e.error_code) == "0x80070005":
                 self.logger.fail("Scheduled task creation was blocked.")
@@ -159,15 +158,15 @@ class TSCH_EXEC:
 
         done = False
         while not done:
-            self.logger.debug(f"Calling SchRpcGetLastRunInfo for \\{tmpName}")
-            resp = tsch.hSchRpcGetLastRunInfo(dce, f"\\{tmpName}")
+            self.logger.debug(f"Calling SchRpcGetLastRunInfo for \\{self.task_name}")
+            resp = tsch.hSchRpcGetLastRunInfo(dce, f"\\{self.task_name}")
             if resp["pLastRuntime"]["wYear"] != 0:
                 done = True
             else:
                 sleep(2)
 
-        self.logger.info(f"Deleting task \\{tmpName}")
-        tsch.hSchRpcDelete(dce, f"\\{tmpName}")
+        self.logger.info(f"Deleting task \\{self.task_name}")
+        tsch.hSchRpcDelete(dce, f"\\{self.task_name}")
 
         if self.__retOutput:
             if fileless:
