@@ -77,18 +77,12 @@ class NXCModule:
         """
         self.showall = False
         self.showhosts = False
-        self.showip = True
 
         if module_options and "ALL" in module_options:
             if module_options["ALL"].lower() == "true" or module_options["ALL"] == "1":
                 self.showall = True
             else:
                 print("Could not parse ALL option.")
-        if module_options and "IP" in module_options:
-            if module_options["IP"].lower() == "true" or module_options["IP"] == "1":
-                self.showip = True
-            else:
-                print("Could not parse ONLY_HOSTS option.")
         if module_options and "ONLY_HOSTS" in module_options:
             if module_options["ONLY_HOSTS"].lower() == "true" or module_options["ONLY_HOSTS"] == "1":
                 self.showhosts = True
@@ -130,14 +124,15 @@ class NXCModule:
                                     "value": address.formatCanonical(),
                                 }
                             )
-                    if dr["Type"] in [CNAME, NS, PTR]:
+                    # Skip without "ALL" and "ONLY_HOSTS" => only IPs
+                    elif dr["Type"] in [CNAME, NS, PTR] and (self.showall or self.showhosts):
                         address = DNS_RPC_RECORD_NODE_NAME(dr["Data"])
                         if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
                             outdata.append(
                                 {
                                     "name": recordname,
                                     "type": RECORD_TYPE_MAPPING[dr["Type"]],
-                                    "value": address[next(iter(address.fields))].toFqdn(),
+                                    "value": address["nameNode"].toFqdn(),
                                 }
                             )
                     elif dr["Type"] == AAAA:
@@ -150,6 +145,11 @@ class NXCModule:
                                     "value": address.formatCanonical(),
                                 }
                             )
+
+        # Filter duplicate IPs if "ALL"  and "ONLY_HOSTS" are not set
+        if not (self.showall or self.showhosts):
+            seen_ips = set()
+            outdata = [x for x in outdata if not (x["value"] in seen_ips or seen_ips.add(x["value"]))]
 
         context.log.highlight(f"Found {len(outdata)} records")
         path = expanduser(f"{NXC_PATH}/logs/{connection.domain}_network_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")
