@@ -35,7 +35,7 @@ class ConfigCheck:
 
     module = None
 
-    def __init__(self, name, description="", checkers=None, checker_args=None, checker_kwargs=None):
+    def __init__(self, name, description="", category="Other", checkers=None, checker_args=None, checker_kwargs=None):
         if checker_kwargs is None:
             checker_kwargs = [{}]
         if checker_args is None:
@@ -45,6 +45,7 @@ class ConfigCheck:
         self.check_id = None
         self.name = name
         self.description = description
+        self.category = category
         assert len(checkers) == len(checker_args)
         assert len(checkers) == len(checker_kwargs)
         self.checkers = checkers
@@ -101,17 +102,50 @@ class NXCModule:
         wcc_file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
         self.wcc_logger.addHandler(wcc_file_handler)
 
+        self.host_checker = HostChecker()
+
     def options(self, context, module_options):
         """
+        CHECKS          Only perform checks whose name or category matches the ones listed
+        LIST            List checks, grouped in categories. All checks are listed by default, but it is possible to query a specific category (case insensitive)
         OUTPUT_FORMAT   Format for report (Default: 'json')
         OUTPUT          Path for report
         QUIET           Do not print results to stdout (Default: False)
         """
+        # Organize checks by category
+        checks_by_category = {}
+        for check in self.host_checker.checks:
+            checks_by_category.setdefault(check.category, [])
+            checks_by_category[check.category].append(check)
+
+        if "LIST" in module_options:
+            for category in sorted(checks_by_category.keys()):
+                if module_options["LIST"].lower() not in ("", "*", "all") and category.lower() != module_options["LIST"].lower():
+                    continue
+                context.log.highlight(f"[{category}]")
+                for check in checks_by_category[category]:
+                    context.log.display(f"{check.name}: {check.description}")
+                print()
+            exit()
+                
         self.output = module_options.get("OUTPUT")
         self.output_format = module_options.get("OUTPUT_FORMAT", DEFAULT_OUTPUT_FORMAT)
         if self.output_format not in VALID_OUTPUT_FORMATS:
             self.output_format = DEFAULT_OUTPUT_FORMAT
         self.quiet = module_options.get("QUIET", "false").lower() in ("true", "1")
+
+        checks_filters = module_options.get("CHECKS", "")
+        checks_to_perform = []
+
+        # Only keep checks that match the filters provided
+        if checks_filters:
+            checks_filters = checks_filters.split(",")
+            for filter in checks_filters:
+                filter = filter.lower()
+                for check in self.host_checker.checks:
+                    if filter in check.category.lower() or filter in check.name.lower():
+                        checks_to_perform.append(check)
+            self.host_checker.checks = checks_to_perform
 
         self.results = {}
         ConfigCheck.module = self
@@ -120,7 +154,8 @@ class NXCModule:
     def on_admin_login(self, context, connection):
         self.results.setdefault(connection.host, {"checks": []})
         self.context = context
-        HostChecker(context, connection).run()
+        self.host_checker.setup_remops(context, connection)
+        self.host_checker.run()
         if self.output is not None:
             self.export_results()
 
@@ -147,7 +182,276 @@ class NXCModule:
 class HostChecker:
     module = None
 
-    def __init__(self, context, connection):
+    def __init__(self):
+        self.context = None
+        self.connection = None
+        self.dce = None
+
+        # Declare the checks to do and how to do them
+        self.checks = [
+            ConfigCheck(
+                name="Last successful update age", 
+                description="Checks how old is the last successful update", 
+                category="Updates",
+                checkers=[self.check_last_successful_update]
+            ),
+            ConfigCheck(
+                name="LAPS installed", 
+                description="Checks if LAPS is installed", 
+                category="Authentication",
+                checkers=[self.check_laps]
+            ),
+            ConfigCheck(
+                name="Administrator account renamed", 
+                description="Checks if Administror user name has been changed", 
+                category="Accounts",
+                checkers=[self.check_administrator_name]
+            ),
+            ConfigCheck(
+                name="UAC configuration", 
+                description="Checks if UAC configuration is secure", 
+                checker_args=[[self, 
+                    ("HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System", "EnableLUA", 1), 
+                    ("HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System", "LocalAccountTokenFilterPolicy", 0)
+                ]]
+            ),
+            ConfigCheck(
+                name="LM hash storage disabled", 
+                description="Checks if storing  hashes in LM format is disabled", 
+                category="Authentication",
+                checker_args=[[self, ("HKLM\\System\\CurrentControlSet\\Control\\Lsa", "NoLMHash", 1)]]
+            ),
+            ConfigCheck(
+                name="Always install elevated disabled",
+                description="Checks if AlwaysInstallElevated is disabled", 
+                checker_args=[[self, ("HKCU\\SOFTWARE\\Policies\\Microsoft\\Windows\\Installer", "AlwaysInstallElevated", 0)]]
+            ),
+            ConfigCheck(
+                name="IPv4 preferred over IPv6", 
+                description="Checks if IPv4 is preferred over IPv6", 
+                category="Network",
+                checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters", "DisabledComponents", (32, 255), in_)]]
+            ),
+            ConfigCheck(
+                name="Spooler service disabled", 
+                description="Checks if the spooler service is disabled", 
+                checkers=[self.check_spooler_service]
+            ),
+            ConfigCheck(
+                name="WDigest authentication disabled", 
+                description="Checks if WDigest authentication is disabled", 
+                category="Authentication",
+                checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest", "UseLogonCredential", 0)]]
+            ),
+            ConfigCheck(
+                name="WSUS configuration", 
+                description="Checks if WSUS configuration uses HTTPS", 
+                category="Updates",
+                checkers=[self.check_wsus_running, None], 
+                checker_args=[
+                    [], 
+                    [self, 
+                     ("HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate", "WUServer", "https://", startswith), 
+                     ("HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU", "UseWUServer", 0, operator.eq)
+                    ]
+                ], 
+                checker_kwargs=[{}, {"options": {"lastWins": True}}]
+            ),
+            ConfigCheck(
+                name="Small LSA cache", 
+                description="Checks how many logons are kept in the LSA cache", 
+                category="Authentication",
+                checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon", "CachedLogonsCount", 2, le)]]
+            ),
+            ConfigCheck(
+                name="AppLocker rules defined", 
+                description="Checks if there are AppLocker rules defined", 
+                checkers=[self.check_applocker]
+            ),
+            ConfigCheck(
+                name="RDP expiration time", 
+                description="Checks RDP session timeout", 
+                category="RDP",
+                checker_args=[[self, 
+                    ("HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services", "MaxDisconnectionTime", 0, operator.gt), 
+                    ("HKCU\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services", "MaxDisconnectionTime", 0, operator.gt)
+                ]]
+            ),
+            ConfigCheck(
+                name="CredentialGuard enabled", 
+                description="Checks if CredentialGuard is enabled", 
+                category="LSASS",
+                checker_args=[[self, 
+                    ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard", "EnableVirtualizationBasedSecurity", 1), 
+                    ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "LsaCfgFlags", 1)
+                ]]
+            ),
+            ConfigCheck(
+                name="Lsass run as PPL", 
+                description="Checks if lsass runs as a protected process", 
+                category="LSASS",
+                checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "RunAsPPL", 1)]]
+            ),
+            ConfigCheck(
+                name="No Powershell v2", 
+                description="Checks if powershell v2 is available", 
+                category="Powershell",
+                checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\PowerShell\\3\\PowerShellEngine", "PSCompatibleVersion", "2.0", not_(operator.contains))]]
+            ),
+            ConfigCheck(
+                name="LLMNR disabled", 
+                description="Checks if LLMNR is disabled", 
+                category="Network",
+                checker_args=[[self, ("HKLM\\Software\\policies\\Microsoft\\Windows NT\\DNSClient", "EnableMulticast", 0)]]
+            ),
+            ConfigCheck(
+                name="LmCompatibilityLevel == 5", 
+                description="Checks if LmCompatibilityLevel is set to 5", 
+                category="Authentication",
+                checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "LmCompatibilityLevel", 5, operator.ge)]]
+            ),
+            ConfigCheck(
+                name="NBTNS disabled", 
+                description="Checks if NBTNS is disabled on all interfaces", 
+                category="Network",
+                checkers=[self.check_nbtns]
+            ),
+            ConfigCheck(
+                name="mDNS disabled", 
+                description="Checks if mDNS is disabled", 
+                category="Network",
+                checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\DNScache\\Parameters", "EnableMDNS", 0)]]
+            ),
+            ConfigCheck(
+                name="SMB signing enabled", 
+                description="Checks if SMB signing is enabled", 
+                category="Network",
+                checker_args=[[self, ("HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters", "requiresecuritysignature", 1)]]
+            ),
+            ConfigCheck(
+                name="LDAP signing enabled", 
+                description="Checks if LDAP signing is enabled", 
+                category="Network",
+                checker_args=[[self, 
+                    ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\NTDS\\Parameters", "LDAPServerIntegrity", 2), 
+                    ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\NTDS", "LdapEnforceChannelBinding", 2)
+                ]]
+            ),
+            ConfigCheck(
+                name="SMB encryption enabled", 
+                description="Checks if SMB encryption is enabled", 
+                category="Network",
+                checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters", "EncryptData", 1)]]
+            ),
+            ConfigCheck(
+                name="RDP authentication", 
+                description="Checks RDP authentication configuration (NLA auth and restricted admin mode)", 
+                category="RDP",
+                checker_args=[[self, 
+                    ("HKLM\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp\\", "UserAuthentication", 1), 
+                    ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\LSA", "RestrictedAdminMode", 1)
+                ]]
+            ),
+            ConfigCheck(
+                name="BitLocker configuration", 
+                description="Checks the BitLocker configuration (based on https://www.stigviewer.com/stig/windows_10/2020-06-15/finding/V-94859)", 
+                checker_args=[[self, 
+                    ("HKLM\\SOFTWARE\\Policies\\Microsoft\\FVE", "UseAdvancedStartup", 1), 
+                    ("HKLM\\SOFTWARE\\Policies\\Microsoft\\FVE", "UseTPMPIN", 1)
+                ]]
+            ),
+            ConfigCheck(
+                name="Guest account disabled", 
+                description="Checks if the guest account is disabled", 
+                category="Accounts",
+                checkers=[self.check_guest_account_disabled]
+            ),
+            ConfigCheck(
+                name="Automatic session lock enabled", 
+                description="Checks if the session is automatically locked on after a period of inactivity", 
+                checker_args=[[self, 
+                    ("HKCU\\Control Panel\\Desktop", "ScreenSaverIsSecure", 1), 
+                    ("HKCU\\Control Panel\\Desktop", "ScreenSaveTimeOut", 300, le)
+                ]]
+            ),
+            ConfigCheck(
+                name='Powershell Execution Policy == "Restricted"', 
+                description='Checks if the Powershell execution policy is set to "Restricted"', 
+                category="Powershell",
+                checker_args=[[self, 
+                    ("HKLM\\SOFTWARE\\Microsoft\\PowerShell\\1\\ShellIds\\Microsoft.Powershell", "ExecutionPolicy", "Restricted\x00"), 
+                    ("HKCU\\SOFTWARE\\Microsoft\\PowerShell\\1\\ShellIds\\Microsoft.Powershell", "ExecutionPolicy", "Restricted\x00")
+                ]], 
+                checker_kwargs=[{"options": {"KOIfMissing": False, "lastWins": True}}]
+            ),
+            ConfigCheck(
+                name="Defender service running", 
+                description="Checks if defender service is enabled", 
+                category="Defender",
+                checkers=[self.check_defender_service]
+            ),
+            ConfigCheck(
+                name="Defender Tamper Protection enabled", 
+                description="Check if Defender Tamper Protection is enabled", 
+                category="Defender",
+                checker_args=[[self, ("HKLM\\Software\\Microsoft\\Windows Defender\\Features", "TamperProtection", 5)]]
+            ),
+            ConfigCheck(
+                name="Defender RealTime Monitoring enabled", 
+                description="Check if Defender RealTime Monitoring is enabled",
+                category="Defender",
+                checker_args=[[self, 
+                    ("HKLM\\Software\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableRealtimeMonitoring", 0), 
+                    ("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableRealtimeMonitoring", 0)
+                ]],
+                checker_kwargs=[{"options": {"lastWins": True, "stopOnOK": True}}]
+            ),
+            ConfigCheck(
+                name="Defender IOAV Protection enabled", 
+                description="Check if Defender IOAV Protection is enabled",
+                category="Defender",
+                checker_args=[[self, 
+                    ("HKLM\\Software\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableIOAVProtection", 0), 
+                    ("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableIOAVProtection", 0)
+                ]],
+                checker_kwargs=[{"options": {"lastWins": True, "stopOnOK": True}}]
+            ),
+            ConfigCheck(
+                name="Defender Behaviour Monitoring enabled", 
+                description="Check if Defender Behaviour Monitoring is enabled",
+                category="Defender",
+                checker_args=[[self, 
+                    ("HKLM\\Software\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableBehaviourMonitoring", 0), 
+                    ("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableBehaviourMonitoring", 0)
+                ]],
+                checker_kwargs=[{"options": {"lastWins": True, "stopOnOK": True}}]
+            ),
+            ConfigCheck(
+                name="Defender Script Scanning enabled", 
+                description="Check if Defender Script Scanning is enabled",
+                category="Defender",
+                checker_args=[[self, 
+                    ("HKLM\\Software\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableScriptScanning", 0), 
+                    ("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableScriptScanning", 0)
+                ]],
+                checker_kwargs=[{"options": {"lastWins": True, "stopOnOK": True}}]
+            ),
+            ConfigCheck(
+                name="Defender no path exclusions", 
+                description="Checks Defender path exclusion", 
+                category="Defender",
+                checkers=[self.check_defender_exclusion],
+                checker_args=[("HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Exclusions\\Paths", "HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Paths")]
+            ),
+            ConfigCheck(
+                name="Defender no extension exclusions", 
+                description="Checks Defender extension exclusion", 
+                category="Defender",
+                checkers=[self.check_defender_exclusion],
+                checker_args=[("HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Exclusions\\Extensions", "HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Extensions")])
+        ]
+
+    def setup_remops(self, context, connection):
         self.context = context
         self.connection = connection
         remoteOps = RemoteOperations(smbConnection=connection.conn, doKerberos=False)
@@ -159,45 +463,6 @@ class HostChecker:
         self.check_config()
 
     def init_checks(self):
-        # Declare the checks to do and how to do them
-        self.checks = [
-            ConfigCheck("Last successful update age", "Checks how old is the last successful update", checkers=[self.check_last_successful_update]),
-            ConfigCheck("LAPS installed", "Checks if LAPS is installed", checkers=[self.check_laps]),
-            ConfigCheck("Administrator account renamed", "Checks if Administror user name has been changed", checkers=[self.check_administrator_name]),
-            ConfigCheck("UAC configuration", "Checks if UAC configuration is secure", checker_args=[[self, ("HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System", "EnableLUA", 1), ("HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System", "LocalAccountTokenFilterPolicy", 0)]]),
-            ConfigCheck("LM hash storage disabled", "Checks if storing  hashes in LM format is disabled", checker_args=[[self, ("HKLM\\System\\CurrentControlSet\\Control\\Lsa", "NoLMHash", 1)]]),
-            ConfigCheck("Always install elevated disabled", "Checks if AlwaysInstallElevated is disabled", checker_args=[[self, ("HKCU\\SOFTWARE\\Policies\\Microsoft\\Windows\\Installer", "AlwaysInstallElevated", 0)]]),
-            ConfigCheck("IPv4 preferred over IPv6", "Checks if IPv4 is preferred over IPv6", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters", "DisabledComponents", (32, 255), in_)]]),
-            ConfigCheck("Spooler service disabled", "Checks if the spooler service is disabled", checkers=[self.check_spooler_service]),
-            ConfigCheck("WDigest authentication disabled", "Checks if WDigest authentication is disabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest", "UseLogonCredential", 0)]]),
-            ConfigCheck("WSUS configuration", "Checks if WSUS configuration uses HTTPS", checkers=[self.check_wsus_running, None], checker_args=[[], [self, ("HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate", "WUServer", "https://", startswith), ("HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU", "UseWUServer", 0, operator.eq)]], checker_kwargs=[{}, {"options": {"lastWins": True}}]),
-            ConfigCheck("Small LSA cache", "Checks how many logons are kept in the LSA cache", checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon", "CachedLogonsCount", 2, le)]]),
-            ConfigCheck("AppLocker rules defined", "Checks if there are AppLocker rules defined", checkers=[self.check_applocker]),
-            ConfigCheck("RDP expiration time", "Checks RDP session timeout", checker_args=[[self, ("HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services", "MaxDisconnectionTime", 0, operator.gt), ("HKCU\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services", "MaxDisconnectionTime", 0, operator.gt)]]),
-            ConfigCheck("CredentialGuard enabled", "Checks if CredentialGuard is enabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard", "EnableVirtualizationBasedSecurity", 1), ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "LsaCfgFlags", 1)]]),
-            ConfigCheck("Lsass run as PPL", "Checks if lsass runs as a protected process", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "RunAsPPL", 1)]]),
-            ConfigCheck("No Powershell v2", "Checks if powershell v2 is available", checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\PowerShell\\3\\PowerShellEngine", "PSCompatibleVersion", "2.0", not_(operator.contains))]]),
-            ConfigCheck("LLMNR disabled", "Checks if LLMNR is disabled", checker_args=[[self, ("HKLM\\Software\\policies\\Microsoft\\Windows NT\\DNSClient", "EnableMulticast", 0)]]),
-            ConfigCheck("LmCompatibilityLevel == 5", "Checks if LmCompatibilityLevel is set to 5", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "LmCompatibilityLevel", 5, operator.ge)]]),
-            ConfigCheck("NBTNS disabled", "Checks if NBTNS is disabled on all interfaces", checkers=[self.check_nbtns]),
-            ConfigCheck("mDNS disabled", "Checks if mDNS is disabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\DNScache\\Parameters", "EnableMDNS", 0)]]),
-            ConfigCheck("SMB signing enabled", "Checks if SMB signing is enabled", checker_args=[[self, ("HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters", "requiresecuritysignature", 1)]]),
-            ConfigCheck("LDAP signing enabled", "Checks if LDAP signing is enabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\NTDS\\Parameters", "LDAPServerIntegrity", 2), ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\NTDS", "LdapEnforceChannelBinding", 2)]]),
-            ConfigCheck("SMB encryption enabled", "Checks if SMB encryption is enabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters", "EncryptData", 1)]]),
-            ConfigCheck("RDP authentication", "Checks RDP authentication configuration (NLA auth and restricted admin mode)", checker_args=[[self, ("HKLM\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp\\", "UserAuthentication", 1), ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\LSA", "RestrictedAdminMode", 1)]]),
-            ConfigCheck("BitLocker configuration", "Checks the BitLocker configuration (based on https://www.stigviewer.com/stig/windows_10/2020-06-15/finding/V-94859)", checker_args=[[self, ("HKLM\\SOFTWARE\\Policies\\Microsoft\\FVE", "UseAdvancedStartup", 1), ("HKLM\\SOFTWARE\\Policies\\Microsoft\\FVE", "UseTPMPIN", 1)]]),
-            ConfigCheck("Guest account disabled", "Checks if the guest account is disabled", checkers=[self.check_guest_account_disabled]),
-            ConfigCheck("Automatic session lock enabled", "Checks if the session is automatically locked on after a period of inactivity", checker_args=[[self, ("HKCU\\Control Panel\\Desktop", "ScreenSaverIsSecure", 1), ("HKCU\\Control Panel\\Desktop", "ScreenSaveTimeOut", 300, le)]]),
-            ConfigCheck('Powershell Execution Policy == "Restricted"', 'Checks if the Powershell execution policy is set to "Restricted"', checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\PowerShell\\1\\ShellIds\\Microsoft.Powershell", "ExecutionPolicy", "Restricted\x00"), ("HKCU\\SOFTWARE\\Microsoft\\PowerShell\\1\\ShellIds\\Microsoft.Powershell", "ExecutionPolicy", "Restricted\x00")]], checker_kwargs=[{"options": {"KOIfMissing": False, "lastWins": True}}]),
-            ConfigCheck("Defender service running", "Checks if defender service is enabled", checkers=[self.check_defender_service]),
-            ConfigCheck("Defender Tamper Protection enabled", "Check if Defender Tamper Protection is enabled", checker_args=[[self, ("HKLM\\Software\\Microsoft\\Windows Defender\\Features", "TamperProtection", 5)]]),
-            ConfigCheck("Defender RealTime Monitoring enabled", "Check if Defender RealTime Monitoring is enabled", checker_args=[[self, ("HKLM\\Software\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableRealtimeMonitoring", 0), ("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableRealtimeMonitoring", 0)]], checker_kwargs=[{"options": {"lastWins": True, "stopOnOK": True}}]),
-            ConfigCheck("Defender IOAV Protection enabled", "Check if Defender IOAV Protection is enabled", checker_args=[[self, ("HKLM\\Software\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableIOAVProtection", 0), ("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableIOAVProtection", 0)]], checker_kwargs=[{"options": {"lastWins": True, "stopOnOK": True}}]),
-            ConfigCheck("Defender Behaviour Monitoring enabled", "Check if Defender Behaviour Monitoring is enabled", checker_args=[[self, ("HKLM\\Software\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableBehaviourMonitoring", 0), ("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableBehaviourMonitoring", 0)]], checker_kwargs=[{"options": {"lastWins": True, "stopOnOK": True}}]),
-            ConfigCheck("Defender Script Scanning enabled", "Check if Defender Script Scanning is enabled", checker_args=[[self, ("HKLM\\Software\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableScriptScanning", 0), ("HKLM\\Software\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableScriptScanning", 0)]], checker_kwargs=[{"options": {"lastWins": True, "stopOnOK": True}}]),
-            ConfigCheck("Defender no path exclusions", "Checks Defender path exclusion", checkers=[self.check_defender_exclusion], checker_args=[("HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Exclusions\\Paths", "HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Paths")]),
-            ConfigCheck("Defender no extension exclusions", "Checks Defender extension exclusion", checkers=[self.check_defender_exclusion], checker_args=[("HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Exclusions\\Extensions", "HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Extensions")])
-        ]
 
         # Add check to conf_checks table if missing
         db_checks = self.connection.db.get_checks()
