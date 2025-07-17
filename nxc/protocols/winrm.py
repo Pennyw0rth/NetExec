@@ -339,6 +339,11 @@ class winrm(connection):
             LSA.dumpSecrets()
 
     def dpapi(self):
+        """
+        Find and unlock Credential Manager masterkeys and credentials owned by user.
+        The flow is inspired by and a simplified version of dploot's triage methods for user masterkeys and credentials.
+        Actual decryption of keys and credentials is taken and adapted from impacket-dpapi.
+        """
         if self.args.dump_method == "cmd":
             self.logger.fail("'cmd' dump method not supported, please use '--dump-method powershell'")
             return
