@@ -14,7 +14,6 @@ class NXCModule:
     name = "gpp_password"
     description = "Retrieves the plaintext password and other information for accounts pushed through Group Policy Preferences."
     supported_protocols = ["smb"]
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """ """

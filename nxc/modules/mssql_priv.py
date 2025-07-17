@@ -23,7 +23,6 @@ class NXCModule:
     name = "mssql_priv"
     description = "Enumerate and exploit MSSQL privileges"
     supported_protocols = ["mssql"]
-    multiple_hosts = True
 
     def __init__(self):
         self.admin_privs = None

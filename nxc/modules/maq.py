@@ -19,7 +19,6 @@ class NXCModule:
     name = "maq"
     description = "Retrieves the MachineAccountQuota domain-level attribute"
     supported_protocols = ["ldap"]
-    multiple_hosts = False
 
     def on_login(self, context, connection):
         context.log.display("Getting the MachineAccountQuota")

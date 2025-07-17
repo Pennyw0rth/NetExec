@@ -190,11 +190,6 @@ def main():
             nxc_logger.debug(f"Loading module for sanity check {m} at path {modules[m]['path']}")
             module = loader.init_module(modules[m]["path"])
 
-            if not module.multiple_hosts and len(targets) > 1:
-                ans = input(highlight("[!] Running this module on multiple hosts doesn't really make any sense, are you sure you want to continue? [Y/n] ", "red"))
-                if ans.lower() not in ["y", "yes", ""]:
-                    exit(1)
-
             # Add modules paths to the protocol object so it can load them itself
             proto_module_paths.append(modules[m]["path"])
         protocol_object.module_paths = proto_module_paths

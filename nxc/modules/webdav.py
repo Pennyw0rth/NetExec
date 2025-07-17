@@ -15,7 +15,6 @@ class NXCModule:
     name = "webdav"
     description = "Checks whether the WebClient service is running on the target"
     supported_protocols = ["smb"]
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """MSG     Info message when the WebClient service is running. '{}' is replaced by the target."""

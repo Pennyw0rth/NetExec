@@ -13,7 +13,7 @@ class NXCModule:
     name = "group-mem"
     description = "[REMOVED] Retrieves all the members within a Group"
     supported_protocols = ["ldap"]
-    multiple_hosts = False
+
     primaryGroupID = ""
     answers = []
 
