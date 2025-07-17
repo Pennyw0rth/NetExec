@@ -14,8 +14,6 @@ class NXCModule:
     name = "get_netconnections"
     description = "Uses WMI to query network connections."
     supported_protocols = ["smb", "wmi"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """No options available"""

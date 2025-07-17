@@ -1,3 +1,5 @@
+# ❗❗❗ Before filing this bug report, MAKE SURE you have already downloaded the newest version of NetExec from GitHub and installed it! Many issues have already been reported and fixed, _especially_ if you are running the native Kali version! Please delete this line before submitting your issue if you have done so.❗❗❗
+
 ---
 name: Bug report
 about: Create a report to help us improve
@@ -6,6 +8,8 @@ labels: ''
 assignees: ''
 
 ---
+
+
 
 **Describe the bug**
 A clear and concise description of what the bug is.
@@ -30,7 +34,7 @@ If applicable, add screenshots to help explain your problem.
 
 **NetExec info**
  - OS: [e.g. Kali]
- - Version of nxc: [e.g. v1.5.2]
+ - Version of nxc: [e.g. v1.5.2] (run nxc --version and post the _exact_ string that is output)
  - Installed from: apt/github/pip/docker/...? Please try with latest release before opening an issue
 
 **Additional context**

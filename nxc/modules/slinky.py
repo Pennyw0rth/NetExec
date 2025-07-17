@@ -14,8 +14,6 @@ class NXCModule:
     name = "slinky"
     description = "Creates windows shortcuts with the icon attribute containing a URI to the specified  server (default SMB) in all shares with write permissions"
     supported_protocols = ["smb"]
-    opsec_safe = False
-    multiple_hosts = True
 
     def __init__(self):
         self.server = None

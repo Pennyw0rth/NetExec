@@ -17,8 +17,6 @@ class NXCModule:
     name = "putty"
     description = "Query the registry for users who saved ssh private keys in PuTTY. Download the private keys if found."
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def __init__(self):
         self.context = None

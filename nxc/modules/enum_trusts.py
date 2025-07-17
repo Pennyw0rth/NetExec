@@ -9,8 +9,6 @@ class NXCModule:
     name = "enum_trusts"
     description = "[REMOVED] Extract all Trust Relationships, Trusting Direction, and Trust Transitivity"
     supported_protocols = ["ldap"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def options(self, context, module_options):
         pass

@@ -10,6 +10,7 @@ from re import sub, IGNORECASE
 from zipfile import ZipFile
 from termcolor import colored
 from dns import resolver
+from dateutil.relativedelta import relativedelta as rd
 
 from Cryptodome.Hash import MD4
 from OpenSSL.SSL import SysCallError
@@ -664,7 +665,7 @@ class ldap(connection):
         resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
         answers = []
-        if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "") and self.username != "":
+        if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "" or self.use_kcache) and self.username != "":
             for item in resp_parsed:
                 self.sid_domain = "-".join(item["objectSid"].split("-")[:-1])
 
@@ -1395,6 +1396,86 @@ class ldap(connection):
                 self.logger.highlight(f"Account: {gmsa_id:<20} NTLM: {passwd}")
         else:
             self.logger.fail("No string provided :'(")
+
+    def pso(self):
+        """
+        Get the Fine Grained Password Policy/PSOs
+        Initial FGPP/PSO script written by @n00py: https://github.com/n00py/GetFGPP
+        """
+        # Convert LDAP time to human readable format
+        def pso_days(ldap_time):
+            return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).days} days"
+        
+        def pso_mins(ldap_time):
+            return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).minutes} minutes"
+        
+        # Are there even any FGPPs?
+        self.logger.info("Attempting to enumerate policies...")
+        resp = self.search(searchFilter="(objectclass=*)", baseDN=f"CN=Password Settings Container,CN=System,{self.baseDN}", attributes=[])
+        if len(resp) > 1:
+            self.logger.highlight(f"{len(resp) - 1} PSO Objects found!")
+            self.logger.highlight("")
+            self.logger.success("Attempting to enumerate objects with an applied policy...")
+
+        # Who do they apply to?
+        resp = self.search(searchFilter="(objectclass=*)", attributes=["DistinguishedName", "msDS-PSOApplied"])
+        resp_parsed = parse_result_attributes(resp)
+        for attrs in resp_parsed:
+            if "msDS-PSOApplied" in attrs:
+                # Get the distinguished name from the original response for objectName
+                for orig_resp in resp:
+                    if isinstance(orig_resp, ldapasn1_impacket.SearchResultEntry):
+                        self.logger.highlight(f"Object: {orig_resp['objectName']}")
+                        break
+                self.logger.highlight("Applied Policy: ")
+                pso_applied = attrs["msDS-PSOApplied"]
+                self.logger.highlight(f"\t{pso_applied}")
+                self.logger.highlight("")
+
+        # Let's find out even more details!
+        self.logger.info("Attempting to enumerate details...\n")
+        resp = self.search(searchFilter="(objectclass=msDS-PasswordSettings)",
+                          attributes=["name", "msds-lockoutthreshold", "msds-psoappliesto", "msds-minimumpasswordlength",
+                                     "msds-passwordhistorylength", "msds-lockoutobservationwindow", "msds-lockoutduration",
+                                     "msds-passwordsettingsprecedence", "msds-passwordcomplexityenabled", "Description",
+                                     "msds-passwordreversibleencryptionenabled", "msds-minimumpasswordage", "msds-maximumpasswordage"])
+        resp_parsed = parse_result_attributes(resp)
+        for attrs in resp_parsed:
+            policyName = attrs.get("name", "")
+            description = attrs.get("description", "")
+            passwordLength = attrs.get("msDS-MinimumPasswordLength", "")
+            passwordhistorylength = attrs.get("msDS-PasswordHistoryLength", "")
+            lockoutThreshold = attrs.get("msDS-LockoutThreshold", "")
+            observationWindow = attrs.get("msDS-LockoutObservationWindow", "")
+            lockoutDuration = attrs.get("msDS-LockoutDuration", "")
+            complexity = attrs.get("msDS-PasswordComplexityEnabled", "")
+            minPassAge = attrs.get("msDS-MinimumPasswordAge", "")
+            maxPassAge = attrs.get("msDS-MaximumPasswordAge", "")
+            reverseibleEncryption = attrs.get("msDS-PasswordReversibleEncryptionEnabled", "")
+            precedence = attrs.get("msDS-PasswordSettingsPrecedence", "")
+            policyApplies = attrs.get("msDS-PSOAppliesTo", "")
+
+            self.logger.highlight(f"Policy Name: {policyName}")
+            if description:
+                self.logger.highlight(f"Description: {description}")
+            self.logger.highlight(f"Minimum Password Length: {passwordLength}")
+            self.logger.highlight(f"Minimum Password History Length: {passwordhistorylength}")
+            self.logger.highlight(f"Lockout Threshold: {lockoutThreshold}")
+            self.logger.highlight(f"Observation Window: {pso_mins(observationWindow)}")
+            self.logger.highlight(f"Lockout Duration: {pso_mins(lockoutDuration)}")
+            self.logger.highlight(f"Complexity Enabled: {complexity}")
+            self.logger.highlight(f"Minimum Password Age: {pso_days(minPassAge)}")
+            self.logger.highlight(f"Maximum Password Age: {pso_days(maxPassAge)}")
+            self.logger.highlight(f"Reversible Encryption: {reverseibleEncryption}")
+            self.logger.highlight(f"Precedence: {precedence} (Lower is Higher Priority)")
+            self.logger.highlight("Policy Applies to:")
+            if isinstance(policyApplies, list):
+                for value in policyApplies:
+                    if value:
+                        self.logger.highlight(f"\t{value}")
+            elif policyApplies:
+                self.logger.highlight(f"\t{policyApplies}")
+            self.logger.highlight("")
 
     def bloodhound(self):
         # Check which version is desired
