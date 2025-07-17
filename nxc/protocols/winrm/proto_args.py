@@ -17,6 +17,7 @@ def proto_args(parser, parents):
     cgroup.add_argument("--dump-method", action="store", default="cmd", choices={"cmd", "powershell"}, help="Select shell type in hashes dump")
     cgroup.add_argument("--sam", action="store_true", help="dump SAM hashes from target systems")
     cgroup.add_argument("--lsa", action="store_true", help="dump LSA secrets from target systems")
+    cgroup.add_argument("--dpapi", action="store_true", help="dump user's Credential Manager secrets from target systems")
 
     cgroup = winrm_parser.add_argument_group("Command Execution", "Options for executing commands")
     cgroup.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output. If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
