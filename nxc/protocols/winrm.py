@@ -344,10 +344,6 @@ class winrm(connection):
         The flow is inspired by and a simplified version of dploot's triage methods for user masterkeys and credentials.
         Actual decryption of keys and credentials is taken and adapted from impacket-dpapi.
         """
-        if self.args.dump_method == "cmd":
-            self.logger.fail("'cmd' dump method not supported, please use '--dump-method powershell'")
-            return
-
         user_masterkey_path = ntpath.join("C:\\Users", self.username, "AppData\\Roaming\\Microsoft\\Protect")
         user_credentials_paths = [
             ntpath.join("C:\\Users", self.username, "AppData\\Roaming\\Microsoft\\Credentials"),
