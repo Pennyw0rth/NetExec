@@ -2,7 +2,6 @@ import socket
 from nxc.logger import nxc_logger
 from impacket.ldap.ldap import LDAPSearchError
 from impacket.ldap.ldapasn1 import SearchResultEntry
-from dns import resolver
 import sys
 
 
@@ -69,13 +68,10 @@ class NXCModule:
             context.log.success("Found the following computers: ")
             for answer in answers:
                 try:
-                    resolv = resolver.Resolver()
-                    resolv.nameservers = [connection.host]
-                    result = resolv.resolve(answer[0], "A")
-                    ip = result[0].to_text()
-                    context.log.highlight(f"{answer[0]} ({answer[1]}) ({ip})")
+                    resolv = connection.resolver(answer[0])
+                    context.log.highlight(f"{answer[0]} ({answer[1]}) ({resolv['host']})")
                     context.log.debug("IP found via DNS query")
-                except socket.gaierror:
+                except (socket.gaierror, TypeError):
                     context.log.debug("Missing IP")
                     context.log.highlight(f"{answer[0]} ({answer[1]}) (No IP Found)")
         else:
