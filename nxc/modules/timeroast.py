@@ -23,7 +23,6 @@ class NXCModule:
     name = "timeroast"
     description = "Timeroasting exploits Windows NTP authentication to request password hashes of any computer or trust account"
     supported_protocols = ["smb"]
-    multiple_hosts = False
 
     def __init__(self):
         self.context = None

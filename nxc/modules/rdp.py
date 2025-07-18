@@ -15,7 +15,6 @@ class NXCModule:
     name = "rdp"
     description = "Enables/Disables RDP"
     supported_protocols = ["smb", "wmi"]
-    multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):
         self.context = context

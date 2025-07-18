@@ -68,7 +68,6 @@ class NXCModule:
     name = "get-network"
     description = "Query all DNS records with the corresponding IP from the domain."
     supported_protocols = ["ldap"]
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """

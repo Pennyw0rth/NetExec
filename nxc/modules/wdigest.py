@@ -9,7 +9,6 @@ class NXCModule:
     name = "wdigest"
     description = "Creates/Deletes the 'UseLogonCredential' registry key enabling WDigest cred dumping on Windows >= 8.1"
     supported_protocols = ["smb"]
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """ACTION  Create/Delete the registry key (choices: enable, disable, check)"""
