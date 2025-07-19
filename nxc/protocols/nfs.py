@@ -141,6 +141,7 @@ class nfs(connection):
             self.root_escape = self.try_root_escape()
         else:
             self.logger.debug("NFSv3 not supported, skipping root escape check")
+        self.db.add_host(self.host, self.port, str(self.nfs_versions), self.root_escape)
         self.nfs3.disconnect()
 
     def print_host_info(self):
