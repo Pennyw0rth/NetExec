@@ -1,10 +1,12 @@
 import os
 import random
 import socket
+import struct
 import contextlib
 from io import StringIO
+from termcolor import colored
 
-from nxc.config import process_secret
+from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.connection import requires_admin
 from nxc.logger import NXCAdapter
@@ -29,6 +31,12 @@ from impacket.tds import (
     TDS_ENVCHANGE_PACKETSIZE,
 )
 
+# Added by @Deft to support version enum and encryption via PRELOGIN
+from impacket.tds import (
+    TDS_PRELOGIN,         # Used to structure to initialize first packet to MSSQL
+    TDS_ENCRYPT_NOT_SUP,  # Encryption is not available
+    TDS_PRE_LOGIN,        # Used constant
+)
 
 class mssql(connection):
     def __init__(self, args, db, host):
@@ -40,6 +48,7 @@ class mssql(connection):
         self.os_arch = None
         self.nthash = ""
         self.is_mssql = False
+        self.encryption = None
 
         connection.__init__(self, args, db, host)
 
@@ -90,8 +99,28 @@ class mssql(connection):
             if is_admin:
                 self.admin_privs = True
 
+     # Added by @Deft_ from https://github.com/CompassSecurity/mssqlrelay/blob/main/mssqlrelay/commands/check.py
+    def check_encryption(self):
+        try:
+            prelogin = TDS_PRELOGIN()
+            prelogin["Version"] = b"\x08\x00\x01\x55\x00\x00"
+            prelogin["Encryption"] = TDS_ENCRYPT_NOT_SUP
+            prelogin["ThreadID"] = struct.pack("<L", random.randint(0, 65535))
+            prelogin["Instance"] = b"MSSQLServer\x00"
+            self.conn.sendTDS(TDS_PRE_LOGIN, prelogin.getData(), 0)
+            tds = self.conn.recvTDS()
+            response = TDS_PRELOGIN(tds["Data"])
+            return response["Encryption"]
+        except Exception as e:
+            self.logger.error(f"Exception in mssql:check_encryption {e!s}")
+            return "", ""
+
     @reconnect_mssql
     def enum_host_info(self):
+
+        # Added by @Deft_ to enumerate MSSQL encryption option
+        self.encryption = self.check_encryption()
+
         challenge = None
         try:
             login = tds.TDS_LOGIN()
@@ -141,7 +170,11 @@ class mssql(connection):
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain})")
+        if self.encryption != TDS_ENCRYPT_NOT_SUP:
+            encryption = colored("encryption:True", host_info_colors[0], attrs=["bold"])  
+        else:
+            encryption = colored("encryption:False", host_info_colors[1], attrs=["bold"])
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption})")
 
     @reconnect_mssql
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
