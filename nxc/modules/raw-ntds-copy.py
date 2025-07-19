@@ -18,8 +18,7 @@ class NXCModule:
     name = "raw-ntds-copy"
     description = "Extracting the ntds.dit, SAM, and SYSTEM files from DC by accessing the raw hard drive."
     supported_protocols = ["smb"]
-    opsec_safe = True  # could be flagged
-    multiple_hosts = False
+
     files_full_location_to_extract = [
         "Windows/System32/config/SYSTEM",
         "Windows/System32/config/SAM",
@@ -73,7 +72,7 @@ class NXCModule:
         full_path: str = ""
 
     def options(self, context, module_options):
-        pass
+        """No options available"""
 
     def read_from_disk(self, offset, size):
         """Get the raw content of the disk based on the specified offset and size by executing PowerShell code on the remote target"""
@@ -275,6 +274,7 @@ class NXCModule:
         path = abspath(join(export_path, filename_on_disk))
         makedirs(export_path, exist_ok=True)
         self.MFT_local_path = path
+
         self.logger.display(f"Analyzing & Extracting {MFT_file_header.filename} {MFT_file_header.size / (1024**2)}MB")
         for i in MFT_file_header.dataRun:
             cluster_loc = i[0] * self.CLUSTER_SIZE
@@ -363,6 +363,7 @@ class NXCModule:
         export_path = join(TMP_PATH, "raw_ntds_dump")
         path = abspath(join(export_path, filename_on_disk))
         makedirs(export_path, exist_ok=True)
+
         self.logger.display(f"Extracting {filename} to {path}")
         for i in lst:
             cluster_loc = i[0] * self.CLUSTER_SIZE
