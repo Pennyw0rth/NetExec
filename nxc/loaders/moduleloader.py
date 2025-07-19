@@ -33,9 +33,6 @@ class ModuleLoader:
         elif not hasattr(module, "supported_protocols"):
             self.logger.fail(f"{module_path} missing the supported_protocols variable")
             module_error = True
-        elif not hasattr(module, "multiple_hosts"):
-            self.logger.fail(f"{module_path} missing the multiple_hosts variable")
-            module_error = True
         elif not hasattr(module, "options"):
             self.logger.fail(f"{module_path} missing the options function")
             module_error = True
@@ -95,7 +92,6 @@ class ModuleLoader:
                     "description": module_spec.description,
                     "options": module_spec.options.__doc__,
                     "supported_protocols": module_spec.supported_protocols,
-                    "multiple_hosts": module_spec.multiple_hosts,
                     "requires_admin": bool(hasattr(module_spec, "on_admin_login") and callable(module_spec.on_admin_login)),
                 }
             }

@@ -24,7 +24,6 @@ class NXCModule:
     # while the module only executes legit powershell commands on the target (search and edit files)
     # some EDR like Trend Micro flag base64-encoded powershell as malicious
     # the option PSH_EXEC_METHOD can be used to avoid such execution, and will drop scripts on the target
-    multiple_hosts = False
 
     def __init__(self):
         # module options

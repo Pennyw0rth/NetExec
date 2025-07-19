@@ -11,7 +11,6 @@ class NXCModule:
     name = "msol"
     description = "Dump MSOL cleartext password and Entra ID credentials from the localDB on the Entra ID Connect Server"
     supported_protocols = ["smb"]
-    multiple_hosts = True
 
     def __init__(self):
         self.context = None

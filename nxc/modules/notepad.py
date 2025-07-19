@@ -28,7 +28,6 @@ class NXCModule:
     name = "notepad"
     description = "Extracts content from Windows Notepad tab state binary files."
     supported_protocols = ["smb"]
-    multiple_hosts = True
 
     def __init__(self, context=None):
         self.context = context

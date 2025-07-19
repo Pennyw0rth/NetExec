@@ -27,7 +27,6 @@ class NXCModule:
     name = "efsr_spray"
     description = "Tries to activate the EFSR service by creating a file with the encryption attribute on some available share."
     supported_protocols = ["smb"]
-    multiple_hosts = True  # Does the module support multiple hosts?
     excluded_shares = ["SYSVOL"]
 
     def options(self, context: Context, module_options: dict[str, str]):

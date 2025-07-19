@@ -130,7 +130,6 @@ class NXCModule:
     name = "hash_spider"
     description = "Dump lsass recursively from a given hash using BH to find local admins"
     supported_protocols = ["smb"]
-    multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):
         self.context = context

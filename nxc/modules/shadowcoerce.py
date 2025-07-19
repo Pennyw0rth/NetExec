@@ -2,7 +2,6 @@ class NXCModule:
     name = "shadowcoerce"
     description = "[REMOVED] Module to check if the target is vulnerable to ShadowCoerce, credit to @Shutdown and @topotam"
     supported_protocols = ["smb"]
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """
