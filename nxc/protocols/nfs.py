@@ -138,6 +138,7 @@ class nfs(connection):
         self.nfs3.connect()
         # Check if root escape is possible
         self.root_escape = self.try_root_escape()
+        self.db.add_host(self.host, self.port, str(self.nfs_versions), self.root_escape)
         self.nfs3.disconnect()
 
     def print_host_info(self):
