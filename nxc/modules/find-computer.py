@@ -68,10 +68,10 @@ class NXCModule:
             context.log.success("Found the following computers: ")
             for answer in answers:
                 try:
-                    ip = socket.gethostbyname(answer[0])
-                    context.log.highlight(f"{answer[0]} ({answer[1]}) ({ip})")
-                    context.log.debug("IP found")
-                except socket.gaierror:
+                    resolv = connection.resolver(answer[0])
+                    context.log.highlight(f"{answer[0]} ({answer[1]}) ({resolv['host']})")
+                    context.log.debug("IP found via DNS query")
+                except (socket.gaierror, TypeError):
                     context.log.debug("Missing IP")
                     context.log.highlight(f"{answer[0]} ({answer[1]}) (No IP Found)")
         else:
