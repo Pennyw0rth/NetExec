@@ -813,6 +813,9 @@ class smb(connection):
                         self.username,
                         self.password,
                         self.domain,
+                        self.args.task_name,
+                        self.args.run_task_as,
+                        self.args.upload_task_binary,
                         self.kerberos,
                         self.aesKey,
                         self.host,
@@ -879,6 +882,7 @@ class smb(connection):
                 if output:
                     for line in output.split("\n"):
                         self.logger.highlight(line)
+
             return output
         else:
             self.logger.fail(f"Execute command failed with {current_method}")
