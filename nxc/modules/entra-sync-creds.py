@@ -14,7 +14,6 @@ class NXCModule:
     description = "Extract Entra ID sync credentials from the target host"
     supported_protocols = ["smb"]
     opsec_safe = True
-    multiple_hosts = True
 
     def __init__(self):
         self.context = None

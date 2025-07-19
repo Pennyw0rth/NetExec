@@ -12,8 +12,6 @@ class NXCModule:
     name = "drop-sc"
     description = "Drop a searchConnector-ms file on each writable share"
     supported_protocols = ["smb"]
-    opsec_safe = False
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """

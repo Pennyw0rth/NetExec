@@ -9,8 +9,6 @@ class NXCModule:
     name = "get-info-users"
     description = "Get the info field of all users. May contain password"
     supported_protocols = ["ldap"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """FILTER    Apply the FILTER (grep-like) (default: '')"""

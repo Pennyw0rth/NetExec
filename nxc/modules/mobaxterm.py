@@ -9,8 +9,6 @@ class NXCModule:
     name = "mobaxterm"
     description = "Remotely dump MobaXterm credentials via RemoteRegistry or NTUSER.dat export"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """ """
