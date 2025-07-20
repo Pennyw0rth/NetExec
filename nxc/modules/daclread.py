@@ -11,6 +11,7 @@ from ldap3.protocol.formatters.formatters import format_sid
 from ldap3.utils.conv import escape_filter_chars
 from ldap3.protocol.microsoft import security_descriptor_control
 import sys
+import traceback
 
 OBJECT_TYPES_GUID = {}
 OBJECT_TYPES_GUID.update(SCHEMA_OBJECTS)
@@ -287,9 +288,10 @@ class NXCModule:
                     )[0][1][0][1][0]
                 )
                 context.log.highlight(f"Found principal SID to filter on: {self.principal_sid}")
-            except Exception:
+            except Exception as e:
                 context.log.fail(f"Principal SID not found in LDAP ({_lookedup_principal})")
-                sys.exit(1)
+                context.log.debug(f"Exception: {e}, {traceback.format_exc()}")
+                return
 
         # Searching for the targets SID and their Security Descriptors
         # If there is only one target
@@ -302,9 +304,10 @@ class NXCModule:
                 self.principal_raw_security_descriptor = str(self.target_principal[1][0][1][0]).encode("latin-1")
                 self.principal_security_descriptor = ldaptypes.SR_SECURITY_DESCRIPTOR(data=self.principal_raw_security_descriptor)
                 context.log.highlight(f"Target principal found in LDAP ({self.target_principal[0]})")
-            except Exception:
+            except Exception as e:
                 context.log.fail(f"Target SID not found in LDAP ({self.target_sAMAccountName})")
-                sys.exit(1)
+                context.log.exception(e)
+                return
 
             if self.action == "read":
                 self.read(context)
