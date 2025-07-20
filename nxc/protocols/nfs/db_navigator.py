@@ -1,5 +1,4 @@
 from nxc.nxcdb import DatabaseNavigator, print_help, print_table
-from nxc.helpers.misc import validate_ntlm
 
 
 class navigator(DatabaseNavigator):
@@ -16,16 +15,17 @@ class navigator(DatabaseNavigator):
         print_help(help_string)
 
     def display_hosts(self, hosts):
-        data = [["HostID", "Host", "Port", "Version", "Escape"]]
+        data = [["HostID", "Host", "Version", "Escape"]]
+        host_id_list = []
 
         for host in hosts:
             host_id = host[0]
+            host_id_list.append(host_id)
             ip = host[1]
-            port = host[2]
-            version = host[3]
-            escape = host[4]
+            version = host[2]
+            escape = bool(host[3])
 
-            data.append([host_id, ip, port, version, escape])
+            data.append([host_id, ip, version, escape])
             
         print_table(data, title="Hosts")
     
@@ -41,18 +41,17 @@ class navigator(DatabaseNavigator):
             if len(hosts) > 1:
                 self.display_hosts(hosts)
             elif len(hosts) == 1:
-                data = [["HostID", "Host", "Port", "Version", "Escape"]]
+                data = [["HostID", "Host", "Version", "Escape"]]
                 host_id_list = []
 
                 for host in hosts:
                     host_id = host[0]
                     host_id_list.append(host_id)
                     ip = host[1]
-                    port = host[2]
-                    version = host[3]
-                    escape = host[4]
+                    version = host[2]
+                    escape = bool(host[3])
 
-                    data.append([host_id, ip, port, version, escape])
+                    data.append([host_id, ip, version, escape])
                 print_table(data, title="Host")
 
     def help_hosts(self):
@@ -60,11 +59,11 @@ class navigator(DatabaseNavigator):
         hosts [filter_term]
         By default prints all hosts
         Table format:
-        | 'HostID', 'Host', 'Port', 'Version', 'Escape' |
+        | 'HostID', 'Host', 'Version', 'Escape' |
         Subcommands:
         filter_term - filters hosts with filter_term
             If a single host is returned (e.g. `hosts 15`, it prints the following tables:
-                Host | 'HostID', 'IP', 'Port', 'Version', 'Escape' |
+                Host | 'HostID', 'IP', 'Version', 'Escape' |
             Otherwise, it prints the default host table from a `like` query on the `ip` and `hostname` columns
         """
         print_help(help_string)

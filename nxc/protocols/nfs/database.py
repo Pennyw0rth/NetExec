@@ -33,9 +33,8 @@ class database(BaseDB):
             """CREATE TABLE "hosts" (
             "id" integer PRIMARY KEY,
             "host" text,
-            "port" integer,
             "version" text,
-            "root_escape" text
+            "root_escape" integer
             )"""
         )
         db_conn.execute(
@@ -73,7 +72,7 @@ class database(BaseDB):
                 )
                 sys.exit()
 
-    def add_host(self, host, port, version, escape):
+    def add_host(self, host, version, escape):
         """Check if this host is already in the DB, if not add it"""
         hosts = []
         updated_ids = []
@@ -85,7 +84,6 @@ class database(BaseDB):
         if not results:
             new_host = {
                 "host": host,
-                "port": port,
                 "version": version,
                 "root_escape": escape
             }
@@ -99,8 +97,6 @@ class database(BaseDB):
                 # only update column if it is being passed in
                 if host is not None:
                     host_data["host"] = host
-                if port is not None:
-                    host_data["port"] = port
                 if version is not None:
                     host_data["version"] = version
                 if escape is not None:
@@ -137,7 +133,7 @@ class database(BaseDB):
             q = format_host_query(q, filter_term, self.HostsTable)
 
         results = self.db_execute(q).all()
-        nxc_logger.debug(f"FTP get_hosts() - results: {results}")
+        nxc_logger.debug(f"NFS get_hosts() - results: {results}")
         return results
 
     def is_host_valid(self, host_id):
