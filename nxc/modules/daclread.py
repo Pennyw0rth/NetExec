@@ -376,21 +376,17 @@ class NXCModule:
         context.log.highlight("DACL backed up to %s", self.filename)
         self.filename = None
 
-    # Attempts to retrieve the SID and Distinguisehd Name from the sAMAccountName
-    # Not used for the moment
-    #   - samname : a sAMAccountName
-    def get_user_info(self, context, samname):
-        self.ldap_session.search(
-            searchBase=self.baseDN,
-            searchFilter=f"(sAMAccountName={escape_filter_chars(samname)})",
-            attributes=["objectSid"],
-        )
+    def get_user_info(self, context, sAMAccountName):
+        """Retrieves the SID and Distinguished Name from a sAMAccountName."""
         try:
-            dn = self.ldap_session.entries[0].entry_dn
-            sid = format_sid(self.ldap_session.entries[0]["objectSid"].raw_values[0])
-            return dn, sid
+            resp = self.connection.search(
+                searchFilter=f"(sAMAccountName={escape_filter_chars(sAMAccountName)})",
+                attributes=["distinguishedName", "objectSid"],
+            )
+            resp_parsed = parse_result_attributes(resp)[0]
+            return resp_parsed["distinguishedName"], resp_parsed["objectSid"]
         except Exception:
-            context.log.fail(f"User not found in LDAP: {samname}")
+            context.log.fail(f"User not found in LDAP: {sAMAccountName}")
             return False
 
     def resolveSID(self, sid):
@@ -398,17 +394,17 @@ class NXCModule:
         # Tries to resolve the SID from the well known SIDs
         if sid in WELL_KNOWN_SIDS:
             return WELL_KNOWN_SIDS[sid]
+
         # Tries to resolve the SID from the LDAP domain dump
-        else:
-            try:
-                resp = self.connection.search(
-                    searchFilter=f"(objectSid={sid})",
-                    attributes=["sAMAccountName"],
-                )
-                return parse_result_attributes(resp)[0]["sAMAccountName"]
-            except Exception:
-                self.context.log.debug(f"SID not found in LDAP: {sid}")
-                return ""
+        try:
+            resp = self.connection.search(
+                searchFilter=f"(objectSid={sid})",
+                attributes=["sAMAccountName"],
+            )
+            return parse_result_attributes(resp)[0]["sAMAccountName"]
+        except Exception:
+            self.context.log.debug(f"SID not found in LDAP: {sid}")
+            return ""
 
     # Parses a full DACL
     #   - dacl : the DACL to parse, submitted in a Security Desciptor format
