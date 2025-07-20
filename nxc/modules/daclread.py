@@ -279,35 +279,44 @@ class NXCModule:
 
         # Searching for the principal SID
         if self.principal_sAMAccountName is not None:
-            _lookedup_principal = self.principal_sAMAccountName
             try:
-                self.principal_sid = format_sid(
-                    self.ldap_session.search(
-                        searchBase=self.baseDN,
-                        searchFilter=f"(sAMAccountName={escape_filter_chars(_lookedup_principal)})",
-                        attributes=["objectSid"],
-                    )[0][1][0][1][0]
+                resp = connection.search(
+                    searchFilter=f"(sAMAccountName={escape_filter_chars(self.principal_sAMAccountName)})",
+                    attributes=["objectSid"],
                 )
+                resp_parsed = parse_result_attributes(resp)[0]
+                self.principal_sid = resp_parsed["objectSid"]
                 context.log.highlight(f"Found principal SID to filter on: {self.principal_sid}")
             except Exception as e:
-                context.log.fail(f"Principal SID not found in LDAP ({_lookedup_principal})")
+                context.log.fail(f"Principal SID not found in LDAP ({self.principal_sAMAccountName})")
                 context.log.debug(f"Exception: {e}, {traceback.format_exc()}")
                 return
 
         # Searching for the targets SID and their Security Descriptors
         # If there is only one target
         if (self.target_sAMAccountName or self.target_DN) and self.target_file is None:
-            # Searching for target account with its security descriptor
             try:
-                self.search_target_principal_security_descriptor(context, connection)
+                # Searching for target account with its security descriptor
+                if self.target_sAMAccountName:  # noqa: SIM108
+                    search_filter = f"(sAMAccountName={escape_filter_chars(self.target_sAMAccountName)})"
+                else:
+                    search_filter = f"(distinguishedName={escape_filter_chars(self.target_DN)})"
+
+                resp = connection.search(
+                    searchFilter=search_filter,
+                    attributes=["distinguishedName", "nTSecurityDescriptor"],
+                    searchControls=security_descriptor_control(sdflags=0x04),
+                )
+                resp_parsed = parse_result_attributes(resp)[0]
+
                 # Extract security descriptor data
-                self.target_principal_dn = self.target_principal[0]
-                self.principal_raw_security_descriptor = str(self.target_principal[1][0][1][0]).encode("latin-1")
+                self.target_principal_dn = resp_parsed["distinguishedName"]
+                self.principal_raw_security_descriptor = resp_parsed["nTSecurityDescriptor"]
                 self.principal_security_descriptor = ldaptypes.SR_SECURITY_DESCRIPTOR(data=self.principal_raw_security_descriptor)
-                context.log.highlight(f"Target principal found in LDAP ({self.target_principal[0]})")
+                context.log.highlight(f"Target principal found in LDAP ({self.target_principal_dn})")
             except Exception as e:
                 context.log.fail(f"Target SID not found in LDAP ({self.target_sAMAccountName})")
-                context.log.exception(e)
+                context.log.debug(f"Exception: {e}, {traceback.format_exc()}")
                 return
 
             if self.action == "read":
@@ -322,10 +331,16 @@ class NXCModule:
                 try:
                     self.target_sAMAccountName = target.strip()
                     # Searching for target account with its security descriptor
-                    self.search_target_principal_security_descriptor(context, connection)
+                    resp = connection.search(
+                        searchFilter=f"(sAMAccountName={escape_filter_chars(self.target_sAMAccountName)})",
+                        attributes=["distinguishedName", "nTSecurityDescriptor"],
+                        searchControls=security_descriptor_control(sdflags=0x04),
+                    )
+                    resp_parsed = parse_result_attributes(resp)[0]
+
                     # Extract security descriptor data
-                    self.target_principal_dn = self.target_principal[0]
-                    self.principal_raw_security_descriptor = str(self.target_principal[1][0][1][0]).encode("latin-1")
+                    self.target_principal_dn = resp_parsed["distinguishedName"]
+                    self.principal_raw_security_descriptor = resp_parsed["nTSecurityDescriptor"]
                     self.principal_security_descriptor = ldaptypes.SR_SECURITY_DESCRIPTOR(data=self.principal_raw_security_descriptor)
                     context.log.highlight(f"Target principal found in LDAP ({self.target_sAMAccountName})")
                 except Exception:
@@ -358,33 +373,6 @@ class NXCModule:
             json.dump(backup, outfile)
         context.log.highlight("DACL backed up to %s", self.filename)
         self.filename = None
-
-    # Attempts to retrieve the DACL in the Security Descriptor of the specified target
-    def search_target_principal_security_descriptor(self, context, connection):
-        _lookedup_principal = ""
-        # Set SD flags to only query for DACL
-        controls = security_descriptor_control(sdflags=0x04)
-        if self.target_sAMAccountName is not None:
-            _lookedup_principal = self.target_sAMAccountName
-            target = self.ldap_session.search(
-                searchBase=self.baseDN,
-                searchFilter=f"(sAMAccountName={escape_filter_chars(_lookedup_principal)})",
-                attributes=["nTSecurityDescriptor"],
-                searchControls=controls,
-            )
-        if self.target_DN is not None:
-            _lookedup_principal = self.target_DN
-            target = self.ldap_session.search(
-                searchBase=_lookedup_principal,
-                searchFilter=f"(distinguishedName={_lookedup_principal})",
-                attributes=["nTSecurityDescriptor"],
-                searchControls=controls,
-            )
-        try:
-            self.target_principal = target[0]
-        except Exception:
-            context.log.fail(f"Principal not found in LDAP ({_lookedup_principal}), probably an LDAP session issue.")
-            sys.exit(0)
 
     # Attempts to retrieve the SID and Distinguisehd Name from the sAMAccountName
     # Not used for the moment
@@ -505,7 +493,7 @@ class NXCModule:
 
     def print_parsed_dacl(self, context, parsed_dacl):
         """Prints a full DACL by printing each parsed ACE
-        
+
         parsed_dacl : a parsed DACL from parse_dacl()
         """
         context.log.debug("Printing parsed DACL")
