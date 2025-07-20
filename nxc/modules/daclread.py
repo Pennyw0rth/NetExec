@@ -1,17 +1,18 @@
 import binascii
 import codecs
 import json
-import re
 import datetime
 from enum import Enum
 from impacket.ldap import ldaptypes
 from impacket.uuid import bin_to_string
 from nxc.helpers.msada_guids import SCHEMA_OBJECTS, EXTENDED_RIGHTS
+from nxc.parsers.ldap_results import parse_result_attributes
 from ldap3.protocol.formatters.formatters import format_sid
 from ldap3.utils.conv import escape_filter_chars
 from ldap3.protocol.microsoft import security_descriptor_control
 import sys
 import traceback
+from os.path import isfile
 
 OBJECT_TYPES_GUID = {}
 OBJECT_TYPES_GUID.update(SCHEMA_OBJECTS)
@@ -228,12 +229,12 @@ class NXCModule:
 
         if module_options and "TARGET" in module_options:
             context.log.debug("There is a target specified!")
-            if re.search(r"^(.+)\/([^\/]+)$", module_options["TARGET"]) is not None:
+            if isfile(module_options["TARGET"]):
                 try:
                     self.target_file = open(module_options["TARGET"])  # noqa: SIM115
                     self.target_sAMAccountName = None
                 except Exception:
-                    context.log.fail("The file doesn't exist or cannot be openned.")
+                    context.log.fail("The file doesn't exist or cannot be opened.")
             else:
                 context.log.debug(f"Setting target_sAMAccountName to {module_options['TARGET']}")
                 self.target_sAMAccountName = module_options["TARGET"]
