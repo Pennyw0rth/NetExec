@@ -7,7 +7,6 @@ from impacket.ldap import ldaptypes
 from impacket.uuid import bin_to_string
 from nxc.helpers.msada_guids import SCHEMA_OBJECTS, EXTENDED_RIGHTS
 from nxc.parsers.ldap_results import parse_result_attributes
-from ldap3.protocol.formatters.formatters import format_sid
 from ldap3.utils.conv import escape_filter_chars
 from ldap3.protocol.microsoft import security_descriptor_control
 import sys
@@ -375,19 +374,6 @@ class NXCModule:
             json.dump(backup, outfile)
         context.log.highlight("DACL backed up to %s", self.filename)
         self.filename = None
-
-    def get_user_info(self, context, sAMAccountName):
-        """Retrieves the SID and Distinguished Name from a sAMAccountName."""
-        try:
-            resp = self.connection.search(
-                searchFilter=f"(sAMAccountName={escape_filter_chars(sAMAccountName)})",
-                attributes=["distinguishedName", "objectSid"],
-            )
-            resp_parsed = parse_result_attributes(resp)[0]
-            return resp_parsed["distinguishedName"], resp_parsed["objectSid"]
-        except Exception:
-            context.log.fail(f"User not found in LDAP: {sAMAccountName}")
-            return False
 
     def resolveSID(self, sid):
         """Resolves a SID to its corresponding sAMAccountName."""
