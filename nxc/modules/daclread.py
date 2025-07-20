@@ -276,6 +276,8 @@ class NXCModule:
         context.log.highlight("Be careful, this module cannot read the DACLS recursively.")
         self.baseDN = connection.ldap_connection._baseDN
         self.ldap_session = connection.ldap_connection
+        self.connection = connection
+        self.context = context
 
         # Searching for the principal SID
         if self.principal_sAMAccountName is not None:
@@ -391,27 +393,21 @@ class NXCModule:
             context.log.fail(f"User not found in LDAP: {samname}")
             return False
 
-    # Attempts to resolve a SID and return the corresponding samaccountname
-    #   - sid : the SID to resolve
-    def resolveSID(self, context, sid):
+    def resolveSID(self, sid):
+        """Resolves a SID to its corresponding sAMAccountName."""
         # Tries to resolve the SID from the well known SIDs
         if sid in WELL_KNOWN_SIDS:
             return WELL_KNOWN_SIDS[sid]
         # Tries to resolve the SID from the LDAP domain dump
         else:
             try:
-                self.ldap_session.search(
-                    searchBase=self.baseDN,
+                resp = self.connection.search(
                     searchFilter=f"(objectSid={sid})",
                     attributes=["sAMAccountName"],
-                )[0][0]
-                return self.ldap_session.search(
-                    searchBase=self.baseDN,
-                    searchFilter=f"(objectSid={sid})",
-                    attributes=["sAMAccountName"],
-                )[0][1][0][1][0]
+                )
+                return parse_result_attributes(resp)[0]["sAMAccountName"]
             except Exception:
-                context.log.debug(f"SID not found in LDAP: {sid}")
+                self.context.log.debug(f"SID not found in LDAP: {sid}")
                 return ""
 
     # Parses a full DACL
@@ -450,7 +446,7 @@ class NXCModule:
             # Extracts the access mask (by parsing the simple permissions) and the principal's SID
             if ace["TypeName"] in ["ACCESS_ALLOWED_ACE", "ACCESS_DENIED_ACE"]:
                 access_mask = f"{', '.join(self.parse_perms(ace['Ace']['Mask']['Mask']))} (0x{ace['Ace']['Mask']['Mask']:x})"
-                trustee_sid = f"{self.resolveSID(context, ace['Ace']['Sid'].formatCanonical()) or 'UNKNOWN'} ({ace['Ace']['Sid'].formatCanonical()})"
+                trustee_sid = f"{self.resolveSID(ace['Ace']['Sid'].formatCanonical()) or 'UNKNOWN'} ({ace['Ace']['Sid'].formatCanonical()})"
                 parsed_ace = {
                     "Access mask": access_mask,
                     "Trustee (SID)": trustee_sid
@@ -478,7 +474,7 @@ class NXCModule:
                         parsed_ace["Inherited type (GUID)"] = f"UNKNOWN ({inh_obj_type})"
                 # Extract the Trustee SID (the object that has the right over the DACL bearer)
                 parsed_ace["Trustee (SID)"] = "{} ({})".format(
-                    self.resolveSID(context, ace["Ace"]["Sid"].formatCanonical()) or "UNKNOWN",
+                    self.resolveSID(ace["Ace"]["Sid"].formatCanonical()) or "UNKNOWN",
                     ace["Ace"]["Sid"].formatCanonical(),
                 )
         else:  # if the ACE is not an access allowed
