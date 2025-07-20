@@ -16,7 +16,7 @@ from nxc.helpers.powershell import get_ps_script
 
 
 class NXCModule:
-    name = "raw-ntds-copy"
+    name = "ntds-dump-raw"
     description = "Extracting the ntds.dit, SAM, and SYSTEM files from DC by accessing the raw hard drive."
     supported_protocols = ["smb"]
 
@@ -65,7 +65,7 @@ class NXCModule:
 
     def __init__(self):
         ps_script = ""
-        with open(get_ps_script("raw_ntds_copy/raw_ntds_copy.ps1")) as psFile:
+        with open(get_ps_script("ntds-dump-raw/ntds-dump-raw.ps1")) as psFile:
             for line in psFile:
                 if line.startswith("#") or line.strip() == "":
                     continue
