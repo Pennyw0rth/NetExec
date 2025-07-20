@@ -31,7 +31,6 @@ class database(BaseDB):
         __tablename__ = "hosts"
         id = Column(Integer)
         host = Column(String)
-        port = Column(Integer)
         version = Column(String)
         root_escape = Column(Boolean)
 
@@ -72,7 +71,7 @@ class database(BaseDB):
         self.LoggedinRelationsTable = self.reflect_table(self.LoggedInRelation)
         self.SharesTable = self.reflect_table(self.Share)
 
-    def add_host(self, host, port, version, escape):
+    def add_host(self, host, version, escape):
         """Check if this host is already in the DB, if not add it"""
         hosts = []
         updated_ids = []
@@ -84,7 +83,6 @@ class database(BaseDB):
         if not results:
             new_host = {
                 "host": host,
-                "port": port,
                 "version": version,
                 "root_escape": escape,
             }
@@ -97,12 +95,10 @@ class database(BaseDB):
                 nxc_logger.debug(f"host_data: {host_data}")
                 if host is not None:
                     host_data["host"] = host
-                if port is not None:
-                    host_data["port"] = port
                 if version is not None:
                     host_data["version"] = version
                 if escape is not None:
-                    host_data["root_escape"] = escape
+                    host_data["root_escape"] = bool(escape)
                 if host_data not in hosts:
                     hosts.append(host_data)
                     updated_ids.append(host_data["id"])
