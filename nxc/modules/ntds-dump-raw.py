@@ -18,7 +18,7 @@ from nxc.helpers.powershell import get_ps_script
 class NXCModule:
     name = "ntds-dump-raw"
     description = "Extracting the ntds.dit, SAM, and SYSTEM files from DC by accessing the raw hard drive."
-    supported_protocols = ["smb"]
+    supported_protocols = ["smb", "winrm"]
 
     files_full_location_to_extract = [
         "Windows/System32/config/SYSTEM",
