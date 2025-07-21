@@ -39,7 +39,6 @@ class WMIEXEC:
         self.__exec_timeout = exec_timeout
         self.__registry_Path = ""
         self.__outputBuffer = ""
-        self.__retOutput = True
 
         self.__shell = "cmd.exe /Q /c "
         self.__pwd = "C:\\"
@@ -53,8 +52,7 @@ class WMIEXEC:
         self.__win32Process, _ = self.__iWbemServices.GetObject("Win32_Process")
 
     def execute(self, command, output=False):
-        self.__retOutput = output
-        if self.__retOutput:
+        if output:
             self.execute_WithOutput(command)
         else:
             command = self.__shell + command
@@ -77,9 +75,16 @@ class WMIEXEC:
         keyName = str(uuid.uuid4())
         self.__registry_Path = f"Software\\Classes\\{gen_random_string(6)}"
 
-        command = rf"""{self.__shell} {command} 1> {result_output} 2>&1 && certutil -encodehex -f {result_output} {result_output_b64} 0x40000001 && for /F "usebackq" %G in ("{result_output_b64}") do reg add HKLM\{self.__registry_Path} /v {keyName} /t REG_SZ /d "%G" /f && del /q /f /s {result_output} {result_output_b64}"""
+        commands = [
+            f"{self.__shell} {command} 1> {result_output} 2>&1",
+            f"{self.__shell} certutil -encodehex -f {result_output} {result_output_b64} 0x40000001",
+            f'{self.__shell} for /F "usebackq" %G in ("{result_output_b64}") do reg add HKLM\\{self.__registry_Path} /v {keyName} /t REG_SZ /d "%G" /f',
+            f"{self.__shell} del /q /f /s {result_output} {result_output_b64}",
+        ]
 
-        self.execute_remote(command)
+        for cmd in commands:
+            self.execute_remote(cmd)
+            time.sleep(0.5)
         self.logger.info(f"Waiting {self.__exec_timeout}s for command completely executed.")
         time.sleep(self.__exec_timeout)
 
@@ -90,13 +95,13 @@ class WMIEXEC:
             self.logger.debug(f"Querying registry key: HKLM\\{self.__registry_Path}")
             descriptor, _ = self.__iWbemServices.GetObject("StdRegProv")
             descriptor = descriptor.SpawnInstance()
-            retVal = descriptor.GetStringValue(2147483650, self.__registry_Path, keyName)
+            retVal = descriptor.GetStringValue(0x80000002, self.__registry_Path, keyName)
             self.__outputBuffer = base64.b64decode(retVal.sValue).decode(self.__codec, errors="replace").rstrip("\r\n")
         except Exception:
             self.logger.fail("WMIEXEC: Could not retrieve output file, it may have been detected by AV. Please try increasing the timeout with the '--exec-timeout' option. If it is still failing, try the 'smb' protocol or another exec method")
 
         try:
             self.logger.debug(f"Removing temporary registry path: HKLM\\{self.__registry_Path}")
-            retVal = descriptor.DeleteKey(2147483650, self.__registry_Path)
+            retVal = descriptor.DeleteKey(0x80000002, self.__registry_Path)
         except Exception as e:
             self.logger.debug(f"Target: {self.__target} removing temporary registry path error: {e!s}")
