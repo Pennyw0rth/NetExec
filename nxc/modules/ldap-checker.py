@@ -23,10 +23,8 @@ class NXCModule:
     Original work thankfully taken from @zyn3rgy's Ldap Relay Scan project: https://github.com/zyn3rgy/LdapRelayScan
     """
     name = "ldap-checker"
-    description = "Checks whether LDAP signing and channel binding are required and / or enforced"
+    description = "[REMOVED] Checks whether LDAP signing and channel binding are required and / or enforced"
     supported_protocols = ["ldap"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """No options available."""
@@ -173,6 +171,8 @@ class NXCModule:
     # Determine authentication context and proceed to
     # enumerate LDAP signing and channel binding settings    
     def on_login(self, context, connection):
+        context.log.fail("[REMOVED] Now natively supported in the host banner")
+        return
         stype = asyauthSecret.PASS
         secret = connection.password
         if connection.nthash:

@@ -13,8 +13,6 @@ class NXCModule:
     name = "adcs"
     description = "Find PKI Enrollment Services in Active Directory and Certificate Templates Names"
     supported_protocols = ["ldap"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):
         self.context = context

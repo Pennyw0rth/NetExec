@@ -8,6 +8,7 @@ from nxc.config import process_secret
 from nxc.connection import connection, dcom_FirewallChecker, requires_admin
 from nxc.logger import NXCAdapter
 from nxc.protocols.wmi import wmiexec, wmiexec_event
+from nxc.paths import NXC_PATH
 
 from impacket import ntlm
 from impacket.uuid import uuidtup_to_bin
@@ -140,7 +141,7 @@ class wmi(connection):
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
-        self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
+        self.output_filename = os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
     def print_host_info(self):
         self.logger.extra["protocol"] = "RPC"
@@ -410,19 +411,20 @@ class wmi(connection):
     @requires_admin
     def execute(self, command=None, get_output=False):
         output = ""
-        if not command:
-            command = self.args.execute
 
-        if not self.args.no_output:
-            get_output = True
+        # Execution via -x
+        if not command and self.args.execute:
+            command = self.args.execute
+            if not self.args.no_output:
+                get_output = True
 
         if "systeminfo" in command and self.args.exec_timeout < 10:
             self.logger.fail("Execute 'systeminfo' must set the interval time higher than 10 seconds")
-            return False
+            return ""
 
         if self.server_os is not None and "NT 5" in self.server_os:
             self.logger.fail("Execute command failed, not support current server os (version < NT 6)")
-            return False
+            return ""
 
         if self.args.exec_method == "wmiexec":
             exec_method = wmiexec.WMIEXEC(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, self.doKerberos, self.kdcHost, self.host, self.aesKey, self.logger, self.args.exec_timeout, self.args.codec)
@@ -435,10 +437,12 @@ class wmi(connection):
         self.conn.disconnect()
         if output == "" and get_output:
             self.logger.fail("Execute command failed, probabaly got detection by AV.")
-            return False
-        else:
+            return ""
+        elif self.args.execute and get_output:
             self.logger.success(f'Executed command: "{command}" via {self.args.exec_method}')
             buf = StringIO(output).readlines()
             for line in buf:
                 self.logger.highlight(line.strip())
+            return output
+        elif get_output:
             return output

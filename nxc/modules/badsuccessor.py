@@ -79,8 +79,6 @@ class NXCModule:
     name = "badsuccessor"
     description = "Check if vulnerable to bad successor attack (DMSA)"
     supported_protocols = ["ldap"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def __init__(self):
         self.context = None
@@ -187,7 +185,7 @@ class NXCModule:
         for dc in parsed_resp:
             if "2025" in dc["operatingSystem"]:
                 out = connection.resolver(dc["dNSHostName"])
-                dc_ip = out[0] if out else "Unknown IP"
+                dc_ip = out["host"] if out else "Unknown IP"
                 context.log.success(f"Found domain controller with operating system Windows Server 2025: {dc_ip} ({dc['dNSHostName']})")
             else:
                 context.log.fail("No domain controller with operating system Windows Server 2025 found, attack not possible. Enumerate dMSA objects anyway.")

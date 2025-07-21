@@ -16,8 +16,6 @@ class NXCModule:
     name = "pre2k"
     description = "Identify pre-created computer accounts, save the results to a file, and obtain TGTs for each"
     supported_protocols = ["ldap"]
-    opsec_safe = True
-    multiple_hosts = False
 
     def options(self, context, module_options):
         pass
@@ -79,7 +77,8 @@ class NXCModule:
                         successful_tgts += 1
 
                 # Summary of TGT results
-                context.log.success(f"Successfully obtained TGT for {successful_tgts} pre-created computer accounts. Saved to {ccache_base_dir}")
+                if successful_tgts > 0:
+                    context.log.success(f"Successfully obtained TGT for {successful_tgts} pre-created computer accounts. Saved to {ccache_base_dir}")
 
             except Exception as e:
                 context.log.fail(f"Error occurred during search: {e}")

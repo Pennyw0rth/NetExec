@@ -9,10 +9,10 @@ from nxc.cli import gen_cli_args
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.loaders.moduleloader import ModuleLoader
 from nxc.first_run import first_run_setup
-from nxc.paths import NXC_PATH
+from nxc.paths import NXC_PATH, WORKSPACE_DIR
 from nxc.console import nxc_console
 from nxc.logger import nxc_logger
-from nxc.config import nxc_config, nxc_workspace, config_log, ignore_opsec
+from nxc.config import nxc_config, nxc_workspace, config_log
 from nxc.database import create_db_engine
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
@@ -69,7 +69,7 @@ async def start_run(protocol_obj, args, db, targets):  # noqa: RUF029
 
 def main():
     first_run_setup(nxc_logger)
-    args = gen_cli_args()
+    args, version_info = gen_cli_args()
 
     # if these are the same, it might double log to file (two FileHandlers will be added)
     # but this should never happen by accident
@@ -78,6 +78,8 @@ def main():
     if hasattr(args, "log") and args.log:
         nxc_logger.add_file_log(args.log)
 
+    CODENAME, VERSION, COMMIT, DISTANCE = version_info
+    nxc_logger.debug(f"NXC VERSION: {VERSION} - {CODENAME} - {COMMIT} - {DISTANCE}")
     nxc_logger.debug(f"PYTHON VERSION: {sys.version}")
     nxc_logger.debug(f"RUNNING ON: {platform.system()} Release: {platform.release()}")
     nxc_logger.debug(f"Passed args: {args}")
@@ -125,8 +127,9 @@ def main():
 
     # The following is a quick hack for the powershell obfuscation functionality, I know this is yucky
     if hasattr(args, "clear_obfscripts") and args.clear_obfscripts:
-        shutil.rmtree(os.path.expanduser("~/.nxc/obfuscated_scripts/"))
-        os.mkdir(os.path.expanduser("~/.nxc/obfuscated_scripts/"))
+        obfuscated_dir = os.path.join(NXC_PATH, "obfuscated_scripts")
+        shutil.rmtree(obfuscated_dir)
+        os.mkdir(obfuscated_dir)
         nxc_logger.success("Cleared cached obfuscated PowerShell scripts")
 
     if hasattr(args, "obfs") and args.obfs:
@@ -144,7 +147,7 @@ def main():
     protocol_db_object = p_loader.load_protocol(protocol_db_path).database
     nxc_logger.debug(f"Protocol DB Object: {protocol_db_object}")
 
-    db_path = path_join(NXC_PATH, "workspaces", nxc_workspace, f"{args.protocol}.db")
+    db_path = path_join(WORKSPACE_DIR, nxc_workspace, f"{args.protocol}.db")
     nxc_logger.debug(f"DB Path: {db_path}")
 
     db_engine = create_db_engine(db_path)
@@ -186,20 +189,6 @@ def main():
 
             nxc_logger.debug(f"Loading module for sanity check {m} at path {modules[m]['path']}")
             module = loader.init_module(modules[m]["path"])
-
-            if not module.opsec_safe:
-                if ignore_opsec:
-                    nxc_logger.debug("ignore_opsec is set in the configuration, skipping prompt")
-                    nxc_logger.display("Ignore OPSEC in configuration is set and OPSEC unsafe module loaded")
-                else:
-                    ans = input(highlight("[!] Module is not opsec safe, are you sure you want to run this? [Y/n] For global configuration, change ignore_opsec value to True on ~/nxc/nxc.conf", "red"))
-                    if ans.lower() not in ["y", "yes", ""]:
-                        exit(1)
-
-            if not module.multiple_hosts and len(targets) > 1:
-                ans = input(highlight("[!] Running this module on multiple hosts doesn't really make any sense, are you sure you want to continue? [Y/n] ", "red"))
-                if ans.lower() not in ["y", "yes", ""]:
-                    exit(1)
 
             # Add modules paths to the protocol object so it can load them itself
             proto_module_paths.append(modules[m]["path"])

@@ -6,11 +6,14 @@ from nxc.paths import DATA_PATH, TMP_PATH
 
 
 class NXCModule:
+    """
+    Module for running system command as target PID user's
+    Module by @termanix
+    """
+
     name = "pi"
     description = "Run command as logged on users via Process Injection"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def options(self, context, module_options):
         r"""
