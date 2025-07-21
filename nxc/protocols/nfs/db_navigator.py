@@ -67,3 +67,55 @@ class navigator(DatabaseNavigator):
             Otherwise, it prints the default host table from a `like` query on the `ip` and `hostname` columns
         """
         print_help(help_string)
+
+    def display_shares(self, shares):
+        """
+        shares: list of rows (tuples) -> expects columns:
+        (id, host, read_perm, write_perm, exec_perm, storage, share, access)
+        """
+        data = [["ID", "Host", "R", "W", "X", "Storage", "Share", "Access"]]
+        for row in shares:
+            (
+                sid, host, r, w, x,
+                storage_str, share_path, access_str
+            ) = row
+            # boolean format
+            data.append([
+                sid, host,
+                "True" if r else "False",
+                "True" if w else "False",
+                "True" if x else "False",
+                storage_str,
+                share_path,
+                access_str,
+            ])
+        print_table(data, title="Shares")
+
+    def do_shares(self, line):
+        """
+        Shares [host_filter]
+        List shares, optionally filtreli olarak.
+        """
+        host_filter = line.strip()
+        if host_filter:
+            q = self.db.SharesTable.select().where(
+                self.db.SharesTable.c.host.like(f"%{host_filter}%")
+            )
+            shares = self.db.db_execute(q).all()
+        else:
+            q = self.db.SharesTable.select()
+            shares = self.db.db_execute(q).all()
+        
+        if shares:
+            self.display_shares(shares)
+        else:
+            print("No shares found.")
+
+    def help_shares(self):
+        help_string = """
+        shares [host_filter]
+        Lists all shares. Optionally filters by host substring.
+        Columns:
+         ID, Host, Read (True/False), Write, Execute, Storage ("used / total"), Share path, Access list
+        """
+        print_help(help_string)
