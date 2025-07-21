@@ -264,6 +264,7 @@ class nfs(connection):
                         read_perm, write_perm, exec_perm = self.get_permissions(file_handle)
                         self.mount.umnt(self.auth)
                         self.logger.highlight(f"{self.auth['uid']:<11}{'r' if read_perm else '-'}{'w' if write_perm else '-'}{('x' if exec_perm else '-'):<7}{convert_size(used_space) + '/' + convert_size(total_space):<16} {share:<30} {', '.join(network) if network else 'No network':<15}")
+                        self.db.add_share(self.host, (read_perm, write_perm, exec_perm), (convert_size(used_space), "/", convert_size(total_space)), share, network)
                 except Exception as e:
                     self.logger.fail(f"Failed to list share: {share} - {e}")
 

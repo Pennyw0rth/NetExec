@@ -48,12 +48,18 @@ class database(BaseDB):
         )
         db_conn.execute(
             """CREATE TABLE "shares" (
-            "id" integer PRIMARY KEY,
-            "lir_id" integer,
-            "data" text,
-            FOREIGN KEY(lir_id) REFERENCES loggedin_relations(id)
+                "id" integer PRIMARY KEY,
+                "host" text,
+                "read_perm" boolean,
+                "write_perm" boolean,
+                "exec_perm" boolean,
+                "storage" text,
+                "share" text,
+                "access" text,
+                UNIQUE(host, share)
             )"""
         )
+
 
     def reflect_tables(self):
         with self.db_engine.connect():
@@ -85,7 +91,7 @@ class database(BaseDB):
             new_host = {
                 "host": host,
                 "version": version,
-                "root_escape": escape
+                "root_escape": bool(escape)
             }
             hosts = [new_host]
         # update existing hosts data
@@ -100,7 +106,7 @@ class database(BaseDB):
                 if version is not None:
                     host_data["version"] = version
                 if escape is not None:
-                    host_data["root_escape"] = escape
+                    host_data["root_escape"] = bool(escape)
                 # only add host to be updated if it has changed
                 if host_data not in hosts:
                     hosts.append(host_data)
@@ -141,3 +147,27 @@ class database(BaseDB):
         q = select(self.HostsTable).filter(self.HostsTable.c.id == host_id)
         results = self.db_execute(q).all()
         return len(results) > 0
+
+    def add_share(self, host, permission, storage, share, access):
+        """Check if this share is already in the DB, if not add it"""
+
+        read_perm, write_perm, exec_perm = permission
+        used, _, total = storage
+        storage_str = f"{used} / {total}"
+        access_str = ", ".join(access)
+
+        new_share = {
+            "host": host,
+            "read_perm": read_perm,
+            "write_perm": write_perm,
+            "exec_perm": exec_perm,
+            "storage": storage_str,
+            "share": share,
+            "access": access_str,
+        }
+
+        self.db_execute(
+            Insert(self.SharesTable).on_conflict_do_nothing(),
+            new_share,
+        )
+
