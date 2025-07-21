@@ -60,7 +60,6 @@ class database(BaseDB):
             )"""
         )
 
-
     def reflect_tables(self):
         with self.db_engine.connect():
             try:
@@ -150,7 +149,6 @@ class database(BaseDB):
 
     def add_share(self, host, permission, storage, share, access):
         """Check if this share is already in the DB, if not add it"""
-
         read_perm, write_perm, exec_perm = permission
         used, _, total = storage
         storage_str = f"{used} / {total}"
