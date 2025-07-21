@@ -19,10 +19,11 @@ class NXCModule:
 
     def options(self, context, module_options):
         """
-        find-computer: Specify find-computer to call the module
-        TEXT: Specify the TEXT option to enter your text to search for
-        Usage: nxc ldap $DC-IP -u Username -p Password -M find-computer -o TEXT="server"
-               nxc ldap $DC-IP -u Username -p Password -M find-computer -o TEXT="SQL"
+        TEXT    Search TEXT in the operating system or name of the computer.
+
+        Examples:
+        nxc ldap $DC-IP -u Username -p Password -M find-computer -o TEXT="server"
+        nxc ldap $DC-IP -u Username -p Password -M find-computer -o TEXT="SQL"
         """
         self.TEXT = ""
 
