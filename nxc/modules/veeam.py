@@ -117,7 +117,7 @@ class NXCModule:
             credentials = self.executePsPostgreSql(connection, PostgreSqlExec, PostgresUserForWindowsAuth, SqlDatabaseName, salt)
             self.printCreds(context, credentials)
 
-    def get_salt(self, context, remoteOps, regHandle):
+    def get_salt(self, context, remoteOps, regHandle) -> str:
         try:
             keyHandle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication\\Data")["phkResult"]
             return rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "EncryptionSalt")[1].split("\x00")[:-1][0]
@@ -127,6 +127,7 @@ class NXCModule:
         except Exception as e:
             context.log.fail(f"UNEXPECTED ERROR: {e}")
             context.log.debug(traceback.format_exc())
+        return ""
 
     def executePsMssql(self, connection, SqlDatabase, SqlInstance, SqlServer, salt):
         self.psScriptMssql = self.psScriptMssql.replace("REPLACE_ME_SqlDatabase", SqlDatabase)
