@@ -1,4 +1,3 @@
-import socket
 from nxc.logger import nxc_logger
 from impacket.ldap.ldap import LDAPSearchError
 from impacket.ldap.ldapasn1 import SearchResultEntry
