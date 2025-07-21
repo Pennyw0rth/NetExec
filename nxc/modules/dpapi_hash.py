@@ -10,8 +10,6 @@ class NXCModule:
     name = "dpapi_hash"
     description = "Remotely dump Dpapi hash based on masterkeys"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """OUTPUTFILE       Output file to write hashes"""

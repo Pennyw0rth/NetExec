@@ -13,7 +13,7 @@ def proto_args(parser, parents):
     egroup = ldap_parser.add_argument_group("Retrieve hash on the remote DC", "Options to get hashes from Kerberos")
     egroup.add_argument("--asreproast", help="Output AS_REP response to crack with hashcat to file")
     egroup.add_argument("--kerberoasting", help="Output TGS ticket to crack with hashcat to file")
-    egroup.add_argument("--no-preauth", nargs=1, dest="no_preauth", help="No-preauth user for AS-REQ Kerberoast (use with -u users/SPNs).")
+    egroup.add_argument("--no-preauth-targets", nargs=1, dest="no_preauth_targets", help="Targeted kerberoastable users")
 
     vgroup = ldap_parser.add_argument_group("Retrieve useful information on the domain")
     vgroup.add_argument("--base-dn", metavar="BASE_DN", dest="base_dn", type=str, default=None, help="base DN for search queries")
@@ -30,6 +30,7 @@ def proto_args(parser, parents):
     vgroup.add_argument("--dc-list", action="store_true", help="Enumerate Domain Controllers")
     vgroup.add_argument("--get-sid", action="store_true", help="Get domain sid")
     vgroup.add_argument("--active-users", nargs="*", help="Get Active Domain Users Accounts")
+    vgroup.add_argument("--pso", action="store_true", help="Get Fine Grained Password Policy/PSOs")
 
     ggroup = ldap_parser.add_argument_group("Retrieve gmsa on the remote DC", "Options to play with gmsa")
     ggroup.add_argument("--gmsa", action="store_true", help="Enumerate GMSA passwords")

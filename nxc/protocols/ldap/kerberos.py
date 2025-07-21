@@ -117,7 +117,7 @@ class KerberosAttacks:
         if etype == constants.EncryptionTypes.rc4_hmac.value:  # 23
             chk = hexlify(cipher[:16]).decode()
             data = hexlify(cipher[16:]).decode()
-            entry = f"$krb5tgs${etype}*{service}${realm}${spn_fmt}*${chk}${data}"
+            entry = f"$krb5tgs${etype}$*{service}${realm}${spn_fmt}*${chk}${data}"
 
         elif etype in (
             constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value,  # 17
