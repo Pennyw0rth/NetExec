@@ -14,6 +14,7 @@ from paramiko.ssh_exception import (
     SSHException,
 )
 
+from impacket.krb5.ccache import CCache
 
 class ssh(connection):
     def __init__(self, args, db, host):
@@ -23,6 +24,11 @@ class ssh(connection):
         self.shell_access = False
         self.admin_privs = False
         self.uac = ""
+        self.username = ""
+        self.password = ""
+        self.lmhash = ""
+        self.nthash = ""
+        self.hash = ""
         super().__init__(args, db, host)
 
     def proto_flow(self):
@@ -78,6 +84,44 @@ class ssh(connection):
             return False
         except OSError:
             return False
+
+    def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
+        self.username = username if not useCache else ""
+        
+        if useCache:
+            ccache = CCache.loadFile(os.getenv("KRB5CCNAME"))
+            username, domain = ccache.credentials[0].header["client"].prettyPrint().decode().split("@")
+            self.username = username
+            self.domain = domain
+        else:
+            self.username = username
+
+        self.password = password
+        nthash = ""
+        if ntlm_hash.find(":") != -1:
+            _, nthash = ntlm_hash.split(":")
+            self.hash = nthash
+        else:
+            nthash = ntlm_hash
+            self.hash = ntlm_hash
+
+        self.logger.debug(f"Attempting Kerberos login for {self.host} with username: {self.username}")
+        if os.getenv("KRB5CCNAME"):
+            self.conn.connect(
+                hostname=self.host,
+                username=self.username,
+                gss_auth=True,
+                gss_kex=True,
+                timeout=self.args.ssh_timeout,
+                look_for_keys=False,
+                allow_agent=False,
+                banner_timeout=self.args.ssh_timeout,
+            )
+            self.check_shell()
+
+            display_shell_access = f"{self.uac}{self.server_os_platform}{' - Shell access!' if self.shell_access else ''}"
+            self.logger.success(f"{self.domain}\\{self.username} from ccache {self.mark_pwned()} {highlight(display_shell_access)}")
+            return True
 
     def plaintext_login(self, username, password, private_key=""):
         self.username = username
@@ -139,9 +183,8 @@ class ssh(connection):
             self.conn.close()
         return False
 
-    def check_shell(self, cred_id):
-        host_id = self.db.get_hosts(self.host)[0].id
-
+    def check_shell(self, cred_id = None):
+        host_id = self.db.get_hosts(self.host)[0].id if cred_id else None
         # Some IOT devices will not raise exception in self.conn._transport.auth_password / self.conn._transport.auth_publickey
         # Check Linux
         stdout = self.conn.exec_command("id")[1].read().decode(self.args.codec, errors="ignore")
@@ -149,14 +192,16 @@ class ssh(connection):
             self.server_os_platform = "Linux"
             self.logger.debug(f"Linux detected for user: {stdout}")
             self.shell_access = True
-            self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
+            if cred_id:
+                self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
             self.check_linux_priv()
             if self.admin_privs:
                 self.logger.debug(f"User {self.username} logged in successfully and is root!")
-                if self.args.key_file:
-                    self.db.add_admin_user("key", self.username, self.password, host_id=host_id, cred_id=cred_id)
-                else:
-                    self.db.add_admin_user("plaintext", self.username, self.password, host_id=host_id, cred_id=cred_id)
+                if cred_id:
+                    if self.args.key_file:
+                        self.db.add_admin_user("key", self.username, self.password, host_id=host_id, cred_id=cred_id)
+                    else:
+                        self.db.add_admin_user("plaintext", self.username, self.password, host_id=host_id, cred_id=cred_id)
             return
 
         # Check Windows
@@ -165,21 +210,24 @@ class ssh(connection):
             self.server_os_platform = "Windows"
             self.logger.debug("Windows detected")
             self.shell_access = True
-            self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
+            if cred_id:
+                self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
             self.check_windows_priv(stdout)
             if self.admin_privs:
                 self.logger.debug(f"User {self.username} logged in successfully and is admin!")
-                if self.args.key_file:
-                    self.db.add_admin_user("key", self.username, self.password, host_id=host_id, cred_id=cred_id)
-                else:
-                    self.db.add_admin_user("plaintext", self.username, self.password, host_id=host_id, cred_id=cred_id)
+                if cred_id:
+                    if self.args.key_file:
+                        self.db.add_admin_user("key", self.username, self.password, host_id=host_id, cred_id=cred_id)
+                    else:
+                        self.db.add_admin_user("plaintext", self.username, self.password, host_id=host_id, cred_id=cred_id)
             return
 
         # No shell access
         self.shell_access = False
         self.logger.debug(f"User: {self.username} can't get a basic shell")
         self.server_os_platform = "Network Devices"
-        self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
+        if cred_id and host_id:
+            self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
 
     def check_windows_priv(self, stdout):
         if "SeDebugPrivilege" in stdout:
