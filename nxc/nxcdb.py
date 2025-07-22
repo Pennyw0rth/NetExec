@@ -211,35 +211,77 @@ class DatabaseNavigator(cmd.Cmd):
                 print("[-] invalid arguments, export shares <simple|detailed> <filename>")
                 return
 
-            shares = self.db.get_shares()
-            csv_header = ("id", "host", "userid", "name", "remark", "read", "write")
             filename = line[2]
+            mode = line[1].lower()
+            proto = self.proto  # "smb", "nfs", etc.
 
-            if line[1].lower() == "simple":
-                write_csv(filename, csv_header, shares)
-                print("[+] shares exported")
-            # Detailed view gets hostname, usernames, and true false statement
-            elif line[1].lower() == "detailed":
-                formatted_shares = []
-                for share in shares:
-                    user = self.db.get_users(share[2])[0]
-                    share_host = self.db.get_hosts(share[1])[0][2] if self.db.get_hosts(share[1]) else "ERROR"
+            if proto == "smb":
+                shares = self.db.get_shares()
 
-                    entry = (
-                        share[0],  # shareID
-                        share_host,  # hosts
-                        f"{user[1]}\\{user[2]}",  # userID
-                        share[3],  # name
-                        share[4],  # remark
-                        bool(share[5]),  # read
-                        bool(share[6]),  # write
-                    )
-                    formatted_shares.append(entry)
-                write_csv(filename, csv_header, formatted_shares)
-                print("[+] Shares exported")
+                if mode == "simple":
+                    csv_header = ("id", "host", "userid", "name", "remark", "read", "write")
+                    write_csv(filename, csv_header, shares)
+                    print("[+] shares exported")
+                    
+                # Detailed view gets hostname, usernames, and true false statement
+                elif mode == "detailed":
+                    csv_header = ("id", "host", "user", "name", "remark", "read", "write")
+                    formatted_shares = []
+                    for share in shares:
+                        user = self.db.get_users(share[2])[0]
+                        share_host = self.db.get_hosts(share[1])[0][2] if self.db.get_hosts(share[1]) else "ERROR"
+
+                        entry = (
+                            share[0],  # shareID
+                            share_host,  # hosts
+                            f"{user[1]}\\{user[2]}",  # userID
+                            share[3],  # name
+                            share[4],  # remark
+                            bool(share[5]),  # read
+                            bool(share[6]),  # write
+                        )
+                        formatted_shares.append(entry)
+                    write_csv(filename, csv_header, formatted_shares)
+                    print("[+] Shares exported")
+
+                else:
+                    print(f"[-] No such export option: {mode}")
+                    return
+
+            elif proto == "nfs":
+                shares = self.db.get_shares()
+
+                if mode == "simple":
+                    csv_header = ("id", "host", "read", "write", "exec", "storage", "share", "access")
+                    write_csv(filename, csv_header, shares)
+                    print("[+] NFS shares exported")
+
+                elif mode == "detailed":
+                    csv_header = ("id", "host", "version", "read", "write", "exec", "storage", "share", "access")
+                    formatted = []
+                    for row in shares:
+                        host_row = self.db.get_hosts(row[1])
+                        entry = (
+                            row[0],  # id
+                            row[1],  # resolved host
+                            host_row[0][2],  # version
+                            row[2],  # read
+                            row[3],  # write
+                            row[4],  # exec
+                            row[5],  # storage
+                            row[6],  # share
+                            row[7],  # access
+                        )
+                        formatted.append(entry)
+                    write_csv(filename, csv_header, formatted)
+                    print("[+] NFS shares exported")
+
+                else:
+                    print(f"[-] No such export option: {mode}")
+                    return
             else:
-                print(f"[-] No such export option: {line[1]}")
-                return
+                print(f"[-] Exporting shares not supported for protocol: {proto}")
+
         # Local Admin
         elif command == "local_admins":
             if len(line) < 3:
