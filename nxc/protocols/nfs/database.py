@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, UniqueConstraint, select
+from sqlalchemy import Boolean, Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, UniqueConstraint, func, select
 from sqlalchemy.dialects.sqlite import Insert
 from sqlalchemy.orm import declarative_base
 
@@ -162,3 +162,21 @@ class database(BaseDB):
             Insert(self.SharesTable).on_conflict_do_nothing(),
             new_share,
         )
+
+    def get_shares(self, filter_term=None):
+        if self.is_share_valid(filter_term):
+            q = select(self.SharesTable).filter(self.SharesTable.c.id == filter_term)
+        elif filter_term:
+            like_term = func.lower(f"%{filter_term}%")
+            q = select(self.SharesTable).filter(self.SharesTable.c.name.like(like_term))
+        else:
+            q = select(self.SharesTable)
+        return self.db_execute(q).all()
+
+    def is_share_valid(self, share_id):
+        """Check if this share ID is valid."""
+        q = select(self.SharesTable).filter(self.SharesTable.c.id == share_id)
+        results = self.db_execute(q).all()
+
+        nxc_logger.debug(f"is_share_valid(shareID={share_id}) => {len(results) > 0}")
+        return len(results) > 0

@@ -240,6 +240,7 @@ class DatabaseNavigator(cmd.Cmd):
             else:
                 print(f"[-] No such export option: {line[1]}")
                 return
+
         # Local Admin
         elif command == "local_admins":
             if len(line) < 3:
