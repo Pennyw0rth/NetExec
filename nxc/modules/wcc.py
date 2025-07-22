@@ -140,11 +140,11 @@ class NXCModule:
         # Only keep checks that match the filters provided
         if checks_filters:
             checks_filters = checks_filters.split(",")
-            for filter in checks_filters:
-                filter = filter.lower()
-                for check in self.host_checker.checks:
-                    if filter in check.category.lower() or filter in check.name.lower():
-                        checks_to_perform.append(check)
+            for _filter in checks_filters:
+                _filter = _filter.lower()
+                checks_to_perform.extend([check for check in self.host_checker.checks 
+                    if _filter in check.category.lower() 
+                    or _filter in check.name.lower()])
             self.host_checker.checks = checks_to_perform
 
         self.results = {}
