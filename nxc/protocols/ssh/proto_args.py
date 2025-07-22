@@ -7,6 +7,7 @@ def proto_args(parser, parents):
     ssh_parser.add_argument("--key-file", type=str, help="Authenticate using the specified private key. Treats the password parameter as the key's passphrase.")
     ssh_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
     ssh_parser.add_argument("--port", type=int, default=22, help="SSH port")
+    ssh_parser.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, default="", help="domain to authenticate to")
     ssh_parser.add_argument("--ssh-timeout", help="SSH connection timeout", type=int, default=15)
     sudo_check_arg = ssh_parser.add_argument("--sudo-check", action="store_true", help="Check user privilege with sudo")
     sudo_check_method_arg = ssh_parser.add_argument("--sudo-check-method", action=get_conditional_action(_StoreAction), make_required=[], choices={"sudo-stdin", "mkfifo"}, default="sudo-stdin", help="method to do with sudo check (mkfifo is non-stable, probably you need to execute once again if it failed)'")

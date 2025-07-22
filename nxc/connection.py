@@ -486,12 +486,12 @@ class connection:
                 if self.kerberos:
                     self.logger.debug("Trying to authenticate using Kerberos")
                     return self.kerberos_login(domain, username, secret, "", "", self.kdcHost, False)
-                elif hasattr(self.args, "domain"):  # Some protocols don't use domain for login
-                    self.logger.debug("Trying to authenticate using plaintext with domain")
-                    return self.plaintext_login(domain, username, secret)
                 elif self.args.protocol == "ssh":
                     self.logger.debug("Trying to authenticate using plaintext over SSH")
                     return self.plaintext_login(username, secret, data)
+                elif hasattr(self.args, "domain"):  # Some protocols don't use domain for login
+                    self.logger.debug("Trying to authenticate using plaintext with domain")
+                    return self.plaintext_login(domain, username, secret)
                 else:
                     self.logger.debug("Trying to authenticate using plaintext")
                     return self.plaintext_login(username, secret)

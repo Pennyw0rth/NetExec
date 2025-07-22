@@ -4,16 +4,24 @@ import re
 import uuid
 import logging
 import time
+import binascii
+from datetime import datetime
 
 from nxc.config import process_secret
 from nxc.connection import connection, highlight
 from nxc.logger import NXCAdapter
+from nxc.paths import NXC_PATH
 from paramiko.ssh_exception import (
     AuthenticationException,
     NoValidConnectionsError,
     SSHException,
 )
 
+from impacket.krb5.ccache import CCache
+from impacket.krb5.kerberosv5 import getKerberosTGT
+from impacket.krb5 import constants
+from impacket.krb5.types import Principal
+from impacket.krb5.kerberosv5 import KerberosError
 from impacket.krb5.ccache import CCache
 
 class ssh(connection):
@@ -87,6 +95,9 @@ class ssh(connection):
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.username = username if not useCache else ""
+        self.domain = domain
+        self.kdcHost = kdcHost
+        self.kerb_cred = ""
         
         if useCache:
             ccache = CCache.loadFile(os.getenv("KRB5CCNAME"))
@@ -99,29 +110,75 @@ class ssh(connection):
         self.password = password
         nthash = ""
         if ntlm_hash.find(":") != -1:
-            _, nthash = ntlm_hash.split(":")
-            self.hash = nthash
+            lmhash, nthash = ntlm_hash.split(":")
+            self.lmhash = lmhash
+            self.nthash = nthash
         else:
-            nthash = ntlm_hash
-            self.hash = ntlm_hash
+            self.lmhash = ""
+            self.nthash = ntlm_hash
 
         self.logger.debug(f"Attempting Kerberos login for {self.host} with username: {self.username}")
-        if os.getenv("KRB5CCNAME"):
-            self.conn.connect(
-                hostname=self.host,
-                username=self.username,
-                gss_auth=True,
-                gss_kex=True,
-                timeout=self.args.ssh_timeout,
-                look_for_keys=False,
-                allow_agent=False,
-                banner_timeout=self.args.ssh_timeout,
-            )
-            self.check_shell()
 
-            display_shell_access = f"{self.uac}{self.server_os_platform}{' - Shell access!' if self.shell_access else ''}"
-            self.logger.success(f"{self.domain}\\{self.username} from ccache {self.mark_pwned()} {highlight(display_shell_access)}")
-            return True
+        if not useCache:
+            # we need to populate the cache ourselves since it's not provided by the user
+            if not any([self.username, self.password, nthash, aesKey]):
+                self.logger.error("You must provide a username and either a password or NTLM hash for Kerberos authentication")
+                return False
+            if not self.domain:
+                self.logger.error("You must provide a domain for Kerberos authentication")
+                return False
+
+            if not self.kdcHost:
+                self.kdcHost = self.domain
+
+            principal = Principal(
+                value=self.username,
+                type=constants.PrincipalNameType.NT_PRINCIPAL.value,
+            )
+
+            try:
+                tgt, cipher, old_session_key, session_key = getKerberosTGT(
+                    clientName=principal,
+                    password=self.password,
+                    domain=self.domain.upper(),
+                    lmhash=binascii.unhexlify(self.lmhash) if self.lmhash else b"",
+                    nthash=binascii.unhexlify(self.nthash) if self.nthash else b"",
+                    kdcHost=self.kdcHost,
+                )
+                self.logger.info(f"Got TGT for {self.username}@{self.domain} from KDC {self.kdcHost}")
+                ccache = CCache()
+                ccache.fromTGT(tgt, old_session_key, session_key)
+                tgt_file = f"{self.username}_{self.domain}.ccache"
+                save_path = os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}_cache_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}_{tgt_file}")
+                ccache.saveFile(save_path)
+                self.logger.info(f"Saved TGT to {save_path}")
+            except KerberosError as e:
+                self.logger.error(f"Kerberos authentication failed: {e}")
+                return
+
+            if save_path:
+                os.environ["KRB5CCNAME"] = save_path
+        
+
+        if not os.getenv("KRB5CCNAME"):
+            self.logger.error("KRB5CCNAME environment variable is not set, cannot proceed with Kerberos authentication")
+            return False
+
+        self.conn.connect(
+            hostname=self.host,
+            username=self.username,
+            gss_auth=True,
+            gss_kex=True,
+            timeout=self.args.ssh_timeout,
+            look_for_keys=False,
+            allow_agent=False,
+            banner_timeout=self.args.ssh_timeout,
+        )
+        self.check_shell()
+
+        display_shell_access = f"{self.uac}{self.server_os_platform}{' - Shell access!' if self.shell_access else ''}"
+        self.logger.success(f"{self.domain}\\{self.username} from ccache {self.mark_pwned()} {highlight(display_shell_access)}")
+        return True
 
     def plaintext_login(self, username, password, private_key=""):
         self.username = username
