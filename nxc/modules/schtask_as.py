@@ -55,7 +55,6 @@ class NXCModule:
     multiple_hosts = False
 
     def on_admin_login(self, context, connection):
-        print(vars(connection))
         self.logger = context.log
 
         if self.command_to_run is None:
