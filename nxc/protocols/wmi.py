@@ -409,7 +409,7 @@ class wmi(connection):
             return records
 
     @requires_admin
-    def execute(self, command=None, get_output=False):
+    def execute(self, command=None, get_output=False, use_powershell=False):
         output = ""
 
         # Execution via -x
@@ -428,18 +428,38 @@ class wmi(connection):
 
         if self.args.exec_method == "wmiexec":
             exec_method = wmiexec.WMIEXEC(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, self.doKerberos, self.kdcHost, self.host, self.aesKey, self.logger, self.args.exec_timeout, self.args.codec)
-            output = exec_method.execute(command, get_output)
+            output = exec_method.execute(command, get_output, use_powershell=use_powershell)
 
         elif self.args.exec_method == "wmiexec-event":
             exec_method = wmiexec_event.WMIEXEC_EVENT(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, self.doKerberos, self.kdcHost, self.host, self.aesKey, self.logger, self.args.exec_timeout, self.args.codec)
-            output = exec_method.execute(command, get_output)
+            output = exec_method.execute(command, get_output, use_powershell=use_powershell)
 
         self.conn.disconnect()
         if self.args.execute and get_output:
             self.logger.success(f'Executed command: "{command}" via {self.args.exec_method}')
             buf = StringIO(output).readlines()
             for line in buf:
-                self.logger.highlight(line.strip())
+                if line.strip():
+                    self.logger.highlight(line.strip())
+            return output
+        else:
+            return output
+
+    def execute_psh(self, command=None, get_output=False):
+        # Execution via -X
+        if not command and self.args.execute_psh:
+            command = self.args.execute_psh
+            if not self.args.no_output:
+                get_output = True
+
+        output = self.execute(command, get_output, use_powershell=True)
+
+        if self.args.execute_psh and get_output:
+            self.logger.success(f'Executed PowerShell command: "{command}" via {self.args.exec_method}')
+            buf = StringIO(output).readlines()
+            for line in buf:
+                if line.strip().rstrip("\ufeff"):
+                    self.logger.highlight(line.strip())
             return output
         else:
             return output

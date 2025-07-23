@@ -57,9 +57,11 @@ class WMIEXEC_EVENT:
         self.__iWbemServices = iWbemLevel1Login.NTLMLogin("//./root/subscription", NULL, NULL)
         iWbemLevel1Login.RemRelease()
 
-    def execute(self, command, output=False):
+    def execute(self, command, output=False, use_powershell=False):
         if "'" in command:
             command = command.replace("'", r'"')
+        if use_powershell:
+            command = f"powershell.exe -Command {command}"
         self.__retOutput = output
         self.execute_handler(command)
 
