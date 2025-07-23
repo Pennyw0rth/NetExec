@@ -122,10 +122,12 @@ class WMIEXEC:
         result_output = f"C:\\windows\\temp\\{uuid.uuid4()!s}.txt"
         result_output_b64 = f"C:\\windows\\temp\\{uuid.uuid4()!s}.txt"
         keyName = str(uuid.uuid4())
-        self.__registry_Path = f"Software\\Classes\\test_nxc_{gen_random_string(6)}"
+        self.__registry_Path = f"Software\\Classes\\{gen_random_string(6)}"
 
         # 1. Run the command and write output to file
-        self.execute_remote(f'powershell -Command {command} 1> "{result_output}" 2>&1')
+        if not command.lower().startswith("powershell"):
+            command = f"powershell -Command {command}"
+        self.execute_remote(f'{command} > "{result_output}" 2>&1')
         self.logger.info(f"Waiting {self.__exec_timeout}s for command to complete.")
         time.sleep(self.__exec_timeout)
 
@@ -173,7 +175,7 @@ class WMIEXEC:
                 chunk_name = f"{keyName}_chunk_{i}"
                 self.logger.debug(f"Retrieving chunk: {chunk_name}")
                 outputBuffer_b64 += descriptor.GetStringValue(0x80000002, self.__registry_Path, chunk_name).sValue
-            self.__outputBuffer = base64.b64decode(outputBuffer_b64).decode("utf-16le", errors="replace").rstrip("\r\n")
+            self.__outputBuffer = base64.b64decode(outputBuffer_b64).decode("utf-16le", errors="replace").rstrip("\r\n").lstrip("\ufeff")  # Remove BOM if present
         except Exception:
             self.logger.fail("WMIEXEC: Could not retrieve output file! Either command timed out or AV killed the process. Please try increasing the timeout: '--exec-timeout 10'")
 

@@ -458,7 +458,7 @@ class wmi(connection):
             self.logger.success(f'Executed PowerShell command: "{command}" via {self.args.exec_method}')
             buf = StringIO(output).readlines()
             for line in buf:
-                if line.strip().rstrip("\ufeff"):
+                if line.strip():
                     self.logger.highlight(line.strip())
             return output
         else:
