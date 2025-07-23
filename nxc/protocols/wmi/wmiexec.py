@@ -125,8 +125,7 @@ class WMIEXEC:
                 self.logger.debug(f"Retrieving chunk: {chunk_name}")
                 outputBuffer_b64 += descriptor.GetStringValue(0x80000002, self.__registry_Path, chunk_name).sValue
             self.__outputBuffer = base64.b64decode(outputBuffer_b64).decode(self.__codec, errors="replace").rstrip("\r\n")
-        except Exception as e:
-            print(e)
+        except Exception:
             self.logger.fail("WMIEXEC: Could not retrieve output file! Either command timed out or AV killed the process. Please try increasing the timeout: '--exec-timeout 10'")
 
     def clean_up(self, result_output, result_output_b64):
