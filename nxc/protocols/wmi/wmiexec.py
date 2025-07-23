@@ -95,12 +95,10 @@ class WMIEXEC:
             f'  reg add \\"HKLM\\{self.__registry_Path}\\" /v $name /t REG_SZ /d $chunk /f }}; '
             f'reg add \\"HKLM\\{self.__registry_Path}\\" /v \\"{keyName}\\" /t REG_DWORD /d $count /f"'
         )
-        time.sleep(1)
-
-        # 4. Delete temporary files
-        self.execute_remote(f'{self.__shell} del /q /f "{result_output}" "{result_output_b64}"')
+        time.sleep(0.1)
 
         self.queryRegistry(keyName)
+        self.clean_up(result_output, result_output_b64)
 
     def queryRegistry(self, keyName):
         try:
@@ -110,7 +108,14 @@ class WMIEXEC:
             descriptor = descriptor.SpawnInstance()
 
             # Get the number of chunks stored in the registry
-            num_chunks = descriptor.GetDWORDValue(0x80000002, self.__registry_Path, keyName).uValue
+            num_chunks = None
+            for _ in range(10):
+                self.logger.debug(f"Retrieving number of chunks for key: {keyName}")
+                num_chunks = descriptor.GetDWORDValue(0x80000002, self.__registry_Path, keyName).uValue
+                if num_chunks is not None:
+                    break
+                time.sleep(1)
+
             self.logger.debug(f"Number of chunks: {num_chunks}")
 
             # Retrieve each chunk and decode the base64 content
@@ -120,11 +125,18 @@ class WMIEXEC:
                 self.logger.debug(f"Retrieving chunk: {chunk_name}")
                 outputBuffer_b64 += descriptor.GetStringValue(0x80000002, self.__registry_Path, chunk_name).sValue
             self.__outputBuffer = base64.b64decode(outputBuffer_b64).decode(self.__codec, errors="replace").rstrip("\r\n")
-        except Exception:
-            self.logger.fail("WMIEXEC: Could not retrieve output file, it may have been detected by AV. Please try increasing the timeout with the '--exec-timeout' option. If it is still failing, try the 'smb' protocol or another exec method")
+        except Exception as e:
+            print(e)
+            self.logger.fail("WMIEXEC: Could not retrieve output file! Either command timed out or AV killed the process. Please try increasing the timeout: '--exec-timeout 10'")
+
+    def clean_up(self, result_output, result_output_b64):
+        """Deletes the output file, the base64 output file, and the registry path where the base64 content was stored."""
+        self.execute_remote(f'{self.__shell} del /q /f "{result_output}" "{result_output_b64}"')
 
         try:
             self.logger.debug(f"Removing temporary registry path: HKLM\\{self.__registry_Path}")
+            descriptor, _ = self.__iWbemServices.GetObject("StdRegProv")
+            descriptor = descriptor.SpawnInstance()
             descriptor.DeleteKey(0x80000002, self.__registry_Path)
         except Exception as e:
-            self.logger.debug(f"Target: {self.__target} removing temporary registry path error: {e!s}")
+            self.logger.fail(f"Target: {self.__target} removing temporary registry path error: {e!s}")

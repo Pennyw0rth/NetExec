@@ -435,14 +435,11 @@ class wmi(connection):
             output = exec_method.execute(command, get_output)
 
         self.conn.disconnect()
-        if output == "" and get_output:
-            self.logger.fail("Execute command failed, probabaly got detection by AV.")
-            return ""
-        elif self.args.execute and get_output:
+        if self.args.execute and get_output:
             self.logger.success(f'Executed command: "{command}" via {self.args.exec_method}')
             buf = StringIO(output).readlines()
             for line in buf:
                 self.logger.highlight(line.strip())
             return output
-        elif get_output:
+        else:
             return output
