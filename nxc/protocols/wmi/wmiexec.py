@@ -77,7 +77,7 @@ class WMIEXEC:
 
         commands = [
             f"{self.__shell} {command} 1> {result_output} 2>&1",
-            f"{self.__shell} certutil -encodehex -f {result_output} {result_output_b64} 0x40000001",
+            f'{self.__shell} powershell -Command "[Convert]::ToBase64String([IO.File]::ReadAllBytes(\'{result_output}\')) | Out-File -Encoding ASCII \'{result_output_b64}\'"',
             f'{self.__shell} for /F "usebackq" %G in ("{result_output_b64}") do reg add HKLM\\{self.__registry_Path} /v {keyName} /t REG_SZ /d "%G" /f',
             f"{self.__shell} del /q /f /s {result_output} {result_output_b64}",
         ]
