@@ -76,32 +76,58 @@ class WMIEXEC:
         self.__registry_Path = f"Software\\Classes\\{gen_random_string(6)}"
 
         commands = [
-            f"{self.__shell} {command} 1> {result_output} 2>&1",
+            # 1. Run the command and write output to file
+            f'{self.__shell} {command} 1> "{result_output}" 2>&1',
+
+            # 2. Base64 encode the file using PowerShell
             f'{self.__shell} powershell -Command "[Convert]::ToBase64String([IO.File]::ReadAllBytes(\'{result_output}\')) | Out-File -Encoding ASCII \'{result_output_b64}\'"',
-            f'{self.__shell} for /F "usebackq" %G in ("{result_output_b64}") do reg add HKLM\\{self.__registry_Path} /v {keyName} /t REG_SZ /d "%G" /f',
-            f"{self.__shell} del /q /f /s {result_output} {result_output_b64}",
+
+            # 3. Use PowerShell to split base64 content into 16KB chunks and store in registry
+            f'{self.__shell} powershell -Command "$b64 = Get-Content -Raw \'{result_output_b64}\'; '
+            f'$chunksize = 16000; '
+            f'$count = [math]::Ceiling($b64.Length / $chunksize); '
+            f'for ($i = 0; $i -lt $count; $i++) {{ '
+            f'  $chunk = $b64.Substring($i * $chunksize, [math]::Min($chunksize, $b64.Length - ($i * $chunksize))); '
+            f'  $name = \\"{keyName}_chunk_$i\\"; '
+            f'  reg add \\"HKLM\\{self.__registry_Path}\\" /v $name /t REG_SZ /d $chunk /f }}; '
+            f'reg add \\"HKLM\\{self.__registry_Path}\\" /v \\"{keyName}\\" /t REG_DWORD /d $count /f"',
+
+            # 4. Delete temporary files
+            f'{self.__shell} del /q /f "{result_output}" "{result_output_b64}"'
         ]
 
         for cmd in commands:
             self.execute_remote(cmd)
             time.sleep(0.5)
-        self.logger.info(f"Waiting {self.__exec_timeout}s for command completely executed.")
+
+        self.logger.info(f"Waiting {self.__exec_timeout}s for command to complete.")
         time.sleep(self.__exec_timeout)
 
         self.queryRegistry(keyName)
 
     def queryRegistry(self, keyName):
         try:
-            self.logger.debug(f"Querying registry key: HKLM\\{self.__registry_Path}")
+            # Spawn an instance of StdRegProv to access the registry
+            self.logger.debug(f"Retrieving output from: HKLM\\{self.__registry_Path}")
             descriptor, _ = self.__iWbemServices.GetObject("StdRegProv")
             descriptor = descriptor.SpawnInstance()
-            retVal = descriptor.GetStringValue(0x80000002, self.__registry_Path, keyName)
-            self.__outputBuffer = base64.b64decode(retVal.sValue).decode(self.__codec, errors="replace").rstrip("\r\n")
+
+            # Get the number of chunks stored in the registry
+            num_chunks = descriptor.GetDWORDValue(0x80000002, self.__registry_Path, keyName).uValue
+            self.logger.debug(f"Number of chunks: {num_chunks}")
+
+            # Retrieve each chunk and decode the base64 content
+            outputBuffer_b64 = ""
+            for i in range(num_chunks):
+                chunk_name = f"{keyName}_chunk_{i}"
+                self.logger.debug(f"Retrieving chunk: {chunk_name}")
+                outputBuffer_b64 += descriptor.GetStringValue(0x80000002, self.__registry_Path, chunk_name).sValue
+            self.__outputBuffer = base64.b64decode(outputBuffer_b64).decode(self.__codec, errors="replace").rstrip("\r\n")
         except Exception:
             self.logger.fail("WMIEXEC: Could not retrieve output file, it may have been detected by AV. Please try increasing the timeout with the '--exec-timeout' option. If it is still failing, try the 'smb' protocol or another exec method")
 
         try:
             self.logger.debug(f"Removing temporary registry path: HKLM\\{self.__registry_Path}")
-            retVal = descriptor.DeleteKey(0x80000002, self.__registry_Path)
+            descriptor.DeleteKey(0x80000002, self.__registry_Path)
         except Exception as e:
             self.logger.debug(f"Target: {self.__target} removing temporary registry path error: {e!s}")
