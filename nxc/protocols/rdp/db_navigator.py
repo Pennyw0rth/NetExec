@@ -59,3 +59,17 @@ class navigator(DatabaseNavigator):
                     
                     data.append([host_id, host, hostname, port, domain, serveros, nla])
                 print_table(data, title="Host")
+
+    def help_hosts(self):
+        help_string = """
+        hosts [filter_term]
+        By default prints all hosts
+        Table format:
+        | 'HostID', 'Host', 'Hostname', 'Port', 'Domain', 'Server OS', 'NLA' |
+        Subcommands:
+        filter_term - filters hosts with filter_term
+            If a single host is returned (e.g. `hosts 15`, it prints the following tables:
+                Host | 'HostID', 'Host', 'Hostname', 'Port', 'Domain', 'Server OS', 'NLA' |
+            Otherwise, it prints the default host table from a `like` query on the `ip` and `hostname` columns
+        """
+        print_help(help_string)
