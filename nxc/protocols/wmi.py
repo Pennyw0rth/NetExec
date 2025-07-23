@@ -208,7 +208,7 @@ class wmi(connection):
             username = ccache.credentials[0].header["client"].prettyPrint().decode().split("@")[0]
             self.username = username
         used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
-        
+
         try:
             self.logger.debug(f"Attempting to connect via WMI to {self.host}")
             self.conn.set_credentials(username=username, password=password, domain=domain, lmhash=lmhash, nthash=nthash, aesKey=self.aesKey)
@@ -369,7 +369,7 @@ class wmi(connection):
     @requires_admin
     def wmi(self, wql=None, namespace=None):
         """Execute WQL syntax via WMI
-        
+
         This is done via the --wmi flag
         """
         records = []
