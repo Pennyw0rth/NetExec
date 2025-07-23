@@ -8,7 +8,7 @@ from sqlalchemy.exc import (
     NoSuchTableError,
 )
 
-from nxc.database import BaseDB
+from nxc.database import BaseDB, format_host_query
 
 
 class database(BaseDB):
@@ -110,3 +110,27 @@ class database(BaseDB):
         if updated_ids:
             nxc_logger.debug(f"add_host() - Host IDs Updated: {updated_ids}")
             return updated_ids
+
+    def get_hosts(self, filter_term=None):
+        """Return hosts from the database."""
+        q = select(self.HostsTable)
+
+        # if we're returning a single host by ID
+        if self.is_host_valid(filter_term):
+            q = q.filter(self.HostsTable.c.id == filter_term)
+            results = self.db_execute(q).first()
+            # all() returns a list, so we keep the return format the same so consumers don't have to guess
+            return [results]
+        # if we're filtering by host
+        elif filter_term and filter_term != "":
+            q = format_host_query(q, filter_term, self.HostsTable)
+
+        results = self.db_execute(q).all()
+        nxc_logger.debug(f"RDP get_hosts() - results: {results}")
+        return results
+
+    def is_host_valid(self, host_id):
+        """Check if this host ID is valid."""
+        q = select(self.HostsTable).filter(self.HostsTable.c.id == host_id)
+        results = self.db_execute(q).all()
+        return len(results) > 0
