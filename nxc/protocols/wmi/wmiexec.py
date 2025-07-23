@@ -73,16 +73,19 @@ class WMIEXEC:
         result_output = f"C:\\windows\\temp\\{uuid.uuid4()!s}.txt"
         result_output_b64 = f"C:\\windows\\temp\\{uuid.uuid4()!s}.txt"
         keyName = str(uuid.uuid4())
-        self.__registry_Path = f"Software\\Classes\\{gen_random_string(6)}"
+        self.__registry_Path = f"Software\\Classes\\test_nxc_{gen_random_string(6)}"
 
-        commands = [
-            # 1. Run the command and write output to file
-            f'{self.__shell} {command} 1> "{result_output}" 2>&1',
+        # 1. Run the command and write output to file
+        self.execute_remote(f'{self.__shell} {command} 1> "{result_output}" 2>&1')
+        self.logger.info(f"Waiting {self.__exec_timeout}s for command to complete.")
+        time.sleep(self.__exec_timeout)
 
-            # 2. Base64 encode the file using PowerShell
-            f'{self.__shell} powershell -Command "[Convert]::ToBase64String([IO.File]::ReadAllBytes(\'{result_output}\')) | Out-File -Encoding ASCII \'{result_output_b64}\'"',
+        # 2. Base64 encode the file using PowerShell
+        self.execute_remote(f'{self.__shell} powershell -Command "[Convert]::ToBase64String([IO.File]::ReadAllBytes(\'{result_output}\')) | Out-File -Encoding ASCII \'{result_output_b64}\'"')
+        time.sleep(0.5)
 
-            # 3. Use PowerShell to split base64 content into 16KB chunks and store in registry
+        # 3. Use PowerShell to split base64 content into 16KB chunks and store in registry
+        self.execute_remote(
             f'{self.__shell} powershell -Command "$b64 = Get-Content -Raw \'{result_output_b64}\'; '
             f'$chunksize = 16000; '
             f'$count = [math]::Ceiling($b64.Length / $chunksize); '
@@ -90,18 +93,12 @@ class WMIEXEC:
             f'  $chunk = $b64.Substring($i * $chunksize, [math]::Min($chunksize, $b64.Length - ($i * $chunksize))); '
             f'  $name = \\"{keyName}_chunk_$i\\"; '
             f'  reg add \\"HKLM\\{self.__registry_Path}\\" /v $name /t REG_SZ /d $chunk /f }}; '
-            f'reg add \\"HKLM\\{self.__registry_Path}\\" /v \\"{keyName}\\" /t REG_DWORD /d $count /f"',
+            f'reg add \\"HKLM\\{self.__registry_Path}\\" /v \\"{keyName}\\" /t REG_DWORD /d $count /f"'
+        )
+        time.sleep(1)
 
-            # 4. Delete temporary files
-            f'{self.__shell} del /q /f "{result_output}" "{result_output_b64}"'
-        ]
-
-        for cmd in commands:
-            self.execute_remote(cmd)
-            time.sleep(0.5)
-
-        self.logger.info(f"Waiting {self.__exec_timeout}s for command to complete.")
-        time.sleep(self.__exec_timeout)
+        # 4. Delete temporary files
+        self.execute_remote(f'{self.__shell} del /q /f "{result_output}" "{result_output_b64}"')
 
         self.queryRegistry(keyName)
 
