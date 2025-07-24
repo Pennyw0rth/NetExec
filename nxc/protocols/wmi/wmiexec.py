@@ -81,7 +81,7 @@ class WMIEXEC:
         result_output = f"C:\\windows\\temp\\{uuid.uuid4()!s}.txt"
         result_output_b64 = f"C:\\windows\\temp\\{uuid.uuid4()!s}.txt"
         keyName = str(uuid.uuid4())
-        self.__registry_Path = f"Software\\Classes\\test_nxc_{gen_random_string(6)}"
+        self.__registry_Path = f"Software\\Classes\\{gen_random_string(8)}"
 
         # 1. Run the command and write output to file
         self.execute_remote(f'{self.__shell} {command} 1> "{result_output}" 2>&1')
@@ -122,7 +122,7 @@ class WMIEXEC:
         result_output = f"C:\\windows\\temp\\{uuid.uuid4()!s}.txt"
         result_output_b64 = f"C:\\windows\\temp\\{uuid.uuid4()!s}.txt"
         keyName = str(uuid.uuid4())
-        self.__registry_Path = f"Software\\Classes\\{gen_random_string(6)}"
+        self.__registry_Path = f"Software\\Classes\\{gen_random_string(8)}"
 
         # 1. Run the command and write output to file
         if not command.lower().startswith("powershell"):
