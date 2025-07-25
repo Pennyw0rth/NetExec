@@ -63,7 +63,7 @@ from dploot.triage.credentials import CredentialsTriage
 from dploot.lib.target import Target
 from dploot.triage.sccm import SCCMTriage, SCCMCred, SCCMSecret, SCCMCollection
 
-from time import time, ctime
+from time import time, ctime, sleep
 from traceback import format_exc
 from termcolor import colored
 import contextlib
@@ -1145,6 +1145,155 @@ class smb(connection):
         except SessionError:
             self.logger.fail("Cannot list remote tasks, RDP is probably disabled.")
 
+    def reg_sessions(self):
+        
+        def output(sessions, usernames):
+            # Calculate max lengths for formatting
+            maxSidLen = max(len(key) + 1 for key in sessions)
+            maxSidLen = max(maxSidLen, len("SID") + 1)
+            maxUsernameLen = max(len(vals["Username"] + vals["Domain"]) + 1 for vals in sessions.values()) + 1
+            maxUsernameLen = max(maxUsernameLen, len("USERNAME") + 1)
+
+            # Create the template for formatting
+            template = (f"{{USERNAME: <{maxUsernameLen}}} "
+                        f"{{SID: <{maxSidLen}}}")
+
+            # Create headers
+            header = template.format(
+                USERNAME="USERNAME",
+                SID="SID",
+            )
+            
+            header2 = template.replace(" <", "=<").format(
+                USERNAME="",
+                SID="",
+            )
+
+            # Store result
+            result = [header, header2]
+            
+            for sid, vals in sessions.items():
+                username = vals["Username"]
+                domain = vals["Domain"]
+                user_full = f"{domain}\\{username}" if username else ""
+
+                # If usernames are provided, filter them
+                if usernames and username.lower() not in usernames:
+                    continue
+
+                row = template.format(
+                    USERNAME=user_full,
+                    SID=sid
+                )
+                result.append(row)
+
+            if len(result) > 2:
+                self.logger.success("Remote Registry enumerated sessions")
+                for row in result:
+                    self.logger.highlight(row)
+            else:
+                self.logger.fail("No active session found for specified user(s) using the Remote Registry service.")
+                
+        # Bind to the Remote Registry Pipe
+        rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\winreg", smb_connection=self.conn)
+        binding_attempts = 2
+        while True:
+            dce = rpctransport.get_dce_rpc()
+            
+            try:
+                dce.connect()
+                dce.bind(rrp.MSRPC_UUID_RRP)
+                break
+            except Exception as e:
+                self.logger.debug(f"Could not bind to the Remote Registry: {e}")
+                if binding_attempts == 1:  
+                    self.logger.fail("The Remote Registry service seems to be disabled.")
+                    return
+                    
+            # STATUS_PIPE_NOT_AVAILABLE : Waiting 1 second for the service to start (if idle and set to 'Automatic' startup type)
+            sleep(1)
+            binding_attempts -= 1
+
+        # Open HKU hive
+        try:
+            resp = rrp.hOpenUsers(dce)
+        except DCERPCException as e:
+            if "rpc_s_access_denied" in str(e).lower():
+                self.logger.fail("Access denied while enumerating session using the Remote Registry")
+                return
+            else:
+                self.logger.debug("Exception connecting to RPC: %s", e)
+        except Exception as e:
+            self.logger.debug("Exception connecting to RPC: %s", e)
+
+        # Enumerate HKU subkeys and recover SIDs
+        sid_filter = "^S-1-.*\d$" 
+        exclude_sid = ["S-1-5-18", "S-1-5-19", "S-1-5-20"]
+        
+        key_handle = resp["phKey"]
+        index = 1
+        sessions = {}
+        
+        while True:
+            try:
+                resp = rrp.hBaseRegEnumKey(dce, key_handle, index)
+                sid = resp["lpNameOut"].rstrip("\0")
+                if re.match(sid_filter, sid) and sid not in exclude_sid:
+                    self.logger.info(f"User with SID {sid} is logged in on {self.hostname}")
+                    sessions.setdefault(sid, {"Username": "", "Domain": ""})
+                index += 1
+            except Exception:
+                break
+
+        rrp.hBaseRegCloseKey(dce, key_handle)
+        dce.disconnect()
+
+        if not sessions:
+            self.logger.fail("No sessions found via the Remote Registry service.")
+            return
+        
+        # Bind to the LSARPC Pipe for SID resolution
+        rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\lsarpc", smb_connection=self.conn)
+        dce = rpctransport.get_dce_rpc()
+        try:
+            dce.connect()
+            dce.bind(lsat.MSRPC_UUID_LSAT)
+        except Exception as e:
+            self.logger.debug(f"Failed to connect to LSARPC for SID resolution : {e}")
+            output(sessions, None)
+            return
+        
+        # Resolve SIDs with names
+        policy_handle = lsad.hLsarOpenPolicy2(dce, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES)["PolicyHandle"]
+        try:
+            resp = lsat.hLsarLookupSids(dce, policy_handle, sessions.keys(), lsat.LSAP_LOOKUP_LEVEL.LsapLookupWksta)
+        except DCERPCException as e:
+            if str(e).find("STATUS_SOME_NOT_MAPPED") >= 0:
+                resp = e.get_packet()
+                self.logger.debug(f"Could not resolve some SIDs: {e}")
+            else:
+                resp = None
+                self.logger.debug(f"Could not resolve SID(s): {e}")
+        
+        if resp:
+            for sid, item in zip(sessions.keys(), resp["TranslatedNames"]["Names"]):
+                if item["DomainIndex"] >= 0:
+                    sessions[sid]["Username"] = item["Name"]
+                    sessions[sid]["Domain"] = resp["ReferencedDomains"]["Domains"][item["DomainIndex"]]["Name"]
+        
+        # Check if we need to filter for usernames
+        usernames = None
+        if self.args.reg_sessions:
+            arg = self.args.reg_sessions
+            if os.path.isfile(arg):
+                with open(arg) as f:
+                    usernames = [line.strip().lower() for line in f if line.strip()]
+            else:
+                usernames = [arg.lower()]
+        
+        output(sessions, usernames)
+        return
+    
     def shares(self):
         temp_dir = ntpath.normpath("\\" + gen_random_string())
         temp_file = ntpath.normpath("\\" + gen_random_string() + ".txt")
