@@ -354,8 +354,10 @@ class smb(connection):
                 kerb_pass = ""
                 self.username = self.args.delegate
                 serverName = Principal(f"cifs/{self.hostname}", type=constants.PrincipalNameType.NT_SRV_INST.value)
-                tgs = kerberos_login_with_S4U(domain, self.hostname, username, password, nthash, lmhash, aesKey, kdcHost, self.args.delegate, serverName, useCache, no_s4u2proxy=self.args.no_s4u2proxy)
+                tgs, sk = kerberos_login_with_S4U(domain, self.hostname, username, password, nthash, lmhash, aesKey, kdcHost, self.args.delegate, serverName, useCache, no_s4u2proxy=self.args.no_s4u2proxy)
                 self.logger.debug(f"Got TGS for {self.args.delegate} through S4U")
+                if self.args.store_st:
+                    self.save_st(tgs, sk)
 
             self.conn.kerberosLogin(self.username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache=useCache, TGS=tgs)
             if "Unix" not in self.server_os:
@@ -629,6 +631,19 @@ class smb(connection):
             with sem, open(self.args.gen_relay_list, "a+") as relay_list:
                 if self.host not in relay_list.read():
                     relay_list.write(self.host + "\n")
+
+    def save_st(self, st, sk):
+        ccache = CCache()
+        tgs_rep = st['KDC_REP']
+        session_key = sk
+        try:
+            ccache.fromTGS(tgs_rep, session_key, session_key)
+        except SessionKeyDecryptionError as e:
+            self.logger.fail(f"Failed to decrypt session key: {e}")
+            return
+
+        ccache.saveFile(f"{self.args.store_st}.ccache")
+        self.logger.success(f"Saved ST to {self.args.store_st}.ccache")
 
     def generate_tgt(self):
         self.logger.info(f"Attempting to get TGT for {self.username}@{self.domain}")
