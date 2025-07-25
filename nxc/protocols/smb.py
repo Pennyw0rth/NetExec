@@ -353,7 +353,7 @@ class smb(connection):
             if self.args.delegate:
                 kerb_pass = ""
                 self.username = self.args.delegate
-                serverName = Principal(f"cifs/{self.hostname}", type=constants.PrincipalNameType.NT_SRV_INST.value)
+                serverName = Principal(f"cifs/{self.hostname}.{self.domain}", type=constants.PrincipalNameType.NT_SRV_INST.value)
                 tgs, sk = kerberos_login_with_S4U(domain, self.hostname, username, password, nthash, lmhash, aesKey, kdcHost, self.args.delegate, serverName, useCache, no_s4u2proxy=self.args.no_s4u2proxy)
                 self.logger.debug(f"Got TGS for {self.args.delegate} through S4U")
                 if self.args.store_st:
