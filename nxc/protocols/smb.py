@@ -1573,8 +1573,8 @@ class smb(connection):
         for src, dest in self.args.get_file:
             self.get_file_single(src, dest)
     
-    def download_folder(self, folder, dest, recursive=False, silent=False, base_dir=None):
-        self.logger.debug(f"Downloading folder with args: {folder}, {dest}, Recursive: {recursive}, Silent: {silent}, Base dir: {base_dir}")
+    def download_folder(self, folder, dest, recursive=False, silent=False, base_dir=None, ignore_empty=False):
+        self.logger.debug(f"Downloading folder with args: {folder}, {dest}, Recursive: {recursive}, Silent: {silent}, Base dir: {base_dir}, Ignore empty: {ignore_empty}")
         normalized_folder = ntpath.normpath(folder)
         base_folder = os.path.basename(normalized_folder)
         self.logger.debug(f"Base folder: {base_folder}")
@@ -1586,26 +1586,36 @@ class smb(connection):
             return
         self.logger.debug(f"{len(items)} items in folder: {items}")
 
-        for item in items:
-            item_name = item.get_longname()
-            if item_name in [".", ".."]:
-                continue
+        filtered_items = [item for item in items if item.get_longname() not in [".", ".."]]
+        
+        # create local directory structure regardless of content; download empty folders by default
+        # change the Windows path to Linux and then join it with the base directory to get our actual save path
+        relative_path = os.path.join(*folder.replace(base_dir or folder, "").lstrip("\\").split("\\"))
+        local_folder_path = os.path.join(dest, relative_path)
+        
+        if not filtered_items and ignore_empty:
+            if not silent:
+                self.logger.debug(f"Skipping empty folder '{folder}'")
+            return
             
+        # create the directory for this folder
+        os.makedirs(local_folder_path, exist_ok=True)
+        if not filtered_items and not silent:
+            self.logger.success(f"Created empty directory '{local_folder_path}'")
+
+        for item in filtered_items:
+            item_name = item.get_longname()
             dir_path = ntpath.normpath(ntpath.join(normalized_folder, item_name))
             self.logger.debug(f"Parsing item: {item_name}, {dir_path}")
             
             if item.is_directory() and recursive:
                 self.logger.debug(f"Found new directory to parse: {dir_path}")
-                self.download_folder(dir_path, dest, recursive, silent, base_dir or folder)
+                self.download_folder(dir_path, dest, recursive, silent, base_dir or folder, ignore_empty)
             elif not item.is_directory():
                 remote_file_path = ntpath.join(folder, item_name)
-                # change the Windows path to Linux and then join it with the base directory to get our actual save path
-                relative_path = os.path.join(*folder.replace(base_dir or folder, "").lstrip("\\").split("\\"))
-                local_folder_path = os.path.join(dest, relative_path)
                 local_file_path = os.path.join(local_folder_path, item_name)
                 self.logger.debug(f"{dest=} {remote_file_path=} {relative_path=} {local_folder_path=} {local_file_path=}")
                 
-                os.makedirs(local_folder_path, exist_ok=True)
                 try:
                     self.get_file_single(remote_file_path, local_file_path, silent)
                 except FileNotFoundError:
@@ -1614,9 +1624,11 @@ class smb(connection):
 
     def get_folder(self):
         recursive = self.args.recursive
+        ignore_empty = getattr(self.args, "ignore_empty_folders", False)
         self.logger.debug(f"Recursive option set to {recursive}")
+        self.logger.debug(f"Ignore empty folders option set to {ignore_empty}")
         for folder, dest in self.args.get_folder:
-            self.download_folder(folder, dest, recursive)
+            self.download_folder(folder, dest, recursive, False, None, ignore_empty)
             self.logger.success(f"Folder '{folder}' was downloaded to '{dest}'")
 
     def enable_remoteops(self, regsecret=False):
