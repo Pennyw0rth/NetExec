@@ -1147,47 +1147,43 @@ class smb(connection):
 
     def reg_sessions(self):
         
-        def output(sessions, usernames):
-            # Calculate max lengths for formatting
-            maxSidLen = max(len(key) + 1 for key in sessions)
-            maxSidLen = max(maxSidLen, len("SID") + 1)
-            maxUsernameLen = max(len(vals["Username"] + vals["Domain"]) + 1 for vals in sessions.values()) + 1
-            maxUsernameLen = max(maxUsernameLen, len("USERNAME") + 1)
+        def output(sessions):
+            if sessions:
+                # Calculate max lengths for formatting
+                maxSidLen = max(len(key) + 1 for key in sessions)
+                maxSidLen = max(maxSidLen, len("SID") + 1)
+                maxUsernameLen = max(len(vals["Username"] + vals["Domain"]) + 1 for vals in sessions.values()) + 1
+                maxUsernameLen = max(maxUsernameLen, len("USERNAME") + 1)
 
-            # Create the template for formatting
-            template = (f"{{USERNAME: <{maxUsernameLen}}} "
-                        f"{{SID: <{maxSidLen}}}")
+                # Create the template for formatting
+                template = (f"{{USERNAME: <{maxUsernameLen}}} "
+                            f"{{SID: <{maxSidLen}}}")
 
-            # Create headers
-            header = template.format(
-                USERNAME="USERNAME",
-                SID="SID",
-            )
-            
-            header2 = template.replace(" <", "=<").format(
-                USERNAME="",
-                SID="",
-            )
-
-            # Store result
-            result = [header, header2]
-            
-            for sid, vals in sessions.items():
-                username = vals["Username"]
-                domain = vals["Domain"]
-                user_full = f"{domain}\\{username}" if username else ""
-
-                # If usernames are provided, filter them
-                if usernames and username.lower() not in usernames:
-                    continue
-
-                row = template.format(
-                    USERNAME=user_full,
-                    SID=sid
+                # Create headers
+                header = template.format(
+                    USERNAME="USERNAME",
+                    SID="SID",
                 )
-                result.append(row)
+                
+                header2 = template.replace(" <", "=<").format(
+                    USERNAME="",
+                    SID="",
+                )
 
-            if len(result) > 2:
+                # Store result
+                result = [header, header2]
+                
+                for sid, vals in sessions.items():
+                    username = vals["Username"]
+                    domain = vals["Domain"]
+                    user_full = f"{domain}\\{username}" if username else ""
+
+                    row = template.format(
+                        USERNAME=user_full,
+                        SID=sid
+                    )
+                    result.append(row)
+
                 self.logger.success("Remote Registry enumerated sessions")
                 for row in result:
                     self.logger.highlight(row)
@@ -1260,7 +1256,7 @@ class smb(connection):
             dce.bind(lsat.MSRPC_UUID_LSAT)
         except Exception as e:
             self.logger.debug(f"Failed to connect to LSARPC for SID resolution : {e}")
-            output(sessions, None)
+            output(sessions)
             return
         
         # Resolve SIDs with names
@@ -1281,8 +1277,7 @@ class smb(connection):
                     sessions[sid]["Username"] = item["Name"]
                     sessions[sid]["Domain"] = resp["ReferencedDomains"]["Domains"][item["DomainIndex"]]["Name"]
         
-        # Check if we need to filter for usernames
-        usernames = None
+        # Filter for usernames
         if self.args.reg_sessions:
             arg = self.args.reg_sessions
             if os.path.isfile(arg):
@@ -1291,8 +1286,15 @@ class smb(connection):
             else:
                 usernames = [arg.lower()]
         
-        output(sessions, usernames)
-        return
+            filtered_sessions = {}
+            for sid, info in sessions.items():
+                if info["Username"].lower() not in usernames:
+                    continue
+                else:
+                    filtered_sessions[sid] = info
+            output(filtered_sessions)
+        else:
+            output(sessions)
     
     def shares(self):
         temp_dir = ntpath.normpath("\\" + gen_random_string())
