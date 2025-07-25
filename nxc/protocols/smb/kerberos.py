@@ -275,4 +275,4 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
     tgs_formated["KDC_REP"] = r
     tgs_formated["cipher"] = cipher
     tgs_formated["sessionKey"] = new_session_key
-    return tgs_formated
+    return tgs_formated, session_key
