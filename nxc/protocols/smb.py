@@ -1272,7 +1272,7 @@ class smb(connection):
                 self.logger.debug(f"Could not resolve SID(s): {e}")
         
         if resp:
-            for sid, item in zip(sessions.keys(), resp["TranslatedNames"]["Names"]):
+            for sid, item in zip(sessions.keys(), resp["TranslatedNames"]["Names"], strict=False):
                 if item["DomainIndex"] >= 0:
                     sessions[sid]["Username"] = item["Name"]
                     sessions[sid]["Domain"] = resp["ReferencedDomains"]["Domains"][item["DomainIndex"]]["Name"]
