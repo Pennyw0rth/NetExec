@@ -8,7 +8,7 @@ def proto_args(parser, parents):
 
     delegate_arg = smb_parser.add_argument("--delegate", action="store", help="Impersonate user with S4U2Self + S4U2Proxy")
     delegate_spn_arg = smb_parser.add_argument("--delegate-spn", action=get_conditional_action(_StoreAction), make_required=[], help="SPN to use for S4U2Proxy, if not specified the SPN used will be cifs/<target>", type=str)
-    store_st = smb_parser.add_argument("--store-st", dest="store_st", action=get_conditional_action(_StoreAction), make_required=[], help="Store the S4U Service Ticket in the specified file", type=str)
+    generate_st = smb_parser.add_argument("--generate-st", dest="generate_st", action=get_conditional_action(_StoreAction), make_required=[], help="Store the S4U Service Ticket in the specified file", type=str)
     self_delegate_arg = smb_parser.add_argument("--self", dest="no_s4u2proxy", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Only do S4U2Self, no S4U2Proxy (use with delegate)")
 
     dgroup = smb_parser.add_mutually_exclusive_group()
@@ -26,7 +26,7 @@ def proto_args(parser, parents):
     smb_parser.add_argument("--generate-krb5-file", type=str, help="Generate a krb5 file like from a range of IP")
     smb_parser.add_argument("--generate-tgt", type=str, help="Generate a tgt ticket")
     self_delegate_arg.make_required = [delegate_arg]
-    store_st.make_required = [delegate_arg]
+    generate_st.make_required = [delegate_arg]
     delegate_spn_arg.make_required = [delegate_arg]
 
     cred_gathering_group = smb_parser.add_argument_group("Credential Gathering", "Options for gathering credentials")

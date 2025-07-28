@@ -362,7 +362,7 @@ class smb(connection):
                     self.logger.debug(f"Swapping SPN to {spn} for TGS")
                     tgs = kerberos_altservice(tgs, spn)
                 
-                if self.args.store_st:
+                if self.args.generate_st:
                     self.save_st(tgs, sk, spn if self.args.delegate_spn else None)
 
             self.conn.kerberosLogin(self.username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache=useCache, TGS=tgs)
@@ -659,8 +659,8 @@ class smb(connection):
             self.logger.debug(f"Using principal {principal} for ST")
             ccache.credentials[0]["server"].fromPrincipal(principal)
 
-        ccache.saveFile(f"{self.args.store_st}.ccache")
-        self.logger.success(f"Saved ST to {self.args.store_st}.ccache")
+        ccache.saveFile(f"{self.args.generate_st}.ccache")
+        self.logger.success(f"Saved ST to {self.args.generate_st}.ccache")
 
     def generate_tgt(self):
         self.logger.info(f"Attempting to get TGT for {self.username}@{self.domain}")
