@@ -1031,8 +1031,24 @@ class ldap(connection):
                         f.write(line + "\n")
             return
 
-        # Building the search filter
-        searchFilter = "(&(servicePrincipalName=*)(!(objectCategory=computer)))"
+        if self.args.kerberoast_users:
+            target_usernames = []
+            for item in self.args.kerberoast_users:
+                if os.path.isfile(item):
+                    with open(item, encoding="utf-8") as f:
+                        target_usernames.extend(line.strip() for line in f if line.strip())
+                else:
+                    target_usernames.append(item.strip())
+
+            self.logger.info(f"Targeting specific users for kerberoasting: {', '.join(target_usernames)}")
+
+            # build search filter for specific users
+            user_filter = "".join([f"(sAMAccountName={username})" for username in target_usernames])
+            searchFilter = f"(&(servicePrincipalName=*)(!(objectCategory=computer))(|{user_filter}))"
+        else:
+            # default to all
+            searchFilter = "(&(servicePrincipalName=*)(!(objectCategory=computer)))"
+
         attributes = [
             "sAMAccountName",
             "userAccountControl",
