@@ -9,8 +9,6 @@ class NXCModule:
     name = "bitlocker"
     description = "Enumerating BitLocker Status on target(s) If it is enabled or disabled."
     supported_protocols = ["smb", "wmi"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -105,7 +103,16 @@ class BitLockerWMI:
                 # Query to get BitLocker status
                 classQuery = "SELECT DriveLetter, ProtectionStatus, EncryptionMethod FROM Win32_EncryptableVolume"
                 iEnumWbemClassObject = iWbemServices.ExecQuery(classQuery)
-                encryptionTypeMapping = {0: "None", 1: "AES_256_WITH_DIFFUSER", 2: "AES_256_WITH_DIFFUSER", 3: "AES_128", 4: "AES_256", 5: "HARDWARE_ENCRYPTION", 6: "XTS_AES_128", 7: "XTS_AES_256"}
+                encryptionTypeMapping = {
+                    0: "None",
+                    1: "AES_128_WITH_DIFFUSER",
+                    2: "AES_256_WITH_DIFFUSER",
+                    3: "AES_128",
+                    4: "AES_256",
+                    5: "HARDWARE_ENCRYPTION",
+                    6: "XTS_AES_128",
+                    7: "XTS_AES_256_WITH_DIFFUSER"
+                }
                 
                 try:
                     while True:

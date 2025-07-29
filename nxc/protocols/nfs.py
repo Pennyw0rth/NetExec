@@ -203,7 +203,7 @@ class nfs(connection):
         for node in export_nodes:
 
             # Collect the names of the groups associated with this export node
-            group_names = self.group_names(node.ex_groups)
+            group_names = self.group_names(node.ex_groups) or ["Everyone"]
             networks.append(group_names)
 
             # If there are more export nodes, process them recursively. More than one share.

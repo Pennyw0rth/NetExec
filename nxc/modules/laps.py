@@ -17,8 +17,6 @@ class NXCModule:
     name = "laps"
     description = "Retrieves all LAPS passwords which the account has read permissions for."
     supported_protocols = ["ldap"]
-    opsec_safe = True
-    multiple_hosts = False
 
     def options(self, context, module_options):
         """COMPUTER    Computer name or wildcard ex: WIN-S10, WIN-* etc. Default: *"""
