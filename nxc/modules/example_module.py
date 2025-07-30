@@ -11,8 +11,6 @@ class NXCModule:
     name = "example_module"  # Make sure this is unique and one word (no spaces)
     description = "I do something"
     supported_protocols = []  # Example: ['smb', 'mssql']
-    opsec_safe = True  # Does the module touch disk?
-    multiple_hosts = True  # Does it make sense to run this module on multiple hosts at a time?
 
     def __init__(self):
         self.context = None
