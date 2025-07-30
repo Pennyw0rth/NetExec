@@ -284,7 +284,6 @@ class NXCModule:
         self.baseDN = connection.ldap_connection._baseDN
         self.ldap_session = connection.ldap_connection
         self.connection = connection
-        self.context = context
 
         # Searching for the principal SID
         if self.principal_sAMAccountName is not None:
@@ -323,15 +322,15 @@ class NXCModule:
                 continue
 
             if self.action == "read":
-                self.read(context, principal_security_descriptor)
+                self.read(principal_security_descriptor)
             if self.action == "backup":
                 self.backup(target, target_principal_dn, principal_raw_security_descriptor)
 
     # Main read funtion
     # Prints the parsed DACL
-    def read(self, context, principal_security_descriptor):
-        parsed_dacl = self.parse_dacl(context, principal_security_descriptor["Dacl"])
-        self.print_parsed_dacl(context, parsed_dacl)
+    def read(self, principal_security_descriptor):
+        parsed_dacl = self.parse_dacl(principal_security_descriptor["Dacl"])
+        self.print_parsed_dacl(parsed_dacl)
 
     # Permits to export the DACL of the targets
     # This function is called before any writing action (write, remove or restore)
@@ -367,11 +366,11 @@ class NXCModule:
 
     # Parses a full DACL
     #   - dacl : the DACL to parse, submitted in a Security Desciptor format
-    def parse_dacl(self, context, dacl):
+    def parse_dacl(self, dacl):
         parsed_dacl = []
-        context.log.debug("Parsing DACL")
+        self.context.log.debug("Parsing DACL")
         for ace in dacl["Data"]:
-            parsed_ace = self.parse_ace(context, ace)
+            parsed_ace = self.parse_ace(ace)
             parsed_dacl.append(parsed_ace)
         return parsed_dacl
 
@@ -386,7 +385,7 @@ class NXCModule:
 
     # Parses a specified ACE and extract the different values (Flags, Access Mask, Trustee, ObjectType, InheritedObjectType)
     #   - ace : the ACE to parse
-    def parse_ace(self, context, ace):
+    def parse_ace(self, ace):
         # For the moment, only the Allowed and Denied Access ACE are supported
         if ace["TypeName"] in [
             "ACCESS_ALLOWED_ACE",
@@ -433,7 +432,7 @@ class NXCModule:
                     ace["Ace"]["Sid"].formatCanonical(),
                 )
         else:  # if the ACE is not an access allowed
-            context.log.debug(f"ACE Type ({ace['TypeName']}) unsupported for parsing yet, feel free to contribute")
+            self.context.log.debug(f"ACE Type ({ace['TypeName']}) unsupported for parsing yet, feel free to contribute")
             _ace_flags = [FLAG.name for FLAG in ACE_FLAGS if ace.hasFlag(FLAG.value)]
             parsed_ace = {
                 "ACE type": ace["TypeName"],
@@ -442,18 +441,18 @@ class NXCModule:
             }
         return parsed_ace
 
-    def print_parsed_dacl(self, context, parsed_dacl):
+    def print_parsed_dacl(self, parsed_dacl):
         """Prints a full DACL by printing each parsed ACE
 
         parsed_dacl : a parsed DACL from parse_dacl()
         """
-        context.log.debug("Printing parsed DACL")
+        self.context.log.debug("Printing parsed DACL")
         # If a specific right or a specific GUID has been specified, only the ACE with this right will be printed
         # If an ACE type has been specified, only the ACE with this type will be specified
         # If a principal has been specified, only the ACE where he is the trustee will be printed
         for i, parsed_ace in enumerate(parsed_dacl):
             print_ace = True
-            context.log.debug(f"{parsed_ace=}, {self.rights=}, {self.rights_guid=}, {self.ace_type=}, {self.principal_sid=}")
+            self.context.log.debug(f"{parsed_ace=}, {self.rights=}, {self.rights_guid=}, {self.ace_type=}, {self.principal_sid=}")
 
             # Filter on specific rights
             if self.rights is not None:
@@ -467,7 +466,7 @@ class NXCModule:
                     if (self.rights == "ResetPassword") and (("Object type (GUID)" not in parsed_ace) or (RIGHTS_GUID.ResetPassword.value not in parsed_ace["Object type (GUID)"])):
                         print_ace = False
                 except Exception as e:
-                    context.log.debug(f"Error filtering with {parsed_ace=} and {self.rights=}, probably because of ACE type unsupported for parsing yet ({e})")
+                    self.context.log.debug(f"Error filtering with {parsed_ace=} and {self.rights=}, probably because of ACE type unsupported for parsing yet ({e})")
 
             # Filter on specific right GUID
             if self.rights_guid is not None:
@@ -475,7 +474,7 @@ class NXCModule:
                     if ("Object type (GUID)" not in parsed_ace) or (self.rights_guid not in parsed_ace["Object type (GUID)"]):
                         print_ace = False
                 except Exception as e:
-                    context.log.debug(f"Error filtering with {parsed_ace=} and {self.rights_guid=}, probably because of ACE type unsupported for parsing yet ({e})")
+                    self.context.log.debug(f"Error filtering with {parsed_ace=} and {self.rights_guid=}, probably because of ACE type unsupported for parsing yet ({e})")
 
             # Filter on ACE type
             if self.ace_type == "allowed":
@@ -483,13 +482,13 @@ class NXCModule:
                     if ("ACCESS_ALLOWED_OBJECT_ACE" not in parsed_ace["ACE Type"]) and ("ACCESS_ALLOWED_ACE" not in parsed_ace["ACE Type"]):
                         print_ace = False
                 except Exception as e:
-                    context.log.debug(f"Error filtering with {parsed_ace=} and {self.ace_type=}, probably because of ACE type unsupported for parsing yet ({e})")
+                    self.context.log.debug(f"Error filtering with {parsed_ace=} and {self.ace_type=}, probably because of ACE type unsupported for parsing yet ({e})")
             else:
                 try:
                     if ("ACCESS_DENIED_OBJECT_ACE" not in parsed_ace["ACE Type"]) and ("ACCESS_DENIED_ACE" not in parsed_ace["ACE Type"]):
                         print_ace = False
                 except Exception as e:
-                    context.log.debug(f"Error filtering with {parsed_ace=} and {self.ace_type=}, probably because of ACE type unsupported for parsing yet ({e})")
+                    self.context.log.debug(f"Error filtering with {parsed_ace=} and {self.ace_type=}, probably because of ACE type unsupported for parsing yet ({e})")
 
             # Filter on trusted principal
             if self.principal_sid is not None:
@@ -497,7 +496,7 @@ class NXCModule:
                     if self.principal_sid not in parsed_ace["Trustee (SID)"]:
                         print_ace = False
                 except Exception as e:
-                    context.log.debug(f"Error filtering with {parsed_ace=} and {self.principal_sid=}, probably because of ACE type unsupported for parsing yet ({e})")
+                    self.context.log.debug(f"Error filtering with {parsed_ace=} and {self.principal_sid=}, probably because of ACE type unsupported for parsing yet ({e})")
             if print_ace:
                 self.context.log.highlight(f"ACE[{i}] info")
                 self.print_parsed_ace(parsed_ace)
