@@ -276,7 +276,6 @@ class NXCModule:
             self.rights_guid = module_options["RIGHTS_GUID"]
         else:
             self.rights_guid = None
-        self.filename = None
 
     def on_login(self, context, connection):
         self.context = context
@@ -340,15 +339,14 @@ class NXCModule:
         backup = {}
         backup["sd"] = binascii.hexlify(self.principal_raw_security_descriptor).decode("latin-1")
         backup["dn"] = str(self.target_principal_dn)
-        if not self.filename:
-            self.filename = "dacledit-{}-{}.bak".format(
-                datetime.datetime.now().strftime("%Y%m%d-%H%M%S"),
-                target,
-            )
-        with codecs.open(self.filename, "w", "latin-1") as outfile:
+
+        filename = "dacledit-{}-{}.bak".format(
+            datetime.datetime.now().strftime("%Y%m%d-%H%M%S"),
+            target,
+        )
+        with codecs.open(filename, "w", "latin-1") as outfile:
             json.dump(backup, outfile)
-        self.context.log.highlight(f"DACL backed up to {self.filename}")
-        self.filename = None
+        self.context.log.highlight(f"DACL backed up to {filename}")
 
     def resolveSID(self, sid):
         """Resolves a SID to its corresponding sAMAccountName."""
