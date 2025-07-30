@@ -320,7 +320,7 @@ class NXCModule:
             except Exception as e:
                 context.log.fail(f"Target SID not found in LDAP ({target})")
                 context.log.debug(f"Exception: {e}, {traceback.format_exc()}")
-                return
+                continue
 
             if self.action == "read":
                 self.read(context)
