@@ -694,7 +694,7 @@ class ldap(connection):
         t /= 10000000
         return t
 
-    def search(self, searchFilter, attributes, sizeLimit=0, baseDN=None) -> list:
+    def search(self, searchFilter, attributes, sizeLimit=0, baseDN=None, searchControls=None) -> list:
         if baseDN is None and self.args.base_dn is not None:
             baseDN = self.args.base_dn
         elif baseDN is None:
@@ -712,7 +712,7 @@ class ldap(connection):
                     searchFilter=searchFilter,
                     attributes=attributes,
                     sizeLimit=sizeLimit,
-                    searchControls=paged_search_control,
+                    searchControls=searchControls if searchControls else paged_search_control,
                 )
         except ldap_impacket.LDAPSearchError as e:
             if "sizeLimitExceeded" in str(e):

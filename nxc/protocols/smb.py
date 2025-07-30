@@ -39,7 +39,6 @@ from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
-from nxc.paths import NXC_PATH
 from nxc.protocols.smb.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection
 from nxc.protocols.smb.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
 from nxc.protocols.smb.kerberos import kerberos_login_with_S4U
@@ -65,7 +64,6 @@ from dploot.lib.target import Target
 from dploot.triage.sccm import SCCMTriage, SCCMCred, SCCMSecret, SCCMCollection
 
 from time import time, ctime
-from datetime import datetime
 from traceback import format_exc
 from termcolor import colored
 import contextlib
@@ -255,10 +253,6 @@ class smb(connection):
             self.logger.debug(e)
 
         self.os_arch = self.get_os_arch()
-        # Construct the output file template using os.path.join for OS compatibility
-        base_log_dir = os.path.join(os.path.expanduser(NXC_PATH), "logs")
-        filename_pattern = f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
-        self.output_file_template = os.path.join(base_log_dir, "{output_folder}", filename_pattern)
 
         try:
             # DCs seem to want us to logoff first, windows workstations sometimes reset the connection
