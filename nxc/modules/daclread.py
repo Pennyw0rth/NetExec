@@ -189,6 +189,12 @@ class ALLOWED_OBJECT_ACE_MASK_FLAGS(Enum):
     Self = ldaptypes.ACCESS_ALLOWED_OBJECT_ACE.ADS_RIGHT_DS_SELF
 
 
+SEARCH_FILTERS = {
+    "TARGET": lambda target: f"(sAMAccountName={escape_filter_chars(target)})",
+    "TARGET_DN": lambda target: f"(distinguishedName={escape_filter_chars(target)})"
+}
+
+
 class NXCModule:
     """Module to read and backup the Discretionary Access Control List of one or multiple objects.
 
@@ -226,24 +232,27 @@ class NXCModule:
             context.log.fail("Select an option, example: -M daclread -o TARGET=Administrator ACTION=read")
             sys.exit(1)
 
-        if module_options and "TARGET" in module_options:
-            context.log.debug("There is a target specified!")
-            if isfile(module_options["TARGET"]):
-                try:
-                    self.target_file = open(module_options["TARGET"])  # noqa: SIM115
-                    self.target_sAMAccountName = None
-                except Exception:
-                    context.log.fail("The file doesn't exist or cannot be opened.")
-            else:
-                context.log.debug(f"Setting target_sAMAccountName to {module_options['TARGET']}")
-                self.target_sAMAccountName = module_options["TARGET"]
-                self.target_file = None
-            self.target_DN = None
+        self.targets = []
         self.target_SID = None
-        if module_options and "TARGET_DN" in module_options:
-            self.target_DN = module_options["TARGET_DN"]
-            self.target_sAMAccountName = None
-            self.target_file = None
+
+        for option in "TARGET", "TARGET_DN":
+            if module_options and option in module_options:
+                context.log.debug("There is a target specified!")
+                if isfile(module_options[option]):
+                    try:
+                        target_file = open(module_options[option])  # noqa: SIM115
+                        for line in target_file:
+                            context.log.debug(f"Adding target from file: {line}")
+                            self.targets.append((line.strip(), SEARCH_FILTERS[option]))
+                    except Exception:
+                        context.log.fail("The file doesn't exist or cannot be opened.")
+                else:
+                    context.log.debug(f"Adding target: {module_options[option]}")
+                    self.targets.append((module_options[option].strip(), SEARCH_FILTERS[option]))
+
+        if not self.targets:
+            context.log.fail("No target specified, please specify at least one target with the TARGET or TARGET_DN options.")
+            sys.exit(1)
 
         if module_options and "PRINCIPAL" in module_options:
             self.principal_sAMAccountName = module_options["PRINCIPAL"]
@@ -294,17 +303,11 @@ class NXCModule:
                 return
 
         # Searching for the targets SID and their Security Descriptors
-        # If there is only one target
-        if (self.target_sAMAccountName or self.target_DN) and self.target_file is None:
+        for target, search_filter in self.targets:
             try:
                 # Searching for target account with its security descriptor
-                if self.target_sAMAccountName:  # noqa: SIM108
-                    search_filter = f"(sAMAccountName={escape_filter_chars(self.target_sAMAccountName)})"
-                else:
-                    search_filter = f"(distinguishedName={escape_filter_chars(self.target_DN)})"
-
                 resp = connection.search(
-                    searchFilter=search_filter,
+                    searchFilter=search_filter(target),
                     attributes=["distinguishedName", "nTSecurityDescriptor"],
                     searchControls=security_descriptor_control(sdflags=0x04),
                 )
@@ -316,42 +319,14 @@ class NXCModule:
                 self.principal_security_descriptor = ldaptypes.SR_SECURITY_DESCRIPTOR(data=self.principal_raw_security_descriptor)
                 context.log.highlight(f"Target principal found in LDAP ({self.target_principal_dn})")
             except Exception as e:
-                context.log.fail(f"Target SID not found in LDAP ({self.target_sAMAccountName})")
+                context.log.fail(f"Target SID not found in LDAP ({target})")
                 context.log.debug(f"Exception: {e}, {traceback.format_exc()}")
                 return
 
             if self.action == "read":
                 self.read(context)
             if self.action == "backup":
-                self.backup(context)
-
-        # If there are multiple targets
-        else:
-            targets = self.target_file.readlines()
-            for target in targets:
-                try:
-                    self.target_sAMAccountName = target.strip()
-                    # Searching for target account with its security descriptor
-                    resp = connection.search(
-                        searchFilter=f"(sAMAccountName={escape_filter_chars(self.target_sAMAccountName)})",
-                        attributes=["distinguishedName", "nTSecurityDescriptor"],
-                        searchControls=security_descriptor_control(sdflags=0x04),
-                    )
-                    resp_parsed = parse_result_attributes(resp)[0]
-
-                    # Extract security descriptor data
-                    self.target_principal_dn = resp_parsed["distinguishedName"]
-                    self.principal_raw_security_descriptor = resp_parsed["nTSecurityDescriptor"]
-                    self.principal_security_descriptor = ldaptypes.SR_SECURITY_DESCRIPTOR(data=self.principal_raw_security_descriptor)
-                    context.log.highlight(f"Target principal found in LDAP ({self.target_sAMAccountName})")
-                except Exception:
-                    context.log.fail(f"Target SID not found in LDAP ({self.target_sAMAccountName})")
-                    continue
-
-                if self.action == "read":
-                    self.read(context)
-                if self.action == "backup":
-                    self.backup(context)
+                self.backup(target)
 
     # Main read funtion
     # Prints the parsed DACL
@@ -361,18 +336,18 @@ class NXCModule:
 
     # Permits to export the DACL of the targets
     # This function is called before any writing action (write, remove or restore)
-    def backup(self, context):
+    def backup(self, target):
         backup = {}
         backup["sd"] = binascii.hexlify(self.principal_raw_security_descriptor).decode("latin-1")
         backup["dn"] = str(self.target_principal_dn)
         if not self.filename:
             self.filename = "dacledit-{}-{}.bak".format(
                 datetime.datetime.now().strftime("%Y%m%d-%H%M%S"),
-                self.target_sAMAccountName,
+                target,
             )
         with codecs.open(self.filename, "w", "latin-1") as outfile:
             json.dump(backup, outfile)
-        context.log.highlight("DACL backed up to %s", self.filename)
+        self.context.log.highlight(f"DACL backed up to {self.filename}")
         self.filename = None
 
     def resolveSID(self, sid):
