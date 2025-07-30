@@ -313,32 +313,32 @@ class NXCModule:
                 resp_parsed = parse_result_attributes(resp)[0]
 
                 # Extract security descriptor data
-                self.target_principal_dn = resp_parsed["distinguishedName"]
-                self.principal_raw_security_descriptor = resp_parsed["nTSecurityDescriptor"]
-                self.principal_security_descriptor = ldaptypes.SR_SECURITY_DESCRIPTOR(data=self.principal_raw_security_descriptor)
-                context.log.highlight(f"Target principal found in LDAP ({self.target_principal_dn})")
+                target_principal_dn = resp_parsed["distinguishedName"]
+                principal_raw_security_descriptor = resp_parsed["nTSecurityDescriptor"]
+                principal_security_descriptor = ldaptypes.SR_SECURITY_DESCRIPTOR(data=principal_raw_security_descriptor)
+                context.log.highlight(f"Target principal found in LDAP ({target_principal_dn})")
             except Exception as e:
                 context.log.fail(f"Target SID not found in LDAP ({target})")
                 context.log.debug(f"Exception: {e}, {traceback.format_exc()}")
                 continue
 
             if self.action == "read":
-                self.read(context)
+                self.read(context, principal_security_descriptor)
             if self.action == "backup":
-                self.backup(target)
+                self.backup(target, target_principal_dn, principal_raw_security_descriptor)
 
     # Main read funtion
     # Prints the parsed DACL
-    def read(self, context):
-        parsed_dacl = self.parse_dacl(context, self.principal_security_descriptor["Dacl"])
+    def read(self, context, principal_security_descriptor):
+        parsed_dacl = self.parse_dacl(context, principal_security_descriptor["Dacl"])
         self.print_parsed_dacl(context, parsed_dacl)
 
     # Permits to export the DACL of the targets
     # This function is called before any writing action (write, remove or restore)
-    def backup(self, target):
+    def backup(self, target, target_principal_dn, principal_raw_security_descriptor):
         backup = {}
-        backup["sd"] = binascii.hexlify(self.principal_raw_security_descriptor).decode("latin-1")
-        backup["dn"] = str(self.target_principal_dn)
+        backup["sd"] = binascii.hexlify(principal_raw_security_descriptor).decode("latin-1")
+        backup["dn"] = str(target_principal_dn)
 
         filename = "dacledit-{}-{}.bak".format(
             datetime.datetime.now().strftime("%Y%m%d-%H%M%S"),
