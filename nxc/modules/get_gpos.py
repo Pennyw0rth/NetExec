@@ -1,9 +1,7 @@
-from impacket.ldap import ldapasn1 as ldapasn1_impacket
 import os
 import ntpath
 import shutil
 from nxc.config import process_secret
-from impacket.smbconnection import SMBConnection
 
 
 class NXCModule:
@@ -42,12 +40,10 @@ class NXCModule:
         
     def on_login(self, context, connection):
         """Main entry point that determines which protocol method to use"""        
-
         return self.smb_method(context, connection)
 
-    
     def smb_method(self, context, connection):
-        """find GPOs by browsing SYSVOL share"""
+        """Find GPOs by browsing SYSVOL share"""
         context.log.display("Searching for GPOs via SMB in SYSVOL share")
                 
         try:
@@ -100,7 +96,7 @@ class NXCModule:
             context.log.fail(f"Error searching GPOs via SMB: {e}")
     
     def get_gpo_display_name(self, context, connection, gpo_path):
-        """try to get the display name of a GPO by reading gpt.ini file directly into memory"""
+        """Try to get the display name of a GPO by reading gpt.ini file directly into memory"""
         try:
             ini_path = f"{gpo_path}\\GPT.ini"
             context.log.debug(f"GPT.ini path: {ini_path}")
@@ -126,7 +122,7 @@ class NXCModule:
             return ntpath.basename(gpo_path)
     
     def download_gpo(self, context, smb_conn, sysvol_path, dest_folder, guid):
-        """download a GPO from the SYSVOL share using the appropriate method"""
+        """Download a GPO from the SYSVOL share using the appropriate method"""
         context.log.debug(f"Downloading GPO {guid} from {sysvol_path} to {dest_folder}")
         
         created_dir = False
