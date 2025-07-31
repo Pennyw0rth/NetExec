@@ -1,5 +1,4 @@
 import binascii
-import codecs
 import json
 import datetime
 from enum import Enum
@@ -278,11 +277,9 @@ class NXCModule:
             self.rights_guid = None
 
     def on_login(self, context, connection):
-        self.context = context
         """On a successful LDAP login we perform a search for the targets' SID, their Security Descriptors and the principal's SID if there is one specified"""
         context.log.highlight("Be careful, this module cannot read the DACLS recursively.")
-        self.baseDN = connection.ldap_connection._baseDN
-        self.ldap_session = connection.ldap_connection
+        self.context = context
         self.connection = connection
 
         # Searching for the principal SID
@@ -339,11 +336,9 @@ class NXCModule:
         backup["sd"] = binascii.hexlify(principal_raw_security_descriptor).decode("latin-1")
         backup["dn"] = str(target_principal_dn)
 
-        filename = "dacledit-{}-{}.bak".format(
-            datetime.datetime.now().strftime("%Y%m%d-%H%M%S"),
-            target,
-        )
-        with codecs.open(filename, "w", "latin-1") as outfile:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        filename = f"dacledit-{timestamp}-{target}.bak"
+        with open(filename, "w", encoding="latin-1") as outfile:
             json.dump(backup, outfile)
         self.context.log.highlight(f"DACL backed up to {filename}")
 
@@ -427,10 +422,7 @@ class NXCModule:
                     except KeyError:
                         parsed_ace["Inherited type (GUID)"] = f"UNKNOWN ({inh_obj_type})"
                 # Extract the Trustee SID (the object that has the right over the DACL bearer)
-                parsed_ace["Trustee (SID)"] = "{} ({})".format(
-                    self.resolveSID(ace["Ace"]["Sid"].formatCanonical()) or "UNKNOWN",
-                    ace["Ace"]["Sid"].formatCanonical(),
-                )
+                parsed_ace["Trustee (SID)"] = f"{self.resolveSID(ace['Ace']['Sid'].formatCanonical()) or 'UNKNOWN'} ({ace['Ace']['Sid'].formatCanonical()})"
         else:  # if the ACE is not an access allowed
             self.context.log.debug(f"ACE Type ({ace['TypeName']}) unsupported for parsing yet, feel free to contribute")
             _ace_flags = [FLAG.name for FLAG in ACE_FLAGS if ace.hasFlag(FLAG.value)]
