@@ -274,7 +274,6 @@ class NXCModule:
         if "RIGHTS_GUID" in module_options:
             self.rights_guid = module_options["RIGHTS_GUID"]
 
-
     def on_login(self, context, connection):
         """On a successful LDAP login we perform a search for the targets' SID, their Security Descriptors and the principal's SID if there is one specified"""
         context.log.highlight("Be careful, this module cannot read the DACLS recursively.")
