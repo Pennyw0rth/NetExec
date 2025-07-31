@@ -209,6 +209,12 @@ class NXCModule:
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options
+        self.principal_sAMAccountName = None
+        self.principal_sid = None
+        self.action = "read"
+        self.ace_type = "allowed"
+        self.rights = None
+        self.rights_guid = None
 
     def options(self, context, module_options):
         """
@@ -235,7 +241,7 @@ class NXCModule:
         self.target_SID = None
 
         for option in "TARGET", "TARGET_DN":
-            if module_options and option in module_options:
+            if option in module_options:
                 context.log.debug("There is a target specified!")
                 if isfile(module_options[option]):
                     try:
@@ -253,28 +259,21 @@ class NXCModule:
             context.log.fail("No target specified, please specify at least one target with the TARGET or TARGET_DN options.")
             sys.exit(1)
 
-        if module_options and "PRINCIPAL" in module_options:
+        if "PRINCIPAL" in module_options:
             self.principal_sAMAccountName = module_options["PRINCIPAL"]
-        else:
-            self.principal_sAMAccountName = None
-        self.principal_sid = None
 
-        if module_options and "ACTION" in module_options:
+        if "ACTION" in module_options:
             self.action = module_options["ACTION"]
-        else:
-            self.action = "read"
-        if module_options and "ACE_TYPE" in module_options:
+
+        if "ACE_TYPE" in module_options:
             self.ace_type = module_options["ACE_TYPE"]
-        else:
-            self.ace_type = "allowed"
-        if module_options and "RIGHTS" in module_options:
+            
+        if "RIGHTS" in module_options:
             self.rights = module_options["RIGHTS"]
-        else:
-            self.rights = None
-        if module_options and "RIGHTS_GUID" in module_options:
+
+        if "RIGHTS_GUID" in module_options:
             self.rights_guid = module_options["RIGHTS_GUID"]
-        else:
-            self.rights_guid = None
+
 
     def on_login(self, context, connection):
         """On a successful LDAP login we perform a search for the targets' SID, their Security Descriptors and the principal's SID if there is one specified"""
