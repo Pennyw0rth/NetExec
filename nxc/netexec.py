@@ -65,6 +65,32 @@ async def start_run(protocol_obj, args, db, targets):  # noqa: RUF029
             future.result()
         except Exception:
             nxc_logger.exception(f"Exception for target {targets[futures.index(future)]}: {future.exception()}")
+            
+
+def load_protocol(protocol):
+    nxc_logger.debug(f"Protocol: {protocol}")
+    p_loader = ProtocolLoader()
+    protocol_path = p_loader.get_protocols()[protocol]["path"]
+    nxc_logger.debug(f"Protocol Path: {protocol_path}")
+    protocol_db_path = p_loader.get_protocols()[protocol]["dbpath"]
+    nxc_logger.debug(f"Protocol DB Path: {protocol_db_path}")
+
+    protocol_object = getattr(p_loader.load_protocol(protocol_path), protocol)
+    nxc_logger.debug(f"Protocol Object: {protocol_object}, type: {type(protocol_object)}")
+    protocol_db_object = p_loader.load_protocol(protocol_db_path).database
+    nxc_logger.debug(f"Protocol DB Object: {protocol_db_object}")
+
+    db_path = path_join(WORKSPACE_DIR, nxc_workspace, f"{protocol}.db")
+    nxc_logger.debug(f"DB Path: {db_path}")
+
+    db_engine = create_db_engine(db_path)
+
+    db = protocol_db_object(db_engine)
+
+    # with the new nxc/config.py this can be eventually removed, as it can be imported anywhere
+    protocol_object.config = nxc_config
+
+    return protocol_object, db, db_engine
 
 
 def main():
@@ -135,27 +161,7 @@ def main():
     if hasattr(args, "obfs") and args.obfs:
         powershell.obfuscate_ps_scripts = True
 
-    nxc_logger.debug(f"Protocol: {args.protocol}")
-    p_loader = ProtocolLoader()
-    protocol_path = p_loader.get_protocols()[args.protocol]["path"]
-    nxc_logger.debug(f"Protocol Path: {protocol_path}")
-    protocol_db_path = p_loader.get_protocols()[args.protocol]["dbpath"]
-    nxc_logger.debug(f"Protocol DB Path: {protocol_db_path}")
-
-    protocol_object = getattr(p_loader.load_protocol(protocol_path), args.protocol)
-    nxc_logger.debug(f"Protocol Object: {protocol_object}, type: {type(protocol_object)}")
-    protocol_db_object = p_loader.load_protocol(protocol_db_path).database
-    nxc_logger.debug(f"Protocol DB Object: {protocol_db_object}")
-
-    db_path = path_join(WORKSPACE_DIR, nxc_workspace, f"{args.protocol}.db")
-    nxc_logger.debug(f"DB Path: {db_path}")
-
-    db_engine = create_db_engine(db_path)
-
-    db = protocol_db_object(db_engine)
-
-    # with the new nxc/config.py this can be eventually removed, as it can be imported anywhere
-    protocol_object.config = nxc_config
+    protocol_object, db, db_engine = load_protocol(args.protocol)
 
     if args.module or args.list_modules:
         loader = ModuleLoader(args, db, nxc_logger)
