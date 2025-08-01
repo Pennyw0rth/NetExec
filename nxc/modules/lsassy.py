@@ -15,6 +15,7 @@ from impacket.krb5.ccache import CCache
 
 from nxc.helpers.bloodhound import add_user_bh
 
+
 class NXCModule:
     name = "lsassy"
     description = "Dump lsass and parse the result remotely with lsassy"
