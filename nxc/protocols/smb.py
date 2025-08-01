@@ -1188,7 +1188,7 @@ class smb(connection):
                 for row in result:
                     self.logger.highlight(row)
             else:
-                self.logger.fail("No active session found for specified user(s) using the Remote Registry service.")
+                self.logger.info(f"No active session found for specified user(s) using the Remote Registry service on {self.hostname}.")
                 
         # Bind to the Remote Registry Pipe
         rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\winreg", smb_connection=self.conn)
@@ -1201,9 +1201,9 @@ class smb(connection):
                 dce.bind(rrp.MSRPC_UUID_RRP)
                 break
             except Exception as e:
-                self.logger.debug(f"Could not bind to the Remote Registry: {e}")
+                self.logger.debug(f"Could not bind to the Remote Registry on {self.hostname}: {e}")
                 if binding_attempts == 1:  
-                    self.logger.fail("The Remote Registry service seems to be disabled.")
+                    self.logger.info(f"The Remote Registry service seems to be disabled on {self.hostname}.")
                     return
                     
             # STATUS_PIPE_NOT_AVAILABLE : Waiting 1 second for the service to start (if idle and set to 'Automatic' startup type)
@@ -1215,12 +1215,12 @@ class smb(connection):
             resp = rrp.hOpenUsers(dce)
         except DCERPCException as e:
             if "rpc_s_access_denied" in str(e).lower():
-                self.logger.fail("Access denied while enumerating session using the Remote Registry")
+                self.logger.info(f"Access denied while enumerating session using the Remote Registry on {self.hostname}.")
                 return
             else:
-                self.logger.debug("Exception connecting to RPC: %s", e)
+                self.logger.debug(f"Exception connecting to RPC on {self.hostname}: {e}")
         except Exception as e:
-            self.logger.debug("Exception connecting to RPC: %s", e)
+            self.logger.debug(f"Exception connecting to RPC on {self.hostname}: {e}")
 
         # Enumerate HKU subkeys and recover SIDs
         sid_filter = "^S-1-.*\d$" 
@@ -1245,7 +1245,7 @@ class smb(connection):
         dce.disconnect()
 
         if not sessions:
-            self.logger.fail("No sessions found via the Remote Registry service.")
+            self.logger.info(f"No sessions found via the Remote Registry service on {self.hostname}.")
             return
         
         # Bind to the LSARPC Pipe for SID resolution
@@ -1255,7 +1255,7 @@ class smb(connection):
             dce.connect()
             dce.bind(lsat.MSRPC_UUID_LSAT)
         except Exception as e:
-            self.logger.debug(f"Failed to connect to LSARPC for SID resolution : {e}")
+            self.logger.debug(f"Failed to connect to LSARPC for SID resolution on {self.hostname}: {e}")
             output(sessions)
             return
         
