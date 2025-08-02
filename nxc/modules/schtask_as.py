@@ -1,5 +1,4 @@
 import os
-import contextlib
 from traceback import format_exc
 from nxc.protocols.smb.atexec import TSCH_EXEC
 
