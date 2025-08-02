@@ -1106,7 +1106,7 @@ class smb(connection):
                 procInfo["pSid"],
                 f"{procInfo['WorkingSetSize'] // 1000:,} K",
             )
-        
+
         try:
             with TSTS.LegacyAPI(self.conn, self.host, self.kerberos) as legacy:
                 try:
@@ -1141,12 +1141,12 @@ class smb(connection):
                 # If a process was suppliad to args.tasklist and it was not found, we print a fail message
                 if self.args.tasklist is not True and not found_task:
                     self.logger.fail(f"Didn't find process {self.args.tasklist}")
-            
+
         except SessionError:
             self.logger.fail("Cannot list remote tasks, RDP is probably disabled.")
 
     def reg_sessions(self):
-        
+
         def output(sessions):
             if sessions:
                 # Calculate max lengths for formatting
@@ -1164,7 +1164,7 @@ class smb(connection):
 
                 # Store result
                 result = [header, header2]
-                
+
                 for sid, vals in sessions.items():
                     username = vals["Username"]
                     domain = vals["Domain"]
@@ -1214,11 +1214,11 @@ class smb(connection):
         # Enumerate HKU subkeys and recover SIDs
         sid_filter = "^S-1-.*\\d$"
         exclude_sid = ["S-1-5-18", "S-1-5-19", "S-1-5-20"]
-        
+
         key_handle = resp["phKey"]
         index = 1
         sessions = {}
-        
+
         while True:
             try:
                 resp = rrp.hBaseRegEnumKey(dce, key_handle, index)
@@ -1236,7 +1236,7 @@ class smb(connection):
         if not sessions:
             self.logger.info(f"No sessions found via the Remote Registry service on {self.hostname}.")
             return
-        
+
         # Bind to the LSARPC Pipe for SID resolution
         rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\lsarpc", smb_connection=self.conn)
         dce = rpctransport.get_dce_rpc()
@@ -1247,7 +1247,7 @@ class smb(connection):
             self.logger.debug(f"Failed to connect to LSARPC for SID resolution on {self.hostname}: {e}")
             output(sessions)
             return
-        
+
         # Resolve SIDs with names
         policy_handle = lsad.hLsarOpenPolicy2(dce, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES)["PolicyHandle"]
         try:
@@ -1259,13 +1259,13 @@ class smb(connection):
             else:
                 resp = None
                 self.logger.debug(f"Could not resolve SID(s): {e}")
-        
+
         if resp:
             for sid, item in zip(sessions.keys(), resp["TranslatedNames"]["Names"], strict=False):
                 if item["DomainIndex"] >= 0:
                     sessions[sid]["Username"] = item["Name"]
                     sessions[sid]["Domain"] = resp["ReferencedDomains"]["Domains"][item["DomainIndex"]]["Name"]
-        
+
         # Filter for usernames
         if self.args.reg_sessions:
             arg = self.args.reg_sessions
@@ -1274,7 +1274,7 @@ class smb(connection):
                     usernames = [line.strip().lower() for line in f if line.strip()]
             else:
                 usernames = [arg.lower()]
-        
+
             filtered_sessions = {}
             for sid, info in sessions.items():
                 if info["Username"].lower() not in usernames:
@@ -1284,7 +1284,7 @@ class smb(connection):
             output(filtered_sessions)
         else:
             output(sessions)
-    
+
     def shares(self):
         temp_dir = ntpath.normpath("\\" + gen_random_string())
         temp_file = ntpath.normpath("\\" + gen_random_string() + ".txt")
@@ -1399,7 +1399,7 @@ class smb(connection):
         self.logger.display("Enumerated shares")
         self.logger.highlight(f"{'Share':<15} {'Permissions':<15} {'Remark'}")
         self.logger.highlight(f"{'-----':<15} {'-----------':<15} {'------'}")
-        
+
         for share in permissions:
             name = share["name"]
             remark = share["remark"]
