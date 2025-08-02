@@ -1178,26 +1178,24 @@ class smb(connection):
                     self.logger.highlight(row)
             else:
                 self.logger.info(f"No active session found for specified user(s) using the Remote Registry service on {self.hostname}.")
-                
+
         # Bind to the Remote Registry Pipe
         rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\winreg", smb_connection=self.conn)
-        binding_attempts = 2
-        while True:
+        for binding_attempts in range(2, 0, -1):
             dce = rpctransport.get_dce_rpc()
-            
+
             try:
                 dce.connect()
                 dce.bind(rrp.MSRPC_UUID_RRP)
                 break
-            except Exception as e:
+            except SessionError as e:
                 self.logger.debug(f"Could not bind to the Remote Registry on {self.hostname}: {e}")
-                if binding_attempts == 1:  
+                if binding_attempts == 1:   # Last attempt
                     self.logger.info(f"The Remote Registry service seems to be disabled on {self.hostname}.")
                     return
-                    
+
             # STATUS_PIPE_NOT_AVAILABLE : Waiting 1 second for the service to start (if idle and set to 'Automatic' startup type)
             sleep(1)
-            binding_attempts -= 1
 
         # Open HKU hive
         try:
