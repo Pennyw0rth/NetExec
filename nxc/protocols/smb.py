@@ -1156,19 +1156,11 @@ class smb(connection):
                 maxUsernameLen = max(maxUsernameLen, len("USERNAME") + 1)
 
                 # Create the template for formatting
-                template = (f"{{USERNAME: <{maxUsernameLen}}} "
-                            f"{{SID: <{maxSidLen}}}")
+                template = (f"{{USERNAME: <{maxUsernameLen}}} {{SID: <{maxSidLen}}}")
 
                 # Create headers
-                header = template.format(
-                    USERNAME="USERNAME",
-                    SID="SID",
-                )
-                
-                header2 = template.replace(" <", "=<").format(
-                    USERNAME="",
-                    SID="",
-                )
+                header = template.format(USERNAME="USERNAME", SID="SID")
+                header2 = template.replace(" <", "=<").format(USERNAME="", SID="")
 
                 # Store result
                 result = [header, header2]
@@ -1178,10 +1170,7 @@ class smb(connection):
                     domain = vals["Domain"]
                     user_full = f"{domain}\\{username}" if username else ""
 
-                    row = template.format(
-                        USERNAME=user_full,
-                        SID=sid
-                    )
+                    row = template.format(USERNAME=user_full, SID=sid)
                     result.append(row)
 
                 self.logger.success("Remote Registry enumerated sessions")
