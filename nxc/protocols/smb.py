@@ -1507,7 +1507,7 @@ class smb(connection):
         return dc_ips
 
     def smb_sessions(self):
-        self.logger.fail("[REMOVED] Use option --qwinsta or --loggedon-users")
+        self.logger.fail("[REMOVED] Use option --reg-sessions --qwinsta or --loggedon-users")
         return
 
     def disks(self):
