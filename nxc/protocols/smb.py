@@ -122,8 +122,8 @@ class smb(connection):
         self.signing = False
         self.smb_share_name = smb_share_name
         self.pvkbytes = None
-        self.no_da = None
         self.no_ntlm = False
+        self.null_auth = False
         self.protocol = "SMB"
         self.is_guest = None
         self.isdc = False
@@ -172,9 +172,11 @@ class smb(connection):
 
         try:
             self.conn.login("", "")
+            self.null_auth = True
         except BrokenPipeError:
             self.logger.fail("Broken Pipe Error while attempting to login")
         except Exception as e:
+            self.null_auth = False
             if "STATUS_NOT_SUPPORTED" in str(e):
                 # no ntlm supported
                 self.no_ntlm = True
@@ -288,8 +290,9 @@ class smb(connection):
     def print_host_info(self):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
         smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
-        ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
-        self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}) {ntlm}")
+        ntlm = colored(f" (NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
+        null_auth = colored(f" (Null Auth:{self.null_auth})", host_info_colors[2], attrs=["bold"]) if self.null_auth else ""
+        self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domin:{self.targetDomain}) ({signing}) ({smbv1}){ntlm}{null_auth}")
 
         if self.args.generate_hosts_file or self.args.generate_krb5_file:
             if self.args.generate_hosts_file:
