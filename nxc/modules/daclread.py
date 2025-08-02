@@ -209,6 +209,8 @@ class NXCModule:
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options
+
+        # Initialize module variables
         self.principal_sAMAccountName = None
         self.principal_sid = None
         self.action = "read"
