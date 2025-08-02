@@ -1183,7 +1183,6 @@ class smb(connection):
         rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\winreg", smb_connection=self.conn)
         for binding_attempts in range(2, 0, -1):
             dce = rpctransport.get_dce_rpc()
-
             try:
                 dce.connect()
                 dce.bind(rrp.MSRPC_UUID_RRP)
@@ -1193,7 +1192,6 @@ class smb(connection):
                 if binding_attempts == 1:   # Last attempt
                     self.logger.info(f"The Remote Registry service seems to be disabled on {self.hostname}.")
                     return
-
             # STATUS_PIPE_NOT_AVAILABLE : Waiting 1 second for the service to start (if idle and set to 'Automatic' startup type)
             sleep(1)
 
@@ -1205,9 +1203,9 @@ class smb(connection):
                 self.logger.info(f"Access denied while enumerating session using the Remote Registry on {self.hostname}.")
                 return
             else:
-                self.logger.debug(f"Exception connecting to RPC on {self.hostname}: {e}")
+                self.logger.fail(f"Exception connecting to RPC on {self.hostname}: {e}")
         except Exception as e:
-            self.logger.debug(f"Exception connecting to RPC on {self.hostname}: {e}")
+            self.logger.fail(f"Exception connecting to RPC on {self.hostname}: {e}")
 
         # Enumerate HKU subkeys and recover SIDs
         sid_filter = "^S-1-.*\\d$"
@@ -1225,8 +1223,13 @@ class smb(connection):
                     self.logger.info(f"User with SID {sid} is logged in on {self.hostname}")
                     sessions.setdefault(sid, {"Username": "", "Domain": ""})
                 index += 1
-            except Exception:
-                break
+            except rrp.DCERPCSessionError as e:
+                if "ERROR_NO_MORE_ITEMS" in str(e):
+                    self.logger.debug(f"No more items found in HKU on {self.hostname}.")
+                    break
+                else:
+                    self.logger.fail(f"Error enumerating HKU subkeys on {self.hostname}: {e}")
+                    break
 
         rrp.hBaseRegCloseKey(dce, key_handle)
         dce.disconnect()
