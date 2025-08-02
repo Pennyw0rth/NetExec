@@ -3,6 +3,10 @@ from io import BytesIO
 import pefile
 
 class NXCModule:
+    """
+    Module by @E1A
+    """
+
     name = "lockscreendoors"
     description = "Detect Windows lock screen backdoors by checking FileDescriptions of accessibility binaries."
     supported_protocols = ["smb"]
