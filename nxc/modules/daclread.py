@@ -269,7 +269,7 @@ class NXCModule:
 
         if "ACE_TYPE" in module_options:
             self.ace_type = module_options["ACE_TYPE"]
-            
+
         if "RIGHTS" in module_options:
             self.rights = module_options["RIGHTS"]
 

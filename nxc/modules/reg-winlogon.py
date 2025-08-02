@@ -32,7 +32,7 @@ class NXCModule:
             "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon",
         )
         keyHandle = ans["phkResult"]
-        
+
         reg_keys = ["AutoAdminLogon", "DefaultDomainName", "DefaultUserName", "DefaultPassword"]
         for reg_key in reg_keys:
             try:

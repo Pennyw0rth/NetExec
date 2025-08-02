@@ -30,7 +30,7 @@ class NXCModule:
 
         # Static NTP query prefix using the MD5 authenticator. Append 4-byte RID and dummy checksum to create a full query.
         self.ntp_prefix = unhexlify("db0011e9000000000001000000000000e1b8407debc7e50600000000000000000000000000000000e1b8428bffbfcd0a")
-        
+
     def options(self, context, module_options):
         self.rids = range(1, 2**31)
         self.rate = 180
@@ -55,7 +55,7 @@ class NXCModule:
             self.target = connection.host
 
         context.log.display("Starting Timeroasting...")
-        
+
         for rid, md5hash, salt in self.run_ntp_roast(context, self.target, self.rids, self.rate, self.timeout, self.old_hashes, self.src_port):
             context.log.highlight(hashcat_format(rid, md5hash, salt))
 

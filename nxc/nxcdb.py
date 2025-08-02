@@ -521,13 +521,13 @@ class NXCDBMenu(cmd.Cmd):
         Exits
         """
         print_help(help_string)
-    
+
 
 def main():
     if not exists(CONFIG_PATH):
         print("[-] Unable to find config file")
         sys.exit(1)
-    
+
     parser = argparse.ArgumentParser(
         description="NXCDB is a database navigator for NXC",
     )
