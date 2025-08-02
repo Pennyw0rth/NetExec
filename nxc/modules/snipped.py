@@ -106,7 +106,7 @@ class NXCModule:
 
         if total_files_downloaded > 0 and host_output_path:
             context.log.success(f"{total_files_downloaded} file(s) downloaded from host {connection.host} to {host_output_path}.")
-                            
+
     def find_screenshots_folders(self, user_folder_name):
         """
         Dynamically searches for all Screenshots folders in the user's home directory.

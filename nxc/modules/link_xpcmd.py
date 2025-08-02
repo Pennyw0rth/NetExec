@@ -31,14 +31,14 @@ class NXCModule:
         self.context.log.display(f"Running command on {self.linked_server}: {self.command}")
         query = f"EXEC ('xp_cmdshell ''{self.command}''') AT [{self.linked_server}]"
         result = self.mssql_conn.sql_query(query)
-        
+
         if result:
             output_lines = []
             for row in result:
                 output_value = row.get("output")
                 if output_value and output_value != "NULL":
                     output_lines.append(str(output_value))
-            
+
             if output_lines:
                 self.context.log.success("Executed command via linked server")
                 for line in output_lines:

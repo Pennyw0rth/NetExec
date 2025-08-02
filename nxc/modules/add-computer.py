@@ -86,7 +86,7 @@ class NXCModule:
         # If SAMR fails now try over LDAPS
         if not self.noLDAPRequired:
             self.do_ldaps_add(connection, context)
-            
+
     def do_samr_add(self, context):
         """
         Connects to a target server and performs various operations related to adding or deleting machine accounts.

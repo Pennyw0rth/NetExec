@@ -1405,10 +1405,10 @@ class ldap(connection):
         # Convert LDAP time to human readable format
         def pso_days(ldap_time):
             return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).days} days"
-        
+
         def pso_mins(ldap_time):
             return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).minutes} minutes"
-        
+
         # Are there even any FGPPs?
         self.logger.info("Attempting to enumerate policies...")
         resp = self.search(searchFilter="(objectclass=*)", baseDN=f"CN=Password Settings Container,CN=System,{self.baseDN}", attributes=[])

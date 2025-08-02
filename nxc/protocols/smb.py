@@ -1109,7 +1109,7 @@ class smb(connection):
                 procInfo["pSid"],
                 f"{procInfo['WorkingSetSize'] // 1000:,} K",
             )
-        
+
         try:
             with TSTS.LegacyAPI(self.conn, self.host, self.kerberos) as legacy:
                 try:
@@ -1144,7 +1144,7 @@ class smb(connection):
                 # If a process was suppliad to args.tasklist and it was not found, we print a fail message
                 if self.args.tasklist is not True and not found_task:
                     self.logger.fail(f"Didn't find process {self.args.tasklist}")
-            
+
         except SessionError:
             self.logger.fail("Cannot list remote tasks, RDP is probably disabled.")
 
@@ -1262,7 +1262,7 @@ class smb(connection):
         self.logger.display("Enumerated shares")
         self.logger.highlight(f"{'Share':<15} {'Permissions':<15} {'Remark'}")
         self.logger.highlight(f"{'-----':<15} {'-----------':<15} {'------'}")
-        
+
         for share in permissions:
             name = share["name"]
             remark = share["remark"]

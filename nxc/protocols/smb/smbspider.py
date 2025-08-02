@@ -14,8 +14,8 @@ class SMBSpider:
         self.share = ""
         self.shares = shares
         self.folder = folder
-        self.pattern = pattern 
-        self.exclude_folders = exclude_folders 
+        self.pattern = pattern
+        self.exclude_folders = exclude_folders
         self.depth = depth
         self.content = content
         self.onlyfiles = only_files
@@ -34,7 +34,7 @@ class SMBSpider:
                 except SessionError:
                     self.logger.debug(f"Failed accessing share: {self.share}")
         else:
-            for share in self.shares: 
+            for share in self.shares:
                 self.share = share
                 self.logger.display(f"Spidering share: {self.share}")
                 if self.folder != "/":
@@ -57,7 +57,7 @@ class SMBSpider:
             if "STATUS_ACCESS_DENIED" in str(e):
                 self.logger.debug(f"Failed listing files on share {self.share} in directory {subfolder}")
             elif "STATUS_BAD_NETWORK_NAME" in str(e):
-                self.logger.fail(f"Failed accessing {self.share} share") 
+                self.logger.fail(f"Failed accessing {self.share} share")
             elif "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
                 self.logger.fail(f"{self.folder} folder does not exist")
             return
@@ -76,7 +76,7 @@ class SMBSpider:
             if result.get_longname() in [".", ".."] or result.get_longname() in self.exclude_folders:
                 continue
             filename = bytes(result.get_longname().lower(), "utf-8")
-            if self.content: 
+            if self.content:
                 if not result.is_directory():
                     self.search_content(path, result)
                 continue

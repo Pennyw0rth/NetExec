@@ -44,7 +44,7 @@ class NXCModule:
                     context.log.highlight("RunAsPPL disabled")
                 else:
                     context.log.highlight("RunAsPPL enabled")
-                
+
         except DCERPCSessionError as e:
             context.log.debug(f"Error connecting to RemoteRegistry {e} on host {connection.host}")
         finally:

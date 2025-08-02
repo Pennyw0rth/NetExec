@@ -145,11 +145,11 @@ class Element:
             return ""
 
         attrs = filter(lambda x: x is not None, (x.xml(template) for x in self._attributes))
-        
+
         attrs = " ".join(attrs)
         if len(attrs) > 0:
             attrs = " " + attrs
-            
+
         if self._empty:
             return f"<{self._name.val}{attrs}/>"
         else:

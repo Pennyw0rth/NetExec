@@ -85,7 +85,7 @@ class NXCModule:
                     resp = samr.hSamrEnumerateUsersInDomain(dce, domain_handle, enumerationContext=enumeration_context)
                 except DCERPCException as e:
                     if str(e).find("STATUS_MORE_ENTRIES") < 0:
-                        raise 
+                        raise
                     resp = e.get_packet()
 
                 for user in resp["Buffer"]["Buffer"]:

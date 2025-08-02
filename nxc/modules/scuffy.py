@@ -48,7 +48,7 @@ class NXCModule:
 
         if not self.cleanup:
             self.server = module_options["SERVER"]
-            
+
             with open(self.scf_path, "a") as scuf:
                 scuf.write("[Shell]\n")
                 scuf.write("Command=2\n")
