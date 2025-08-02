@@ -177,7 +177,6 @@ class TSCH_EXEC:
         tsch.hSchRpcDelete(dce, f"\\{self.task_name}")
 
         if self.__retOutput:
-            ":".join(map(str, self.__rpctransport.get_socket().getpeername()))
             smbConnection = self.__rpctransport.get_smb_connection()
 
             tries = 1

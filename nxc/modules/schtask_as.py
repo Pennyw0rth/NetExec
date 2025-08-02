@@ -121,8 +121,6 @@ class NXCModule:
         except Exception:
             self.logger.debug("Error executing command via atexec, traceback:")
             self.logger.debug(format_exc())
-            with contextlib.suppress(Exception):
-                exec_method.deleteartifact()
         finally:
             if self.binary_to_upload:
                 try:
