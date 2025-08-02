@@ -9,8 +9,7 @@ from datetime import datetime, timedelta
 
 
 class TSCH_EXEC:
-    def __init__(self, target, share_name, username, password, domain, doKerberos=False, aesKey=None, remoteHost=None, 
-                 kdcHost=None, hashes=None, logger=None, tries=None, share=None,
+    def __init__(self, target, share_name, username, password, domain, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None,
                  # These options are used by the schtask_as module, except the run_task_as 
                  # that defaults to NT AUTHORITY\System user (SID S-1-5-18) if not specified
                  run_task_as="S-1-5-18", run_cmd=None, output_filename=None, task_name=None, output_file_location=None):
@@ -32,6 +31,7 @@ class TSCH_EXEC:
         self.__share = share
         self.logger = logger
 
+        # Optional args for finetuning the task execution, e.g. used in nxc/modules/schtask_as.py
         self.task_name = task_name if task_name else gen_random_string(8)
         self.run_task_as = run_task_as
         self.run_cmd = run_cmd
@@ -116,11 +116,11 @@ class TSCH_EXEC:
             <Command>cmd.exe</Command>
         """
         if self.__retOutput:
-            fileLocation = "\\Windows\\Temp\\" if self.output_file_location is None else self.output_file_location
+            file_location = "\\Windows\\Temp\\" if self.output_file_location is None else self.output_file_location
             if self.output_filename is None:
-                self.__output_filename = os.path.join(fileLocation, gen_random_string(6))
+                self.__output_filename = os.path.join(file_location, gen_random_string(6))
             else:
-                self.__output_filename = os.path.join(fileLocation, self.output_filename)
+                self.__output_filename = os.path.join(file_location, self.output_filename)
             argument_xml = f"      <Arguments>/C {command} &gt; {self.__output_filename} 2&gt;&amp;1</Arguments>"
 
         elif self.__retOutput is False:
