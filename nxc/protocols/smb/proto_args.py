@@ -1,5 +1,5 @@
 from argparse import _StoreTrueAction
-from nxc.helpers.args import DisplayDefaultsNotNone, DefaultTrackingAction
+from nxc.helpers.args import DisplayDefaultsNotNone, DefaultTrackingAction, get_conditional_action
 
 
 def proto_args(parser, parents):
@@ -97,18 +97,3 @@ def proto_args(parser, parents):
     posh_group.add_argument("--no-encode", action="store_true", default=False, help="Do not encode the PowerShell command ran on target")
 
     return parser
-
-
-def get_conditional_action(baseAction):
-    class ConditionalAction(baseAction):
-        def __init__(self, option_strings, dest, **kwargs):
-            x = kwargs.pop("make_required", [])
-            super().__init__(option_strings, dest, **kwargs)
-            self.make_required = x
-
-        def __call__(self, parser, namespace, values, option_string=None):
-            for x in self.make_required:
-                x.required = True
-            super().__call__(parser, namespace, values, option_string)
-
-    return ConditionalAction
