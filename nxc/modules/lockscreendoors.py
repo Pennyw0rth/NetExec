@@ -1,11 +1,9 @@
-import struct
 from io import BytesIO
 import pefile
 
+
 class NXCModule:
-    """
-    Module by @E1A
-    """
+    """Module by @E1A"""
 
     name = "lockscreendoors"
     description = "Detect Windows lock screen backdoors by checking FileDescriptions of accessibility binaries."
@@ -41,11 +39,11 @@ class NXCModule:
         try:
             pe = pefile.PE(data=binary_data, fast_load=True)
             pe.parse_data_directories(
-                directories=[pefile.DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_RESOURCE']]
+                directories=[pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_RESOURCE"]]
             )
             for fileinfo in pe.FileInfo:
                 for entry in fileinfo:
-                    if entry.Key.decode() == 'StringFileInfo':
+                    if entry.Key.decode() == "StringFileInfo":
                         for st in entry.StringTable:
                             desc = st.entries.get(b"FileDescription")
                             if desc:
