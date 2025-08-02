@@ -1,5 +1,5 @@
 from argparse import _StoreAction
-from nxc.helpers.args import DisplayDefaultsNotNone
+from nxc.helpers.args import DisplayDefaultsNotNone, get_conditional_action
 
 
 def proto_args(parser, parents):
