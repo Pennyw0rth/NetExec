@@ -15,9 +15,9 @@ class NXCModule:
         self.module_options = module_options
 
     def options(self, context, module_options):
-        """ 
+        """
         USAGE:
-        
+
         NetExec smb <IP> -u <username> -p <password> -M bitlocker
         NetExec wmi <IP> -u <username> -p <password> -M bitlocker (Better option to use on real life.)
         """

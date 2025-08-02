@@ -220,7 +220,7 @@ class NXCModule:
 
     def options(self, context, module_options):
         """
-        Be careful, this module cannot read the DACLS recursively. 
+        Be careful, this module cannot read the DACLS recursively.
         For example, if an object has particular rights because it belongs to a group, the module will not be able to see it directly, you have to check the group rights manually.
 
         TARGET          The objects that we want to read or backup the DACLs, specified by its SamAccountName

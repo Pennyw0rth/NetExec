@@ -379,7 +379,7 @@ class DatabaseNavigator(cmd.Cmd):
         help_string = """
         export [creds|hosts|local_admins|shares|signing|keys] [simple|detailed|*] [filename]
         Exports information to a specified file
-        
+
         * hosts has an additional third option from simple and detailed: signing - this simply writes a list of ips of
         hosts where signing is enabled
         * keys' third option is either "all" or an id of a key to export

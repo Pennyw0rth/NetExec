@@ -25,7 +25,7 @@ class NXCModule:
         SRVPORT     Stager port
         RAND        Random string given by metasploit (if using web_delivery)
         SSL         Stager server use https or http (default: https)
-        
+
         This module is compatable with --obfs, --force-ps32 (PowerShell execution options)
 
         multi/handler method that don't require RAND:

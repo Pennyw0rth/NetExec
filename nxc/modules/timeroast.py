@@ -62,10 +62,10 @@ class NXCModule:
     def run_ntp_roast(self, context, dc_host, rids, rate, giveup_time, old_pwd, src_port=0):
         """Gathers MD5(MD4(password) || NTP-response[:48]) hashes for a sequence of RIDs.
         Rate is the number of queries per second to send.
-        Will quit when either rids ends or no response has been received in giveup_time seconds. Note that the server will 
-        not respond to queries with non-existing RIDs, so it is difficult to distinguish nonexistent RIDs from network 
+        Will quit when either rids ends or no response has been received in giveup_time seconds. Note that the server will
+        not respond to queries with non-existing RIDs, so it is difficult to distinguish nonexistent RIDs from network
         issues.
-        
+
         Yields (rid, hash, salt) pairs, where salt is the NTP response data.
         """
         # Flag in key identifier that indicates whether the old or new password should be used.
