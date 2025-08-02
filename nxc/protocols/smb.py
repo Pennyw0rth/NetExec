@@ -1212,7 +1212,7 @@ class smb(connection):
             self.logger.debug(f"Exception connecting to RPC on {self.hostname}: {e}")
 
         # Enumerate HKU subkeys and recover SIDs
-        sid_filter = "^S-1-.*\d$" 
+        sid_filter = "^S-1-.*\\d$"
         exclude_sid = ["S-1-5-18", "S-1-5-19", "S-1-5-20"]
         
         key_handle = resp["phKey"]
