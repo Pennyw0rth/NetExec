@@ -53,9 +53,50 @@ class mssql(connection):
             }
         )
 
+    def enum_sqlbrowser(self):
+        # SQL Browser enumeration
+
+        self.mssql_instances = self.conn.getInstances()
+
+        if len(self.mssql_instances) > 0:
+
+            sqlbrowser_logger = NXCAdapter(
+                extra={
+                    "protocol": "SQLBROWSER",
+                    "host": self.host,
+                    "port": "1434",
+                    "hostname": self.mssql_instances[0].get("ServerName")
+                }
+            )
+
+            sqlbrowser_logger.debug(self.mssql_instances)
+            
+            # Find the first np or tcp instance
+            valid_instance = None
+            for index, instance in enumerate(self.mssql_instances):
+                sqlbrowser_logger.success(f"#{index} {instance.get('InstanceName')} (port:{instance.get('tcp', 'None')}) (np:{instance.get('np', 'None')}) (version:{instance.get('Version')})")
+                if not valid_instance and instance.get("tcp"):
+                    valid_instance = instance
+            
+            if not valid_instance:
+                sqlbrowser_logger.fail(f"SQL Browser detected {len(self.mssql_instances)} instances but none of them is exposed to TCP.")
+                return
+            
+            # Only fallback when TCP is detected, until an implementation for np is done
+            port = valid_instance.get("tcp")
+            sqlbrowser_logger.success(f"Falling back to instance #{self.mssql_instances.index(valid_instance)} on port {port}")
+            self.port = port
+            # Reset proto_logger to update the port
+            self.proto_logger()
+            self.conn = tds.MSSQL(self.host, self.port, self.remoteName)
+
     def create_conn_obj(self):
         try:
             self.conn = tds.MSSQL(self.host, self.port, self.remoteName)
+
+            if not self.args.no_sqlbrowser and not self.is_mssql:
+                self.enum_sqlbrowser()
+
             # Default has not timeout option in tds.MSSQL.connect() function, let rewrite it.
             af, socktype, proto, canonname, sa = socket.getaddrinfo(self.host, self.port, 0, socket.SOCK_STREAM)[0]
             sock = socket.socket(af, socktype, proto)
@@ -109,7 +150,7 @@ class mssql(connection):
             login["Length"] = len(login.getData())
 
             # Get number of mssql instance
-            self.mssql_instances = self.conn.getInstances(0)
+            self.mssql_instances = self.conn.getInstances()
 
             # Send the NTLMSSP Negotiate or SQL Auth Packet
             self.conn.sendTDS(tds.TDS_LOGIN7, login.getData())
