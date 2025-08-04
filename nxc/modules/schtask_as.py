@@ -96,7 +96,7 @@ class NXCModule:
                 self.logger,
                 connection.args.get_output_tries,
                 connection.args.share,
-                self.run_task_as, 
+                self.run_task_as,
                 self.command_to_run,
                 self.output_filename,
                 self.task_name,

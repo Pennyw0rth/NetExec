@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 class TSCH_EXEC:
     def __init__(self, target, share_name, username, password, domain, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None,
-                 # These options are used by the schtask_as module, except the run_task_as 
+                 # These options are used by the schtask_as module, except the run_task_as
                  # that defaults to NT AUTHORITY\System user (SID S-1-5-18) if not specified
                  run_task_as="S-1-5-18", run_cmd=None, output_filename=None, task_name=None, output_file_location=None):
         self.__target = target
