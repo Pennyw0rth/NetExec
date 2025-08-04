@@ -145,4 +145,3 @@ def detect_if_ip(target):
         return True
     except Exception:
         return False
-

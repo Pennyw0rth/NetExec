@@ -21,7 +21,7 @@ class NXCModule:
         self.limit = None
 
     def options(self, context, module_options):
-        """ 
+        """
         METHOD         EventLog method (Execute or RPCCALL), default: execute
         M              Alias for METHOD
         LIMIT          Limit of the number of records to be fetched, default: unlimited
