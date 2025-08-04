@@ -32,7 +32,7 @@ class NXCModule:
             no_pass=True,
             use_kcache=getattr(connection, "use_kcache", False),
         )
-        
+
         conn = upgrade_to_dploot_connection(connection=connection.conn, target=target)
         if conn is None:
             context.log.debug("Could not upgrade connection")

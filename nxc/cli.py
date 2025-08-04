@@ -60,7 +60,7 @@ def gen_cli_args():
 
     The network execution tool
     Maintained as an open source project by @NeffIsBack, @MJHallenbeck, @_zblurx
-    
+
     For documentation and usage examples, visit: https://www.netexec.wiki/
 
     {highlight('Version', 'red')} : {highlight(VERSION)}

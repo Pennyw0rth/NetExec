@@ -34,12 +34,12 @@ class NXCModule:
             no_pass=True,
             use_kcache=getattr(connection, "use_kcache", False),
         )
-        
+
         conn = upgrade_to_dploot_connection(connection=connection.conn, target=target)
         if conn is None:
             context.log.debug("Could not upgrade connection")
             return
-        
+
         self.masterkeys = collect_masterkeys_from_target(connection, target, conn, system=False)
 
         if len(self.masterkeys) == 0:
