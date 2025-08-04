@@ -3,7 +3,10 @@ import pefile
 
 
 class NXCModule:
-    """Module by @E1A"""
+    """
+    Module for detecting Windows lock screen backdoors
+    Module by @E1A
+    """
 
     name = "lockscreendoors"
     description = "Detect Windows lock screen backdoors by checking FileDescriptions of accessibility binaries."
@@ -16,13 +19,11 @@ class NXCModule:
             "narrator.exe": "Screen Reader",
             "sethc.exe": "Accessibility shortcut keys",
             "osk.exe": "Accessibility On-Screen Keyboard",
-            "xwizard.exe": "Extensible Wizards Host Process",
-            "sndvol.exe": "Volume Mixer",
-            "ctfmon.exe": "CTF Loader",
-            "displayswitch.exe": "Display Switch",
             "magnify.exe": "Microsoft Screen Magnifier",
+            "EaseOfAccessDialog.exe": "Ease of Access Dialog Host",
+            "voiceaccess.exe": "Voice access",  # Only on Windows 11 / Server 2025+
+            "displayswitch.exe": "Display Switch",
             "atbroker.exe": "Windows Assistive Technology Manager",
-            "EaseOfAccessDialog.exe": "Ease of Access Dialog Host"
         }
 
         # If description matches one of these it's almost certainly backdoored
@@ -73,12 +74,12 @@ class NXCModule:
                 if file_desc != expected_desc:
                     tampered = True
                     if file_desc in self.backdoor_descriptions:
-                        context.log.fail(f"BACKDOOR DETECTED: {exe} has FileDescription '{file_desc}'")
+                        context.log.highlight(f"BACKDOOR DETECTED: {exe} has FileDescription '{file_desc}'")
                     else:
-                        context.log.fail(f"SUSPICIOUS: {exe} has unexpected FileDescription '{file_desc}' (expected '{expected_desc}')")
+                        context.log.highlight(f"SUSPICIOUS: {exe} has unexpected FileDescription '{file_desc}' (expected '{expected_desc}')")
 
             except Exception:
-                # Silently skip if we can't access the file
+                # Silently skip if the file is not readable or doesn't exist
                 continue
 
         if not readable_file_found:
