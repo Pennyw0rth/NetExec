@@ -161,6 +161,7 @@ netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M winscp
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M zerologon
 #netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M change-password -o NEWPASS=Password123
 #netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M change-password -o NEWNTHASH=58A478135A93AC3BF058A5EA0E8FDB71
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M lockscreendoors
 # test for multiple modules at once
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M spooler -M petitpotam -M zerologon -M nopac -M enum_av -M enum_dns -M gpp_autologin -M gpp_password -M lsassy -M impersonate -M install_elevated -M ioxidresolver -M ms17-010 -M ntlmv1 -M runasppl -M uac -M webdav -M wifi -M coerce_plus
 ##### SMB Anonymous Auth
@@ -291,4 +292,3 @@ netexec nfs TARGET_HOST -u "" -p "" --shares
 netexec nfs TARGET_HOST -u "" -p "" --enum-shares
 netexec nfs TARGET_HOST -u "" -p "" --get-file /NFStest/test/test.txt ../test.txt
 netexec nfs TARGET_HOST -u "" -p "" --put-file ../test.txt /NFStest/test
-netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M lockscreendoors
