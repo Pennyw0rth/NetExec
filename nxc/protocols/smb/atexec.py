@@ -114,7 +114,6 @@ class TSCH_EXEC:
         random.shuffle(IdleSettings)
         randomized_IdleSettings = "\n".join(IdleSettings)
         random_digit = random.randint(2, 6)
-        print(command)
         match = re.match(r'^(.+?\\[^\\ ]+)\s+(.*)', command)
         if match:
             cmd_path = match.group(1)
