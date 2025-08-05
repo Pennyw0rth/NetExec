@@ -3,9 +3,10 @@
 import hashlib
 import hmac
 import os
+import ldap3
 from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
 from binascii import hexlify
-from datetime import datetime
+from datetime import datetime, timezone
 from re import sub, IGNORECASE
 from zipfile import ZipFile
 from termcolor import colored
@@ -25,15 +26,20 @@ from impacket.dcerpc.v5.samr import (
     SAM_MACHINE_ACCOUNT,
 )
 from impacket.krb5 import constants
-from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError
+from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError, getKerberosTGT
 from impacket.krb5.ccache import CCache
-from impacket.krb5.types import Principal, KerberosException
+from impacket.krb5.types import Principal, KerberosException, Ticket, KerberosTime
+from impacket.krb5.asn1 import TGS_REP, AP_REQ, Authenticator, seq_set
 from impacket.ldap import ldap as ldap_impacket
 from impacket.ldap import ldaptypes
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ldap.ldap import LDAPFilterSyntaxError
 from impacket.smbconnection import SessionError
 from impacket.ntlm import getNTLMSSPType1
+from impacket.spnego import SPNEGO_NegTokenInit, TypesMech
+
+from pyasn1.codec.ber import decoder as der_decoder, encoder as ber_encoder
+from pyasn1.type.univ import noValue
 
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
@@ -487,6 +493,92 @@ class ldap(connection):
                     color="magenta" if error_code in ldap_error_status else "red",
                 )
                 return False
+
+    def ldap3_kerberos_login(self, user: str, password: str = "", lmhash: str = "", nthash: str = "", aes_key: str = "", kdcHost: str | None = None, useCache: bool =        True) -> tuple[bool, ldap3.Connection | None]:
+        target, domain = self.host, self.domain
+
+        # Hashes hex → bytes
+        if lmhash or nthash:
+            lmhash = bytes.fromhex(lmhash.zfill(len(lmhash) + len(lmhash) % 2))
+            nthash = bytes.fromhex(nthash.zfill(len(nthash) + len(nthash) % 2))
+
+        TGT = TGS = None
+        if useCache:
+            try:
+                ccache = CCache.loadFile(os.getenv("KRB5CCNAME"))
+                if not domain:
+                    domain = ccache.principal.realm["data"].decode()
+                spn = f"ldap/{target.upper()}@{domain.upper()}"
+                if creds := ccache.getCredential(spn):
+                    TGS = creds.toTGS(spn)
+                elif creds := ccache.getCredential(f"krbtgt/{domain.upper()}@{domain.upper()}"):
+                    TGT = creds.toTGT()
+            except Exception:
+                pass
+
+        # TGT
+        princ = Principal(user, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+        if not TGT:
+            tgt_blob, cipher, _, sessionKey = getKerberosTGT(
+                princ, password, domain, lmhash, nthash, aes_key, kdcHost
+            )
+            TGT = {"KDC_REP": tgt_blob, "cipher": cipher, "sessionKey": sessionKey}
+        else:
+            cipher, sessionKey = TGT["cipher"], TGT["sessionKey"]
+        # TGS for ldap/<FQDN>
+        host_fqdn = getattr(self, "hostname", None) or target
+        if "." not in host_fqdn:
+            host_fqdn = f"{host_fqdn}.{domain}"
+        spn_princ = Principal(f"ldap/{host_fqdn}", type=constants.PrincipalNameType.NT_SRV_INST.value)
+        if not TGS:
+            tgs_blob, cipher, _, sessionKey = getKerberosTGS(
+                spn_princ, domain, kdcHost, TGT["KDC_REP"], cipher, sessionKey
+            )
+            TGS = {"KDC_REP": tgs_blob, "cipher": cipher, "sessionKey": sessionKey}
+        else:
+            cipher, sessionKey = TGS["cipher"], TGS["sessionKey"]
+        # SPNEGO → AP_REQ
+        blob = SPNEGO_NegTokenInit(); blob["MechTypes"] = [TypesMech["MS KRB5 - Microsoft Kerberos 5"]]
+        tgs_rep = der_decoder.decode(TGS["KDC_REP"], asn1Spec=TGS_REP())[0]
+        ticket  = Ticket(); ticket.from_asn1(tgs_rep["ticket"])
+
+        apReq = AP_REQ()
+        apReq["pvno"] = 5
+        apReq["msg-type"] = int(constants.ApplicationTagNumbers.AP_REQ.value)
+        apReq["ap-options"] = constants.encodeFlags([])
+        seq_set(apReq, "ticket", ticket.to_asn1)
+
+        auth = Authenticator()
+        auth["authenticator-vno"] = 5
+        auth["crealm"] = domain
+        seq_set(auth, "cname", princ.components_to_asn1)
+        now = datetime.now(timezone.utc)
+        auth["ctime"] = KerberosTime.to_asn1(now)
+        auth["cusec"] = now.microsecond
+        enc_auth = cipher.encrypt(sessionKey, 11, ber_encoder.encode(auth), None)
+
+        apReq["authenticator"] = noValue
+        apReq["authenticator"]["etype"] = cipher.enctype
+        apReq["authenticator"]["cipher"] = enc_auth
+        blob["MechToken"] = ber_encoder.encode(apReq)
+
+        # Bind SASL / GSS-SPNEGO
+        server = ldap3.Server(target, port=self.args.port, get_info=ldap3.ALL)
+        conn   = ldap3.Connection(server, authentication=ldap3.SASL, sasl_mechanism="GSS-SPNEGO", auto_bind=False)
+        if conn.closed:
+            conn.open(read_server_info=False)
+
+        req  = ldap3.operation.bind.bind_operation(conn.version, ldap3.SASL, user, None, "GSS-SPNEGO", blob.getData())
+        conn.sasl_in_progress = True
+        resp = conn.post_send_single_response(conn.send("bindRequest", req, None))
+        conn.sasl_in_progress = False
+
+        if resp[0]["result"] != 0:
+            return False, None
+
+        conn.bound = True
+        self.ldap_connection = conn
+        return True, conn
 
     def plaintext_login(self, domain, username, password):
         self.username = username
