@@ -73,25 +73,26 @@ class NXCModule:
             # And check that the filename contains $R only to prevent downloading useless stuff
             for path in paths:    
                 filename = path.split(f"{sid_directory_name}/")[1]
-                if filename.startswith("$R"):
-                    if connection.conn.listPath("C$", path)[0].is_directory():
-                        continue
-                    context.log.highlight(f"Found file: {path}")
-                    filename = filename.replace("/", "_").replace(" ", "_")[2:]
-                    if self.download:
-                        export_path = join(NXC_PATH, "modules", "recyclebin", f"{connection.host}_{username if username else sid_directory_name}")
-                        makedirs(export_path, exist_ok=True)
-                        dest_path = abspath(join(export_path, filename))
-                        with open(dest_path, "wb+") as file:
-                            try:
-                                connection.conn.getFile("C$", path, file.write)
-                                context.log.highlight(f"Writing {filename} to {export_path}")
-                            except Exception as e:
-                                if "STATUS_FILE_IS_A_DIRECTORY" in str(e):
-                                    context.log.debug("File is a directory")
-                                else:
-                                    context.log.fail(f"Failed to write recyclebin file {filename}: {e}")
-                    else:
-                        context.log.info('Use the module option "DOWNLOAD=True"')
+                if not filename.startswith("$R"):
+                    continue
+                if connection.conn.listPath("C$", path)[0].is_directory():
+                    continue
+                context.log.highlight(f"Found file: {path}")
+                filename = filename.replace("/", "_").replace(" ", "_")[2:]
+                if self.download:
+                    export_path = join(NXC_PATH, "modules", "recyclebin", f"{connection.host}_{username if username else sid_directory_name}")
+                    makedirs(export_path, exist_ok=True)
+                    dest_path = abspath(join(export_path, filename))
+                    with open(dest_path, "wb+") as file:
+                        try:
+                            connection.conn.getFile("C$", path, file.write)
+                            context.log.highlight(f"Writing {filename} to {export_path}")
+                        except Exception as e:
+                            if "STATUS_FILE_IS_A_DIRECTORY" in str(e):
+                                context.log.debug("File is a directory")
+                            else:
+                                context.log.fail(f"Failed to write recyclebin file {filename}: {e}")
+                else:
+                    context.log.info('Use the module option "DOWNLOAD=True"')
 
         remote_ops.finish()
