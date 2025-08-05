@@ -13,8 +13,6 @@ class NXCModule:
     name = "eventlog_creds"
     description = "Extracting Credentials From Windows Logs (Event ID: 4688 and SYSMON)"
     supported_protocols = ["smb"]  # Example: ['smb', 'mssql']
-    opsec_safe = True  # Does the module touch disk?
-    multiple_hosts = True  # Does it make sense to run this module on multiple hosts at a time?
 
     def __init__(self):
         self.context = None
@@ -23,7 +21,7 @@ class NXCModule:
         self.limit = None
 
     def options(self, context, module_options):
-        """ 
+        """
         METHOD         EventLog method (Execute or RPCCALL), default: execute
         M              Alias for METHOD
         LIMIT          Limit of the number of records to be fetched, default: unlimited

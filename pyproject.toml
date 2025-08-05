@@ -99,7 +99,7 @@ preview = true
 [tool.ruff.lint]
 select = [
     "E", "F", "D", "UP", "YTT", "ASYNC", "B", "A", "C4", "ISC", "ICN", "PIE", "PT",
-    "Q", "RSE", "RET", "SIM", "TID", "ERA", "FLY", "PERF", "LOG", "RUF"
+    "Q", "RSE", "RET", "SIM", "TID", "ERA", "FLY", "PERF", "LOG", "RUF", "W"
 ]
 ignore = [
     "A004", "E501", "F405", "D100", "D101", "D102", "D103", "D104", "D105", "D106",

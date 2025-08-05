@@ -10,8 +10,6 @@ class NXCModule:
     name = "dpapi_hash"
     description = "Remotely dump Dpapi hash based on masterkeys"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """OUTPUTFILE       Output file to write hashes"""
@@ -36,12 +34,12 @@ class NXCModule:
             no_pass=True,
             use_kcache=getattr(connection, "use_kcache", False),
         )
-        
+
         conn = upgrade_to_dploot_connection(connection=connection.conn, target=target)
         if conn is None:
             context.log.debug("Could not upgrade connection")
             return
-        
+
         try:
             context.log.display("Collecting DPAPI masterkeys, grab a coffee and be patient...")
             masterkeys_triage = MasterkeysTriage(
@@ -59,6 +57,6 @@ class NXCModule:
             else:
                 for mkhash in [mkhash for masterkey in masterkeys_triage.all_looted_masterkeys for mkhash in masterkey.generate_hash()]:
                     context.log.highlight(mkhash)
-            
+
         except Exception as e:
             context.log.debug(f"Could not get masterkeys: {e}")

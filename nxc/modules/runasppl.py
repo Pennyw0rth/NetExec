@@ -8,8 +8,6 @@ class NXCModule:
     name = "runasppl"
     description = "Check if the registry value RunAsPPL is set or not"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -46,7 +44,7 @@ class NXCModule:
                     context.log.highlight("RunAsPPL disabled")
                 else:
                     context.log.highlight("RunAsPPL enabled")
-                
+
         except DCERPCSessionError as e:
             context.log.debug(f"Error connecting to RemoteRegistry {e} on host {connection.host}")
         finally:

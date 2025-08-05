@@ -39,7 +39,6 @@ from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
-from nxc.paths import NXC_PATH
 from nxc.protocols.smb.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection
 from nxc.protocols.smb.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
 from nxc.protocols.smb.kerberos import kerberos_login_with_S4U
@@ -65,7 +64,6 @@ from dploot.lib.target import Target
 from dploot.triage.sccm import SCCMTriage, SCCMCred, SCCMSecret, SCCMCollection
 
 from time import time, ctime
-from datetime import datetime
 from traceback import format_exc
 from termcolor import colored
 import contextlib
@@ -78,6 +76,7 @@ smb_error_status = [
     "STATUS_ACCOUNT_RESTRICTION",
     "STATUS_INVALID_LOGON_HOURS",
     "STATUS_INVALID_WORKSTATION",
+    "STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT",
     "STATUS_LOGON_TYPE_NOT_GRANTED",
     "STATUS_PASSWORD_EXPIRED",
     "STATUS_PASSWORD_MUST_CHANGE",
@@ -125,6 +124,7 @@ class smb(connection):
         self.pvkbytes = None
         self.no_da = None
         self.no_ntlm = False
+        self.null_auth = False
         self.protocol = "SMB"
         self.is_guest = None
         self.isdc = False
@@ -173,9 +173,11 @@ class smb(connection):
 
         try:
             self.conn.login("", "")
+            self.null_auth = True
         except BrokenPipeError:
             self.logger.fail("Broken Pipe Error while attempting to login")
         except Exception as e:
+            self.null_auth = False
             if "STATUS_NOT_SUPPORTED" in str(e):
                 # no ntlm supported
                 self.no_ntlm = True
@@ -254,10 +256,6 @@ class smb(connection):
             self.logger.debug(e)
 
         self.os_arch = self.get_os_arch()
-        # Construct the output file template using os.path.join for OS compatibility
-        base_log_dir = os.path.join(os.path.expanduser(NXC_PATH), "logs")
-        filename_pattern = f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
-        self.output_file_template = os.path.join(base_log_dir, "{output_folder}", filename_pattern)
 
         try:
             # DCs seem to want us to logoff first, windows workstations sometimes reset the connection
@@ -293,8 +291,9 @@ class smb(connection):
     def print_host_info(self):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
         smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
-        ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
-        self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}) {ntlm}")
+        ntlm = colored(f" (NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
+        null_auth = colored(f" (Null Auth:{self.null_auth})", host_info_colors[2], attrs=["bold"]) if self.null_auth else ""
+        self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}){ntlm}{null_auth}")
 
         if self.args.generate_hosts_file or self.args.generate_krb5_file:
             if self.args.generate_hosts_file:
@@ -663,17 +662,65 @@ class smb(connection):
         except Exception as e:
             self.logger.fail(f"Failed to get TGT: {e}")
 
+    def check_dc_ports(self, timeout=1):
+        """Check multiple DC-specific ports in case first check fails"""
+        import socket
+        dc_ports = [88, 389, 636, 3268, 9389]  # Kerberos, LDAP, LDAPS, Global Catalog, ADWS
+        open_ports = 0
+
+        for port in dc_ports:
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(timeout)
+                result = sock.connect_ex((self.host, port))
+                if result == 0:
+                    self.logger.debug(f"Port {port} is open on {self.host}")
+                    open_ports += 1
+                sock.close()
+            except Exception:
+                pass
+        # If 3 or more DC ports are open, likely a DC
+        return open_ports >= 3
+
     def is_host_dc(self):
         from impacket.dcerpc.v5 import nrpc, epm
+
         self.logger.debug("Performing authentication attempts...")
+
+        # First check if port 135 is open
+        if self._is_port_open(135):
+            self.logger.debug("Port 135 is open, attempting MSRPC connection...")
+            try:
+                epm.hept_map(self.host, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
+                self.isdc = True
+                return True
+            except DCERPCException:
+                self.logger.debug("Error while connecting to host: DCERPCException, which means this is probably not a DC!")
+            except TimeoutError:
+                self.logger.debug("Timeout while connecting to host: likely not a DC or host is unreachable.")
+            except Exception as e:
+                self.logger.debug(f"Error while connecting to host: {e}")
+            self.isdc = False
+            return False
+        else:
+            self.logger.debug("Port 135 is closed, skipping MSRPC check...")
+            # Fallback to checking DC ports
+            if self.check_dc_ports():
+                self.logger.debug("Host appears to be a DC (multiple DC ports open)")
+                self.isdc = True
+                return True
+
+    def _is_port_open(self, port, timeout=1):
+        """Check if a specific port is open on the target host."""
+        import socket
         try:
-            epm.hept_map(self.host, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
-            self.isdc = True
-            return True
-        except DCERPCException:
-            self.logger.debug("Error while connecting to host: DCERPCException, which means this is probably not a DC!")
-        self.isdc = False
-        return False
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(timeout)
+                result = sock.connect_ex((self.host, port))
+                return result == 0
+        except Exception as e:
+            self.logger.debug(f"Error checking port {port} on {self.host}: {e}")
+            return False
 
     @requires_admin
     def execute(self, payload=None, get_output=False, methods=None) -> str:
@@ -915,15 +962,45 @@ class smb(connection):
                     sessions[SessionId]["DisconnectTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["DisconnectTime"]
                     sessions[SessionId]["LogonTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["LogonTime"]
                     sessions[SessionId]["LastInputTime"] = sessdata["LSMSessionInfoExPtr"]["LSM_SessionInfo_Level1"]["LastInputTime"]
-            with TSTS.RCMPublic(self.conn, self.host, self.kerberos) as rcm:
-                for SessionId in sessions:
-                    try:
-                        client = rcm.hRpcGetRemoteAddress(SessionId)
-                        if not client:
-                            continue
-                        sessions[SessionId]["RemoteIp"] = client["pRemoteAddress"]["ipv4"]["in_addr"]
-                    except Exception as e:
-                        self.logger.debug(f"Error getting client address for session {SessionId}: {e}")
+
+            try:
+                with TSTS.RCMPublic(self.conn, self.host, self.kerberos) as rcm:
+                    for SessionId in sessions:
+                        try:
+                            client = rcm.hRpcGetRemoteAddress(SessionId)
+                            if not client:
+                                continue
+                            sessions[SessionId]["RemoteIp"] = client["pRemoteAddress"]["ipv4"]["in_addr"]
+                        except Exception as e:
+                            self.logger.debug(f"Error getting client address for session {SessionId}: {e}")
+            except SessionError:
+                self.logger.fail("RDP is probably not enabled, cannot list remote IPv4 addresses.")
+
+    @requires_admin
+    def taskkill(self):
+        with TSTS.LegacyAPI(self.conn, self.host, self.kerberos) as legacy:
+            handle = legacy.hRpcWinStationOpenServer()
+            if self.args.taskkill.isdigit():
+                pidList = [int(self.args.taskkill)]
+            else:
+                res = legacy.hRpcWinStationGetAllProcesses(handle)
+                if not res:
+                    self.logger.error("Could not get process list")
+                    return
+
+                pidList = [i["UniqueProcessId"] for i in res if i["ImageName"].lower() == self.args.taskkill.lower()]
+                if not pidList:
+                    self.logger.fail(f"Could not find process named {self.args.taskkill}")
+                    return
+
+            for pid in pidList:
+                try:
+                    if legacy.hRpcWinStationTerminateProcess(handle, pid)["ErrorCode"]:
+                        self.logger.highlight(f"Terminated PID {pid} ({self.args.taskkill})")
+                    else:
+                        self.logger.fail(f"Failed terminating PID {pid}")
+                except Exception as e:
+                    self.logger.exception(f"Error terminating PID {pid}: {e}")
 
     @requires_admin
     def qwinsta(self):
@@ -932,33 +1009,32 @@ class smb(connection):
             "WTS_SESSIONSTATE_LOCK": "Locked",
             "WTS_SESSIONSTATE_UNLOCK": "Unlocked",
         }
+
         sessions = self.get_session_list()
-        if not len(sessions):
+        if not sessions:
             return
+
         self.enumerate_sessions_info(sessions)
 
+        # Calculate max lengths for formatting
         maxSessionNameLen = max(len(sessions[i]["SessionName"]) + 1 for i in sessions)
-        maxSessionNameLen = maxSessionNameLen if len("SESSIONNAME") < maxSessionNameLen else len("SESSIONNAME") + 1
+        maxSessionNameLen = max(maxSessionNameLen, len("SESSIONNAME") + 1)
         maxUsernameLen = max(len(sessions[i]["Username"] + sessions[i]["Domain"]) + 1 for i in sessions) + 1
-        maxUsernameLen = maxUsernameLen if len("Username") < maxUsernameLen else len("Username") + 1
+        maxUsernameLen = max(maxUsernameLen, len("USERNAME") + 1)
         maxIdLen = max(len(str(i)) for i in sessions)
-        maxIdLen = maxIdLen if len("ID") < maxIdLen else len("ID") + 1
+        maxIdLen = max(maxIdLen, len("ID") + 1)
         maxStateLen = max(len(sessions[i]["state"]) + 1 for i in sessions)
-        maxStateLen = maxStateLen if len("STATE") < maxStateLen else len("STATE") + 1
-        maxRemoteIp = max(len(sessions[i]["RemoteIp"]) + 1 for i in sessions)
-        maxRemoteIp = maxRemoteIp if len("RemoteAddress") < maxRemoteIp else len("RemoteAddress") + 1
-        maxClientName = max(len(sessions[i]["ClientName"]) + 1 for i in sessions)
-        maxClientName = maxClientName if len("ClientName") < maxClientName else len("ClientName") + 1
-        template = ("{SESSIONNAME: <%d} "  # noqa: UP031
-                    "{USERNAME: <%d} "
-                    "{ID: <%d} "
+        maxStateLen = max(maxStateLen, len("STATE") + 1)
+
+        # Create the template for formatting
+        template = (f"{{SESSIONNAME: <{maxSessionNameLen}}} "
+                    f"{{USERNAME: <{maxUsernameLen}}} "
+                    f"{{ID: <{maxIdLen}}} "
                     "{IPv4: <16} "
-                    "{STATE: <%d} "
+                    f"{{STATE: <{maxStateLen}}} "
                     "{DSTATE: <9} "
                     "{CONNTIME: <20} "
-                    "{DISCTIME: <20} ") % (maxSessionNameLen, maxUsernameLen, maxIdLen, maxStateLen)
-
-        result = []
+                    "{DISCTIME: <20} ")
         header = template.format(
             SESSIONNAME="SESSIONNAME",
             USERNAME="USERNAME",
@@ -969,7 +1045,6 @@ class smb(connection):
             CONNTIME="ConnectTime",
             DISCTIME="DisconnectTime",
         )
-
         header2 = template.replace(" <", "=<").format(
             SESSIONNAME="",
             USERNAME="",
@@ -980,58 +1055,99 @@ class smb(connection):
             CONNTIME="",
             DISCTIME="",
         )
-        result.extend((header, header2))
+        result = [header, header2]
+
+        # Check if we need to filter for usernames
+        usernames = None
+        if self.args.qwinsta:
+            arg = self.args.qwinsta
+            if os.path.isfile(arg):
+                with open(arg) as f:
+                    usernames = [line.strip().lower() for line in f if line.strip()]
+            else:
+                usernames = [arg.lower()]
 
         for i in sessions:
+            username = sessions[i]["Username"]
+            domain = sessions[i]["Domain"]
+            user_full = f"{domain}\\{username}" if username else ""
+
+            # If usernames are provided, filter them
+            if usernames and username.lower() not in usernames:
+                continue
+
             connectTime = sessions[i]["ConnectTime"]
             connectTime = connectTime.strftime(r"%Y/%m/%d %H:%M:%S") if connectTime.year > 1601 else "None"
 
             disconnectTime = sessions[i]["DisconnectTime"]
             disconnectTime = disconnectTime.strftime(r"%Y/%m/%d %H:%M:%S") if disconnectTime.year > 1601 else "None"
-            userName = sessions[i]["Domain"] + "\\" + sessions[i]["Username"] if len(sessions[i]["Username"]) else ""
 
-            result.append(template.format(
+            row = template.format(
                 SESSIONNAME=sessions[i]["SessionName"],
-                USERNAME=userName,
+                USERNAME=user_full,
                 ID=i,
                 IPv4=sessions[i]["RemoteIp"],
                 STATE=sessions[i]["state"],
                 DSTATE=desktop_states[sessions[i]["flags"]],
                 CONNTIME=connectTime,
                 DISCTIME=disconnectTime,
-            ))
+            )
+            result.append(row)
 
-        self.logger.success("Enumerated qwinsta sessions")
-        for row in result:
-            self.logger.highlight(row)
+        if len(result) > 2:
+            self.logger.success("Enumerated qwinsta sessions")
+            for row in result:
+                self.logger.highlight(row)
 
     @requires_admin
     def tasklist(self):
-        with TSTS.LegacyAPI(self.conn, self.host, self.kerberos) as legacy:
-            try:
-                handle = legacy.hRpcWinStationOpenServer()
-                res = legacy.hRpcWinStationGetAllProcesses(handle)
-            except Exception as e:
-                # TODO: Issue https://github.com/fortra/impacket/issues/1816
-                self.logger.debug(f"Exception while calling hRpcWinStationGetAllProcesses: {e}")
-                return
-            if not res:
-                return
-            self.logger.success("Enumerated processes")
-            maxImageNameLen = max(len(i["ImageName"]) for i in res)
-            maxSidLen = max(len(i["pSid"]) for i in res)
-            template = "{: <%d} {: <8} {: <11} {: <%d} {: >12}" % (maxImageNameLen, maxSidLen)  # noqa: UP031
-            self.logger.highlight(template.format("Image Name", "PID", "Session#", "SID", "Mem Usage"))
-            self.logger.highlight(template.replace(": ", ":=").format("", "", "", "", ""))
-            for procInfo in res:
-                row = template.format(
-                    procInfo["ImageName"],
-                    procInfo["UniqueProcessId"],
-                    procInfo["SessionId"],
-                    procInfo["pSid"],
-                    "{:,} K".format(procInfo["WorkingSetSize"] // 1000),
-                )
-                self.logger.highlight(row)
+        # Formats a row to be printed on screen
+        def format_row(procInfo):
+            return template.format(
+                procInfo["ImageName"],
+                procInfo["UniqueProcessId"],
+                procInfo["SessionId"],
+                procInfo["pSid"],
+                f"{procInfo['WorkingSetSize'] // 1000:,} K",
+            )
+
+        try:
+            with TSTS.LegacyAPI(self.conn, self.host, self.kerberos) as legacy:
+                try:
+                    handle = legacy.hRpcWinStationOpenServer()
+                    res = legacy.hRpcWinStationGetAllProcesses(handle)
+                except Exception as e:
+                    # TODO: Issue https://github.com/fortra/impacket/issues/1816
+                    self.logger.debug(f"Exception while calling hRpcWinStationGetAllProcesses: {e}")
+                    return
+                if not res:
+                    return
+                self.logger.success("Enumerated processes")
+                maxImageNameLen = max(len(i["ImageName"]) for i in res)
+                maxSidLen = max(len(i["pSid"]) for i in res)
+                template = f"{{: <{maxImageNameLen}}} {{: <8}} {{: <11}} {{: <{maxSidLen}}} {{: >12}}"
+                self.logger.highlight(template.format("Image Name", "PID", "Session#", "SID", "Mem Usage"))
+                self.logger.highlight(template.replace(": ", ":=").format("", "", "", "", ""))
+                found_task = False
+
+                # For each process on the remote host
+                for procInfo in res:
+                    # If args.tasklist is not True then a process name was supplied
+                    if self.args.tasklist is not True:
+                        # So we look for it and print its information if found
+                        if self.args.tasklist.lower() in procInfo["ImageName"].lower():
+                            found_task = True
+                            self.logger.highlight(format_row(procInfo))
+                    # Else, no process was supplied, we print the entire list of remote processes
+                    else:
+                        self.logger.highlight(format_row(procInfo))
+
+                # If a process was suppliad to args.tasklist and it was not found, we print a fail message
+                if self.args.tasklist is not True and not found_task:
+                    self.logger.fail(f"Didn't find process {self.args.tasklist}")
+
+        except SessionError:
+            self.logger.fail("Cannot list remote tasks, RDP is probably disabled.")
 
     def shares(self):
         temp_dir = ntpath.normpath("\\" + gen_random_string())
@@ -1141,16 +1257,20 @@ class smb(connection):
                     error = get_error_string(e)
                     self.logger.debug(f"Error adding share: {error}")
 
+        if self.args.filter_shares:
+            self.logger.display("[REMOVED] Use the --shares read,write options instead.")
+
         self.logger.display("Enumerated shares")
         self.logger.highlight(f"{'Share':<15} {'Permissions':<15} {'Remark'}")
         self.logger.highlight(f"{'-----':<15} {'-----------':<15} {'------'}")
+
         for share in permissions:
             name = share["name"]
             remark = share["remark"]
-            perms = share["access"]
-            if self.args.filter_shares and not any(x in perms for x in self.args.filter_shares):
+            perms = ",".join(share["access"])
+            if self.args.shares and self.args.shares.lower() not in perms.lower():
                 continue
-            self.logger.highlight(f"{name:<15} {','.join(perms):<15} {remark}")
+            self.logger.highlight(f"{name:<15} {perms:<15} {remark}")
         return permissions
 
     def dir(self):
@@ -1383,46 +1503,39 @@ class smb(connection):
             dcom.disconnect()
         return records if records else False
 
-    def spider(
-        self,
-        share=None,
-        folder=".",
-        pattern=None,
-        regex=None,
-        exclude_dirs=None,
-        depth=None,
-        content=False,
-        only_files=True,
-        silent=True
-    ):
-        if exclude_dirs is None:
-            exclude_dirs = []
-        if regex is None:
-            regex = []
-        if pattern is None:
-            pattern = []
-        spider = SMBSpider(self.conn, self.logger)
-        if not silent:
-            self.logger.display("Started spidering")
-        start_time = time()
-        if not share:
-            spider.spider(
+    def spider(self):
+        if self.args.regex:
+            try:
+                self.args.regex = [re.compile(bytes(rx, "utf8")) for rx in self.args.regex]
+            except Exception as e:
+                self.logger.fail(f"Regex compilation error: {e}")
+        elif self.args.pattern is None:
+            self.args.pattern = [""]
+        if self.args.exclude_folders is None:
+            self.args.exclude_folders = []
+
+        spidering = SMBSpider(
+                self.conn,
+                self.logger,
                 self.args.spider,
                 self.args.spider_folder,
                 self.args.pattern,
                 self.args.regex,
-                self.args.exclude_dirs,
+                self.args.exclude_folders,
                 self.args.depth,
                 self.args.content,
                 self.args.only_files,
-                self.args.silent
+                self.args.only_folders,
+                self.args.spider_all
             )
-        else:
-            spider.spider(share, folder, pattern, regex, exclude_dirs, depth, content, only_files, silent)
-        if not silent:
-            self.logger.display(f"Done spidering (Completed in {time() - start_time})")
 
-        return spider.results
+        self.logger.display("Started spidering")
+        start_time = time()
+        spidering.spider()
+        self.logger.display(f"Done spidering (Completed in {round(time() - start_time, 3)} seconds)")
+
+    def spider_all(self):
+        self.spider()
 
     def rid_brute(self, max_rid=None):
         entries = []
@@ -1430,16 +1543,16 @@ class smb(connection):
             max_rid = int(self.args.rid_brute)
 
         KNOWN_PROTOCOLS = {
-            135: {"bindstr": rf"ncacn_ip_tcp:{self.host}"},
-            139: {"bindstr": rf"ncacn_np:{self.host}[\pipe\lsarpc]"},
-            445: {"bindstr": rf"ncacn_np:{self.host}[\pipe\lsarpc]"},
+            135: {"bindstr": rf"ncacn_ip_tcp:{self.remoteName}"},
+            139: {"bindstr": rf"ncacn_np:{self.remoteName}[\pipe\lsarpc]"},
+            445: {"bindstr": rf"ncacn_np:{self.remoteName}[\pipe\lsarpc]"},
         }
 
         try:
             string_binding = KNOWN_PROTOCOLS[self.port]["bindstr"]
             self.logger.debug(f"StringBinding {string_binding}")
             rpc_transport = transport.DCERPCTransportFactory(string_binding)
-            rpc_transport.setRemoteHost(self.host)
+            rpc_transport.setRemoteHost(self.remoteName)
 
             if hasattr(rpc_transport, "set_credentials"):
                 # This method exists only for selected protocol sequences.
