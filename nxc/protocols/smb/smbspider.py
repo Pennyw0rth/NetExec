@@ -36,6 +36,14 @@ class SMBSpider:
                     self.logger.debug(f"Failed accessing share: {share}")
         else:
             for share in self.shares: 
+                try:
+                    self.smbconnection.listPath(share, "*")
+                except SessionError as e:
+                    if "STATUS_ACCESS_DENIED" in str(e):
+                        self.logger.fail(f"Failed accessing share: {share} (Insufficient Permissions)")
+                    elif "STATUS_BAD_NETWORK_NAME" in str(e):
+                        self.logger.fail(f"Failed accessing share: {share} (Does Not Exist)") 
+                    continue
                 self.logger.display(f"Spidering share: {share}")
                 if self.folder != "/":
                     self.logger.display(f"Spidering folder: {self.folder}")
@@ -56,8 +64,6 @@ class SMBSpider:
         except SessionError as e:
             if "STATUS_ACCESS_DENIED" in str(e):
                 self.logger.debug(f"Failed listing files on share {share} in directory {subfolder}")
-            elif "STATUS_BAD_NETWORK_NAME" in str(e):
-                self.logger.fail(f"Failed accessing {share} share") 
             elif "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
                 self.logger.fail(f"{self.folder} folder does not exist")
             return
