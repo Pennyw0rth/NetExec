@@ -93,6 +93,6 @@ class NXCModule:
                             else:
                                 context.log.fail(f"Failed to write recyclebin file {filename}: {e}")
                 else:
-                    context.log.info('Use the module option "DOWNLOAD=True"')
+                    context.log.info('Use the module option "DOWNLOAD=True" to download the files')
 
         remote_ops.finish()
