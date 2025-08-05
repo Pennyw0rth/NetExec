@@ -7,41 +7,41 @@ import contextlib
 
 
 class SMBSpider:
-    def __init__(self, smbconnection, logger, shares, folder, pattern, regex, exclude_folders, depth, content, only_files, only_folders, spider_all):
-        self.smbconnection = smbconnection
-        self.logger = logger
-        self.spider_all = spider_all
-        self.share = ""
-        self.shares = shares
-        self.folder = folder
-        self.pattern = pattern 
-        self.exclude_folders = exclude_folders 
-        self.depth = depth
-        self.content = content
-        self.onlyfiles = only_files
-        self.onlyfolders = only_folders
-        self.regex = regex
+    def __init__(self, connection, silent=False):
+        self.smbconnection = connection.conn
+        self.logger = connection.logger
+        self.shares = connection.args.spider
+        self.folder = connection.args.spider_folder
+        self.exclude_folders = connection.args.exclude_folders 
+        self.depth = connection.args.depth
+        self.content = connection.args.content
+        self.spider_all = connection.args.spider_all
+        self.onlyfiles = connection.args.only_files
+        self.onlyfolders = connection.args.only_folders
+        self.pattern = connection.args.pattern 
+        self.regex = connection.args.regex
+        self.paths = []
+        self.silent = silent
 
     def spider(self):
         if self.spider_all:
             self.logger.display("Enumerating all readable shares")
             for share in self.smbconnection.listShares():
-                self.share = share["shi1_netname"][:-1]
+                share = share["shi1_netname"][:-1]
                 try:
-                    self.smbconnection.listPath(self.share, "*")
-                    self.logger.display(f"Spidering share: {self.share}")
-                    self._spider(self.folder, self.depth)
+                    self.smbconnection.listPath(share, "*")
+                    self.logger.display(f"Spidering share: {share}")
+                    self.crawl(share, self.folder, self.depth)
                 except SessionError:
-                    self.logger.debug(f"Failed accessing share: {self.share}")
+                    self.logger.debug(f"Failed accessing share: {share}")
         else:
             for share in self.shares: 
-                self.share = share
-                self.logger.display(f"Spidering share: {self.share}")
+                self.logger.display(f"Spidering share: {share}")
                 if self.folder != "/":
                     self.logger.display(f"Spidering folder: {self.folder}")
-                self._spider(self.folder, self.depth)
+                self.crawl(share, self.folder, self.depth)
 
-    def _spider(self, subfolder, depth):
+    def crawl(self, share, subfolder, depth):
         filelist = None
         if subfolder in ["", ".", "/"]:
             subfolder = "*"
@@ -49,15 +49,15 @@ class SMBSpider:
             subfolder += "/*"
 
         try:
-            filelist = self.smbconnection.listPath(self.share, subfolder)
+            filelist = self.smbconnection.listPath(share, subfolder)
             if depth is not None and depth <= 0:
                 return
-            self.dir_list(filelist, subfolder)
+            self.dir_list(share, filelist, subfolder)
         except SessionError as e:
             if "STATUS_ACCESS_DENIED" in str(e):
-                self.logger.debug(f"Failed listing files on share {self.share} in directory {subfolder}")
+                self.logger.debug(f"Failed listing files on share {share} in directory {subfolder}")
             elif "STATUS_BAD_NETWORK_NAME" in str(e):
-                self.logger.fail(f"Failed accessing {self.share} share") 
+                self.logger.fail(f"Failed accessing {share} share") 
             elif "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
                 self.logger.fail(f"{self.folder} folder does not exist")
             return
@@ -67,44 +67,48 @@ class SMBSpider:
                 if depth is not None:
                     depth -= 1
                 if result.get_longname() not in self.exclude_folders:
-                    self._spider(subfolder.replace("*", "") + result.get_longname(), depth)
+                    self.crawl(share, subfolder.replace("*", "") + result.get_longname(), depth)
         return
 
-    def dir_list(self, files, path):
+    def dir_list(self, share, files, path):
         path = path.replace("*", "")
         for result in files:
+            file = path + result.get_longname()
             if result.get_longname() in [".", ".."] or result.get_longname() in self.exclude_folders:
                 continue
             filename = bytes(result.get_longname().lower(), "utf-8")
             if self.content: 
                 if not result.is_directory():
-                    self.search_content(path, result)
+                    self.search_content(share, file, result)
                 continue
             if self.pattern and any(bytes(pattern.lower(), "utf-8") in filename for pattern in self.pattern):
                 if result.is_directory():
                     if not self.onlyfiles:
-                        self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{self.share}/{path}{result.get_longname()} [dir]")
+                        self.paths.append(file)
+                        self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{share}/{file} [dir]") if not self.silent else None
                 else:
                     if not self.onlyfolders:
-                        self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{self.share}/{path}{result.get_longname()} [lastm:'{self.get_lastm_time(result)}' size:{result.get_filesize()}]")
+                        self.paths.append(file)
+                        self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{share}/{file} [lastm:'{self.get_lastm_time(result)}' size:{result.get_filesize()}]") if not self.silent else None 
             if self.regex:
                 for regex in self.regex:
                     if regex.findall(filename):
                         if result.is_directory():
                             if not self.onlyfiles:
-                                self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{self.share}/{path}{result.get_longname()} [dir]")
+                                self.paths.append(file)
+                                self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{share}/{file} [dir]")
                         else:
                             if not self.onlyfolders:
-                                self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{self.share}/{path}{result.get_longname()} [lastm:'{self.get_lastm_time(result)}' size:{result.get_filesize()}]")
+                                self.paths.append(file)
+                                self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{share}/{file} [lastm:'{self.get_lastm_time(result)}' size:{result.get_filesize()}]")
 
-    def search_content(self, path, result):
-        path = path.replace("*", "")
-        file = path + result.get_longname()
-        rfile = RemoteFile(self.smbconnection, file, self.share, access=FILE_READ_DATA)
+    def search_content(self, share, file, result):
+        rfile = RemoteFile(self.smbconnection, file, share, access=FILE_READ_DATA)
         try:
             rfile.open_file()
         except Exception as e:
             if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.debug(f"Failed accessing file: {file} on the {share} share")
                 return
 
         while True:
@@ -113,19 +117,20 @@ class SMBSpider:
                 contents = rfile.read(4096)
             except NetBIOSTimeout as e:
                 self.logger.fail(f"Error retrieving {file} ({e})")
-
             if not contents:
                 break
 
             if self.pattern:
                 for pattern in self.pattern:
                     if contents.lower().find(bytes(pattern.lower(), "utf-8")) != -1:
-                        self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{self.share}/{path}{result.get_longname()}"
+                        self.paths.append(file)
+                        self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{share}/{file}"
                                               f"[lastm:'{self.get_lastm_time(result)}' size:{result.get_filesize()}  pattern='{pattern}']")
             if self.regex:
                 for regex in self.regex:
                     if regex.findall(contents):
-                        self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{self.share}/{path}{result.get_longname()}"
+                        self.paths.append(file)
+                        self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{share}/{file}"
                                               f"[lastm:'{self.get_lastm_time(result)}' size:{result.get_filesize()} regex='{regex.pattern.decode('utf-8')}']")
         rfile.close()
 

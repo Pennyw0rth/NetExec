@@ -1510,20 +1510,7 @@ class smb(connection):
         if self.args.exclude_folders is None:
             self.args.exclude_folders = []
 
-        spidering = SMBSpider(
-                self.conn,
-                self.logger,
-                self.args.spider,
-                self.args.spider_folder,
-                self.args.pattern,
-                self.args.regex,
-                self.args.exclude_folders,
-                self.args.depth,
-                self.args.content,
-                self.args.only_files,
-                self.args.only_folders,
-                self.args.spider_all
-            )
+        spidering = SMBSpider(self)
 
         self.logger.display("Started spidering")
         start_time = time()
