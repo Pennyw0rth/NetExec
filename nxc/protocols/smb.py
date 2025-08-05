@@ -122,6 +122,7 @@ class smb(connection):
         self.signing = False
         self.smb_share_name = smb_share_name
         self.pvkbytes = None
+        self.no_da = None
         self.no_ntlm = False
         self.null_auth = False
         self.protocol = "SMB"
