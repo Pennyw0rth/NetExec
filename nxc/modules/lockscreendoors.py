@@ -15,15 +15,15 @@ class NXCModule:
     def __init__(self):
         # List of exe names with expected descriptions
         self.expected_descriptions = {
-            "utilman.exe": "Utility Manager",
-            "narrator.exe": "Screen Reader",
-            "sethc.exe": "Accessibility shortcut keys",
-            "osk.exe": "Accessibility On-Screen Keyboard",
-            "magnify.exe": "Microsoft Screen Magnifier",
-            "EaseOfAccessDialog.exe": "Ease of Access Dialog Host",
-            "voiceaccess.exe": "Voice access",  # Only on Windows 11 / Server 2025+
-            "displayswitch.exe": "Display Switch",
-            "atbroker.exe": "Windows Assistive Technology Manager",
+            "utilman.exe": ["Utility Manager"],
+            "narrator.exe": ["Screen Reader", "Narrator"],
+            "sethc.exe": ["Accessibility shortcut keys"],
+            "osk.exe": ["Accessibility On-Screen Keyboard"],
+            "magnify.exe": ["Microsoft Screen Magnifier"],
+            "EaseOfAccessDialog.exe": ["Ease of Access Dialog Host"],
+            "voiceaccess.exe": ["Voice access"],  # Only on Windows 11 / Server 2025+
+            "displayswitch.exe": ["Display Switch"],
+            "atbroker.exe": ["Windows Assistive Technology Manager", "Transitions Accessible technologies between desktops"],
         }
 
         # If description matches one of these it's almost certainly backdoored
@@ -56,7 +56,7 @@ class NXCModule:
         tampered = False
         readable_file_found = False
 
-        for exe, expected_desc in self.expected_descriptions.items():
+        for exe, expected_descs in self.expected_descriptions.items():
             try:
                 # Grab the binary from the share
                 buf = BytesIO()
@@ -71,12 +71,12 @@ class NXCModule:
                     continue
 
                 # Check if the description is as expected
-                if file_desc != expected_desc:
+                if file_desc not in expected_descs:
                     tampered = True
                     if file_desc in self.backdoor_descriptions:
                         context.log.highlight(f"BACKDOOR DETECTED: {exe} has FileDescription '{file_desc}'")
                     else:
-                        context.log.highlight(f"SUSPICIOUS: {exe} has unexpected FileDescription '{file_desc}' (expected '{expected_desc}')")
+                        context.log.highlight(f"SUSPICIOUS: {exe} has unexpected FileDescription '{file_desc}' (expected '{expected_descs}')")
 
             except Exception:
                 # Silently skip if the file is not readable or doesn't exist
