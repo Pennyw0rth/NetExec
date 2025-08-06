@@ -18,10 +18,12 @@ class SMBSpider:
         self.spider_all = spider_all
         self.onlyfiles = only_files
         self.onlyfolders = only_folders
-        self.pattern = pattern if pattern else [""]
         self.regex = regex
         self.paths = []
         self.silent = silent
+        self.pattern = pattern
+        if not pattern and not regex:
+            self.pattern = [""]
 
     def spider(self):
         if self.spider_all:
@@ -87,7 +89,7 @@ class SMBSpider:
                 if not result.is_directory():
                     self.search_content(share, file, result)
                 continue
-            if self.pattern != [""] and any(bytes(pattern.lower(), "utf-8") in filename for pattern in self.pattern):
+            if self.pattern and any(bytes(pattern.lower(), "utf-8") in filename for pattern in self.pattern):
                 if result.is_directory():
                     if not self.onlyfiles:
                         self.paths.append(file)
