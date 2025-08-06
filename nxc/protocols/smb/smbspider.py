@@ -7,19 +7,19 @@ import contextlib
 
 
 class SMBSpider:
-    def __init__(self, connection, silent=False):
-        self.smbconnection = connection.conn
-        self.logger = connection.logger
-        self.shares = connection.args.spider
-        self.folder = connection.args.spider_folder
-        self.exclude_folders = connection.args.exclude_folders 
-        self.depth = connection.args.depth
-        self.content = connection.args.content
-        self.spider_all = connection.args.spider_all
-        self.onlyfiles = connection.args.only_files
-        self.onlyfolders = connection.args.only_folders
-        self.pattern = connection.args.pattern 
-        self.regex = connection.args.regex
+    def __init__(self, smbconnection, logger, spider, spider_folder, exclude_folders, depth, content, spider_all, only_files, only_folders, pattern, regex, silent):
+        self.smbconnection = smbconnection
+        self.logger = logger
+        self.shares = spider
+        self.folder = spider_folder
+        self.exclude_folders = exclude_folders if exclude_folders else []
+        self.depth = depth
+        self.content = content
+        self.spider_all = spider_all
+        self.onlyfiles = only_files
+        self.onlyfolders = only_folders
+        self.pattern = pattern if pattern else [""]
+        self.regex = regex
         self.paths = []
         self.silent = silent
 
@@ -44,9 +44,9 @@ class SMBSpider:
                     elif "STATUS_BAD_NETWORK_NAME" in str(e):
                         self.logger.fail(f"Failed accessing share: {share} (Does Not Exist)") 
                     continue
-                self.logger.display(f"Spidering share: {share}")
+                self.logger.display(f"Spidering share: {share}") if not self.silent else None
                 if self.folder != "/":
-                    self.logger.display(f"Spidering folder: {self.folder}")
+                    self.logger.display(f"Spidering folder: {self.folder}") if not self.silent else None
                 self.crawl(share, self.folder, self.depth)
 
     def crawl(self, share, subfolder, depth):

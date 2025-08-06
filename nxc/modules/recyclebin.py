@@ -4,7 +4,6 @@ from os.path import join, abspath
 from impacket.dcerpc.v5 import rrp
 from impacket.dcerpc.v5.rrp import DCERPCSessionError
 from impacket.examples.secretsdump import RemoteOperations
-from nxc.protocols.smb.smbspider import SMBSpider
 
 
 class NXCModule:
@@ -32,14 +31,9 @@ class NXCModule:
             sid_directory_name = sid_directory.get_longname()
             if sid_directory_name in (".", ".."):
                 continue
-
-            connection.args.pattern = [""]
-            connection.args.exclude_folders = []
             paths = []
-            spidering = SMBSpider(connection, True)
             try:
-                spidering.crawl("C$", f"$Recycle.Bin/{sid_directory_name}", None)
-                paths = spidering.paths
+                paths = connection.spider_share(share="C$", folder=f"$Recycle.Bin/{sid_directory_name}")
             except Exception as e:
                 context.log.fail(f"Exception: {e}")
 
