@@ -76,7 +76,14 @@ class NXCModule:
                     if file_desc in self.backdoor_descriptions:
                         context.log.highlight(f"BACKDOOR DETECTED: {exe} has FileDescription '{file_desc}'")
                     else:
-                        context.log.highlight(f"SUSPICIOUS: {exe} has unexpected FileDescription '{file_desc}' (expected '{expected_descs}')")
+                        if len(expected_descs) == 1:
+                            expected_str = f"'{expected_descs[0]}'"
+                        else:
+                            expected_str = ", ".join(f"'{d}'" for d in expected_descs)
+                            expected_str = f"one of: {expected_str}"
+                        context.log.highlight(
+                            f"SUSPICIOUS: {exe} has unexpected FileDescription '{file_desc}' (expected {expected_str})"
+                        )
 
             except Exception:
                 # Silently skip if the file is not readable or doesn't exist
