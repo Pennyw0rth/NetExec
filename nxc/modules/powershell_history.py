@@ -30,7 +30,7 @@ class NXCModule:
                     for file in connection.conn.listPath("C$", f"{powershell_history_dir}\\*"):
                         if file.get_longname() not in self.false_positive:
                             file_path = f"{powershell_history_dir}{file.get_longname()}"
-                            
+
                             buf = BytesIO()
                             connection.conn.getFile("C$", file_path, buf.write)
                             buf.seek(0)
@@ -42,7 +42,7 @@ class NXCModule:
                                 context.log.highlight(f"C:\\{file_path}")
 
                             for line in file_content.splitlines():
-                                context.log.highlight(f"\t{line}")    
+                                context.log.highlight(f"\t{line}")
                             if self.export:
                                 filename = f"{connection.host}_{directory.get_longname()}_powershell_history.txt"
                                 export_path = join(NXC_PATH, "modules", "powershell_history")
