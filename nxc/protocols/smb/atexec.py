@@ -1,4 +1,6 @@
 import os
+import random
+import re
 from textwrap import dedent
 from impacket.dcerpc.v5 import tsch, transport
 from impacket.dcerpc.v5.dtypes import NULL
@@ -80,52 +82,91 @@ class TSCH_EXEC:
         return end_boundary.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
 
     def gen_xml(self, command):
+        global cmdstdout
+        global cmd_path
+        #Random setting order to help with detection
+        settings = [
+            "       <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>",
+            "       <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>",
+            "       <AllowHardTerminate>true</AllowHardTerminate>",
+            "       <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>",
+            "       <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>"
+        ]
+        random.shuffle(settings)
+        randomized_settings = "\n".join(settings)
+        
+        settings2 = [
+            "       <AllowStartOnDemand>true</AllowStartOnDemand>",
+            "       <Hidden>true</Hidden>",
+            "       <Enabled>true</Enabled>",
+            "       <RunOnlyIfIdle>false</RunOnlyIfIdle>",
+            "       <WakeToRun>false</WakeToRun>",
+            "       <Priority>7</Priority>",
+            "       <ExecutionTimeLimit>P3D</ExecutionTimeLimit>"
+        ]
+        random.shuffle(settings2)
+        randomized_settings2 = "\n".join(settings2)
+        
+        IdleSettings = [
+            "         <StopOnIdleEnd>true</StopOnIdleEnd>",
+            "         <RestartOnIdle>false</RestartOnIdle>"
+        ]
+        random.shuffle(IdleSettings)
+        randomized_IdleSettings = "\n".join(IdleSettings)
+        random_digit = random.randint(2, 6)
+
+        match = re.match(r'^(.+?\\[^\\ ]+)\s+(.*)', command)
+        if match:
+            cmd_path = match.group(1)
+            cmd_args = match.group(2)
+        else:
+            print("Could not split the command properly.")
+        
         xml = f"""<?xml version="1.0" encoding="UTF-16"?>
-        <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+        <Task version="1.{random_digit}" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
         <Triggers>
-            <RegistrationTrigger>
-            <EndBoundary>{self.get_end_boundary()}</EndBoundary>
-            </RegistrationTrigger>
+           <RegistrationTrigger>
+           <EndBoundary>{self.get_end_boundary()}</EndBoundary>
+           </RegistrationTrigger>
         </Triggers>
         <Principals>
-            <Principal id="LocalSystem">
-            <UserId>{self.run_task_as}</UserId>
-            <RunLevel>HighestAvailable</RunLevel>
-            </Principal>
+           <Principal id="LocalSystem">
+           <UserId>{self.run_task_as}</UserId>
+           <RunLevel>HighestAvailable</RunLevel>
+           </Principal>
         </Principals>
         <Settings>
-            <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-            <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-            <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-            <AllowHardTerminate>true</AllowHardTerminate>
-            <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
-            <IdleSettings>
-            <StopOnIdleEnd>true</StopOnIdleEnd>
-            <RestartOnIdle>false</RestartOnIdle>
-            </IdleSettings>
-            <AllowStartOnDemand>true</AllowStartOnDemand>
-            <Enabled>true</Enabled>
-            <Hidden>true</Hidden>
-            <RunOnlyIfIdle>false</RunOnlyIfIdle>
-            <WakeToRun>false</WakeToRun>
-            <ExecutionTimeLimit>P3D</ExecutionTimeLimit>
-            <Priority>7</Priority>
+           {randomized_settings}
+           <IdleSettings>
+           {randomized_IdleSettings}
+           </IdleSettings>
+           {randomized_settings2}
         </Settings>
         <Actions Context="LocalSystem">
-            <Exec>
-            <Command>cmd.exe</Command>
+           <Exec>
+           <Command>{cmd_path}</Command>
         """
         if self.__retOutput:
             file_location = "\\Windows\\Temp\\" if self.output_file_location is None else self.output_file_location
             if self.output_filename is None:
-                self.__output_filename = os.path.join(file_location, gen_random_string(6))
+                self.__output_filename = os.path.join(file_location, gen_random_string(8))
             else:
                 self.__output_filename = os.path.join(file_location, self.output_filename)
-            argument_xml = f"      <Arguments>/C {command} &gt; {self.__output_filename} 2&gt;&amp;1</Arguments>"
+            
+            if "cmd" in cmd_path.lower() or "powershell" in cmd_path.lower():
+                cmd_output = f"&gt; {self.__output_filename} 2&gt;&amp;1"
+                cmdstdout = 1
+                argument_xml = f"      <Arguments>{cmd_args} {cmd_output}</Arguments>"
+            else:
+                cmd_output = ""
+                cmdstdout = 0
+                argument_xml = f"      <Arguments>{cmd_args} {cmd_output}</Arguments>"
+                
 
         elif self.__retOutput is False:
-            argument_xml = f"      <Arguments>/C {command}</Arguments>"
-
+            argument_xml = f"      <Arguments>{cmd_args}</Arguments>"
+        
+        
         self.logger.debug("Generated argument XML: " + argument_xml)
         xml += argument_xml
 
@@ -182,40 +223,44 @@ class TSCH_EXEC:
             tries = 1
             # Give the command a bit of time to execute before we try to read the output, 0.4 seconds was good in testing
             sleep(0.4)
-            while True:
-                try:
-                    self.logger.info(f"Attempting to read {self.__share}\\{self.__output_filename}")
-                    smbConnection.getFile(self.__share, self.__output_filename, self.output_callback)
-                    break
-                except Exception as e:
-                    if tries >= self.__tries:
-                        self.logger.fail("ATEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
-                        break
-                    if "STATUS_BAD_NETWORK_NAME" in str(e):
-                        self.logger.fail(f"ATEXEC: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
-                        break
-                    elif "STATUS_VIRUS_INFECTED" in str(e):
-                        self.logger.fail("Command did not run because a virus was detected")
-                        break
-                    # When executing PowerShell and the command is still running, we get a sharing violation
-                    # We can use that information to wait longer than if the file is not found (probably av or something)
-                    if "STATUS_SHARING_VIOLATION" in str(e):
-                        self.logger.info(f"File {self.__share}\\{self.__output_filename} is still in use with {self.__tries - tries} tries left, retrying...")
-                        tries += 1
-                        sleep(1)
-                    elif "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
-                        self.logger.info(f"File {self.__share}\\{self.__output_filename} not found with {self.__tries - tries} tries left, deducting 10 tries and retrying...")
-                        tries += 10
-                        sleep(1)
-                    else:
-                        self.logger.debug(f"Exception when trying to read output file: {e!s}. {self.__tries - tries} tries left, retrying...")
-                        tries += 1
-                        sleep(1)
+            if cmdstdout == 1:
+               while True:
+                   try:
+                       self.logger.info(f"Attempting to read {self.__share}\\{self.__output_filename}")
+                       smbConnection.getFile(self.__share, self.__output_filename, self.output_callback)
+                       break
+                   except Exception as e:
+                       if tries >= self.__tries:
+                           self.logger.fail("ATEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
+                           break
+                       if "STATUS_BAD_NETWORK_NAME" in str(e):
+                           self.logger.fail(f"ATEXEC: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
+                           break
+                       elif "STATUS_VIRUS_INFECTED" in str(e):
+                           self.logger.fail("Command did not run because a virus was detected")
+                           break
+                       # When executing PowerShell and the command is still running, we get a sharing violation
+                       # We can use that information to wait longer than if the file is not found (probably av or something)
+                       if "STATUS_SHARING_VIOLATION" in str(e):
+                           self.logger.info(f"File {self.__share}\\{self.__output_filename} is still in use with {self.__tries - tries} tries left, retrying...")
+                           tries += 1
+                           sleep(1)
+                       elif "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
+                           self.logger.info(f"File {self.__share}\\{self.__output_filename} not found with {self.__tries - tries} tries left, deducting 10 tries and retrying...")
+                           tries += 10
+                           sleep(1)
+                       else:
+                           self.logger.debug(f"Exception when trying to read output file: {e!s}. {self.__tries - tries} tries left, retrying...")
+                           tries += 1
+                           sleep(1)
+  
+   
+               try:
+                   self.logger.debug(f"Deleting file {self.__share}\\{self.__output_filename}")
+                   smbConnection.deleteFile(self.__share, self.__output_filename)
+               except Exception:
+                   pass
 
-            try:
-                self.logger.debug(f"Deleting file {self.__share}\\{self.__output_filename}")
-                smbConnection.deleteFile(self.__share, self.__output_filename)
-            except Exception:
-                pass
-
+            else:
+              self.logger.display("No output file was saved to be retrived") 
         dce.disconnect()
