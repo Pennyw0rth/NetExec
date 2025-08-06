@@ -1505,7 +1505,7 @@ class smb(connection):
                 self.args.regex = [re.compile(bytes(rx, "utf8")) for rx in self.args.regex]
             except Exception as e:
                 self.logger.fail(f"Regex compilation error: {e}")
-
+                return
         spidering = SMBSpider(
                 smbconnection=self.conn,
                 logger=self.logger,
@@ -1531,6 +1531,12 @@ class smb(connection):
         self.spider()
 
     def spider_share(self, share, folder="/", pattern=None, regex=None, depth=None, silent=True):
+        if regex:
+            try:
+                regex = [re.compile(bytes(rx, "utf8")) for rx in regex]
+            except Exception as e:
+                self.logger.fail(f"Regex compilation error: {e}")
+                return
         spidering = SMBSpider(
                 smbconnection=self.conn,
                 logger=self.logger,

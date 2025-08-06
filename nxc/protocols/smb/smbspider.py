@@ -3,7 +3,7 @@ from nxc.protocols.smb.remotefile import RemoteFile
 from impacket.smb3structs import FILE_READ_DATA
 from impacket.smbconnection import SessionError
 from impacket.nmb import NetBIOSTimeout
-import contextlib
+import contextlib, re
 
 
 class SMBSpider:
@@ -87,7 +87,7 @@ class SMBSpider:
                 if not result.is_directory():
                     self.search_content(share, file, result)
                 continue
-            if self.pattern and any(bytes(pattern.lower(), "utf-8") in filename for pattern in self.pattern):
+            if self.pattern != [""] and any(bytes(pattern.lower(), "utf-8") in filename for pattern in self.pattern):
                 if result.is_directory():
                     if not self.onlyfiles:
                         self.paths.append(file)
@@ -102,11 +102,11 @@ class SMBSpider:
                         if result.is_directory():
                             if not self.onlyfiles:
                                 self.paths.append(file)
-                                self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{share}/{file} [dir]")
+                                self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{share}/{file} [dir]") if not self.silent else None
                         else:
                             if not self.onlyfolders:
                                 self.paths.append(file)
-                                self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{share}/{file} [lastm:'{self.get_lastm_time(result)}' size:{result.get_filesize()}]")
+                                self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{share}/{file} [lastm:'{self.get_lastm_time(result)}' size:{result.get_filesize()}]") if not self.silent else None
 
     def search_content(self, share, file, result):
         rfile = RemoteFile(self.smbconnection, file, share, access=FILE_READ_DATA)
@@ -131,13 +131,13 @@ class SMBSpider:
                     if contents.lower().find(bytes(pattern.lower(), "utf-8")) != -1:
                         self.paths.append(file)
                         self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{share}/{file}"
-                                              f"[lastm:'{self.get_lastm_time(result)}' size:{result.get_filesize()}  pattern='{pattern}']")
+                                              f"[lastm:'{self.get_lastm_time(result)}' size:{result.get_filesize()}  pattern='{pattern}']") if not self.silent else None
             if self.regex:
                 for regex in self.regex:
                     if regex.findall(contents):
                         self.paths.append(file)
                         self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{share}/{file}"
-                                              f"[lastm:'{self.get_lastm_time(result)}' size:{result.get_filesize()} regex='{regex.pattern.decode('utf-8')}']")
+                                              f"[lastm:'{self.get_lastm_time(result)}' size:{result.get_filesize()} regex='{regex.pattern.decode('utf-8')}']") if not self.silent else None
         rfile.close()
 
     def get_lastm_time(self, result_obj):
