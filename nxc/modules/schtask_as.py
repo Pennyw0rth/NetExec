@@ -2,7 +2,6 @@ import os
 from traceback import format_exc
 from nxc.protocols.smb.atexec import TSCH_EXEC
 
-
 class NXCModule:
     """
     Execute a scheduled task remotely as a already connected user by @Defte_
@@ -69,17 +68,16 @@ class NXCModule:
                 return 1
             else:
                 self.logger.display(f"Uploading {self.binary_to_upload}")
+                binary_file_location = self.tmp_share if self.output_file_location is None else self.output_file_location
                 with open(self.binary_to_upload, "rb") as binary_to_upload:
                     try:
                         self.binary_to_upload_name = os.path.basename(self.binary_to_upload)
-                        connection.conn.putFile(self.share, f"{self.tmp_share}{self.binary_to_upload_name}", binary_to_upload.read)
-                        self.logger.success(f"Binary {self.binary_to_upload_name} successfully uploaded in {self.tmp_share}{self.binary_to_upload_name}")
+                        connection.conn.putFile(self.share, f"{binary_file_location}{self.binary_to_upload_name}", binary_to_upload.read)
+                        self.logger.success(f"Binary {self.binary_to_upload_name} successfully uploaded in {binary_file_location}{self.binary_to_upload_name}")
                     except Exception as e:
-                        self.logger.fail(f"Error writing file to share {self.tmp_share}: {e}")
+                        self.logger.fail(f"Error writing file to share {binary_file_location}: {e}")
                         return 1
 
-        # Returnes self.command_to_run or \Windows\temp\BinToExecute.exe depending if BINARY=BinToExecute.exe
-        self.command_to_run = self.command_to_run if not self.binary_to_upload else f"{self.tmp_share}{self.command_to_run}"
         self.logger.display("Connecting to the remote Service control endpoint")
         try:
             exec_method = TSCH_EXEC(
@@ -122,7 +120,9 @@ class NXCModule:
         finally:
             if self.binary_to_upload:
                 try:
-                    connection.conn.deleteFile(self.share, f"{self.tmp_share}{self.binary_to_upload_name}")
-                    context.log.success(f"Binary {self.binary_to_upload_name} successfully deleted")
+                    context.log.success("Sleeping for 10 seconds to let binary run")
+                    sleep(10)
+                    connection.conn.deleteFile(self.share, f"{binary_file_location}{self.binary_to_upload_name}")
+                    context.log.success(f"Binary {binary_file_location}{self.binary_to_upload_name} successfully deleted")
                 except Exception as e:
-                    context.log.fail(f"Error deleting {self.binary_to_upload_name} on {self.share}: {e}")
+                    context.log.fail(f"Error deleting {binary_file_location}{self.binary_to_upload_name} on {self.share}: {e}")
