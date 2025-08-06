@@ -41,4 +41,3 @@ class NXCModule:
         # Filter
         context.log.debug(f"Filter info field with: {self.FILTER}")
         return [answer for answer in answers if self.FILTER in answer[1]]
-

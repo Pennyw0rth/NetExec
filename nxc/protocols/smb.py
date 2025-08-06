@@ -122,6 +122,7 @@ class smb(connection):
         self.signing = False
         self.smb_share_name = smb_share_name
         self.pvkbytes = None
+        self.no_da = None
         self.no_ntlm = False
         self.null_auth = False
         self.protocol = "SMB"
@@ -292,7 +293,7 @@ class smb(connection):
         smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
         ntlm = colored(f" (NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
         null_auth = colored(f" (Null Auth:{self.null_auth})", host_info_colors[2], attrs=["bold"]) if self.null_auth else ""
-        self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domin:{self.targetDomain}) ({signing}) ({smbv1}){ntlm}{null_auth}")
+        self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}){ntlm}{null_auth}")
 
         if self.args.generate_hosts_file or self.args.generate_krb5_file:
             if self.args.generate_hosts_file:
@@ -1109,7 +1110,7 @@ class smb(connection):
                 procInfo["pSid"],
                 f"{procInfo['WorkingSetSize'] // 1000:,} K",
             )
-        
+
         try:
             with TSTS.LegacyAPI(self.conn, self.host, self.kerberos) as legacy:
                 try:
@@ -1144,7 +1145,7 @@ class smb(connection):
                 # If a process was suppliad to args.tasklist and it was not found, we print a fail message
                 if self.args.tasklist is not True and not found_task:
                     self.logger.fail(f"Didn't find process {self.args.tasklist}")
-            
+
         except SessionError:
             self.logger.fail("Cannot list remote tasks, RDP is probably disabled.")
 
@@ -1262,7 +1263,7 @@ class smb(connection):
         self.logger.display("Enumerated shares")
         self.logger.highlight(f"{'Share':<15} {'Permissions':<15} {'Remark'}")
         self.logger.highlight(f"{'-----':<15} {'-----------':<15} {'------'}")
-        
+
         for share in permissions:
             name = share["name"]
             remark = share["remark"]
@@ -1502,39 +1503,46 @@ class smb(connection):
             dcom.disconnect()
         return records if records else False
 
-    def spider(self):
-        if self.args.regex:
-            try:
-                self.args.regex = [re.compile(bytes(rx, "utf8")) for rx in self.args.regex]
-            except Exception as e:
-                self.logger.fail(f"Regex compilation error: {e}")
-        elif self.args.pattern is None:
-            self.args.pattern = [""]
-        if self.args.exclude_folders is None:
-            self.args.exclude_folders = []
-
-        spidering = SMBSpider(
-                self.conn,
-                self.logger,
+    def spider(
+        self,
+        share=None,
+        folder=".",
+        pattern=None,
+        regex=None,
+        exclude_dirs=None,
+        depth=None,
+        content=False,
+        only_files=True,
+        silent=True
+    ):
+        if exclude_dirs is None:
+            exclude_dirs = []
+        if regex is None:
+            regex = []
+        if pattern is None:
+            pattern = []
+        spider = SMBSpider(self.conn, self.logger)
+        if not silent:
+            self.logger.display("Started spidering")
+        start_time = time()
+        if not share:
+            spider.spider(
                 self.args.spider,
                 self.args.spider_folder,
                 self.args.pattern,
                 self.args.regex,
-                self.args.exclude_folders,
+                self.args.exclude_dirs,
                 self.args.depth,
                 self.args.content,
                 self.args.only_files,
-                self.args.only_folders,
-                self.args.spider_all
+                self.args.silent
             )
+        else:
+            spider.spider(share, folder, pattern, regex, exclude_dirs, depth, content, only_files, silent)
+        if not silent:
+            self.logger.display(f"Done spidering (Completed in {time() - start_time})")
 
-        self.logger.display("Started spidering")
-        start_time = time()
-        spidering.spider()
-        self.logger.display(f"Done spidering (Completed in {round(time() - start_time, 3)} seconds)")
-
-    def spider_all(self):
-        self.spider()
+        return spider.results
 
     def rid_brute(self, max_rid=None):
         entries = []
