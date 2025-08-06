@@ -3,7 +3,7 @@ from nxc.protocols.smb.remotefile import RemoteFile
 from impacket.smb3structs import FILE_READ_DATA
 from impacket.smbconnection import SessionError
 from impacket.nmb import NetBIOSTimeout
-import contextlib, re
+import contextlib
 
 
 class SMBSpider:
