@@ -93,6 +93,7 @@ def gen_cli_args():
     credential_group.add_argument("--gfail-limit", metavar="LIMIT", type=int, help="max number of global failed login attempts")
     credential_group.add_argument("--ufail-limit", metavar="LIMIT", type=int, help="max number of failed login attempts per username")
     credential_group.add_argument("--fail-limit", metavar="LIMIT", type=int, help="max number of failed login attempts per host")
+    credential_group.add_argument("--summary", action="store_true", help="Generate a summary of non-failed authentications")
 
     kerberos_group = std_parser.add_argument_group("Kerberos", "Options for Kerberos authentication")
     kerberos_group.add_argument("-k", "--kerberos", action="store_true", help="Use Kerberos authentication")

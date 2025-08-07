@@ -67,6 +67,7 @@ from time import time, ctime
 from traceback import format_exc
 from termcolor import colored
 import contextlib
+from nxc.netexec import GLOBAL_SUMMARY_RESULTS
 
 smb_share_name = gen_random_string(5).upper()
 
@@ -377,6 +378,11 @@ class smb(connection):
             out = f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}"
             self.logger.success(out)
 
+            summaryText = f"{self.protocol}   {self.host}   {self.port}   {self.hostname}   {domain}\\{self.username}:{process_secret(kerb_pass)} {self.mark_guest()}{self.mark_pwned()}"
+            
+            if summaryText:
+               GLOBAL_SUMMARY_RESULTS.append(summaryText)
+
             if not self.args.local_auth and self.username != "" and not self.args.delegate:
                 add_user_bh(self.username, domain, self.logger, self.config)
             if self.admin_privs:
@@ -411,6 +417,9 @@ class smb(connection):
                 f"{domain}\\{self.username}{used_ccache} {error} {f'({desc})' if self.args.verbose else ''}",
                 color="magenta" if error in smb_error_status else "red",
             )
+            if error in smb_error_status:
+            # Log the non failures to the summary
+               GLOBAL_SUMMARY_RESULTS.append(f"{self.protocol}   {self.host}   {self.port}   {self.hostname}   {domain}\\{self.username}:{process_secret(kerb_pass)} {error} {self.mark_guest()}{self.mark_pwned()}")
             if error not in smb_error_status:
                 self.inc_failed_login(username)
             return False
@@ -438,6 +447,11 @@ class smb(connection):
 
             out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_guest()}{self.mark_pwned()}"
             self.logger.success(out)
+            # Add the successful auth to the summary
+            summaryText = f"{self.protocol}   {self.host}   {self.port}   {self.hostname}   {domain}\\{self.username}:{process_secret(self.password)} {self.mark_guest()}{self.mark_pwned()}"
+            
+            if summaryText:
+               GLOBAL_SUMMARY_RESULTS.append(summaryText)
 
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
@@ -459,6 +473,9 @@ class smb(connection):
             )
             if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED"] and self.args.module == ["change-password"]:
                 return True
+            if error in smb_error_status:
+            # Log the non failures to the summary
+               GLOBAL_SUMMARY_RESULTS.append(f"{self.protocol}   {self.host}   {self.port}   {self.hostname}   {domain}\\{self.username}:{process_secret(self.password)} {error} {self.mark_guest()}{self.mark_pwned()}")                       
             if error not in smb_error_status:
                 self.inc_failed_login(username)
                 return False
@@ -503,6 +520,11 @@ class smb(connection):
 
             out = f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_guest()}{self.mark_pwned()}"
             self.logger.success(out)
+            # Add the successful auth to the summary
+            summaryText = f"{self.protocol}   {self.host}   {self.port}   {self.hostname}   {domain}\\{self.username}:{process_secret(self.hash)} {self.mark_guest()}{self.mark_pwned()}"
+            
+            if summaryText:
+               GLOBAL_SUMMARY_RESULTS.append(summaryText)
 
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
@@ -517,6 +539,9 @@ class smb(connection):
             return True
         except SessionError as e:
             error, desc = e.getErrorString()
+            # Log the non failures to the summary
+            if error != "STATUS_LOGON_FAILURE":
+                GLOBAL_SUMMARY_RESULTS.append(f"{self.protocol}   {self.host}   {self.port}   {self.hostname}   {domain}\\{self.username}:{process_secret(self.hash)} {error} {self.mark_guest()}{self.mark_pwned()}")
             self.logger.fail(
                 f"{domain}\\{self.username}:{process_secret(self.hash)} {error} {f'({desc})' if self.args.verbose else ''}",
                 color="magenta" if error in smb_error_status else "red",
