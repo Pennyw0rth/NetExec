@@ -16,8 +16,9 @@ def proto_args(parser, parents):
     cgroup = wmi_parser.add_argument_group("Command Execution", "Options for executing commands")
     cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
     cgroup.add_argument("-x", metavar="COMMAND", dest="execute", type=str, help="Creates a new cmd process and executes the specified command with output")
+    cgroup.add_argument("-X", metavar="COMMAND", dest="execute_psh", type=str, help="Creates a new PowerShell process and executes the specified command with output")
     cgroup.add_argument("--exec-method", choices={"wmiexec", "wmiexec-event"}, default="wmiexec", help="method to execute the command. (default: wmiexec). [wmiexec (win32_process + StdRegProv)]: get command results over registry instead of using smb connection. [wmiexec-event (T1546.003)]: this method is not very stable, highly recommend use this method in single host, using on multiple hosts may crash (just try again if it crashed).")
-    cgroup.add_argument("--exec-timeout", default=5, metavar="exec_timeout", dest="exec_timeout", type=int, help="Set timeout (in seconds) when executing a command, minimum 5 seconds is recommended. Default: %(default)s")
+    cgroup.add_argument("--exec-timeout", default=2, metavar="exec_timeout", dest="exec_timeout", type=int, help="Set timeout (in seconds) when executing a command, minimum 5 seconds is recommended. Default: %(default)s")
     cgroup.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output (default: utf-8). If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
     return parser
 

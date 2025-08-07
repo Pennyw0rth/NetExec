@@ -1,6 +1,7 @@
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 
+
 class NXCModule:
     r"""
     WinLogon AutoLogon: extract the credential from the following registry hive
@@ -11,8 +12,6 @@ class NXCModule:
     name = "reg-winlogon"
     description = "Collect autologon credential stored in the registry"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -33,7 +32,7 @@ class NXCModule:
             "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon",
         )
         keyHandle = ans["phkResult"]
-        
+
         reg_keys = ["AutoAdminLogon", "DefaultDomainName", "DefaultUserName", "DefaultPassword"]
         for reg_key in reg_keys:
             try:

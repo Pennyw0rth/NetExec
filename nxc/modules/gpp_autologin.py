@@ -11,8 +11,6 @@ class NXCModule:
     name = "gpp_autologin"
     description = "Searches the domain controller for registry.xml to find autologon information and returns the username and password."
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """ """

@@ -25,8 +25,6 @@ class NXCModule:
     name = "remove-mic"
     description = "Check if host vulnerable to CVE-2019-1040"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = False
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -52,10 +50,11 @@ class NXCModule:
         else:
             context.log.highlight("Potentially vulnerable to CVE-2019-1040, next step: https://dirkjanm.io/exploiting-CVE-2019-1040-relay-vulnerabilities-for-rce-and-domain-admin/")
 
+
 class Modify_Func:
     # Slightly modified version of impackets computeResponseNTLMv2
     def mod_computeResponseNTLMv2(flags, serverChallenge, clientChallenge, serverName, domain, user, password, lmhash="", nthash="",
-                    use_ntlmv2=ntlm.USE_NTLMv2, channel_binding_value=b""):
+                    use_ntlmv2=ntlm.USE_NTLMv2, channel_binding_value=b"", service="cifs"):
 
         responseServerVersion = b"\x01"
         hiResponseServerVersion = b"\x01"
@@ -101,7 +100,7 @@ class Modify_Func:
             lmChallengeResponse = ""
 
         return ntChallengeResponse, lmChallengeResponse, sessionBaseKey
-    
+
     def mod_getNTLMSSPType3(type1, type2, user, password, domain, lmhash="", nthash="", use_ntlmv2=ntlm.USE_NTLMv2, channel_binding_value=b""):
         # Safety check in case somebody sent password = None.. That's not allowed. Setting it to '' and hope for the best.
         if password is None:
@@ -130,7 +129,7 @@ class Modify_Func:
         # Let's start with the original flags sent in the type1 message
         responseFlags = type1["flags"]
 
-        # Token received and parsed. Depending on the authentication 
+        # Token received and parsed. Depending on the authentication
         # method we will create a valid ChallengeResponse
         ntlmChallengeResponse = ntlm.NTLMAuthChallengeResponse(user, password, ntlmChallenge["challenge"])
 
@@ -162,14 +161,12 @@ class Modify_Func:
         if ntlmChallenge["flags"] & ntlm.NTLMSSP_NEGOTIATE_ALWAYS_SIGN == ntlm.NTLMSSP_NEGOTIATE_ALWAYS_SIGN:
             responseFlags ^= ntlm.NTLMSSP_NEGOTIATE_ALWAYS_SIGN
 
-
         keyExchangeKey = ntlm.KXKEY(ntlmChallenge["flags"], sessionBaseKey, lmResponse, ntlmChallenge["challenge"], password,
                             lmhash, nthash, use_ntlmv2)
 
         # Special case for anonymous login
         if user == "" and password == "" and lmhash == "" and nthash == "":
             keyExchangeKey = b"\x00" * 16
-
 
         if ntlmChallenge["flags"] & ntlm.NTLMSSP_NEGOTIATE_KEY_EXCH:
             exportedSessionKey = ntlm.b("".join([random.choice(string.digits + string.ascii_letters) for _ in range(16)]))
@@ -186,7 +183,7 @@ class Modify_Func:
         else:
             ntlmChallengeResponse["lanman"] = lmResponse
         ntlmChallengeResponse["ntlm"] = ntResponse
-        if encryptedRandomSessionKey is not None: 
+        if encryptedRandomSessionKey is not None:
             ntlmChallengeResponse["session_key"] = encryptedRandomSessionKey
 
         return ntlmChallengeResponse, exportedSessionKey

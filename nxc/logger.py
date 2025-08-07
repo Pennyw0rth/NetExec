@@ -103,7 +103,7 @@ class NXCAdapter(logging.LoggerAdapter):
         logging.getLogger("dploot").disabled = True
         logging.getLogger("neo4j").setLevel(logging.ERROR)
 
-    def format(self, msg, *args, **kwargs):  # noqa: A003
+    def format(self, msg, *args, **kwargs):
         """Format msg for output
 
         This is used instead of process() since process() applies to _all_ messages, including debug calls
@@ -182,9 +182,9 @@ class NXCAdapter(logging.LoggerAdapter):
 
         with file_handler._open() as f:
             if file_creation:
-                f.write(f"[{datetime.now().strftime('%d-%m-%Y %H:%M:%S')}]> {' '.join(sys.argv)}\n\n")
+                f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]> {' '.join(sys.argv)}\n\n")
             else:
-                f.write(f"\n[{datetime.now().strftime('%d-%m-%Y %H:%M:%S')}]> {' '.join(sys.argv)}\n\n")
+                f.write(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]> {' '.join(sys.argv)}\n\n")
 
         file_handler.setFormatter(file_formatter)
         self.logger.addHandler(file_handler)

@@ -47,8 +47,7 @@ def write_csv(filename, headers, entries):
 def write_list(filename, entries):
     """Writes a file with a simple list"""
     with open(os.path.expanduser(filename), "w") as export_file:
-        for line in entries:
-            export_file.write(line + "\n")
+        export_file.writelines(line + "\n" for line in entries)
 
 
 def complete_import(text, line):
@@ -380,7 +379,7 @@ class DatabaseNavigator(cmd.Cmd):
         help_string = """
         export [creds|hosts|local_admins|shares|signing|keys] [simple|detailed|*] [filename]
         Exports information to a specified file
-        
+
         * hosts has an additional third option from simple and detailed: signing - this simply writes a list of ips of
         hosts where signing is enabled
         * keys' third option is either "all" or an id of a key to export
@@ -516,20 +515,19 @@ class NXCDBMenu(cmd.Cmd):
     def do_EOF(line):
         sys.exit()
 
-
     @staticmethod
     def help_exit():
         help_string = """
         Exits
         """
         print_help(help_string)
-    
+
 
 def main():
     if not exists(CONFIG_PATH):
         print("[-] Unable to find config file")
         sys.exit(1)
-    
+
     parser = argparse.ArgumentParser(
         description="NXCDB is a database navigator for NXC",
     )
