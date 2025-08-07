@@ -30,6 +30,7 @@ dependencies = [
     "minikerberos>=0.4.1",
     "neo4j>=5.0.0",
     "paramiko>=3.3.1",
+    "gssapi==1.9.0",
     "pyasn1-modules>=0.3.0",
     "pylnk3>=0.4.3",
     "pypsrp>=0.8.1",
