@@ -77,11 +77,11 @@ async def start_run(protocol_obj, args, db, targets):  # noqa: RUF029
             nxc_logger.highlight("[*] Summary of non-failed authentications:")
             for line in GLOBAL_SUMMARY_RESULTS:           
                 status_code = line.strip().split()[-2]
-                if any(status_code.startswith(prefix) for prefix in ["STATUS_", "KDC_", "LDAP_", "USER_"]):
+                if any(status_code.startswith(prefix) for prefix in ["STATUS_", "KDC_", "LDAP_", "USER_", "None"]):
                     nxc_logger.fail(line, color="magenta")
                 else:
                     nxc_logger.success(line, color="green")
-                    
+
 def main():
     first_run_setup(nxc_logger)
     args, version_info = gen_cli_args()

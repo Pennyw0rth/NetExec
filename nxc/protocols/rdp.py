@@ -256,7 +256,7 @@ class rdp(connection):
                 )
             )
             # Add the successful auth to the summary
-            summaryText = f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{self.username}:{process_secret(kerb_pass)} {self.mark_pwned()}"           
+            summaryText = f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(kerb_pass)} {self.mark_pwned()}"           
             if summaryText:
                GLOBAL_SUMMARY_RESULTS.append(summaryText)
             if not self.args.local_auth and self.username != "":
@@ -290,7 +290,7 @@ class rdp(connection):
                     (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} ({reason if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
-            GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{self.username}:{process_secret(kerb_pass)} {reason} {self.mark_pwned()}") 
+            GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(kerb_pass)} {reason} {self.mark_pwned()}") 
             return False
 
     def plaintext_login(self, domain, username, password):
@@ -307,7 +307,7 @@ class rdp(connection):
             self.admin_privs = True
             self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
             # Add the successful auth to the summary
-            summaryText = f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}"
+            summaryText = f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(self.password)} {self.mark_pwned()}"
             
             if summaryText:
                GLOBAL_SUMMARY_RESULTS.append(summaryText)
@@ -330,7 +330,7 @@ class rdp(connection):
                     (f"{domain}\\{username}:{process_secret(password)} ({reason if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
-                    GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{self.username}:{process_secret(self.password)} {reason} {self.mark_pwned()}")                         
+                GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(self.password)} {reason} {self.mark_pwned()}")                         
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
@@ -347,7 +347,7 @@ class rdp(connection):
             self.admin_privs = True
             self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
             # Add the successful auth to the summary
-            summaryText = f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{self.username}:{process_secret(ntlm_hash)} {self.mark_pwned()}"
+            summaryText = f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}"
             
             if summaryText:
                GLOBAL_SUMMARY_RESULTS.append(summaryText)
@@ -372,7 +372,7 @@ class rdp(connection):
                     (f"{domain}\\{username}:{process_secret(ntlm_hash)} ({reason if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
-                GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{self.username}:{process_secret(ntlm_hash)} {reason} {self.mark_pwned()}")  
+                GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(ntlm_hash)} {reason} {self.mark_pwned()}")  
             return False
 
     async def screen(self):
