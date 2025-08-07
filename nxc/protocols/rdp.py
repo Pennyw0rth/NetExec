@@ -356,7 +356,7 @@ class rdp(connection):
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
             return False
-        
+
     async def _send_keystrokes(self, text, delay=0.02):
         """Helper method to send keystrokes to the RDP session"""
         for char in text:
@@ -365,35 +365,35 @@ class rdp(connection):
             key_event.is_pressed = True
             await self.conn.ext_in_queue.put(key_event)
             await asyncio.sleep(delay)
-    
+
     async def _send_enter(self):
         """Helper method to send Enter key to the RDP session"""
         await self.conn.send_key_virtualkey("VK_RETURN", True, False)
         await asyncio.sleep(0.05)
         await self.conn.send_key_virtualkey("VK_RETURN", False, False)
-        
+
     async def _send_win_r(self):
         """Helper method to send Windows+R key combination to open Run dialog"""
         try:
             self.logger.debug("Sending Win+R using scancode method")
-                        
+
             layout = KeyboardLayoutManager().get_layout_by_shortname("enus")
-            
+
             win_scancode = layout.vk_to_scancode("VK_LWIN")
             await self.conn.send_key_scancode(win_scancode, True, False)
             await asyncio.sleep(0.1)
-            
+
             r_scancode = layout.char_to_scancode("r")[0]
             await self.conn.send_key_scancode(r_scancode, True, False)
             await asyncio.sleep(0.1)
-            
+
             await self.conn.send_key_scancode(r_scancode, False, False)
             await asyncio.sleep(0.1)
-            
+
             await self.conn.send_key_scancode(win_scancode, False, False)
-            
+
             await asyncio.sleep(0.5)
-            
+
             self.logger.debug("Win+R sent successfully")
             return True
         except (ConnectionResetError, ConnectionError, OSError) as e:
@@ -404,12 +404,12 @@ class rdp(connection):
             self.logger.debug(f"Error sending Win+R: {e!s}")
             self.logger.debug("Using fallback approach for opening command prompt")
             return False
-    
+
     async def execute_shell(self, payload, get_output, shell_type):
         # Append | clip to send output to clipboard
         payload_with_clip = f"{payload} | clip & exit" if shell_type == "cmd" else f"{payload} | clip; exit"
         self.logger.debug(f"Executing command: {payload_with_clip}")
-        
+
         # Create a connection
         try:
             self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
@@ -452,12 +452,12 @@ class rdp(connection):
 
             # Wait for desktop to be available
             await asyncio.sleep(self.args.cmd_delay)
-            
+
             try:
                 # Try to open Run dialog using Windows+R
                 self.logger.debug("Attempting to open Run dialog")
                 win_r_success = await self._send_win_r()
-                
+
                 if win_r_success:
                     self.logger.debug(f"Launching {shell_type} via Run dialog")
                     await self._send_keystrokes(f"{shell_type}.exe")
@@ -469,12 +469,12 @@ class rdp(connection):
                     await self._send_keystrokes(f"{shell_type}.exe")
                     await self._send_enter()
                     await asyncio.sleep(self.args.cmd_delay)
-            
+
                 # Type the command with | clip
                 self.logger.debug(f"Typing command: {payload_with_clip}")
                 await self._send_keystrokes(payload_with_clip)
                 await self._send_enter()
-                
+
                 # Wait for command to execute
                 await asyncio.sleep(self.args.cmd_delay)
 
@@ -482,7 +482,7 @@ class rdp(connection):
                     # Get the current clipboard text
                     self.logger.debug("Getting clipboard content...")
                     clipboard_text = await self.conn.get_current_clipboard_text()
-                    
+
                     if clipboard_text:
                         self.logger.debug("Command output retrieved from clipboard:")
                         for line in clipboard_text.lstrip().strip("\n").splitlines():
@@ -493,7 +493,7 @@ class rdp(connection):
 
                 self.logger.debug("Command execution completed")
                 return None
-                
+
             except (ConnectionResetError, ConnectionError, OSError) as e:
                 self.logger.debug(f"Connection error during command execution: {e!s}")
                 self.logger.fail("Connection was reset by the remote host during command execution")
@@ -505,7 +505,7 @@ class rdp(connection):
                 else:
                     self.logger.fail(f"Command execution failed: {e!s}")
                 return None
-                
+
         except (ConnectionResetError, ConnectionError, OSError) as e:
             self.logger.debug(f"Connection error: {e!s}")
             self.logger.fail("Connection was reset by the remote host")
@@ -522,19 +522,19 @@ class rdp(connection):
                     await self.conn.terminate()
                 except Exception as e:
                     self.logger.debug(f"Error terminating connection: {e!s}")
-    
+
     def execute(self, payload=None, shell_type="cmd"):
         """Execute a command via RDP"""
         if not payload:
             payload = self.args.execute
-        
+
         get_output = bool(not self.args.no_output)
 
         self.logger.success(f"Executing command: {payload} with delay {self.args.cmd_delay} seconds")
-        
+
         try:
             result = asyncio.run(self.execute_shell(payload, get_output, shell_type))
-            
+
             if result:
                 self.logger.debug("Command execution completed")
             return result
@@ -566,7 +566,7 @@ class rdp(connection):
             buffer.save(filename, "png")
             self.logger.highlight(f"Screenshot saved {filename}")
 
-    def screenshot(self):            
+    def screenshot(self):
         asyncio.run(self.screen())
 
     async def nla_screen(self):
