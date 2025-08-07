@@ -97,6 +97,12 @@ def proto_args(parser, parents):
     posh_group.add_argument("--force-ps32", action="store_true", help="force PowerShell commands to run in a 32-bit process (may not apply to modules)")
     posh_group.add_argument("--no-encode", action="store_true", default=False, help="Do not encode the PowerShell command ran on target")
 
+    coercer_group = smb_parser.add_argument_group("Coerce Auth", "Options for Coerce authentication module")
+    coercer_group.add_argument("--coercer-method", dest="coercer", action="store", default="all", choices={"all", "ShadowCoerce", "DFSCoerce", "Petitpotam", "PrinterBug", "CheeseOunce", "WSPCoerce"}, nargs="?", help="AAAAAAAAAA")
+    coercer_group.add_argument("--coercer-listener", action="store", help="BBBBBBBBBB")
+    coercer_group.add_argument("--coercer-timeout", type=int, default=3, action="store", help="CCCCCCCCCC")
+    coercer_group.add_argument("--coercer-ac", action="store_true", dest="coercer_always_continue", default=False, help="CCCCCCCCCC")
+
     return parser
 
 
