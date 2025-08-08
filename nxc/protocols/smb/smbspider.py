@@ -133,13 +133,13 @@ class SMBSpider:
                     if contents.lower().find(bytes(pattern.lower(), "utf-8")) != -1:
                         self.paths.append(file)
                         self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{share}/{file}"
-                                              f"[lastm:'{self.get_lastm_time(result)}' size:{result.get_filesize()}  pattern='{pattern}']") if not self.silent else None
+                                              f" [lastm:'{self.get_lastm_time(result)}' size:{result.get_filesize()}  pattern='{pattern}']") if not self.silent else None
             if self.regex:
                 for regex in self.regex:
                     if regex.findall(contents):
                         self.paths.append(file)
                         self.logger.highlight(f"//{self.smbconnection.getRemoteHost()}/{share}/{file}"
-                                              f"[lastm:'{self.get_lastm_time(result)}' size:{result.get_filesize()} regex='{regex.pattern.decode('utf-8')}']") if not self.silent else None
+                                              f" [lastm:'{self.get_lastm_time(result)}' size:{result.get_filesize()} regex='{regex.pattern.decode('utf-8')}']") if not self.silent else None
         rfile.close()
 
     def get_lastm_time(self, result_obj):
