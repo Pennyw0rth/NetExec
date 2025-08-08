@@ -22,7 +22,7 @@ class NXCModule:
                 context.log.success("Found SYSVOL share")
                 context.log.display("Searching for Registry.xml")
 
-                paths = connection.spider("SYSVOL", pattern=["Registry.xml"])
+                paths = connection.spider_share("SYSVOL", pattern=["Registry.xml"])
 
                 for path in paths:
                     context.log.display(f"Found {path}")
