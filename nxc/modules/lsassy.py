@@ -14,6 +14,7 @@ from lsassy.session import Session
 from impacket.krb5.ccache import CCache
 
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.paths import NXC_PATH
 
 
 class NXCModule:
@@ -25,31 +26,26 @@ class NXCModule:
         self.context = context
         self.module_options = module_options
         self.method = None
-        self.dump_tickets = False
-        self.save_dir = None
-        self.ticket_type = "kirbi"
+        self.dump_tickets = True
+        self.save_dir = os.path.join(NXC_PATH, "modules", "lsassy")
+        self.ticket_type = "ccache"
 
     def options(self, context, module_options):
         """
         METHOD              Method to use to dump lsass.exe with lsassy
         DUMP_TICKETS        If set, will dump Kerberos tickets
         SAVE_DIR            Directory to save dumped tickets
-        SAVE_TYPE           Type of ticket to save, either 'kirbi' or 'ccache'. Default is 'kirbi'.
+        SAVE_TYPE           Type of ticket to save, either 'kirbi' or 'ccache'. Default is 'ccache'.
         """
         self.method = "comsvcs"
         if "METHOD" in module_options:
             self.method = module_options["METHOD"]
+        
+        if "DUMP_TICKETS" in module_options:
+            self.dump_tickets = module_options["DUMP_TICKETS"].lower() in ["true"]
 
-        if "DUMP_TICKETS" in module_options or "SAVE_DIR" in module_options:
-            if "DUMP_TICKETS" in module_options and "SAVE_DIR" in module_options:
-                self.dump_tickets = True
-                self.save_dir = module_options["SAVE_DIR"]
-            elif "DUMP_TICKETS" in module_options:
-                context.log.error("DUMP_TICKETS is set but SAVE_DIR is not specified. Both must be set to enable ticket dumping.")
-                sys.exit(1)
-            else:
-                context.log.error("SAVE_DIR is set but DUMP_TICKETS is not specified. Both must be set to enable ticket dumping.")
-                sys.exit(1)
+        if "SAVE_DIR" in module_options:
+            self.save_dir = module_options["SAVE_DIR"]
 
         if "SAVE_TYPE" in module_options:
             self.ticket_type = module_options["SAVE_TYPE"]
