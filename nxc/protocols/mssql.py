@@ -441,14 +441,6 @@ class mssql(connection):
             return "[]"
         return "[" + str(ident).replace("]", "]]") + "]"
 
-    def _exec(self, sql: str, params=None):
-        try:
-            return self.conn.sql_query(sql, params=params) if params is not None else self.conn.sql_query(sql)
-        except TypeError:
-            if params is not None:
-                return self.conn.sql_query(sql, params)
-            raise
-
     def list_databases(self):
         try:
             q = (
@@ -457,16 +449,16 @@ class mssql(connection):
                 "FROM sys.databases d "
                 "ORDER BY d.name;"
             )
-            rows = self._exec(q) or []
+            rows = self.conn.sql_query(q) or []
             if not rows:
                 self.logger.display("No databases returned")
                 return
 
             self.logger.display("Enumerated databases")
             self.logger.highlight(f"{'Database Name':<30} {'Owner':<25}")
-            self.logger.highlight(f"{'-'*30} {'-'*25}")
+            self.logger.highlight(f"{'-' * 30} {'-' * 25}")
             for r in rows:
-                self.logger.highlight(f"{r.get('DatabaseName',''):<30} {r.get('Owner',''):<25}")
+                self.logger.highlight(f"{r.get('DatabaseName', ''):<30} {r.get('Owner', ''):<25}")
             self.logger.highlight(f"Total: {len(rows)} database(s)")
         except Exception as e:
             self.logger.fail(f"Failed to enumerate databases: {e}")
@@ -484,7 +476,7 @@ class mssql(connection):
         if isinstance(db_arg, str):
             try:
                 safe = db_arg.replace("'", "''")
-                exists = self._exec(f"SELECT 1 FROM sys.databases WHERE name = N'{safe}';")
+                exists = self.conn.sql_query(f"SELECT 1 FROM sys.databases WHERE name = N'{safe}';")
                 if not exists:
                     self.logger.fail(f"Database [{db_arg}] does not exist on the server.")
                     return
@@ -494,7 +486,7 @@ class mssql(connection):
                     f"FROM {self._qname(db_arg)}.sys.tables t "
                     f"ORDER BY t.name;"
                 )
-                rows = self._exec(tq) or []
+                rows = self.conn.sql_query(tq) or []
             except Exception as e:
                 self.logger.fail(f"Insufficient permissions or query error in [{db_arg}]: {e}")
                 self.logger.debug("database() error", exc_info=True)
@@ -506,12 +498,11 @@ class mssql(connection):
 
             self.logger.display(f"Tables in database: {db_arg}")
             self.logger.highlight(f"{'Table Name':<50} {'Last Modified':<25}")
-            self.logger.highlight(f"{'-'*50} {'-'*25}")
+            self.logger.highlight(f"{'-' * 50} {'-' * 25}")
             for r in rows:
-                mod = r.get('modify_date', '')
-                if mod and hasattr(mod, 'strftime'):
+                mod = r.get("modify_date", "")
+                if mod and hasattr(mod, "strftime"):
                     mod = mod.strftime("%Y-%m-%d %H:%M:%S")
-                self.logger.highlight(f"{r.get('TableName',''):<50} {str(mod):<25}")
+                self.logger.highlight(f"{r.get('TableName', ''):<50} {mod!s:<25}")
             self.logger.highlight(f"Total: {len(rows)} table(s)")
             return
- 
