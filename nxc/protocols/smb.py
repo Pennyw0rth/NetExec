@@ -1440,7 +1440,7 @@ class smb(connection):
     def interfaces(self):
         """
         Enumeratie active network interfaces via SMB
-        Module by Ilya Yatsenko (@fulc2um)
+        Made by Ilya Yatsenko (@fulc2um)
         """
         try:
             self.logger.display("Starting network interface enumeration")
