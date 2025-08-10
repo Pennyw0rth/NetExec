@@ -33,14 +33,14 @@ class NXCModule:
     def options(self, context, module_options):
         """
         METHOD              Method to use to dump lsass.exe with lsassy
-        DUMP_TICKETS        If set, will dump Kerberos tickets
+        DUMP_TICKETS        If set, will dump Kerberos tickets (Default: True)
         SAVE_DIR            Directory to save dumped tickets
-        SAVE_TYPE           Type of ticket to save, either 'kirbi' or 'ccache'. Default is 'ccache'.
+        SAVE_TYPE           Type of ticket to save, either 'kirbi' or 'ccache' (Default: 'ccache')
         """
         self.method = "comsvcs"
         if "METHOD" in module_options:
             self.method = module_options["METHOD"]
-        
+
         if "DUMP_TICKETS" in module_options:
             self.dump_tickets = module_options["DUMP_TICKETS"].lower() in ["true"]
 
