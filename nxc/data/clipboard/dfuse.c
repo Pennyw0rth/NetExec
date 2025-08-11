@@ -1,6 +1,6 @@
 #define _CRT_SECURE_NO_WARNINGS
-#include <Windows.h>
-#include <Wtsapi32.h>
+#include <windows.h>
+#include <wtsapi32.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -93,6 +93,12 @@ int main(int argc, char* argv[]) {
     }
 
     writeLog("[+] Notepad launched: PID = %lu", pi.dwProcessId);
+
+    FILE* pidFile = fopen("C:\\Windows\\Temp\\.nxc_clipboard.pid", "w");
+    if (pidFile) {
+        fprintf(pidFile, "%lu", pi.dwProcessId);
+        fclose(pidFile);
+    }
 
     HMODULE hKernel32 = GetModuleHandleA("kernel32.dll");
     if (!hKernel32) {
