@@ -15,18 +15,16 @@ class NXCModule:
 
     def options(self, context, module_options):
         '''
-        BINARY          DLL injector binary
-        DLL             DLL to inject
         TIME            Monitoring clipboard time (sec)
 
         Example:
-        nxc smb <ip> -u <user> -p <password> -M clipboard -o BINARY=injector.exe DLL=payload.dll TIME=30
+        nxc smb <ip> -u <user> -p <password> -M clipboard -o TIME=30
         '''
         self.share = "C$"
         self.tmp_dir = "C:\\Windows\\Temp\\"
         self.tmp_share = self.tmp_dir.split(":")[1]
-        self.binary = module_options.get("BINARY")
-        self.dll = module_options.get("DLL")
+        self.binary = get_ps_script("clipboard/dfuse.exe")
+        self.dll = get_ps_script("clipboard/dllwin2.dll")
         self.time = module_options.get("TIME")
 
     def on_login(self, context, connection):
@@ -36,12 +34,6 @@ class NXCModule:
         self.logger = context.log
         self.connection = connection
 
-        if not self.binary or not os.path.isfile(self.binary):
-            self.logger.fail("Invalid or missing BINARY path")
-            return 1
-        if not self.dll or not os.path.isfile(self.dll):
-            self.logger.fail("Invalid or missing DLL path")
-            return 1
         if not self.time:
             self.logger.fail("Time not specified")
             return 1
