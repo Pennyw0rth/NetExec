@@ -111,7 +111,6 @@ class TSCH_EXEC:
         ]
         random.shuffle(idleSettings)
         randomized_idleSettings = "\n".join(idleSettings)
-        random_digit = random.randint(2, 6)
 
         match = re.match(r'^(.+?\\[^\\ ]+)\s+(.*)', command)
         if match:
@@ -124,7 +123,7 @@ class TSCH_EXEC:
             cmd_args = f"/c {command}"
         
         xml = f"""<?xml version="1.0" encoding="UTF-16"?>
-        <Task version="1.{random_digit}" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+        <Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
         <Triggers>
            <RegistrationTrigger>
            <EndBoundary>{self.get_end_boundary()}</EndBoundary>
@@ -182,7 +181,7 @@ class TSCH_EXEC:
         dce.set_credentials(*self.__rpctransport.get_credentials())
         dce.connect()
         xml = self.gen_xml(command)
-        
+
         self.logger.debug(f"Task XML: {xml}")
         self.logger.info(f"Creating task \\{self.task_name}")
         try:
@@ -252,6 +251,7 @@ class TSCH_EXEC:
                 smbConnection.deleteFile(self.__share, self.__output_filename)
             except Exception:
                 pass
+
         else:
           self.logger.display("No output file was saved to be retrived") 
         dce.disconnect()
