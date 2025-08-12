@@ -51,6 +51,23 @@ pipx install git+https://github.com/Pennyw0rth/NetExec
 # Development
 Development guidelines and recommendations in development
 
+## Build
+
+Install poetry package manager
+```
+pipx install poetry
+```
+
+Install nxc from poetry
+```
+poetry install
+```
+
+Run from poetry
+```
+poetry run nxc
+```
+
 # Acknowledgments
 All the hard work and development over the years from everyone in the CrackMapExec project
 
