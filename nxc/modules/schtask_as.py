@@ -27,7 +27,7 @@ class NXCModule:
         self.command_to_run = self.binary_to_upload = self.run_task_as = self.task_name = self.output_filename = self.output_file_location = self.time = None
         self.share = "C$"
         self.tmp_dir = "C:\\Windows\\Temp\\"
-        self.tmp_share = self.tmp_dir.split(":")[1]
+        self.tmp_path = self.tmp_dir.split(":")[1]
 
         if "CMD" in module_options:
             self.command_to_run = module_options["CMD"]
@@ -68,7 +68,7 @@ class NXCModule:
                 return 1
             else:
                 self.logger.display(f"Uploading {self.binary_to_upload}")
-                binary_file_location = self.tmp_share if self.output_file_location is None else self.output_file_location
+                binary_file_location = self.tmp_path if self.output_file_location is None else self.output_file_location
                 with open(self.binary_to_upload, "rb") as binary_to_upload:
                     try:
                         self.binary_to_upload_name = os.path.basename(self.binary_to_upload)
@@ -102,7 +102,11 @@ class NXCModule:
             )
 
             self.logger.display(f"Executing {self.command_to_run} as {self.run_task_as}")
-            output = exec_method.execute(self.command_to_run, True)
+            #output = exec_method.execute(self.command_to_run, True)
+            if "cmd" in self.command_to_run.lower() or "powershell" in self.command_to_run.lower():
+                output = exec_method.execute(self.command_to_run, True)
+            else:
+                output = exec_method.execute(self.command_to_run, False)
 
             try:
                 if not isinstance(output, str):
