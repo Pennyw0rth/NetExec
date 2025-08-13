@@ -81,7 +81,7 @@ class TSCH_EXEC:
         return end_boundary.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
 
     def gen_xml(self, command):
-        #Random setting order to help with detection
+        # Random setting order to help with detection
         settings = [
             "       <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>",
             "       <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>",
@@ -91,7 +91,6 @@ class TSCH_EXEC:
         ]
         random.shuffle(settings)
         randomized_settings = "\n".join(settings)
-        
         settings2 = [
             "       <AllowStartOnDemand>true</AllowStartOnDemand>",
             "       <Hidden>true</Hidden>",
@@ -103,7 +102,6 @@ class TSCH_EXEC:
         ]
         random.shuffle(settings2)
         randomized_settings2 = "\n".join(settings2)
-        
         idleSettings = [
             "         <StopOnIdleEnd>true</StopOnIdleEnd>",
             "         <RestartOnIdle>false</RestartOnIdle>"
@@ -111,9 +109,11 @@ class TSCH_EXEC:
         random.shuffle(idleSettings)
         randomized_idleSettings = "\n".join(idleSettings)
 
-        cmd_path = 'C:\Windows\System32\cmd'
-        cmd_args = f"/c {command}"
-        
+        random_cmd_path = ["C:\\Windows\\System32\\cmd", "C:\\Windows\\System32\\cmd.exe", "C:\\Windows\\System32\\cmd.exe", "cmd.exe", "C:\\Windows\\System32\\..\\System32\\cmd.exe", "C:\\Windows\\System32\\..\\System32\\cmd", "C:\\Windows\\..\\Windows\\System32\\cmd.exe", "C:\\Windows\\..\\Windows\\System32\\cmd"]
+        random_cmd_arg = ["/c", "/C", "/Q /c", "/F:ON /c", "/T:fg /c", "/T:fg /Q /C", "/F:ON /Q /C"]
+        cmd_path = random.choice(random_cmd_path)
+        cmd_args = f"{random.choice(random_cmd_arg)} {command}"
+
         xml = f"""<?xml version="1.0" encoding="UTF-16"?>
         <Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
         <Triggers>
@@ -149,7 +149,7 @@ class TSCH_EXEC:
 
         elif self.__retOutput is False:
             argument_xml = f"      <Arguments>{cmd_args}</Arguments>"
-        
+
         self.logger.debug("Generated argument XML: " + argument_xml)
         xml += argument_xml
 
