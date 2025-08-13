@@ -102,11 +102,7 @@ class NXCModule:
             )
 
             self.logger.display(f"Executing {self.command_to_run} as {self.run_task_as}")
-            #output = exec_method.execute(self.command_to_run, True)
-            if "cmd" in self.command_to_run.lower() or "powershell" in self.command_to_run.lower():
-                output = exec_method.execute(self.command_to_run, True)
-            else:
-                output = exec_method.execute(self.command_to_run, False)
+            output = exec_method.execute(self.command_to_run, True)
 
             try:
                 if not isinstance(output, str):
@@ -124,8 +120,6 @@ class NXCModule:
         finally:
             if self.binary_to_upload:
                 try:
-                    context.log.success("Sleeping for 10 seconds to let binary run")
-                    sleep(10)
                     connection.conn.deleteFile(self.share, f"{binary_file_location}{self.binary_to_upload_name}")
                     context.log.success(f"Binary {binary_file_location}{self.binary_to_upload_name} successfully deleted")
                 except Exception as e:
