@@ -35,8 +35,7 @@ class NXCModule:
         self.fuzzy_search = module_options.get("FUZZY")
         self.all_props = module_options.get("ALL_PROPS")
         self.download = module_options.get("DOWNLOAD", "True").lower() == "true"
-        if module_options.get("DEST"):
-            self.download_dest = module_options.get("DEST")
+        self.download_dest = module_options.get("DEST", "GPOs")
         
     def on_login(self, context, connection):
         """Main entry point that determines which protocol method to use"""        
@@ -125,7 +124,6 @@ class NXCModule:
         """Download a GPO from the SYSVOL share using the appropriate method"""
         context.log.debug(f"Downloading GPO {guid} from {sysvol_path} to {dest_folder}")
         
-        created_dir = False
         # save the original share to reset it later, since we need to download from SYSVOL
         original_share = smb_conn.args.share
         
@@ -133,24 +131,10 @@ class NXCModule:
             smb_conn.args.share = "SYSVOL"
             smb_conn.download_folder(sysvol_path, dest_folder, recursive=True)
             context.log.success(f"GPO {guid} downloaded to {dest_folder}")
-        except AttributeError as e:
-            if "SMB connection is not available" in str(e):
-                context.log.fail(f"Could not download GPO {guid}: SMB connection failed to establish")
-            else:
-                context.log.fail(f"Could not download GPO {guid}: {e}")
-            # clean up the directory if it was created and download failed
-            if created_dir and os.path.exists(dest_folder):
-                try:
-                    shutil.rmtree(dest_folder)
-                except Exception as cleanup_e:
-                    context.log.debug(f"Error cleaning up directory: {cleanup_e}")
-            
-            context.log.highlight("To manually download this GPO, use the following command:")
-            context.log.highlight(f"nxc smb {smb_conn.host} -u '{smb_conn.username}' -p '{process_secret(smb_conn.password)}' --share SYSVOL --get-folder '{sysvol_path}' '{dest_folder}' --recursive")
         except Exception as e:
             context.log.fail(f"Error downloading GPO {guid}: {e}")
             # clean up the directory if it was created and download failed
-            if created_dir and os.path.exists(dest_folder):
+            if os.path.exists(dest_folder):
                 try:
                     shutil.rmtree(dest_folder)
                 except Exception as cleanup_error:

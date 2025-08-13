@@ -1855,8 +1855,7 @@ class smb(connection):
         local_folder_path = os.path.join(dest, relative_path)
         
         if not filtered_items and ignore_empty:
-            if not silent:
-                self.logger.debug(f"Skipping empty folder '{folder}'")
+            self.logger.debug(f"Skipping empty folder '{folder}'")
             return
             
         # create the directory for this folder
