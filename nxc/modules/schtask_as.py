@@ -2,6 +2,7 @@ import os
 from traceback import format_exc
 from nxc.protocols.smb.atexec import TSCH_EXEC
 
+
 class NXCModule:
     """
     Execute a scheduled task remotely as a already connected user by @Defte_
