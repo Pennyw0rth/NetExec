@@ -10,12 +10,12 @@ def create_log_dir(module_name):
 
 def create_loot_dir(module_name):
     makedirs(f"{NXC_PATH}/loot/{module_name}", exist_ok=True)
-    
+
 
 def generate_module_log_file(module_name):
     create_log_dir(module_name)
     return f"{NXC_PATH}/logs/{module_name}/{datetime.now().strftime('%Y-%m-%d')}.log"
-    
+
 
 def create_module_logger(module_name):
     log_file = generate_module_log_file(module_name)
@@ -33,7 +33,7 @@ def add_loot_data(module_name, filename, data):
     loot_file = get_loot_data_filepath(module_name, filename)
     with open(loot_file, "a") as file:
         file.write(data)
-         
+
 
 def get_loot_data_filepath(module_name, filename):
     return f"{NXC_PATH}/loot/{module_name}/{filename}"

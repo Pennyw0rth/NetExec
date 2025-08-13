@@ -1795,7 +1795,7 @@ class smb(connection):
     def put_file(self):
         for src, dest in self.args.put_file:
             self.put_file_single(src, dest)
-            
+
     def download_file(self, share_name, remote_path, dest_file, access_mode=FILE_READ_DATA):
         try:
             self.logger.debug(f"Getting file from {share_name}:{remote_path} with access mode {access_mode}")
@@ -1810,7 +1810,7 @@ class smb(connection):
         except Exception as e:
             self.logger.debug(f"Other error when attempting to download file {remote_path}: {e}")
             return False
-            
+
     def get_file_single(self, remote_path, download_path, silent=False):
         share_name = self.args.share
         if not silent:
@@ -1829,11 +1829,11 @@ class smb(connection):
                 else:
                     if not silent:
                         self.logger.fail(f"Error downloading file '{remote_path}' from share '{share_name}'")
-                    
+
     def get_file(self):
         for src, dest in self.args.get_file:
             self.get_file_single(src, dest)
-    
+
     def download_folder(self, folder, dest, recursive=False, silent=False, base_dir=None, ignore_empty=False):
         self.logger.debug(f"Downloading folder with args: {folder}, {dest}, Recursive: {recursive}, Silent: {silent}, Base dir: {base_dir}, Ignore empty: {ignore_empty}")
         normalized_folder = ntpath.normpath(folder)
@@ -1848,16 +1848,16 @@ class smb(connection):
         self.logger.debug(f"{len(items)} items in folder: {items}")
 
         filtered_items = [item for item in items if item.get_longname() not in [".", ".."]]
-        
+
         # create local directory structure regardless of content; download empty folders by default
         # change the Windows path to Linux and then join it with the base directory to get our actual save path
         relative_path = os.path.join(*folder.replace(base_dir or folder, "").lstrip("\\").split("\\"))
         local_folder_path = os.path.join(dest, relative_path)
-        
+
         if not filtered_items and ignore_empty:
             self.logger.debug(f"Skipping empty folder '{folder}'")
             return
-            
+
         # create the directory for this folder
         os.makedirs(local_folder_path, exist_ok=True)
         if not filtered_items and not silent:
@@ -1867,7 +1867,7 @@ class smb(connection):
             item_name = item.get_longname()
             dir_path = ntpath.normpath(ntpath.join(normalized_folder, item_name))
             self.logger.debug(f"Parsing item: {item_name}, {dir_path}")
-            
+
             if item.is_directory() and recursive:
                 self.logger.debug(f"Found new directory to parse: {dir_path}")
                 self.download_folder(dir_path, dest, recursive, silent, base_dir or folder, ignore_empty)
@@ -1875,7 +1875,7 @@ class smb(connection):
                 remote_file_path = ntpath.join(folder, item_name)
                 local_file_path = os.path.join(local_folder_path, item_name)
                 self.logger.debug(f"{dest=} {remote_file_path=} {relative_path=} {local_folder_path=} {local_file_path=}")
-                
+
                 try:
                     self.get_file_single(remote_file_path, local_file_path, silent)
                 except FileNotFoundError:
