@@ -111,7 +111,7 @@ class TSCH_EXEC:
         random.shuffle(idleSettings)
         randomized_idleSettings = "\n".join(idleSettings)
 
-        cmd_path = "C:\Windows\System32\cmd"
+        cmd_path = 'C:\Windows\System32\cmd'
         cmd_args = f"/c {command}"
         
         xml = f"""<?xml version="1.0" encoding="UTF-16"?>
@@ -170,7 +170,6 @@ class TSCH_EXEC:
         dce.set_credentials(*self.__rpctransport.get_credentials())
         dce.connect()
         xml = self.gen_xml(command)
-
         self.logger.debug(f"Task XML: {xml}")
         self.logger.info(f"Creating task \\{self.task_name}")
         try:
@@ -213,8 +212,8 @@ class TSCH_EXEC:
                         self.logger.fail("ATEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
                         break
                     if "STATUS_BAD_NETWORK_NAME" in str(e):
-                         self.logger.fail(f"ATEXEC: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
-                         break
+                        self.logger.fail(f"ATEXEC: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
+                        break
                     elif "STATUS_VIRUS_INFECTED" in str(e):
                         self.logger.fail("Command did not run because a virus was detected")
                         break
