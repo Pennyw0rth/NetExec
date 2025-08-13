@@ -18,8 +18,6 @@ class NXCModule:
     name = "enum_av"
     description = "Gathers information on all endpoint protection solutions installed on the the remote host(s) via LsarLookupNames (no privilege needed)"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -378,7 +376,7 @@ conf = {
                 {"name": "masvc", "description": "Trellix Agent Service"},
                 {"name": "macmnsvc", "description": "Trellix Agent Common Service"},
                 {"name": "mfetp", "description": "Trellix Endpoint Threat Prevention Service"},
-                {"name": "mfewc", "description": "Trellix Endpoint Security Web Control Service"}, 
+                {"name": "mfewc", "description": "Trellix Endpoint Security Web Control Service"},
                 {"name": "mfeaack", "description": "Trellix Anti-Malware Core Service"}
             ],
             "pipes": [

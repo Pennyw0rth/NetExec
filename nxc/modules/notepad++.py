@@ -11,8 +11,6 @@ class NXCModule:
     name = "notepad++"
     description = "Extracts notepad++ unsaved files."
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
     false_positive = [".", "..", "desktop.ini", "Public", "Default", "Default User", "All Users", ".NET v4.5", ".NET v4.5 Classic"]
 
     def options(self, context, module_options):
@@ -32,10 +30,10 @@ class NXCModule:
                             buf = BytesIO()
                             connection.conn.getFile("C$", file_path, buf.write)
                             buf.seek(0)
-                            file_content = buf.read().decode("utf-8", errors="ignore").lower()                
+                            file_content = buf.read().decode("utf-8", errors="ignore").lower()
                             context.log.highlight(f"C:\\{file_path}")
                             for line in file_content.splitlines():
-                                context.log.highlight(f"\t{line}")    
+                                context.log.highlight(f"\t{line}")
                             filename = f"{connection.host}_{directory.get_longname()}_notepad_backup_{found}.txt"
                             export_path = join(NXC_PATH, "modules", "notepad++")
                             path = abspath(join(export_path, filename))

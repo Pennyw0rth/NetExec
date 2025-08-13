@@ -30,7 +30,6 @@ import os
 import secrets
 import hashlib
 import datetime
-import logging
 import random
 import base64
 
@@ -47,8 +46,7 @@ from asn1crypto import keys
 from minikerberos.pkinit import PKINIT, DirtyDH
 from minikerberos.protocol.constants import NAME_TYPE, PaDataType
 from minikerberos.protocol.encryption import Enctype, _enctype_table, Key
-from minikerberos.protocol.asn1_structs import KDC_REQ_BODY, PrincipalName, KDCOptions, EncASRepPart, AS_REQ, PADATA_TYPE, \
-    PA_PAC_REQUEST
+from minikerberos.protocol.asn1_structs import KDC_REQ_BODY, PrincipalName, KDCOptions, EncASRepPart, AS_REQ, PADATA_TYPE, PA_PAC_REQUEST
 from minikerberos.protocol.rfc4556 import PKAuthenticator, AuthPack, PA_PK_AS_REP, KDCDHKeyInfo, PA_PK_AS_REQ
 
 from pyasn1.codec.der import decoder, encoder
@@ -70,6 +68,7 @@ from minikerberos.common.ccache import CCACHE
 from impacket.krb5.ccache import CCache as impacket_CCache
 
 from nxc.paths import NXC_PATH
+from nxc.logger import nxc_logger
 
 
 class myPKINIT(PKINIT):
@@ -304,8 +303,8 @@ class myPKINIT(PKINIT):
 
         key = Key(cipher.enctype, t_key)
         enc_data = as_rep["enc-part"]["cipher"]
-        logging.info("AS-REP encryption key (you might need this later):")
-        logging.info(hexlify(t_key).decode("utf-8"))
+        nxc_logger.info("AS-REP encryption key (you might need this later):")
+        nxc_logger.info(hexlify(t_key).decode("utf-8"))
         dec_data = cipher.decrypt(key, 3, enc_data)
         encasrep = EncASRepPart.load(dec_data).native
         cipher = _enctype_table[int(encasrep["key"]["keytype"])]
@@ -327,34 +326,27 @@ class GETPAC:
         for _bufferN in range(pacType["cBuffers"]):
             infoBuffer = PAC_INFO_BUFFER(buff)
             data = pacType["Buffers"][infoBuffer["Offset"] - 8:][:infoBuffer["cbBufferSize"]]
-            if logging.getLogger().level == logging.DEBUG:
-                print("TYPE 0x%x" % infoBuffer["ulType"])
+            nxc_logger.debug(f"TYPE 0x{infoBuffer['ulType']}")
             if infoBuffer["ulType"] == 2:
                 found = True
                 credinfo = PAC_CREDENTIAL_INFO(data)
-                if logging.getLogger().level == logging.DEBUG:
-                    credinfo.dump()
                 newCipher = _enctype_table[credinfo["EncryptionType"]]
                 out = newCipher.decrypt(key, 16, credinfo["SerializedData"])
                 type1 = TypeSerialization1(out)
                 # I'm skipping here 4 bytes with its the ReferentID for the pointer
                 newdata = out[len(type1) + 4:]
                 pcc = PAC_CREDENTIAL_DATA(newdata)
-                if logging.getLogger().level == logging.DEBUG:
-                    pcc.dump()
                 for cred in pcc["Credentials"]:
                     credstruct = NTLM_SUPPLEMENTAL_CREDENTIAL(b"".join(cred["Credentials"]))
-                    if logging.getLogger().level == logging.DEBUG:
-                        credstruct.dump()
 
-                    logging.info("Recovered NT Hash")
-                    logging.info(hexlify(credstruct["NtPassword"]).decode("utf-8"))
+                    nxc_logger.info("Recovered NT Hash")
+                    nxc_logger.info(hexlify(credstruct["NtPassword"]).decode("utf-8"))
                     nthash = hexlify(credstruct["NtPassword"]).decode("utf-8")
 
             buff = buff[len(infoBuffer):]
 
         if not found:
-            logging.info("Did not find the PAC_CREDENTIAL_INFO in the PAC. Are you sure your TGT originated from a PKINIT operation?")
+            nxc_logger.info("Did not find the PAC_CREDENTIAL_INFO in the PAC. Are you sure your TGT originated from a PKINIT operation?")
         return nthash
 
     def __init__(self, username, domain, kdcHost, key, tgt):
@@ -399,10 +391,8 @@ class GETPAC:
         authenticator["cusec"] = now.microsecond
         authenticator["ctime"] = KerberosTime.to_asn1(now)
 
-        if logging.getLogger().level == logging.DEBUG:
-            logging.debug("AUTHENTICATOR")
-            print(authenticator.prettyPrint())
-            print("\n")
+        nxc_logger.debug("AUTHENTICATOR")
+        nxc_logger.debug(authenticator.prettyPrint() + "\n")
 
         encodedAuthenticator = encoder.encode(authenticator)
 
@@ -452,23 +442,18 @@ class GETPAC:
 
         myTicket = ticket.to_asn1(TicketAsn1())
         seq_set_iter(reqBody, "additional-tickets", (myTicket,))
-        if logging.getLogger().level == logging.DEBUG:
-            logging.debug("Final TGS")
-            print(tgsReq.prettyPrint())
-        if logging.getLogger().level == logging.DEBUG:
-            logging.debug("Final TGS")
-            print(tgsReq.prettyPrint())
+        nxc_logger.debug("Final TGS")
+        nxc_logger.debug(tgsReq.prettyPrint())
 
         message = encoder.encode(tgsReq)
-        logging.info("Requesting ticket to self with PAC")
+        nxc_logger.info("Requesting ticket to self with PAC")
 
         r = sendReceive(message, self.__domain, self.__kdcHost)
 
         tgs = decoder.decode(r, asn1Spec=TGS_REP())[0]
 
-        if logging.getLogger().level == logging.DEBUG:
-            logging.debug("TGS_REP")
-            print(tgs.prettyPrint())
+        nxc_logger.debug("TGS_REP")
+        nxc_logger.debug(tgs.prettyPrint())
 
         cipherText = tgs["ticket"]["enc-part"]["cipher"]
 
