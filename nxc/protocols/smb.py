@@ -63,7 +63,7 @@ from dploot.triage.credentials import CredentialsTriage
 from dploot.lib.target import Target
 from dploot.triage.sccm import SCCMTriage, SCCMCred, SCCMSecret, SCCMCollection
 
-from time import time, ctime
+from time import time, ctime, sleep
 from traceback import format_exc
 from termcolor import colored
 import contextlib
@@ -124,6 +124,7 @@ class smb(connection):
         self.pvkbytes = None
         self.no_da = None
         self.no_ntlm = False
+        self.null_auth = False
         self.protocol = "SMB"
         self.is_guest = None
         self.isdc = False
@@ -172,9 +173,11 @@ class smb(connection):
 
         try:
             self.conn.login("", "")
+            self.null_auth = True
         except BrokenPipeError:
             self.logger.fail("Broken Pipe Error while attempting to login")
         except Exception as e:
+            self.null_auth = False
             if "STATUS_NOT_SUPPORTED" in str(e):
                 # no ntlm supported
                 self.no_ntlm = True
@@ -288,8 +291,9 @@ class smb(connection):
     def print_host_info(self):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
         smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
-        ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
-        self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}) {ntlm}")
+        ntlm = colored(f" (NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
+        null_auth = colored(f" (Null Auth:{self.null_auth})", host_info_colors[2], attrs=["bold"]) if self.null_auth else ""
+        self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}){ntlm}{null_auth}")
 
         if self.args.generate_hosts_file or self.args.generate_krb5_file:
             if self.args.generate_hosts_file:
@@ -1106,7 +1110,7 @@ class smb(connection):
                 procInfo["pSid"],
                 f"{procInfo['WorkingSetSize'] // 1000:,} K",
             )
-        
+
         try:
             with TSTS.LegacyAPI(self.conn, self.host, self.kerberos) as legacy:
                 try:
@@ -1141,9 +1145,150 @@ class smb(connection):
                 # If a process was suppliad to args.tasklist and it was not found, we print a fail message
                 if self.args.tasklist is not True and not found_task:
                     self.logger.fail(f"Didn't find process {self.args.tasklist}")
-            
+
         except SessionError:
             self.logger.fail("Cannot list remote tasks, RDP is probably disabled.")
+
+    def reg_sessions(self):
+
+        def output(sessions):
+            if sessions:
+                # Calculate max lengths for formatting
+                maxSidLen = max(len(key) + 1 for key in sessions)
+                maxSidLen = max(maxSidLen, len("SID") + 1)
+                maxUsernameLen = max(len(vals["Username"] + vals["Domain"]) + 1 for vals in sessions.values()) + 1
+                maxUsernameLen = max(maxUsernameLen, len("USERNAME") + 1)
+
+                # Create the template for formatting
+                template = (f"{{USERNAME: <{maxUsernameLen}}} {{SID: <{maxSidLen}}}")
+
+                # Create headers
+                header = template.format(USERNAME="USERNAME", SID="SID")
+                header2 = template.replace(" <", "=<").format(USERNAME="", SID="")
+
+                # Store result
+                result = [header, header2]
+
+                for sid, vals in sessions.items():
+                    username = vals["Username"]
+                    domain = vals["Domain"]
+                    user_full = f"{domain}\\{username}" if username else ""
+
+                    row = template.format(USERNAME=user_full, SID=sid)
+                    result.append(row)
+
+                self.logger.success("Remote Registry enumerated sessions")
+                for row in result:
+                    self.logger.highlight(row)
+            else:
+                self.logger.info(f"No active session found for specified user(s) using the Remote Registry service on {self.hostname}.")
+
+        # Bind to the Remote Registry Pipe
+        rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\winreg", smb_connection=self.conn)
+        for binding_attempts in range(2, 0, -1):
+            dce = rpctransport.get_dce_rpc()
+            try:
+                dce.connect()
+                dce.bind(rrp.MSRPC_UUID_RRP)
+                break
+            except SessionError as e:
+                self.logger.debug(f"Could not bind to the Remote Registry on {self.hostname}: {e}")
+                if binding_attempts == 1:   # Last attempt
+                    self.logger.info(f"The Remote Registry service seems to be disabled on {self.hostname}.")
+                    return
+            # STATUS_PIPE_NOT_AVAILABLE : Waiting 1 second for the service to start (if idle and set to 'Automatic' startup type)
+            sleep(1)
+
+        # Open HKU hive
+        try:
+            resp = rrp.hOpenUsers(dce)
+        except DCERPCException as e:
+            if "rpc_s_access_denied" in str(e).lower():
+                self.logger.info(f"Access denied while enumerating session using the Remote Registry on {self.hostname}.")
+                return
+            else:
+                self.logger.fail(f"Exception connecting to RPC on {self.hostname}: {e}")
+        except Exception as e:
+            self.logger.fail(f"Exception connecting to RPC on {self.hostname}: {e}")
+
+        # Enumerate HKU subkeys and recover SIDs
+        sid_filter = "^S-1-.*\\d$"
+        exclude_sid = ["S-1-5-18", "S-1-5-19", "S-1-5-20"]
+
+        key_handle = resp["phKey"]
+        index = 1
+        sessions = {}
+
+        while True:
+            try:
+                resp = rrp.hBaseRegEnumKey(dce, key_handle, index)
+                sid = resp["lpNameOut"].rstrip("\0")
+                if re.match(sid_filter, sid) and sid not in exclude_sid:
+                    self.logger.info(f"User with SID {sid} is logged in on {self.hostname}")
+                    sessions.setdefault(sid, {"Username": "", "Domain": ""})
+                index += 1
+            except rrp.DCERPCSessionError as e:
+                if "ERROR_NO_MORE_ITEMS" in str(e):
+                    self.logger.debug(f"No more items found in HKU on {self.hostname}.")
+                    break
+                else:
+                    self.logger.fail(f"Error enumerating HKU subkeys on {self.hostname}: {e}")
+                    break
+
+        rrp.hBaseRegCloseKey(dce, key_handle)
+        dce.disconnect()
+
+        if not sessions:
+            self.logger.info(f"No sessions found via the Remote Registry service on {self.hostname}.")
+            return
+
+        # Bind to the LSARPC Pipe for SID resolution
+        rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\lsarpc", smb_connection=self.conn)
+        dce = rpctransport.get_dce_rpc()
+        try:
+            dce.connect()
+            dce.bind(lsat.MSRPC_UUID_LSAT)
+        except Exception as e:
+            self.logger.debug(f"Failed to connect to LSARPC for SID resolution on {self.hostname}: {e}")
+            output(sessions)
+            return
+
+        # Resolve SIDs with names
+        policy_handle = lsad.hLsarOpenPolicy2(dce, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES)["PolicyHandle"]
+        try:
+            resp = lsat.hLsarLookupSids(dce, policy_handle, sessions.keys(), lsat.LSAP_LOOKUP_LEVEL.LsapLookupWksta)
+        except DCERPCException as e:
+            if str(e).find("STATUS_SOME_NOT_MAPPED") >= 0:
+                resp = e.get_packet()
+                self.logger.debug(f"Could not resolve some SIDs: {e}")
+            else:
+                resp = None
+                self.logger.debug(f"Could not resolve SID(s): {e}")
+
+        if resp:
+            for sid, item in zip(sessions.keys(), resp["TranslatedNames"]["Names"], strict=False):
+                if item["DomainIndex"] >= 0:
+                    sessions[sid]["Username"] = item["Name"]
+                    sessions[sid]["Domain"] = resp["ReferencedDomains"]["Domains"][item["DomainIndex"]]["Name"]
+
+        # Filter for usernames
+        if self.args.reg_sessions:
+            arg = self.args.reg_sessions
+            if os.path.isfile(arg):
+                with open(arg) as f:
+                    usernames = [line.strip().lower() for line in f if line.strip()]
+            else:
+                usernames = [arg.lower()]
+
+            filtered_sessions = {}
+            for sid, info in sessions.items():
+                if info["Username"].lower() not in usernames:
+                    continue
+                else:
+                    filtered_sessions[sid] = info
+            output(filtered_sessions)
+        else:
+            output(sessions)
 
     def shares(self):
         temp_dir = ntpath.normpath("\\" + gen_random_string())
@@ -1259,7 +1404,7 @@ class smb(connection):
         self.logger.display("Enumerated shares")
         self.logger.highlight(f"{'Share':<15} {'Permissions':<15} {'Remark'}")
         self.logger.highlight(f"{'-----':<15} {'-----------':<15} {'------'}")
-        
+
         for share in permissions:
             name = share["name"]
             remark = share["remark"]
@@ -1366,7 +1511,7 @@ class smb(connection):
         return dc_ips
 
     def smb_sessions(self):
-        self.logger.fail("[REMOVED] Use option --qwinsta or --loggedon-users")
+        self.logger.fail("[REMOVED] Use option --reg-sessions --qwinsta or --loggedon-users")
         return
 
     def disks(self):
