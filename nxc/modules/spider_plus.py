@@ -9,6 +9,7 @@ from impacket.smb3structs import FILE_READ_DATA
 from impacket.smbconnection import SessionError
 from impacket.nmb import NetBIOSTimeout
 
+
 CHUNK_SIZE = 4096
 
 
