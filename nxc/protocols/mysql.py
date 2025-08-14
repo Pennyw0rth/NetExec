@@ -4,6 +4,7 @@ from nxc.config import process_secret
 from nxc.connection import connection
 from nxc.logger import NXCAdapter
 from pymysql.connections import Connection
+from pymysql.err import OperationalError
 
 
 class mysql(connection):
@@ -11,6 +12,7 @@ class mysql(connection):
         self.protocol = "MySQL"
         self.remote_version = None
         self.server_capabilities = {}
+        self._pinged = False
         super().__init__(args, db, host)
 
     def proto_logger(self):
@@ -24,7 +26,13 @@ class mysql(connection):
         )
 
     def create_conn_obj(self):
+        """Create the connection object, but defer the actual connection
+        Because of how proto_flow works, we do an initial custom socket to ensure there is something on the port,
+        then we can get server information with that same socket if there is something there
+        """
         self.logger.debug(f"Creating connection object for {self.host}:{self.port}")
+
+        # during the initial connection the username and password are actually blank
         self.conn = Connection(
             host=self.host,
             port=self.port,
@@ -33,35 +41,54 @@ class mysql(connection):
             defer_connect=True,
         )
         self.logger.debug(f"Connection object created for {self.host}:{self.port}")
+
+        # we don't want to do additional useless TCP handshake requests for connect(), etc, so we only "ping" it once
+        if not self._pinged:
+            self.logger.debug(f"Making initial socket connection to {self.host}:{self.port}")
+            try:
+                self.conn._sock = socket.create_connection((self.host, self.port))
+                self._pinged = True
+            except Exception as e:
+                self.logger.debug(f"Error creating socket connection: {e}")
+                return False
         return True
 
     def enum_host_info(self):
-        """Create a custom socket the same way pymysql does, but only get the server information"""
-        self.logger.debug(f"Connecting to {self.host}:{self.port}")
-        sock = socket.create_connection((self.host, self.port))
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-        sock.settimeout(None)
-        self.conn._sock = sock
-        self.conn._rfile = sock.makefile("rb")
-        self.conn._next_seq_id = 0
-
+        """Use existing socket but only get the server information
+        The way we do this actually sends less packets than nmap -sV, since they open a socket for ping then don't reuse it
+        We also don't want to send a QUIT message, so we use _force_close()
+        """
         self.logger.debug("Getting server information")
-        self.conn._get_server_information()
-        self.remote_version = self.conn.server_version
-        self.logger.debug(f"Server information: {self.remote_version}")
 
-        if self.remote_version:
+        try:
+            # setup the socket for the server information request
+            self.conn._rfile = self.conn._sock.makefile("rb")
+            self.conn._next_seq_id = 0
+            self.conn._get_server_information()
+            with contextlib.suppress(Exception):
+                self.conn._force_close()  # close the socket without sending a QUIT message
+        except OperationalError as e:
+            if "is not allowed to connect to" in str(e):
+                self.logger.fail("Host is not allowed to connect to server")
+            else:
+                self.logger.fail(f"Error getting server information: {e}")
+
+        if self.conn.server_version:
+            self.remote_version = self.conn.server_version
+            self.logger.debug(f"Server information: {self.remote_version}")
             self.db.add_host(self.host, self.port, self.remote_version)
 
     def print_host_info(self):
-        self.logger.display(f"MySQL Version: {self.remote_version}")
+        if self.remote_version:
+            self.logger.display(f"MySQL Version: {self.remote_version}")
 
     def plaintext_login(self, username, password):
-        """Authenticate with MySQL server using username/password via pymysql connect"""
+        """Authenticate with MySQL server using username/password via pymysql connect
+        This is where we actually do the full connection as well
+        """
         self.password = password
         self.username = username
-        self.create_conn_obj()
+        self.create_conn_obj()  # create connection object with username and password
 
         try:
             self.logger.debug(f"Attempting login with {username}:{process_secret(password)}")
