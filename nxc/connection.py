@@ -174,7 +174,7 @@ class connection:
         if self.kerberos:
             self.host = self.hostname
 
-        self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
+        self.logger.info(f"Connection __init__ info: host={self.host}, hostname={self.hostname}, port={self.port}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
 
         try:
             self.proto_flow()
