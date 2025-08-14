@@ -65,18 +65,19 @@ class mysql(connection):
             self.conn._rfile = self.conn._sock.makefile("rb")
             self.conn._next_seq_id = 0
             self.conn._get_server_information()
+            if self.conn.server_version:
+                self.remote_version = self.conn.server_version
+                self.logger.debug(f"Server information: {self.remote_version}")
+                self.db.add_host(self.host, self.port, self.remote_version)
+
             with contextlib.suppress(Exception):
                 self.conn._force_close()  # close the socket without sending a QUIT message
         except OperationalError as e:
             if "is not allowed to connect to" in str(e):
                 self.logger.fail("Host is not allowed to connect to server")
+                exit(1)
             else:
                 self.logger.fail(f"Error getting server information: {e}")
-
-        if self.conn.server_version:
-            self.remote_version = self.conn.server_version
-            self.logger.debug(f"Server information: {self.remote_version}")
-            self.db.add_host(self.host, self.port, self.remote_version)
 
     def print_host_info(self):
         if self.remote_version:
