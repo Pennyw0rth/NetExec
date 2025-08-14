@@ -13,7 +13,7 @@ class NXCModule:
     Made by: @Sant0rryu, @NeffIsBack
     """
 
-    name = "enum_inet"
+    name = "enum_interfaces"
     description = "Retrieve the list of network interfaces info (Name, IP Address, Subnet Mask, Default Gateway) from remote Windows registry (formerly --interfaces)"
     supported_protocols = ["smb"]
     opsec_safe = False
