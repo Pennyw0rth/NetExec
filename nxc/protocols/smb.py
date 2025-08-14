@@ -190,7 +190,7 @@ class smb(connection):
                 self.conn.login("Guest", "")
                 self.logger.debug("Guest authentication successful")
                 self.is_guest = True
-            except Exception as e:
+            except Exception:
                 self.is_guest = False
 
         # self.domain is the attribute we authenticate with
