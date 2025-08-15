@@ -4,6 +4,7 @@ from os import makedirs
 from certipy.commands.find import Find
 from certipy.lib.target import Target, DnsResolver
 from certipy.lib.formatting import pretty_print
+from datetime import datetime
 
 from nxc.paths import NXC_PATH
 
@@ -95,8 +96,9 @@ class NXCModule:
         if self.json or self.csv or self.text:
             makedirs(self.output_path, exist_ok=True)
 
+        filename = f"certipy_{connection.hostname}_{connection.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
         if self.json:
-            with open(f"{self.output_path}/certipy-find.json", "w") as f:
+            with open(f"{self.output_path}/{filename}.json", "w") as f:
                 json.dump(
                     output,
                     f,
@@ -106,10 +108,10 @@ class NXCModule:
         if self.csv:
             template_output = finder.get_template_output_for_csv(output)
             ca_output = finder.get_ca_output_for_csv(output)
-            with open(f"{self.output_path}/certipy-find-templates.csv", "w") as f:
+            with open(f"{self.output_path}/{filename}-templates.csv", "w") as f:
                 f.write(template_output)
-            with open(f"{self.output_path}/certipy-find-cas.csv", "w") as f:
+            with open(f"{self.output_path}/{filename}-cas.csv", "w") as f:
                 f.write(ca_output)
         if self.text:
-            with open(f"{self.output_path}/certipy-find.txt", "w") as f:
+            with open(f"{self.output_path}/{filename}.txt", "w") as f:
                 pretty_print(output, print_func=lambda x: f.write(x + "\n"))
