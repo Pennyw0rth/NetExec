@@ -18,7 +18,7 @@ class NXCModule:
         BINARY         OPTIONAL: Upload the binary to be executed by CMD
         TASK           OPTIONAL: Set a name for the scheduled task name
         FILE           OPTIONAL: Set a name for the command output file
-        LOCATION       OPTIONAL: Set a location for the command output file (e.g. '\tmp\')
+        LOCATION       OPTIONAL: Set a location for the command output file (e.g. 'C:\\Windows\\Temp\\')
 
         Example:
         -------
@@ -46,7 +46,8 @@ class NXCModule:
             self.output_filename = module_options["FILE"]
 
         if "LOCATION" in module_options:
-            self.output_file_location = module_options["LOCATION"]
+            # Ensure trailing backslashes
+            self.output_file_location = module_options["LOCATION"].rstrip("\\") + "\\"
 
     name = "schtask_as"
     description = "Remotely execute a scheduled task as a logged on user"
