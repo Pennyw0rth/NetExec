@@ -109,10 +109,19 @@ class TSCH_EXEC:
         random.shuffle(idleSettings)
         randomized_idleSettings = "\n".join(idleSettings)
 
-        random_cmd_path = ["C:\\Windows\\System32\\cmd", "C:\\Windows\\System32\\cmd.exe", "C:\\Windows\\System32\\cmd.exe", "cmd.exe", "C:\\Windows\\System32\\..\\System32\\cmd.exe", "C:\\Windows\\System32\\..\\System32\\cmd", "C:\\Windows\\..\\Windows\\System32\\cmd.exe", "C:\\Windows\\..\\Windows\\System32\\cmd"]
-        random_cmd_arg = ["/c", "/C", "/Q /c", "/F:ON /c", "/T:fg /c", "/T:fg /Q /C", "/F:ON /Q /C"]
+        random_cmd_path = [
+            "cmd",
+            "cmd.exe",
+            "C:\\Windows\\System32\\cmd",
+            "C:\\Windows\\System32\\cmd.exe",
+            "C:\\Windows\\System32\\..\\System32\\cmd",
+            "C:\\Windows\\System32\\..\\System32\\cmd.exe",
+            "C:\\Windows\\..\\Windows\\System32\\cmd"
+            "C:\\Windows\\..\\Windows\\System32\\cmd.exe",
+        ]
         cmd_path = random.choice(random_cmd_path)
-        cmd_args = f"{random.choice(random_cmd_arg)} {command}"
+        random_cmd_arg = ["/c", "/C", "/Q /c", "/F:ON /c", "/T:fg /c", "/T:fg /Q /C", "/F:ON /Q /C"]
+        full_command = f"{random.choice(random_cmd_arg)} {command}"
 
         xml = f"""<?xml version="1.0" encoding="UTF-16"?>
         <Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -145,10 +154,10 @@ class TSCH_EXEC:
                 self.__output_filename = os.path.join(file_location, gen_random_string(8))
             else:
                 self.__output_filename = os.path.join(file_location, self.output_filename)
-            argument_xml = f"      <Arguments>{cmd_args} &gt; {self.__output_filename} 2&gt;&amp;1</Arguments>"
+            argument_xml = f"      <Arguments>{full_command} &gt; {self.__output_filename} 2&gt;&amp;1</Arguments>"
 
         elif self.__retOutput is False:
-            argument_xml = f"      <Arguments>{cmd_args}</Arguments>"
+            argument_xml = f"      <Arguments>{full_command}</Arguments>"
 
         self.logger.debug("Generated argument XML: " + argument_xml)
         xml += argument_xml
@@ -169,6 +178,7 @@ class TSCH_EXEC:
 
         dce.set_credentials(*self.__rpctransport.get_credentials())
         dce.connect()
+
         xml = self.gen_xml(command)
         self.logger.debug(f"Task XML: {xml}")
         self.logger.info(f"Creating task \\{self.task_name}")
@@ -197,6 +207,7 @@ class TSCH_EXEC:
 
         self.logger.info(f"Deleting task \\{self.task_name}")
         tsch.hSchRpcDelete(dce, f"\\{self.task_name}")
+
         if self.__retOutput:
             smbConnection = self.__rpctransport.get_smb_connection()
             tries = 1
