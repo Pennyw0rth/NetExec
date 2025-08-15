@@ -407,7 +407,13 @@ class rdp(connection):
 
     async def execute_shell(self, payload, get_output, shell_type):
         # Append | clip to send output to clipboard
-        payload_with_clip = f"{payload} | clip & exit" if shell_type == "cmd" else f"{payload} | clip; exit"
+        if shell_type == "cmd":
+            payload_with_clip = f"{payload} | clip & exit"
+        elif shell_type == "powershell":
+            payload_with_clip = f"try {{ {payload} 2>&1 | clip}} catch {{ $_ | clip}}; exit"
+        else:
+            self.logger.fail(f"Unsupported shell type: {shell_type}")
+            return None
         self.logger.debug(f"Executing command: {payload_with_clip}")
 
         # Create a connection
