@@ -58,16 +58,16 @@ class NXCModule:
 
         if self.command_to_run is None:
             self.logger.fail("You need to specify a CMD to run")
-            return 1
+            return
 
         if self.run_task_as is None:
             self.logger.fail("You need to specify a USER to run the command as")
-            return 1
+            return
 
         if self.binary_to_upload:
             if not os.path.isfile(self.binary_to_upload):
                 self.logger.fail(f"Cannot find {self.binary_to_upload}")
-                return 1
+                return
             else:
                 self.logger.display(f"Uploading {self.binary_to_upload}")
                 binary_file_location = self.tmp_path if self.output_file_location is None else self.output_file_location
@@ -78,7 +78,7 @@ class NXCModule:
                         self.logger.success(f"Binary {self.binary_to_upload_name} successfully uploaded in {binary_file_location}{self.binary_to_upload_name}")
                     except Exception as e:
                         self.logger.fail(f"Error writing file to share {binary_file_location}: {e}")
-                        return 1
+                        return
 
         self.logger.display("Connecting to the remote Service control endpoint")
         try:
