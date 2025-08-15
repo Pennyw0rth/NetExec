@@ -194,6 +194,11 @@ def main():
             proto_module_paths.append(modules[m]["path"])
         protocol_object.module_paths = proto_module_paths
 
+    if args.protocol == "rdp" and args.execute:
+        ans = input(highlight("[!] Executing remote command via RDP will disconnect the Windows session (not log off) if the targeted user is connected via RDP, do you want to continue ? [Y/n] ", "red"))
+        if ans.lower() not in ["y", "yes", ""]:
+            exit(1)
+
     if args.jitter and len(targets) > 1:
         nxc_logger.highlight(highlight("[!] Jitter is only throttling authentications per target!", "red"))
 
