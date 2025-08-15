@@ -502,24 +502,13 @@ class ldap(connection):
         - If LM/NT hashes are provided (no password), switch to Kerberos automatically.
         - Kerberos path: try LDAP:389, fallback to LDAPS:636 on strongerAuthRequired.
         """
-        target = self.host
-        domain = (self.domain or "").upper()
-        user   = self.username or ""
-        pwd    = getattr(self, "password", "") or ""
-        lmhash = getattr(self, "lmhash", "") or ""
-        nthash = getattr(self, "nthash", "") or ""
-        aeskey = getattr(self, "aesKey", "") or ""
-        kdc    = getattr(self, "kdcHost", None)
-        port   = int(getattr(self.args, "port", 389))
-        port_explicit = bool(getattr(self.args, "port_explicitly_set", False))
 
-        explicit_k = bool(getattr(self.args, "kerberos", False))
-        hash_only  = (not pwd) and (bool(nthash) or bool(lmhash))
-        aes_only   = (not pwd) and bool(aeskey)
-        use_k      = explicit_k or hash_only or aes_only
-        use_cc     = bool(getattr(self.args, "use_kcache", False))
+        hash_only = (not self.password) and (bool(self.nthash) or bool(self.lmhash))
+        aes_only = (not self.password) and bool(self.aesKey)
+        use_k = self.kerberos or hash_only or aes_only
+        use_cc = getattr(self, "use_kcache", False)
 
-        if hash_only and not explicit_k:
+        if hash_only and not self.kerberos:
             self.logger.display("No -k supplied: switching to Kerberos because ldap3 NTLM doesn’t support hash-only auth.")
 
         if not use_k:
@@ -528,16 +517,16 @@ class ldap(connection):
                     self.logger.extra["protocol"] = "LDAPS" if ssl else "LDAP"
                     self.logger.extra["port"] = str(bind_port)
                     server = ldap3.Server(
-                        target,
+                        self.host,
                         port=bind_port,
                         use_ssl=ssl,
                         get_info=ldap3.NONE,
                     )
-                    user_ntlm = f"{domain}\\{user}" if domain else user
+                    user_ntlm = f"{self.domain}\\{self.username}" if self.domain else (self.username or "")
                     conn = ldap3.Connection(
                         server,
                         user=user_ntlm,
-                        password=pwd,
+                        password=self.password,
                         authentication=ldap3.NTLM,
                         auto_bind=True,
                     )
@@ -546,10 +535,10 @@ class ldap(connection):
                     return None, e
 
             # port test order
-            primary_port = port
-            try_order = [(primary_port, primary_port == 636)]
+            port_explicit = getattr(self, "port_explicitly_set", False)
+            try_order = [(self.port, self.port == 636)]
             if not port_explicit:
-                if primary_port == 389:
+                if self.port == 389:
                     try_order.append((636, True))
                 else:
                     try_order.append((389, False))
@@ -570,34 +559,19 @@ class ldap(connection):
                 return None
 
             self.ldap_connection = conn
-
-            try:
-                self.check_if_admin()
-            except Exception:
-                pass
-            try:
-                self.db.add_credential("plaintext", domain or self.targetDomain, user, pwd)
-            except Exception:
-                pass
-            try:
-                if not self.args.local_auth and user:
-                    add_user_bh(user, domain or self.targetDomain, self.logger, self.config)
-                if getattr(self, "admin_privs", False):
-                    add_user_bh(f"{self.hostname}$", domain or self.targetDomain, self.logger, self.config)
-            except Exception:
-                pass
-
-            self.logger.info(f"ldap3 NTLM bind over {'LDAPS:636' if conn.server.port == 636 else f'LDAP:{conn.server.port}'} established")
+            self.logger.info(
+                f"ldap3 NTLM bind over {'LDAPS:636' if conn.server.port == 636 else f'LDAP:{conn.server.port}'} established"
+            )
             return conn
 
         # Build FQDN for SPN
-        host_fqdn = getattr(self, "hostname", None) or target
-        if "." not in host_fqdn and domain:
-            host_fqdn = f"{host_fqdn}.{domain}"
+        realm = (self.domain or "").upper()
+        host_fqdn = (self.hostname or self.host) or ""
+        if "." not in host_fqdn and realm:
+            host_fqdn = f"{host_fqdn}.{realm}"
 
         TGT = None
         TGS = None
-        from_cache = False
 
         if use_cc:
             try:
@@ -607,12 +581,12 @@ class ldap(connection):
                     return None
                 ccache = CCache.loadFile(ccname)
 
-                if not domain:
-                    domain = ccache.principal.realm["data"].decode().upper()
+                if not realm:
+                    realm = ccache.principal.realm["data"].decode().upper()
 
                 spn_candidates = [
-                    f"ldap/{host_fqdn.lower()}@{domain}",
-                    f"ldap/{host_fqdn.upper()}@{domain}",
+                    f"ldap/{host_fqdn.lower()}@{realm}",
+                    f"ldap/{host_fqdn.upper()}@{realm}",
                 ]
                 creds = None
                 for spn in spn_candidates:
@@ -622,28 +596,28 @@ class ldap(connection):
                         break
 
                 if not TGS:
-                    kt = ccache.getCredential(f"krbtgt/{domain}@{domain}")
+                    kt = ccache.getCredential(f"krbtgt/{realm}@{realm}")
                     if kt:
                         TGT = kt.toTGT()
 
                 if not TGS and not TGT:
                     self.logger.fail("Kerberos cache selected (--use-kcache) but no usable TGT/TGS found in cache.")
                     return None
-
-                from_cache = True
             except Exception as e:
                 self.logger.fail(f"Failed to read Kerberos cache (--use-kcache): {e}")
                 return None
 
         # Prepare creds for TGT acquisition if needed
-        princ = Principal(user, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
-        lm_b = bytes.fromhex(lmhash.zfill(len(lmhash) + len(lmhash) % 2)) if lmhash else b""
-        nt_b = bytes.fromhex(nthash.zfill(len(nthash) + len(nthash) % 2)) if nthash else b""
+        princ = Principal(self.username or "", type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+        lm_b = bytes.fromhex(self.lmhash.zfill(len(self.lmhash) + len(self.lmhash) % 2)) if self.lmhash else b""
+        nt_b = bytes.fromhex(self.nthash.zfill(len(self.nthash) + len(self.nthash) % 2)) if self.nthash else b""
 
         if not TGT and not TGS:
-            tgt_blob, cipher, _, sessionKey = getKerberosTGT(princ, pwd, domain, lm_b, nt_b, aeskey, kdc)
+            tgt_blob, cipher, _, sessionKey = getKerberosTGT(
+                princ, self.password, realm, lm_b, nt_b, self.aesKey, self.kdcHost
+            )
             TGT = {"KDC_REP": tgt_blob, "cipher": cipher, "sessionKey": sessionKey}
-        else    :
+        else:
             cipher = (TGT or TGS)["cipher"]
             sessionKey = (TGT or TGS)["sessionKey"]
 
@@ -651,16 +625,17 @@ class ldap(connection):
         if not TGS:
             spn_princ = Principal(f"ldap/{host_fqdn}", type=constants.PrincipalNameType.NT_SRV_INST.value)
             tgs_blob, cipher, _, sessionKey = getKerberosTGS(
-                spn_princ, domain, kdc, TGT["KDC_REP"], TGT["cipher"], TGT["sessionKey"]
+                spn_princ, realm, self.kdcHost, TGT["KDC_REP"], TGT["cipher"], TGT["sessionKey"]
             )
             TGS = {"KDC_REP": tgs_blob, "cipher": cipher, "sessionKey": sessionKey}
 
-        # Build AP_REQ (SPNEGO)
+        # Build AP_REQ SPNEGO
         blob = SPNEGO_NegTokenInit()
         blob["MechTypes"] = [TypesMech["MS KRB5 - Microsoft Kerberos 5"]]
 
         tgs_rep = der_decoder.decode(TGS["KDC_REP"], asn1Spec=TGS_REP())[0]
-        ticket  = Ticket(); ticket.from_asn1(tgs_rep["ticket"])
+        ticket = Ticket()
+        ticket.from_asn1(tgs_rep["ticket"])
 
         apReq = AP_REQ()
         apReq["pvno"] = 5
@@ -670,7 +645,7 @@ class ldap(connection):
 
         auth = Authenticator()
         auth["authenticator-vno"] = 5
-        auth["crealm"] = domain
+        auth["crealm"] = realm
         seq_set(auth, "cname", princ.components_to_asn1)
         now = datetime.now(timezone.utc)
         auth["ctime"] = KerberosTime.to_asn1(now)
@@ -688,7 +663,7 @@ class ldap(connection):
                 self.logger.extra["protocol"] = "LDAPS" if ssl else "LDAP"
                 self.logger.extra["port"] = str(bind_port)
                 server = ldap3.Server(
-                    target,
+                    self.host,
                     port=bind_port,
                     use_ssl=ssl,
                     get_info=ldap3.NONE,
@@ -701,7 +676,9 @@ class ldap(connection):
                 )
                 if conn.closed:
                     conn.open(read_server_info=False)
-                req = ldap3.operation.bind.bind_operation(conn.version, ldap3.SASL, user, None, "GSS-SPNEGO", blob.getData())
+                req = ldap3.operation.bind.bind_operation(
+                    conn.version, ldap3.SASL, (self.username or ""), None, "GSS-SPNEGO", blob.getData()
+                )
                 conn.sasl_in_progress = True
                 resp = conn.post_send_single_response(conn.send("bindRequest", req, None))
                 conn.sasl_in_progress = False
@@ -709,10 +686,10 @@ class ldap(connection):
             except Exception as e:
                 return None, e
 
-        primary_port = port
-        try_order = [(primary_port, primary_port == 636)]
+        port_explicit = getattr(self, "port_explicitly_set", False)
+        try_order = [(self.port, self.port == 636)]
         if not port_explicit:
-            if primary_port == 389:
+            if self.port == 389:
                 try_order.append((636, True))
             else:
                 try_order.append((389, False))
@@ -741,15 +718,15 @@ class ldap(connection):
 
         # whoami if username is empty (ccache case)
         try:
-            if not user:
+            if not self.username:
                 w = conn.extend.standard.who_am_i()
                 if isinstance(w, str) and w.startswith("u:"):
                     uval = w[2:]
                     if "\\" in uval:
                         dom, usr = uval.split("\\", 1)
                         self.username = usr
-                        if not domain:
-                            domain = dom.upper()
+                        if not self.domain:
+                            self.domain = dom.upper()
                     else:
                         self.username = uval
         except Exception:
