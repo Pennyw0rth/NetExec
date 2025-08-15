@@ -101,6 +101,7 @@ class NXCAdapter(logging.LoggerAdapter):
         logging.getLogger("minidump").disabled = True
         logging.getLogger("lsassy").disabled = True
         logging.getLogger("dploot").disabled = True
+        logging.getLogger("aardwolf").disabled = True
         logging.getLogger("neo4j").setLevel(logging.ERROR)
 
     def format(self, msg, *args, **kwargs):
