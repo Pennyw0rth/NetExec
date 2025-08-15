@@ -102,7 +102,7 @@ class NXCModule:
 
             # Process Bad Password Count
             if "badPwdCount" in response:
-                context.log.highlight(f"Bad Passwod Count: {response['badPwdCount']}")
+                context.log.highlight(f"Bad Password Count: {response['badPwdCount']}")
 
             # Process servicePrincipalName
             if "servicePrincipalName" in response:
