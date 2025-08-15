@@ -86,9 +86,8 @@ class NXCModule:
                         context.log.highlight(f"GPO Path: \\\\SYSVOL\\{gpo_path}")
 
                     if self.download:
-                        dest_folder = os.path.join(self.download_dest, gpo_path, gpo_guid.strip("{}"))
                         context.log.display(f"Downloading GPO {gpo_guid} from SYSVOL share")
-                        self.download_gpo(context, connection, gpo_path, dest_folder, gpo_guid)
+                        self.download_gpo(context, connection, gpo_path, self.download_dest, gpo_guid)
 
             context.log.success(f"GPOs Found: {len(gpos_found)}")
         except Exception as e:
