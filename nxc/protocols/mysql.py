@@ -68,7 +68,11 @@ class mysql(connection):
             if self.conn.server_version:
                 self.remote_version = self.conn.server_version
                 self.logger.debug(f"Server information: {self.remote_version}")
-                self.db.add_host(self.host, self.port, self.remote_version)
+                try:
+                    self.db.add_host(self.host, self.port, self.remote_version)
+                except IndexError as e:
+                    self.logger.debug(f"Error adding host to DB: {e}, trying one more time...")
+                    self.db.add_host(self.host, self.port, self.remote_version)
 
             with contextlib.suppress(Exception):
                 self.conn._force_close()  # close the socket without sending a QUIT message
