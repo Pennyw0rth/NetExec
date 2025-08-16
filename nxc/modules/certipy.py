@@ -11,7 +11,7 @@ from nxc.paths import NXC_PATH
 
 class NXCModule:
     """Module made by: @NeffIsBack, @gatariee"""
-    name = "certipy-find"
+    name = "certipy"
     description = "certipy find command with options to export the result to text/csv/json. Default: Show only vulnerable templates"
     supported_protocols = ["ldap"]
 
