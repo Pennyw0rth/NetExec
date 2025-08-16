@@ -851,6 +851,7 @@ class ldap(connection):
                                 return
                     except resolver.NXDOMAIN:
                         self.logger.fail(f"{prefix}{name} = Host not found (NXDOMAIN)")
+                        break
                     except resolver.Timeout:
                         self.logger.fail(f"{prefix}{name} = Connection timed out")
                     except resolver.NoAnswer:
