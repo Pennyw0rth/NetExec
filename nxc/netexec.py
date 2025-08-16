@@ -159,17 +159,20 @@ def main():
     # with the new nxc/config.py this can be eventually removed, as it can be imported anywhere
     protocol_object.config = nxc_config
 
-    if args.module or args.list_modules:
+    if args.module or args.list_modules is not None:
         loader = ModuleLoader(args, db, nxc_logger)
         modules = loader.list_modules()
 
-    if args.list_modules:
+    if args.list_modules is not None:
         low_privilege_modules = {m: props for m, props in modules.items() if args.protocol in props["supported_protocols"] and not props["requires_admin"]}
         high_privilege_modules = {m: props for m, props in modules.items() if args.protocol in props["supported_protocols"] and props["requires_admin"]}
 
         # List low privilege modules
         nxc_logger.highlight("LOW PRIVILEGE MODULES")
         for category, color in {CATEGORY.ENUMERATION: "green", CATEGORY.CREDENTIAL_DUMPING: "cyan", CATEGORY.PRIVILEGE_ESCALATION: "magenta"}.items():
+            # Add category filter for module listing
+            if args.list_modules and args.list_modules.lower() != category.name.lower():
+                continue
             if len([module for module in low_privilege_modules.values() if module["category"] == category]) > 0:
                 nxc_logger.highlight(colored(f"{category.name}", color, attrs=["bold"]))
             for name, props in sorted(low_privilege_modules.items()):
@@ -179,6 +182,9 @@ def main():
         # List high privilege modules
         nxc_logger.highlight("\nHIGH PRIVILEGE MODULES (requires admin privs)")
         for category, color in {CATEGORY.ENUMERATION: "green", CATEGORY.CREDENTIAL_DUMPING: "cyan", CATEGORY.PRIVILEGE_ESCALATION: "magenta"}.items():
+            # Add category filter for module listing
+            if args.list_modules and args.list_modules.lower() != category.name.lower():
+                continue
             if len([module for module in high_privilege_modules.values() if module["category"] == category]) > 0:
                 nxc_logger.highlight(colored(f"{category.name}", color, attrs=["bold"]))
             for name, props in sorted(high_privilege_modules.items()):
