@@ -79,13 +79,9 @@ class NXCModule:
                         else:
                             expected_str = ", ".join(f"'{d}'" for d in expected_descs)
                             expected_str = f"one of: {expected_str}"
-                        context.log.highlight(
-                            f"SUSPICIOUS: {exe} has unexpected FileDescription '{file_desc}' (expected {expected_str})"
-                        )
-
-            except Exception:
-                # Silently skip if the file is not readable or doesn't exist
-                continue
+                        context.log.highlight(f"SUSPICIOUS: {exe} has unexpected FileDescription '{file_desc}' (expected {expected_str})")
+            except Exception as e:
+                context.log.debug(f"Failed to process {exe}: {e}")
 
         if not tampered:
             context.log.display("All lock screen executable descriptions are consistent with the expected values")
