@@ -12,6 +12,7 @@ from binascii import unhexlify
 import codecs
 import re
 
+from nxc.helpers.misc import CATEGORY
 from nxc.protocols.smb.dpapi import upgrade_to_dploot_connection
 
 
@@ -24,6 +25,7 @@ class NXCModule:
     name = "vnc"
     description = "Loot Passwords from VNC server and client configurations"
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self, context=None, module_options=None):
         self.context = context

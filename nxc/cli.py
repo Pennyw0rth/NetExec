@@ -76,7 +76,7 @@ def gen_cli_args():
     mgroup = module_parser.add_argument_group("Modules", "Options for nxc modules")
     mgroup.add_argument("-M", "--module", choices=get_module_names(), action="append", metavar="MODULE", help="module to use")
     mgroup.add_argument("-o", metavar="MODULE_OPTION", nargs="+", default=[], dest="module_options", help="module options")
-    mgroup.add_argument("-L", "--list-modules", action="store_true", help="list available modules")
+    mgroup.add_argument("-L", "--list-modules", nargs="?", type=str, const="", help="list available modules")
     mgroup.add_argument("--options", dest="show_module_options", action="store_true", help="display module options")
 
     subparsers = parser.add_subparsers(title="Available Protocols", dest="protocol")

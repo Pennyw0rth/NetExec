@@ -3,6 +3,7 @@ from os import makedirs
 from os.path import join, abspath
 import re
 import time
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 from impacket.smbconnection import SessionError
 
@@ -28,6 +29,7 @@ class NXCModule:
     name = "notepad"
     description = "Extracts content from Windows Notepad tab state binary files."
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self, context=None):
         self.context = context

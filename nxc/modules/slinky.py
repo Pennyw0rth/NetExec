@@ -1,6 +1,7 @@
 import pylnk3
 import ntpath
 from sys import exit
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import TMP_PATH
 
 
@@ -14,6 +15,7 @@ class NXCModule:
     name = "slinky"
     description = "Creates windows shortcuts with the icon attribute containing a URI to the specified  server (default SMB) in all shares with write permissions"
     supported_protocols = ["smb"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self):
         self.server = None

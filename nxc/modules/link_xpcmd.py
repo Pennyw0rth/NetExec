@@ -1,3 +1,6 @@
+from nxc.helpers.misc import CATEGORY
+
+
 class NXCModule:
     """
     Run xp_cmdshell commands on a linked SQL server
@@ -7,6 +10,7 @@ class NXCModule:
     name = "link_xpcmd"
     description = "Run xp_cmdshell commands on a linked SQL server"
     supported_protocols = ["mssql"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self):
         self.linked_server = None

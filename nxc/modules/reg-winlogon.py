@@ -1,5 +1,6 @@
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -12,6 +13,7 @@ class NXCModule:
     name = "reg-winlogon"
     description = "Collect autologon credential stored in the registry"
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self, context=None, module_options=None):
         self.context = context

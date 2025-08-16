@@ -7,6 +7,8 @@ from impacket.dcerpc.v5.ndr import NDRCALL, NDRPOINTER, NDRSTRUCT, NDRUNION, NUL
 from impacket.dcerpc.v5.dtypes import DWORD, LPWSTR, ULONG, WSTR
 from impacket.dcerpc.v5.rprn import checkNullString, STRING_HANDLE, PBYTE_ARRAY
 
+from nxc.helpers.misc import CATEGORY
+
 KNOWN_PROTOCOLS = {
     135: {"bindstr": r"ncacn_ip_tcp:%s[135]"},
     445: {"bindstr": r"ncacn_np:%s[\pipe\epmapper]"},
@@ -22,6 +24,7 @@ class NXCModule:
     name = "printnightmare"
     description = "Check if host vulnerable to printnightmare"
     supported_protocols = ["smb"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

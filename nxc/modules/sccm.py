@@ -1,6 +1,7 @@
 from impacket.ldap import ldap, ldaptypes, ldapasn1 as ldapasn1_impacket
 from impacket.ldap.ldap import LDAPSearchError
 from ldap3.protocol.microsoft import security_descriptor_control
+from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
 
 SAM_USER_OBJECT = 0x30000000
@@ -22,6 +23,7 @@ class NXCModule:
     name = "sccm"
     description = "Find a SCCM infrastructure in the Active Directory"
     supported_protocols = ["ldap"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self):
         self.sccm_site_servers = []     # List of dns host names of the SCCM site servers

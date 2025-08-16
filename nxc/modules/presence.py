@@ -5,6 +5,8 @@ from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVE
 from contextlib import suppress
 import traceback
 
+from nxc.helpers.misc import CATEGORY
+
 
 class NXCModule:
     """
@@ -15,6 +17,7 @@ class NXCModule:
     name = "presence"
     description = "Traces Domain and Enterprise Admin presence in the target over SMB"
     supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """There are no module options."""

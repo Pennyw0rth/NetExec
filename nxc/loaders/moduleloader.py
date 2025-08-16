@@ -30,6 +30,9 @@ class ModuleLoader:
         elif not hasattr(module, "description"):
             self.logger.fail(f"{module_path} missing the description variable")
             module_error = True
+        elif not hasattr(module, "category"):
+            self.logger.fail(f"{module_path} missing the category variable")
+            module_error = True
         elif not hasattr(module, "supported_protocols"):
             self.logger.fail(f"{module_path} missing the supported_protocols variable")
             module_error = True
@@ -92,6 +95,7 @@ class ModuleLoader:
                     "description": module_spec.description,
                     "options": module_spec.options.__doc__,
                     "supported_protocols": module_spec.supported_protocols,
+                    "category": module_spec.category,
                     "requires_admin": bool(hasattr(module_spec, "on_admin_login") and callable(module_spec.on_admin_login)),
                 }
             }

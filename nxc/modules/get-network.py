@@ -10,6 +10,7 @@ from struct import unpack
 from impacket.structure import Structure
 from ldap3 import LEVEL
 from os.path import expanduser
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 from nxc.parsers.ldap_results import parse_result_attributes
 
@@ -68,6 +69,7 @@ class NXCModule:
     name = "get-network"
     description = "Query all DNS records with the corresponding IP from the domain."
     supported_protocols = ["ldap"]
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """

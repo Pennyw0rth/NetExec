@@ -1,6 +1,7 @@
 from dploot.lib.target import Target
 from dploot.triage.masterkeys import MasterkeysTriage
 
+from nxc.helpers.misc import CATEGORY
 from nxc.protocols.smb.dpapi import upgrade_to_dploot_connection
 
 # Based on dpapimk2john, original work by @fist0urs
@@ -10,6 +11,7 @@ class NXCModule:
     name = "dpapi_hash"
     description = "Remotely dump Dpapi hash based on masterkeys"
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """OUTPUTFILE       Output file to write hashes"""

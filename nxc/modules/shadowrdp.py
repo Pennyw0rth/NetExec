@@ -1,6 +1,8 @@
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 
+from nxc.helpers.misc import CATEGORY
+
 
 # Module by @Defte_
 # Enables or disables shadow RDP
@@ -8,6 +10,7 @@ class NXCModule:
     name = "shadowrdp"
     description = "Enables or disables shadow RDP"
     supported_protocols = ["smb"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

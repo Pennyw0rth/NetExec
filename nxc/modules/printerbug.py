@@ -1,7 +1,11 @@
+from nxc.helpers.misc import CATEGORY
+
+
 class NXCModule:
     name = "printerbug"
     description = "[REMOVED] Module to check if the Target is vulnerable to PrinterBug. Set LISTENER IP for coercion."
     supported_protocols = ["smb"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

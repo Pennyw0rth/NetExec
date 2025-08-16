@@ -11,7 +11,7 @@ import random
 import gzip
 from io import BytesIO
 from impacket.examples.secretsdump import LocalOperations, NTDSHashes, SAMHashes, LSASecrets
-from nxc.helpers.misc import validate_ntlm
+from nxc.helpers.misc import CATEGORY, validate_ntlm
 from nxc.helpers.powershell import get_ps_script
 import sys
 
@@ -20,6 +20,9 @@ class NXCModule:
     name = "ntds-dump-raw"
     description = "Extracting the ntds.dit, SAM, and SYSTEM files from DC by accessing the raw hard drive."
     supported_protocols = ["smb", "wmi", "winrm"]
+    category = CATEGORY.CREDENTIAL_DUMPING
+
+    # Module constants
     NTFS_LOCATION = 0
     MFT_LOCATION = 0
     context = None

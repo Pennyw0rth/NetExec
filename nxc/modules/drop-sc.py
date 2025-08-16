@@ -1,6 +1,8 @@
 import ntpath
 import tempfile
 
+from nxc.helpers.misc import CATEGORY
+
 
 class NXCModule:
     """
@@ -12,6 +14,7 @@ class NXCModule:
     name = "drop-sc"
     description = "Drop a searchConnector-ms file on each writable share"
     supported_protocols = ["smb"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context, module_options):
         """

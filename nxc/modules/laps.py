@@ -1,6 +1,7 @@
 import json
 
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
+from nxc.helpers.misc import CATEGORY
 from nxc.protocols.ldap.laps import LAPSv2Extract
 
 
@@ -17,6 +18,7 @@ class NXCModule:
     name = "laps"
     description = "Retrieves all LAPS passwords which the account has read permissions for."
     supported_protocols = ["ldap"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """COMPUTER    Computer name or wildcard ex: WIN-S10, WIN-* etc. Default: *"""
