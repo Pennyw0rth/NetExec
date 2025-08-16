@@ -1437,6 +1437,18 @@ gssapi = ["gssapi (>=1.4.1) ; platform_system != \"Windows\"", "pyasn1 (>=0.1.7)
 invoke = ["invoke (>=2.0)"]
 
 [[package]]
+name = "pefile"
+version = "2024.8.26"
+description = "Python PE parsing module"
+optional = false
+python-versions = ">=3.6.0"
+groups = ["main"]
+files = [
+    {file = "pefile-2024.8.26-py3-none-any.whl", hash = "sha256:76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f"},
+    {file = "pefile-2024.8.26.tar.gz", hash = "sha256:3ff6c5d8b43e8c37bb6e6dd5085658d658a7a0bdcd20b6a07b1fcfc1c4e9d632"},
+]
+
+[[package]]
 name = "pillow"
 version = "11.1.0"
 description = "Python Imaging Library (Fork)"
@@ -2463,4 +2475,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<4.0"
-content-hash = "e99f88534ebb145b7fadef433b4eb72132b4cb6ef012bc4132c69b75df348055"
+content-hash = "668295ac997900510e1f7162df978afc0de26fa32354eea7918ea7fe054e172d"
