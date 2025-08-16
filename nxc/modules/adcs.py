@@ -2,6 +2,8 @@ import re
 from impacket.ldap import ldap, ldapasn1
 from impacket.ldap.ldap import LDAPSearchError
 
+from nxc.helpers.misc import CATEGORY
+
 
 class NXCModule:
     """

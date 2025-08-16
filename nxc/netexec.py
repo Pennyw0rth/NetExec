@@ -1,7 +1,9 @@
 # PYTHON_ARGCOMPLETE_OK
 import sys
+
+from termcolor import colored
 from nxc.helpers.logger import highlight
-from nxc.helpers.misc import identify_target_file
+from nxc.helpers.misc import identify_target_file, CATEGORY
 from nxc.parsers.ip import parse_targets
 from nxc.parsers.nmap import parse_nmap_xml
 from nxc.parsers.nessus import parse_nessus_file
@@ -162,14 +164,26 @@ def main():
         modules = loader.list_modules()
 
     if args.list_modules:
+        low_privilege_modules = {m: props for m, props in modules.items() if args.protocol in props["supported_protocols"] and not props["requires_admin"]}
+        high_privilege_modules = {m: props for m, props in modules.items() if args.protocol in props["supported_protocols"] and props["requires_admin"]}
+
+        # List low privilege modules
         nxc_logger.highlight("LOW PRIVILEGE MODULES")
-        for name, props in sorted(modules.items()):
-            if args.protocol in props["supported_protocols"] and not props["requires_admin"]:
-                nxc_logger.display(f"{name:<25} {props['description']}")
+        for category, color in {CATEGORY.ENUMERATION: "green", CATEGORY.CREDENTIAL_DUMPING: "cyan", CATEGORY.PRIVILEGE_ESCALATION: "magenta"}.items():
+            if len([module for module in low_privilege_modules.values() if module["category"] == category]) > 0:
+                nxc_logger.highlight(colored(f"{category.name}", color, attrs=["bold"]))
+            for name, props in sorted(low_privilege_modules.items()):
+                if props["category"] == category:
+                    nxc_logger.display(f"{name:<25} {props['description']}")
+
+        # List high privilege modules
         nxc_logger.highlight("\nHIGH PRIVILEGE MODULES (requires admin privs)")
-        for name, props in sorted(modules.items()):
-            if args.protocol in props["supported_protocols"] and props["requires_admin"]:
-                nxc_logger.display(f"{name:<25} {props['description']}")
+        for category, color in {CATEGORY.ENUMERATION: "green", CATEGORY.CREDENTIAL_DUMPING: "cyan", CATEGORY.PRIVILEGE_ESCALATION: "magenta"}.items():
+            if len([module for module in high_privilege_modules.values() if module["category"] == category]) > 0:
+                nxc_logger.highlight(colored(f"{category.name}", color, attrs=["bold"]))
+            for name, props in sorted(high_privilege_modules.items()):
+                if props["category"] == category:
+                    nxc_logger.display(f"{name:<25} {props['description']}")
         exit(0)
     elif args.module and args.show_module_options:
         for module in args.module:
