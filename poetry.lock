@@ -1252,14 +1252,14 @@ files = [
 
 [[package]]
 name = "masky"
-version = "0.2.0"
+version = "0.2.1"
 description = "Python library with CLI allowing to remotely dump domain user credentials via an ADCS"
 optional = false
 python-versions = ">=3.6"
 groups = ["main"]
 files = [
-    {file = "masky-0.2.0-py3-none-any.whl", hash = "sha256:04f29988e659bd265bf393c833ee473cfd16bf8a32ffdeaacfbefe8f466f53ab"},
-    {file = "masky-0.2.0.tar.gz", hash = "sha256:fc0a99086da54e1cf91bb5e9c809aa311ea1519f10a3b6faf6d8e0a47c471ec9"},
+    {file = "masky-0.2.1-py3-none-any.whl", hash = "sha256:bcf545f5e2b762fc49df2f29aa934498bb5dd37ba0a28e0c1683acee2e5ef14b"},
+    {file = "masky-0.2.1.tar.gz", hash = "sha256:973615bebbd9455a1c2a81a6cec626a2032ec2209f242e3e69a6226e4b60b6fc"},
 ]
 
 [package.dependencies]
@@ -2475,4 +2475,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<4.0"
-content-hash = "668295ac997900510e1f7162df978afc0de26fa32354eea7918ea7fe054e172d"
+content-hash = "d5a080dff08c7835da466af3c6dbe210650500a127b732f92fb1a417fee228f2"
