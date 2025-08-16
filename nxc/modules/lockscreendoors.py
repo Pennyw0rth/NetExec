@@ -52,17 +52,15 @@ class NXCModule:
         return None
 
     def on_admin_login(self, context, connection):
-        target_path = "Windows/System32"
+        target_path = "\\Windows\\System32"
         tampered = False
-        readable_file_found = False
 
         for exe, expected_descs in self.expected_descriptions.items():
             try:
                 # Grab the binary from the share
                 buf = BytesIO()
-                connection.conn.getFile("C$", f"{target_path}/{exe}", buf.write)
+                connection.conn.getFile("C$", f"{target_path}\\{exe}", buf.write)
                 binary = buf.getvalue()
-                readable_file_found = True
 
                 # Extract and normalize the file description
                 file_desc = self.get_description(binary)
@@ -88,9 +86,6 @@ class NXCModule:
             except Exception:
                 # Silently skip if the file is not readable or doesn't exist
                 continue
-
-        if not readable_file_found:
-            return
 
         if not tampered:
             context.log.display("All lock screen executable descriptions are consistent with the expected values")
