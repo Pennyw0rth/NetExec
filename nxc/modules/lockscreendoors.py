@@ -46,9 +46,9 @@ class NXCModule:
                         for st in entry.StringTable:
                             desc = st.entries.get(b"FileDescription")
                             if desc:
-                                return desc.decode(errors="ignore").strip()
-        except Exception:
-            return None
+                                return desc.decode().strip()
+        except Exception as e:
+            self.context.log.debug(f"Failed to extract PE info: {e}")
         return None
 
     def on_admin_login(self, context, connection):
