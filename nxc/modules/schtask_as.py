@@ -18,7 +18,7 @@ class NXCModule:
         BINARY         OPTIONAL: Upload the binary to be executed by CMD
         TASK           OPTIONAL: Set a name for the scheduled task name
         FILE           OPTIONAL: Set a name for the command output file
-        LOCATION       OPTIONAL: Set a location for the command output file (e.g. '\tmp\')
+        LOCATION       OPTIONAL: Set a location for the command output file (e.g. 'C:\\Windows\\Temp\\')
 
         Example:
         -------
@@ -28,7 +28,7 @@ class NXCModule:
         self.command_to_run = self.binary_to_upload = self.run_task_as = self.task_name = self.output_filename = self.output_file_location = self.time = None
         self.share = "C$"
         self.tmp_dir = "C:\\Windows\\Temp\\"
-        self.tmp_share = self.tmp_dir.split(":")[1]
+        self.tmp_path = self.tmp_dir.split(":")[1]
 
         if "CMD" in module_options:
             self.command_to_run = module_options["CMD"]
@@ -46,7 +46,8 @@ class NXCModule:
             self.output_filename = module_options["FILE"]
 
         if "LOCATION" in module_options:
-            self.output_file_location = module_options["LOCATION"]
+            # Ensure trailing backslashes
+            self.output_file_location = module_options["LOCATION"].rstrip("\\") + "\\"
 
     name = "schtask_as"
     description = "Remotely execute a scheduled task as a logged on user"
@@ -57,29 +58,28 @@ class NXCModule:
 
         if self.command_to_run is None:
             self.logger.fail("You need to specify a CMD to run")
-            return 1
+            return
 
         if self.run_task_as is None:
             self.logger.fail("You need to specify a USER to run the command as")
-            return 1
+            return
 
         if self.binary_to_upload:
             if not os.path.isfile(self.binary_to_upload):
                 self.logger.fail(f"Cannot find {self.binary_to_upload}")
-                return 1
+                return
             else:
                 self.logger.display(f"Uploading {self.binary_to_upload}")
+                binary_file_location = self.tmp_path if self.output_file_location is None else self.output_file_location
                 with open(self.binary_to_upload, "rb") as binary_to_upload:
                     try:
                         self.binary_to_upload_name = os.path.basename(self.binary_to_upload)
-                        connection.conn.putFile(self.share, f"{self.tmp_share}{self.binary_to_upload_name}", binary_to_upload.read)
-                        self.logger.success(f"Binary {self.binary_to_upload_name} successfully uploaded in {self.tmp_share}{self.binary_to_upload_name}")
+                        connection.conn.putFile(self.share, f"{binary_file_location}{self.binary_to_upload_name}", binary_to_upload.read)
+                        self.logger.success(f"Binary {self.binary_to_upload_name} successfully uploaded in {binary_file_location}{self.binary_to_upload_name}")
                     except Exception as e:
-                        self.logger.fail(f"Error writing file to share {self.tmp_share}: {e}")
-                        return 1
+                        self.logger.fail(f"Error writing file to share {binary_file_location}: {e}")
+                        return
 
-        # Returnes self.command_to_run or \Windows\temp\BinToExecute.exe depending if BINARY=BinToExecute.exe
-        self.command_to_run = self.command_to_run if not self.binary_to_upload else f"{self.tmp_share}{self.command_to_run}"
         self.logger.display("Connecting to the remote Service control endpoint")
         try:
             exec_method = TSCH_EXEC(
@@ -122,7 +122,7 @@ class NXCModule:
         finally:
             if self.binary_to_upload:
                 try:
-                    connection.conn.deleteFile(self.share, f"{self.tmp_share}{self.binary_to_upload_name}")
-                    context.log.success(f"Binary {self.binary_to_upload_name} successfully deleted")
+                    connection.conn.deleteFile(self.share, f"{binary_file_location}{self.binary_to_upload_name}")
+                    context.log.success(f"Binary {binary_file_location}{self.binary_to_upload_name} successfully deleted")
                 except Exception as e:
-                    context.log.fail(f"Error deleting {self.binary_to_upload_name} on {self.share}: {e}")
+                    context.log.fail(f"Error deleting {binary_file_location}{self.binary_to_upload_name} on {self.share}: {e}")
