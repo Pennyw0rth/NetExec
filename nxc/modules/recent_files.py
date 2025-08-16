@@ -10,7 +10,7 @@ class NXCModule:
     name = "recent_files"
     description = "Extracts recently modified files"
     supported_protocols = ["smb"]
-    category = CATEGORY.PRIVILEGE_ESCALATION
+    category = CATEGORY.CREDENTIAL_DUMPING
     false_positive = [".", "..", "desktop.ini", "Public", "Default", "Default User", "All Users", ".NET v4.5", ".NET v4.5 Classic"]
 
     def options(self, context, module_options):
