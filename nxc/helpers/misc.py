@@ -1,3 +1,4 @@
+from enum import Enum
 import random
 import string
 import re
@@ -145,3 +146,9 @@ def detect_if_ip(target):
         return True
     except Exception:
         return False
+
+
+class CATEGORY(Enum):
+    ENUMERATION = "Enumeration"
+    CREDENTIAL_DUMPING = "Credential Dumping"
+    PRIVILEGE_ESCALATION = "Privilege Escalation"
