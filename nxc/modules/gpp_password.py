@@ -25,16 +25,16 @@ class NXCModule:
                 context.log.success("Found SYSVOL share")
                 context.log.display("Searching for potential XML files containing passwords")
 
-                paths = connection.spider(
-                    "SYSVOL",
-                    pattern=[
-                        "Groups.xml",
-                        "Services.xml",
-                        "Scheduledtasks.xml",
-                        "DataSources.xml",
-                        "Printers.xml",
-                        "Drives.xml",
-                    ],
+                paths = connection.spider_share(
+                        share="SYSVOL", 
+                        pattern=[
+                            "Groups.xml",
+                            "Services.xml",
+                            "Scheduledtasks.xml",
+                            "DataSources.xml",
+                            "Printers.xml",
+                            "Drives.xml",
+                        ],
                 )
 
                 for path in paths:
