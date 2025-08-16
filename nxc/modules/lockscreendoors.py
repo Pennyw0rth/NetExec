@@ -33,7 +33,7 @@ class NXCModule:
         ]
 
     def options(self, context, module_options):
-        pass
+        """No options available"""
 
     def get_description(self, binary_data):
         # Extract the file description from version info
