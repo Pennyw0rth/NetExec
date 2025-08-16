@@ -6,6 +6,7 @@ from base64 import b64decode
 import hashlib
 from dataclasses import dataclass
 
+from nxc.helpers.misc import CATEGORY
 from nxc.protocols.smb.dpapi import upgrade_to_dploot_connection
 
 
@@ -26,6 +27,7 @@ class NXCModule:
     name = "mremoteng"
     description = "Dump mRemoteNG Passwords in AppData and in Desktop / Documents folders (digging recursively in them) "
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self, context=None, module_options=None):
         self.false_positive = (

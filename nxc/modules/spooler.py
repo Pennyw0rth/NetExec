@@ -9,6 +9,8 @@ from impacket.dcerpc.v5.rpch import (
 )
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 
+from nxc.helpers.misc import CATEGORY
+
 KNOWN_PROTOCOLS = {
     135: {"bindstr": r"ncacn_ip_tcp:%s[135]"},
     445: {"bindstr": r"ncacn_np:%s[\pipe\epmapper]"},
@@ -24,6 +26,7 @@ class NXCModule:
     name = "spooler"
     description = "Detect if print spooler is enabled or not"
     supported_protocols = ["smb", "wmi"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

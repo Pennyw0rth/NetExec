@@ -4,11 +4,14 @@ from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 
+from nxc.helpers.misc import CATEGORY
+
 
 class NXCModule:
     name = "bitlocker"
     description = "Enumerating BitLocker Status on target(s) If it is enabled or disabled."
     supported_protocols = ["smb", "wmi"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

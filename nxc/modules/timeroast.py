@@ -4,6 +4,8 @@ from time import time
 from socket import socket, AF_INET, SOCK_DGRAM
 from struct import pack, unpack
 
+from nxc.helpers.misc import CATEGORY
+
 
 def hashcat_format(rid, hashval, salt):
     """Encodes hash in Hashcat-compatible format (with username prefix)."""
@@ -23,6 +25,7 @@ class NXCModule:
     name = "timeroast"
     description = "Timeroasting exploits Windows NTP authentication to request password hashes of any computer or trust account"
     supported_protocols = ["smb"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self):
         self.context = None

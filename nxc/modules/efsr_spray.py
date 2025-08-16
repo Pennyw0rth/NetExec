@@ -1,5 +1,5 @@
 import ntpath
-from nxc.helpers.misc import gen_random_string
+from nxc.helpers.misc import CATEGORY, gen_random_string
 from nxc.context import Context
 from impacket.smb3structs import FILE_SHARE_WRITE, FILE_SHARE_DELETE, FILE_ATTRIBUTE_ENCRYPTED
 from impacket.smbconnection import SessionError, SMBConnection
@@ -28,6 +28,7 @@ class NXCModule:
     description = "Tries to activate the EFSR service by creating a file with the encryption attribute on some available share."
     supported_protocols = ["smb"]
     excluded_shares = ["SYSVOL"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context: Context, module_options: dict[str, str]):
         """

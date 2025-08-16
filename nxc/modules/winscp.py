@@ -14,6 +14,8 @@ from io import BytesIO
 import re
 import configparser
 
+from nxc.helpers.misc import CATEGORY
+
 
 class NXCModule:
     """Module by @NeffIsBack"""
@@ -21,6 +23,7 @@ class NXCModule:
     name = "winscp"
     description = "Looks for WinSCP.ini files in the registry and default locations and tries to extract credentials."
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         r"""

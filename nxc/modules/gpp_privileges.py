@@ -3,6 +3,8 @@ import ldap3
 import re
 from io import BytesIO
 
+from nxc.helpers.misc import CATEGORY
+
 
 class NXCModule:
     """
@@ -13,6 +15,7 @@ class NXCModule:
     name = "gpp_privileges"
     description = "Extracts privileges assigned via GPOs and resolves SIDs via LDAP."
     supported_protocols = ["smb"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     WELL_KNOWN_SIDS = {
         "S-1-0": "Null Authority",

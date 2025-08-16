@@ -7,6 +7,8 @@ from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket import uuid
 import requests
 
+from nxc.helpers.misc import CATEGORY
+
 
 class NXCModule:
     """
@@ -23,7 +25,8 @@ class NXCModule:
 
     name = "enum_ca"
     description = "Anonymously uses RPC endpoints to hunt for ADCS CAs"
-    supported_protocols = ["smb"]  # Example: ['smb', 'mssql']
+    supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

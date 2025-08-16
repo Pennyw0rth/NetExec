@@ -1,5 +1,7 @@
 from sys import exit
 
+from nxc.helpers.misc import CATEGORY
+
 
 class NXCModule:
     """
@@ -12,6 +14,7 @@ class NXCModule:
     name = "web_delivery"
     description = "Kicks off a Metasploit Payload using the exploit/multi/script/web_delivery module"
     supported_protocols = ["smb", "mssql"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context, module_options):
         """

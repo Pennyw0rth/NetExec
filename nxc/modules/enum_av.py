@@ -8,6 +8,8 @@ from impacket.dcerpc.v5.dtypes import NULL, MAXIMUM_ALLOWED, RPC_UNICODE_STRING
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 import pathlib
 
+from nxc.helpers.misc import CATEGORY
+
 
 class NXCModule:
     """
@@ -18,6 +20,7 @@ class NXCModule:
     name = "enum_av"
     description = "Gathers information on all endpoint protection solutions installed on the the remote host(s) via LsarLookupNames (no privilege needed)"
     supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

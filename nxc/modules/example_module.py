@@ -1,3 +1,5 @@
+from nxc.helpers.misc import CATEGORY
+
 
 class NXCModule:
     """
@@ -9,6 +11,7 @@ class NXCModule:
     name = "example module"
     description = "I do something"
     supported_protocols = []  # Example: ['smb', 'mssql']
+    category = CATEGORY.ENUMERATION  # Must be one of "Enumeration", "Privilege Escalation" or "Credential Dumping". Use what fits best.
 
     def __init__(self):
         self.context = None

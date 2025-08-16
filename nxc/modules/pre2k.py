@@ -4,6 +4,7 @@ from impacket.krb5.ccache import CCache
 from impacket.krb5.types import Principal
 from impacket.krb5 import constants
 
+from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.paths import NXC_PATH
 
@@ -16,6 +17,7 @@ class NXCModule:
     name = "pre2k"
     description = "Identify pre-created computer accounts, save the results to a file, and obtain TGTs for each"
     supported_protocols = ["ldap"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context, module_options):
         pass
