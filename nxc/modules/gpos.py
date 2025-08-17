@@ -2,13 +2,12 @@ import os
 import ntpath
 import shutil
 from impacket.dcerpc.v5.lsat import DCERPCSessionError
-from impacket.smb3structs import FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE
 from impacket.dcerpc.v5 import transport, srvs
 from impacket.dcerpc.v5.dtypes import OWNER_SECURITY_INFORMATION, GROUP_SECURITY_INFORMATION, DACL_SECURITY_INFORMATION
-from impacket.ldap.ldaptypes import ACCESS_MASK
 from impacket.ldap import ldaptypes
 from nxc.config import process_secret
 from nxc.protocols.smb.samrfunc import LSAQuery
+from nxc.protocols.ldap.constants import ACCESS_MASK_TO_TEXT_LOOKUP
 
 
 class NXCModule:
@@ -28,6 +27,7 @@ class NXCModule:
         self.all_props = False
         self.download = True
         self.download_dest = "Retrieved_GPOs"
+        self.list_permissions = False
 
     def options(self, context, module_options):
         """
@@ -39,11 +39,11 @@ class NXCModule:
         LIST_PERMISSIONS List permissions for the GPOs (default is False)
         """
         self.gpo_name = module_options.get("NAME")
-        self.fuzzy_search = module_options.get("FUZZY")
-        self.all_props = module_options.get("ALL_PROPS")
-        self.download = module_options.get("DOWNLOAD", True)
+        self.fuzzy_search = module_options.get("FUZZY", "False").lower() == "true"
+        self.all_props = module_options.get("ALL_PROPS", "False").lower() == "true"
+        self.download = module_options.get("DOWNLOAD", "True").lower() == "true"
         self.download_dest = module_options.get("DEST", "Retrieved_GPOs")
-        self.list_permissions = module_options.get("LIST_PERMISSIONS", False)
+        self.list_permissions = module_options.get("LIST_PERMISSIONS", "False").lower() == "true"
 
     def on_login(self, context, connection):
         context.log.display("Searching for GPOs via SMB in SYSVOL share")
@@ -64,17 +64,6 @@ class NXCModule:
                 gpo_path = os.path.join(f"{connection.domain}", "Policies", f"{gpo_guid}")
 
                 gpos_found.append((gpo_guid, gpo_path))
-
-                tid = connection.conn.connectTree("SYSVOL")
-                context.log.debug(f"TID: {tid}")
-                fid = connection.conn.openFile(tid, gpo_path, shareMode=FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, creationOption=0, desiredAccess=FILE_READ_ATTRIBUTES)
-                context.log.debug(f"FID: {fid}")
-
-                if self.list_permissions:
-                    self.get_folder_security_info(context, connection, gpo_guid, gpo_path)
-
-                connection.conn.closeFile(tid, fid)
-                connection.conn.disconnectTree(tid)
 
                 if self.gpo_name:
                     # try to find the GPO's display name by checking for gpt.ini
@@ -98,6 +87,9 @@ class NXCModule:
                     context.log.highlight(f"Display Name: {display_name}")
                     context.log.highlight(f"GUID: {gpo_guid}")
                     context.log.highlight(f"GPO Path: \\\\SYSVOL\\{gpo_path}")
+
+                if self.list_permissions:
+                    self.get_folder_security_info(context, connection, gpo_guid, gpo_path)
 
                 if self.download:
                     context.log.display(f"Downloading GPO {gpo_guid} from SYSVOL share")
@@ -181,33 +173,8 @@ class NXCModule:
                 sid = ace["Ace"]["Sid"].formatCanonical()
                 context.log.debug(f"ACE {i} mask: 0x{access_mask:08x}")
 
-                # create a lookup dictionary mapping ACCESS_MASK constants to permission names
-                mask_lookup = {
-                    ACCESS_MASK.GENERIC_READ: "GENERIC_READ",
-                    ACCESS_MASK.GENERIC_WRITE: "GENERIC_WRITE",
-                    ACCESS_MASK.GENERIC_EXECUTE: "GENERIC_EXECUTE",
-                    ACCESS_MASK.GENERIC_ALL: "GENERIC_ALL",
-                    ACCESS_MASK.MAXIMUM_ALLOWED: "MAXIMUM_ALLOWED",
-                    ACCESS_MASK.ACCESS_SYSTEM_SECURITY: "ACCESS_SYSTEM_SECURITY",
-                    ACCESS_MASK.SYNCHRONIZE: "SYNCHRONIZE",
-                    ACCESS_MASK.WRITE_OWNER: "WRITE_OWNER",
-                    ACCESS_MASK.WRITE_DACL: "WRITE_DACL",
-                    ACCESS_MASK.READ_CONTROL: "READ_CONTROL",
-                    ACCESS_MASK.DELETE: "DELETE",
-                    # file system rights
-                    0x00000001: "FILE_READ_DATA",
-                    0x00000002: "FILE_WRITE_DATA",
-                    0x00000004: "FILE_APPEND_DATA",
-                    0x00000008: "FILE_READ_EA",
-                    0x00000010: "FILE_WRITE_EA",
-                    0x00000020: "FILE_EXECUTE",
-                    0x00000040: "FILE_DELETE_CHILD",
-                    0x00000080: "FILE_READ_ATTRIBUTES",
-                    0x00000100: "FILE_WRITE_ATTRIBUTES"
-                }
-
                 # build permissions list using the lookup dictionary
-                permissions = [mask_name for mask_value, mask_name in mask_lookup.items() if access_mask & mask_value]
+                permissions = [mask_name for mask_value, mask_name in ACCESS_MASK_TO_TEXT_LOOKUP.items() if access_mask & mask_value]
 
                 # if no specific permissions found, show the raw mask
                 perm_str = ", ".join(permissions) if permissions else f"0x{access_mask:08x}"
@@ -276,12 +243,15 @@ class NXCModule:
 
         sec_desc = ldaptypes.SR_SECURITY_DESCRIPTOR(sec_info)
         context.log.highlight(f"Security Descriptor for GPO {gpo_guid}:")
-
         context.log.debug(f"Security information: {sec_desc}")
-        context.log.debug(f"Owner SID: {sec_desc['OwnerSid'].formatCanonical()}")
-        context.log.debug(f"Group SID: {sec_desc['GroupSid'].formatCanonical()}")
-        sid_names = lsa_query.lookup_sids([sec_desc["OwnerSid"].formatCanonical(), sec_desc["GroupSid"].formatCanonical()])
-        context.log.debug(f"SID names: {sid_names}")
+
+        owner_sid = sec_desc["OwnerSid"].formatCanonical()
+        group_sid = sec_desc["GroupSid"].formatCanonical()
+        context.log.debug(f"Owner SID: {owner_sid}")
+        context.log.debug(f"Group SID: {group_sid}")
+
+        sec_desc["OwnerName"] = lsa_query.lookup_sids([owner_sid])[0]
+        sec_desc["GroupName"] = lsa_query.lookup_sids([group_sid])[0]
 
         for i, ace in enumerate(sec_desc["Dacl"]["Data"]):
             try:
@@ -293,9 +263,9 @@ class NXCModule:
                 continue
 
         if sec_desc["OwnerSid"]:
-            context.log.highlight(f"  Owner SID: {sec_desc['OwnerSid'].formatCanonical()} - {sid_names[0]}")
+            context.log.highlight(f"  Owner SID: {owner_sid} - {sec_desc['OwnerName']}")
         if sec_desc["GroupSid"]:
-            context.log.highlight(f"  Group SID: {sec_desc['GroupSid'].formatCanonical()} - {sid_names[1]}")
+            context.log.highlight(f"  Group SID: {group_sid} - {sec_desc['GroupName']}")
         if sec_desc["Dacl"]:
             self.parse_aces(context, sec_desc)
 
