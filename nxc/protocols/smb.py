@@ -2,6 +2,8 @@ import ntpath
 import binascii
 import os
 import re
+import struct
+import ipaddress
 from Cryptodome.Hash import MD4
 
 from impacket.smbconnection import SMBConnection, SessionError
@@ -32,7 +34,7 @@ from impacket.krb5 import constants
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login
-from impacket.smb3structs import FILE_SHARE_WRITE, FILE_SHARE_DELETE
+from impacket.smb3structs import FILE_SHARE_WRITE, FILE_SHARE_DELETE, SMB2_0_IOCTL_IS_FSCTL
 from impacket.dcerpc.v5 import tsts as TSTS
 
 from nxc.config import process_secret, host_info_colors
@@ -1435,74 +1437,116 @@ class smb(connection):
             full_path = ntpath.join(self.args.dir, content.get_longname())
             self.logger.highlight(f"{'d' if content.is_directory() else 'f'}{'rw-' if content.is_readonly() > 0 else 'r--':<8}{content.get_filesize():<15}{ctime(float(content.get_mtime_epoch())):<30}{full_path:<45}")
 
-    @requires_admin
     def interfaces(self):
         """
-        Retrieve the list of network interfaces info (Name, IP Address, Subnet Mask, Default Gateway) from remote Windows registry'
-        Made by: @Sant0rryu, @NeffIsBack
+        Enumeratie active network interfaces via SMB
+        Made by Ilya Yatsenko (@fulc2um)
         """
         try:
-            remoteOps = RemoteOperations(self.conn, False)
-            remoteOps.enableRegistry()
+            self.logger.display("Starting network interface enumeration")
 
-            if remoteOps._RemoteOperations__rrp:
-                reg_handle = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)["phKey"]
-                key_handle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, reg_handle, "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces")["phkResult"]
-                sub_key_list = rrp.hBaseRegQueryInfoKey(remoteOps._RemoteOperations__rrp, key_handle)["lpcSubKeys"]
-                sub_keys = [rrp.hBaseRegEnumKey(remoteOps._RemoteOperations__rrp, key_handle, i)["lpNameOut"][:-1] for i in range(sub_key_list)]
+            tree_id = self.conn.connectTree("IPC$")
 
-                self.logger.highlight(f"{'-Name-':<11} | {'-IP Address-':<15} | {'-SubnetMask-':<15} | {'-Gateway-':<15} | -DHCP-")
-                for sub_key in sub_keys:
-                    interface = {}
+            FSCTL_QUERY_NETWORK_INTERFACE_INFO = 0x001401FC
+
+            response = self.conn._SMBConnection.ioctl(
+                tree_id,
+                fileId=None,
+                ctlCode=FSCTL_QUERY_NETWORK_INTERFACE_INFO,
+                flags=SMB2_0_IOCTL_IS_FSCTL,
+                inputBlob=b"",
+                maxOutputResponse=8192
+            )
+
+            if response:
+                self.logger.success("Retrieved network interface data")
+
+                # Parse FSCTL_QUERY_NETWORK_INTERFACE_INFO response data
+                if not response:
+                    self.logger.fail("No data to parse")
+                    return
+
+                # Parse and group interfaces
+                grouped_interfaces = {}
+                offset = 0
+
+                while offset < len(response) and offset + 152 <= len(response):
                     try:
-                        interface_key = f"SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\{sub_key}"
-                        interface_handle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, reg_handle, interface_key)["phkResult"]
+                        # Parse NETWORK_INTERFACE_INFO structure
+                        next_offset = struct.unpack("<L", response[offset:offset + 4])[0]
+                        if_index = struct.unpack("<L", response[offset + 4:offset + 8])[0]
+                        capabilities = struct.unpack("<L", response[offset + 8:offset + 12])[0]
+                        link_speed = struct.unpack("<Q", response[offset + 16:offset + 24])[0]
 
-                        # Retrieve Interace Name
-                        interface_name_key = f"SYSTEM\\ControlSet001\\Control\\Network\\{{4D36E972-E325-11CE-BFC1-08002BE10318}}\\{sub_key}\\Connection"
-                        interface_name_handle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, reg_handle, interface_name_key)["phkResult"]
-                        interface_name = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, interface_name_handle, "Name")[1].rstrip("\x00")
-                        interface["Name"] = str(interface_name)
-                        if "Kernel" in interface_name:
-                            continue
+                        # Socket address (SockAddr_Storage at offset+24)
+                        family = struct.unpack("<H", response[offset + 24:offset + 26])[0]
 
-                        # Retrieve DHCP
-                        try:
-                            dhcp_enabled = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, interface_handle, "EnableDHCP")[1]
-                        except DCERPCException:
-                            dhcp_enabled = False
-                        interface["DHCP"] = bool(dhcp_enabled)
+                        if family == 0x0002:  # IPv4
+                            ip_bytes = response[offset + 28:offset + 32]
+                            ip_addr = ipaddress.IPv4Address(ip_bytes)
+                            addr_info = f"IPv4: {ip_addr}"
+                        elif family == 0x0017:  # IPv6
+                            ip6_bytes = response[offset + 32:offset + 48]
+                            ip_addr = ipaddress.IPv6Address(ip6_bytes)
+                            addr_info = f"IPv6: {ip_addr}"
+                        else:
+                            addr_info = f"Unknown family: 0x{family:04x}"
 
-                        # Retrieve IPAddress
-                        try:
-                            ip_address = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, interface_handle, "DhcpIPAddress" if dhcp_enabled else "IPAddress")[1].rstrip("\x00").replace("\x00", ", ")
-                        except DCERPCException:
-                            ip_address = None
-                        interface["IPAddress"] = ip_address if ip_address else None
+                        # Group by interface index
+                        if if_index not in grouped_interfaces:
+                            caps = []
+                            if capabilities & 0x01:
+                                caps.append("RSS")
+                            if capabilities & 0x02:
+                                caps.append("RDMA")
 
-                        # Retrieve SubnetMask
-                        try:
-                            subnetmask = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, interface_handle, "SubnetMask")[1].rstrip("\x00").replace("\x00", ", ")
-                        except DCERPCException:
-                            subnetmask = None
-                        interface["SubnetMask"] = subnetmask if subnetmask else None
+                            grouped_interfaces[if_index] = {
+                                "capabilities": caps,
+                                "link_speed": link_speed,
+                                "addresses": []
+                            }
 
-                        # Retrieve DefaultGateway
-                        try:
-                            default_gateway = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, interface_handle, "DhcpDefaultGateway")[1].rstrip("\x00").replace("\x00", ", ")
-                        except DCERPCException:
-                            default_gateway = None
-                        interface["DefaultGateway"] = default_gateway if default_gateway else None
+                        grouped_interfaces[if_index]["addresses"].append(addr_info)
 
-                        self.logger.highlight(f"{interface['Name']:<11} | {interface['IPAddress']!s:<15} | {interface['SubnetMask']!s:<15} | {interface['DefaultGateway']!s:<15} | {interface['DHCP']}")
+                        if next_offset == 0:
+                            break
 
-                    except DCERPCException as e:
-                        self.logger.info(f"Failed to retrieve the network interface info for {sub_key}: {e!s}")
+                        offset = next_offset if next_offset > offset else offset + next_offset
+                        if offset >= len(response):
+                            break
 
-            with contextlib.suppress(Exception):
-                remoteOps.finish()
-        except DCERPCException as e:
-            self.logger.error(f"Failed to connect to the target: {e!s}")
+                    except (struct.error, IndexError) as e:
+                        self.logger.fail(f"Error parsing interface at offset {offset}: {e}")
+                        break
+
+                # Display interfaces
+                if not grouped_interfaces:
+                    self.logger.fail("No network interfaces found")
+                    return
+
+                self.logger.highlight(f"Found {len(grouped_interfaces)} network interface(s)")
+
+                for i, if_index in enumerate(sorted(grouped_interfaces.keys())):
+                    iface = grouped_interfaces[if_index]
+                    caps_str = ", ".join(iface["capabilities"]) if iface["capabilities"] else "None"
+                    speed_mbps = iface["link_speed"] / 1000000
+
+                    self.logger.display(f"Interface {i + 1} (Index: {if_index}):")
+                    self.logger.display(f"  - Capabilities: {caps_str}")
+                    self.logger.display(f"  - Speed: {speed_mbps:.0f} Mbps")
+                    self.logger.display("  - Addresses:")
+
+                    for addr in iface["addresses"]:
+                        prefix = "      -"
+                        self.logger.display(f"{prefix} {addr}")
+            else:
+                self.logger.fail("No response data received")
+
+            self.conn.disconnectTree(tree_id)
+
+        except Exception as e:
+            self.logger.fail(f"Error during network interface enumeration: {e}")
+            self.logger.fail(f"Full error: {e}", exc_info=True)
 
     def get_dc_ips(self):
         dc_ips = [dc[1] for dc in self.db.get_domain_controllers(domain=self.domain)]
