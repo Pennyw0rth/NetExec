@@ -1036,7 +1036,11 @@ class ldap(connection):
             for item in self.args.kerberoast_users:
                 if os.path.isfile(item):
                     with open(item, encoding="utf-8") as f:
-                        target_usernames.extend(line.strip() for line in f if line.strip())
+                    try:
+                        with open(item, encoding="utf-8") as f:
+                            target_usernames.extend(line.strip() for line in f if line.strip())
+                    except Exception as e:
+                        self.logger.fail(f"Failed to read file '{item}': {e}")
                 else:
                     target_usernames.append(item.strip())
 
