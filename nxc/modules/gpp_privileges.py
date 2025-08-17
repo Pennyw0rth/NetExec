@@ -103,7 +103,7 @@ class NXCModule:
             return
 
         context.log.display("Searching for GptTmpl.inf files")
-        paths = connection.spider("SYSVOL", pattern=["GptTmpl.inf"])
+        paths = connection.spider_share(share="SYSVOL", pattern=["GptTmpl.inf"])
 
         if not paths:
             context.log.warning("No GptTmpl.inf files found in SYSVOL.")

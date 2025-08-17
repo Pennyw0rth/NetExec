@@ -1696,47 +1696,62 @@ class smb(connection):
                         break
             dcom.disconnect()
         return records if records else False
+      
+    def spider(self):
+        if self.args.regex:
+            try:
+                self.args.regex = [re.compile(bytes(rx, "utf8")) for rx in self.args.regex]
+            except Exception as e:
+                self.logger.fail(f"Regex compilation error: {e}")
+                return
+        spidering = SMBSpider(
+                smbconnection=self.conn,
+                logger=self.logger,
+                spider=self.args.spider,
+                spider_folder=self.args.spider_folder,
+                exclude_folders=self.args.exclude_folders,
+                depth=self.args.depth,
+                content=self.args.content,
+                spider_all=self.args.spider_all,
+                only_files=self.args.only_files,
+                only_folders=self.args.only_folders,
+                pattern=self.args.pattern,
+                regex=self.args.regex,
+                silent=False
+        )
 
-    def spider(
-        self,
-        share=None,
-        folder=".",
-        pattern=None,
-        regex=None,
-        exclude_dirs=None,
-        depth=None,
-        content=False,
-        only_files=True,
-        silent=True
-    ):
-        if exclude_dirs is None:
-            exclude_dirs = []
-        if regex is None:
-            regex = []
-        if pattern is None:
-            pattern = []
-        spider = SMBSpider(self.conn, self.logger)
-        if not silent:
-            self.logger.display("Started spidering")
+        self.logger.display("Started spidering")
         start_time = time()
-        if not share:
-            spider.spider(
-                self.args.spider,
-                self.args.spider_folder,
-                self.args.pattern,
-                self.args.regex,
-                self.args.exclude_dirs,
-                self.args.depth,
-                self.args.content,
-                self.args.only_files,
-                self.args.silent
-            )
-        else:
-            spider.spider(share, folder, pattern, regex, exclude_dirs, depth, content, only_files, silent)
-        if not silent:
-            self.logger.display(f"Done spidering (Completed in {time() - start_time})")
+        spidering.spider()
+        self.logger.display(f"Done spidering (Completed in {round(time() - start_time, 3)} seconds)")
 
-        return spider.results
+    def spider_all(self):
+        self.spider()
+
+    def spider_share(self, share, folder="/", pattern=None, regex=None, depth=None, silent=True):
+        if regex:
+            try:
+                regex = [re.compile(bytes(rx, "utf8")) for rx in regex]
+            except Exception as e:
+                self.logger.fail(f"Regex compilation error: {e}")
+                return None
+        spidering = SMBSpider(
+                smbconnection=self.conn,
+                logger=self.logger,
+                spider=[share],
+                spider_folder=folder,
+                exclude_folders=None,
+                depth=depth,
+                content=None,
+                spider_all=None,
+                only_files=None,
+                only_folders=None,
+                pattern=pattern,
+                regex=regex,
+                silent=silent
+        )
+        spidering.spider()
+        return spidering.paths
 
     def rid_brute(self, max_rid=None):
         entries = []
