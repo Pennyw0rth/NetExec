@@ -1905,7 +1905,7 @@ class smb(connection):
         # create the directory for this folder
         os.makedirs(local_folder_path, exist_ok=True)
         if not filtered_items and not silent:
-            self.logger.success(f"Created empty directory '{local_folder_path}'")
+            self.logger.display(f"Created empty directory '{local_folder_path}'")
 
         for item in filtered_items:
             item_name = item.get_longname()
