@@ -194,8 +194,8 @@ def main():
             proto_module_paths.append(modules[m]["path"])
         protocol_object.module_paths = proto_module_paths
 
-    if hasattr(args, "ntds") and args.ntds and not args.userntds:
-        ans = input(highlight("[!] Dumping the ntds can crash the DC on Windows Server 2019. Use the option --user <user> to dump a specific user safely or the module -M ntdsutil [Y/n] ", "red"))
+    if args.protocol == "rdp" and args.execute:
+        ans = input(highlight("[!] Executing remote command via RDP will disconnect the Windows session (not log off) if the targeted user is connected via RDP, do you want to continue ? [Y/n] ", "red"))
         if ans.lower() not in ["y", "yes", ""]:
             exit(1)
 
