@@ -5,7 +5,7 @@ class NXCModule:
     name = "shadowcoerce"
     description = "[REMOVED] Module to check if the target is vulnerable to ShadowCoerce, credit to @Shutdown and @topotam"
     supported_protocols = ["smb"]
-    category = CATEGORY.PRIVILEGE_ESCALATION
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """

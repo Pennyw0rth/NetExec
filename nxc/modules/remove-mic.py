@@ -27,7 +27,7 @@ class NXCModule:
     name = "remove-mic"
     description = "Check if host vulnerable to CVE-2019-1040"
     supported_protocols = ["smb"]
-    category = CATEGORY.PRIVILEGE_ESCALATION
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

@@ -5,7 +5,7 @@ class NXCModule:
     name = "petitpotam"
     description = "[REMOVED] Module to check if the DC is vulnerable to PetitPotam, credit to @topotam"
     supported_protocols = ["smb"]
-    category = CATEGORY.PRIVILEGE_ESCALATION
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """
