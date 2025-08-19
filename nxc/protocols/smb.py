@@ -333,6 +333,8 @@ class smb(connection):
 """
                     host_file.write(data)
                     self.logger.debug(data)
+                    self.logger.success(f"krb5 conf saved to: {self.args.generate_krb5_file}")
+                    self.logger.success(f"Run the following command to use the conf file: export KRB5_CONFIG={self.args.generate_krb5_file}")
 
         return self.host, self.hostname, self.targetDomain
 
