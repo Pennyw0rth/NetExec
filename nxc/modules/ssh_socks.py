@@ -22,11 +22,30 @@ class NXCModule:
 
     # nxc passes a dict in module_options; PORT is optional
     def options(self, context, module_options):
+        # Existing port option
         try:
             self.local_port = int(module_options.get("PORT", 1080))
         except Exception:
             self.local_port = 1080
         context.log.display(f"[ssh_socks] Listening on {self.bind_host}:{self.local_port} (SOCKS5)")
+    
+        # Options for kex and hostkey for legacy systems
+        kex = module_options.get("KEX")
+        hostkey = module_options.get("HOSTKEY")
+    
+        if kex:
+            algos = [x.strip() for x in kex.split(",") if x.strip()]
+            context.log.display(f"[ssh_socks] Forcing KEX algos: {algos}")
+            # Patch paramiko defaults
+            from paramiko.transport import Transport
+            Transport._preferred_kex = algos
+    
+        if hostkey:
+            algos = [x.strip() for x in hostkey.split(",") if x.strip()]
+            context.log.display(f"[ssh_socks] Forcing hostkey algos: {algos}")
+            from paramiko.transport import Transport
+            Transport._preferred_pubkeys = algos
+
 
     def on_login(self, context, connection):
         """
