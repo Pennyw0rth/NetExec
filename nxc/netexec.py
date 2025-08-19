@@ -1,6 +1,5 @@
 # PYTHON_ARGCOMPLETE_OK
 import sys
-
 from termcolor import colored
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import identify_target_file, CATEGORY
