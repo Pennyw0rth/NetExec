@@ -1,10 +1,10 @@
-from impacket import uuid
 from impacket.dcerpc.v5 import transport, rprn, even, epm
 from impacket.dcerpc.v5.ndr import NDRCALL, NDRSTRUCT, NDRPOINTER, NDRUniConformantArray, NDRPOINTERNULL
 from impacket.dcerpc.v5.dtypes import LPBYTE, USHORT, LPWSTR, DWORD, ULONG, NULL, WSTR, LONG, BOOL, PCHAR, RPC_SID
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 
 from impacket.uuid import uuidtup_to_bin
+import contextlib
 
 
 def get_dynamic_endpoint(interface: bytes, target: str, timeout: int = 5) -> str:
@@ -13,8 +13,8 @@ def get_dynamic_endpoint(interface: bytes, target: str, timeout: int = 5) -> str
     rpctransport.set_connect_timeout(timeout)
     dce = rpctransport.get_dce_rpc()
     dce.connect()
-    endpoint = epm.hept_map(target, interface, protocol="ncacn_ip_tcp", dce=dce)
-    return endpoint
+    return epm.hept_map(target, interface, protocol="ncacn_ip_tcp", dce=dce)
+
 
 class NXCModule:
     name = "coerce_plus"
@@ -539,10 +539,8 @@ class PetitPotamtTrigger:
 
         # activates EFS
         # https://specterops.io/blog/2025/08/19/will-webclient-start/
-        try:
+        with contextlib.suppress(Exception):
             get_dynamic_endpoint(uuidtup_to_bin(("df1941c5-fe89-4e79-bf10-463657acf44d", "0.0")), target, timeout=1)
-        except:
-            pass
 
         rpctransport = transport.DCERPCTransportFactory(binding_params[pipe]["stringBinding"])
         rpctransport.set_dport(445)

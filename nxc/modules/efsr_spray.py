@@ -1,5 +1,5 @@
-import ntpath
 from nxc.context import Context
+
 
 class NXCModule:
     name = "efsr_spray"
@@ -13,7 +13,6 @@ class NXCModule:
         SHARE_NAME     If set, ONLY this share will be used
         EXCLUDED_SHARES List of share names which will not be used, seperated by comma
         """
-        pass
 
     def on_login(self, context: Context, connection):
         context.log.fail('[REMOVED] This module has been made obsolete and EFS will be activated automatically by "coerce_plus"')
