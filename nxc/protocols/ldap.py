@@ -828,15 +828,9 @@ class ldap(connection):
 
     def dc_list(self):
         # bypass host resolver configuration via configure=False (default pulls from /etc/resolv.conf or registry on Windows)
-        if self.args.dns_server:
-            resolv = resolver.Resolver(configure=False)
-            self.logger.debug(f"DNS Server option set, using DNS server: {self.args.dns_server}")
-            resolv.nameservers = [self.args.dns_server]
-        else:
-            resolv = resolver.Resolver(configure=False)
-            self.logger.debug(f"No DNS Server option set, using host: {self.host}")
-            resolv.nameservers = [self.host]
-
+        resolv = resolver.Resolver(configure=False)
+        resolv.nameservers = [self.args.dns_server] if self.args.dns_server else [self.host]
+        self.logger.debug(f"DNS Server option: {self.args.dns_server}, using DNS server: {resolv.nameservers}")
         resolv.timeout = self.args.dns_timeout
 
         def resolve_and_display_hostname(name, domain_name=None):
