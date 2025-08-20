@@ -215,6 +215,7 @@ class ldap(connection):
                 return False
             else:
                 self.logger.error(f"Error getting ldap info {e}")
+                return False
 
         self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
         self.target = target
