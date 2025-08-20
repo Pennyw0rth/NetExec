@@ -819,18 +819,23 @@ class ldap(connection):
                 self.logger.highlight(item["name"] + "$")
 
     def dc_list(self):
-        # Building the search filter
-        resolv = resolver.Resolver()
+        # bypass host resolver configuration via configure=False (default pulls from /etc/resolv.conf or registry on Windows)
         if self.args.dns_server:
+            resolv = resolver.Resolver(configure=False)
+            self.logger.debug(f"DNS Server option set, using DNS server: {self.args.dns_server}")
             resolv.nameservers = [self.args.dns_server]
         else:
+            resolv = resolver.Resolver(configure=False)
+            self.logger.debug(f"No DNS Server option set, using host: {self.host}")
             resolv.nameservers = [self.host]
+
         resolv.timeout = self.args.dns_timeout
 
-        # Function to resolve and display hostnames
         def resolve_and_display_hostname(name, domain_name=None):
             prefix = f"[{domain_name}] " if domain_name else ""
             try:
+                self.logger.debug(f"DNS server set to: {resolv.nameservers}")
+
                 # Resolve using DNS server for A, AAAA, CNAME, PTR, and NS records
                 for record_type in ["A", "AAAA", "CNAME", "PTR", "NS"]:
                     try:
