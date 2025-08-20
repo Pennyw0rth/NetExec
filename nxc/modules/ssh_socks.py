@@ -28,24 +28,23 @@ class NXCModule:
         except Exception:
             self.local_port = 1080
         context.log.display(f"[ssh_socks] Listening on {self.bind_host}:{self.local_port} (SOCKS5)")
-    
+
         # Options for kex and hostkey for legacy systems
         kex = module_options.get("KEX")
         hostkey = module_options.get("HOSTKEY")
-    
+
         if kex:
             algos = [x.strip() for x in kex.split(",") if x.strip()]
             context.log.display(f"[ssh_socks] Forcing KEX algos: {algos}")
             # Patch paramiko defaults
             from paramiko.transport import Transport
             Transport._preferred_kex = algos
-    
+
         if hostkey:
             algos = [x.strip() for x in hostkey.split(",") if x.strip()]
             context.log.display(f"[ssh_socks] Forcing hostkey algos: {algos}")
             from paramiko.transport import Transport
             Transport._preferred_pubkeys = algos
-
 
     def on_login(self, context, connection):
         """
@@ -116,8 +115,10 @@ class NXCModule:
             hdr = self._recv_exact(client, 4)
             if not hdr or hdr[0] != 0x05 or hdr[1] != 0x01:  # CONNECT only
                 # reply: command not supported
-                try: client.sendall(b"\x05\x07\x00\x01\0\0\0\0\x00\x00")
-                except Exception: pass
+                try:
+                    client.sendall(b"\x05\x07\x00\x01\0\0\0\0\x00\x00")
+                except Exception:
+                    pass
                 return
 
             atyp = hdr[3]
@@ -130,8 +131,10 @@ class NXCModule:
                 raw = self._recv_exact(client, 16)
                 dst_addr = socket.inet_ntop(socket.AF_INET6, raw)
             else:
-                try: client.sendall(b"\x05\x08\x00\x01\0\0\0\0\x00\x00")
-                except Exception: pass
+                try:
+                    client.sendall(b"\x05\x08\x00\x01\0\0\0\0\x00\x00")
+                except Exception:
+                    pass
                 return
 
             dst_port = struct.unpack(">H", self._recv_exact(client, 2))[0]
@@ -159,11 +162,15 @@ class NXCModule:
         except Exception as e:
             context.log.error(f"[ssh_socks] SOCKS5 handler error: {e}")
         finally:
-            try: client.close()
-            except Exception: pass
+            try:
+                client.close()
+            except Exception:
+                pass
             if remote:
-                try: remote.close()
-                except Exception: pass
+                try:
+                    remote.close()
+                except Exception:
+                    pass
 
     def _pump(self, c, r):
         bufsz = 65536
