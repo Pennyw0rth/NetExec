@@ -1476,12 +1476,12 @@ class ldap(connection):
             elif policyApplies:
                 self.logger.highlight(f"\t{policyApplies}")
             self.logger.highlight("")
-    
+
     def pass_pol(self):
         search_filter = "(objectClass=domainDNS)"
         attributes = [
             "minPwdLength",
-            "pwdHistoryLength", 
+            "pwdHistoryLength",
             "maxPwdAge",
             "minPwdAge",
             "lockoutThreshold",
@@ -1490,17 +1490,17 @@ class ldap(connection):
             "forceLogoff",
             "pwdProperties"
         ]
-        
+
         resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
-        
+
         if not resp_parsed:
             self.logger.fail("No domain password policy found!")
             return
-        
+
         self.logger.highlight("Domain Password Policy:")
         self.logger.highlight("")
-        
+
         for policy in resp_parsed:
             # Helper function to convert LDAP time to human readable format
             def ldap_time_to_days(ldap_time):
@@ -1510,7 +1510,7 @@ class ldap(connection):
                 seconds = abs(int(ldap_time)) / 10000000
                 days = int(seconds / 86400)  # 86400 seconds in a day
                 return f"{days} days"
-            
+
             def ldap_time_to_minutes(ldap_time):
                 if not ldap_time or ldap_time == "0":
                     return "Never"
@@ -1518,7 +1518,7 @@ class ldap(connection):
                 seconds = abs(int(ldap_time)) / 10000000
                 minutes = int(seconds / 60)
                 return f"{minutes} minutes"
-            
+
             # Display password policy information
             min_pwd_length = policy.get("minPwdLength", "Not set")
             pwd_history_length = policy.get("pwdHistoryLength", "Not set")
@@ -1529,7 +1529,7 @@ class ldap(connection):
             lockout_observation_window = ldap_time_to_minutes(policy.get("lockOutObservationWindow", "0"))
             force_logoff = ldap_time_to_minutes(policy.get("forceLogoff", "0"))
             pwd_properties = policy.get("pwdProperties", "0")
-            
+
             self.logger.highlight(f"Minimum Password Length: {min_pwd_length}")
             self.logger.highlight(f"Password History Length: {pwd_history_length}")
             self.logger.highlight(f"Maximum Password Age: {max_pwd_age}")
@@ -1538,12 +1538,12 @@ class ldap(connection):
             self.logger.highlight(f"Account Lockout Duration: {lockout_duration}")
             self.logger.highlight(f"Account Lockout Observation Window: {lockout_observation_window}")
             self.logger.highlight(f"Force Logoff: {force_logoff}")
-            
+
             # Decode password properties flags
             if pwd_properties and pwd_properties != "0":
                 pwd_props_int = int(pwd_properties)
                 properties = []
-                
+
                 if pwd_props_int & 0x1:
                     properties.append("Password complexity enabled")
                 if pwd_props_int & 0x2:
@@ -1558,7 +1558,7 @@ class ldap(connection):
                     properties.append("Store password with weaker obfuscation")
                 if pwd_props_int & 0x40:
                     properties.append("Refuse password change")
-                
+
                 if properties:
                     self.logger.highlight("Password Properties:")
                     for prop in properties:
