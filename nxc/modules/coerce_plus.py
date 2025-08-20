@@ -7,6 +7,15 @@ from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVE
 from impacket.uuid import uuidtup_to_bin
 
 
+def get_dynamic_endpoint(interface: bytes, target: str, timeout: int = 5) -> str:
+    string_binding = rf"ncacn_ip_tcp:{target}[135]"
+    rpctransport = transport.DCERPCTransportFactory(string_binding)
+    rpctransport.set_connect_timeout(timeout)
+    dce = rpctransport.get_dce_rpc()
+    dce.connect()
+    endpoint = epm.hept_map(target, interface, protocol="ncacn_ip_tcp", dce=dce)
+    return endpoint
+
 class NXCModule:
     name = "coerce_plus"
     description = "Module to check if the Target is vulnerable to any coerce vulns. Set LISTENER IP for coercion."
@@ -528,6 +537,13 @@ class PetitPotamtTrigger:
             },
         }
 
+        # activates EFS
+        # https://specterops.io/blog/2025/08/19/will-webclient-start/
+        try:
+            get_dynamic_endpoint(uuidtup_to_bin(("df1941c5-fe89-4e79-bf10-463657acf44d", "0.0")), target, timeout=1)
+        except:
+            pass
+
         rpctransport = transport.DCERPCTransportFactory(binding_params[pipe]["stringBinding"])
         rpctransport.set_dport(445)
 
@@ -755,27 +771,6 @@ class PrinterBugTrigger:
     def __init__(self, context):
         self.context = context
 
-    def get_dynamic_endpoint(self, interface: bytes, target: str, timeout: int = 5) -> str:
-        string_binding = rf"ncacn_ip_tcp:{target}[135]"
-        rpctransport = transport.DCERPCTransportFactory(string_binding)
-        rpctransport.set_connect_timeout(timeout)
-        dce = rpctransport.get_dce_rpc()
-        self.context.log.debug(f"Trying to resolve dynamic endpoint {uuid.bin_to_string(interface)!r}")
-        try:
-            dce.connect()
-        except Exception as e:
-            self.context.log.warning(f"Failed to connect to endpoint mapper: {e}")
-            raise e
-        try:
-            endpoint = epm.hept_map(target, interface, protocol="ncacn_ip_tcp", dce=dce)
-            self.context.log.debug(
-                f"Resolved dynamic endpoint {uuid.bin_to_string(interface)!r} to {endpoint!r}"
-            )
-            return endpoint
-        except Exception as e:
-            self.context.log.debug(f"Failed to resolve dynamic endpoint {uuid.bin_to_string(interface)!r}")
-            raise e
-
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
             "spoolss": {
@@ -784,7 +779,7 @@ class PrinterBugTrigger:
                 "port": 445
             },
             "[dcerpc]": {
-                "stringBinding": self.get_dynamic_endpoint(uuidtup_to_bin(("12345678-1234-abcd-ef00-0123456789ab", "1.0")), target),
+                "stringBinding": get_dynamic_endpoint(uuidtup_to_bin(("12345678-1234-abcd-ef00-0123456789ab", "1.0")), target),
                 "MSRPC_UUID_RPRN": ("12345678-1234-abcd-ef00-0123456789ab", "1.0"),
                 "port": None
             }
