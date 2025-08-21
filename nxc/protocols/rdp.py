@@ -266,6 +266,7 @@ class rdp(connection):
             return True
 
         except Exception as e:
+            print(e)
             if "KDC_ERR" in str(e):
                 reason = None
                 for word in self.rdp_error_status:
@@ -284,13 +285,14 @@ class rdp(connection):
                 for word in self.rdp_error_status:
                     if word in str(e):
                         reason = self.rdp_error_status[word]
+                if "STATUS_LOGON_FAILURE" != reason:
+                   GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(kerb_pass)} {reason} {self.mark_pwned()}")                                         
                 if str(e) == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
                 self.logger.fail(
                     (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} ({reason if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
-            GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(kerb_pass)} {reason} {self.mark_pwned()}") 
             return False
 
     def plaintext_login(self, domain, username, password):
@@ -324,13 +326,14 @@ class rdp(connection):
                 for word in self.rdp_error_status:
                     if word in str(e):
                         reason = self.rdp_error_status[word]
+                if "STATUS_LOGON_FAILURE" != reason:
+                   GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(self.password)} {reason} {self.mark_pwned()}")                         
                 if str(e) == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
                 self.logger.fail(
                     (f"{domain}\\{username}:{process_secret(password)} ({reason if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
-                GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(self.password)} {reason} {self.mark_pwned()}")                         
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
@@ -365,6 +368,8 @@ class rdp(connection):
                 for word in self.rdp_error_status:
                     if word in str(e):
                         reason = self.rdp_error_status[word]
+                if "STATUS_LOGON_FAILURE" != reason:
+                   GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(ntlm_hash)} {reason} {self.mark_pwned()}")                         
                 if str(e) == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
 
@@ -372,7 +377,6 @@ class rdp(connection):
                     (f"{domain}\\{username}:{process_secret(ntlm_hash)} ({reason if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "STATUS_LOGON_FAILURE") else "red"),
                 )
-                GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(ntlm_hash)} {reason} {self.mark_pwned()}")  
             return False
 
     async def screen(self):
