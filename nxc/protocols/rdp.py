@@ -266,7 +266,6 @@ class rdp(connection):
             return True
 
         except Exception as e:
-            print(e)
             if "KDC_ERR" in str(e):
                 reason = None
                 for word in self.rdp_error_status:
@@ -285,7 +284,7 @@ class rdp(connection):
                 for word in self.rdp_error_status:
                     if word in str(e):
                         reason = self.rdp_error_status[word]
-                if "STATUS_LOGON_FAILURE" != reason:
+                if reason not in ["STATUS_LOGON_FAILURE", None]:
                    GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(kerb_pass)} {reason} {self.mark_pwned()}")                                         
                 if str(e) == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
