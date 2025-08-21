@@ -1,4 +1,3 @@
-import sys
 from impacket import system_errors
 from impacket.dcerpc.v5.rpcrt import DCERPCException, RPC_C_AUTHN_GSS_NEGOTIATE, rpc_status_codes
 from impacket.structure import Structure
@@ -67,7 +66,7 @@ class NXCModule:
             dce.bind(rprn.MSRPC_UUID_RPRN)
         except Exception as e:
             context.log.fail(f"Failed to bind: {e}")
-            sys.exit(1)
+            return False
 
         flags = APD_COPY_ALL_FILES | APD_COPY_FROM_DIRECTORY | APD_INSTALL_WARNED_DRIVER
 
