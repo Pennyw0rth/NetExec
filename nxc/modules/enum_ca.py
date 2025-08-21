@@ -78,7 +78,8 @@ class NXCModule:
                RPC_PROXY_CONN_A1_0X6BA_ERR in error_text:
                 context.log.fail("This usually means the target does not allow "
                                  "to connect to its epmapper using RpcProxy.")
-                return
+            return False
+
         for entry in entries:
             tmpUUID = str(entry["tower"]["Floors"][0])
 
@@ -95,7 +96,7 @@ class NXCModule:
                             context.log.highlight("Web enrollment found on HTTP (ESC8).")
                     except requests.RequestException as e:
                         context.log.debug(e)
-                    return
+                    return None
 
     def __fetchList(self, doKerberos, rpctransport):
         dce = rpctransport.get_dce_rpc()
