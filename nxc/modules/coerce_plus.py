@@ -7,15 +7,6 @@ from impacket.uuid import uuidtup_to_bin
 import contextlib
 
 
-def get_dynamic_endpoint(interface: bytes, target: str, timeout: int = 5) -> str:
-    string_binding = rf"ncacn_ip_tcp:{target}[135]"
-    rpctransport = transport.DCERPCTransportFactory(string_binding)
-    rpctransport.set_connect_timeout(timeout)
-    dce = rpctransport.get_dce_rpc()
-    dce.connect()
-    return epm.hept_map(target, interface, protocol="ncacn_ip_tcp", dce=dce)
-
-
 class NXCModule:
     name = "coerce_plus"
     description = "Module to check if the Target is vulnerable to any coerce vulns. Set LISTENER IP for coercion."
@@ -27,6 +18,15 @@ class NXCModule:
         self.listener = None
         self.always_continue = None
         self.method = "all"
+
+    @staticmethod
+    def get_dynamic_endpoint(interface: bytes, target: str, timeout: int = 5) -> str:
+        string_binding = rf"ncacn_ip_tcp:{target}[135]"
+        rpctransport = transport.DCERPCTransportFactory(string_binding)
+        rpctransport.set_connect_timeout(timeout)
+        dce = rpctransport.get_dce_rpc()
+        dce.connect()
+        return epm.hept_map(target, interface, protocol="ncacn_ip_tcp", dce=dce)
 
     def options(self, context, module_options):
         """
@@ -540,7 +540,7 @@ class PetitPotamtTrigger:
         # activates EFS
         # https://specterops.io/blog/2025/08/19/will-webclient-start/
         with contextlib.suppress(Exception):
-            get_dynamic_endpoint(uuidtup_to_bin(("df1941c5-fe89-4e79-bf10-463657acf44d", "0.0")), target, timeout=1)
+            NXCModule.get_dynamic_endpoint(uuidtup_to_bin(("df1941c5-fe89-4e79-bf10-463657acf44d", "0.0")), target, timeout=1)
 
         rpctransport = transport.DCERPCTransportFactory(binding_params[pipe]["stringBinding"])
         rpctransport.set_dport(445)
@@ -777,7 +777,7 @@ class PrinterBugTrigger:
                 "port": 445
             },
             "[dcerpc]": {
-                "stringBinding": get_dynamic_endpoint(uuidtup_to_bin(("12345678-1234-abcd-ef00-0123456789ab", "1.0")), target),
+                "stringBinding": NXCModule.get_dynamic_endpoint(uuidtup_to_bin(("12345678-1234-abcd-ef00-0123456789ab", "1.0")), target),
                 "MSRPC_UUID_RPRN": ("12345678-1234-abcd-ef00-0123456789ab", "1.0"),
                 "port": None
             }
