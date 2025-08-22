@@ -26,7 +26,6 @@ from impacket.dcerpc.v5.samr import (
 )
 from impacket.krb5 import constants
 from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError
-from impacket.krb5.ccache import CCache
 from impacket.krb5.types import Principal, KerberosException
 from impacket.ldap import ldap as ldap_impacket
 from impacket.ldap import ldaptypes
@@ -312,13 +311,14 @@ class ldap(connection):
         else:
             self.no_ntlm = True
 
-        if self.args.domain:
+        if self.args.use_kcache:  # already parsed kcache domain and username in main()
             self.domain = self.args.domain
-        elif self.args.use_kcache:  # Fixing domain trust, just pull the auth domain out of the ticket
-            self.domain = CCache.parseFile()[0]
-            self.username = CCache.parseFile()[1]
+            self.username = self.args.username[0]
+        elif self.args.domain:
+            self.domain = self.args.domain
         else:
             self.domain = self.targetDomain
+        self.logger.debug(f"Domain set to {self.domain} and username set to {self.username} for LDAP connection object")
 
         self.check_ldap_signing()
         if getattr(self.args, "port_explicitly_set", False) and self.port == 389:
@@ -357,7 +357,7 @@ class ldap(connection):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({cbt_status}) {ntlm}")
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
-        self.username = username if not self.args.use_kcache else self.username    # With ccache we get the username from the ticket
+        self.username = username  # if not self.args.use_kcache else self.username    # With ccache we get the username from the ticket
         self.password = password
         self.domain = domain
         self.kdcHost = kdcHost

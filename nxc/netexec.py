@@ -24,6 +24,9 @@ from os.path import join as path_join
 from sys import exit
 from rich.progress import Progress
 import platform
+from impacket.krb5.ccache import CCache
+
+
 if sys.stdout.encoding == "cp1252":
     sys.stdout.reconfigure(encoding="utf-8")
 
@@ -92,9 +95,42 @@ def main():
         nxc_logger.fail("Password is required, even if a key file is used - if no passphrase for key, use `-p ''`")
         exit(1)
 
-    if args.use_kcache and not os.environ.get("KRB5CCNAME"):
-        nxc_logger.error("KRB5CCNAME environment variable is not set")
-        exit(1)
+    if args.use_kcache:
+        krb5ccname = os.getenv("KRB5CCNAME")
+        if not krb5ccname:
+            nxc_logger.error("KRB5CCNAME environment variable is not set!")
+            exit(1)
+        if not os.path.isfile(krb5ccname):
+            nxc_logger.error(f"Kerberos cache file '{krb5ccname}' does not exist!")
+            exit(1)
+        if not os.access(krb5ccname, os.R_OK):
+            nxc_logger.error(f"Kerberos cache file '{krb5ccname}' is not readable!")
+            exit(1)
+
+        krb_domain, krb_username, krb_tgt, krb_tgs = CCache.parseFile()
+        nxc_logger.debug(f"Kerberos cache file parsed: {krb_username}, {krb_domain}, {krb_tgt}, {krb_tgs}")
+
+        if len(args.username) > 1:
+            nxc_logger.error(f"Only one username can be used when using Kerberos cache! The domain\\user for this cache file is '{krb_domain}\\{krb_username}'")
+            exit(1)
+
+        if args.username and krb_username != args.username[0]:
+            nxc_logger.error(f"Kerberos cache file username '{krb_username}' does not match provided username '{args.username[0]}', setting username to '{krb_username}'")
+        else:
+            nxc_logger.debug(f"No username provided, using the one from the cache file: {krb_username}")
+
+        if args.domain and krb_domain != args.domain:
+            nxc_logger.error(f"Kerberos cache file domain '{krb_domain}' does not match provided domain '{args.domain}', setting domain to '{krb_domain}'")
+        else:
+            nxc_logger.debug(f"No domain provided, using the one from the cache file: {krb_domain}")
+
+        args.username = [krb_username]
+        args.domain = krb_domain
+        # at this point the user should be a single user, but in a list, because we still parse credentials the same later, and it expects a list
+        nxc_logger.debug(f"Domain set to {args.domain} and username set to {args.username} for kerberos cache login")
+
+        if args.password:
+            nxc_logger.display("Setting password is irrelevant when using Kerberos cache, ignoring")
 
     targets = []
 

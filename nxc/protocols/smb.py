@@ -228,8 +228,6 @@ class smb(connection):
 
         if self.args.domain:
             self.domain = self.args.domain
-        elif self.args.use_kcache:  # Fixing domain trust, just pull the auth domain out of the ticket
-            self.domain = CCache.parseFile()[0]
         else:
             self.domain = self.targetDomain
 
@@ -680,8 +678,10 @@ class smb(connection):
 
             self.logger.success(f"TGT saved to: {tgt_file}")
             self.logger.success(f"Run the following command to use the TGT: export KRB5CCNAME={tgt_file}")
+            return True
         except Exception as e:
             self.logger.fail(f"Failed to get TGT: {e}")
+            return False
 
     def check_dc_ports(self, timeout=1):
         """Check multiple DC-specific ports in case first check fails"""
