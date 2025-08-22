@@ -5,6 +5,7 @@
 from impacket.dcerpc.v5 import transport, lsat, lsad, samr
 from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
+from impacket.krb5.kerberosv5 import KerberosError
 from impacket.nmb import NetBIOSError
 from impacket.smbconnection import SessionError
 
@@ -98,7 +99,10 @@ class SAMRQuery:
         self.__kdcHost = kdcHost
         self.logger = logger
         self.dce = self.get_dce()
-        self.server_handle = self.get_server_handle()
+        if self.dce:
+            self.server_handle = self.get_server_handle()
+        else:
+            return
 
     def get_transport(self):
         string_binding = rf"ncacn_np:{self.__port}[\pipe\samr]"
@@ -126,10 +130,16 @@ class SAMRQuery:
             dce.connect()
             dce.bind(samr.MSRPC_UUID_SAMR)
         except NetBIOSError as e:
-            self.logger.error(f"NetBIOSError on Connection: {e}")
+            self.logger.fail(f"NetBIOSError on Connection: {e}")
             return None
         except SessionError as e:
-            self.logger.error(f"SessionError on Connection: {e}")
+            error_code, error_string = e.getErrorString()
+            if error_code == "KDC_ERR_S_PRINCIPAL_UNKNOWN":
+                self.logger.fail(f"Error {error_code} when creating SAMRPC connection, which means the server {self.__remote_host} is not an object in the Kerberos realm (try using an FQDN)")
+            elif error_code == "KDC_ERR_C_PRINCIPAL_UNKNOWN":
+                self.logger.fail(f"Error {error_code} when creating SAMRPC connection, which means the user {self.__username} is not an object in the Kerberos realm")
+            else:
+                self.logger.fail(f"SessionError on SAMRPC Connection: {e}")
             return None
         return dce
 
@@ -189,9 +199,12 @@ class LSAQuery:
         self.__remote_host = remote_host
         self.__kdcHost = kdcHost
         self.__kerberos = kerberos
-        self.dce = self.get_dce()
-        self.policy_handle = self.get_policy_handle()
         self.logger = logger
+        self.dce = self.get_dce()
+        if self.dce:
+            self.policy_handle = self.get_policy_handle()
+        else:
+            return
 
     def get_transport(self):
         string_binding = f"ncacn_np:{self.__remote_name}[\\pipe\\lsarpc]"
@@ -222,6 +235,15 @@ class LSAQuery:
             dce.bind(lsat.MSRPC_UUID_LSAT)
         except NetBIOSError as e:
             self.logger.fail(f"NetBIOSError on Connection: {e}")
+            return None
+        except KerberosError as e:
+            error_code, error_string = e.getErrorString()
+            if error_code == "KDC_ERR_S_PRINCIPAL_UNKNOWN":
+                self.logger.fail(f"Error {error_code} when creating LSA connection, which means the server {self.__remote_host} is not an object in the Kerberos realm (try using an FQDN)")
+            elif error_code == "KDC_ERR_C_PRINCIPAL_UNKNOWN":
+                self.logger.fail(f"Error {error_code} when creating LSA connection, which means the user {self.__username} is not an object in the Kerberos realm")
+            else:
+                self.logger.fail(f"KerberosError on LSA Connection: {e}")
             return None
         return dce
 

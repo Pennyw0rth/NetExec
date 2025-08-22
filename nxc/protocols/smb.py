@@ -1588,7 +1588,10 @@ class smb(connection):
     def local_groups(self):
         self.logger.display("Enumerating with SAMRPC protocol")
         try:
-            groups, members = SamrFunc(self).get_local_groups(self.args.local_groups)
+            samr_func = SamrFunc(self)
+            if not samr_func.lsa_query.dce or not samr_func.samr_query.dce:
+                return
+            groups, members = samr_func.get_local_groups(self.args.local_groups)
         except DCERPCException as e:
             self.logger.fail(f"Error enumerating local groups: {e}")
             return
