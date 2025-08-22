@@ -648,8 +648,16 @@ class smb(connection):
                     relay_list.write(self.host + "\n")
 
     def generate_tgt(self):
+        if not self.username:
+            self.logger.error("No username provided, cannot generate TGT")
+            return False
+
         self.logger.info(f"Attempting to get TGT for {self.username}@{self.domain}")
-        userName = Principal(self.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+        try:
+            userName = Principal(self.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+        except Exception as e:
+            self.logger.fail(f"Failed to create Principal object: {e}")
+            return False
 
         try:
             tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(
@@ -792,7 +800,7 @@ class smb(connection):
                 try:
                     # https://github.com/fortra/impacket/issues/1611
                     if self.kerberos:
-                        raise Exception("MMCExec current is buggly with kerberos")
+                        raise Exception("MMCExec current is buggy with kerberos")
                     exec_method = MMCEXEC(
                         self.remoteName,
                         self.smb_share_name,
