@@ -33,6 +33,7 @@ REG_VALUE_TYPE_64BIT_LE = 11
 
 checks_results = {}
 
+
 class ConfigCheck:
     """Class for performing the checks and holding the results"""
 
@@ -153,7 +154,7 @@ class NXCModule:
 
         ConfigCheck.module = self
         HostChecker.module = self
-        
+
         # Load intermediary results into checks_results
         if self.output and os.path.isfile(self.checks_results_path):
             with open(self.checks_results_path) as f:
