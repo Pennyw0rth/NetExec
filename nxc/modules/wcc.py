@@ -122,9 +122,9 @@ class NXCModule:
             for category in sorted(checks_by_category.keys()):
                 if module_options["LIST"].lower() not in ("", "*", "all") and category.lower() != module_options["LIST"].lower():
                     continue
-                context.log.highlight(f"[{category}]")
+                print(colored(f"[{category}]", "yellow", attrs=["bold"]))
                 for check in checks_by_category[category]:
-                    context.log.display(f"{check.name}: {check.description}")
+                    print(colored("[*]", "blue", attrs=["bold"]), f"{colored(check.name, attrs=['bold'])}: {check.description}")
                 print()
             exit()
                 
