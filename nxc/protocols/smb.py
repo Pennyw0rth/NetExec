@@ -667,7 +667,7 @@ class smb(connection):
 
             ccache = CCache()
             ccache.fromTGT(tgt, oldSessionKey, sessionKey)
-            tgt_file = f"{self.args.generate_tgt}.ccache"
+            tgt_file = f"{self.args.generate_tgt}.ccache" if not self.args.generate_tgt.endswith(".ccache") else self.args.generate_tgt
             ccache.saveFile(tgt_file)
 
             self.logger.success(f"TGT saved to: {tgt_file}")
