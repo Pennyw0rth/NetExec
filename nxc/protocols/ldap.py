@@ -192,10 +192,10 @@ class ldap(connection):
             return False
         except OSError as e:
             if e.errno in (EHOSTUNREACH, ENETUNREACH, ETIMEDOUT):
-                self.logger.info(f"Error connecting to {self.host} - {e}")
+                self.logger.info(f"Error connecting to {self.host}: {e}")
                 return False
             else:
-                self.logger.error(f"Error creating connection to {self.host}: {e}")
+                self.logger.error(f"Error connecting to {self.host}: {e}")
                 return False
 
         return True
