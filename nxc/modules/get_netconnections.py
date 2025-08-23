@@ -1,5 +1,6 @@
 from datetime import datetime
 from nxc.helpers.logger import write_log
+from nxc.paths import NXC_PATH
 import json
 
 
@@ -13,11 +14,9 @@ class NXCModule:
     name = "get_netconnections"
     description = "Uses WMI to query network connections."
     supported_protocols = ["smb", "wmi"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def options(self, context, module_options):
-        """No options"""
+        """No options available"""
 
     def on_admin_login(self, context, connection):
         data = []
@@ -31,4 +30,4 @@ class NXCModule:
 
         log_name = f"network-connections-{connection.host}-{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log"
         write_log(json.dumps(data), log_name)
-        context.log.display(f"Saved raw output to ~/.nxc/logs/{log_name}")
+        context.log.display(f"Saved raw output to {NXC_PATH}/logs/{log_name}")

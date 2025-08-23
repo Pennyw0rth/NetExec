@@ -4,6 +4,7 @@ from impacket.dcerpc.v5.rpcrt import DCERPCException
 from json import loads
 from traceback import format_exc as traceback_format_exc
 
+
 class NXCModule:
     """
     Module by Adamkadaban: @Adamkadaban
@@ -16,8 +17,6 @@ class NXCModule:
     name = "security-questions"
     description = "Gets security questions and answers for users on computer"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def options(self, context, module):
         pass
@@ -86,7 +85,7 @@ class NXCModule:
                     resp = samr.hSamrEnumerateUsersInDomain(dce, domain_handle, enumerationContext=enumeration_context)
                 except DCERPCException as e:
                     if str(e).find("STATUS_MORE_ENTRIES") < 0:
-                        raise 
+                        raise
                     resp = e.get_packet()
 
                 for user in resp["Buffer"]["Buffer"]:

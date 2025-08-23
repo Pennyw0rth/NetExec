@@ -4,6 +4,7 @@ import sys
 from impacket.dcerpc.v5 import samr, epm, transport
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 
+
 class NXCModule:
     """
     Module by CyberCelt: @Cyb3rC3lt
@@ -15,8 +16,6 @@ class NXCModule:
     name = "add-computer"
     description = "Adds or deletes a domain computer"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = False
 
     def options(self, context, module_options):
         """
@@ -87,7 +86,6 @@ class NXCModule:
         # If SAMR fails now try over LDAPS
         if not self.noLDAPRequired:
             self.do_ldaps_add(connection, context)
-            
 
     def do_samr_add(self, context):
         """

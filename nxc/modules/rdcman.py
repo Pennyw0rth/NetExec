@@ -9,8 +9,6 @@ class NXCModule:
     name = "rdcman"
     description = "Remotely dump Remote Desktop Connection Manager (sysinternals) credentials"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """ """
@@ -34,7 +32,7 @@ class NXCModule:
             no_pass=True,
             use_kcache=getattr(connection, "use_kcache", False),
         )
-        
+
         conn = upgrade_to_dploot_connection(connection=connection.conn, target=target)
         if conn is None:
             context.log.debug("Could not upgrade connection")

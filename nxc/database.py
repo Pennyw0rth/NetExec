@@ -110,7 +110,8 @@ def initialize_db():
 
     # Even if the default workspace exists, we still need to check if every protocol has a database (in case of a new protocol)
     init_protocol_dbs("default")
-    
+
+
 def format_host_query(q, filter_term, HostsTable):
     """One annoying thing is that if you search for an ip such as '10.10.10.5',
     it will return 10.10.10.5 and 10.10.10.52, so we have to check if its an ip address first
@@ -126,8 +127,8 @@ def format_host_query(q, filter_term, HostsTable):
     else:
         nxc_logger.debug("Neither 'ip' nor 'host' columns found in the table")
         return q
-   
-    # first we check if its an ip address 
+
+    # first we check if its an ip address
     try:
         ipaddress.ip_address(filter_term)
         nxc_logger.debug(f"filter_term is an IP address: {filter_term}")
@@ -135,11 +136,12 @@ def format_host_query(q, filter_term, HostsTable):
     except ValueError:
         nxc_logger.debug(f"filter_term is not an IP address: {filter_term}")
         like_term = func.lower(f"%{filter_term}%")
-        
+
         # check if the hostname column exists for hostname searching
         q = q.filter(ip_column.like(like_term) | func.lower(HostsTable.c.hostname).like(like_term)) if hasattr(HostsTable.c, "hostname") else q.filter(ip_column.like(like_term))
 
     return q
+
 
 class BaseDB:
     def __init__(self, db_engine):

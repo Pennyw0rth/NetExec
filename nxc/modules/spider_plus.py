@@ -472,8 +472,6 @@ class NXCModule:
     name = "spider_plus"
     description = "List files recursively and save a JSON share-file metadata to the 'OUTPUT_FOLDER'. See module options for finer configuration."
     supported_protocols = ["smb"]
-    opsec_safe = True  # Does the module touch disk?
-    multiple_hosts = True  # Does the module support multiple hosts?
 
     def options(self, context, module_options):
         """
@@ -485,7 +483,7 @@ class NXCModule:
         EXCLUDE_EXTS      Case-insensitive extension filter to exclude (Default: ico,lnk)
         EXCLUDE_FILTER    Case-insensitive filter to exclude folders/files (Default: print$,ipc$)
         MAX_FILE_SIZE     Max file size to download (Default: 51200)
-        OUTPUT_FOLDER     Path of the local folder to save files (Default: ~/.nxc/nxc_spider_plus)
+        OUTPUT_FOLDER     Path of the local folder to save files (Default: NXC_PATH/nxc_spider_plus)
         """
         self.download_flag = False
         if any("DOWNLOAD" in key for key in module_options):
