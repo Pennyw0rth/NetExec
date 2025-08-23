@@ -828,8 +828,6 @@ class ldap(connection):
         def resolve_and_display_hostname(name, domain_name=None):
             prefix = f"[{domain_name}] " if domain_name else ""
             try:
-                self.logger.debug(f"DNS server set to: {resolv.nameservers}")
-
                 # Resolve using DNS server for A, AAAA, CNAME, PTR, and NS records
                 for record_type in ["A", "AAAA", "CNAME", "PTR", "NS"]:
                     try:
