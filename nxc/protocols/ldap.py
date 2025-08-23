@@ -171,41 +171,22 @@ class ldap(connection):
         )
 
     def create_conn_obj(self):
-        target = ""
-        target_domain = ""
-        base_dn = ""
         try:
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.host}"
             self.logger.info(f"Connecting to {ldap_url} with no baseDN")
-            try:
-                self.ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.host)
-                if self.ldap_connection:
-                    self.logger.debug(f"ldap_connection: {self.ldap_connection}")
-            except SysCallError as e:
-                if proto == "ldaps":
-                    self.logger.fail(f"LDAPs connection to {ldap_url} failed - {e}")
-                    # https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/enable-ldap-over-ssl-3rd-certification-authority
-                    self.logger.fail("Even if the port is open, LDAPS may not be configured")
-                else:
-                    self.logger.fail(f"LDAP connection to {ldap_url} failed: {e}")
-                return False
 
-            resp = self.ldap_connection.search(
-                scope=ldapasn1_impacket.Scope("baseObject"),
-                attributes=["defaultNamingContext", "dnsHostName"],
-                sizeLimit=0,
-            )
-            resp_parsed = parse_result_attributes(resp)[0]
-
-            target = resp_parsed["dnsHostName"]
-            base_dn = resp_parsed["defaultNamingContext"]
-            target_domain = sub(
-                r",DC=",
-                ".",
-                base_dn[base_dn.lower().find("dc="):],
-                flags=IGNORECASE,
-            )[3:]
+            self.ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.host)
+            if self.ldap_connection:
+                self.logger.debug(f"ldap_connection: {self.ldap_connection}")
+        except SysCallError as e:
+            if proto == "ldaps":
+                self.logger.fail(f"LDAPs connection to {ldap_url} failed - {e}")
+                # https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/enable-ldap-over-ssl-3rd-certification-authority
+                self.logger.fail("Even if the port is open, LDAPS may not be configured")
+            else:
+                self.logger.fail(f"LDAP connection to {ldap_url} failed: {e}")
+            return False
         except ConnectionRefusedError as e:
             self.logger.debug(f"{e} on host {self.host}")
             return False
@@ -214,13 +195,9 @@ class ldap(connection):
                 self.logger.info(f"Error connecting to {self.host} - {e}")
                 return False
             else:
-                self.logger.error(f"Error getting ldap info {e}")
+                self.logger.error(f"Error creating connection to {self.host}: {e}")
                 return False
 
-        self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
-        self.target = target
-        self.targetDomain = target_domain
-        self.baseDN = base_dn
         return True
 
     def get_ldap_username(self):
@@ -284,9 +261,39 @@ class ldap(connection):
                 raise
 
     def enum_host_info(self):
+        # Enumerate LDAP info
+        target = ""
+        target_domain = ""
+        base_dn = ""
+        try:
+            resp = self.ldap_connection.search(
+                scope=ldapasn1_impacket.Scope("baseObject"),
+                attributes=["defaultNamingContext", "dnsHostName"],
+                sizeLimit=0,
+            )
+            resp_parsed = parse_result_attributes(resp)[0]
+
+            target = resp_parsed["dnsHostName"]
+            base_dn = resp_parsed["defaultNamingContext"]
+            target_domain = sub(
+                r",DC=",
+                ".",
+                base_dn[base_dn.lower().find("dc="):],
+                flags=IGNORECASE,
+            )[3:]
+        except Exception as e:
+            self.logger.fail(f"Failed to enumerate host info for {self.host}, error: {e!s}")
+
+        self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
+        self.target = target
+        self.targetDomain = target_domain
+        self.baseDN = base_dn
+
+        # Parse hostname and remoteName
         self.hostname = self.target.split(".")[0].upper() if "." in self.target else self.target
         self.remoteName = self.target
 
+        # Parse NTLM challenge
         ntlm_challenge = None
         bindRequest = ldapasn1_impacket.BindRequest()
         bindRequest["version"] = 3
