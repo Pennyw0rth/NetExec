@@ -16,7 +16,7 @@ class NXCModule:
     supported_protocols = ["smb"]
 
     def options(self, context, module_options):
-        """ """
+        """No options available"""
 
     def on_login(self, context, connection):
         shares = connection.shares()
