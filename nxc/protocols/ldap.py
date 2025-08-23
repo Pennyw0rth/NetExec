@@ -357,7 +357,7 @@ class ldap(connection):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({cbt_status}) {ntlm}")
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
-        self.username = username  # if not self.args.use_kcache else self.username    # With ccache we get the username from the ticket
+        self.username = username
         self.password = password
         self.domain = domain
         self.kdcHost = kdcHost
