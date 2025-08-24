@@ -279,7 +279,12 @@ netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sudo-check --sudo-
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sudo-check --sudo-check-method mkfifo --get-output-tries 10
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --put-file TEST_NORMAL_FILE /tmp/test_file.txt --put-file TEST_NORMAL_FILE /tmp/test_file2.txt
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --get-file /tmp/test_file.txt /tmp/test_file.txt --get-file /tmp/test_file.txt /tmp/test_file2.txt
-##### SMB Modules
+##### SSH Modules
+nxc ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --module linux_privesc_check
+nxc ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --module linux_privesc_check -o NO_SUDO=true
+nxc ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --module linux_privesc_check -o NO_GTF=true
+nxc ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --module linux_privesc_check -o SHOW_ALL_SUID=true
+nxc ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --module linux_privesc_check -o SHOW_ALL_CAPS=true
 nxc ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --module ssh_socks
 nxc ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --module ssh_socks --port TARGET_PORT
 nxc ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --module ssh_socks -o PORT=1080,KEX=diffie-hellman-group1-sha1,HOSTKEY=ssh-dss
