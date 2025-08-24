@@ -22,8 +22,6 @@ class NXCModule:
 
     def on_login(self, context, connection):
         try:
-            ldap_connection = connection.ldap_connection
-
             # Define the search filter for pre-created computer accounts
             search_filter = "(&(objectClass=computer)(userAccountControl=4128))"
             attributes = ["sAMAccountName", "userAccountControl", "dNSHostName"]
@@ -82,8 +80,6 @@ class NXCModule:
 
             except Exception as e:
                 context.log.fail(f"Error occurred during search: {e}")
-
-            ldap_connection.close()
             return True
 
         except Exception as e:
