@@ -18,7 +18,7 @@ class NXCModule:
     supported_protocols = ["ldap"]
 
     def options(self, context, module_options):
-        pass
+        """No options available"""
 
     def on_login(self, context, connection):
         try:
