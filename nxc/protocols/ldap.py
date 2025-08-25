@@ -1531,7 +1531,7 @@ class ldap(connection):
 
             # Convert password properties using existing d2b function
             pwd_properties = policy.get("pwdProperties", "0")
-            pass_prop = d2b(int(pwd_properties)) if pwd_properties != "0" else "None"
+            pass_prop = d2b(int(pwd_properties)) if pwd_properties != "0" else "000000"
 
             # Use the same formatting and constants as SMB passpol
             PASSCOMPLEX = {

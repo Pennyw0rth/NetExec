@@ -149,6 +149,10 @@ def detect_if_ip(target):
 
 
 def d2b(a):
+    """
+    This function is used to convert password property flags from decimal to binary
+    format for easier interpretation of individual flag bits.
+    """
     tbin = []
     while a:
         tbin.append(a % 2)
@@ -162,6 +166,22 @@ def d2b(a):
 
 
 def convert(low, high, lockout=False):
+    """
+    Convert Windows FILETIME (64-bit) values to human-readable time strings.
+    
+    Windows stores time intervals as 64-bit values representing 100-nanosecond
+    intervals since January 1, 1601. This function converts these values to
+    readable format like "30 days 5 hours 15 minutes".
+    
+    Args:
+        low (int): Low 32 bits of the FILETIME value
+        high (int): High 32 bits of the FILETIME value  
+        lockout (bool): If True, treats the value as a lockout duration (simpler conversion)
+        
+    Returns:
+        str: Human-readable time string (e.g., "42 days 5 hours 30 minutes") or
+             special values like "Not Set", "None", or "[-] Invalid TIME"
+    """
     time = ""
     tmp = 0
 
