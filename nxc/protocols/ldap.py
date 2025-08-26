@@ -171,55 +171,33 @@ class ldap(connection):
         )
 
     def create_conn_obj(self):
-        target = ""
-        target_domain = ""
-        base_dn = ""
         try:
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.host}"
             self.logger.info(f"Connecting to {ldap_url} with no baseDN")
-            try:
-                self.ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.host)
-                if self.ldap_connection:
-                    self.logger.debug(f"ldap_connection: {self.ldap_connection}")
-            except SysCallError as e:
-                if proto == "ldaps":
-                    self.logger.fail(f"LDAPs connection to {ldap_url} failed - {e}")
-                    # https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/enable-ldap-over-ssl-3rd-certification-authority
-                    self.logger.fail("Even if the port is open, LDAPS may not be configured")
-                else:
-                    self.logger.fail(f"LDAP connection to {ldap_url} failed: {e}")
-                return False
 
-            resp = self.ldap_connection.search(
-                scope=ldapasn1_impacket.Scope("baseObject"),
-                attributes=["defaultNamingContext", "dnsHostName"],
-                sizeLimit=0,
-            )
-            resp_parsed = parse_result_attributes(resp)[0]
-
-            target = resp_parsed["dnsHostName"]
-            base_dn = resp_parsed["defaultNamingContext"]
-            target_domain = sub(
-                r",DC=",
-                ".",
-                base_dn[base_dn.lower().find("dc="):],
-                flags=IGNORECASE,
-            )[3:]
+            self.ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.host)
+            if self.ldap_connection:
+                self.logger.debug(f"ldap_connection: {self.ldap_connection}")
+        except SysCallError as e:
+            if proto == "ldaps":
+                self.logger.fail(f"LDAPs connection to {ldap_url} failed - {e}")
+                # https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/enable-ldap-over-ssl-3rd-certification-authority
+                self.logger.fail("Even if the port is open, LDAPS may not be configured")
+            else:
+                self.logger.fail(f"LDAP connection to {ldap_url} failed: {e}")
+            return False
         except ConnectionRefusedError as e:
             self.logger.debug(f"{e} on host {self.host}")
             return False
         except OSError as e:
             if e.errno in (EHOSTUNREACH, ENETUNREACH, ETIMEDOUT):
-                self.logger.info(f"Error connecting to {self.host} - {e}")
+                self.logger.info(f"Error connecting to {self.host}: {e}")
                 return False
             else:
-                self.logger.error(f"Error getting ldap info {e}")
+                self.logger.error(f"Error connecting to {self.host}: {e}")
+                return False
 
-        self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
-        self.target = target
-        self.targetDomain = target_domain
-        self.baseDN = base_dn
         return True
 
     def get_ldap_username(self):
@@ -283,9 +261,39 @@ class ldap(connection):
                 raise
 
     def enum_host_info(self):
+        # Enumerate LDAP info
+        target = ""
+        target_domain = ""
+        base_dn = ""
+        try:
+            resp = self.ldap_connection.search(
+                scope=ldapasn1_impacket.Scope("baseObject"),
+                attributes=["defaultNamingContext", "dnsHostName"],
+                sizeLimit=0,
+            )
+            resp_parsed = parse_result_attributes(resp)[0]
+
+            target = resp_parsed["dnsHostName"]
+            base_dn = resp_parsed["defaultNamingContext"]
+            target_domain = sub(
+                r",DC=",
+                ".",
+                base_dn[base_dn.lower().find("dc="):],
+                flags=IGNORECASE,
+            )[3:]
+        except Exception as e:
+            self.logger.fail(f"Failed to enumerate host info for {self.host}, error: {e!s}")
+
+        self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
+        self.target = target
+        self.targetDomain = target_domain
+        self.baseDN = base_dn
+
+        # Parse hostname and remoteName
         self.hostname = self.target.split(".")[0].upper() if "." in self.target else self.target
         self.remoteName = self.target
 
+        # Parse NTLM challenge
         ntlm_challenge = None
         bindRequest = ldapasn1_impacket.BindRequest()
         bindRequest["version"] = 3
@@ -819,15 +827,12 @@ class ldap(connection):
                 self.logger.highlight(item["name"] + "$")
 
     def dc_list(self):
-        # Building the search filter
-        resolv = resolver.Resolver()
-        if self.args.dns_server:
-            resolv.nameservers = [self.args.dns_server]
-        else:
-            resolv.nameservers = [self.host]
+        # bypass host resolver configuration via configure=False (default pulls from /etc/resolv.conf or registry on Windows)
+        resolv = resolver.Resolver(configure=False)
+        resolv.nameservers = [self.args.dns_server] if self.args.dns_server else [self.host]
+        self.logger.debug(f"DNS Server option: {self.args.dns_server}, using DNS server: {resolv.nameservers}")
         resolv.timeout = self.args.dns_timeout
 
-        # Function to resolve and display hostnames
         def resolve_and_display_hostname(name, domain_name=None):
             prefix = f"[{domain_name}] " if domain_name else ""
             try:
@@ -1278,15 +1283,13 @@ class ldap(connection):
     def gmsa(self):
         self.logger.display("Getting GMSA Passwords")
         search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
-        gmsa_accounts = self.ldap_connection.search(
-            searchBase=self.baseDN,
+        gmsa_accounts = self.search(
             searchFilter=search_filter,
             attributes=[
                 "sAMAccountName",
                 "msDS-ManagedPassword",
                 "msDS-GroupMSAMembership",
             ],
-            sizeLimit=0,
         )
         gmsa_accounts_parsed = parse_result_attributes(gmsa_accounts)
         if gmsa_accounts_parsed:
