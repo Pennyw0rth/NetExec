@@ -3,7 +3,6 @@ import ldap3
 import sys
 from impacket.dcerpc.v5 import samr, epm, transport
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
-
 from nxc.helpers.misc import CATEGORY
 
 

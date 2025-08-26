@@ -5,7 +5,6 @@ from impacket.dcerpc.v5.dtypes import LPBYTE, USHORT, LPWSTR, DWORD, ULONG, NULL
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 
 from impacket.uuid import uuidtup_to_bin
-
 from nxc.helpers.misc import CATEGORY
 
 

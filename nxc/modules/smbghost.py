@@ -3,7 +3,6 @@
 # module by : @r4vanan
 import socket
 import struct
-
 from nxc.helpers.misc import CATEGORY
 
 # Constants

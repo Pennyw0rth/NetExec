@@ -1,6 +1,5 @@
 from dploot.lib.target import Target
 from dploot.triage.masterkeys import MasterkeysTriage
-
 from nxc.helpers.misc import CATEGORY
 from nxc.protocols.smb.dpapi import upgrade_to_dploot_connection
 

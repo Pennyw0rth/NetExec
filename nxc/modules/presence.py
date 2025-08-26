@@ -4,7 +4,6 @@ from impacket.dcerpc.v5 import tsts as TSTS
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 from contextlib import suppress
 import traceback
-
 from nxc.helpers.misc import CATEGORY
 
 

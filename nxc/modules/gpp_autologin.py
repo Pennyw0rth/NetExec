@@ -1,6 +1,5 @@
 import xml.etree.ElementTree as ET
 from io import BytesIO
-
 from nxc.helpers.misc import CATEGORY
 
 

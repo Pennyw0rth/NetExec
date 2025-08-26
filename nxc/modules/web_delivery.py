@@ -1,5 +1,4 @@
 from sys import exit
-
 from nxc.helpers.misc import CATEGORY
 
 

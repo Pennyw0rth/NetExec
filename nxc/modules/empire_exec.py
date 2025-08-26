@@ -1,7 +1,6 @@
 import sys
 import requests
 from requests import ConnectionError
-
 from nxc.helpers.misc import CATEGORY
 
 

@@ -3,7 +3,6 @@ from Cryptodome.Cipher import AES
 from base64 import b64decode
 from binascii import unhexlify
 from io import BytesIO
-
 from nxc.helpers.misc import CATEGORY
 
 

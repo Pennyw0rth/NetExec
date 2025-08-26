@@ -4,7 +4,6 @@ import contextlib
 from impacket.examples.secretsdump import RemoteOperations
 from impacket.dcerpc.v5 import rrp
 from impacket.dcerpc.v5.rpcrt import DCERPCException
-
 from nxc.helpers.misc import CATEGORY
 
 

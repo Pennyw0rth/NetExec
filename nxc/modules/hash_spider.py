@@ -8,7 +8,6 @@ from lsassy.dumper import Dumper
 from lsassy.parser import Parser
 from lsassy.session import Session
 from lsassy.impacketfile import ImpacketFile
-
 from nxc.helpers.misc import CATEGORY
 
 credentials_data = []

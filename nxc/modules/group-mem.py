@@ -1,6 +1,5 @@
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 import sys
-
 from nxc.helpers.misc import CATEGORY
 
 

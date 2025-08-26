@@ -13,7 +13,6 @@ from urllib.parse import unquote
 from io import BytesIO
 import re
 import configparser
-
 from nxc.helpers.misc import CATEGORY
 
 

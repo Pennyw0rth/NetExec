@@ -5,7 +5,6 @@ from lxml import objectify
 from base64 import b64decode
 import hashlib
 from dataclasses import dataclass
-
 from nxc.helpers.misc import CATEGORY
 from nxc.protocols.smb.dpapi import upgrade_to_dploot_connection
 

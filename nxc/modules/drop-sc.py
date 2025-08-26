@@ -1,6 +1,5 @@
 import ntpath
 import tempfile
-
 from nxc.helpers.misc import CATEGORY
 
 

@@ -2,7 +2,6 @@ import ssl
 import ldap3
 import re
 from io import BytesIO
-
 from nxc.helpers.misc import CATEGORY
 
 

@@ -19,7 +19,6 @@ import string
 from impacket import ntlm
 from impacket import nt_errors
 from impacket.smbconnection import SessionError
-
 from nxc.helpers.misc import CATEGORY
 
 

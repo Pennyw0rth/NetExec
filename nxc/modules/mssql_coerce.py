@@ -1,5 +1,4 @@
 import sys
-
 from nxc.helpers.misc import CATEGORY
 
 

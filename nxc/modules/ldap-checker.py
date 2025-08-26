@@ -13,7 +13,6 @@ from asyauth.common.credentials.kerberos import KerberosCredential
 
 from asysocks.unicomm.common.target import UniTarget, UniProto
 import contextlib
-
 from nxc.helpers.misc import CATEGORY
 
 

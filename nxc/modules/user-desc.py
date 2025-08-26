@@ -2,7 +2,6 @@ from pathlib import Path
 from datetime import datetime
 from impacket.ldap import ldap, ldapasn1
 from impacket.ldap.ldap import LDAPSearchError
-
 from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 

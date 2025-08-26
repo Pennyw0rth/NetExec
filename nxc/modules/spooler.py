@@ -8,7 +8,6 @@ from impacket.dcerpc.v5.rpch import (
     RPC_PROXY_RPC_OUT_DATA_404_ERR,
 )
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
-
 from nxc.helpers.misc import CATEGORY
 
 KNOWN_PROTOCOLS = {

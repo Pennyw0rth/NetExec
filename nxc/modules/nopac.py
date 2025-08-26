@@ -6,7 +6,6 @@ from binascii import unhexlify
 from impacket.krb5.kerberosv5 import getKerberosTGT
 from impacket.krb5 import constants
 from impacket.krb5.types import Principal
-
 from nxc.helpers.misc import CATEGORY
 
 

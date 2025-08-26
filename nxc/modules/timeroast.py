@@ -3,7 +3,6 @@ from select import select
 from time import time
 from socket import socket, AF_INET, SOCK_DGRAM
 from struct import pack, unpack
-
 from nxc.helpers.misc import CATEGORY
 
 

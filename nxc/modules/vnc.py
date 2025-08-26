@@ -11,7 +11,6 @@ from Cryptodome.Cipher import DES
 from binascii import unhexlify
 import codecs
 import re
-
 from nxc.helpers.misc import CATEGORY
 from nxc.protocols.smb.dpapi import upgrade_to_dploot_connection
 

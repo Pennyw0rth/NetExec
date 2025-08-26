@@ -3,7 +3,6 @@ from impacket.krb5.kerberosv5 import getKerberosTGT
 from impacket.krb5.ccache import CCache
 from impacket.krb5.types import Principal
 from impacket.krb5 import constants
-
 from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.paths import NXC_PATH

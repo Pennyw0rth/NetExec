@@ -5,7 +5,6 @@ import time
 
 from impacket.system_errors import ERROR_NO_MORE_ITEMS, ERROR_FILE_NOT_FOUND, ERROR_OBJECT_NOT_FOUND
 from termcolor import colored
-
 from nxc.helpers.misc import CATEGORY
 from nxc.logger import nxc_logger
 from impacket.dcerpc.v5 import rrp, samr, scmr
