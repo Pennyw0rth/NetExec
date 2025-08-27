@@ -312,6 +312,7 @@ class smb(connection):
                     dc_part = f" {self.targetDomain}" if self.isdc else ""
                     host_file.write(f"{self.host}     {self.hostname}.{self.targetDomain}{dc_part} {self.hostname}\n")
                     self.logger.debug(f"Line added to {self.args.generate_hosts_file} {self.host}    {self.hostname}.{self.targetDomain}{dc_part} {self.hostname}")
+                    self.logger.success(f"Hosts file saved to: {self.args.generate_hosts_file}")
             elif self.args.generate_krb5_file and self.isdc:
                 with open(self.args.generate_krb5_file, "w+") as host_file:
                     data = f"""
