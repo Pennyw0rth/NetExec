@@ -66,15 +66,15 @@ class NXCModule:
         subkeys = []
         while True:
             try:
-                ans = rrp.hBaseRegEnumKey(dce, hkey, dwIndex) 
-                subkeys.append(ans["lpNameOut"][:-1]) 
+                ans = rrp.hBaseRegEnumKey(dce, hkey, dwIndex)
+                subkeys.append(ans["lpNameOut"][:-1])
                 dwIndex += 1
             except rrp.DCERPCSessionError as e:
                 if "ERROR_NO_MORE_ITEMS" in str(e):  # Stop when no more subkeys
                     break
                 else:
                     self.context.log.fail(f"Got unexpected exception: {e}")
-        
+
         for subkey in subkeys:
             if subkey == "DP":
                 self.context.log.success("Distribition Point Installed")
@@ -82,13 +82,13 @@ class NXCModule:
 
             if subkey == "MP":
                 self.context.log.success("Management Point Installed")
-        
+
         # Check current logged user (probably sccm admin)
         hkey = rrp.hBaseRegOpenKey(dce, hRootKey, "SOFTWARE\\Microsoft\\SMS\\CurrentUser")["phkResult"]
         value = rrp.hBaseRegQueryValue(dce, hkey, "UserSID")
         self.context.log.success(f"Site Server Current User SID: {value[1][:-1]}")
         self.context.log.display(f"   Resolve with: --query '(objectSid={value[1][:-1]})' sAMAccountName")
-          
+
     def EnumerateDP(self, dce, hRootKey):
         # Check distridution point info
         hkey = rrp.hBaseRegOpenKey(dce, hRootKey, "SOFTWARE\\Microsoft\\SMS\\DP")["phkResult"]
@@ -106,7 +106,7 @@ class NXCModule:
         value = rrp.hBaseRegQueryValue(dce, hkey, "IsPXE")
         if value[1] == 1:
             self.context.log.highlight("       PXE is installed - CRED-1")
-        
+
         value = rrp.hBaseRegQueryValue(dce, hkey, "IsAnonymousAccessEnabled")
         if value[1] == 1:
             self.context.log.highlight("       Anonymous access to Distribution Point is enabled - CRED-6")
@@ -117,21 +117,21 @@ class NXCModule:
     def EnumerateDB(self, dce, hRootKey):
         # Check for database site
         hkey = rrp.hBaseRegOpenKey(dce, hRootKey, "SOFTWARE\\Microsoft\\SMS\\COMPONENTS\\SMS_SITE_COMPONENT_MANAGER\\Multisite Component Servers")["phkResult"]
-        
+
         # Enumerate subkeys
         dwIndex = 0
         subkeys = []
         while True:
             try:
                 ans = rrp.hBaseRegEnumKey(dce, hkey, dwIndex)
-                subkeys.append(ans["lpNameOut"][:-1]) 
+                subkeys.append(ans["lpNameOut"][:-1])
                 dwIndex += 1
             except rrp.DCERPCSessionError as e:
                 if "ERROR_NO_MORE_ITEMS" in str(e):  # Stop when no more subkeys
                     break
                 else:
                     self.context.log.fail(f"Got unexpected exception: {e}")
-        
+
         nbSiteDB = len(subkeys)
         if nbSiteDB == 0:
             self.context.log.success("Local Site Database")
@@ -144,7 +144,7 @@ class NXCModule:
                 else:
                     self.context.log.highlight(f"       SMB signing: {new_conn.isSigningRequired()} - TAKEOVER-1/2")
                 new_conn.close()
-      
+
     def trigger_winreg(self, connection, context):
         # Original idea from https://twitter.com/splinter_code/status/1715876413474025704
         # Basically triggers the RemoteRegistry to start without admin privs
