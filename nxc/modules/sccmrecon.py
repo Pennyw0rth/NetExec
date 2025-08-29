@@ -11,7 +11,7 @@ class NXCModule:
     # Mainly based on pssrecon:https://github.com/slygoo/pssrecon
 
     name = "sccmrecon"
-    description = "Gather infomation about a Distribution point of Primary Site Server through winreg"
+    description = "Gather infomation about a Distribution point or Primary Site Server through winreg"
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
