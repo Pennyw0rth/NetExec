@@ -22,8 +22,6 @@ class NXCModule:
     name = "sccm"
     description = "Find a SCCM infrastructure in the Active Directory"
     supported_protocols = ["ldap"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def __init__(self):
         self.sccm_site_servers = []     # List of dns host names of the SCCM site servers
@@ -49,7 +47,7 @@ class NXCModule:
         """On a successful LDAP login we perform a search for all PKI Enrollment Server or Certificate Templates Names."""
         self.context = context
         self.connection = connection
-        self.base_dn = connection.ldapConnection._baseDN if not self.base_dn else self.base_dn
+        self.base_dn = connection.ldap_connection._baseDN if not self.base_dn else self.base_dn
         self.sc = ldap.SimplePagedResultsControl()
 
         # Basic SCCM enumeration
@@ -58,7 +56,7 @@ class NXCModule:
             search_filter = f"(distinguishedName=CN=System Management,CN=System,{self.base_dn})"
             controls = security_descriptor_control(sdflags=0x04)
             context.log.display(f"Looking for the SCCM container with filter: '{search_filter}'")
-            result = connection.ldapConnection.search(
+            result = connection.ldap_connection.search(
                 searchFilter=search_filter,
                 attributes=["nTSecurityDescriptor"],
                 sizeLimit=0,
@@ -129,7 +127,7 @@ class NXCModule:
         try:
             yoinkers = "(|(samaccountname=*sccm*)(samaccountname=*mecm*)(description=*sccm*)(description=*mecm*)(name=*sccm*)(name=*mecm*))"
             context.log.display("Searching for SCCM related objects")
-            result = connection.ldapConnection.search(
+            result = connection.ldap_connection.search(
                 searchFilter=yoinkers,
                 searchBase=self.base_dn,
                 attributes=["sAMAccountName", "distinguishedName", "sAMAccountType"],
@@ -157,7 +155,7 @@ class NXCModule:
         try:
             self.context.log.debug(f"Resolving group members recursively for {dn}")
             # Somehow BaseDN is not working together with the LDAP_MATCHING_RULE_IN_CHAIN
-            result = self.connection.ldapConnection.search(
+            result = self.connection.ldap_connection.search(
                 searchFilter=f"(memberOf:{LDAP_MATCHING_RULE_IN_CHAIN}:={dn})",
                 attributes=["sAMAccountName", "distinguishedName", "sAMAccountType"],
             )
@@ -176,7 +174,7 @@ class NXCModule:
     def get_management_points(self):
         """Searches for all SCCM management points in the Active Directory and maps them to their SCCM site via the site code."""
         try:
-            response = self.connection.ldapConnection.search(
+            response = self.connection.ldap_connection.search(
                 searchBase=self.base_dn,
                 searchFilter="(objectClass=mSSMSManagementPoint)",
                 attributes=["cn", "dNSHostName", "mSSMSDefaultMP", "mSSMSSiteCode"],
@@ -199,7 +197,7 @@ class NXCModule:
     def get_sites(self):
         """Searches for all SCCM sites in the Active Directory, sorted by site code."""
         try:
-            response = self.connection.ldapConnection.search(
+            response = self.connection.ldap_connection.search(
                 searchBase=self.base_dn,
                 searchFilter="(objectClass=mSSMSSite)",
                 attributes=["cn", "mSSMSSiteCode", "mSSMSAssignmentSiteCode"],
@@ -244,7 +242,7 @@ class NXCModule:
         """Tries to resolve a SID and add the dNSHostName to the sccm site list."""
         try:
             self.context.log.debug(f"Resolving SID: {sid}")
-            result = self.connection.ldapConnection.search(
+            result = self.connection.ldap_connection.search(
                 searchBase=self.base_dn,
                 searchFilter=f"(objectSid={sid})",
                 attributes=["sAMAccountName", "sAMAccountType", "member", "dNSHostName"],
@@ -277,7 +275,7 @@ class NXCModule:
 
     def dn_to_sid(self, dn) -> str:
         """Tries to resolve a DN to a SID."""
-        result = self.connection.ldapConnection.search(
+        result = self.connection.ldap_connection.search(
             searchBase=self.base_dn,
             searchFilter=f"(distinguishedName={dn})",
             attributes=["sAMAccountName", "objectSid"],

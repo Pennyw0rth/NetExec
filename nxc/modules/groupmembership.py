@@ -15,8 +15,6 @@ class NXCModule:
     name = "groupmembership"
     description = "Query the groups to which a user belongs."
     supported_protocols = ["ldap"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """USER	Choose a username to query group membership"""
@@ -37,7 +35,7 @@ class NXCModule:
 
         try:
             context.log.debug(f"Search Filter={searchFilter}")
-            resp = connection.ldapConnection.search(
+            resp = connection.ldap_connection.search(
                 searchFilter=searchFilter,
                 attributes=["memberOf", "primaryGroupID"],
                 sizeLimit=0,

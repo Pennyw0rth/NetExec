@@ -1,16 +1,19 @@
 from base64 import b64decode
 from sys import exit
 from os.path import abspath, join, isfile
-
+from datetime import datetime
 from nxc.paths import DATA_PATH, TMP_PATH
 
 
 class NXCModule:
+    """
+    Module for running system command as target PID user's
+    Module by @termanix
+    """
+
     name = "pi"
     description = "Run command as logged on users via Process Injection"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def options(self, context, module_options):
         r"""
@@ -25,8 +28,12 @@ class NXCModule:
         self.pi = "pi.exe"
         self.useembeded = True
         self.pid = self.cmd = ""
+
         with open(join(DATA_PATH, ("pi_module/pi.bs64"))) as pi_file:
             self.pi_embedded = b64decode(pi_file.read())
+
+        # Add some random binary data to defeat AVs which check the file hash
+        self.pi_embedded += datetime.now().strftime("%Y%m%d%H%M%S").encode()
 
         if "EXEC" in module_options:
             self.cmd = module_options["EXEC"]

@@ -1,4 +1,3 @@
-import socket
 from nxc.logger import nxc_logger
 from impacket.ldap.ldap import LDAPSearchError
 from impacket.ldap.ldapasn1 import SearchResultEntry
@@ -16,15 +15,14 @@ class NXCModule:
     name = "find-computer"
     description = "Finds computers in the domain via the provided text"
     supported_protocols = ["ldap"]
-    opsec_safe = True
-    multiple_hosts = False
 
     def options(self, context, module_options):
         """
-        find-computer: Specify find-computer to call the module
-        TEXT: Specify the TEXT option to enter your text to search for
-        Usage: nxc ldap $DC-IP -u Username -p Password -M find-computer -o TEXT="server"
-               nxc ldap $DC-IP -u Username -p Password -M find-computer -o TEXT="SQL"
+        TEXT    Search TEXT in the operating system or name of the computer.
+
+        Examples:
+        nxc ldap $DC-IP -u Username -p Password -M find-computer -o TEXT="server"
+        nxc ldap $DC-IP -u Username -p Password -M find-computer -o TEXT="SQL"
         """
         self.TEXT = ""
 
@@ -35,11 +33,11 @@ class NXCModule:
             sys.exit(1)
 
     def on_login(self, context, connection):
-        search_filter = f"(&(objectCategory=computer)(&(|(operatingSystem=*{self.TEXT}*))(name=*{self.TEXT}*)))"
+        search_filter = f"(&(objectCategory=computer)(|(operatingSystem=*{self.TEXT}*)(name=*{self.TEXT}*)))"
 
         try:
             context.log.debug(f"Search Filter={search_filter}")
-            resp = connection.ldapConnection.search(searchFilter=search_filter, attributes=["dNSHostName", "operatingSystem"], sizeLimit=0)
+            resp = connection.ldap_connection.search(searchFilter=search_filter, attributes=["dNSHostName", "operatingSystem"], sizeLimit=0)
         except LDAPSearchError as e:
             if e.getErrorString().find("sizeLimitExceeded") >= 0:
                 context.log.debug("sizeLimitExceeded exception caught, giving up and processing the data received")
@@ -69,12 +67,12 @@ class NXCModule:
         if len(answers) > 0:
             context.log.success("Found the following computers: ")
             for answer in answers:
-                try:
-                    ip = socket.gethostbyname(answer[0])
-                    context.log.highlight(f"{answer[0]} ({answer[1]}) ({ip})")
-                    context.log.debug("IP found")
-                except socket.gaierror:
-                    context.log.debug("Missing IP")
+                resolv = connection.resolver(answer[0])
+                if resolv:
+                    context.log.highlight(f"{answer[0]} ({answer[1]}) ({resolv['host']})")
+                    context.log.debug("IP found via DNS query")
+                else:
+                    context.log.debug(f"No DNS response for {answer[0]}")
                     context.log.highlight(f"{answer[0]} ({answer[1]}) (No IP Found)")
         else:
             context.log.success(f"Unable to find any computers with the text {self.TEXT}")

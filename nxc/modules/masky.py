@@ -6,8 +6,6 @@ class NXCModule:
     name = "masky"
     description = "Remotely dump domain user credentials via an ADCS and a KDC"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def options(self, context, module_options):
         r"""
@@ -81,8 +79,8 @@ class NXCModule:
 
         pwned_users = 0
         for user in rslts.users:
-            if user.nthash:
-                context.log.highlight(f"{user.domain}\\{user.name} {user.nthash}")
+            if user.nt_hash:
+                context.log.highlight(f"{user.domain}\\{user.name} {user.nt_hash}")
                 self.process_credentials(connection, context, user)
                 pwned_users += 1
 
@@ -98,7 +96,7 @@ class NXCModule:
             "hash",
             user.domain,
             user.name,
-            user.nthash,
+            user.nt_hash,
             pillaged_from=host,
         )
         add_user_bh(user.name, user.domain, context.log, connection.config)

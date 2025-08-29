@@ -12,8 +12,6 @@ class NXCModule:
     name = "empire_exec"
     description = "Uses Empire's RESTful API to generate a launcher for the specified listener and executes it"
     supported_protocols = ["smb", "mssql"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def options(self, context, module_options):
         """
@@ -33,7 +31,7 @@ class NXCModule:
         obfuscate = "OBFUSCATE" in module_options
         # we can use commands instead of backslashes - this is because Linux and OSX treat them differently
         default_obfuscation = "Token,All,1"
-        obfuscate_cmd = module_options["OBFUSCATE_CMD"] if "OBFUSCATE_CMD" in module_options else default_obfuscation
+        obfuscate_cmd = module_options.get("OBFUSCATE_CMD", default_obfuscation)
         context.log.debug(f"Obfuscate: {obfuscate} - Obfuscate_cmd: {obfuscate_cmd}")
 
         # Pull the host and port from the config file
