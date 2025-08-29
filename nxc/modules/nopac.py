@@ -10,13 +10,17 @@ from impacket.krb5.types import Principal
 
 class NXCModule:
     name = "nopac"
-    description = "Check if the DC is vulnerable to CVE-2021-42278 and CVE-2021-42287 to impersonate DA from standard domain user"
+    description = "Check if the DC is vulnerable to CVE-2021-42278 and CVE-2021-42287 to impersonate DA from standard domain user - Requires Kerberos in domain!"
     supported_protocols = ["smb"]
 
     def options(self, context, module_options):
         """ """
 
     def on_login(self, context, connection):
+        if not connection.username:
+            context.log.debug("Blank username, cannot get a Kerberos Principal object")
+            return False
+
         user_name = Principal(connection.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
         try:
             tgt_with_pac, cipher, old_session_key, session_key = getKerberosTGT(
