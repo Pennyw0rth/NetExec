@@ -1,11 +1,13 @@
 from masky import Masky
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
     name = "masky"
     description = "Remotely dump domain user credentials via an ADCS and a KDC"
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         r"""

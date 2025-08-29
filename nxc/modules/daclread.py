@@ -4,6 +4,7 @@ import datetime
 from enum import Enum
 from impacket.ldap import ldaptypes
 from impacket.uuid import bin_to_string
+from nxc.helpers.misc import CATEGORY
 from nxc.helpers.msada_guids import SCHEMA_OBJECTS, EXTENDED_RIGHTS
 from nxc.parsers.ldap_results import parse_result_attributes
 from ldap3.utils.conv import escape_filter_chars
@@ -205,6 +206,7 @@ class NXCModule:
     name = "daclread"
     description = "Read and backup the Discretionary Access Control List of objects. Be careful, this module cannot read the DACLS recursively, see more explanation in the options."
     supported_protocols = ["ldap"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

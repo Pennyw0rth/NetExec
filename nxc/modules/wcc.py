@@ -5,7 +5,7 @@ import time
 
 from impacket.system_errors import ERROR_NO_MORE_ITEMS, ERROR_FILE_NOT_FOUND, ERROR_OBJECT_NOT_FOUND
 from termcolor import colored
-
+from nxc.helpers.misc import CATEGORY
 from nxc.logger import nxc_logger
 from impacket.dcerpc.v5 import rrp, samr, scmr
 from impacket.dcerpc.v5.rrp import DCERPCSessionError
@@ -87,6 +87,7 @@ class NXCModule:
     name = "wcc"
     description = "Check various security configuration items on Windows machines"
     supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self):
         self.context = None

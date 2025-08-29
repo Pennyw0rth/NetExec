@@ -1,4 +1,5 @@
 from pyasn1.error import PyAsn1Error
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -14,11 +15,12 @@ class NXCModule:
     """
 
     def options(self, context, module_options):
-        pass
+        """No options available"""
 
     name = "maq"
     description = "Retrieves the MachineAccountQuota domain-level attribute"
     supported_protocols = ["ldap"]
+    category = CATEGORY.ENUMERATION
 
     def on_login(self, context, connection):
         context.log.display("Getting the MachineAccountQuota")

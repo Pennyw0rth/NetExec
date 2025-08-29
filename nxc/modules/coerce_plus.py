@@ -5,12 +5,14 @@ from impacket.dcerpc.v5.dtypes import LPBYTE, USHORT, LPWSTR, DWORD, ULONG, NULL
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 
 from impacket.uuid import uuidtup_to_bin
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
     name = "coerce_plus"
     description = "Module to check if the Target is vulnerable to any coerce vulns. Set LISTENER IP for coercion."
     supported_protocols = ["smb"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

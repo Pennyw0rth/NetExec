@@ -2,6 +2,7 @@ from dploot.triage.rdg import RDGTriage, RDGServerProfile
 from dploot.lib.target import Target
 
 from nxc.helpers.logger import highlight
+from nxc.helpers.misc import CATEGORY
 from nxc.protocols.smb.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection
 
 
@@ -9,6 +10,7 @@ class NXCModule:
     name = "rdcman"
     description = "Remotely dump Remote Desktop Connection Manager (sysinternals) credentials"
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """ """

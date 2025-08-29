@@ -1,3 +1,4 @@
+from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
 
 
@@ -5,6 +6,7 @@ class NXCModule:
     name = "dump-computers"
     description = "Dumps all computers in the domain"
     supported_protocols = ["ldap"]
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """

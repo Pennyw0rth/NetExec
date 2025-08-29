@@ -2,7 +2,7 @@ from pathlib import Path
 from datetime import datetime
 from impacket.ldap import ldap, ldapasn1
 from impacket.ldap.ldap import LDAPSearchError
-
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 
 
@@ -16,6 +16,7 @@ class NXCModule:
     name = "user-desc"
     description = "Get user descriptions stored in Active Directory"
     supported_protocols = ["ldap"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self, context=None, multiple_options=None):
         self.keywords = None

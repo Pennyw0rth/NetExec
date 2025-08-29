@@ -1,3 +1,4 @@
+from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
 
 
@@ -9,6 +10,7 @@ class NXCModule:
     name = "get-info-users"
     description = "Get the info field of all users. May contain password"
     supported_protocols = ["ldap"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """FILTER    Apply the FILTER (grep-like) (default: '')"""

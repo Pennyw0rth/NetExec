@@ -1,6 +1,7 @@
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 from impacket.dcerpc.v5.rrp import DCERPCSessionError
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -8,6 +9,7 @@ class NXCModule:
     name = "runasppl"
     description = "Check if the registry value RunAsPPL is set or not"
     supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
