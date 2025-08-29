@@ -24,8 +24,6 @@ class NXCModule:
     name = "vnc"
     description = "Loot Passwords from VNC server and client configurations"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -128,17 +126,17 @@ class NXCModule:
                             self.context.log.debug(f"Error while RegQueryValues {registry_keys} from {user_registry_path}: {e}")
                         continue
                 else:
-                    fh = tempfile.NamedTemporaryFile()
-                    fh.write(ntuser_dat_bytes)
-                    fh.seek(0)
-                    reg = winregistry.Registry(fh.name, isRemote=False)
-                    parent_key = reg.findKey(registry_path)
-                    if parent_key is None:
-                        continue
-                    cred["user"] = reg.getValue(ntpath.join(registry_path, registry_keys[0]))[1].decode("latin-1")
-                    password = reg.getValue(ntpath.join(registry_path, registry_keys[1]))[1].decode("utf-16le").rstrip("\0").encode()
-                    cred["password"] = self.recover_vncpassword(unhexlify(password)).decode("latin-1")
-                    cred["server"] = reg.getValue(ntpath.join(registry_path, registry_keys[2]))[1].decode("latin-1")
+                    with tempfile.NamedTemporaryFile() as fh:
+                        fh.write(ntuser_dat_bytes)
+                        fh.seek(0)
+                        reg = winregistry.Registry(fh.name, isRemote=False)
+                        parent_key = reg.findKey(registry_path)
+                        if parent_key is None:
+                            continue
+                        cred["user"] = reg.getValue(ntpath.join(registry_path, registry_keys[0]))[1].decode("latin-1")
+                        password = reg.getValue(ntpath.join(registry_path, registry_keys[1]))[1].decode("utf-16le").rstrip("\0").encode()
+                        cred["password"] = self.recover_vncpassword(unhexlify(password)).decode("latin-1")
+                        cred["server"] = reg.getValue(ntpath.join(registry_path, registry_keys[2]))[1].decode("latin-1")
 
                 self.context.log.highlight(f"[{vnc_name}] {cred['user']}:{cred['password']}@{cred['server']}")
 

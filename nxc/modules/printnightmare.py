@@ -1,4 +1,3 @@
-import sys
 from impacket import system_errors
 from impacket.dcerpc.v5.rpcrt import DCERPCException, RPC_C_AUTHN_GSS_NEGOTIATE, rpc_status_codes
 from impacket.structure import Structure
@@ -22,8 +21,6 @@ class NXCModule:
     name = "printnightmare"
     description = "Check if host vulnerable to printnightmare"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -40,7 +37,7 @@ class NXCModule:
     def on_login(self, context, connection):
         # Connect and bind to MS-RPRN (https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-rprn/848b8334-134a-4d02-aea4-03b673d6c515)
         target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
-        stringbinding = r"ncacn_np:%s[\PIPE\spoolss]" % target
+        stringbinding = rf"ncacn_np:{target}[\PIPE\spoolss]"
 
         context.log.info(f"Binding to {stringbinding!r}")
 
@@ -69,7 +66,7 @@ class NXCModule:
             dce.bind(rprn.MSRPC_UUID_RPRN)
         except Exception as e:
             context.log.fail(f"Failed to bind: {e}")
-            sys.exit(1)
+            return False
 
         flags = APD_COPY_ALL_FILES | APD_COPY_FROM_DIRECTORY | APD_INSTALL_WARNED_DRIVER
 

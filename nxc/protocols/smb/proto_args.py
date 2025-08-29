@@ -22,11 +22,12 @@ def proto_args(parser, parents):
     smb_parser.add_argument("--laps", dest="laps", metavar="LAPS", type=str, help="LAPS authentification", nargs="?", const="administrator")
     smb_parser.add_argument("--generate-hosts-file", type=str, help="Generate a hosts file like from a range of IP")
     smb_parser.add_argument("--generate-krb5-file", type=str, help="Generate a krb5 file like from a range of IP")
+    smb_parser.add_argument("--generate-tgt", type=str, help="Generate a tgt ticket")
     self_delegate_arg.make_required = [delegate_arg]
 
     cred_gathering_group = smb_parser.add_argument_group("Credential Gathering", "Options for gathering credentials")
-    cred_gathering_group.add_argument("--sam", action="store_true", help="dump SAM hashes from target systems")
-    cred_gathering_group.add_argument("--lsa", action="store_true", help="dump LSA secrets from target systems")
+    cred_gathering_group.add_argument("--sam", choices={"regdump", "secdump"}, nargs="?", const="regdump", help="dump SAM hashes from target systems")
+    cred_gathering_group.add_argument("--lsa", choices={"regdump", "secdump"}, nargs="?", const="regdump", help="dump LSA secrets from target systems")
     cred_gathering_group.add_argument("--ntds", choices={"vss", "drsuapi"}, nargs="?", const="drsuapi", help="dump the NTDS.dit from target DCs using the specifed method")
     cred_gathering_group.add_argument("--dpapi", choices={"cookies", "nosystem"}, nargs="*", help="dump DPAPI secrets from target systems, can dump cookies if you add 'cookies', will not dump SYSTEM dpapi if you add nosystem")
     cred_gathering_group.add_argument("--sccm", choices={"wmi", "disk"}, nargs="?", const="disk", help="dump SCCM secrets from target systems")
@@ -36,24 +37,27 @@ def proto_args(parser, parents):
     cred_gathering_group.add_argument("--user", dest="userntds", type=str, help="Dump selected user from DC")
 
     mapping_enum_group = smb_parser.add_argument_group("Mapping/Enumeration", "Options for Mapping/Enumerating")
-    mapping_enum_group.add_argument("--shares", action="store_true", help="enumerate shares and access")
+    mapping_enum_group.add_argument("--shares", type=str, nargs="?", const="", help="Enumerate shares and access, filter on specified argument (read ; write ; read,write)")
     mapping_enum_group.add_argument("--dir", nargs="?", type=str, const="", help="List the content of a path (default path: '%(const)s')")
-    mapping_enum_group.add_argument("--interfaces", action="store_true", help="enumerate network interfaces")
+    mapping_enum_group.add_argument("--interfaces", action="store_true", help="Enumerate network interfaces")
     mapping_enum_group.add_argument("--no-write-check", action="store_true", help="Skip write check on shares (avoid leaving traces when missing delete permissions)")
-    mapping_enum_group.add_argument("--filter-shares", nargs="+", help="Filter share by access, option 'read' 'write' or 'read,write'")
-    mapping_enum_group.add_argument("--smb-sessions", action="store_true", help="enumerate active smb sessions")
-    mapping_enum_group.add_argument("--disks", action="store_true", help="enumerate disks")
-    mapping_enum_group.add_argument("--loggedon-users-filter", action="store", help="only search for specific user, works with regex")
-    mapping_enum_group.add_argument("--loggedon-users", action="store_true", help="enumerate logged on users")
-    mapping_enum_group.add_argument("--users", nargs="*", metavar="USER", help="enumerate domain users, if a user is specified than only its information is queried.")
-    mapping_enum_group.add_argument("--groups", nargs="?", const="", metavar="GROUP", help="enumerate domain groups, if a group is specified than its members are enumerated")
-    mapping_enum_group.add_argument("--computers", nargs="?", const="", metavar="COMPUTER", help="enumerate computer users")
-    mapping_enum_group.add_argument("--local-groups", nargs="?", const="", metavar="GROUP", help="enumerate local groups, if a group is specified then its members are enumerated")
+    mapping_enum_group.add_argument("--filter-shares", nargs="+", help="Filter share by access, option 'READ' 'WRITE' or 'READ,WRITE'")
+    mapping_enum_group.add_argument("--disks", action="store_true", help="Enumerate disks")
+    mapping_enum_group.add_argument("--users", nargs="*", metavar="USER", help="Enumerate domain users, if a user is specified than only its information is queried.")
+    mapping_enum_group.add_argument("--users-export", help="Enumerate domain users and export them to the specified file")
+    mapping_enum_group.add_argument("--groups", nargs="?", const="", metavar="GROUP", help="Enumerate domain groups, if a group is specified than its members are Enumerated")
+    mapping_enum_group.add_argument("--local-groups", nargs="?", const="", metavar="GROUP", help="Enumerate local groups, if a group is specified then its members are Enumerated")
+    mapping_enum_group.add_argument("--computers", nargs="?", const="", metavar="COMPUTER", help="Enumerate computer users")
     mapping_enum_group.add_argument("--pass-pol", action="store_true", help="dump password policy")
-    mapping_enum_group.add_argument("--rid-brute", nargs="?", type=int, const=4000, metavar="MAX_RID", help="enumerate users by bruteforcing RIDs")
-    mapping_enum_group.add_argument("--qwinsta", action="store_true", help="Enumerate RDP connections")
-    mapping_enum_group.add_argument("--tasklist", action="store_true", help="Enumerate running processes")
-    
+    mapping_enum_group.add_argument("--rid-brute", nargs="?", type=int, const=4000, metavar="MAX_RID", help="Enumerate users by bruteforcing RIDs")
+    mapping_enum_group.add_argument("--smb-sessions", action="store_true", help="Enumerate active smb sessions")
+    mapping_enum_group.add_argument("--reg-sessions", type=str, nargs="?", const="", help="Enumerate users sessions using the Remote Registry. If a username is given, filter for it. If a file is given, filter for listed usernames. If no value is given, list all.")
+    mapping_enum_group.add_argument("--loggedon-users", nargs="?", const="", help="Enumerate logged on users, if a user is specified than a regex filter is applied.")
+    mapping_enum_group.add_argument("--loggedon-users-filter", action="store", help="only search for specific user, works with regex")
+    mapping_enum_group.add_argument("--qwinsta", type=str, nargs="?", const="", help="Enumerate user sessions. If a username is given, filter for it; if a file is given, filter for listed usernames. If no value is given, list all.")
+    mapping_enum_group.add_argument("--tasklist", type=str, nargs="?", const=True, help="Enumerate running processes and filter for the specified one if specified")
+    mapping_enum_group.add_argument("--taskkill", type=str, help="Kills a specific PID or a proces name's PID's")
+
     wmi_group = smb_parser.add_argument_group("WMI", "Options for WMI Queries")
     wmi_group.add_argument("--wmi", metavar="QUERY", type=str, help="issues the specified WMI query")
     wmi_group.add_argument("--wmi-namespace", metavar="NAMESPACE", default="root\\cimv2", help="WMI Namespace")
@@ -65,6 +69,7 @@ def proto_args(parser, parents):
     spidering_group.add_argument("--exclude-dirs", type=str, metavar="DIR_LIST", default="", help="directories to exclude from spidering")
     spidering_group.add_argument("--depth", type=int, help="max spider recursion depth")
     spidering_group.add_argument("--only-files", action="store_true", help="only spider files")
+    spidering_group.add_argument("--silent", action="store_true", help="Do not print found files/directories", default=False)
     segroup = spidering_group.add_mutually_exclusive_group()
     segroup.add_argument("--pattern", nargs="+", help="pattern(s) to search for in folders, filenames and file content")
     segroup.add_argument("--regex", nargs="+", help="regex(s) to search for in folders, filenames and file content")
@@ -93,6 +98,7 @@ def proto_args(parser, parents):
     posh_group.add_argument("--no-encode", action="store_true", default=False, help="Do not encode the PowerShell command ran on target")
 
     return parser
+
 
 def get_conditional_action(baseAction):
     class ConditionalAction(baseAction):

@@ -6,15 +6,13 @@ from impacket.examples.secretsdump import SAMHashes, LSASecrets, LocalOperations
 from impacket.smbconnection import SessionError
 from impacket.dcerpc.v5 import transport, rrp
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
-
 from nxc.paths import NXC_PATH
+
 
 class NXCModule:
     name = "backup_operator"
     description = "Exploit user in backup operator group to dump NTDS @mpgn_x64"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):
         self.context = context

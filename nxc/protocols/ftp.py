@@ -5,6 +5,7 @@ from nxc.helpers.logger import highlight
 from nxc.logger import NXCAdapter
 from ftplib import FTP, error_perm
 
+
 class ftp(connection):
     def __init__(self, args, db, host):
         self.protocol = "FTP"
@@ -135,7 +136,7 @@ class ftp(connection):
             if self.conn.encoding == "utf-8":
                 # Switch the connection to binary
                 self.conn.sendcmd("TYPE I")
-            # Check if the file exists 
+            # Check if the file exists
             self.conn.size(filename)
             # Attempt to download the file
             self.conn.retrbinary(f"RETR {filename}", open(downloaded_file, "wb").write)  # noqa: SIM115

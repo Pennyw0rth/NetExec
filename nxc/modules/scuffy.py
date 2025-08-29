@@ -13,8 +13,6 @@ class NXCModule:
     name = "scuffy"
     description = "Creates and dumps an arbitrary .scf file with the icon property containing a UNC path to the declared SMB server against all writeable shares"
     supported_protocols = ["smb"]
-    opsec_safe = False
-    multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -50,7 +48,7 @@ class NXCModule:
 
         if not self.cleanup:
             self.server = module_options["SERVER"]
-            
+
             with open(self.scf_path, "a") as scuf:
                 scuf.write("[Shell]\n")
                 scuf.write("Command=2\n")

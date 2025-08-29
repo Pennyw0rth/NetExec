@@ -9,16 +9,17 @@ from io import StringIO
 from datetime import datetime
 from pypsrp.wsman import NAMESPACES
 from pypsrp.client import Client
+from termcolor import colored
 
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 
-from nxc.config import process_secret
+from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.misc import gen_random_string
 from nxc.helpers.ntlm_parser import parse_challenge
 from nxc.logger import NXCAdapter
-
+from nxc.paths import NXC_PATH
 
 urllib3.disable_warnings()
 
@@ -30,11 +31,12 @@ class winrm(connection):
         self.server_os = None
         self.output_filename = None
         self.endpoint = None
-        self.hash = None
         self.lmhash = ""
         self.nthash = ""
         self.ssl = False
         self.challenge_header = None
+        self.targetDomain = None
+        self.no_ntlm = False
 
         connection.__init__(self, args, db, host)
 
@@ -52,7 +54,15 @@ class winrm(connection):
         )
 
     def enum_host_info(self):
-        ntlm_info = parse_challenge(base64.b64decode(self.challenge_header.split(" ")[1].replace(",", "")))
+        try:
+            ntlm_info = parse_challenge(base64.b64decode(self.challenge_header.split(" ")[1].replace(",", "")))
+        except Exception as e:
+            self.logger.debug(f"Error parsing NTLM challenge: {e!s}")
+            self.logger.debug(f"Raw challenge: {self.challenge_header.split(' ')[1].replace(',', '')[:20]}...")
+            self.logger.error("Invalid NTLM challenge received from server. This may indicate NTLM is not supported and nxc winrm only support NTLM currently")
+            self.no_ntlm = True
+            return False
+
         self.targetDomain = self.domain = ntlm_info["domain"]
         self.hostname = ntlm_info["hostname"]
         self.server_os = ntlm_info["os_version"]
@@ -65,12 +75,13 @@ class winrm(connection):
         if self.args.local_auth:
             self.domain = self.hostname
 
-        self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
+        self.output_filename = os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
     def print_host_info(self):
         self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
         self.logger.extra["port"] = self.port
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain})")
+        ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) {ntlm}")
 
     def create_conn_obj(self):
         if self.is_link_local_ipv6:
@@ -133,6 +144,9 @@ class winrm(connection):
         return True
 
     def plaintext_login(self, domain, username, password):
+        # Add server hostname to the Workstation field in NTLM Authenticate Message (Message 3)
+        # This helps fix false negatives during NTLM auth — see issue #694 for details
+        os.environ["NETBIOS_COMPUTER_NAME"] = self.hostname
         self.admin_privs = False
         self.password = password
         self.username = username
@@ -153,11 +167,13 @@ class winrm(connection):
 
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
             self.db.add_credential("plaintext", domain, self.username, self.password)
-            # TODO: when we can easily get the host_id via RETURNING statements, readd this in
+            user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
+            host_id = self.db.get_hosts(self.host)[0].id
+            self.db.add_loggedin_relation(user_id, host_id)
 
             if self.admin_privs:
                 self.logger.debug("Inside admin privs")
-                self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host)  # , user_id=user_id)
+                self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host, user_id=user_id)  # , user_id=user_id)
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
             if not self.args.local_auth and self.username != "":
@@ -171,6 +187,9 @@ class winrm(connection):
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
+        # Add server hostname to the Workstation field in NTLM Authenticate Message (Message 3)
+        # This helps fix false negatives during NTLM auth — see issue #694 for details
+        os.environ["NETBIOS_COMPUTER_NAME"] = self.hostname
         self.admin_privs = False
         lmhash = "00000000000000000000000000000000"
         nthash = ""
@@ -199,8 +218,13 @@ class winrm(connection):
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}:{process_secret(nthash)} {self.mark_pwned()}")
 
+            self.db.add_credential("hash", domain, self.username, ntlm_hash)
+            user_id = self.db.get_credential("hash", domain, self.username, ntlm_hash)
+            host_id = self.db.get_hosts(self.host)[0].id
+            self.db.add_loggedin_relation(user_id, host_id)
+
             if self.admin_privs:
-                self.db.add_admin_user("hash", domain, self.username, nthash, self.host)
+                self.db.add_admin_user("hash", domain, self.username, nthash, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
             if not self.args.local_auth and self.username != "":
@@ -214,12 +238,9 @@ class winrm(connection):
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {e!s}")
             return False
 
-    def execute(self, payload=None, get_output=True, shell_type="cmd"):
+    def execute(self, payload=None, get_output=False, shell_type="cmd"):
         if not payload:
             payload = self.args.execute
-
-        if self.args.no_output:
-            get_output = False
 
         try:
             result = self.conn.execute_cmd(payload, encoding=self.args.codec) if shell_type == "cmd" else self.conn.execute_ps(payload)
@@ -236,13 +257,18 @@ class winrm(connection):
             else:
                 self.logger.fail(f"Execute command failed, error: {e!s}")
         else:
+            if get_output:
+                return result[0]
             self.logger.success(f"Executed command (shell type: {shell_type})")
-            buf = StringIO(result[0]).readlines() if get_output else ""
-            for line in buf:
-                self.logger.highlight(line.strip())
+            if not self.args.no_output:
+                for line in StringIO(result[0]).readlines():
+                    self.logger.highlight(line.strip())
 
-    def ps_execute(self):
-        self.execute(payload=self.args.ps_execute, get_output=True, shell_type="powershell")
+    def ps_execute(self, payload=None, get_output=False):
+        command = payload if payload else self.args.ps_execute
+        result = self.execute(payload=command, get_output=get_output, shell_type="powershell")
+        if get_output:
+            return result
 
     # Dos attack prevent:
     # if someboby executed "reg save HKLM\sam C:\windows\temp\sam" before, but didn't remove "C:\windows\temp\sam" file,

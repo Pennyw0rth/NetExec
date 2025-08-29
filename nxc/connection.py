@@ -1,3 +1,5 @@
+from datetime import datetime
+import os
 import random
 import sys
 import contextlib
@@ -15,6 +17,7 @@ from nxc.helpers.logger import highlight
 from nxc.loaders.moduleloader import ModuleLoader
 from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
+from nxc.paths import NXC_PATH
 from nxc.protocols.ldap.laps import laps_search
 from nxc.helpers.pfx import pfx_auth
 
@@ -136,7 +139,11 @@ class connection:
         # Authentication info
         self.password = ""
         self.username = ""
-        self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey or (hasattr(self.args, "delegate") and self.args.delegate))
+        self.kerberos = bool(self.args.kerberos or
+                             self.args.use_kcache or
+                             self.args.aesKey or
+                             (hasattr(self.args, "delegate") and self.args.delegate) or
+                             (hasattr(self.args, "no_preauth_targets") and self.args.no_preauth_targets))
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
         self.admin_privs = False
@@ -151,6 +158,11 @@ class connection:
         self.port = self.args.port
         self.local_ip = None
         self.dns_server = self.args.dns_server
+
+        # Construct the output file template using os.path.join for OS compatibility
+        base_log_dir = os.path.join(os.path.expanduser(NXC_PATH), "logs")
+        filename_pattern = f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
+        self.output_file_template = os.path.join(base_log_dir, "{output_folder}", filename_pattern)
 
         # DNS resolution
         dns_result = self.resolver(target)
@@ -275,7 +287,7 @@ class connection:
                 extra={
                     "module_name": module.name.upper(),
                     "host": self.host,
-                    "port": self.args.port,
+                    "port": self.port,
                     "hostname": self.hostname,
                 },
             )
@@ -283,11 +295,6 @@ class connection:
             self.logger.debug(f"Loading context for module {module.name} - {module}")
             context = Context(self.db, module_logger, self.args)
             context.localip = self.local_ip
-
-            if hasattr(module, "on_request") or hasattr(module, "has_response"):
-                self.logger.debug(f"Module {module.name} has on_request or has_response methods")
-                self.server.connection = self
-                self.server.context.localip = self.local_ip
 
             if hasattr(module, "on_login"):
                 self.logger.debug(f"Module {module.name} has on_login method")
@@ -297,13 +304,8 @@ class connection:
                 self.logger.debug(f"Module {module.name} has on_admin_login method")
                 module.on_admin_login(context, self)
 
-            if (not hasattr(module, "on_request") and not hasattr(module, "has_response")) and hasattr(module, "on_shutdown"):
-                self.logger.debug(f"Module {module.name} has on_shutdown method")
-                module.on_shutdown(context, self)
-
     def inc_failed_login(self, username):
-        global global_failed_logins
-        global user_failed_logins
+        global global_failed_logins, user_failed_logins
 
         if username not in user_failed_logins:
             user_failed_logins[username] = 0
@@ -313,8 +315,7 @@ class connection:
         self.failed_logins += 1
 
     def over_fail_limit(self, username):
-        global global_failed_logins
-        global user_failed_logins
+        global global_failed_logins, user_failed_logins
 
         if global_failed_logins == self.args.gfail_limit:
             return True
@@ -322,7 +323,7 @@ class connection:
         if self.failed_logins == self.args.fail_limit:
             return True
 
-        if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:
+        if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:  # noqa: SIM103
             return True
 
         return False
@@ -389,7 +390,7 @@ class connection:
                         if "\\" in line and len(line.split("\\")) == 2:
                             domain_single, username_single = line.split("\\")
                         else:
-                            domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain else self.domain
+                            domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain is not None else self.domain
                             username_single = line
                         domain.append(domain_single)
                         username.append(username_single.strip())
@@ -398,7 +399,7 @@ class connection:
                 if "\\" in user:
                     domain_single, username_single = user.split("\\")
                 else:
-                    domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain else self.domain
+                    domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain is not None else self.domain
                     username_single = user
                 domain.append(domain_single)
                 username.append(username_single)
@@ -427,14 +428,14 @@ class connection:
                     with open(ntlm_hash) as ntlm_hash_file:
                         for i, line in enumerate(ntlm_hash_file):
                             line = line.strip()
-                            if len(line) != 32 and len(line) != 65:
+                            if len(line) != 32 and len(line) != 65 and len(line) != 0:
                                 self.logger.fail(f"Invalid NTLM hash length on line {(i + 1)} (len {len(line)}): {line}")
                                 continue
                             else:
                                 secret.append(line)
                                 cred_type.append("hash")
                 else:
-                    if len(ntlm_hash) != 32 and len(ntlm_hash) != 65:
+                    if len(ntlm_hash) != 32 and len(ntlm_hash) != 65 and len(ntlm_hash) != 0:
                         self.logger.fail(f"Invalid NTLM hash length {len(ntlm_hash)}, authentication not sent")
                         exit(1)
                     else:

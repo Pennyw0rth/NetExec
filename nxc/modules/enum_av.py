@@ -18,8 +18,6 @@ class NXCModule:
     name = "enum_av"
     description = "Gathers information on all endpoint protection solutions installed on the the remote host(s) via LsarLookupNames (no privilege needed)"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -290,6 +288,14 @@ conf = {
             ]
         },
         {
+        "name": "Ivanti Security",
+            "services": [
+                {"name": "STAgent$Shavlik Protect", "description": "Ivanti Security Controls Agent"},
+                {"name": "STDispatch$Shavlik Protect", "description": "Ivanti Security Controls Agent Dispatcher"}
+            ],
+            "pipes": []
+        },
+        {
             "name": "Kaspersky Security for Windows Server",
             "services": [
                 {"name": "kavfsslp", "description": "Kaspersky Security Exploit Prevention Service"},
@@ -336,6 +342,11 @@ conf = {
             "pipes": []
         },
         {
+            "name": "Rapid7",
+            "services": [{"name": "ir_agent", "description": "Rapid7 Insight Agent"}],
+            "pipes": []
+        },
+        {
             "name": "Sophos Intercept X",
             "services": [
                 {"name": "SntpService", "description": "Sophos Network Threat Protection"},
@@ -365,7 +376,7 @@ conf = {
                 {"name": "masvc", "description": "Trellix Agent Service"},
                 {"name": "macmnsvc", "description": "Trellix Agent Common Service"},
                 {"name": "mfetp", "description": "Trellix Endpoint Threat Prevention Service"},
-                {"name": "mfewc", "description": "Trellix Endpoint Security Web Control Service"}, 
+                {"name": "mfewc", "description": "Trellix Endpoint Security Web Control Service"},
                 {"name": "mfeaack", "description": "Trellix Anti-Malware Core Service"}
             ],
             "pipes": [
@@ -384,7 +395,10 @@ conf = {
                 {"name": "Trend Micro Web Service Communicator", "description": "Trend Micro Web Service Communicator"},
                 {"name": "TMiACAgentSvc", "description": "Trend Micro Application Control Service (Agent)"},
                 {"name": "CETASvc", "description": "Trend Micro Cloud Endpoint Telemetry Service"},
-                {"name": "iVPAgent", "description": "Trend Micro Vulnerability Protection Service (Agent)"}
+                {"name": "iVPAgent", "description": "Trend Micro Vulnerability Protection Service (Agent)"},
+                {"name": "ds_agent", "description": "Trend Micro Deep Security Agent"},
+                {"name": "ds_monitor", "description": "Trend Micro Deep Security Monitor"},
+                {"name": "ds_notifier", "description": "Trend Micro Deep Security Notifier"}
             ],
             "pipes": [
                 {"name": "IPC_XBC_XBC_AGENT_PIPE_*", "processes": ["EndpointBasecamp.exe"]},
