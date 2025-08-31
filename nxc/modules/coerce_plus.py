@@ -19,15 +19,6 @@ class NXCModule:
         self.always_continue = None
         self.method = "all"
 
-    @staticmethod
-    def get_dynamic_endpoint(interface: bytes, target: str, timeout: int = 5) -> str:
-        string_binding = rf"ncacn_ip_tcp:{target}[135]"
-        rpctransport = transport.DCERPCTransportFactory(string_binding)
-        rpctransport.set_connect_timeout(timeout)
-        dce = rpctransport.get_dce_rpc()
-        dce.connect()
-        return epm.hept_map(target, interface, protocol="ncacn_ip_tcp", dce=dce)
-
     def options(self, context, module_options):
         """
         LISTENER       LISTENER for exploitation (default: 127.0.0.1)
@@ -219,6 +210,15 @@ class NXCModule:
         if not runmethod:
             context.log.error("Invalid method, please check the method name.")
             return
+
+    @staticmethod
+    def get_dynamic_endpoint(interface: bytes, target: str, timeout: int = 5) -> str:
+        string_binding = rf"ncacn_ip_tcp:{target}[135]"
+        rpctransport = transport.DCERPCTransportFactory(string_binding)
+        rpctransport.set_connect_timeout(timeout)
+        dce = rpctransport.get_dce_rpc()
+        dce.connect()
+        return epm.hept_map(target, interface, protocol="ncacn_ip_tcp", dce=dce)
 
 
 class ShadowCoerceTrigger:
