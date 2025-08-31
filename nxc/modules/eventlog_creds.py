@@ -3,6 +3,7 @@ from impacket.dcerpc.v5 import transport, even6
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 from impacket.dcerpc.v5.epm import hept_map
 from nxc.helpers.even6_parser import ResultSet
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -12,7 +13,8 @@ class NXCModule:
     """
     name = "eventlog_creds"
     description = "Extracting Credentials From Windows Logs (Event ID: 4688 and SYSMON)"
-    supported_protocols = ["smb"]  # Example: ['smb', 'mssql']
+    supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self):
         self.context = None
