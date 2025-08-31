@@ -4,8 +4,9 @@ import string
 import re
 import inspect
 import os
-
+from termcolor import colored
 from ipaddress import ip_address
+from nxc.logger import nxc_logger
 
 
 def identify_target_file(target_file):
@@ -147,6 +148,17 @@ def detect_if_ip(target):
     except Exception:
         return False
 
+
+def display_modules(args, modules):
+    for category, color in {CATEGORY.ENUMERATION: "green", CATEGORY.CREDENTIAL_DUMPING: "cyan", CATEGORY.PRIVILEGE_ESCALATION: "magenta"}.items():
+        # Add category filter for module listing
+        if args.list_modules and args.list_modules.lower() != category.name.lower():
+            continue
+        if len([module for module in modules.values() if module["category"] == category]) > 0:
+            nxc_logger.highlight(colored(f"{category.name}", color, attrs=["bold"]))
+        for name, props in sorted(modules.items()):
+            if props["category"] == category:
+                nxc_logger.display(f"{name:<25} {props['description']}")
 
 class CATEGORY(Enum):
     ENUMERATION = "Enumeration"
