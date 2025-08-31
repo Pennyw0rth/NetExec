@@ -94,10 +94,9 @@ class NXCModule:
             return True
         return any(sid.startswith(domain_sid) and sid.endswith(suffix) for suffix in EXCLUDED_SIDS_SUFFIXES)
 
-    def get_domain_sid(self, ldap_session, base_dn):
+    def get_domain_sid(self):
         """Retrieve the domain SID from the domain object in LDAP"""
-        r = ldap_session.search(
-            searchBase=base_dn,
+        r = self.connection.search(
             searchFilter="(objectClass=domain)",
             attributes=["objectSid"]
         )
@@ -105,8 +104,8 @@ class NXCModule:
         if parsed and "objectSid" in parsed[0]:
             return parsed[0]["objectSid"]
 
-    def find_bad_successor_ous(self, ldap_session, entries, base_dn):
-        domain_sid = self.get_domain_sid(ldap_session, base_dn)
+    def find_bad_successor_ous(self, entries):
+        domain_sid = self.get_domain_sid()
         results = {}
         parsed = parse_result_attributes(entries)
         for entry in parsed:
@@ -146,15 +145,13 @@ class NXCModule:
                     results.setdefault(owner_sid, []).append(dn)
         return results
 
-    def resolve_sid_to_name(self, ldap_session, sid, base_dn):
+    def resolve_sid_to_name(self, sid):
         """
         Resolves a SID to a samAccountName using LDAP
 
         Args:
         ----
-            ldap_session: The LDAP connection
             sid: The SID to resolve
-            base_dn: The base DN for the LDAP search
 
         Returns:
         -------
@@ -162,8 +159,7 @@ class NXCModule:
         """
         try:
             search_filter = f"(objectSid={sid})"
-            response = ldap_session.search(
-                searchBase=base_dn,
+            response = self.connection.search(
                 searchFilter=search_filter,
                 attributes=["sAMAccountName"]
             )
@@ -176,9 +172,10 @@ class NXCModule:
             return sid
 
     def on_login(self, context, connection):
+        self.connection = connection
+
         # Check for a domain controller with Windows Server 2025
-        resp = connection.ldap_connection.search(
-            searchBase=connection.ldap_connection._baseDN,
+        resp = self.connection.search(
             searchFilter="(&(objectCategory=computer)(primaryGroupId=516))",
             attributes=["operatingSystem", "dNSHostName"]
         )
@@ -194,15 +191,15 @@ class NXCModule:
 
         # Enumerate dMSA objects
         controls = security_descriptor_control(sdflags=0x07)  # OWNER_SECURITY_INFORMATION
-        resp = connection.ldap_connection.search(
-            searchBase=connection.ldap_connection._baseDN,
+        resp = self.connection.search(
             searchFilter="(objectClass=organizationalUnit)",
             attributes=["distinguishedName", "nTSecurityDescriptor"],
-            searchControls=controls)  # Fixed parameter name
+            searchControls=controls
+        )
 
         context.log.debug(f"Found {len(resp)} entries")
 
-        results = self.find_bad_successor_ous(connection.ldap_connection, resp, connection.ldap_connection._baseDN)
+        results = self.find_bad_successor_ous(resp)
 
         if results:
             context.log.success(f"Found {len(results)} results")
@@ -210,11 +207,7 @@ class NXCModule:
             context.log.highlight("No account found")
 
         for sid, ous in results.items():
-            samaccountname = self.resolve_sid_to_name(
-                connection.ldap_connection,
-                sid,
-                connection.ldap_connection._baseDN
-            )
+            samaccountname = self.resolve_sid_to_name(sid)
 
             for ou in ous:
                 if sid == samaccountname:

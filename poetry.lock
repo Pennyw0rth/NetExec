@@ -2,18 +2,45 @@
 
 [[package]]
 name = "aardwolf"
-version = "0.2.11"
+version = "0.2.13"
 description = "Asynchronous RDP protocol implementation"
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "aardwolf-0.2.11-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d071445ac0afed6e14e7cff1187db26c6331e84c383ea305b1f9041153dd71c4"},
-    {file = "aardwolf-0.2.11-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:764bfe8cf5898b08e1c0923bea9b9a887b044d9e95461cecf59d864b7f0884dc"},
-    {file = "aardwolf-0.2.11-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5fb78ff2f410ff7effffc22bf7ba72f0dd0c95a6b7ac14d548ccbbc646699c27"},
-    {file = "aardwolf-0.2.11-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c80a755da73568c61803957980266f6fdcd414507f9bfe628230f7a18d116b2e"},
-    {file = "aardwolf-0.2.11-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ce4bf855bec187c4ad5420f1da66ce1799f16dd0a34f81904e02e860ed85bbec"},
-    {file = "aardwolf-0.2.11.tar.gz", hash = "sha256:46dc892703f133961b782fd2971124803cba7409ea5dad5b4ebb7653b16dcdf3"},
+    {file = "aardwolf-0.2.13-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:2a2f79f774807ad2fe2aa702b32b8f98d9c7d8474761a235a9e42747a1ba7693"},
+    {file = "aardwolf-0.2.13-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:23ecf64d1f2a28e6ece62d983373543f8f6d7273878d7f608d93c26448f49f99"},
+    {file = "aardwolf-0.2.13-cp310-cp310-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:5ed3543fbdd99d568e31fd1418fc0b0d3939d0c8c8338a1b78ac5c282c8ef7fc"},
+    {file = "aardwolf-0.2.13-cp310-cp310-win_amd64.whl", hash = "sha256:b9ffec598c4e0f7d3c7f5c5cf741d1639fba4091290a41730f5901d663158700"},
+    {file = "aardwolf-0.2.13-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:1b7b3bcbb0dc718daef2d89ec69560c6764f17962ca86721fe5de4838f855b23"},
+    {file = "aardwolf-0.2.13-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c6185cccf51a98a5396edb5b1dba26b31080b15d7357a22f2e0d086590962a4e"},
+    {file = "aardwolf-0.2.13-cp311-cp311-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:fcbe77f0cc1cbe0e9a1b40669007c5b72e155099bc0f645b48ce843a09113db2"},
+    {file = "aardwolf-0.2.13-cp311-cp311-win_amd64.whl", hash = "sha256:726eae2ace82a0f96608c74d6d393fb8c61d711ade232fecc662839c1bb148a7"},
+    {file = "aardwolf-0.2.13-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:70e0f31d61dafffe8f19921c28bcb77909cb2c73f14c98cf6eb2fde42ce5de2d"},
+    {file = "aardwolf-0.2.13-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:42aa2bb888127088a5f5ce29ca2acce33270afe15016ace16dfa373525fb9d6a"},
+    {file = "aardwolf-0.2.13-cp312-cp312-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:df6298af95c2ede4886538d3f05ac32e6b7060d098c273fb119d70dd2140837d"},
+    {file = "aardwolf-0.2.13-cp312-cp312-win_amd64.whl", hash = "sha256:f5d52440965b81eb824da7274d422b409637f825d0490e5a247a9da756df7358"},
+    {file = "aardwolf-0.2.13-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:d70d489d1b6b25100a70a2add0c14cfcbc82b9230a352307a53df4000208daa1"},
+    {file = "aardwolf-0.2.13-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:49a6ba4d2c5571b39d0437fa2a691102fcd9e2ca97d17613d84bdd2695e59648"},
+    {file = "aardwolf-0.2.13-cp313-cp313-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:8ae112f0d05366407bcb67613c15a61f21f4cc48a487fb5091571321bc39d01b"},
+    {file = "aardwolf-0.2.13-cp313-cp313-win_amd64.whl", hash = "sha256:e087a5d37406234a8938ebbf27cee7ab762ce73662deb90929f2bb047635ffd8"},
+    {file = "aardwolf-0.2.13-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:10af6e0c8f46b9cdd325540c5819f1fb492f3c568080e2732390b2f1b93e7911"},
+    {file = "aardwolf-0.2.13-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:9be8a28b8fc9c14e35b403d6140e6e0ccaea640afb2e5697ed852a2ad9eff155"},
+    {file = "aardwolf-0.2.13-cp39-cp39-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:eed655ccca5e9a44e9359e0637fb017c6e9719204d788ca1001767fb2ae8061d"},
+    {file = "aardwolf-0.2.13-cp39-cp39-win_amd64.whl", hash = "sha256:1199e51f8dab19a5528df77e0afdb0648b867964c6327a12f27cfb756ef796a2"},
+    {file = "aardwolf-0.2.13-pp310-pypy310_pp73-macosx_11_0_arm64.whl", hash = "sha256:66c599a792d67e7e22dfdfd83d440d6708cdbbd3e6d96a0f1f2367940a1271d3"},
+    {file = "aardwolf-0.2.13-pp310-pypy310_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:36ec601ba9376f933c760c712d3e35691b774029777c4e79f8c5abd37876df72"},
+    {file = "aardwolf-0.2.13-pp310-pypy310_pp73-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:bd42b25029dfa88be08c63863bd6852d8e8afa31842a2f024070236138bbb8a1"},
+    {file = "aardwolf-0.2.13-pp310-pypy310_pp73-win_amd64.whl", hash = "sha256:b344a4740ceb1064c5776e72960861b7b3c768c1daff7a737abd7f4d98dd5780"},
+    {file = "aardwolf-0.2.13-pp311-pypy311_pp73-macosx_11_0_arm64.whl", hash = "sha256:5a3c0e40debad804a84d4cf88304a26e904b73193dcc2ff9ffe927a26aea9dfa"},
+    {file = "aardwolf-0.2.13-pp311-pypy311_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4377bc185dd4c4d119af7e029edd3eddb94858e0a024f3fe4b05ac8e57244a8a"},
+    {file = "aardwolf-0.2.13-pp311-pypy311_pp73-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:aef5e21ffd35b3d38cb9a8f54b53682d78084e63cc8b40fb891ce8b12b8402bb"},
+    {file = "aardwolf-0.2.13-pp311-pypy311_pp73-win_amd64.whl", hash = "sha256:da6fcdf569fd8c9d65202f8446119739d375854702a38e2ae0ca7410b16c1aed"},
+    {file = "aardwolf-0.2.13-pp39-pypy39_pp73-macosx_11_0_arm64.whl", hash = "sha256:74fac85b5c511eac74caadb07c94f40cafee4b7c5a09fdbcd0770390c2847493"},
+    {file = "aardwolf-0.2.13-pp39-pypy39_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0dfb2b81a485fb8c18a39c04e37c3e5a85dce6912d89baff5862fe4c6c31a3a1"},
+    {file = "aardwolf-0.2.13-pp39-pypy39_pp73-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:7e4a62c570d7b9e254ca35107347e84eabb1857dadd7add55cbb789b72e4b62d"},
+    {file = "aardwolf-0.2.13-pp39-pypy39_pp73-win_amd64.whl", hash = "sha256:69644602eb6e3c9dbe8ab8efc449bab634f087a82224070bfc9c389270b21bea"},
+    {file = "aardwolf-0.2.13.tar.gz", hash = "sha256:95d186a162dbbade1f92b2ae659235c5cab42eff66c9528ad66c8c5c41b77eec"},
 ]
 
 [package.dependencies]
@@ -26,7 +53,7 @@ colorama = "*"
 Pillow = ">=9.0.0"
 pyperclip = ">=1.8.2"
 tqdm = "*"
-unicrypto = ">=0.0.10"
+unicrypto = ">=0.0.11"
 
 [[package]]
 name = "aesedb"
@@ -1252,14 +1279,14 @@ files = [
 
 [[package]]
 name = "masky"
-version = "0.2.0"
+version = "0.2.1"
 description = "Python library with CLI allowing to remotely dump domain user credentials via an ADCS"
 optional = false
 python-versions = ">=3.6"
 groups = ["main"]
 files = [
-    {file = "masky-0.2.0-py3-none-any.whl", hash = "sha256:04f29988e659bd265bf393c833ee473cfd16bf8a32ffdeaacfbefe8f466f53ab"},
-    {file = "masky-0.2.0.tar.gz", hash = "sha256:fc0a99086da54e1cf91bb5e9c809aa311ea1519f10a3b6faf6d8e0a47c471ec9"},
+    {file = "masky-0.2.1-py3-none-any.whl", hash = "sha256:bcf545f5e2b762fc49df2f29aa934498bb5dd37ba0a28e0c1683acee2e5ef14b"},
+    {file = "masky-0.2.1.tar.gz", hash = "sha256:973615bebbd9455a1c2a81a6cec626a2032ec2209f242e3e69a6226e4b60b6fc"},
 ]
 
 [package.dependencies]
@@ -1435,6 +1462,18 @@ pynacl = ">=1.5"
 all = ["gssapi (>=1.4.1) ; platform_system != \"Windows\"", "invoke (>=2.0)", "pyasn1 (>=0.1.7)", "pywin32 (>=2.1.8) ; platform_system == \"Windows\""]
 gssapi = ["gssapi (>=1.4.1) ; platform_system != \"Windows\"", "pyasn1 (>=0.1.7)", "pywin32 (>=2.1.8) ; platform_system == \"Windows\""]
 invoke = ["invoke (>=2.0)"]
+
+[[package]]
+name = "pefile"
+version = "2024.8.26"
+description = "Python PE parsing module"
+optional = false
+python-versions = ">=3.6.0"
+groups = ["main"]
+files = [
+    {file = "pefile-2024.8.26-py3-none-any.whl", hash = "sha256:76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f"},
+    {file = "pefile-2024.8.26.tar.gz", hash = "sha256:3ff6c5d8b43e8c37bb6e6dd5085658d658a7a0bdcd20b6a07b1fcfc1c4e9d632"},
+]
 
 [[package]]
 name = "pillow"
@@ -2373,13 +2412,14 @@ files = [
 
 [[package]]
 name = "unicrypto"
-version = "0.0.10"
+version = "0.0.11"
 description = "Unified interface for cryptographic libraries"
 optional = false
 python-versions = ">=3.6"
 groups = ["main"]
 files = [
-    {file = "unicrypto-0.0.10-py3-none-any.whl", hash = "sha256:77322c68cb6a7ef8ee762dcb0a824a491429f8939793e8a9d64f615baaf595b9"},
+    {file = "unicrypto-0.0.11-py3-none-any.whl", hash = "sha256:6eca25e58797ba0965aba9d7a8cded15001dfaa424a622111d90a1f4f7afe733"},
+    {file = "unicrypto-0.0.11.tar.gz", hash = "sha256:44ab77bbf0e9ea6a4e957bc03d015cf837b9533c5319129e44d950be273d40a5"},
 ]
 
 [package.dependencies]
@@ -2463,4 +2503,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<4.0"
-content-hash = "e02f61c9bb3bccd22fc51f90a9e09552afe50cb309155959dbb3ff06fea4d736"
+content-hash = "d5a080dff08c7835da466af3c6dbe210650500a127b732f92fb1a417fee228f2"
