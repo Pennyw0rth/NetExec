@@ -1,4 +1,5 @@
 from nxc.context import Context
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -6,6 +7,7 @@ class NXCModule:
     description = "[REMOVED] Tries to activate the EFSR service by creating a file with the encryption attribute on some available share."
     supported_protocols = ["smb"]
     excluded_shares = ["SYSVOL"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context: Context, module_options: dict[str, str]):
         """
