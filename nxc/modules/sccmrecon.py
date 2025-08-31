@@ -2,9 +2,9 @@
 import time
 from impacket.dcerpc.v5 import transport, rrp
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
-from impacket.smbconnection import SMBConnection
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.smbconnection import SessionError
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -13,14 +13,10 @@ class NXCModule:
     name = "sccmrecon"
     description = "Gather infomation about a Distribution point or Primary Site Server through winreg"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
-
-    def __init__(self, context=None, module_options=None):
-        """"""
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
-        """"""
+        """No options available"""
 
     def on_login(self, context, connection):
         self.context = context
