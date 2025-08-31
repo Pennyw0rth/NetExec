@@ -134,12 +134,10 @@ class NXCModule:
         else:
             for subkey in subkeys:
                 self.context.log.success(f"Site Database : {subkey}")
-                new_conn = SMBConnection(subkey, subkey)
-                if new_conn.isSigningRequired():
-                    self.context.log.display(f"       SMB signing: {new_conn.isSigningRequired()}")
+                if self.connection.conn.isSigningRequired():
+                    self.context.log.display(f"       SMB signing: {self.connection.conn.isSigningRequired()}")
                 else:
-                    self.context.log.highlight(f"       SMB signing: {new_conn.isSigningRequired()} - TAKEOVER-1/2")
-                new_conn.close()
+                    self.context.log.highlight(f"       SMB signing: {self.connection.conn.isSigningRequired()} - TAKEOVER-1/2")
 
     def trigger_winreg(self, connection, context):
         # Original idea from https://twitter.com/splinter_code/status/1715876413474025704
