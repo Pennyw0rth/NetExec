@@ -160,6 +160,7 @@ def display_modules(args, modules):
             if props["category"] == category:
                 nxc_logger.display(f"{name:<25} {props['description']}")
 
+
 class CATEGORY(Enum):
     ENUMERATION = "Enumeration"
     CREDENTIAL_DUMPING = "Credential Dumping"
