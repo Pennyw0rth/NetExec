@@ -177,7 +177,6 @@ class PassPolDump:
             nxc_logger.debug(f"{domain['Name']}")
 
         self.logger.success(f"Dumping password info for domain: {self.__domains[0]['Name']}")
-
         self.logger.highlight(f"Minimum password length: {self.__min_pass_len}")
         self.logger.highlight(f"Password history length: {self.__pass_hist_len}")
         self.logger.highlight(f"Maximum password age: {self.__max_pass_age}")
