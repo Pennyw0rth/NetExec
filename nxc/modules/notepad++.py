@@ -1,6 +1,7 @@
 from io import BytesIO
 from os import makedirs
 from os.path import join, abspath
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 
 
@@ -11,6 +12,7 @@ class NXCModule:
     name = "notepad++"
     description = "Extracts notepad++ unsaved files."
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
     false_positive = [".", "..", "desktop.ini", "Public", "Default", "Default User", "All Users", ".NET v4.5", ".NET v4.5 Classic"]
 
     def options(self, context, module_options):

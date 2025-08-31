@@ -7,12 +7,14 @@ from ipaddress import ip_address
 from impacket.dcerpc.v5 import transport
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_NONE, DCERPCException
 from impacket.dcerpc.v5.dcomrt import IObjectExporter
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
     name = "ioxidresolver"
     description = "This module helps you to identify hosts that have additional active interfaces"
     supported_protocols = ["smb", "wmi"]
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """DIFFERENT show only ip address if different from target ip (Default: False)"""
