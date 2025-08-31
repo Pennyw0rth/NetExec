@@ -1,5 +1,6 @@
 from io import BytesIO
 import pefile
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -11,6 +12,7 @@ class NXCModule:
     name = "lockscreendoors"
     description = "Detect Windows lock screen backdoors by checking FileDescriptions of accessibility binaries."
     supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self):
         # List of exe names with expected descriptions
