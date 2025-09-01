@@ -1,5 +1,6 @@
 import os
 from traceback import format_exc
+from nxc.helpers.misc import CATEGORY
 from nxc.protocols.smb.atexec import TSCH_EXEC
 
 
@@ -11,6 +12,10 @@ class NXCModule:
     Modified by @Defte_ so that we can upload a custom binary to execute using the BINARY option (28/04/2025)
     Modified by @SGMG11 to execute the task without output
     """
+    name = "schtask_as"
+    description = "Remotely execute a scheduled task as a logged on user"
+    supported_protocols = ["smb"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context, module_options):
         r"""
@@ -55,10 +60,6 @@ class NXCModule:
 
         if "SILENTCOMMAND" in module_options and module_options["SILENTCOMMAND"] in ["True", "yes", "1"]:
             self.show_output = False
-
-    name = "schtask_as"
-    description = "Remotely execute a scheduled task as a logged on user"
-    supported_protocols = ["smb"]
 
     def on_admin_login(self, context, connection):
         self.logger = context.log
