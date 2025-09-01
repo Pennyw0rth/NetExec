@@ -1,5 +1,6 @@
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 import sys
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -13,6 +14,7 @@ class NXCModule:
     name = "group-mem"
     description = "[REMOVED] Retrieves all the members within a Group"
     supported_protocols = ["ldap"]
+    category = CATEGORY.ENUMERATION
 
     primaryGroupID = ""
     answers = []
