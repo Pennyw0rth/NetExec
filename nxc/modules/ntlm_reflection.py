@@ -7,7 +7,7 @@ from impacket.smbconnection import SessionError
 class NXCModule:
     # https://www.synacktiv.com/en/publications/ntlm-reflection-is-dead-long-live-ntlm-reflection-an-in-depth-analysis-of-cve-2025
     name = "ntlm_reflection"
-    description = "Attempt to check if the OS is vulnerable to CVE-2025-33073"
+    description = "Attempt to check if the OS is vulnerable to CVE-2025-33073 (NTLM Reflection attack)"
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
