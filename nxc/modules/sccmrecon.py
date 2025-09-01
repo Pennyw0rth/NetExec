@@ -101,23 +101,10 @@ class NXCModule:
     def EnumerateDB(self, dce, hRootKey):
         # Check for database site
         hkey = rrp.hBaseRegOpenKey(dce, hRootKey, "SOFTWARE\\Microsoft\\SMS\\COMPONENTS\\SMS_SITE_COMPONENT_MANAGER\\Multisite Component Servers")["phkResult"]
+        num_keys = rrp.hBaseRegQueryInfoKey(dce, hkey)["lpcSubKeys"]
+        subkeys = [rrp.hBaseRegEnumKey(dce, hkey, i)["lpNameOut"].rstrip("\x00") for i in range(num_keys)]
 
-        # Enumerate subkeys
-        dwIndex = 0
-        subkeys = []
-        while True:
-            try:
-                ans = rrp.hBaseRegEnumKey(dce, hkey, dwIndex)
-                subkeys.append(ans["lpNameOut"][:-1])
-                dwIndex += 1
-            except rrp.DCERPCSessionError as e:
-                if "ERROR_NO_MORE_ITEMS" in str(e):  # Stop when no more subkeys
-                    break
-                else:
-                    self.context.log.fail(f"Got unexpected exception: {e}")
-
-        nbSiteDB = len(subkeys)
-        if nbSiteDB == 0:
+        if num_keys == 0:
             self.context.log.success("Local Site Database")
         else:
             for subkey in subkeys:
