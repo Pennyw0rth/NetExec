@@ -53,9 +53,8 @@ class NXCModule:
             # Ensure trailing backslashes
             self.output_file_location = module_options["LOCATION"].rstrip("\\") + "\\"
 
-        if "SILENTCOMMAND" in module_options:
-            if module_options["SILENTCOMMAND"] == "True":
-                self.show_output = False
+        if "SILENTCOMMAND" in module_options and module_options["SILENTCOMMAND"] in ["True", "yes", "1"]:
+            self.show_output = False
 
     name = "schtask_as"
     description = "Remotely execute a scheduled task as a logged on user"
