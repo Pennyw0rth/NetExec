@@ -10,8 +10,8 @@ from nxc.helpers.misc import CATEGORY
 class NXCModule:
     # Mainly based on pssrecon:https://github.com/slygoo/pssrecon
 
-    name = "sccmrecon"
-    description = "Gather infomation about a Distribution point or Primary Site Server through winreg"
+    name = "sccm-recon6"
+    description = "Check if target is a Distribution point or Primary Site Server through winreg (RECON-6)"
     supported_protocols = ["smb"]
     category = CATEGORY.ENUMERATION
 
@@ -112,7 +112,7 @@ class NXCModule:
                 if self.connection.conn.isSigningRequired():
                     self.context.log.display(f"       SMB signing: {self.connection.conn.isSigningRequired()}")
                 else:
-                    self.context.log.highlight(f"       SMB signing: {self.connection.conn.isSigningRequired()} - TAKEOVER-1/2")
+                    self.context.log.highlight(f"       SMB signing: {self.connection.conn.isSigningRequired()} - TAKEOVER-2")
 
     def trigger_winreg(self, connection, context):
         # Original idea from https://twitter.com/splinter_code/status/1715876413474025704
