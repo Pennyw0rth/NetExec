@@ -114,7 +114,7 @@ class NXCModule:
                 self.output_file_location,
             )
 
-            self.logger.display(f"Executing {self.command_to_run} as {self.run_task_as} with output set to {self.show_output}")
+            self.logger.display(f"Executing '{self.command_to_run}' as '{self.run_task_as}'")
             output = exec_method.execute(self.command_to_run, self.show_output)
 
             try:
