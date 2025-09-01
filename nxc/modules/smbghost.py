@@ -3,6 +3,7 @@
 # module by : @r4vanan
 import socket
 import struct
+from nxc.helpers.misc import CATEGORY
 
 # Constants
 MAX_ATTEMPTS = 2000  # False negative chance: 0.04%
@@ -15,6 +16,7 @@ class NXCModule:
     name = "smbghost"
     description = "Module to check for the SMB dialect 3.1.1 and compression capability of the host, which is an indicator for the SMBGhost vulnerability (CVE-2020-0796)."
     supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

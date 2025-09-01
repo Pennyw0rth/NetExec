@@ -7,6 +7,7 @@ from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 from os import makedirs
 from nxc.helpers.logger import highlight
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 import re
 
@@ -17,6 +18,7 @@ class NXCModule:
     name = "putty"
     description = "Query the registry for users who saved ssh private keys in PuTTY. Download the private keys if found."
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self):
         self.context = None
