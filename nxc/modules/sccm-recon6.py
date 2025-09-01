@@ -97,7 +97,7 @@ class NXCModule:
             self.context.log.highlight("       Anonymous access to Distribution Point is enabled - CRED-6")
             self.context.log.display(f"       http://{self.connection.host}/sms_dp_smspkg$/datalib")
         else:
-            self.context.log.display("       Anonymous access to Distribution Point is disabled")
+            self.context.log.display("   Anonymous access to Distribution Point is disabled")
 
     def EnumerateDB(self, dce, hRootKey):
         # Check for database site
