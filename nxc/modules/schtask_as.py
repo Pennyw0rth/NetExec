@@ -72,7 +72,7 @@ class NXCModule:
             self.logger.fail("You need to specify a USER to run the command as")
             return
 
-        if self.show_output == "False":
+        if self.show_output is False:
             self.logger.display("Command will be executed silently without output")
 
         if self.binary_to_upload:
