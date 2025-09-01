@@ -5,6 +5,7 @@ from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.smbconnection import SessionError
 from nxc.helpers.misc import CATEGORY
+from impacket.smbconnection import SMBConnection
 
 
 class NXCModule:
@@ -109,10 +110,26 @@ class NXCModule:
         else:
             for subkey in subkeys:
                 self.context.log.success(f"Site Database : {subkey}")
-                if self.connection.conn.isSigningRequired():
-                    self.context.log.display(f"       SMB signing: {self.connection.conn.isSigningRequired()}")
+
+                # Resolve site database name
+                target = self.connection.resolver(subkey)
+                if target is None:
+                    try:
+                        new_conn = SMBConnection(subkey, subkey)
+                    except Exception as e:
+                        self.context.log.fail(f"Connection error to {subkey}: {e}")
+                        continue
                 else:
-                    self.context.log.highlight(f"       SMB signing: {self.connection.conn.isSigningRequired()} - TAKEOVER-2")
+                    try:
+                        new_conn = SMBConnection(subkey, target["host"])
+                    except Exception as e:
+                        self.context.log.fail(f"Connection error to {target['host']}: {e}")
+                        continue
+
+                if new_conn.isSigningRequired():
+                    self.context.log.display(f"       SMB signing: {new_conn.isSigningRequired()}")
+                else:
+                    self.context.log.highlight(f"       SMB signing: {new_conn.isSigningRequired()} - TAKEOVER-2")
 
     def trigger_winreg(self, connection, context):
         # Original idea from https://twitter.com/splinter_code/status/1715876413474025704
