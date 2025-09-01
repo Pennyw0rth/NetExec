@@ -56,20 +56,8 @@ class NXCModule:
     def EnumerateSS(self, dce, hRootKey):
         # Open the target registry key
         hkey = rrp.hBaseRegOpenKey(dce, hRootKey, "SOFTWARE\\Microsoft\\SMS")["phkResult"]
-
-        # Enumerate subkeys
-        dwIndex = 0
-        subkeys = []
-        while True:
-            try:
-                ans = rrp.hBaseRegEnumKey(dce, hkey, dwIndex)
-                subkeys.append(ans["lpNameOut"][:-1])
-                dwIndex += 1
-            except rrp.DCERPCSessionError as e:
-                if "ERROR_NO_MORE_ITEMS" in str(e):  # Stop when no more subkeys
-                    break
-                else:
-                    self.context.log.fail(f"Got unexpected exception: {e}")
+        num_keys = rrp.hBaseRegQueryInfoKey(dce, hkey)["lpcSubKeys"]
+        subkeys = [rrp.hBaseRegEnumKey(dce, hkey, i)["lpNameOut"].rstrip("\x00") for i in range(num_keys)]
 
         for subkey in subkeys:
             if subkey == "DP":
