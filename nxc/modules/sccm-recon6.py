@@ -47,7 +47,7 @@ class NXCModule:
                 self.context.log.fail("No site Database found")
         except DCERPCException as e:
             if "rpc_s_access_denied" in str(e):
-                self.context.log.fail(f"Probably not a primary site server or a distribution point: {e}")
+                self.context.log.info(f"Probably not a primary site server or a distribution point: {e}")
             else:
                 self.context.log.fail(f"Unexpected error: {e}")
 
