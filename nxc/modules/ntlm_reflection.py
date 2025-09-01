@@ -2,6 +2,7 @@ import time
 from impacket.dcerpc.v5 import transport, rrp
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.smbconnection import SessionError
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -11,6 +12,7 @@ class NXCModule:
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     # Reference table from MSRC report
     # https://msrc.microsoft.com/update-guide/fr-FRS/vulnerability/CVE-2025-33073
