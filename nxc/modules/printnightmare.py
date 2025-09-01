@@ -5,6 +5,7 @@ from impacket.dcerpc.v5 import transport, rprn
 from impacket.dcerpc.v5.ndr import NDRCALL, NDRPOINTER, NDRSTRUCT, NDRUNION, NULL
 from impacket.dcerpc.v5.dtypes import DWORD, LPWSTR, ULONG, WSTR
 from impacket.dcerpc.v5.rprn import checkNullString, STRING_HANDLE, PBYTE_ARRAY
+from nxc.helpers.misc import CATEGORY
 
 KNOWN_PROTOCOLS = {
     135: {"bindstr": r"ncacn_ip_tcp:%s[135]"},
@@ -21,6 +22,7 @@ class NXCModule:
     name = "printnightmare"
     description = "Check if host vulnerable to printnightmare"
     supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
