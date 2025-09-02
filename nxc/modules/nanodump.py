@@ -9,6 +9,7 @@ from pypykatz.pypykatz import pypykatz
 import tempfile
 from datetime import datetime
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.misc import CATEGORY
 from nxc.protocols.mssql.mssqlexec import MSSQLEXEC
 
 
@@ -16,6 +17,7 @@ class NXCModule:
     name = "nanodump"
     description = "Get lsass dump using nanodump and parse the result with pypykatz"
     supported_protocols = ["smb", "mssql"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self, context=None, module_options=None):
         self.connection = None

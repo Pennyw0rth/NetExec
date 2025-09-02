@@ -1,6 +1,7 @@
 import ntpath
 import os
 from os.path import join, getsize, exists
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 
 
@@ -9,6 +10,7 @@ class NXCModule:
     name = "snipped"
     description = "Downloads screenshots taken by the (new) Snipping Tool."
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self):
         self.context = None
@@ -106,7 +108,7 @@ class NXCModule:
 
         if total_files_downloaded > 0 and host_output_path:
             context.log.success(f"{total_files_downloaded} file(s) downloaded from host {connection.host} to {host_output_path}.")
-                            
+
     def find_screenshots_folders(self, user_folder_name):
         """
         Dynamically searches for all Screenshots folders in the user's home directory.

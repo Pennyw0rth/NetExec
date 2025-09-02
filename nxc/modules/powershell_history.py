@@ -1,5 +1,6 @@
 from os import makedirs
 from os.path import join, abspath
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 from io import BytesIO
 
@@ -11,6 +12,7 @@ class NXCModule:
     name = "powershell_history"
     description = "Extracts PowerShell history for all users and looks for sensitive commands."
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
     false_positive = [".", "..", "desktop.ini", "Public", "Default", "Default User", "All Users", ".NET v4.5", ".NET v4.5 Classic"]
     sensitive_keywords = [
         "password", "passw", "secret", "credential", "key",
@@ -30,7 +32,7 @@ class NXCModule:
                     for file in connection.conn.listPath("C$", f"{powershell_history_dir}\\*"):
                         if file.get_longname() not in self.false_positive:
                             file_path = f"{powershell_history_dir}{file.get_longname()}"
-                            
+
                             buf = BytesIO()
                             connection.conn.getFile("C$", file_path, buf.write)
                             buf.seek(0)
@@ -42,7 +44,7 @@ class NXCModule:
                                 context.log.highlight(f"C:\\{file_path}")
 
                             for line in file_content.splitlines():
-                                context.log.highlight(f"\t{line}")    
+                                context.log.highlight(f"\t{line}")
                             if self.export:
                                 filename = f"{connection.host}_{directory.get_longname()}_powershell_history.txt"
                                 export_path = join(NXC_PATH, "modules", "powershell_history")
