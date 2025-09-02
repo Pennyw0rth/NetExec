@@ -1,6 +1,7 @@
 ##### Check Generic Help Options
 netexec -h
 ##### SMB
+smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M spider_plus -o KEYWORDS=pass,cred
 netexec smb TARGET_HOST --generate-hosts-file /tmp/hostsfile
 netexec smb TARGET_HOST --generate-krb5-file /tmp/krb5conf
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
