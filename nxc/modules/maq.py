@@ -1,5 +1,5 @@
-from pyasn1.error import PyAsn1Error
 from nxc.helpers.misc import CATEGORY
+from nxc.parsers.ldap_results import parse_result_attributes
 
 
 class NXCModule:
@@ -24,19 +24,19 @@ class NXCModule:
     category = CATEGORY.ENUMERATION
 
     def on_login(self, context, connection):
-         context.log.display("Getting the MachineAccountQuota")
-         try:
-             result = connection.search("(objectClass=*)", ["ms-DS-MachineAccountQuota"])
-         except Exception as e:
-             context.log.fail(f"LDAP search failed: {e}")
-             return
+        context.log.display("Getting the MachineAccountQuota")
 
-         if not result:
-             context.log.fail("No LDAP entries returned.")
-             return
+        ldap_response = connection.search("(objectClass=*)", ["ms-DS-MachineAccountQuota"])
+        entries = parse_result_attributes(ldap_response)
 
-         try:
-             maq = result[0]["attributes"][0]["vals"][0]
-             context.log.highlight(f"MachineAccountQuota: {maq}")
-         except (IndexError, KeyError, PyAsn1Error):
-             context.log.highlight("MachineAccountQuota: <not set>")
+        if not entries:
+            context.log.fail("No LDAP entries returned.")
+            return
+
+        maq = entries[0].get("ms-DS-MachineAccountQuota")
+        if isinstance(maq, list):
+            maq = maq[0] if maq else None
+        if isinstance(maq, (bytes, bytearray)):
+            maq = maq.decode("utf-8", errors="ignore")
+
+        context.log.highlight(f"MachineAccountQuota: {maq if maq else '<not set>'}")
