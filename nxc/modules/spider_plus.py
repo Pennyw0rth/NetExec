@@ -85,7 +85,7 @@ class SMBSpiderPlus:
             "num_files_unmodified": 0,
             "num_files_updated": 0,
             "num_keyword_matches": 0,  # New stat for keyword matches
-            "keyword_matches": [],     # New list to store files with matches
+            "keyword_matches": [],  # New list to store files with matches
         }
         self.download_flag = download_flag
         self.stats_flag = stats_flag
@@ -279,7 +279,7 @@ class SMBSpiderPlus:
             "ctime_epoch": human_time(file_creation_time),
             "mtime_epoch": human_time(file_modified_time),
             "atime_epoch": human_time(file_access_time),
-            "keyword_matches": []  # New field for keyword matches
+            "keyword_matches": [],  # New field for keyword matches
         }
         self.stats["file_sizes"].append(file_size)
 
@@ -328,11 +328,7 @@ class SMBSpiderPlus:
 
                 if matched_keywords:
                     self.stats["num_keyword_matches"] += 1
-                    self.stats["keyword_matches"].append({
-                        "file": file_path,
-                        "share": share_name,
-                        "keywords": matched_keywords
-                    })
+                    self.stats["keyword_matches"].append({"file": file_path, "share": share_name, "keywords": matched_keywords})
                     self.results[share_name][file_path]["keyword_matches"] = matched_keywords
                     self.logger.success(f'Found keywords {matched_keywords} in file "{file_path}" on share "{share_name}"')
             except Exception as e:
@@ -569,4 +565,6 @@ class NXCModule:
         )
 
         spider.spider_shares()
+
+
 # Minor update 2025-09-03
