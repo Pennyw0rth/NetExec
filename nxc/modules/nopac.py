@@ -11,7 +11,7 @@ from nxc.helpers.misc import CATEGORY
 
 class NXCModule:
     name = "nopac"
-    description = "Check if the DC is vulnerable to CVE-2021-42278 and CVE-2021-42287 to impersonate DA from standard domain user"
+    description = "Check if the DC is vulnerable to CVE-2021-42278 and CVE-2021-42287 to impersonate DA from standard domain user - Requires Kerberos in domain!"
     supported_protocols = ["smb"]
     category = CATEGORY.ENUMERATION
 
@@ -19,6 +19,10 @@ class NXCModule:
         """No options available"""
 
     def on_login(self, context, connection):
+        if not connection.username:
+            context.log.debug("Blank username, cannot get a Kerberos Principal object")
+            return False
+
         user_name = Principal(connection.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
         try:
             tgt_with_pac, cipher, old_session_key, session_key = getKerberosTGT(
