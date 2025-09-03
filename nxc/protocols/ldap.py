@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import os
+import socket
 from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
 from binascii import hexlify
 from datetime import datetime
@@ -830,7 +831,8 @@ class ldap(connection):
     def dc_list(self):
         # bypass host resolver configuration via configure=False (default pulls from /etc/resolv.conf or registry on Windows)
         resolv = resolver.Resolver(configure=False)
-        resolv.nameservers = [self.args.dns_server] if self.args.dns_server else [self.host]
+        ns = self.args.dns_server or self.host
+        resolv.nameservers = [socket.gethostbyname(ns)]
         self.logger.debug(f"DNS Server option: {self.args.dns_server}, using DNS server: {resolv.nameservers}")
         resolv.timeout = self.args.dns_timeout
 
