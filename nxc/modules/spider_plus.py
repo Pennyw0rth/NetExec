@@ -63,6 +63,7 @@ class SMBSpiderPlus:
         exclude_filter,
         max_file_size,
         output_folder,
+        keywords,  # New parameter for keywords
     ):
         self.smb = smb
         self.host = self.smb.conn.getRemoteHost()
@@ -84,6 +85,8 @@ class SMBSpiderPlus:
             "num_files_filtered": 0,
             "num_files_unmodified": 0,
             "num_files_updated": 0,
+            "num_keyword_matches": 0,  # New stat for keyword matches
+            "keyword_matches": [],     # New list to store files with matches
         }
         self.download_flag = download_flag
         self.stats_flag = stats_flag
@@ -91,6 +94,7 @@ class SMBSpiderPlus:
         self.exclude_exts = exclude_exts
         self.max_file_size = max_file_size
         self.output_folder = output_folder
+        self.keywords = keywords  # Store keywords
 
         # Make sure the output_folder exists
         make_dirs(self.output_folder)
@@ -265,7 +269,7 @@ class SMBSpiderPlus:
                 self.parse_file(share_name, next_fullpath, result)
 
     def parse_file(self, share_name, file_path, file_info):
-        """Checks file attributes against various filters, records file metadata, and downloads eligible files if the download flag is set"""
+        """Checks file attributes against various filters, records file metadata, downloads eligible files if the download flag is set, and searches for keywords"""
         # Record the file metadata
         file_size = file_info.get_filesize()
         file_creation_time = file_info.get_ctime_epoch()
@@ -276,11 +280,12 @@ class SMBSpiderPlus:
             "ctime_epoch": human_time(file_creation_time),
             "mtime_epoch": human_time(file_modified_time),
             "atime_epoch": human_time(file_access_time),
+            "keyword_matches": []  # New field for keyword matches
         }
         self.stats["file_sizes"].append(file_size)
 
-        # Check if proceeding with download attempt.
-        if not self.download_flag:
+        # Check if proceeding with download attempt or keyword search.
+        if not (self.download_flag or self.keywords):
             return
 
         # Check file extension filter.
@@ -306,7 +311,36 @@ class SMBSpiderPlus:
             self.stats["num_get_fail"] += 1
             return
 
-        # Check if the file is already downloaded and up-to-date.
+        # Check for keywords if specified.
+        matched_keywords = []
+        if self.keywords:
+            try:
+                remote_file.open_file()
+                remote_file.seek(0, 0)
+                while True:
+                    chunk = self.read_chunk(remote_file)
+                    if not chunk:
+                        break
+                    chunk_str = chunk.decode("utf-8", errors="ignore").lower()
+                    for keyword in self.keywords:
+                        if keyword.lower() in chunk_str and keyword not in matched_keywords:
+                            matched_keywords.append(keyword)
+                remote_file.close()
+
+                if matched_keywords:
+                    self.stats["num_keyword_matches"] += 1
+                    self.stats["keyword_matches"].append({
+                        "file": file_path,
+                        "share": share_name,
+                        "keywords": matched_keywords
+                    })
+                    self.results[share_name][file_path]["keyword_matches"] = matched_keywords
+                    self.logger.success(f'Found keywords {matched_keywords} in file "{file_path}" on share "{share_name}"')
+            except Exception as e:
+                self.logger.fail(f'Error searching keywords in file "{file_path}": {e!s}')
+                remote_file.close()
+
+        # Check if the file is already downloaded and up-to-date
         file_dir, file_name = self.get_file_save_path(remote_file)
         download_path = join(file_dir, file_name)
         needs_update_flag = False
@@ -318,7 +352,7 @@ class SMBSpiderPlus:
             else:
                 needs_update_flag = True
 
-        # Download file.
+        # Download file if download_flag is set
         download_success = False
         try:
             self.logger.info(f'Downloading file "{file_path}" => "{download_path}".')
@@ -441,6 +475,13 @@ class SMBSpiderPlus:
             unique_exts_str = ", ".join(file_exts[:10]) + "..." if len(file_exts) > 10 else ", ".join(file_exts)
             self.logger.display(f"File unique exts:     {num_unique_file_exts} ({unique_exts_str})")
 
+        # Keyword statistics
+        num_keyword_matches = self.stats.get("num_keyword_matches", 0)
+        if num_keyword_matches:
+            self.logger.display(f"Files with keyword matches: {num_keyword_matches}")
+            for match in self.stats["keyword_matches"]:
+                self.logger.display(f"  File: {match['file']} (Share: {match['share']}) - Keywords: {', '.join(match['keywords'])}")
+
         # Download statistics.
         if self.download_flag:
             num_get_success = self.stats.get("num_get_success", 0)
@@ -472,20 +513,22 @@ class NXCModule:
 
     name = "spider_plus"
     description = "List files recursively and save a JSON share-file metadata to the 'OUTPUT_FOLDER'. See module options for finer configuration."
+    category = "enum"  # Added to fix the loading error
     supported_protocols = ["smb"]
-    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """
         List files recursively (excluding `EXCLUDE_FILTER` and `EXCLUDE_EXTS` extensions) and save JSON share-file metadata to the `OUTPUT_FOLDER`.
         If `DOWNLOAD_FLAG`=True, download files smaller then `MAX_FILE_SIZE` to the `OUTPUT_FOLDER`.
+        If `KEYWORDS` is set, search for files containing specified keywords.
 
         DOWNLOAD_FLAG     Download all share folders/files (Default: False)
         STATS_FLAG        Disable file/download statistics (Default: True)
         EXCLUDE_EXTS      Case-insensitive extension filter to exclude (Default: ico,lnk)
         EXCLUDE_FILTER    Case-insensitive filter to exclude folders/files (Default: print$,ipc$)
         MAX_FILE_SIZE     Max file size to download (Default: 51200)
-        OUTPUT_FOLDER     Path of the local folder to save files (Default: NXC_PATH/nxc_spider_plus)
+        OUTPUT_FOLDER Path of the local folder to save files (Default: NXC_PATH/nxc_spider_plus)
+        KEYWORDS          Comma-separated keywords to search in files (Default: None)
         """
         self.download_flag = False
         if any("DOWNLOAD" in key for key in module_options):
@@ -499,6 +542,7 @@ class NXCModule:
         self.exclude_filter = [d.lower() for d in self.exclude_filter]  # force case-insensitive
         self.max_file_size = int(module_options.get("MAX_FILE_SIZE", 50 * 1024))
         self.output_folder = module_options.get("OUTPUT_FOLDER", abspath(join(NXC_PATH, "modules/nxc_spider_plus")))
+        self.keywords = get_list_from_option(module_options.get("KEYWORDS", ""))
 
     def on_login(self, context, connection):
         context.log.display("Started module spidering_plus with the following options:")
@@ -508,6 +552,7 @@ class NXCModule:
         context.log.display(f"  EXCLUDE_EXTS: {self.exclude_exts}")
         context.log.display(f" MAX_FILE_SIZE: {human_size(self.max_file_size)}")
         context.log.display(f" OUTPUT_FOLDER: {self.output_folder}")
+        context.log.display(f" KEYWORDS: {self.keywords}")
 
         spider = SMBSpiderPlus(
             connection,
@@ -518,6 +563,7 @@ class NXCModule:
             self.exclude_filter,
             self.max_file_size,
             self.output_folder,
+            self.keywords,
         )
 
         spider.spider_shares()
