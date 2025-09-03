@@ -46,6 +46,7 @@ from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.ntlm_parser import parse_challenge
 from nxc.paths import CONFIG_PATH, NXC_PATH
+from nxc.netexec import GLOBAL_SUMMARY_RESULTS
 
 ldap_error_status = {
     "1": "STATUS_NOT_SUPPORTED",
@@ -60,8 +61,8 @@ ldap_error_status = {
     "0": "LDAP Signing IS Enforced",
     "KDC_ERR_CLIENT_REVOKED": "KDC_ERR_CLIENT_REVOKED",
     "KDC_ERR_PREAUTH_FAILED": "KDC_ERR_PREAUTH_FAILED",
+    "invalidCredentials": "STATUS_INVALID_CREDENTIALS",
 }
-
 
 def resolve_collection_methods(methods):
     """Convert methods (string) to list of validated methods to resolve"""
@@ -412,6 +413,12 @@ class ldap(connection):
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             self.logger.success(f"{domain}\\{self.username}{used_ccache} {self.mark_pwned()}")
 
+            # Add the successful auth to the summary
+            summaryText = f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{self.username}:{process_secret(kerb_pass)} {self.mark_pwned()}"
+            
+            if summaryText:
+               GLOBAL_SUMMARY_RESULTS.append(summaryText)
+
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
@@ -429,6 +436,9 @@ class ldap(connection):
             else:
                 return False
         except SessionError as e:
+            error_code = str(e).split()[-2][:-1]
+            if error in ldap_error_status:
+               GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{self.username}:{process_secret(kerb_pass)} {ldap_error_status.get(error_code, '')} {self.mark_pwned()}")
             error, desc = e.getErrorString()
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             self.logger.fail(
@@ -475,9 +485,9 @@ class ldap(connection):
                         add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
                     return True
                 except SessionError as e:
-                    error, desc = e.getErrorString()
+                    error, desc = e.getErrorString()                    
                     self.logger.fail(
-                        f"{self.domain}\\{self.username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {error!s}",
+                        f"{self.domain}\\{self.username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {desc!s}",
                         color="magenta" if error in ldap_error_status else "red",
                     )
                     return False
@@ -490,8 +500,11 @@ class ldap(connection):
                     return False
             else:
                 error_code = str(e).split()[-2][:-1]
+                error_desc = str(e).split("->")[1].split(":")[0].strip()
+                if error_code in ldap_error_status:
+                         GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{self.username}:{process_secret(kerb_pass)} {ldap_error_status.get(error_code, '')} {self.mark_pwned()}")    
                 self.logger.fail(
-                    f"{self.domain}\\{self.username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {error_code!s}",
+                    f"{self.domain}\\{self.username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {error_desc!s}",
                     color="magenta" if error_code in ldap_error_status else "red",
                 )
                 return False
@@ -524,6 +537,12 @@ class ldap(connection):
 
             # Prepare success credential text
             self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
+
+            # Add the successful auth to the summary
+            summaryText = f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}"
+            
+            if summaryText:
+               GLOBAL_SUMMARY_RESULTS.append(summaryText)
 
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
@@ -562,6 +581,9 @@ class ldap(connection):
                     )
             else:
                 error_code = str(e).split()[-2][:-1]
+                if error_code != "52e":
+                    GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status.get(error_code, '')} {self.mark_pwned()}")
+                
                 self.logger.fail(
                     f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status.get(error_code, '')}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
@@ -616,6 +638,11 @@ class ldap(connection):
             # Prepare success credential text
             out = f"{domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}"
             self.logger.success(out)
+            # Add the successful auth to the summary
+            summaryText = (f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{self.username}:{process_secret(self.hash)} {self.mark_pwned()}")
+            
+            if summaryText:
+               GLOBAL_SUMMARY_RESULTS.append(summaryText)
 
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
@@ -654,6 +681,10 @@ class ldap(connection):
                     )
             else:
                 error_code = str(e).split()[-2][:-1]
+                if error_code != "52e":
+                # Log the non failures to the summary
+                     GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{self.username}:{process_secret(self.hash)} {ldap_error_status.get(error_code, '')} {self.mark_pwned()}")                  
+                
                 self.logger.fail(
                     f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status.get(error_code, '')}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
