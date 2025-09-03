@@ -23,6 +23,7 @@ class NXCModule:
     Module by LuemmelSec (@theluemmel), updated by @zblurx/@Mercury0
     Original work thankfully taken from @zyn3rgy's Ldap Relay Scan project: https://github.com/zyn3rgy/LdapRelayScan
     """
+
     name = "ldap-checker"
     description = "[REMOVED] Checks whether LDAP signing and channel binding are required and / or enforced"
     supported_protocols = ["ldap"]
@@ -184,24 +185,14 @@ class NXCModule:
             stype = asyauthSecret.AES
             secret = connection.aesKey
 
-        anon_credential = NTLMCredential(
-            secret="",
-            username="",
-            domain=connection.domain,
-            stype=asyauthSecret.PASS
-        )
+        anon_credential = NTLMCredential(secret="", username="", domain=connection.domain, stype=asyauthSecret.PASS)
 
         if not connection.username and not secret:
             context.log.highlight("No credentials provided, skipping LDAP signing check")
             credential = anon_credential
         else:
             if not connection.kerberos:
-                credential = NTLMCredential(
-                    secret=secret,
-                    username=connection.username,
-                    domain=connection.domain,
-                    stype=stype
-                )
+                credential = NTLMCredential(secret=secret, username=connection.username, domain=connection.domain, stype=stype)
             else:
                 kerberos_target = UniTarget(
                     connection.host,
@@ -224,7 +215,8 @@ class NXCModule:
         ldap_signing_status = None
         if connection.username or secret:
             target = MSLDAPTarget(
-                connection.host, 389,
+                connection.host,
+                389,
                 hostname=connection.remoteName,
                 domain=connection.domain,
                 dc_ip=connection.kdcHost,
@@ -239,7 +231,8 @@ class NXCModule:
 
         if self.does_ldaps_complete_handshake(context, connection.host):
             target = MSLDAPTarget(
-                connection.host, 636,
+                connection.host,
+                636,
                 UniProto.CLIENT_SSL_TCP,
                 hostname=connection.remoteName,
                 domain=connection.domain,

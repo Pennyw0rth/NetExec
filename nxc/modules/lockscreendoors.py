@@ -29,10 +29,7 @@ class NXCModule:
         }
 
         # If description matches one of these it's almost certainly backdoored
-        self.backdoor_descriptions = [
-            "Windows Command Processor",
-            "Windows PowerShell"
-        ]
+        self.backdoor_descriptions = ["Windows Command Processor", "Windows PowerShell"]
 
     def options(self, context, module_options):
         """No options available"""

@@ -17,7 +17,6 @@ class NXCModule:
         self.action = None
 
     def options(self, context, module_options):
-
         if "ACTION" not in module_options:
             context.log.fail("ACTION option not specified!")
             exit(1)
@@ -35,47 +34,24 @@ class NXCModule:
                 ans = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)
                 regHandle = ans["phKey"]
 
-                keyHandle = rrp.hBaseRegOpenKey(
-                    remoteOps._RemoteOperations__rrp,
-                    regHandle,
-                    "Software\\Policies\\Microsoft\\Windows NT\\Terminal Services\\"
-                )["phkResult"]
+                keyHandle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "Software\\Policies\\Microsoft\\Windows NT\\Terminal Services\\")["phkResult"]
 
                 # Checks if the key already exists or not
                 try:
-                    rrp.hBaseRegQueryValue(
-                        remoteOps._RemoteOperations__rrp,
-                        keyHandle,
-                        "Shadow\x00"
-                    )
+                    rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "Shadow\x00")
                 except Exception as e:
                     if "ERROR_FILE_NOT_FOUND" in str(e):
                         context.log.debug("here")
-                        ans = rrp.hBaseRegCreateKey(
-                            remoteOps._RemoteOperations__rrp,
-                            keyHandle,
-                            "Shadow\x00")
+                        ans = rrp.hBaseRegCreateKey(remoteOps._RemoteOperations__rrp, keyHandle, "Shadow\x00")
 
                 # Disable remote UAC
                 if self.action == "disable":
-                    rrp.hBaseRegSetValue(
-                        remoteOps._RemoteOperations__rrp,
-                        keyHandle,
-                        "Shadow\x00",
-                        rrp.REG_DWORD,
-                        0
-                    )
+                    rrp.hBaseRegSetValue(remoteOps._RemoteOperations__rrp, keyHandle, "Shadow\x00", rrp.REG_DWORD, 0)
                     context.log.highlight("Shadow RDP disabled")
 
                 # Enable remote UAC
                 if self.action == "enable":
-                    rrp.hBaseRegSetValue(
-                        remoteOps._RemoteOperations__rrp,
-                        keyHandle,
-                        "Shadow\x00",
-                        rrp.REG_DWORD,
-                        2
-                    )
+                    rrp.hBaseRegSetValue(remoteOps._RemoteOperations__rrp, keyHandle, "Shadow\x00", rrp.REG_DWORD, 2)
                     context.log.highlight("Shadow RDP with full access enabled")
 
         except Exception as e:

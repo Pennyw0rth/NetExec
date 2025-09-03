@@ -13,7 +13,7 @@ class Substitution:
 
         self._id = sub_id
         self._type = sub_type
-        self._optional = sub_token == 0x0e
+        self._optional = sub_token == 0x0E
 
     def xml(self, template=None):
         value = template.values[self._id]
@@ -27,7 +27,7 @@ class Substitution:
             return str(struct.unpack("<H", value.data)[0])
         elif self._type == 0x8:
             return str(struct.unpack("<I", value.data)[0])
-        elif self._type == 0xa:
+        elif self._type == 0xA:
             return str(struct.unpack("<Q", value.data)[0])
         elif self._type == 0x11:
             # see http://integriography.wordpress.com/2010/01/16/using-phython-to-parse-and-present-windows-64-bit-timestamps/
@@ -36,13 +36,13 @@ class Substitution:
             # see http://www.gossamer-threads.com/lists/apache/bugs/386930
             revision, number_of_sub_ids = struct.unpack_from("<BB", value.data)
             iav = struct.unpack_from(">Q", value.data, 2)[0]
-            sub_ids = [struct.unpack("<I", value.data[8 + 4 * i:12 + 4 * i])[0] for i in range(number_of_sub_ids)]
+            sub_ids = [struct.unpack("<I", value.data[8 + 4 * i : 12 + 4 * i])[0] for i in range(number_of_sub_ids)]
             return "S-{}-{}-{}".format(revision, iav, "-".join([str(sub_id) for sub_id in sub_ids]))
         elif self._type == 0x15 or self._type == 0x10:
             return value.data.hex()
         elif self._type == 0x21:
             return value.template.xml()
-        elif self._type == 0xf:
+        elif self._type == 0xF:
             return str(uuid.UUID(bytes_le=value.data))
         else:
             print("Unknown value type", hex(value.type))
@@ -51,7 +51,7 @@ class Substitution:
 class Value:
     def __init__(self, buf, offset):
         token, string_type, length = struct.unpack_from("<BBH", buf, offset)
-        self._val = buf[offset + 4:offset + 4 + length * 2].decode("utf16")
+        self._val = buf[offset + 4 : offset + 4 + length * 2].decode("utf16")
 
         self.length = 4 + length * 2
 
@@ -67,7 +67,7 @@ class Attribute:
         (next_token) = struct.unpack_from("<B", buf, offset + 1 + self._name.length)
         if next_token[0] == 0x05 or next_token == 0x45:
             self._value = Value(buf, offset + 1 + self._name.length)
-        elif next_token[0] == 0x0e:
+        elif next_token[0] == 0x0E:
             self._value = Substitution(buf, offset + 1 + self._name.length)
         else:
             print("Unknown attribute next_token", hex(next_token[0]), hex(offset + 1 + self._name.length))
@@ -83,7 +83,7 @@ class Name:
     def __init__(self, buf, offset):
         hashs, length = struct.unpack_from("<HH", buf, offset)
 
-        self.val = buf[offset + 4:offset + 4 + length * 2].decode("utf16")
+        self.val = buf[offset + 4 : offset + 4 + length * 2].decode("utf16")
         self.length = 4 + (length + 1) * 2
 
 
@@ -120,7 +120,7 @@ class Element:
                         break
                     elif next_token == 0x05:
                         element = Value(buf, ofs)
-                    elif next_token == 0x0e or next_token == 0x0d:
+                    elif next_token == 0x0E or next_token == 0x0D:
                         element = Substitution(buf, ofs)
                     else:
                         print("Unknown intern next_token", hex(next_token), hex(ofs))
@@ -160,7 +160,7 @@ class Element:
 class ValueSpec:
     def __init__(self, buf, offset, value_offset):
         self.length, self.type, value_eof = struct.unpack_from("<HBB", buf, offset)
-        self.data = buf[value_offset:value_offset + self.length]
+        self.data = buf[value_offset : value_offset + self.length]
 
         if self.type == 0x21:
             self.template = BinXML(buf, value_offset)

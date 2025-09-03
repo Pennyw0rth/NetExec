@@ -10,7 +10,6 @@ from nxc.logger import nxc_logger
 
 
 class LDAPResolution:
-
     def __init__(self, host):
         self.host = host
 
@@ -41,7 +40,7 @@ class LDAPResolution:
             target_domain = sub(
                 r",DC=",
                 ".",
-                base_dn[base_dn.lower().find("dc="):],
+                base_dn[base_dn.lower().find("dc=") :],
                 flags=I,
             )[3:]
             # Extract machine name from target (hostname part of FQDN)

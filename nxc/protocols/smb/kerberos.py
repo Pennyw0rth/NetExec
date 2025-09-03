@@ -6,9 +6,7 @@ from six import b
 from pyasn1.codec.der import decoder, encoder
 from pyasn1.type.univ import noValue
 
-from impacket.krb5.asn1 import AP_REQ, AS_REP, TGS_REQ, Authenticator, TGS_REP, \
-    seq_set, seq_set_iter, PA_FOR_USER_ENC, Ticket as TicketAsn1, EncTGSRepPart, \
-    PA_PAC_OPTIONS
+from impacket.krb5.asn1 import AP_REQ, AS_REP, TGS_REQ, Authenticator, TGS_REP, seq_set, seq_set_iter, PA_FOR_USER_ENC, Ticket as TicketAsn1, EncTGSRepPart, PA_PAC_OPTIONS
 from impacket.krb5.types import Principal, KerberosTime, Ticket
 from impacket.krb5.kerberosv5 import sendReceive, getKerberosTGT
 from impacket.krb5.ccache import CCache
@@ -242,14 +240,7 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
 
     req_body["till"] = KerberosTime.to_asn1(now)
     req_body["nonce"] = random.getrandbits(31)
-    seq_set_iter(req_body, "etype",
-                 (
-                     int(constants.EncryptionTypes.rc4_hmac.value),
-                     int(constants.EncryptionTypes.des3_cbc_sha1_kd.value),
-                     int(constants.EncryptionTypes.des_cbc_md5.value),
-                     int(cipher.enctype)
-                 )
-                 )
+    seq_set_iter(req_body, "etype", (int(constants.EncryptionTypes.rc4_hmac.value), int(constants.EncryptionTypes.des3_cbc_sha1_kd.value), int(constants.EncryptionTypes.des_cbc_md5.value), int(cipher.enctype)))
     message = encoder.encode(tgs_req)
 
     nxc_logger.info("Requesting S4U2Proxy")

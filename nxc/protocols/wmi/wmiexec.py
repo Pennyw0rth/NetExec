@@ -131,20 +131,11 @@ class WMIEXEC:
         time.sleep(self.__exec_timeout)
 
         # 2. Base64 encode the file using PowerShell
-        self.execute_remote(f'powershell -Command "[Convert]::ToBase64String([IO.File]::ReadAllBytes(\'{result_output}\')) | Out-File -Encoding ASCII \'{result_output_b64}\'"')
+        self.execute_remote(f"powershell -Command \"[Convert]::ToBase64String([IO.File]::ReadAllBytes('{result_output}')) | Out-File -Encoding ASCII '{result_output_b64}'\"")
         time.sleep(0.5)
 
         # 3. Use PowerShell to split base64 content into 16KB chunks and store in registry
-        self.execute_remote(
-            f'powershell -Command "$b64 = Get-Content -Raw \'{result_output_b64}\'; '
-            f'$chunksize = 16000; '
-            f'$count = [math]::Ceiling($b64.Length / $chunksize); '
-            f'for ($i = 0; $i -lt $count; $i++) {{ '
-            f'  $chunk = $b64.Substring($i * $chunksize, [math]::Min($chunksize, $b64.Length - ($i * $chunksize))); '
-            f'  $name = \\"{keyName}_chunk_$i\\"; '
-            f'  reg add \\"HKLM\\{self.__registry_Path}\\" /v $name /t REG_SZ /d $chunk /f }}; '
-            f'reg add \\"HKLM\\{self.__registry_Path}\\" /v \\"{keyName}\\" /t REG_DWORD /d $count /f"'
-        )
+        self.execute_remote(f'powershell -Command "$b64 = Get-Content -Raw \'{result_output_b64}\'; $chunksize = 16000; $count = [math]::Ceiling($b64.Length / $chunksize); for ($i = 0; $i -lt $count; $i++) {{   $chunk = $b64.Substring($i * $chunksize, [math]::Min($chunksize, $b64.Length - ($i * $chunksize)));   $name = \\"{keyName}_chunk_$i\\";   reg add \\"HKLM\\{self.__registry_Path}\\" /v $name /t REG_SZ /d $chunk /f }}; reg add \\"HKLM\\{self.__registry_Path}\\" /v \\"{keyName}\\" /t REG_DWORD /d $count /f"')
         time.sleep(0.1)
 
         self.queryRegistry_psh(keyName)

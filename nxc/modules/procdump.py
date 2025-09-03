@@ -143,12 +143,10 @@ class NXCModule:
                                     context.log.highlight(domain + "\\" + username + ":" + print_pass)
                                     if "." not in domain and domain.upper() in connection.domain.upper():
                                         domain = connection.domain
-                                        credz_bh.append(
-                                            {
-                                                "username": username.upper(),
-                                                "domain": domain.upper(),
-                                            }
-                                        )
+                                        credz_bh.append({
+                                            "username": username.upper(),
+                                            "domain": domain.upper(),
+                                        })
                     if len(credz_bh) > 0:
                         add_user_bh(credz_bh, None, context.log, connection.config)
                 except Exception as e:

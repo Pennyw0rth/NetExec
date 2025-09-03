@@ -56,7 +56,7 @@ class NXCModule:
                 self.context.log.fail(f"Failed extracting ASCII strings: {e}")
 
         # UTF-16LE strings extraction (common in Windows)
-        utf16_pattern = re.compile(b"(?:[\x20-\x7E]\x00){%d,}" % min_length)
+        utf16_pattern = re.compile(b"(?:[\x20-\x7e]\x00){%d,}" % min_length)
         utf16_strings = utf16_pattern.findall(data)
         for s in utf16_strings:
             try:
@@ -116,10 +116,7 @@ class NXCModule:
         binary_data = buf.read()
 
         # Return only the meaningful strings
-        return [
-            string for _, string in self.extract_strings(binary_data)
-            if self.is_meaningful_content(string)
-        ]
+        return [string for _, string in self.extract_strings(binary_data) if self.is_meaningful_content(string)]
 
     def on_admin_login(self, context, connection):
         self.context = context

@@ -14,14 +14,12 @@ class navigator(DatabaseNavigator):
 
         for cred in creds:
             total_users = self.db.get_loggedin_relations(cred_id=cred[0])
-            data.append(
-                [
-                    cred[0],
-                    str(len(total_users)) + " Host(s)",
-                    cred[1],
-                    cred[2],
-                ]
-            )
+            data.append([
+                cred[0],
+                str(len(total_users)) + " Host(s)",
+                cred[1],
+                cred[2],
+            ])
         print_table(data, title="Credentials")
 
     def display_hosts(self, hosts):
@@ -37,15 +35,13 @@ class navigator(DatabaseNavigator):
 
         for h in hosts:
             total_users = self.db.get_loggedin_relations(host_id=h[0])
-            data.append(
-                [
-                    h[0],
-                    str(len(total_users)) + " User(s)",
-                    h[1],
-                    h[2],
-                    h[3],
-                ]
-            )
+            data.append([
+                h[0],
+                str(len(total_users)) + " User(s)",
+                h[1],
+                h[2],
+                h[3],
+            ])
         print_table(data, title="Hosts")
 
     def do_hosts(self, line):

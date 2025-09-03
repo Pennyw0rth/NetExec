@@ -19,16 +19,14 @@ class navigator(DatabaseNavigator):
             credtype = cred[4]
 
             links = self.db.get_admin_relations(user_id=cred_id)
-            data.append(
-                [
-                    cred_id,
-                    str(len(links)) + " Host(s)",
-                    credtype,
-                    domain,
-                    username,
-                    password,
-                ]
-            )
+            data.append([
+                cred_id,
+                str(len(links)) + " Host(s)",
+                credtype,
+                domain,
+                username,
+                password,
+            ])
         print_table(data, title="Credentials")
 
     def display_groups(self, groups):
@@ -99,21 +97,19 @@ class navigator(DatabaseNavigator):
                 petitpotam = ""
 
             links = self.db.get_admin_relations(host_id=host_id)
-            data.append(
-                [
-                    host_id,
-                    str(len(links)) + " Cred(s)",
-                    ip,
-                    hostname,
-                    domain,
-                    os,
-                    smbv1,
-                    signing,
-                    spooler,
-                    zerologon,
-                    petitpotam,
-                ]
-            )
+            data.append([
+                host_id,
+                str(len(links)) + " Cred(s)",
+                ip,
+                hostname,
+                domain,
+                os,
+                smbv1,
+                signing,
+                spooler,
+                zerologon,
+                petitpotam,
+            ])
         print_table(data, title="Hosts")
 
     def display_shares(self, shares):
@@ -127,16 +123,14 @@ class navigator(DatabaseNavigator):
 
             users_r_access = self.db.get_users_with_share_access(host_id=host_id, share_name=name, permissions="r")
             users_w_access = self.db.get_users_with_share_access(host_id=host_id, share_name=name, permissions="w")
-            data.append(
-                [
-                    share_id,
-                    host_id,
-                    name,
-                    remark,
-                    f"{len(users_r_access)} User(s)",
-                    f"{len(users_w_access)} Users",
-                ]
-            )
+            data.append([
+                share_id,
+                host_id,
+                name,
+                remark,
+                f"{len(users_r_access)} User(s)",
+                f"{len(users_w_access)} Users",
+            ])
         print_table(data)
 
     def do_shares(self, line):
@@ -316,21 +310,19 @@ class navigator(DatabaseNavigator):
                         zerologon = ""
                         petitpotam = ""
 
-                    data.append(
-                        [
-                            host_id,
-                            ip,
-                            hostname,
-                            domain,
-                            os,
-                            dc,
-                            smbv1,
-                            signing,
-                            spooler,
-                            zerologon,
-                            petitpotam,
-                        ]
-                    )
+                    data.append([
+                        host_id,
+                        ip,
+                        hostname,
+                        domain,
+                        os,
+                        dc,
+                        smbv1,
+                        signing,
+                        spooler,
+                        zerologon,
+                        petitpotam,
+                    ])
                 print_table(data, title="Host")
 
                 data = [["CredID", "CredType", "Domain", "UserName", "Password"]]
@@ -395,17 +387,17 @@ class navigator(DatabaseNavigator):
 
     def help_wcc(self):
         help_string = f"""
-        {help_header('USAGE')}
-            {help_header('wcc')} [{help_kw('full')}]
-            {help_header('wcc')} <{help_kw('ip')}|{help_kw('hostname')}|{help_kw('check')}|{help_kw('description')}|{help_kw('status')}|{help_kw('reasons')}>...
+        {help_header("USAGE")}
+            {help_header("wcc")} [{help_kw("full")}]
+            {help_header("wcc")} <{help_kw("ip")}|{help_kw("hostname")}|{help_kw("check")}|{help_kw("description")}|{help_kw("status")}|{help_kw("reasons")}>...
 
-        {help_header('DESCRIPTION')}
+        {help_header("DESCRIPTION")}
             Display Windows Configuration Checks results
 
-            {help_header('wcc')} [{help_kw('full')}]
+            {help_header("wcc")} [{help_kw("full")}]
                 If full is provided, display all columns. Otherwise, display IP, Hostname, Check and Status
 
-            {help_header('wcc')} <{help_kw('ip')}|{help_kw('hostname')}|{help_kw('check')}|{help_kw('description')}|{help_kw('status')}|{help_kw('reasons')}>...
+            {help_header("wcc")} <{help_kw("ip")}|{help_kw("hostname")}|{help_kw("check")}|{help_kw("description")}|{help_kw("status")}|{help_kw("reasons")}>...
                 Display only the requested columns (case-insensitive)
             """
         print_help(help_string)

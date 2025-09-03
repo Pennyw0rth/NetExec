@@ -26,11 +26,7 @@ class NXCModule:
             if remote_ops._RemoteOperations__rrp:
                 ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
                 reg_handle = ans["phKey"]
-                ans = rrp.hBaseRegOpenKey(
-                    remote_ops._RemoteOperations__rrp,
-                    reg_handle,
-                    "SYSTEM\\CurrentControlSet\\Control\\Lsa"
-                )
+                ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, "SYSTEM\\CurrentControlSet\\Control\\Lsa")
                 key_handle = ans["phkResult"]
                 _ = data = None
                 try:

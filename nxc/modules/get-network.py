@@ -26,7 +26,7 @@ def get_dns_zones(connection, root, debug=False):
 
 
 def ldap2domain(baseDN):
-    return re.sub(r",DC=", ".", baseDN[baseDN.lower().find("dc="):], flags=re.IGNORECASE)[3:]
+    return re.sub(r",DC=", ".", baseDN[baseDN.lower().find("dc=") :], flags=re.IGNORECASE)[3:]
 
 
 def new_record(rtype, serial):
@@ -118,34 +118,28 @@ class NXCModule:
                     if dr["Type"] == A:
                         address = DNS_RPC_RECORD_A(dr["Data"])
                         if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
-                            outdata.append(
-                                {
-                                    "name": recordname,
-                                    "type": RECORD_TYPE_MAPPING[dr["Type"]],
-                                    "value": address.formatCanonical(),
-                                }
-                            )
+                            outdata.append({
+                                "name": recordname,
+                                "type": RECORD_TYPE_MAPPING[dr["Type"]],
+                                "value": address.formatCanonical(),
+                            })
                     # Skip without "ALL" and "ONLY_HOSTS" => only IPs
                     elif dr["Type"] in [CNAME, NS, PTR] and (self.showall or self.showhosts):
                         address = DNS_RPC_RECORD_NODE_NAME(dr["Data"])
                         if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
-                            outdata.append(
-                                {
-                                    "name": recordname,
-                                    "type": RECORD_TYPE_MAPPING[dr["Type"]],
-                                    "value": address["nameNode"].toFqdn(),
-                                }
-                            )
+                            outdata.append({
+                                "name": recordname,
+                                "type": RECORD_TYPE_MAPPING[dr["Type"]],
+                                "value": address["nameNode"].toFqdn(),
+                            })
                     elif dr["Type"] == AAAA:
                         address = DNS_RPC_RECORD_AAAA(dr["Data"])
                         if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
-                            outdata.append(
-                                {
-                                    "name": recordname,
-                                    "type": RECORD_TYPE_MAPPING[dr["Type"]],
-                                    "value": address.formatCanonical(),
-                                }
-                            )
+                            outdata.append({
+                                "name": recordname,
+                                "type": RECORD_TYPE_MAPPING[dr["Type"]],
+                                "value": address.formatCanonical(),
+                            })
 
         # Filter duplicate IPs if "ALL"  and "ONLY_HOSTS" are not set
         if not (self.showall or self.showhosts):
@@ -221,8 +215,8 @@ class DNS_COUNT_NAME(Structure):
         ind = 0
         labels = []
         for _i in range(self["LabelCount"]):
-            nextlen = unpack("B", self["RawName"][ind: ind + 1])[0]
-            labels.append(self["RawName"][ind + 1: ind + 1 + nextlen].decode("utf-8"))
+            nextlen = unpack("B", self["RawName"][ind : ind + 1])[0]
+            labels.append(self["RawName"][ind + 1 : ind + 1 + nextlen].decode("utf-8"))
             ind += nextlen + 1
         # For the final dot
         labels.append("")

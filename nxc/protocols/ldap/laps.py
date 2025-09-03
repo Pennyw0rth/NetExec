@@ -273,23 +273,9 @@ def laps_search(self, username, password, cred_type, domain, dns_server):
             self.logger.fail("Add --kdcHost parameter to use laps with kerberos")
             return None, None, None
 
-        connection = ldapco.kerberos_login(
-            domain[0],
-            username[0] if username else "",
-            password[0] if cred_type[0] == "plaintext" else "",
-            password[0] if cred_type[0] == "hash" else "",
-            kdcHost=self.kdcHost,
-            aesKey=self.aesKey,
-            dns_server=dns_server
-        )
+        connection = ldapco.kerberos_login(domain[0], username[0] if username else "", password[0] if cred_type[0] == "plaintext" else "", password[0] if cred_type[0] == "hash" else "", kdcHost=self.kdcHost, aesKey=self.aesKey, dns_server=dns_server)
     else:
-        connection = ldapco.auth_login(
-            domain[0],
-            username[0] if username else "",
-            password[0] if cred_type[0] == "plaintext" else "",
-            password[0] if cred_type[0] == "hash" else "",
-            dns_server
-        )
+        connection = ldapco.auth_login(domain[0], username[0] if username else "", password[0] if cred_type[0] == "plaintext" else "", password[0] if cred_type[0] == "hash" else "", dns_server)
     if not connection:
         self.logger.fail(f"LDAP connection failed with account {username[0]}")
 
@@ -316,17 +302,7 @@ def laps_search(self, username, password, cred_type, domain, dns_server):
             values = {str(attr["type"]).lower(): attr["vals"][0] for attr in host["attributes"]}
             if "mslaps-encryptedpassword" in values:
                 msMCSAdmPwd = values["mslaps-encryptedpassword"]
-                d = LAPSv2Extract(
-                    bytes(msMCSAdmPwd),
-                    username[0] if username else "",
-                    password[0] if cred_type[0] == "plaintext" else "",
-                    domain[0],
-                    password[0] if cred_type[0] == "hash" else "",
-                    self.kerberos,
-                    self.kdcHost,
-                    339,
-                    dns_server
-                )
+                d = LAPSv2Extract(bytes(msMCSAdmPwd), username[0] if username else "", password[0] if cred_type[0] == "plaintext" else "", domain[0], password[0] if cred_type[0] == "hash" else "", self.kerberos, self.kdcHost, 339, dns_server)
                 try:
                     data = d.run()
                 except Exception as e:

@@ -14,16 +14,14 @@ class navigator(DatabaseNavigator):
             credtype = cred[4]
 
             links = self.db.get_admin_relations(user_id=cred_id)
-            data.append(
-                [
-                    cred_id,
-                    str(len(links)) + " Host(s)",
-                    credtype,
-                    domain,
-                    username,
-                    password,
-                ]
-            )
+            data.append([
+                cred_id,
+                str(len(links)) + " Host(s)",
+                credtype,
+                domain,
+                username,
+                password,
+            ])
         print_table(data, title="Credentials")
 
     def display_hosts(self, hosts):
@@ -42,17 +40,15 @@ class navigator(DatabaseNavigator):
                 os = host[5]
 
             links = self.db.get_admin_relations(host_id=host_id)
-            data.append(
-                [
-                    host_id,
-                    str(len(links)) + " Cred(s)",
-                    ip,
-                    port,
-                    hostname,
-                    domain,
-                    os,
-                ]
-            )
+            data.append([
+                host_id,
+                str(len(links)) + " Cred(s)",
+                ip,
+                port,
+                hostname,
+                domain,
+                os,
+            ])
         print_table(data, title="Hosts")
 
     def do_hosts(self, line):

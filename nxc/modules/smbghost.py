@@ -45,7 +45,7 @@ class NXCModule:
                     self.context.log.debug(f"{target_ip} Connection closed unexpectedly.")
                     return False
 
-                nb, = struct.unpack(">I", nb_data)
+                (nb,) = struct.unpack(">I", nb_data)
                 res = sock.recv(nb)
 
                 # Check response for vulnerability

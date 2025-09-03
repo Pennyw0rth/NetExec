@@ -25,17 +25,15 @@ class navigator(DatabaseNavigator):
             total_users = self.db.get_loggedin_relations(cred_id=cred_id)
             total_shell = total_users = self.db.get_loggedin_relations(cred_id=cred_id, shell=True)
 
-            data.append(
-                [
-                    cred_id,
-                    str(len(admin_links)) + " Host(s)",
-                    str(len(total_users)) + " Host(s)",
-                    str(len(total_shell)) + " Shells(s)",
-                    username,
-                    password,
-                    credtype,
-                ]
-            )
+            data.append([
+                cred_id,
+                str(len(admin_links)) + " Host(s)",
+                str(len(total_users)) + " Host(s)",
+                str(len(total_shell)) + " Shells(s)",
+                username,
+                password,
+                credtype,
+            ])
         print_table(data, title="Credentials")
 
     # pull/545
@@ -51,17 +49,15 @@ class navigator(DatabaseNavigator):
 
             admin_users = self.db.get_admin_relations(host_id=host_id)
             total_users = self.db.get_loggedin_relations(host_id=host_id)
-            data.append(
-                [
-                    host_id,
-                    str(len(admin_users)) + " Cred(s)",
-                    str(len(total_users)) + " User(s)",
-                    host,
-                    port,
-                    banner,
-                    os,
-                ]
-            )
+            data.append([
+                host_id,
+                str(len(admin_users)) + " Cred(s)",
+                str(len(total_users)) + " User(s)",
+                host,
+                port,
+                banner,
+                os,
+            ])
         print_table(data, title="Hosts")
 
     def do_hosts(self, line):

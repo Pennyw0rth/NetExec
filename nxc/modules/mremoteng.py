@@ -42,7 +42,7 @@ class NXCModule:
         self.mRemoteNg_path = [
             "Users\\{username}\\AppData\\Local\\mRemoteNG",
             "Users\\{username}\\AppData\\Roaming\\mRemoteNG",
-            ]
+        ]
 
         self.custom_user_path = [
             "Users\\{username}\\Desktop",

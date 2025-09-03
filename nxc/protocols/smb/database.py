@@ -180,6 +180,7 @@ class database(BaseDB):
 
                 # Check if Database Schema is correct, due to hanging issues reported on discord introduced by https://github.com/Pennyw0rth/NetExec/pull/658
                 from sqlalchemy.schema import UniqueConstraint
+
                 ip_is_unique = False
                 for constraint in self.HostsTable.constraints:
                     if isinstance(constraint, UniqueConstraint) and constraint.columns[0].name == "ip":
@@ -350,11 +351,7 @@ class database(BaseDB):
         add_links = []
 
         creds_q = select(self.UsersTable)
-        creds_q = creds_q.filter(self.UsersTable.c.id == user_id) if user_id else creds_q.filter(
-            func.lower(self.UsersTable.c.credtype) == func.lower(credtype),
-            func.lower(self.UsersTable.c.domain) == func.lower(domain),
-            func.lower(self.UsersTable.c.username) == func.lower(username),
-            self.UsersTable.c.password == password)
+        creds_q = creds_q.filter(self.UsersTable.c.id == user_id) if user_id else creds_q.filter(func.lower(self.UsersTable.c.credtype) == func.lower(credtype), func.lower(self.UsersTable.c.domain) == func.lower(domain), func.lower(self.UsersTable.c.username) == func.lower(username), self.UsersTable.c.password == password)
         users = self.db_execute(creds_q)
         hosts = self.get_hosts(host)
 
@@ -674,8 +671,7 @@ class database(BaseDB):
 
     def get_users_with_share_access(self, host_id, share_name, permissions):
         permissions = permissions.lower()
-        q = select(self.SharesTable.c.userid).filter(self.SharesTable.c.name == share_name,
-                                                     self.SharesTable.c.hostid == host_id)
+        q = select(self.SharesTable.c.userid).filter(self.SharesTable.c.name == share_name, self.SharesTable.c.hostid == host_id)
         if "r" in permissions:
             q = q.filter(self.SharesTable.c.read == 1)
         if "w" in permissions:
@@ -752,8 +748,7 @@ class database(BaseDB):
 
         self.db_execute(q, [secret])  # .scalar()
 
-        nxc_logger.debug(
-            f"add_dpapi_secrets(host={host}, dpapi_type={dpapi_type}, windows_user={windows_user}, username={username}, password={password}, url={url})")
+        nxc_logger.debug(f"add_dpapi_secrets(host={host}, dpapi_type={dpapi_type}, windows_user={windows_user}, username={username}, password={password}, url={url})")
 
     def get_dpapi_secrets(
         self,

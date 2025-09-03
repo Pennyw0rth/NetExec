@@ -90,7 +90,7 @@ class NXCModule:
 
                 if conditionFilter and not self.PASSWORDPOLICY:
                     context.log.highlight(f"'{self.FILTER}' found in description: '{description}'")
-                elif (self.FILTER == "" and (conditionPasswordPolicy == self.PASSWORDPOLICY)):
+                elif self.FILTER == "" and (conditionPasswordPolicy == self.PASSWORDPOLICY):
                     answersFiltered.append([answer[0], description])
                 elif (self.FILTER != "" and conditionFilter) and (conditionPasswordPolicy == self.PASSWORDPOLICY):
                     context.log.highlight(f"'{self.FILTER}' found in user: '{answer[0]}' description: '{description}'")

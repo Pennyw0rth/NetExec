@@ -4,15 +4,7 @@ from nxc.nxcdb import DatabaseNavigator, print_table, print_help
 
 class navigator(DatabaseNavigator):
     def display_hosts(self, hosts):
-        data = [
-            [
-                "HostID",
-                "IP",
-                "Hostname",
-                "Domain",
-                "OS"
-            ]
-        ]
+        data = [["HostID", "IP", "Hostname", "Domain", "OS"]]
 
         for host in hosts:
             host_id = host[0]
@@ -25,15 +17,7 @@ class navigator(DatabaseNavigator):
             except Exception:
                 os = host[4]
 
-            data.append(
-                [
-                    host_id,
-                    ip,
-                    hostname,
-                    domain,
-                    os
-                ]
-            )
+            data.append([host_id, ip, hostname, domain, os])
         print_table(data, title="Hosts")
 
     def do_hosts(self, line):
@@ -48,15 +32,7 @@ class navigator(DatabaseNavigator):
             if len(hosts) > 1:
                 self.display_hosts(hosts)
             elif len(hosts) == 1:
-                data = [
-                    [
-                        "HostID",
-                        "IP",
-                        "Hostname",
-                        "Domain",
-                        "OS"
-                    ]
-                ]
+                data = [["HostID", "IP", "Hostname", "Domain", "OS"]]
                 host_id_list = []
 
                 for host in hosts:
@@ -71,15 +47,7 @@ class navigator(DatabaseNavigator):
                     except Exception:
                         os = host[4]
 
-                    data.append(
-                        [
-                            host_id,
-                            ip,
-                            hostname,
-                            domain,
-                            os
-                        ]
-                    )
+                    data.append([host_id, ip, hostname, domain, os])
                 print_table(data, title="Host")
 
     def help_hosts(self):
@@ -106,15 +74,7 @@ class navigator(DatabaseNavigator):
             password = cred[3]
             credtype = cred[4]
 
-            data.append(
-                [
-                    cred_id,
-                    credtype,
-                    domain,
-                    username,
-                    password
-                ]
-            )
+            data.append([cred_id, credtype, domain, username, password])
         print_table(data, title="Credentials")
 
     def do_creds(self, line):

@@ -7,6 +7,7 @@ class NXCModule:
     Get the info field of users
     Module by @sepauli
     """
+
     name = "get-info-users"
     description = "Get the info field of all users. May contain password"
     supported_protocols = ["ldap"]
@@ -20,10 +21,7 @@ class NXCModule:
 
     def on_login(self, context, connection):
         # Building the search filter
-        resp = connection.search(
-            searchFilter="(info=*)",
-            attributes=["sAMAccountName", "info"]
-        )
+        resp = connection.search(searchFilter="(info=*)", attributes=["sAMAccountName", "info"])
 
         context.log.debug(f"Total of records returned {len(resp)}")
         resp_parsed = parse_result_attributes(resp)

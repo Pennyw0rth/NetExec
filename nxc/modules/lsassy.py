@@ -131,15 +131,13 @@ class NXCModule:
                 cred["lmhash"],
                 cred["nthash"],
             ] not in credentials_unique:
-                credentials_unique.append(
-                    [
-                        cred["domain"],
-                        cred["username"],
-                        cred["password"],
-                        cred["lmhash"],
-                        cred["nthash"],
-                    ]
-                )
+                credentials_unique.append([
+                    cred["domain"],
+                    cred["username"],
+                    cred["password"],
+                    cred["lmhash"],
+                    cred["nthash"],
+                ])
                 credentials_output.append(cred)
 
         context.log.debug("Calling process_credentials")

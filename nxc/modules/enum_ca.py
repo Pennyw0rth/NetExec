@@ -1,8 +1,6 @@
 from impacket.dcerpc.v5 import transport, epm
 from impacket.http import AUTH_NTLM
-from impacket.dcerpc.v5.rpch import RPC_PROXY_INVALID_RPC_PORT_ERR, \
-    RPC_PROXY_CONN_A1_0X6BA_ERR, RPC_PROXY_CONN_A1_404_ERR, \
-    RPC_PROXY_RPC_OUT_DATA_404_ERR
+from impacket.dcerpc.v5.rpch import RPC_PROXY_INVALID_RPC_PORT_ERR, RPC_PROXY_CONN_A1_0X6BA_ERR, RPC_PROXY_CONN_A1_404_ERR, RPC_PROXY_RPC_OUT_DATA_404_ERR
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket import uuid
 import requests
@@ -14,13 +12,8 @@ class NXCModule:
     -------
     Module by @0xjbb, original code from Impacket rpcdump.py
     """
-    KNOWN_PROTOCOLS = {
-        135: {"bindstr": r"ncacn_ip_tcp:%s[135]"},
-        139: {"bindstr": r"ncacn_np:%s[\pipe\epmapper]"},
-        443: {"bindstr": r"ncacn_http:[593,RpcProxy=%s:443]"},
-        445: {"bindstr": r"ncacn_np:%s[\pipe\epmapper]"},
-        593: {"bindstr": r"ncacn_http:%s"}
-    }
+
+    KNOWN_PROTOCOLS = {135: {"bindstr": r"ncacn_ip_tcp:%s[135]"}, 139: {"bindstr": r"ncacn_np:%s[\pipe\epmapper]"}, 443: {"bindstr": r"ncacn_http:[593,RpcProxy=%s:443]"}, 445: {"bindstr": r"ncacn_np:%s[\pipe\epmapper]"}, 593: {"bindstr": r"ncacn_http:%s"}}
 
     name = "enum_ca"
     description = "Anonymously uses RPC endpoints to hunt for ADCS CAs"
@@ -40,7 +33,7 @@ class NXCModule:
         self.__domain = connection.domain
         self.__lmhash = ""
         self.__nthash = ""
-        self.__port = 135.
+        self.__port = 135.0
         self.__stringbinding = ""
 
         if context.hash and ":" in context.hash[0]:
@@ -74,12 +67,8 @@ class NXCModule:
             error_text = f"Protocol failed: {e}"
             context.log.fail(error_text)
 
-            if RPC_PROXY_INVALID_RPC_PORT_ERR in error_text or \
-               RPC_PROXY_RPC_OUT_DATA_404_ERR in error_text or \
-               RPC_PROXY_CONN_A1_404_ERR in error_text or \
-               RPC_PROXY_CONN_A1_0X6BA_ERR in error_text:
-                context.log.fail("This usually means the target does not allow "
-                                 "to connect to its epmapper using RpcProxy.")
+            if RPC_PROXY_INVALID_RPC_PORT_ERR in error_text or RPC_PROXY_RPC_OUT_DATA_404_ERR in error_text or RPC_PROXY_CONN_A1_404_ERR in error_text or RPC_PROXY_CONN_A1_0X6BA_ERR in error_text:
+                context.log.fail("This usually means the target does not allow to connect to its epmapper using RpcProxy.")
                 return
         for entry in entries:
             tmpUUID = str(entry["tower"]["Floors"][0])

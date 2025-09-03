@@ -67,6 +67,7 @@ def no_debug(func):
     It creates a temporary logger and logs the message to the console and file
     This is so we don't get both normal output AND debugging output, AND so we get the proper log calling file & line number
     """
+
     @functools.wraps(func)
     def wrapper(self, msg, *args, **kwargs):
         if self.logger.getEffectiveLevel() >= logging.INFO:
@@ -76,21 +77,13 @@ def no_debug(func):
             caller_frame = inspect.currentframe().f_back
             create_temp_logger(caller_frame, formatted_text, args, kwargs)
             self.log_console_to_file(formatted_text, *args, **kwargs)
+
     return wrapper
 
 
 class NXCAdapter(logging.LoggerAdapter):
     def __init__(self, extra=None, merge_extra=False):
-        logging.basicConfig(
-            format="%(message)s",
-            datefmt="[%X]",
-            handlers=[RichHandler(
-                console=nxc_console,
-                rich_tracebacks=True,
-                tracebacks_show_locals=False
-            )],
-            encoding="utf-8"
-        )
+        logging.basicConfig(format="%(message)s", datefmt="[%X]", handlers=[RichHandler(console=nxc_console, rich_tracebacks=True, tracebacks_show_locals=False)], encoding="utf-8")
         self.logger = logging.getLogger("nxc")
         self.extra = extra
         self.merge_extra = merge_extra

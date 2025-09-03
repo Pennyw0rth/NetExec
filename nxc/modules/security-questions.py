@@ -56,8 +56,7 @@ class NXCModule:
 
         if hasattr(rpc_transport, "set_credentials"):
             # This method exists only for selected protocol sequences.
-            rpc_transport.set_credentials(self.__username, self.__password, self.__domain, self.__lmhash,
-                                         self.__nthash, self.__aesKey)
+            rpc_transport.set_credentials(self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, self.__aesKey)
         rpc_transport.set_kerberos(self.__doKerberos, self.__kdcHost)
 
         try:

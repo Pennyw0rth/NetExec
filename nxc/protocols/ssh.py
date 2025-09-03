@@ -198,12 +198,7 @@ class ssh(connection):
         self.logger.info("Determined user is root via `id; sudo -ln` command")
         _, stdout, _ = self.conn.exec_command("id; sudo -ln 2>&1")
         stdout = stdout.read().decode(self.args.codec, errors="ignore")
-        admin_flag = {
-            "(root)": [True, None],
-            "NOPASSWD: ALL": [True, None],
-            "(ALL : ALL) ALL": [True, None],
-            "(sudo)": [False, f"Current user: '{self.username}' was in 'sudo' group, please try '--sudo-check' to check if user can run sudo shell"]
-        }
+        admin_flag = {"(root)": [True, None], "NOPASSWD: ALL": [True, None], "(ALL : ALL) ALL": [True, None], "(sudo)": [False, f"Current user: '{self.username}' was in 'sudo' group, please try '--sudo-check' to check if user can run sudo shell"]}
         for keyword in admin_flag:
             match = re.findall(re.escape(keyword), stdout)
             if match:

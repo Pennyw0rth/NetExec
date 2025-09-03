@@ -263,13 +263,7 @@ class NXCModule:
             f"RestrictedKrbHost/{self.__computerName}",
             f"RestrictedKrbHost/{self.__computerName}.{connection.domain}",
         ]
-        ucd = {
-            "dnsHostName": f"{self.__computerName}.{connection.domain}",
-            "userAccountControl": 0x1000,
-            "servicePrincipalName": spns,
-            "sAMAccountName": self.__computerName,
-            "unicodePwd": f"{self.__computerPassword}".encode("utf-16-le")
-        }
+        ucd = {"dnsHostName": f"{self.__computerName}.{connection.domain}", "userAccountControl": 0x1000, "servicePrincipalName": spns, "sAMAccountName": self.__computerName, "unicodePwd": f"{self.__computerPassword}".encode("utf-16-le")}
         tls = ldap3.Tls(validate=ssl.CERT_NONE, version=ssl.PROTOCOL_TLSv1_2, ciphers="ALL:@SECLEVEL=0")
         ldap_server = ldap3.Server(connection.host, use_ssl=True, port=636, get_info=ldap3.ALL, tls=tls)
         c = ldap3.Connection(ldap_server, f"{connection.username}@{connection.domain}", connection.password)
@@ -286,11 +280,7 @@ class NXCModule:
             else:
                 context.log.highlight(f'Unable to delete the "{self.__computerName}" Computer account. The error was: {c.last_error}')
         else:
-            result = c.add(
-                f"cn={self.__computerName},cn=Computers,dc={ldap_domain}",
-                ["top", "person", "organizationalPerson", "user", "computer"],
-                ucd
-            )
+            result = c.add(f"cn={self.__computerName},cn=Computers,dc={ldap_domain}", ["top", "person", "organizationalPerson", "user", "computer"], ucd)
             if result:
                 context.log.highlight(f'Successfully added the machine account: "{self.__computerName}" with Password: "{self.__computerPassword}"')
                 context.log.highlight("You can try to verify this with the nxc command:")

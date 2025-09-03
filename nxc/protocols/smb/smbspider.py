@@ -21,18 +21,7 @@ class SMBSpider:
         self.results = []
         self.silent = False
 
-    def spider(
-        self,
-        share,
-        folder=".",
-        pattern=None,
-        regex=None,
-        exclude_dirs=None,
-        depth=None,
-        content=False,
-        onlyfiles=True,
-        silent=False
-    ):
+    def spider(self, share, folder=".", pattern=None, regex=None, exclude_dirs=None, depth=None, content=False, onlyfiles=True, silent=False):
         if exclude_dirs is None:
             exclude_dirs = []
         if regex is None:

@@ -7,6 +7,7 @@ class NXCModule:
 
     Module by @_sandw1ch
     """
+
     name = "pso"
     description = "Module to get the Fine Grained Password Policy/PSOs"
     supported_protocols = ["ldap"]

@@ -56,8 +56,7 @@ from impacket.dcerpc.v5.rpcrt import TypeSerialization1
 from impacket.krb5 import constants
 from impacket.krb5.asn1 import AP_REQ, AS_REP, TGS_REQ, Authenticator, TGS_REP, seq_set, seq_set_iter, EncTicketPart, AD_IF_RELEVANT, Ticket as TicketAsn1
 from impacket.krb5.kerberosv5 import sendReceive
-from impacket.krb5.pac import PACTYPE, PAC_INFO_BUFFER, PAC_CREDENTIAL_INFO, \
-    PAC_CREDENTIAL_DATA, NTLM_SUPPLEMENTAL_CREDENTIAL
+from impacket.krb5.pac import PACTYPE, PAC_INFO_BUFFER, PAC_CREDENTIAL_INFO, PAC_CREDENTIAL_DATA, NTLM_SUPPLEMENTAL_CREDENTIAL
 from impacket.krb5.types import Principal, KerberosTime, Ticket
 
 # Imports for pfx_auth
@@ -94,6 +93,7 @@ class myPKINIT(PKINIT):
         if not pfxpass:
             from cryptography.hazmat.primitives.serialization import pkcs12
             from cryptography.hazmat.primitives import serialization
+
             privkey, cert, extra_certs = pkcs12.load_key_and_certificates(pfxdata, None)
             pem_key = privkey.private_bytes(
                 encoding=serialization.Encoding.PEM,
@@ -101,9 +101,7 @@ class myPKINIT(PKINIT):
                 encryption_algorithm=serialization.NoEncryption(),
             )
             pkinit.privkey = load_private_key(parse_private(pem_key))
-            pem_cert = cert.public_bytes(
-                encoding=serialization.Encoding.PEM
-            )
+            pem_cert = cert.public_bytes(encoding=serialization.Encoding.PEM)
             pkinit.certificate = parse_certificate(pem_cert)
         else:
             if isinstance(pfxpass, str):
@@ -227,8 +225,8 @@ class myPKINIT(PKINIT):
         si = {}
         si["version"] = "v1"
         si["sid"] = cms.IssuerAndSerialNumber({
-            "issuer":  self.certificate.issuer,
-            "serial_number":  self.certificate.serial_number,
+            "issuer": self.certificate.issuer,
+            "serial_number": self.certificate.serial_number,
         })
 
         si["digest_algorithm"] = algos.DigestAlgorithm(da)
@@ -265,7 +263,7 @@ class myPKINIT(PKINIT):
             while len(output) < keysize:
                 currentDigest = hashlib.sha1(bytes([currentNum]) + value).digest()
                 if len(output) + len(currentDigest) > keysize:
-                    output += currentDigest[:keysize - len(output)]
+                    output += currentDigest[: keysize - len(output)]
                     break
                 output += currentDigest
                 currentNum += 1
@@ -313,19 +311,17 @@ class myPKINIT(PKINIT):
 
 
 class GETPAC:
-
     def printPac(self, data, key=None):
         nthash = None
         encTicketPart = decoder.decode(data, asn1Spec=EncTicketPart())[0]
-        adIfRelevant = decoder.decode(encTicketPart["authorization-data"][0]["ad-data"], asn1Spec=AD_IF_RELEVANT())[
-            0]
+        adIfRelevant = decoder.decode(encTicketPart["authorization-data"][0]["ad-data"], asn1Spec=AD_IF_RELEVANT())[0]
         # So here we have the PAC
         pacType = PACTYPE(adIfRelevant[0]["ad-data"].asOctets())
         buff = pacType["Buffers"]
         found = False
         for _bufferN in range(pacType["cBuffers"]):
             infoBuffer = PAC_INFO_BUFFER(buff)
-            data = pacType["Buffers"][infoBuffer["Offset"] - 8:][:infoBuffer["cbBufferSize"]]
+            data = pacType["Buffers"][infoBuffer["Offset"] - 8 :][: infoBuffer["cbBufferSize"]]
             nxc_logger.debug(f"TYPE 0x{infoBuffer['ulType']}")
             if infoBuffer["ulType"] == 2:
                 found = True
@@ -334,7 +330,7 @@ class GETPAC:
                 out = newCipher.decrypt(key, 16, credinfo["SerializedData"])
                 type1 = TypeSerialization1(out)
                 # I'm skipping here 4 bytes with its the ReferentID for the pointer
-                newdata = out[len(type1) + 4:]
+                newdata = out[len(type1) + 4 :]
                 pcc = PAC_CREDENTIAL_DATA(newdata)
                 for cred in pcc["Credentials"]:
                     credstruct = NTLM_SUPPLEMENTAL_CREDENTIAL(b"".join(cred["Credentials"]))
@@ -343,7 +339,7 @@ class GETPAC:
                     nxc_logger.info(hexlify(credstruct["NtPassword"]).decode("utf-8"))
                     nthash = hexlify(credstruct["NtPassword"]).decode("utf-8")
 
-            buff = buff[len(infoBuffer):]
+            buff = buff[len(infoBuffer) :]
 
         if not found:
             nxc_logger.info("Did not find the PAC_CREDENTIAL_INFO in the PAC. Are you sure your TGT originated from a PKINIT operation?")
@@ -437,8 +433,7 @@ class GETPAC:
 
         reqBody["till"] = KerberosTime.to_asn1(now)
         reqBody["nonce"] = random.getrandbits(31)
-        seq_set_iter(reqBody, "etype",
-                     (int(cipher.enctype), int(constants.EncryptionTypes.rc4_hmac.value)))
+        seq_set_iter(reqBody, "etype", (int(cipher.enctype), int(constants.EncryptionTypes.rc4_hmac.value)))
 
         myTicket = ticket.to_asn1(TicketAsn1())
         seq_set_iter(reqBody, "additional-tickets", (myTicket,))
@@ -471,10 +466,7 @@ class GETPAC:
 def pfx_auth(self):
     """Handles the authentication using a PFX or PEM file"""
     # Static DH params because the ones generated by cryptography are considered unsafe by AD for some weird reason
-    dhparams = {
-        "p": int("00ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a637ed6b0bff5cb6f406b7edee386bfb5a899fa5ae9f24117c4b1fe649286651ece65381ffffffffffffffff", 16),
-        "g": 2
-    }
+    dhparams = {"p": int("00ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a637ed6b0bff5cb6f406b7edee386bfb5a899fa5ae9f24117c4b1fe649286651ece65381ffffffffffffffff", 16), "g": 2}
     self.logger.info("Loading certificate and key from file")
 
     # Load the certificate and key from file

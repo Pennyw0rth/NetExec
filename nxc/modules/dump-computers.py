@@ -33,10 +33,7 @@ class NXCModule:
                 self.fqdn_only = True
 
     def on_login(self, context, connection):
-        resp = connection.search(
-            searchFilter="(objectCategory=computer)",
-            attributes=["dNSHostName", "operatingSystem"]
-        )
+        resp = connection.search(searchFilter="(objectCategory=computer)", attributes=["dNSHostName", "operatingSystem"])
         resp_parsed = parse_result_attributes(resp)
 
         answers = []

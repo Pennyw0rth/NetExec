@@ -26,8 +26,8 @@ class NXCModule:
     category = CATEGORY.ENUMERATION
 
     def __init__(self):
-        self.sccm_site_servers = []     # List of dns host names of the SCCM site servers
-        self.sccm_sites = {}            # List of SCCM sites with their management points (Sorted by site code)
+        self.sccm_site_servers = []  # List of dns host names of the SCCM site servers
+        self.sccm_sites = {}  # List of SCCM sites with their management points (Sorted by site code)
         self.base_dn = ""
         self.recursive_resolve = False
 
@@ -208,11 +208,7 @@ class NXCModule:
             response_parsed = parse_result_attributes(response)
 
             for site in response_parsed:
-                self.sccm_sites[site["mSSMSSiteCode"]] = {
-                    "cn": site["cn"],
-                    "AssignmentSiteCode": site["mSSMSAssignmentSiteCode"],
-                    "ManagementPoints": []
-                }
+                self.sccm_sites[site["mSSMSSiteCode"]] = {"cn": site["cn"], "AssignmentSiteCode": site["mSSMSAssignmentSiteCode"], "ManagementPoints": []}
 
         except LDAPSearchError as e:
             self.context.log.error(f"Error searching for sites: {e}")
@@ -222,7 +218,7 @@ class NXCModule:
         raw_sec_descriptor = str(item[1][0][1][0]).encode("latin-1")
         principal_security_descriptor = ldaptypes.SR_SECURITY_DESCRIPTOR(data=raw_sec_descriptor)
         self.parse_dacl(principal_security_descriptor["Dacl"])
-        self.sccm_site_servers = set(self.sccm_site_servers)    # Make list unique
+        self.sccm_site_servers = set(self.sccm_site_servers)  # Make list unique
 
     def parse_dacl(self, dacl):
         """Parses a DACL and extracts the dns host names with full control over the SCCM object."""
@@ -236,7 +232,7 @@ class NXCModule:
             ace = ace["Ace"]
             sid = ace["Sid"].formatCanonical()
             mask = ace["Mask"]
-            fullcontrol = 0xf01ff
+            fullcontrol = 0xF01FF
             if mask.hasPriv(fullcontrol):
                 self.resolve_SID(sid)
 
@@ -255,7 +251,7 @@ class NXCModule:
             if not parsed_result:
                 return None
             else:
-                parsed_result = parsed_result[0]    # We only have one result as we always query a single SID
+                parsed_result = parsed_result[0]  # We only have one result as we always query a single SID
 
             if int(parsed_result["sAMAccountType"]) == SAM_MACHINE_ACCOUNT:
                 self.context.log.debug(f"Found object with full control over SCCM object. SID: {sid}, dns_hostname: {parsed_result['dNSHostName']}")
@@ -266,7 +262,7 @@ class NXCModule:
                         member_sid = self.dn_to_sid(member)
                         if member_sid:
                             self.resolve_SID(member_sid)
-                else:   # Group has only one member
+                else:  # Group has only one member
                     member_sid = self.dn_to_sid(parsed_result["member"])
                     if member_sid:
                         self.resolve_SID(member_sid)

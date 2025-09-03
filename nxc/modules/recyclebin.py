@@ -29,7 +29,6 @@ class NXCModule:
             for sid_directory in connection.conn.listPath("C$", "$Recycle.Bin\\*"):
                 try:
                     if sid_directory.get_longname() and sid_directory.get_longname() not in false_positive_users:
-
                         # Extracts the username from the SID
                         reg_handle = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)["phKey"]
                         key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\{sid_directory.get_longname()}")["phkResult"]
@@ -43,12 +42,7 @@ class NXCModule:
 
                         # Lists for any file or directory in the recycle bin
                         spider_folder = f"$Recycle.Bin\\{sid_directory.get_longname()}\\"
-                        paths = connection.spider(
-                            "C$",
-                            folder=spider_folder,
-                            regex=[r"(.*)"],
-                            silent=True
-                        )
+                        paths = connection.spider("C$", folder=spider_folder, regex=[r"(.*)"], silent=True)
 
                         false_positive = (".", "..", "desktop.ini")
                         filtered_file_paths = [path for path in paths if not path.endswith(false_positive)]

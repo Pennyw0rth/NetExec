@@ -131,18 +131,7 @@ class NXCModule:
                     hostname = rrp.hBaseRegQueryValue(self.rrp._RemoteOperations__rrp, key_handle, "HostName")[1].split("\x00")[:-1][0]
                     port = rrp.hBaseRegQueryValue(self.rrp._RemoteOperations__rrp, key_handle, "PortNumber")[1]
                     protocol = rrp.hBaseRegQueryValue(self.rrp._RemoteOperations__rrp, key_handle, "Protocol")[1].split("\x00")[:-1][0]
-                    sessions.append({
-                        "user": self.user_dict[user],
-                        "session_name": unquote(session_name),
-                        "hostname": hostname,
-                        "port": port,
-                        "protocol": protocol,
-                        "private_key_path": private_key_path,
-                        "proxy_host": proxy_host,
-                        "proxy_port": proxy_port,
-                        "proxy_username": proxy_username,
-                        "proxy_password": proxy_password
-                    })
+                    sessions.append({"user": self.user_dict[user], "session_name": unquote(session_name), "hostname": hostname, "port": port, "protocol": protocol, "private_key_path": private_key_path, "proxy_host": proxy_host, "proxy_port": proxy_port, "proxy_username": proxy_username, "proxy_password": proxy_password})
                     rrp.hBaseRegCloseKey(self.rrp._RemoteOperations__rrp, key_handle)
 
             except DCERPCException as e:
@@ -173,12 +162,12 @@ class NXCModule:
                             self.context.log.exception(f"Error downloading private key: {e}")
                         continue
                     file.write(buf.getvalue())
-                self.context.log.success(f"Private key found for user \"{session['user']}\", saved to {highlight(download_path)}")
+                self.context.log.success(f'Private key found for user "{session["user"]}", saved to {highlight(download_path)}')
                 self.context.log.highlight(f"Sessionname: {session['session_name']}")
                 self.context.log.highlight(f"Host: {session['hostname']}:{session['port']}")
                 self.context.log.highlight(f"Protocol: {session['protocol']}")
             if session["proxy_password"]:
-                self.context.log.success(f"Found proxy credentials for user \"{session['user']}\"")
+                self.context.log.success(f'Found proxy credentials for user "{session["user"]}"')
                 self.context.log.highlight(f"Sessionname: {session['session_name']}")
                 self.context.log.highlight(f"Host: {session['hostname']}:{session['port']}")
                 self.context.log.highlight(f"Protocol: {session['protocol']}")

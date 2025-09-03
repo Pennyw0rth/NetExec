@@ -16,8 +16,7 @@ class NXCModule:
     category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
-        """
-        """
+        """ """
 
     def on_login(self, context, connection):
         searchFilter = "(userPassword=*)"

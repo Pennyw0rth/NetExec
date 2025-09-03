@@ -77,16 +77,7 @@ class BitLockerWMI:
     def check_bitlocker_status(self):
         try:
             # Create a DCOM connection
-            dcom_conn = DCOMConnection(
-                self.connection.host,
-                self.connection.username,
-                self.connection.password,
-                self.connection.domain,
-                self.connection.lmhash,
-                self.connection.nthash,
-                oxidResolver=True,
-                doKerberos=self.connection.kerberos,
-                kdcHost=self.connection.kdcHost)
+            dcom_conn = DCOMConnection(self.connection.host, self.connection.username, self.connection.password, self.connection.domain, self.connection.lmhash, self.connection.nthash, oxidResolver=True, doKerberos=self.connection.kerberos, kdcHost=self.connection.kdcHost)
 
             try:
                 # CoCreateInstanceEx for WMI login
@@ -105,20 +96,11 @@ class BitLockerWMI:
                 # Query to get BitLocker status
                 classQuery = "SELECT DriveLetter, ProtectionStatus, EncryptionMethod FROM Win32_EncryptableVolume"
                 iEnumWbemClassObject = iWbemServices.ExecQuery(classQuery)
-                encryptionTypeMapping = {
-                    0: "None",
-                    1: "AES_128_WITH_DIFFUSER",
-                    2: "AES_256_WITH_DIFFUSER",
-                    3: "AES_128",
-                    4: "AES_256",
-                    5: "HARDWARE_ENCRYPTION",
-                    6: "XTS_AES_128",
-                    7: "XTS_AES_256_WITH_DIFFUSER"
-                }
+                encryptionTypeMapping = {0: "None", 1: "AES_128_WITH_DIFFUSER", 2: "AES_256_WITH_DIFFUSER", 3: "AES_128", 4: "AES_256", 5: "HARDWARE_ENCRYPTION", 6: "XTS_AES_128", 7: "XTS_AES_256_WITH_DIFFUSER"}
 
                 try:
                     while True:
-                        iWbemClassObject = iEnumWbemClassObject.Next(0xffffffff, 1)
+                        iWbemClassObject = iEnumWbemClassObject.Next(0xFFFFFFFF, 1)
                         encryptionMethod = int(iWbemClassObject[0].EncryptionMethod)
                         if iWbemClassObject[0].ProtectionStatus == 1:
                             self.context.log.highlight(f"BitLocker is enabled on drive {iWbemClassObject[0].DriveLetter} (Encryption Method: {encryptionTypeMapping.get(encryptionMethod, 'Unknown')})")

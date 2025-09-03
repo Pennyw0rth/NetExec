@@ -1,4 +1,3 @@
-
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 from nxc.helpers.misc import CATEGORY

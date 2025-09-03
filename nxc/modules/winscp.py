@@ -87,7 +87,7 @@ class NXCModule:
         else:
             pw_length = pw_flag
         to_be_deleted, pass_bytes = self.dec_next_char(pass_bytes)
-        pass_bytes = pass_bytes[to_be_deleted * 2:]
+        pass_bytes = pass_bytes[to_be_deleted * 2 :]
 
         # decrypt the password
         clearpass = ""
@@ -95,7 +95,7 @@ class NXCModule:
             val, pass_bytes = self.dec_next_char(pass_bytes)
             clearpass += chr(val)
         if pw_flag == self.PW_FLAG:
-            clearpass = clearpass[len(key):]
+            clearpass = clearpass[len(key) :]
         return clearpass
 
     def dec_next_char(self, pass_bytes) -> tuple[int, bytes]:

@@ -194,8 +194,7 @@ class database(BaseDB):
         # TODO: find a way to abstract this away to a single Upsert call
         q_users = Insert(self.CredentialsTable)  # .returning(self.CredentialsTable.c.id)
         update_columns_users = {col.name: col for col in q_users.excluded if col.name not in "id"}
-        q_users = q_users.on_conflict_do_update(index_elements=self.CredentialsTable.primary_key,
-                                                set_=update_columns_users)
+        q_users = q_users.on_conflict_do_update(index_elements=self.CredentialsTable.primary_key, set_=update_columns_users)
         nxc_logger.debug(f"Adding credentials: {credentials}")
 
         self.db_execute(q_users, credentials)  # .scalar()

@@ -248,12 +248,10 @@ class NXCModule:
                                     )
                                     if "." not in domain and domain.upper() in self.connection.domain.upper():
                                         domain = self.connection.domain
-                                        bh_creds.append(
-                                            {
-                                                "username": username.upper(),
-                                                "domain": domain.upper(),
-                                            }
-                                        )
+                                        bh_creds.append({
+                                            "username": username.upper(),
+                                            "domain": domain.upper(),
+                                        })
                     if len(bh_creds) > 0:
                         add_user_bh(bh_creds, None, self.context.log, self.connection.config)
                 except Exception as e:

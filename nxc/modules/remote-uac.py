@@ -5,6 +5,7 @@ from nxc.helpers.misc import CATEGORY
 
 class NXCModule:
     """Module by @Defte_"""
+
     name = "remote-uac"
     description = "Enable or disable remote UAC"
     supported_protocols = ["smb"]

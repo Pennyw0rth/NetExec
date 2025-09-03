@@ -20,6 +20,7 @@ class NXCModule:
     Authors:
       Podalirius: @podalirius_
     """
+
     name = "subnets"
     description = "Retrieves the different Sites and Subnets of an Active Directory"
     supported_protocols = ["ldap"]

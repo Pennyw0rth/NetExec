@@ -165,9 +165,7 @@ class NXCModule:
                 continue
             self.context.log.highlight(f"[{vnc_name}] Password: {password.decode('latin-1')}")
 
-        vnc_users = (
-            ("RealVNC Viewer 7.x", "HKCU\\Software\\RealVNC\\vncviewer", "ProxyUserName", "ProxyPassword", "ProxyServer"),
-        )
+        vnc_users = (("RealVNC Viewer 7.x", "HKCU\\Software\\RealVNC\\vncviewer", "ProxyUserName", "ProxyPassword", "ProxyServer"),)
         for vnc_name, path, user, password, server in vnc_users:
             cred = {}
             try:
@@ -190,7 +188,7 @@ class NXCModule:
             self.context.log.highlight(f"[{vnc_name}] {cred['user']}:{cred['password']}@{cred['server']}")
 
     def split_len(self, seq, length):
-        return [seq[i:i + length] for i in range(0, len(seq), length)]
+        return [seq[i : i + length] for i in range(0, len(seq), length)]
 
     def recover_vncpassword(self, cipher: bytes):
         encpasswd = cipher.hex()

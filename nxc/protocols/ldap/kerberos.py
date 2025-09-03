@@ -2,10 +2,12 @@ import random
 from binascii import hexlify, unhexlify
 from datetime import datetime, timedelta
 import traceback
+
 try:
     # This is only available in python >= 3.11
     # if we are in a lower version, we will use the deprecated utcnow() method
     from datetime import UTC
+
     utc_failed = False
 except ImportError:
     utc_failed = True
@@ -210,21 +212,10 @@ class KerberosAttacks:
         return tgt_data
 
     def get_tgs_no_preauth(self, no_preauth_user, spn):
-        no_pre_princ = Principal(no_preauth_user,
-                                type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+        no_pre_princ = Principal(no_preauth_user, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
 
         try:
-            ticket, _cipher, _old, _sess = getKerberosTGT(
-                clientName=no_pre_princ,
-                password="",
-                domain=self.domain,
-                lmhash=b"",
-                nthash=b"",
-                aesKey="",
-                kdcHost=self.kdcHost,
-                serverName=spn,
-                kerberoast_no_preauth=True
-            )
+            ticket, _cipher, _old, _sess = getKerberosTGT(clientName=no_pre_princ, password="", domain=self.domain, lmhash=b"", nthash=b"", aesKey="", kdcHost=self.kdcHost, serverName=spn, kerberoast_no_preauth=True)
         except Exception as e:
             nxc_logger.debug(f"Unable to retrieve the ticket for {spn} via {no_preauth_user}: {e}")
             return None

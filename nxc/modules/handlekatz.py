@@ -134,7 +134,7 @@ class NXCModule:
 
             context.log.display(f"Deobfuscating, this might take a while (size: {bytes_in_len} bytes)")
 
-            chunks = [bytes_in[i: i + 1000000] for i in range(0, bytes_in_len, 1000000)]
+            chunks = [bytes_in[i : i + 1000000] for i in range(0, bytes_in_len, 1000000)]
             for chunk in chunks:
                 for i in range(len(chunk)):
                     chunk[i] ^= 0x41
@@ -173,12 +173,10 @@ class NXCModule:
                                     context.log.highlight(domain + "\\" + username + ":" + print_pass)
                                     if "." not in domain and domain.upper() in connection.domain.upper():
                                         domain = connection.domain
-                                        credz_bh.append(
-                                            {
-                                                "username": username.upper(),
-                                                "domain": domain.upper(),
-                                            }
-                                        )
+                                        credz_bh.append({
+                                            "username": username.upper(),
+                                            "domain": domain.upper(),
+                                        })
                     if len(credz_bh) > 0:
                         add_user_bh(credz_bh, None, context.log, connection.config)
                 except Exception as e:

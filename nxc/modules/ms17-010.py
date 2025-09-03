@@ -110,8 +110,8 @@ class NXCModule:
             int: The calculated xor key.
         """
         nxc_logger.debug(f"Calculating Doublepulsar XOR key for: {s}")
-        x = (2 * s ^ (((s & 0xff00 | (s << 16)) << 8) | (((s >> 16) | s & 0xff0000) >> 8)))
-        return x & 0xffffffff  # truncate to 32 bits
+        x = 2 * s ^ (((s & 0xFF00 | (s << 16)) << 8) | (((s >> 16) | s & 0xFF0000) >> 8))
+        return x & 0xFFFFFFFF  # truncate to 32 bits
 
     def negotiate_proto_request(self):
         """Generate a negotiate_proto_request packet."""
@@ -125,7 +125,7 @@ class NXCModule:
 
         # Define the SMB header
         smb_header = [
-            b"\xFF\x53\x4D\x42",  # Server Component
+            b"\xff\x53\x4d\x42",  # Server Component
             b"\x72",  # SMB Command
             b"\x00\x00\x00\x00",  # NT Status
             b"\x18",  # Flags
@@ -134,9 +134,9 @@ class NXCModule:
             b"\x00\x00\x00\x00\x00\x00\x00\x00",  # Signature
             b"\x00\x00",  # Reserved
             b"\x00\x00",  # Tree ID
-            b"\x2F\x4B",  # Process ID
+            b"\x2f\x4b",  # Process ID
             b"\x00\x00",  # User ID
-            b"\xC5\x5E",  # Multiplex ID
+            b"\xc5\x5e",  # Multiplex ID
         ]
 
         # Define the negotiate_proto_request
@@ -144,13 +144,13 @@ class NXCModule:
             b"\x00",  # Word Count
             b"\x31\x00",  # Byte Count
             b"\x02",  # Requested Dialects Count
-            b"\x4C\x41\x4E\x4D\x41\x4E\x31\x2E\x30\x00",  # Requested Dialects: LANMAN1.0
+            b"\x4c\x41\x4e\x4d\x41\x4e\x31\x2e\x30\x00",  # Requested Dialects: LANMAN1.0
             b"\x02",  # Requested Dialects Count
-            b"\x4C\x4D\x31\x2E\x32\x58\x30\x30\x32\x00",  # Requested Dialects: LM1.2X002
+            b"\x4c\x4d\x31\x2e\x32\x58\x30\x30\x32\x00",  # Requested Dialects: LM1.2X002
             b"\x02",  # Requested Dialects Count
-            b"\x4E\x54\x20\x4C\x41\x4E\x4D\x41\x4E\x20\x31\x2E\x30\x00",  # Requested Dialects: NT LANMAN 1.0
+            b"\x4e\x54\x20\x4c\x41\x4e\x4d\x41\x4e\x20\x31\x2e\x30\x00",  # Requested Dialects: NT LANMAN 1.0
             b"\x02",  # Requested Dialects Count
-            b"\x4E\x54\x20\x4C\x4D\x20\x30\x2E\x31\x32\x00",  # Requested Dialects: NT LM 0.12
+            b"\x4e\x54\x20\x4c\x4d\x20\x30\x2e\x31\x32\x00",  # Requested Dialects: NT LM 0.12
         ]
 
         # Return the generated SMB protocol payload
@@ -158,8 +158,7 @@ class NXCModule:
 
     def session_setup_andx_request(self):
         """Generate session setup andx request."""
-        self.logger.debug("generate session setup andx request"
-        )
+        self.logger.debug("generate session setup andx request")
         # Define the NetBIOS bytes
         netbios = [
             b"\x00",  # length
@@ -168,7 +167,7 @@ class NXCModule:
 
         # Define the SMB header bytes
         smb_header = [
-            b"\xFF\x53\x4D\x42",  # server component: .SMB
+            b"\xff\x53\x4d\x42",  # server component: .SMB
             b"\x73",  # command: Session Setup AndX
             b"\x00\x00\x00\x00",  # NT status
             b"\x18",  # flags
@@ -177,18 +176,18 @@ class NXCModule:
             b"\x00\x00\x00\x00\x00\x00\x00\x00",  # signature
             b"\x00\x00",  # reserved
             b"\x00\x00",  # tree id
-            b"\x2F\x4B",  # pid
+            b"\x2f\x4b",  # pid
             b"\x00\x00",  # uid
-            b"\xC5\x5E",  # multiplex id
+            b"\xc5\x5e",  # multiplex id
         ]
 
         # Define the session setup andx request bytes
         session_setup_andx_request = [
-            b"\x0D",  # word count
-            b"\xFF",  # andx command: no further commands
+            b"\x0d",  # word count
+            b"\xff",  # andx command: no further commands
             b"\x00",  # reserved
             b"\x00\x00",  # andx offset
-            b"\xDF\xFF",  # max buffer
+            b"\xdf\xff",  # max buffer
             b"\x02\x00",  # max mpx count
             b"\x01\x00",  # VC number
             b"\x00\x00\x00\x00",  # session key
@@ -222,12 +221,12 @@ class NXCModule:
         # Initialize the netbios header
         netbios = [
             b"\x00",  # 'Message_Type'
-            b"\x00\x00\x47"  # 'Length'
+            b"\x00\x00\x47",  # 'Length'
         ]
 
         # Initialize the SMB header
         smb_header = [
-            b"\xFF\x53\x4D\x42",  # server_compnent: .SMB
+            b"\xff\x53\x4d\x42",  # server_compnent: .SMB
             b"\x75",  # smb_command: Tree Connect AndX
             b"\x00\x00\x00\x00",  # 'nt_status'
             b"\x18",  # 'flags'
@@ -236,9 +235,9 @@ class NXCModule:
             b"\x00\x00\x00\x00\x00\x00\x00\x00",  # 'signature'
             b"\x00\x00",  # 'reserved'
             b"\x00\x00",  # 'tree_id'
-            b"\x2F\x4B",  # 'process_id'
+            b"\x2f\x4b",  # 'process_id'
             userid,  # 'user_id'
-            b"\xC5\x5E",  # 'multiplex_id'
+            b"\xc5\x5e",  # 'multiplex_id'
         ]
 
         # Create the IPC string
@@ -248,12 +247,12 @@ class NXCModule:
         # Initialize the tree connect andx request
         tree_connect_andx_request = [
             b"\x04",  # Word Count
-            b"\xFF",  # AndXCommand: No further commands
+            b"\xff",  # AndXCommand: No further commands
             b"\x00",  # Reserved
             b"\x00\x00",  # AndXOffset
             b"\x00\x00",  # Flags
             b"\x01\x00",  # Password Length
-            b"\x1A\x00",  # Byte Count
+            b"\x1a\x00",  # Byte Count
             b"\x00",  # Password
             ipc.encode(),  # \\xxx.xxx.xxx.xxx\IPC$
             b"\x3f\x3f\x3f\x3f\x3f\x00",  # Service
@@ -293,12 +292,12 @@ class NXCModule:
         # Set the necessary values for the netbios header
         netbios = [
             b"\x00",  # message type
-            b"\x00\x00\x4a"  # length
+            b"\x00\x00\x4a",  # length
         ]
 
         # Set the values for the SMB header
         smb_header = [
-            b"\xFF\x53\x4D\x42",  # Server Component: .SMB
+            b"\xff\x53\x4d\x42",  # Server Component: .SMB
             b"\x25",  # SMB Command: Trans2
             b"\x00\x00\x00\x00",  # NT Status
             b"\x18",  # flags
@@ -355,14 +354,11 @@ class NXCModule:
         self.logger.debug("generate trans2 request")
 
         # Define the netbios section of the SMB request
-        netbios = [
-            b"\x00",
-            b"\x00\x00\x4f"
-        ]
+        netbios = [b"\x00", b"\x00\x00\x4f"]
 
         # Define the SMB header section of the SMB request
         smb_header = [
-            b"\xFF\x53\x4D\x42",  # 'server_component': .SMB
+            b"\xff\x53\x4d\x42",  # 'server_component': .SMB
             b"\x32",  # 'smb_command': Trans2
             b"\x00\x00\x00\x00",
             b"\x18",
@@ -432,7 +428,7 @@ class NXCModule:
         tcp_response = client.recv(buffersize)
 
         tcp_response[:4]
-        smb_header = tcp_response[4:36]   # SMB Header: 32 bytes
+        smb_header = tcp_response[4:36]  # SMB Header: 32 bytes
         smb = SmbHeader(smb_header)
 
         user_id = struct.pack("<H", smb.user_id)
@@ -447,7 +443,7 @@ class NXCModule:
         tcp_response = client.recv(buffersize)
 
         tcp_response[:4]
-        smb_header = tcp_response[4:36]   # SMB Header: 32 bytes
+        smb_header = tcp_response[4:36]  # SMB Header: 32 bytes
         smb = SmbHeader(smb_header)
 
         tree_id = struct.pack("<H", smb.tree_id)

@@ -9,6 +9,7 @@ from nxc.helpers.powershell import get_ps_script
 
 class NXCModule:
     """Module by @NeffIsBack"""
+
     name = "msol"
     description = "Dump MSOL cleartext password and Entra ID credentials from the localDB on the Entra ID Connect Server"
     supported_protocols = ["smb"]

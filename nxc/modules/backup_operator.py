@@ -65,6 +65,7 @@ class NXCModule:
 
         # read local file
         try:
+
             def parse_sam(secret):
                 context.log.highlight(secret)
                 if not self.domain_admin:
@@ -112,7 +113,7 @@ class NXCModule:
 
         if not self.deleted_files:
             context.log.display("Use the domain admin account to clean the file on the remote host")
-            context.log.display("netexec smb dc_ip -u user -p pass -x \"del C:\\Windows\\sysvol\\sysvol\\SECURITY && del C:\\Windows\\sysvol\\sysvol\\SAM && del C:\\Windows\\sysvol\\sysvol\\SYSTEM\"")  # noqa: Q003
+            context.log.display('netexec smb dc_ip -u user -p pass -x "del C:\\Windows\\sysvol\\sysvol\\SECURITY && del C:\\Windows\\sysvol\\sysvol\\SAM && del C:\\Windows\\sysvol\\sysvol\\SYSTEM"')  # noqa: Q003
         else:
             context.log.display("Successfully deleted dump files !")
 

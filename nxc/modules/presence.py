@@ -67,7 +67,7 @@ class NXCModule:
         admin_users = []
 
         try:
-            string_binding = fr"ncacn_np:{connection.kdcHost}[\pipe\samr]"
+            string_binding = rf"ncacn_np:{connection.kdcHost}[\pipe\samr]"
             dce = self.get_dce_rpc(connection.kdcHost, string_binding, samr.MSRPC_UUID_SAMR, connection)
         except Exception as e:
             context.log.fail(f"Failed to connect to SAMR: {e}")
@@ -146,8 +146,7 @@ class NXCModule:
         # for admin users, check for folder presence
         for user in admin_users:
             # Look for administrator.domain to check if SID 500 Administrator is present (second check)
-            if user["username"].lower() in dirs_found or \
-                    (user["username"].lower() == "administrator" and f"{user['username'].lower()}.{user['domain']}" in dirs_found):
+            if user["username"].lower() in dirs_found or (user["username"].lower() == "administrator" and f"{user['username'].lower()}.{user['domain']}" in dirs_found):
                 user["in_directory"] = True
                 context.log.info(f"Found user {user['username']} in directories")
 
@@ -186,7 +185,7 @@ class NXCModule:
             for task in tasks:
                 xml = tsch.hSchRpcRetrieveTask(dce, task["Data"])["pXml"]
                 # Extract SID and LogonType from the XML, if LogonType is "Password" we should be able to extract the password
-                sid = re.search(fr"<UserId>({self.domain_sid}-\d{{3,}})</UserId>", xml)
+                sid = re.search(rf"<UserId>({self.domain_sid}-\d{{3,}})</UserId>", xml)
                 logon_type = re.search(r"<LogonType>(\w+)</LogonType>", xml)
 
                 # Check if SID and LogonType are found, then check if SID matches any admin user
@@ -200,7 +199,7 @@ class NXCModule:
                         non_admin_sids.add(sid.group(1))
 
             if non_admin_sids:
-                string_binding = fr"ncacn_np:{connection.kdcHost}[\pipe\samr]"
+                string_binding = rf"ncacn_np:{connection.kdcHost}[\pipe\samr]"
                 dce = self.get_dce_rpc(connection.kdcHost, string_binding, samr.MSRPC_UUID_SAMR, connection)
 
                 # Get Domain Handle

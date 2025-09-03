@@ -214,15 +214,13 @@ class NXCModule:
                 cred["lmhash"],
                 cred["nthash"],
             ] not in credentials_unique:
-                credentials_unique.append(
-                    [
-                        cred["domain"],
-                        cred["username"],
-                        cred["password"],
-                        cred["lmhash"],
-                        cred["nthash"],
-                    ]
-                )
+                credentials_unique.append([
+                    cred["domain"],
+                    cred["username"],
+                    cred["password"],
+                    cred["lmhash"],
+                    cred["nthash"],
+                ])
                 credentials_output.append(cred)
                 self.save_credentials(context, connection, cred["domain"], cred["username"], cred["password"], cred["lmhash"], cred["nthash"])
         global credentials_data

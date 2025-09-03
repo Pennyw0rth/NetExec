@@ -8,6 +8,7 @@ import platform
 import os
 from nxc.paths import TMP_PATH
 import sys
+
 if sys.stdout.encoding == "cp1252":
     sys.stdout.reconfigure(encoding="utf-8")
 
@@ -17,29 +18,10 @@ run_dir = os.getcwd()
 
 def get_cli_args():
     parser = argparse.ArgumentParser(description="Script for running end to end tests for nxc")
-    parser.add_argument(
-        "--executable",
-        default="netexec"
-    )
-    parser.add_argument(
-        "-t",
-        "--target",
-        required=True
-    )
-    parser.add_argument(
-        "-u",
-        "--user",
-        "--username",
-        dest="username",
-        required=True
-    )
-    parser.add_argument(
-        "-p",
-        "--pass",
-        "--password",
-        dest="password",
-        required=True
-    )
+    parser.add_argument("--executable", default="netexec")
+    parser.add_argument("-t", "--target", required=True)
+    parser.add_argument("-u", "--user", "--username", dest="username", required=True)
+    parser.add_argument("-p", "--pass", "--password", dest="password", required=True)
     parser.add_argument(
         "-k",
         "--kerberos",
@@ -105,12 +87,7 @@ def get_cli_args():
         default=normpath(join(script_dir, "data", "test_amsi_bypass.txt")),
         help="Path to the file containing AMSI bypasses",
     )
-    parser.add_argument(
-        "--test-normal-file",
-        required=False,
-        default=normpath(join(script_dir, "data", "test_file.txt")),
-        help="Path to file to upload/download"
-    )
+    parser.add_argument("--test-normal-file", required=False, default=normpath(join(script_dir, "data", "test_file.txt")), help="Path to file to upload/download")
     parser.add_argument(
         "--dns-server",
         action="store",
@@ -173,18 +150,7 @@ def replace_command(args, line):
     kerberos = "-k " if args.kerberos else ""
     dns_server = f"--dns-server {args.dns_server}" if args.dns_server else ""
 
-    line = line\
-        .replace("netexec", args.executable)\
-        .replace("TARGET_HOST", args.target)\
-        .replace("LOGIN_USERNAME", f'"{args.username}"')\
-        .replace("LOGIN_PASSWORD", f'"{args.password}"')\
-        .replace("KERBEROS ", kerberos)\
-        .replace("TEST_USER_FILE", args.test_user_file)\
-        .replace("TEST_PASSWORD_FILE", args.test_password_file)\
-        .replace("AMSI_BYPASS_FILE", args.amsi_bypass_file)\
-        .replace("TEST_NORMAL_FILE", args.test_normal_file)\
-        .replace("{DNS}", dns_server)\
-        .replace("/tmp", TMP_PATH)
+    line = line.replace("netexec", args.executable).replace("TARGET_HOST", args.target).replace("LOGIN_USERNAME", f'"{args.username}"').replace("LOGIN_PASSWORD", f'"{args.password}"').replace("KERBEROS ", kerberos).replace("TEST_USER_FILE", args.test_user_file).replace("TEST_PASSWORD_FILE", args.test_password_file).replace("AMSI_BYPASS_FILE", args.amsi_bypass_file).replace("TEST_NORMAL_FILE", args.test_normal_file).replace("{DNS}", dns_server).replace("/tmp", TMP_PATH)
     if args.poetry:
         line = f"poetry run {line}"
     return line

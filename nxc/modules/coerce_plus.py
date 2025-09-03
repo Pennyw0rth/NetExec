@@ -48,18 +48,7 @@ class NXCModule:
             try:
                 dfscocerceclass = DFSCoerceTrigger(context)
                 target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
-                dfscocerceconnect = dfscocerceclass.connect(
-                    username=connection.username,
-                    password=connection.password,
-                    domain=connection.domain,
-                    lmhash=connection.lmhash,
-                    nthash=connection.nthash,
-                    target=target,
-                    doKerberos=connection.kerberos,
-                    dcHost=connection.kdcHost,
-                    aesKey=connection.aesKey,
-                    pipe="netdfs"
-                )
+                dfscocerceconnect = dfscocerceclass.connect(username=connection.username, password=connection.password, domain=connection.domain, lmhash=connection.lmhash, nthash=connection.nthash, target=target, doKerberos=connection.kerberos, dcHost=connection.kdcHost, aesKey=connection.aesKey, pipe="netdfs")
 
                 if dfscocerceconnect is not None:
                     context.log.debug("Target is vulnerable to DFSCoerce")
@@ -79,18 +68,7 @@ class NXCModule:
             try:
                 shadowcocerceclass = ShadowCoerceTrigger(context)
                 target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
-                shadowcocerceconnect = shadowcocerceclass.connect(
-                    username=connection.username,
-                    password=connection.password,
-                    domain=connection.domain,
-                    lmhash=connection.lmhash,
-                    nthash=connection.nthash,
-                    target=target,
-                    doKerberos=connection.kerberos,
-                    dcHost=connection.kdcHost,
-                    aesKey=connection.aesKey,
-                    pipe="Fssagentrpc"
-                )
+                shadowcocerceconnect = shadowcocerceclass.connect(username=connection.username, password=connection.password, domain=connection.domain, lmhash=connection.lmhash, nthash=connection.nthash, target=target, doKerberos=connection.kerberos, dcHost=connection.kdcHost, aesKey=connection.aesKey, pipe="Fssagentrpc")
 
                 if shadowcocerceconnect is not None:
                     context.log.debug("Target is vulnerable to ShadowCoerce")
@@ -114,18 +92,7 @@ class NXCModule:
                 try:
                     petitpotamclass = PetitPotamtTrigger(context)
                     target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
-                    petitpotamconnect = petitpotamclass.connect(
-                        username=connection.username,
-                        password=connection.password,
-                        domain=connection.domain,
-                        lmhash=connection.lmhash,
-                        nthash=connection.nthash,
-                        target=target,
-                        doKerberos=connection.kerberos,
-                        dcHost=connection.kdcHost,
-                        aesKey=connection.aesKey,
-                        pipe=pipe
-                    )
+                    petitpotamconnect = petitpotamclass.connect(username=connection.username, password=connection.password, domain=connection.domain, lmhash=connection.lmhash, nthash=connection.nthash, target=target, doKerberos=connection.kerberos, dcHost=connection.kdcHost, aesKey=connection.aesKey, pipe=pipe)
 
                     if petitpotamconnect is not None:
                         if reducelog:
@@ -151,18 +118,7 @@ class NXCModule:
                 try:
                     printerbugclass = PrinterBugTrigger(context)
                     target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
-                    printerbugconnect = printerbugclass.connect(
-                        username=connection.username,
-                        password=connection.password,
-                        domain=connection.domain,
-                        lmhash=connection.lmhash,
-                        nthash=connection.nthash,
-                        target=target,
-                        doKerberos=connection.kerberos,
-                        dcHost=connection.kdcHost,
-                        aesKey=connection.aesKey,
-                        pipe=pipe
-                    )
+                    printerbugconnect = printerbugclass.connect(username=connection.username, password=connection.password, domain=connection.domain, lmhash=connection.lmhash, nthash=connection.nthash, target=target, doKerberos=connection.kerberos, dcHost=connection.kdcHost, aesKey=connection.aesKey, pipe=pipe)
 
                     if printerbugconnect is not None:
                         context.log.debug("Target is vulnerable to PrinterBug")
@@ -184,18 +140,7 @@ class NXCModule:
             try:
                 msevenclass = MSEvenTrigger(context)
                 target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
-                msevenconnect = msevenclass.connect(
-                    username=connection.username,
-                    password=connection.password,
-                    domain=connection.domain,
-                    lmhash=connection.lmhash,
-                    nthash=connection.nthash,
-                    target=target,
-                    doKerberos=connection.kerberos,
-                    dcHost=connection.kdcHost,
-                    aesKey=connection.aesKey,
-                    pipe="eventlog"
-                )
+                msevenconnect = msevenclass.connect(username=connection.username, password=connection.password, domain=connection.domain, lmhash=connection.lmhash, nthash=connection.nthash, target=target, doKerberos=connection.kerberos, dcHost=connection.kdcHost, aesKey=connection.aesKey, pipe="eventlog")
 
                 if msevenconnect is not None:
                     context.log.debug("Target is vulnerable to MSEven")
@@ -771,18 +716,7 @@ class PrinterBugTrigger:
         self.context = context
 
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
-        binding_params = {
-            "spoolss": {
-                "stringBinding": rf"ncacn_np:{target}[\PIPE\spoolss]",
-                "MSRPC_UUID_RPRN": ("12345678-1234-abcd-ef00-0123456789ab", "1.0"),
-                "port": 445
-            },
-            "[dcerpc]": {
-                "stringBinding": NXCModule.get_dynamic_endpoint(uuidtup_to_bin(("12345678-1234-abcd-ef00-0123456789ab", "1.0")), target),
-                "MSRPC_UUID_RPRN": ("12345678-1234-abcd-ef00-0123456789ab", "1.0"),
-                "port": None
-            }
-        }
+        binding_params = {"spoolss": {"stringBinding": rf"ncacn_np:{target}[\PIPE\spoolss]", "MSRPC_UUID_RPRN": ("12345678-1234-abcd-ef00-0123456789ab", "1.0"), "port": 445}, "[dcerpc]": {"stringBinding": NXCModule.get_dynamic_endpoint(uuidtup_to_bin(("12345678-1234-abcd-ef00-0123456789ab", "1.0")), target), "MSRPC_UUID_RPRN": ("12345678-1234-abcd-ef00-0123456789ab", "1.0"), "port": None}}
         rpctransport = transport.DCERPCTransportFactory(binding_params[pipe]["stringBinding"])
         if binding_params[pipe]["port"] is not None:
             rpctransport.set_dport(binding_params[pipe]["port"])
@@ -956,6 +890,7 @@ class MSEvenTrigger:
 
 class IsPathShadowCopied(NDRCALL):
     """Structure to make the RPC call to IsPathShadowCopied() in MS-FSRVP Protocol"""
+
     opnum = 9
     structure = (
         ("ShareName", WSTR),  # Type: LPWSTR
@@ -964,11 +899,13 @@ class IsPathShadowCopied(NDRCALL):
 
 class IsPathShadowCopiedResponse(NDRCALL):
     """Structure to parse the response of the RPC call to IsPathShadowCopied() in [MS-FSRVP Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fsrvp/dae107ec-8198-4778-a950-faa7edad125b)"""
+
     structure = ()
 
 
 class IsPathSupported(NDRCALL):
     """Structure to make the RPC call to IsPathSupported() in [MS-FSRVP Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fsrvp/dae107ec-8198-4778-a950-faa7edad125b)"""
+
     opnum = 8
     structure = (
         ("ShareName", WSTR),  # Type: LPWSTR
@@ -977,13 +914,12 @@ class IsPathSupported(NDRCALL):
 
 class IsPathSupportedResponse(NDRCALL):
     """Structure to parse the response of the RPC call to IsPathSupported() in [MS-FSRVP Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fsrvp/dae107ec-8198-4778-a950-faa7edad125b)"""
+
     structure = ()
 
 
 class PRINTER_HANDLE(NDRSTRUCT):
-    structure = (
-        ("Data", '20s=b""'),
-    )
+    structure = (("Data", '20s=b""'),)
 
     def getAlignment(self):
         if self._isNDR64 is True:
@@ -997,9 +933,7 @@ class USHORT_ARRAY(NDRUniConformantArray):
 
 
 class PUSHORT_ARRAY(NDRPOINTER):
-    referent = (
-        ("Data", USHORT_ARRAY),
-    )
+    referent = (("Data", USHORT_ARRAY),)
 
 
 class RPC_V2_NOTIFY_OPTIONS_TYPE(NDRSTRUCT):
@@ -1014,9 +948,7 @@ class RPC_V2_NOTIFY_OPTIONS_TYPE(NDRSTRUCT):
 
 
 class PRPC_V2_NOTIFY_OPTIONS_TYPE_ARRAY(NDRPOINTER):
-    referent = (
-        ("Data", RPC_V2_NOTIFY_OPTIONS_TYPE),
-    )
+    referent = (("Data", RPC_V2_NOTIFY_OPTIONS_TYPE),)
 
 
 class RPC_V2_NOTIFY_OPTIONS(NDRSTRUCT):
@@ -1029,9 +961,7 @@ class RPC_V2_NOTIFY_OPTIONS(NDRSTRUCT):
 
 
 class PRPC_V2_NOTIFY_OPTIONS(NDRPOINTER):
-    referent = (
-        ("Data", RPC_V2_NOTIFY_OPTIONS),
-    )
+    referent = (("Data", RPC_V2_NOTIFY_OPTIONS),)
 
 
 class RpcRemoteFindFirstPrinterChangeNotification(NDRCALL):
@@ -1053,20 +983,23 @@ class RpcRemoteFindFirstPrinterChangeNotificationResponse(NDRCALL):
 
 class EfsRpcOpenFileRaw(NDRCALL):
     """Structure to make the RPC call to EfsRpcOpenFileRaw() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
+
     opnum = 0
     structure = (
         ("FileName", WSTR),  # Type: wchar_t *
-        ("Flags", LONG),     # Type: long
+        ("Flags", LONG),  # Type: long
     )
 
 
 class EfsRpcOpenFileRawResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcOpenFileRaw() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
+
     structure = ()
 
 
 class EfsRpcEncryptFileSrv(NDRCALL):
     """Structure to make the RPC call to EfsRpcEncryptFileSrv() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
+
     opnum = 4
     structure = (
         ("FileName", WSTR),  # Type: wchar_t *
@@ -1098,26 +1031,28 @@ class ENCRYPTION_CERTIFICATE_LIST(NDRSTRUCT):
 
 class EfsRpcAddUsersToFile(NDRCALL):
     """Structure to make the RPC call to EfsRpcAddUsersToFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/afd56d24-3732-4477-b5cf-44cc33848d85)"""
+
     opnum = 9
     structure = (
-        ("FileName", WSTR),   # Type: wchar_t *
-        ("EncryptionCertificates", ENCRYPTION_CERTIFICATE_LIST)
+        ("FileName", WSTR),  # Type: wchar_t *
+        ("EncryptionCertificates", ENCRYPTION_CERTIFICATE_LIST),
     )
 
 
 class EfsRpcAddUsersToFileResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcDecryptFileSrv() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
+
     structure = ()
 
 
 class EfsRpcAddUsersToFileEx(NDRCALL):
     opnum = 15
     structure = (
-        ("dwFlags", DWORD),    # Type: DWORD
+        ("dwFlags", DWORD),  # Type: DWORD
         # Accroding to this page: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/d36df703-edc9-4482-87b7-d05c7783d65e
         # Reserved must be set to NULL
-        ("Reserved", NDRPOINTERNULL),   # Type: NDRPOINTERNULL *
-        ("FileName", WSTR),    # Type: wchar_t *
+        ("Reserved", NDRPOINTERNULL),  # Type: NDRPOINTERNULL *
+        ("FileName", WSTR),  # Type: wchar_t *
         ("EncryptionCertificates", ENCRYPTION_CERTIFICATE_LIST),  # Type: ENCRYPTION_CERTIFICATE_LIST *
     )
 
@@ -1135,6 +1070,7 @@ class EFS_RPC_BLOB(NDRSTRUCT):
 
 class EfsRpcDuplicateEncryptionInfoFile(NDRCALL):
     """Structure to make the RPC call to EfsRpcDuplicateEncryptionInfoFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
+
     opnum = 13
     structure = (
         ("SrcFileName", WSTR),  # Type: wchar_t *
@@ -1148,30 +1084,35 @@ class EfsRpcDuplicateEncryptionInfoFile(NDRCALL):
 
 class EfsRpcDuplicateEncryptionInfoFileResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcDuplicateEncryptionInfoFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
+
     structure = ()
 
 
 class EfsRpcEncryptFileSrvResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcEncryptFileSrv() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
+
     structure = ()
 
 
 class EfsRpcFileKeyInfo(NDRCALL):
     """Structure to make the RPC call to EfsRpcFileKeyInfo() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
+
     opnum = 12
     structure = (
-        ("FileName", WSTR),   # Type: wchar_t *
-        ("InfoClass", DWORD)  # Type: DWORD
+        ("FileName", WSTR),  # Type: wchar_t *
+        ("InfoClass", DWORD),  # Type: DWORD
     )
 
 
 class EfsRpcFileKeyInfoResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcFileKeyInfo() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
+
     structure = ()
 
 
 class EfsRpcQueryRecoveryAgents(NDRCALL):
     """Structure to make the RPC call to EfsRpcQueryRecoveryAgents() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
+
     opnum = 7
     structure = (
         ("FileName", WSTR),  # Type: wchar_t *
@@ -1180,11 +1121,13 @@ class EfsRpcQueryRecoveryAgents(NDRCALL):
 
 class EfsRpcQueryRecoveryAgentsResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcQueryRecoveryAgents() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
+
     structure = ()
 
 
 class EfsRpcQueryUsersOnFile(NDRCALL):
     """Structure to make the RPC call to EfsRpcQueryUsersOnFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
+
     opnum = 6
     structure = (
         ("FileName", WSTR),  # Type: wchar_t *
@@ -1193,20 +1136,23 @@ class EfsRpcQueryUsersOnFile(NDRCALL):
 
 class EfsRpcQueryUsersOnFileResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcQueryUsersOnFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
+
     structure = ()
 
 
 class EfsRpcDecryptFileSrv(NDRCALL):
     """Structure to make the RPC call to EfsRpcDecryptFileSrv() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
+
     opnum = 5
     structure = (
-        ("FileName", WSTR),   # Type: wchar_t *
+        ("FileName", WSTR),  # Type: wchar_t *
         ("OpenFlag", ULONG),  # Type: unsigned
     )
 
 
 class EfsRpcDecryptFileSrvResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcDecryptFileSrv() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
+
     structure = ()
 
 
@@ -1220,15 +1166,14 @@ class ENCRYPTION_CERTIFICATE_HASH_LIST(NDRSTRUCT):
 
 class EfsRpcRemoveUsersFromFile(NDRCALL):
     """Structure to make the RPC call to EfsRpcRemoveUsersFromFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/28609dad-5fa5-4af9-9382-18d40e3e9dec)"""
+
     opnum = 8
-    structure = (
-        ("FileName", WSTR),
-        ("Users", ENCRYPTION_CERTIFICATE_HASH_LIST)
-    )
+    structure = (("FileName", WSTR), ("Users", ENCRYPTION_CERTIFICATE_HASH_LIST))
 
 
 class EfsRpcRemoveUsersFromFileResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcRemoveUsersFromFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
+
     structure = ()
 
 
@@ -1246,30 +1191,34 @@ class NetrDfsManagerInitializeResponse(NDRCALL):
 
 class NetrDfsAddStdRoot(NDRCALL):
     """Structure to make the RPC call to NetrDfsAddStdRoot() in MS-DFSNM Protocol"""
+
     opnum = 12
     structure = (
         ("ServerName", WSTR),  # Type: WCHAR *
-        ("RootShare", WSTR),   # Type: WCHAR *
-        ("Comment", WSTR),     # Type: WCHAR *
-        ("ApiFlags", DWORD),   # Type: DWORD
+        ("RootShare", WSTR),  # Type: WCHAR *
+        ("Comment", WSTR),  # Type: WCHAR *
+        ("ApiFlags", DWORD),  # Type: DWORD
     )
 
 
 class NetrDfsAddStdRootResponse(NDRCALL):
     """Structure to parse the response of the RPC call to EfsRpcRemoveUsersFromFile() in [MS-EFSR Protocol](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsr/08796ba8-01c8-4872-9221-1000ec2eff31)"""
+
     structure = ()
 
 
 class NetrDfsRemoveStdRoot(NDRCALL):
     """Structure to make the RPC call to NetrDfsRemoveStdRoot() in MS-DFSNM Protocol"""
+
     opnum = 13
     structure = (
         ("ServerName", WSTR),  # Type: WCHAR *
-        ("RootShare", WSTR),   # Type: WCHAR *
-        ("ApiFlags", DWORD)    # Type: DWORD
+        ("RootShare", WSTR),  # Type: WCHAR *
+        ("ApiFlags", DWORD),  # Type: DWORD
     )
 
 
 class NetrDfsRemoveStdRootResponse(NDRCALL):
     """Structure to parse the response of the RPC call to NetrDfsRemoveStdRoot() in MS-DFSNM Protocol"""
+
     structure = ()

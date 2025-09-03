@@ -84,7 +84,19 @@ class SamrFunc:
 
 
 class SAMRQuery:
-    def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", kerberos=None, kdcHost="", aesKey="", logger=None,):
+    def __init__(
+        self,
+        username="",
+        password="",
+        domain="",
+        port=445,
+        remote_name="",
+        remote_host="",
+        kerberos=None,
+        kdcHost="",
+        aesKey="",
+        logger=None,
+    ):
         self.__username = username
         self.__password = password
         self.__domain = domain

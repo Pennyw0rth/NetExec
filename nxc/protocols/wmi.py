@@ -33,36 +33,15 @@ class wmi(connection):
         self.doKerberos = False
         self.stringBinding = None
         # from: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/18d8fbe8-a967-4f1c-ae50-99ca8e491d2d
-        self.rpc_error_status = {
-            "0000052F": "STATUS_ACCOUNT_RESTRICTION",
-            "00000533": "STATUS_ACCOUNT_DISABLED",
-            "00000775": "STATUS_ACCOUNT_LOCKED_OUT",
-            "00000701": "STATUS_ACCOUNT_EXPIRED",
-            "00000532": "STATUS_PASSWORD_EXPIRED",
-            "00000530": "STATUS_INVALID_LOGON_HOURS",
-            "00000531": "STATUS_INVALID_WORKSTATION",
-            "00000569": "STATUS_LOGON_TYPE_NOT_GRANTED",
-            "00000773": "STATUS_PASSWORD_MUST_CHANGE",
-            "00000005": "STATUS_ACCESS_DENIED",
-            "0000052E": "STATUS_LOGON_FAILURE",
-            "0000052B": "STATUS_WRONG_PASSWORD",
-            "00000721": "RPC_S_SEC_PKG_ERROR"
-        }
+        self.rpc_error_status = {"0000052F": "STATUS_ACCOUNT_RESTRICTION", "00000533": "STATUS_ACCOUNT_DISABLED", "00000775": "STATUS_ACCOUNT_LOCKED_OUT", "00000701": "STATUS_ACCOUNT_EXPIRED", "00000532": "STATUS_PASSWORD_EXPIRED", "00000530": "STATUS_INVALID_LOGON_HOURS", "00000531": "STATUS_INVALID_WORKSTATION", "00000569": "STATUS_LOGON_TYPE_NOT_GRANTED", "00000773": "STATUS_PASSWORD_MUST_CHANGE", "00000005": "STATUS_ACCESS_DENIED", "0000052E": "STATUS_LOGON_FAILURE", "0000052B": "STATUS_WRONG_PASSWORD", "00000721": "RPC_S_SEC_PKG_ERROR"}
 
         connection.__init__(self, args, db, host)
 
     def proto_logger(self):
-        self.logger = NXCAdapter(
-            extra={
-                "protocol": "WMI",
-                "host": self.host,
-                "port": self.port,
-                "hostname": self.hostname
-            }
-        )
+        self.logger = NXCAdapter(extra={"protocol": "WMI", "host": self.host, "port": self.port, "hostname": self.hostname})
 
     def create_conn_obj(self):
-        connection_target = fr"ncacn_ip_tcp:{self.remoteName}[{self.port!s}]"
+        connection_target = rf"ncacn_ip_tcp:{self.remoteName}[{self.port!s}]"
         self.logger.debug(f"Creating WMI connection object to {connection_target}")
         try:
             rpctansport = transport.DCERPCTransportFactory(connection_target)
@@ -106,7 +85,7 @@ class wmi(connection):
         sec_trailer["auth_ctx_id"] = 0 + 79231
         pad = (4 - (len(packet.get_packet()) % 4)) % 4
         if pad != 0:
-            packet["pduData"] += b"\xFF" * pad
+            packet["pduData"] += b"\xff" * pad
             sec_trailer["auth_pad_len"] = pad
         packet["sec_trailer"] = sec_trailer
         packet["auth_data"] = auth

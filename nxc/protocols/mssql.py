@@ -77,6 +77,7 @@ class mssql(connection):
                 self.conn.disconnect()
             self.create_conn_obj()
             return func(self, *args, **kwargs)
+
         return wrapper
 
     def check_if_admin(self):
@@ -126,7 +127,13 @@ class mssql(connection):
             self.hostname = ntlm_info["hostname"]
             self.server_os = ntlm_info["os_version"]
             self.logger.extra["hostname"] = self.hostname
-            self.db.add_host(self.host, self.hostname, self.targetDomain, self.server_os, len(self.mssql_instances),)
+            self.db.add_host(
+                self.host,
+                self.hostname,
+                self.targetDomain,
+                self.server_os,
+                len(self.mssql_instances),
+            )
 
         if self.args.domain:
             self.domain = self.args.domain
@@ -425,13 +432,11 @@ class mssql(connection):
                     continue
                 rid = so_far + n
                 self.logger.highlight(f"{rid}: {username}")
-                entries.append(
-                    {
-                        "rid": rid,
-                        "domain": domain,
-                        "username": username.split("\\")[1],
-                    }
-                )
+                entries.append({
+                    "rid": rid,
+                    "domain": domain,
+                    "username": username.split("\\")[1],
+                })
 
             so_far += simultaneous
         return entries
@@ -443,12 +448,7 @@ class mssql(connection):
 
     def list_databases(self):
         try:
-            q = (
-                "SELECT d.name AS DatabaseName, "
-                "       suser_sname(d.owner_sid) AS Owner "
-                "FROM sys.databases d "
-                "ORDER BY d.name;"
-            )
+            q = "SELECT d.name AS DatabaseName,        suser_sname(d.owner_sid) AS Owner FROM sys.databases d ORDER BY d.name;"
             rows = self.conn.sql_query(q) or []
             if not rows:
                 self.logger.display("No databases returned")
@@ -481,11 +481,7 @@ class mssql(connection):
                     self.logger.fail(f"Database [{db_arg}] does not exist on the server.")
                     return
 
-                tq = (
-                    f"SELECT t.name AS TableName, t.modify_date "
-                    f"FROM {self._qname(db_arg)}.sys.tables t "
-                    f"ORDER BY t.name;"
-                )
+                tq = f"SELECT t.name AS TableName, t.modify_date FROM {self._qname(db_arg)}.sys.tables t ORDER BY t.name;"
                 rows = self.conn.sql_query(tq) or []
             except Exception as e:
                 self.logger.fail(f"Insufficient permissions or query error in [{db_arg}]: {e}")

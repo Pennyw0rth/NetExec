@@ -14,11 +14,7 @@ from impacket.examples.secretsdump import (
     LSASecrets,
     NTDSHashes,
 )
-from impacket.examples.regsecrets import (
-    RemoteOperations as RegSecretsRemoteOperations,
-    SAMHashes as RegSecretsSAMHashes,
-    LSASecrets as RegSecretsLSASecrets
-)
+from impacket.examples.regsecrets import RemoteOperations as RegSecretsRemoteOperations, SAMHashes as RegSecretsSAMHashes, LSASecrets as RegSecretsLSASecrets
 from impacket.nmb import NetBIOSError, NetBIOSTimeout
 from impacket.dcerpc.v5 import transport, lsat, lsad, scmr, rrp, srvs, wkst
 from impacket.dcerpc.v5.rpcrt import DCERPCException
@@ -118,8 +114,8 @@ class smb(connection):
         self.bootkey = None
         self.output_file_template = None
         self.output_filename = None
-        self.smbv1 = None   # Check if SMBv1 is supported
-        self.smbv3 = None   # Check if SMBv3 is supported
+        self.smbv1 = None  # Check if SMBv1 is supported
+        self.smbv3 = None  # Check if SMBv3 is supported
         self.is_timeouted = False
         self.signing = False
         self.smb_share_name = smb_share_name
@@ -198,7 +194,7 @@ class smb(connection):
         if not self.no_ntlm:
             self.hostname = self.conn.getServerName()
             self.targetDomain = self.conn.getServerDNSDomainName()
-            if not self.targetDomain:   # Not sure if that can even happen but now we are safe
+            if not self.targetDomain:  # Not sure if that can even happen but now we are safe
                 self.targetDomain = self.hostname
         else:
             try:
@@ -210,6 +206,7 @@ class smb(connection):
                 else:
                     # Check if the host is a valid IP address, if not we parse the FQDN in the Exception
                     import socket
+
                     socket.inet_aton(self.host)
                     self.logger.debug("NTLM authentication not available! Authentication will fail without a valid hostname and domain name")
                     self.hostname = self.host
@@ -467,7 +464,7 @@ class smb(connection):
         except SessionError as e:
             error, desc = e.getErrorString()
             self.logger.fail(
-                f'{domain}\\{self.username}:{process_secret(self.password)} {error} {f"({desc})" if self.args.verbose else ""}',
+                f"{domain}\\{self.username}:{process_secret(self.password)} {error} {f'({desc})' if self.args.verbose else ''}",
                 color="magenta" if error in smb_error_status else "red",
             )
             if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED"] and self.args.module == ["change-password"]:
@@ -652,15 +649,7 @@ class smb(connection):
         userName = Principal(self.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
 
         try:
-            tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(
-                clientName=userName,
-                password=self.password,
-                domain=self.domain.upper(),
-                lmhash=binascii.unhexlify(self.lmhash) if self.lmhash else "",
-                nthash=binascii.unhexlify(self.nthash) if self.nthash else "",
-                aesKey=self.aesKey,
-                kdcHost=self.kdcHost
-            )
+            tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(clientName=userName, password=self.password, domain=self.domain.upper(), lmhash=binascii.unhexlify(self.lmhash) if self.lmhash else "", nthash=binascii.unhexlify(self.nthash) if self.nthash else "", aesKey=self.aesKey, kdcHost=self.kdcHost)
 
             self.logger.debug(f"TGT successfully obtained for {self.username}@{self.domain}")
             self.logger.debug(f"Using cipher: {cipher}")
@@ -678,6 +667,7 @@ class smb(connection):
     def check_dc_ports(self, timeout=1):
         """Check multiple DC-specific ports in case first check fails"""
         import socket
+
         dc_ports = [88, 389, 636, 3268, 9389]  # Kerberos, LDAP, LDAPS, Global Catalog, ADWS
         open_ports = 0
 
@@ -726,6 +716,7 @@ class smb(connection):
     def _is_port_open(self, port, timeout=1):
         """Check if a specific port is open on the target host."""
         import socket
+
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 sock.settimeout(timeout)
@@ -765,23 +756,7 @@ class smb(connection):
             current_method = method
             if method == "wmiexec":
                 try:
-                    exec_method = WMIEXEC(
-                        self.remoteName,
-                        self.smb_share_name,
-                        self.username,
-                        self.password,
-                        self.domain,
-                        self.conn,
-                        self.kerberos,
-                        self.aesKey,
-                        self.kdcHost,
-                        self.host,
-                        self.hash,
-                        self.args.share,
-                        logger=self.logger,
-                        timeout=self.args.dcom_timeout,
-                        tries=self.args.get_output_tries
-                    )
+                    exec_method = WMIEXEC(self.remoteName, self.smb_share_name, self.username, self.password, self.domain, self.conn, self.kerberos, self.aesKey, self.kdcHost, self.host, self.hash, self.args.share, logger=self.logger, timeout=self.args.dcom_timeout, tries=self.args.get_output_tries)
                     self.logger.info("Executed command via wmiexec")
                     break
                 except Exception:
@@ -793,23 +768,7 @@ class smb(connection):
                     # https://github.com/fortra/impacket/issues/1611
                     if self.kerberos:
                         raise Exception("MMCExec current is buggly with kerberos")
-                    exec_method = MMCEXEC(
-                        self.remoteName,
-                        self.smb_share_name,
-                        self.username,
-                        self.password,
-                        self.domain,
-                        self.conn,
-                        self.kerberos,
-                        self.aesKey,
-                        self.kdcHost,
-                        self.host,
-                        self.hash,
-                        self.args.share,
-                        logger=self.logger,
-                        timeout=self.args.dcom_timeout,
-                        tries=self.args.get_output_tries
-                    )
+                    exec_method = MMCEXEC(self.remoteName, self.smb_share_name, self.username, self.password, self.domain, self.conn, self.kerberos, self.aesKey, self.kdcHost, self.host, self.hash, self.args.share, logger=self.logger, timeout=self.args.dcom_timeout, tries=self.args.get_output_tries)
                     self.logger.info("Executed command via mmcexec")
                     break
                 except Exception:
@@ -818,21 +777,7 @@ class smb(connection):
                     continue
             elif method == "atexec":
                 try:
-                    exec_method = TSCH_EXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
-                        self.smb_share_name,
-                        self.username,
-                        self.password,
-                        self.domain,
-                        self.kerberos,
-                        self.aesKey,
-                        self.host,
-                        self.kdcHost,
-                        self.hash,
-                        self.logger,
-                        self.args.get_output_tries,
-                        self.args.share
-                    )
+                    exec_method = TSCH_EXEC(self.host if not self.kerberos else self.hostname + "." + self.domain, self.smb_share_name, self.username, self.password, self.domain, self.kerberos, self.aesKey, self.host, self.kdcHost, self.hash, self.logger, self.args.get_output_tries, self.args.share)
                     self.logger.info("Executed command via atexec")
                     break
                 except Exception:
@@ -841,23 +786,7 @@ class smb(connection):
                     continue
             elif method == "smbexec":
                 try:
-                    exec_method = SMBEXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
-                        self.smb_share_name,
-                        self.conn,
-                        self.username,
-                        self.password,
-                        self.domain,
-                        self.kerberos,
-                        self.aesKey,
-                        self.host,
-                        self.kdcHost,
-                        self.hash,
-                        self.args.share,
-                        self.port,
-                        self.logger,
-                        self.args.get_output_tries
-                    )
+                    exec_method = SMBEXEC(self.host if not self.kerberos else self.hostname + "." + self.domain, self.smb_share_name, self.conn, self.username, self.password, self.domain, self.kerberos, self.aesKey, self.host, self.kdcHost, self.hash, self.args.share, self.port, self.logger, self.args.get_output_tries)
                     self.logger.info("Executed command via smbexec")
                     break
                 except Exception:
@@ -885,7 +814,7 @@ class smb(connection):
                 self.logger.fail("Command execution blocked by AMSI")
                 return ""
 
-            if (self.args.execute or self.args.ps_execute):
+            if self.args.execute or self.args.ps_execute:
                 self.logger.success(f"Executed command via {current_method}")
                 if output:
                     for line in output.split("\n"):
@@ -946,16 +875,7 @@ class smb(connection):
             for i in rsessions:
                 sess = i["SessionInfo"]["SessionEnum_Level1"]
                 state = TSTS.enum2value(TSTS.WINSTATIONSTATECLASS, sess["State"]).split("_")[-1]
-                sessions[sess["SessionId"]] = {
-                    "state": state,
-                    "SessionName": sess["Name"],
-                    "RemoteIp": "",
-                    "ClientName": "",
-                    "Username": "",
-                    "Domain": "",
-                    "Resolution": "",
-                    "ClientTimeZone": ""
-                }
+                sessions[sess["SessionId"]] = {"state": state, "SessionName": sess["Name"], "RemoteIp": "", "ClientName": "", "Username": "", "Domain": "", "Resolution": "", "ClientTimeZone": ""}
             return sessions
 
     def enumerate_sessions_info(self, sessions):
@@ -1040,14 +960,7 @@ class smb(connection):
         maxStateLen = max(maxStateLen, len("STATE") + 1)
 
         # Create the template for formatting
-        template = (f"{{SESSIONNAME: <{maxSessionNameLen}}} "
-                    f"{{USERNAME: <{maxUsernameLen}}} "
-                    f"{{ID: <{maxIdLen}}} "
-                    "{IPv4: <16} "
-                    f"{{STATE: <{maxStateLen}}} "
-                    "{DSTATE: <9} "
-                    "{CONNTIME: <20} "
-                    "{DISCTIME: <20} ")
+        template = f"{{SESSIONNAME: <{maxSessionNameLen}}} {{USERNAME: <{maxUsernameLen}}} {{ID: <{maxIdLen}}} {{IPv4: <16}} {{STATE: <{maxStateLen}}} {{DSTATE: <9}} {{CONNTIME: <20}} {{DISCTIME: <20}} "
         header = template.format(
             SESSIONNAME="SESSIONNAME",
             USERNAME="USERNAME",
@@ -1163,7 +1076,6 @@ class smb(connection):
             self.logger.fail("Cannot list remote tasks, RDP is probably disabled.")
 
     def reg_sessions(self):
-
         def output(sessions):
             if sessions:
                 # Calculate max lengths for formatting
@@ -1173,7 +1085,7 @@ class smb(connection):
                 maxUsernameLen = max(maxUsernameLen, len("USERNAME") + 1)
 
                 # Create the template for formatting
-                template = (f"{{USERNAME: <{maxUsernameLen}}} {{SID: <{maxSidLen}}}")
+                template = f"{{USERNAME: <{maxUsernameLen}}} {{SID: <{maxSidLen}}}"
 
                 # Create headers
                 header = template.format(USERNAME="USERNAME", SID="SID")
@@ -1206,7 +1118,7 @@ class smb(connection):
                 break
             except SessionError as e:
                 self.logger.debug(f"Could not bind to the Remote Registry on {self.hostname}: {e}")
-                if binding_attempts == 1:   # Last attempt
+                if binding_attempts == 1:  # Last attempt
                     self.logger.info(f"The Remote Registry service seems to be disabled on {self.hostname}.")
                     return
             # STATUS_PIPE_NOT_AVAILABLE : Waiting 1 second for the service to start (if idle and set to 'Automatic' startup type)
@@ -1460,14 +1372,7 @@ class smb(connection):
 
             FSCTL_QUERY_NETWORK_INTERFACE_INFO = 0x001401FC
 
-            response = self.conn._SMBConnection.ioctl(
-                tree_id,
-                fileId=None,
-                ctlCode=FSCTL_QUERY_NETWORK_INTERFACE_INFO,
-                flags=SMB2_0_IOCTL_IS_FSCTL,
-                inputBlob=b"",
-                maxOutputResponse=8192
-            )
+            response = self.conn._SMBConnection.ioctl(tree_id, fileId=None, ctlCode=FSCTL_QUERY_NETWORK_INTERFACE_INFO, flags=SMB2_0_IOCTL_IS_FSCTL, inputBlob=b"", maxOutputResponse=8192)
 
             if response:
                 self.logger.success("Retrieved network interface data")
@@ -1484,20 +1389,20 @@ class smb(connection):
                 while offset < len(response) and offset + 152 <= len(response):
                     try:
                         # Parse NETWORK_INTERFACE_INFO structure
-                        next_offset = struct.unpack("<L", response[offset:offset + 4])[0]
-                        if_index = struct.unpack("<L", response[offset + 4:offset + 8])[0]
-                        capabilities = struct.unpack("<L", response[offset + 8:offset + 12])[0]
-                        link_speed = struct.unpack("<Q", response[offset + 16:offset + 24])[0]
+                        next_offset = struct.unpack("<L", response[offset : offset + 4])[0]
+                        if_index = struct.unpack("<L", response[offset + 4 : offset + 8])[0]
+                        capabilities = struct.unpack("<L", response[offset + 8 : offset + 12])[0]
+                        link_speed = struct.unpack("<Q", response[offset + 16 : offset + 24])[0]
 
                         # Socket address (SockAddr_Storage at offset+24)
-                        family = struct.unpack("<H", response[offset + 24:offset + 26])[0]
+                        family = struct.unpack("<H", response[offset + 24 : offset + 26])[0]
 
                         if family == 0x0002:  # IPv4
-                            ip_bytes = response[offset + 28:offset + 32]
+                            ip_bytes = response[offset + 28 : offset + 32]
                             ip_addr = ipaddress.IPv4Address(ip_bytes)
                             addr_info = f"IPv4: {ip_addr}"
                         elif family == 0x0017:  # IPv6
-                            ip6_bytes = response[offset + 32:offset + 48]
+                            ip6_bytes = response[offset + 32 : offset + 48]
                             ip_addr = ipaddress.IPv6Address(ip6_bytes)
                             addr_info = f"IPv6: {ip_addr}"
                         else:
@@ -1511,11 +1416,7 @@ class smb(connection):
                             if capabilities & 0x02:
                                 caps.append("RDMA")
 
-                            grouped_interfaces[if_index] = {
-                                "capabilities": caps,
-                                "link_speed": link_speed,
-                                "addresses": []
-                            }
+                            grouped_interfaces[if_index] = {"capabilities": caps, "link_speed": link_speed, "addresses": []}
 
                         grouped_interfaces[if_index]["addresses"].append(addr_info)
 
@@ -1699,18 +1600,7 @@ class smb(connection):
             dcom.disconnect()
         return records if records else False
 
-    def spider(
-        self,
-        share=None,
-        folder=".",
-        pattern=None,
-        regex=None,
-        exclude_dirs=None,
-        depth=None,
-        content=False,
-        only_files=True,
-        silent=True
-    ):
+    def spider(self, share=None, folder=".", pattern=None, regex=None, exclude_dirs=None, depth=None, content=False, only_files=True, silent=True):
         if exclude_dirs is None:
             exclude_dirs = []
         if regex is None:
@@ -1722,17 +1612,7 @@ class smb(connection):
             self.logger.display("Started spidering")
         start_time = time()
         if not share:
-            spider.spider(
-                self.args.spider,
-                self.args.spider_folder,
-                self.args.pattern,
-                self.args.regex,
-                self.args.exclude_dirs,
-                self.args.depth,
-                self.args.content,
-                self.args.only_files,
-                self.args.silent
-            )
+            spider.spider(self.args.spider, self.args.spider_folder, self.args.pattern, self.args.regex, self.args.exclude_dirs, self.args.depth, self.args.content, self.args.only_files, self.args.silent)
         else:
             spider.spider(share, folder, pattern, regex, exclude_dirs, depth, content, only_files, silent)
         if not silent:
@@ -1825,14 +1705,12 @@ class smb(connection):
                     user = item["Name"]
                     sid_type = SID_NAME_USE.enumItems(item["Use"]).name
                     self.logger.highlight(f"{rid}: {domain}\\{user} ({sid_type})")
-                    entries.append(
-                        {
-                            "rid": rid,
-                            "domain": domain,
-                            "username": user,
-                            "sidtype": sid_type,
-                        }
-                    )
+                    entries.append({
+                        "rid": rid,
+                        "domain": domain,
+                        "username": user,
+                        "sidtype": sid_type,
+                    })
             so_far += simultaneous
         dce.disconnect()
         return entries
@@ -1997,9 +1875,12 @@ class smb(connection):
                     secret.value.decode("latin-1"),
                     "N/A",
                 )
+
         try:
             sccm_triage = SCCMTriage(target=target, conn=conn, masterkeys=masterkeys, per_secret_callback=sccm_callback)
-            sccm_triage.triage_sccm(use_wmi=self.args.sccm == "wmi", )
+            sccm_triage.triage_sccm(
+                use_wmi=self.args.sccm == "wmi",
+            )
         except Exception as e:
             self.logger.debug(f"Error while looting sccm: {e}")
 

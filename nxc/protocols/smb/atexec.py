@@ -10,10 +10,29 @@ from datetime import datetime, timedelta
 
 
 class TSCH_EXEC:
-    def __init__(self, target, share_name, username, password, domain, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None,
-                 # These options are used by the schtask_as module, except the run_task_as
-                 # that defaults to NT AUTHORITY\System user (SID S-1-5-18) if not specified
-                 run_task_as="S-1-5-18", run_cmd=None, output_filename=None, task_name=None, output_file_location=None):
+    def __init__(
+        self,
+        target,
+        share_name,
+        username,
+        password,
+        domain,
+        doKerberos=False,
+        aesKey=None,
+        remoteHost=None,
+        kdcHost=None,
+        hashes=None,
+        logger=None,
+        tries=None,
+        share=None,
+        # These options are used by the schtask_as module, except the run_task_as
+        # that defaults to NT AUTHORITY\System user (SID S-1-5-18) if not specified
+        run_task_as="S-1-5-18",
+        run_cmd=None,
+        output_filename=None,
+        task_name=None,
+        output_file_location=None,
+    ):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -82,30 +101,13 @@ class TSCH_EXEC:
 
     def gen_xml(self, command):
         # Random setting order to help with detection
-        settings = [
-            "       <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>",
-            "       <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>",
-            "       <AllowHardTerminate>true</AllowHardTerminate>",
-            "       <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>",
-            "       <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>"
-        ]
+        settings = ["       <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>", "       <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>", "       <AllowHardTerminate>true</AllowHardTerminate>", "       <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>", "       <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>"]
         random.shuffle(settings)
         randomized_settings = "\n".join(settings)
-        settings2 = [
-            "       <AllowStartOnDemand>true</AllowStartOnDemand>",
-            "       <Hidden>true</Hidden>",
-            "       <Enabled>true</Enabled>",
-            "       <RunOnlyIfIdle>false</RunOnlyIfIdle>",
-            "       <WakeToRun>false</WakeToRun>",
-            "       <Priority>7</Priority>",
-            "       <ExecutionTimeLimit>P3D</ExecutionTimeLimit>"
-        ]
+        settings2 = ["       <AllowStartOnDemand>true</AllowStartOnDemand>", "       <Hidden>true</Hidden>", "       <Enabled>true</Enabled>", "       <RunOnlyIfIdle>false</RunOnlyIfIdle>", "       <WakeToRun>false</WakeToRun>", "       <Priority>7</Priority>", "       <ExecutionTimeLimit>P3D</ExecutionTimeLimit>"]
         random.shuffle(settings2)
         randomized_settings2 = "\n".join(settings2)
-        idleSettings = [
-            "         <StopOnIdleEnd>true</StopOnIdleEnd>",
-            "         <RestartOnIdle>false</RestartOnIdle>"
-        ]
+        idleSettings = ["         <StopOnIdleEnd>true</StopOnIdleEnd>", "         <RestartOnIdle>false</RestartOnIdle>"]
         random.shuffle(idleSettings)
         randomized_idleSettings = "\n".join(idleSettings)
 
@@ -116,8 +118,7 @@ class TSCH_EXEC:
             "C:\\Windows\\System32\\cmd.exe",
             "C:\\Windows\\System32\\..\\System32\\cmd",
             "C:\\Windows\\System32\\..\\System32\\cmd.exe",
-            "C:\\Windows\\..\\Windows\\System32\\cmd"
-            "C:\\Windows\\..\\Windows\\System32\\cmd.exe",
+            "C:\\Windows\\..\\Windows\\System32\\cmdC:\\Windows\\..\\Windows\\System32\\cmd.exe",
         ]
         cmd_path = random.choice(random_cmd_path)
         random_cmd_arg = ["/c", "/C", "/Q /c", "/F:ON /c", "/T:fg /c", "/T:fg /Q /C", "/F:ON /Q /C"]

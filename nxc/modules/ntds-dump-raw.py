@@ -83,11 +83,7 @@ class NXCModule:
                nxc smb $IP -u Username -p Password -M ntds-dump-raw -o TARGET=NTDS,LSA,SAM
         $IP can be a Domain Controller or a regular Windows machine.
         """
-        available_options = {
-            "NTDS": "Windows/NTDS/ntds.dit",
-            "LSA": "Windows/System32/config/SECURITY",
-            "SAM": "Windows/System32/config/SAM"
-        }
+        available_options = {"NTDS": "Windows/NTDS/ntds.dit", "LSA": "Windows/System32/config/SECURITY", "SAM": "Windows/System32/config/SAM"}
         self.files_full_location_to_extract = []
         if "TARGET" in module_options:
             selected_options = module_options["TARGET"].split(",")
@@ -142,7 +138,7 @@ class NXCModule:
         first_section = self.read_from_disk(0, 1024)
         if len(first_section) == 0:
             self.logger.fail("Unable to read the Disk, try changing the --exec-method flag")
-        if first_section[512: 512 + 8] == b"EFI PART":
+        if first_section[512 : 512 + 8] == b"EFI PART":
             self.logger.display("Disk is formated using GPT")
             NTFS_LOCATION = self.analyze_gpt("\\\\.\\PhysicalDrive0")
             if NTFS_LOCATION == -1:
@@ -152,10 +148,10 @@ class NXCModule:
             max_parition_size = 0
             NTFS_LOCATION = self.bytes_to_int_unsigned(first_section[0x1C6:0x1CA]) * self.SECTOR_SIZE
             for partition_indx in range(4):
-                curr_partition_size = self.bytes_to_int_unsigned(first_section[0x1CA + (partition_indx * 0x10): 0x1CE + (partition_indx * 0x10)])
+                curr_partition_size = self.bytes_to_int_unsigned(first_section[0x1CA + (partition_indx * 0x10) : 0x1CE + (partition_indx * 0x10)])
                 if curr_partition_size > max_parition_size:
                     max_parition_size = curr_partition_size
-                    NTFS_LOCATION = self.bytes_to_int_unsigned(first_section[0x1C6 + (partition_indx * 0x10): 0x1CA + (partition_indx * 0x10)]) * self.SECTOR_SIZE
+                    NTFS_LOCATION = self.bytes_to_int_unsigned(first_section[0x1C6 + (partition_indx * 0x10) : 0x1CA + (partition_indx * 0x10)]) * self.SECTOR_SIZE
 
         self.logger.display(f"NTFS Location {hex(NTFS_LOCATION)}")
         self.NTFS_LOCATION = NTFS_LOCATION
@@ -186,6 +182,7 @@ class NXCModule:
 
         # NTDS hashes
         if "ntds.dit" in self.extracted_files_location_local and self.extracted_files_location_local["ntds.dit"] != "":
+
             def add_ntds_hash(ntds_hash, host_id):
                 """Extract NTDS hashes"""
                 add_ntds_hash.ntds_hashes += 1
@@ -241,6 +238,7 @@ class NXCModule:
 
         # SAM hashes
         if "SAM" in self.extracted_files_location_local and self.extracted_files_location_local["SAM"] != "":
+
             def add_SAM_hash(SAM_hash, host_id):
                 """Extract SAM hashes"""
                 add_SAM_hash.SAM_hashes += 1
@@ -284,13 +282,7 @@ class NXCModule:
 
         # LSA
         if "SECURITY" in self.extracted_files_location_local and self.extracted_files_location_local["SECURITY"] != "":
-            LSA = LSASecrets(
-                self.extracted_files_location_local["SECURITY"],
-                boot_key,
-                remoteOps=None,
-                isRemote=False,
-                perSecretCallback=lambda secret_type, secret: self.logger.highlight(secret)
-            )
+            LSA = LSASecrets(self.extracted_files_location_local["SECURITY"], boot_key, remoteOps=None, isRemote=False, perSecretCallback=lambda secret_type, secret: self.logger.highlight(secret))
 
             try:
                 self.logger.success("LSA Secrets:")
@@ -309,7 +301,7 @@ class NXCModule:
 
     def analyze_NTFS(self, ntfs_header):
         """Decode the NTFS headers and extract needed infromation from it"""
-        ntfs_header = ntfs_header[0xB: 0xB + 25 + 48]
+        ntfs_header = ntfs_header[0xB : 0xB + 25 + 48]
         header_format = "<HBH3BHBHHHIIIQQQIB3BQI"
 
         data = struct.unpack(header_format, ntfs_header)
@@ -357,7 +349,7 @@ class NXCModule:
         """Analyze the current MFT records and extract the targeted files if they are present"""
         MFT_record_indx = 0
         for curr_record_indx in range(len(curr_data) // 1024):
-            curr_sector = curr_data[curr_record_indx * 1024: curr_record_indx * 1024 + 1024]
+            curr_sector = curr_data[curr_record_indx * 1024 : curr_record_indx * 1024 + 1024]
             try:
                 curr_MFA_sector_properties = self.analyze_MFT_header(curr_sector)
                 if curr_MFA_sector_properties is None or curr_MFA_sector_properties.filename is None:
@@ -472,9 +464,9 @@ class NXCModule:
             dataRun_len_nBytes = (dataRun[curr_datarun_indx] & 0b11110000) >> 4
             curr_datarun_indx += 1
 
-            dataRun_len = dataRun[curr_datarun_indx: curr_datarun_indx + dataRun_startingCluster_nBytes]
+            dataRun_len = dataRun[curr_datarun_indx : curr_datarun_indx + dataRun_startingCluster_nBytes]
             dataRun_len = int.from_bytes(dataRun_len, byteorder="little", signed=False)
-            datarun_startingCluster = dataRun[curr_datarun_indx + dataRun_startingCluster_nBytes: curr_datarun_indx + dataRun_startingCluster_nBytes + dataRun_len_nBytes]
+            datarun_startingCluster = dataRun[curr_datarun_indx + dataRun_startingCluster_nBytes : curr_datarun_indx + dataRun_startingCluster_nBytes + dataRun_len_nBytes]
 
             datarun_cluster_loc = int.from_bytes(datarun_startingCluster, byteorder="little", signed=True) + prev_datarun_loc
 
@@ -492,12 +484,12 @@ class NXCModule:
         parsed_header = {}
 
         while True:
-            curr_header = self.bytes_to_int_unsigned(curr_sector[curr_index: curr_index + 4])
+            curr_header = self.bytes_to_int_unsigned(curr_sector[curr_index : curr_index + 4])
             if curr_header == 0xFFFFFFFF or curr_header is None:
                 break
 
-            curr_header_len = self.bytes_to_int_unsigned(curr_sector[curr_index + 4: curr_index + 4 + 4])
-            parsed_header[self.ATTRIBUTE_NAMES[curr_header]] = curr_sector[curr_index: curr_index + curr_header_len]
+            curr_header_len = self.bytes_to_int_unsigned(curr_sector[curr_index + 4 : curr_index + 4 + 4])
+            parsed_header[self.ATTRIBUTE_NAMES[curr_header]] = curr_sector[curr_index : curr_index + curr_header_len]
             curr_index = curr_index + curr_header_len
 
         return parsed_header
@@ -514,13 +506,13 @@ class NXCModule:
         parsed_header = self.parse_MFT_header(curr_sector[Offset_to_the_first_attribute:])
 
         if "$FILE_NAME" in parsed_header:
-            filename_lenght = self.bytes_to_int_signed(parsed_header["$FILE_NAME"][0x58: 0x58 + 1])
-            curr_MFA_sector.parent_record_number = self.bytes_to_int_unsigned(parsed_header["$FILE_NAME"][0x18: 0x18 + 3] + b"\x00")
+            filename_lenght = self.bytes_to_int_signed(parsed_header["$FILE_NAME"][0x58 : 0x58 + 1])
+            curr_MFA_sector.parent_record_number = self.bytes_to_int_unsigned(parsed_header["$FILE_NAME"][0x18 : 0x18 + 3] + b"\x00")
 
-            curr_MFA_sector.filename = parsed_header["$FILE_NAME"][0x58 + 2: 0x58 + 2 + (filename_lenght * 2)].decode("utf-16")
+            curr_MFA_sector.filename = parsed_header["$FILE_NAME"][0x58 + 2 : 0x58 + 2 + (filename_lenght * 2)].decode("utf-16")
 
         if "$DATA" in parsed_header:
-            dataRun_offset = self.bytes_to_int_signed(parsed_header["$DATA"][0x20: 0x20 + 1])
+            dataRun_offset = self.bytes_to_int_signed(parsed_header["$DATA"][0x20 : 0x20 + 1])
 
             dataRun = parsed_header["$DATA"][dataRun_offset:]
             curr_MFA_sector.dataRun, curr_MFA_sector.size = self.decode_dataRun(dataRun)
@@ -559,7 +551,7 @@ class NXCModule:
 
         for i in range(num_partition_entries):
             entry_offset = i * partition_entry_size
-            partition_entry = partition_table_data[entry_offset: entry_offset + partition_entry_size]
+            partition_entry = partition_table_data[entry_offset : entry_offset + partition_entry_size]
             partition_entries.append(partition_entry)
 
         return partition_entries

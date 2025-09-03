@@ -11,6 +11,7 @@ class NXCModule:
     Extract obsolete operating systems from LDAP
     Module by Brandon Fisher @shad0wcntr0ller
     """
+
     name = "obsolete"
     description = "Extract all obsolete operating systems from LDAP"
     supported_protocols = ["ldap"]
@@ -30,12 +31,7 @@ class NXCModule:
         """No module-specific options required."""
 
     def on_login(self, context, connection):
-        search_filter = ("(&(objectclass=computer)(!(userAccountControl:1.2.840.113556.1.4.803:=2))"
-                         "(|(operatingSystem=*Windows 6*)(operatingSystem=*Windows 2000*)"
-                         "(operatingSystem=*Windows XP*)(operatingSystem=*Windows Vista*)"
-                         "(operatingSystem=*Windows 7*)(operatingSystem=*Windows 8*)"
-                         "(operatingSystem=*Windows 8.1*)(operatingSystem=*Windows Server 2003*)"
-                         "(operatingSystem=*Windows Server 2008*)(operatingSystem=*Windows Server 2012*)))")
+        search_filter = "(&(objectclass=computer)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(|(operatingSystem=*Windows 6*)(operatingSystem=*Windows 2000*)(operatingSystem=*Windows XP*)(operatingSystem=*Windows Vista*)(operatingSystem=*Windows 7*)(operatingSystem=*Windows 8*)(operatingSystem=*Windows 8.1*)(operatingSystem=*Windows Server 2003*)(operatingSystem=*Windows Server 2008*)(operatingSystem=*Windows Server 2012*)))"
         attributes = ["name", "operatingSystem", "dNSHostName", "pwdLastSet"]
 
         try:

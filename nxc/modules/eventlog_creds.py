@@ -11,6 +11,7 @@ class NXCModule:
     Module by @lodos2005
     This module extracts credentials from Windows logs. It uses Security Event ID: 4688 and SYSMON logs.
     """
+
     name = "eventlog_creds"
     description = "Extracting Credentials From Windows Logs (Event ID: 4688 and SYSMON)"
     supported_protocols = ["smb"]
@@ -65,10 +66,7 @@ class NXCModule:
         for line in content.split("\n"):
             for reg in regexps:
                 # Remove unnecessary words
-                line_stripped = line.replace("/add", "") \
-                    .replace("/active:yes", "") \
-                    .replace("/delete", "") \
-                    .replace("/domain", "") \
+                line_stripped = line.replace("/add", "").replace("/active:yes", "").replace("/delete", "").replace("/domain", "")
                 # Remove command lines that were executed with nxc
                 line_stripped = re.sub(r"1> \\Windows\\Temp\\[\w]{6} 2>&1", "", line_stripped)
 
@@ -110,18 +108,7 @@ class NXCModule:
         else:
             msevenclass = MSEven6Trigger(context)
             target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
-            msevenclass.connect(
-                username=connection.username,
-                password=connection.password,
-                domain=connection.domain,
-                lmhash=connection.lmhash,
-                nthash=connection.nthash,
-                target=target,
-                doKerberos=connection.kerberos,
-                dcHost=connection.kdcHost,
-                aesKey=connection.aesKey,
-                pipe="eventlog"
-            )
+            msevenclass.connect(username=connection.username, password=connection.password, domain=connection.domain, lmhash=connection.lmhash, nthash=connection.nthash, target=target, doKerberos=connection.kerberos, dcHost=connection.kdcHost, aesKey=connection.aesKey, pipe="eventlog")
             for record in msevenclass.query("\x00", '<QueryList><Query Id="0"><Select Path="Security">*[System/EventID=4688]</Select></Query><Query Id="0"><Select Path="Microsoft-Windows-Sysmon/Operational">*[System/EventID=1]</Select></Query></QueryList>\x00', self.limit):
                 if record is None:
                     continue
@@ -221,4 +208,4 @@ class MSEven6Result:
         size = self._resp["EventDataSizes"][self._index]["Data"]
         self._index += 1
 
-        return b"".join(self._resp["ResultBuffer"][offset:offset + size])
+        return b"".join(self._resp["ResultBuffer"][offset : offset + size])

@@ -6,7 +6,6 @@ from nxc.paths import NXC_PATH
 
 
 class NXCModule:
-
     name = "snipped"
     description = "Downloads screenshots taken by the (new) Snipping Tool."
     supported_protocols = ["smb"]

@@ -149,17 +149,8 @@ class UserSamrDump:
 
         for user in user_ids:
             self.logger.debug(f"Calling hSamrOpenUser for RID {user}")
-            open_user_resp = samr.hSamrOpenUser(
-                self.dce,
-                domain_handle,
-                samr.MAXIMUM_ALLOWED,
-                user
-            )
-            info_user_resp = samr.hSamrQueryInformationUser2(
-                self.dce,
-                open_user_resp["UserHandle"],
-                samr.USER_INFORMATION_CLASS.UserAllInformation
-            )["Buffer"]
+            open_user_resp = samr.hSamrOpenUser(self.dce, domain_handle, samr.MAXIMUM_ALLOWED, user)
+            info_user_resp = samr.hSamrQueryInformationUser2(self.dce, open_user_resp["UserHandle"], samr.USER_INFORMATION_CLASS.UserAllInformation)["Buffer"]
 
             user_info = info_user_resp["All"]
             user_name = user_info["UserName"]

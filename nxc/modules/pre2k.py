@@ -13,6 +13,7 @@ class NXCModule:
     Identify pre-created computer accounts, save the results to a file, and obtain TGTs for each pre-created computer account.
     Module by: @shad0wcntr0ller
     """
+
     name = "pre2k"
     description = "Identify pre-created computer accounts, save the results to a file, and obtain TGTs for each"
     supported_protocols = ["ldap"]
@@ -86,16 +87,7 @@ class NXCModule:
             password = username[:14]  # Password is the first 14 characters of the machine name in lowercase
             context.log.info(f"Getting TGT for {username}@{domain}")
 
-            tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(
-                clientName=userName,
-                password=password,
-                domain=domain,
-                lmhash="",
-                nthash="",
-                aesKey="",
-                kdcHost=kdcHost,
-                serverName=None
-            )
+            tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(clientName=userName, password=password, domain=domain, lmhash="", nthash="", aesKey="", kdcHost=kdcHost, serverName=None)
 
             self.save_ticket(context, username, tgt, oldSessionKey, ccache_base_dir)
             context.log.success(f"Successfully obtained TGT for {username}@{domain}")

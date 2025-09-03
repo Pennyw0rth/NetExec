@@ -38,24 +38,7 @@ class FileID:
 
 
 # src: https://elixir.bootlin.com/linux/v6.13.4/source/include/linux/exportfs.h#L25
-fileid_types = {
-    0: FileID.root,
-    1: FileID.ext,
-    2: FileID.ext,
-    0x81: FileID.ext,
-    0x4d: FileID.btrfs,
-    0x4e: FileID.btrfs,
-    0x4f: FileID.btrfs,
-    0x51: FileID.udf,
-    0x52: FileID.udf,
-    0x61: FileID.nilfs,
-    0x62: FileID.nilfs,
-    0x71: FileID.fat,
-    0x72: FileID.fat,
-    0x97: FileID.lustre,
-    0xfe: FileID.kernfs,
-    0xff: FileID.invalid
-}
+fileid_types = {0: FileID.root, 1: FileID.ext, 2: FileID.ext, 0x81: FileID.ext, 0x4D: FileID.btrfs, 0x4E: FileID.btrfs, 0x4F: FileID.btrfs, 0x51: FileID.udf, 0x52: FileID.udf, 0x61: FileID.nilfs, 0x62: FileID.nilfs, 0x71: FileID.fat, 0x72: FileID.fat, 0x97: FileID.lustre, 0xFE: FileID.kernfs, 0xFF: FileID.invalid}
 
 # src: https://elixir.bootlin.com/linux/v6.13.4/source/fs/nfsd/nfsfh.h#L17-L45
 fsid_lens = {
@@ -155,12 +138,13 @@ class nfs(connection):
 
     def list_dir(self, file_handle, path, recurse=1):
         """Process entries in NFS directory recursively with UID autodection"""
+
         def process_entries(entries, path, uid, recurse):
             try:
                 contents = []
                 for entry in entries:
                     if "name" in entry and entry["name"] not in [b".", b".."]:
-                        item_path = f'{path}/{entry["name"].decode("utf-8")}'  # Constructing file path
+                        item_path = f"{path}/{entry['name'].decode('utf-8')}"  # Constructing file path
                         if entry.get("name_attributes", {}).get("present", False):
                             if entry["name_attributes"]["attributes"]["type"] == 2 and recurse > 0:  # Recursive directory listing. Entry type shows file format. 1 is file, 2 is folder.
                                 dir_handle = entry["name_handle"]["handle"]["data"]
@@ -201,7 +185,6 @@ class nfs(connection):
         """Enumerates all NFS shares and their access range"""
         networks = []
         for node in export_nodes:
-
             # Collect the names of the groups associated with this export node
             group_names = self.group_names(node.ex_groups) or ["Everyone"]
             networks.append(group_names)
@@ -562,13 +545,13 @@ class nfs(connection):
         # Format for the file id see: https://elixir.bootlin.com/linux/v6.13.4/source/include/linux/exportfs.h#L25
         fh = bytearray(mount_fh)
         if filesystem in [FileID.ext, FileID.unknown]:
-            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x02\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x02\x00\x00\x00"))  # noqa: E226
-            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x80\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x80\x00\x00\x00"))  # noqa: E226
+            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4 : 4 + fh_fsid_len] + b"\x02\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x02\x00\x00\x00"))  # noqa: E226
+            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4 : 4 + fh_fsid_len] + b"\x80\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x80\x00\x00\x00"))  # noqa: E226
         if filesystem in [FileID.btrfs, FileID.unknown]:
             # Iterate over btrfs subvolumes, use 16 as default similar to the guys from nfs-security-tooling
             for i in range(16):
                 subvolume = int.to_bytes(i) + b"\x01\x00\x00"
-                root_handles.append(bytes(fh[:3] + b"\x4d" + fh[4:4+fh_fsid_len] + b"\x00\x01\x00\x00" + b"\x00\x00\x00\x00" + subvolume + b"\x00\x00\x00\x00" + b"\x00\x00\x00\x00"))  # noqa: E226
+                root_handles.append(bytes(fh[:3] + b"\x4d" + fh[4 : 4 + fh_fsid_len] + b"\x00\x01\x00\x00" + b"\x00\x00\x00\x00" + subvolume + b"\x00\x00\x00\x00" + b"\x00\x00\x00\x00"))  # noqa: E226
 
         return root_handles
 
@@ -640,7 +623,7 @@ class nfs(connection):
 
         # We got a path to look up
         curr_fh = mount_fh
-        is_file = False     # If the last path is a file
+        is_file = False  # If the last path is a file
 
         # If ls is "" or "/" without filter we would get one item with [""]
         for sub_path in list(filter(None, self.args.ls.split("/"))):
@@ -681,7 +664,7 @@ class nfs(connection):
         path = f"{self.args.share if self.args.share else ''}/{self.args.ls}"
         if is_file:
             content = [x for x in content if x["name"].decode() == sub_path]
-            path = path.rsplit("/", 1)[0]   # Remove the file from the path
+            path = path.rsplit("/", 1)[0]  # Remove the file from the path
         self.print_directory(content, path)
 
     def print_directory(self, content, path):

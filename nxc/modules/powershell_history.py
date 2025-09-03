@@ -14,12 +14,7 @@ class NXCModule:
     supported_protocols = ["smb"]
     category = CATEGORY.CREDENTIAL_DUMPING
     false_positive = [".", "..", "desktop.ini", "Public", "Default", "Default User", "All Users", ".NET v4.5", ".NET v4.5 Classic"]
-    sensitive_keywords = [
-        "password", "passw", "secret", "credential", "key",
-        "get-credential", "convertto-securestring", "set-localuser",
-        "new-localuser", "set-adaccountpassword", "new-object system.net.webclient",
-        "invoke-webrequest", "invoke-restmethod"
-    ]
+    sensitive_keywords = ["password", "passw", "secret", "credential", "key", "get-credential", "convertto-securestring", "set-localuser", "new-localuser", "set-adaccountpassword", "new-object system.net.webclient", "invoke-webrequest", "invoke-restmethod"]
 
     def options(self, _, module_options):
         self.export = bool(module_options.get("EXPORT", False))

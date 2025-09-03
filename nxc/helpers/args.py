@@ -16,9 +16,7 @@ class DefaultTrackingAction(Action):
     def __init__(self, option_strings, dest, default=None, required=False, **kwargs):
         # Store the default value to check later
         self.default_value = default
-        super().__init__(
-            option_strings, dest, default=default, required=required, **kwargs
-        )
+        super().__init__(option_strings, dest, default=default, required=required, **kwargs)
 
     def __call__(self, parser, namespace, values, option_string=None):
         # Set an attribute to track whether the value was explicitly set

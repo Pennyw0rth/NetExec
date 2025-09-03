@@ -29,11 +29,7 @@ user_failed_logins = {}
 
 
 def get_host_addr_info(target, force_ipv6, dns_server, dns_tcp, dns_timeout):
-    result = {
-        "host": "",
-        "is_ipv6": False,
-        "is_link_local_ipv6": False
-    }
+    result = {"host": "", "is_ipv6": False, "is_link_local_ipv6": False}
     address_info = {"AF_INET6": "", "AF_INET": ""}
 
     try:
@@ -139,11 +135,7 @@ class connection:
         # Authentication info
         self.password = ""
         self.username = ""
-        self.kerberos = bool(self.args.kerberos or
-                             self.args.use_kcache or
-                             self.args.aesKey or
-                             (hasattr(self.args, "delegate") and self.args.delegate) or
-                             (hasattr(self.args, "no_preauth_targets") and self.args.no_preauth_targets))
+        self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey or (hasattr(self.args, "delegate") and self.args.delegate) or (hasattr(self.args, "no_preauth_targets") and self.args.no_preauth_targets))
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
         self.admin_privs = False
@@ -151,9 +143,9 @@ class connection:
 
         # Network info
         self.domain = None
-        self.host = None            # IP address of the target. If kerberos this is the hostname
-        self.hostname = target      # Target info supplied by the user, may be an IP address or a hostname
-        self.remoteName = target    # hostname + domain, defaults to target if domain could not be resolved/not specified
+        self.host = None  # IP address of the target. If kerberos this is the hostname
+        self.hostname = target  # Target info supplied by the user, may be an IP address or a hostname
+        self.remoteName = target  # hostname + domain, defaults to target if domain could not be resolved/not specified
         self.kdcHost = self.args.kdcHost
         self.port = self.args.port
         self.local_ip = None
@@ -193,13 +185,7 @@ class connection:
 
     def resolver(self, target):
         try:
-            return get_host_addr_info(
-                target=target,
-                force_ipv6=self.args.force_ipv6,
-                dns_server=self.args.dns_server,
-                dns_tcp=self.args.dns_tcp,
-                dns_timeout=self.args.dns_timeout
-            )
+            return get_host_addr_info(target=target, force_ipv6=self.args.force_ipv6, dns_server=self.args.dns_server, dns_tcp=self.args.dns_tcp, dns_timeout=self.args.dns_timeout)
         except Exception as e:
             self.logger.info(f"Error resolving hostname {target}: {e}")
             return None

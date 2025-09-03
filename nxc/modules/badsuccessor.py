@@ -18,20 +18,16 @@ ACCESS_RIGHTS = {
     "GenericWrite": 0x40000000,  # ADS_RIGHT_GENERIC_WRITE
     "GenericExecute": 0x20000000,  # ADS_RIGHT_GENERIC_EXECUTE
     "GenericAll": 0x10000000,  # ADS_RIGHT_GENERIC_ALL
-
     # Maximum Allowed access type
     "MaximumAllowed": 0x02000000,
-
     # Access System Acl access type
     "AccessSystemSecurity": 0x01000000,  # ADS_RIGHT_ACCESS_SYSTEM_SECURITY
-
     # Standard access types
     "Synchronize": 0x00100000,  # ADS_RIGHT_SYNCHRONIZE
     "WriteOwner": 0x00080000,  # ADS_RIGHT_WRITE_OWNER
     "WriteDACL": 0x00040000,  # ADS_RIGHT_WRITE_DAC
     "ReadControl": 0x00020000,  # ADS_RIGHT_READ_CONTROL
     "Delete": 0x00010000,  # ADS_RIGHT_DELETE
-
     # Specific rights
     "AllExtendedRights": 0x00000100,  # ADS_RIGHT_DS_CONTROL_ACCESS
     "ListObject": 0x00000080,  # ADS_RIGHT_DS_LIST_OBJECT
@@ -45,15 +41,7 @@ ACCESS_RIGHTS = {
 }
 
 # Define which rights are considered relevant for potential abuse
-RELEVANT_RIGHTS = {
-    "GenericAll": ACCESS_RIGHTS["GenericAll"],
-    "GenericWrite": ACCESS_RIGHTS["GenericWrite"],
-    "WriteOwner": ACCESS_RIGHTS["WriteOwner"],
-    "WriteDACL": ACCESS_RIGHTS["WriteDACL"],
-    "CreateChild": ACCESS_RIGHTS["CreateChild"],
-    "WriteProperties": ACCESS_RIGHTS["WriteProperties"],
-    "AllExtendedRights": ACCESS_RIGHTS["AllExtendedRights"]
-}
+RELEVANT_RIGHTS = {"GenericAll": ACCESS_RIGHTS["GenericAll"], "GenericWrite": ACCESS_RIGHTS["GenericWrite"], "WriteOwner": ACCESS_RIGHTS["WriteOwner"], "WriteDACL": ACCESS_RIGHTS["WriteDACL"], "CreateChild": ACCESS_RIGHTS["CreateChild"], "WriteProperties": ACCESS_RIGHTS["WriteProperties"], "AllExtendedRights": ACCESS_RIGHTS["AllExtendedRights"]}
 
 FUNCTIONAL_LEVELS = {
     "Windows 2000": 0,
@@ -96,10 +84,7 @@ class NXCModule:
 
     def get_domain_sid(self):
         """Retrieve the domain SID from the domain object in LDAP"""
-        r = self.connection.search(
-            searchFilter="(objectClass=domain)",
-            attributes=["objectSid"]
-        )
+        r = self.connection.search(searchFilter="(objectClass=domain)", attributes=["objectSid"])
         parsed = parse_result_attributes(r)
         if parsed and "objectSid" in parsed[0]:
             return parsed[0]["objectSid"]
@@ -159,10 +144,7 @@ class NXCModule:
         """
         try:
             search_filter = f"(objectSid={sid})"
-            response = self.connection.search(
-                searchFilter=search_filter,
-                attributes=["sAMAccountName"]
-            )
+            response = self.connection.search(searchFilter=search_filter, attributes=["sAMAccountName"])
 
             parsed = parse_result_attributes(response)
             if parsed and "sAMAccountName" in parsed[0]:
@@ -175,10 +157,7 @@ class NXCModule:
         self.connection = connection
 
         # Check for a domain controller with Windows Server 2025
-        resp = self.connection.search(
-            searchFilter="(&(objectCategory=computer)(primaryGroupId=516))",
-            attributes=["operatingSystem", "dNSHostName"]
-        )
+        resp = self.connection.search(searchFilter="(&(objectCategory=computer)(primaryGroupId=516))", attributes=["operatingSystem", "dNSHostName"])
         parsed_resp = parse_result_attributes(resp)
 
         for dc in parsed_resp:
@@ -191,11 +170,7 @@ class NXCModule:
 
         # Enumerate dMSA objects
         controls = security_descriptor_control(sdflags=0x07)  # OWNER_SECURITY_INFORMATION
-        resp = self.connection.search(
-            searchFilter="(objectClass=organizationalUnit)",
-            attributes=["distinguishedName", "nTSecurityDescriptor"],
-            searchControls=controls
-        )
+        resp = self.connection.search(searchFilter="(objectClass=organizationalUnit)", attributes=["distinguishedName", "nTSecurityDescriptor"], searchControls=controls)
 
         context.log.debug(f"Found {len(resp)} entries")
 

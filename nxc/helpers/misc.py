@@ -129,6 +129,7 @@ def get_bloodhound_info():
     if not version:
         try:
             import bloodhound
+
             version = getattr(bloodhound, "__version__", "unknown")
             package_name = "bloodhound"
 

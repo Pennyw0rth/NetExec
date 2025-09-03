@@ -12,6 +12,7 @@ class NXCModule:
     Modified by @Defte_ so that we can upload a custom binary to execute using the BINARY option (28/04/2025)
     Modified by @SGMG11 to execute the task without output
     """
+
     name = "schtask_as"
     description = "Remotely execute a scheduled task as a logged on user"
     supported_protocols = ["smb"]

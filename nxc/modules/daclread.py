@@ -189,10 +189,7 @@ class ALLOWED_OBJECT_ACE_MASK_FLAGS(Enum):
     Self = ldaptypes.ACCESS_ALLOWED_OBJECT_ACE.ADS_RIGHT_DS_SELF
 
 
-SEARCH_FILTERS = {
-    "TARGET": lambda target: f"(sAMAccountName={escape_filter_chars(target)})",
-    "TARGET_DN": lambda target: f"(distinguishedName={escape_filter_chars(target)})"
-}
+SEARCH_FILTERS = {"TARGET": lambda target: f"(sAMAccountName={escape_filter_chars(target)})", "TARGET_DN": lambda target: f"(distinguishedName={escape_filter_chars(target)})"}
 
 
 class NXCModule:
@@ -398,10 +395,7 @@ class NXCModule:
             if ace["TypeName"] in ["ACCESS_ALLOWED_ACE", "ACCESS_DENIED_ACE"]:
                 access_mask = f"{', '.join(self.parse_perms(ace['Ace']['Mask']['Mask']))} (0x{ace['Ace']['Mask']['Mask']:x})"
                 trustee_sid = f"{self.resolveSID(ace['Ace']['Sid'].formatCanonical()) or 'UNKNOWN'} ({ace['Ace']['Sid'].formatCanonical()})"
-                parsed_ace = {
-                    "Access mask": access_mask,
-                    "Trustee (SID)": trustee_sid
-                }
+                parsed_ace = {"Access mask": access_mask, "Trustee (SID)": trustee_sid}
             elif ace["TypeName"] in ["ACCESS_ALLOWED_OBJECT_ACE", "ACCESS_DENIED_OBJECT_ACE"]:  # for object-specific ACE
                 # Extracts the mask values. These values will indicate the ObjectType purpose
                 access_mask_flags = [FLAG.name for FLAG in ALLOWED_OBJECT_ACE_MASK_FLAGS if ace["Ace"]["Mask"].hasPriv(FLAG.value)]

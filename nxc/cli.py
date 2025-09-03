@@ -63,12 +63,12 @@ def gen_cli_args():
 
     For documentation and usage examples, visit: https://www.netexec.wiki/
 
-    {highlight('Version', 'red')} : {highlight(VERSION)}
-    {highlight('Codename', 'red')}: {highlight(CODENAME)}
-    {highlight('Commit', 'red')}  : {highlight(COMMIT)}
+    {highlight("Version", "red")} : {highlight(VERSION)}
+    {highlight("Codename", "red")}: {highlight(CODENAME)}
+    {highlight("Commit", "red")}  : {highlight(COMMIT)}
     """,
         formatter_class=RawTextHelpFormatter,
-        parents=[generic_parser, output_parser, dns_parser]
+        parents=[generic_parser, output_parser, dns_parser],
     )
 
     # we do module arg parsing here so we can reference the module_list attribute below

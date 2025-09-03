@@ -24,6 +24,7 @@ from os.path import join as path_join
 from sys import exit
 from rich.progress import Progress
 import platform
+
 if sys.stdout.encoding == "cp1252":
     sys.stdout.reconfigure(encoding="utf-8")
 
@@ -104,7 +105,7 @@ def main():
                 start_id, end_id = cred_id.split("-")
                 try:
                     for n in range(int(start_id), int(end_id) + 1):
-                        args.cred_id.append(n)    # noqa: B909
+                        args.cred_id.append(n)  # noqa: B909
                     args.cred_id.remove(cred_id)  # noqa: B909
                 except Exception as e:
                     nxc_logger.error(f"Error parsing database credential id: {e}")

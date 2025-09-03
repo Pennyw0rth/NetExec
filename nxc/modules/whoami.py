@@ -51,7 +51,6 @@ class NXCModule:
         resp_parsed = parse_result_attributes(r)
 
         for response in resp_parsed:
-
             # Process name
             if "name" in response:
                 context.log.highlight(f"Name: {response['name']}")

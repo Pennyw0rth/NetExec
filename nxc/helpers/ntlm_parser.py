@@ -8,13 +8,9 @@ import contextlib
 
 
 def parse_challenge(challange):
-    target_info = {
-        "hostname": None,
-        "domain": None,
-        "os_version": None
-    }
+    target_info = {"hostname": None, "domain": None, "os_version": None}
     challange = ntlm.NTLMAuthChallenge(challange)
-    av_pairs = ntlm.AV_PAIRS(challange["TargetInfoFields"][:challange["TargetInfoFields_len"]])
+    av_pairs = ntlm.AV_PAIRS(challange["TargetInfoFields"][: challange["TargetInfoFields_len"]])
     if av_pairs[ntlm.NTLMSSP_AV_HOSTNAME] is not None:
         with contextlib.suppress(Exception):
             target_info["hostname"] = av_pairs[ntlm.NTLMSSP_AV_HOSTNAME][1].decode("utf-16le")

@@ -55,9 +55,7 @@ class NXCModule:
 
 class Modify_Func:
     # Slightly modified version of impackets computeResponseNTLMv2
-    def mod_computeResponseNTLMv2(flags, serverChallenge, clientChallenge, serverName, domain, user, password, lmhash="", nthash="",
-                    use_ntlmv2=ntlm.USE_NTLMv2, channel_binding_value=b"", service="cifs"):
-
+    def mod_computeResponseNTLMv2(flags, serverChallenge, clientChallenge, serverName, domain, user, password, lmhash="", nthash="", use_ntlmv2=ntlm.USE_NTLMv2, channel_binding_value=b"", service="cifs"):
         responseServerVersion = b"\x01"
         hiResponseServerVersion = b"\x01"
         responseKeyNT = ntlm.NTOWFv2(user, password, domain, nthash)
@@ -111,6 +109,7 @@ class Modify_Func:
         # Let's do some encoding checks before moving on. Kind of dirty, but found effective when dealing with
         # international characters.
         import sys
+
         encoding = sys.getfilesystemencoding()
         if encoding is not None:
             try:
@@ -139,20 +138,18 @@ class Modify_Func:
 
         serverName = ntlmChallenge["TargetInfoFields"]
 
-        ntResponse, lmResponse, sessionBaseKey = ntlm.computeResponse(ntlmChallenge["flags"], ntlmChallenge["challenge"],
-                                                                clientChallenge, serverName, domain, user, password,
-                                                                lmhash, nthash, use_ntlmv2, channel_binding_value=channel_binding_value)
+        ntResponse, lmResponse, sessionBaseKey = ntlm.computeResponse(ntlmChallenge["flags"], ntlmChallenge["challenge"], clientChallenge, serverName, domain, user, password, lmhash, nthash, use_ntlmv2, channel_binding_value=channel_binding_value)
 
         # Let's check the return flags
         if (ntlmChallenge["flags"] & ntlm.NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY) == 0:
             # No extended session security, taking it out
-            responseFlags &= 0xffffffff ^ ntlm.NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY
+            responseFlags &= 0xFFFFFFFF ^ ntlm.NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY
         if (ntlmChallenge["flags"] & ntlm.NTLMSSP_NEGOTIATE_128) == 0:
             # No support for 128 key len, taking it out
-            responseFlags &= 0xffffffff ^ ntlm.NTLMSSP_NEGOTIATE_128
+            responseFlags &= 0xFFFFFFFF ^ ntlm.NTLMSSP_NEGOTIATE_128
         if (ntlmChallenge["flags"] & ntlm.NTLMSSP_NEGOTIATE_KEY_EXCH) == 0:
             # No key exchange supported, taking it out
-            responseFlags &= 0xffffffff ^ ntlm.NTLMSSP_NEGOTIATE_KEY_EXCH
+            responseFlags &= 0xFFFFFFFF ^ ntlm.NTLMSSP_NEGOTIATE_KEY_EXCH
 
         # drop the mic need to unset these flags
         # https://github.com/fortra/impacket/blob/master/impacket/examples/ntlmrelayx/clients/ldaprelayclient.py#L72
@@ -163,8 +160,7 @@ class Modify_Func:
         if ntlmChallenge["flags"] & ntlm.NTLMSSP_NEGOTIATE_ALWAYS_SIGN == ntlm.NTLMSSP_NEGOTIATE_ALWAYS_SIGN:
             responseFlags ^= ntlm.NTLMSSP_NEGOTIATE_ALWAYS_SIGN
 
-        keyExchangeKey = ntlm.KXKEY(ntlmChallenge["flags"], sessionBaseKey, lmResponse, ntlmChallenge["challenge"], password,
-                            lmhash, nthash, use_ntlmv2)
+        keyExchangeKey = ntlm.KXKEY(ntlmChallenge["flags"], sessionBaseKey, lmResponse, ntlmChallenge["challenge"], password, lmhash, nthash, use_ntlmv2)
 
         # Special case for anonymous login
         if user == "" and password == "" and lmhash == "" and nthash == "":

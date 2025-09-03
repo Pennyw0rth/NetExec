@@ -84,6 +84,7 @@ class rdp(connection):
 
     def proto_logger(self):
         import platform
+
         if platform.python_version() in ["3.11.5", "3.11.6", "3.12.0"]:
             import sys
 

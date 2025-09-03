@@ -278,7 +278,7 @@ class ldap(connection):
             target_domain = sub(
                 r",DC=",
                 ".",
-                base_dn[base_dn.lower().find("dc="):],
+                base_dn[base_dn.lower().find("dc=") :],
                 flags=IGNORECASE,
             )[3:]
         except Exception as e:
@@ -336,12 +336,7 @@ class ldap(connection):
         self.output_filename = os.path.expanduser(os.path.join(NXC_PATH, "logs", filename))
 
         try:
-            self.db.add_host(
-                self.host,
-                self.hostname,
-                self.domain,
-                self.server_os
-            )
+            self.db.add_host(self.host, self.hostname, self.domain, self.server_os)
         except Exception as e:
             self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
 
@@ -357,7 +352,7 @@ class ldap(connection):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({cbt_status}) {ntlm}")
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
-        self.username = username if not self.args.use_kcache else self.username    # With ccache we get the username from the ticket
+        self.username = username if not self.args.use_kcache else self.username  # With ccache we get the username from the ticket
         self.password = password
         self.domain = domain
         self.kdcHost = kdcHost
@@ -893,25 +888,10 @@ class ldap(connection):
                 trust_attributes = int(trust["trustAttributes"])
 
                 # See: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/e9a2d23c-c31e-4a6f-88a0-6646fdb51a3c
-                trust_attribute_flags = {
-                    0x1:    "Non-Transitive",
-                    0x2:    "Uplevel-Only",
-                    0x4:    "Quarantined Domain",
-                    0x8:    "Forest Transitive",
-                    0x10:   "Cross Organization",
-                    0x20:   "Within Forest",
-                    0x40:   "Treat as External",
-                    0x80:   "Uses RC4 Encryption",
-                    0x200:  "Cross Organization No TGT Delegation",
-                    0x800:  "Cross Organization Enable TGT Delegation",
-                    0x2000: "PAM Trust"
-                }
+                trust_attribute_flags = {0x1: "Non-Transitive", 0x2: "Uplevel-Only", 0x4: "Quarantined Domain", 0x8: "Forest Transitive", 0x10: "Cross Organization", 0x20: "Within Forest", 0x40: "Treat as External", 0x80: "Uses RC4 Encryption", 0x200: "Cross Organization No TGT Delegation", 0x800: "Cross Organization Enable TGT Delegation", 0x2000: "PAM Trust"}
 
                 # For check if multiple posibble flags, like Uplevel-Only, Treat as External
-                trust_attributes_text = ", ".join(
-                    text for flag, text in trust_attribute_flags.items()
-                    if trust_attributes & flag
-                ) or "Other"  # If Trust attrs not known
+                trust_attributes_text = ", ".join(text for flag, text in trust_attribute_flags.items() if trust_attributes & flag) or "Other"  # If Trust attrs not known
 
                 # Convert trust direction/type to human-readable format
                 direction_text = {
@@ -1166,10 +1146,7 @@ class ldap(connection):
                 self.logger.highlight(outputFormat.format(*row))
 
         # Building the search filter
-        search_filter = (f"(&(|(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION})"
-                         f"(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_FOR_DELEGATION})"
-                         "(msDS-AllowedToDelegateTo=*)(msDS-AllowedToActOnBehalfOfOtherIdentity=*))"
-                         f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE})))")
+        search_filter = f"(&(|(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION})(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_FOR_DELEGATION})(msDS-AllowedToDelegateTo=*)(msDS-AllowedToActOnBehalfOfOtherIdentity=*))(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE})))"
         # f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_SERVER_TRUST_ACCOUNT})))")  This would filter out RBCD to DCs
 
         attributes = ["sAMAccountName", "pwdLastSet", "userAccountControl", "objectCategory", "msDS-AllowedToActOnBehalfOfOtherIdentity", "msDS-AllowedToDelegateTo"]
@@ -1406,6 +1383,7 @@ class ldap(connection):
         Get the Fine Grained Password Policy/PSOs
         Initial FGPP/PSO script written by @n00py: https://github.com/n00py/GetFGPP
         """
+
         # Convert LDAP time to human readable format
         def pso_days(ldap_time):
             return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).days} days"
@@ -1438,11 +1416,7 @@ class ldap(connection):
 
         # Let's find out even more details!
         self.logger.info("Attempting to enumerate details...\n")
-        resp = self.search(searchFilter="(objectclass=msDS-PasswordSettings)",
-                          attributes=["name", "msds-lockoutthreshold", "msds-psoappliesto", "msds-minimumpasswordlength",
-                                     "msds-passwordhistorylength", "msds-lockoutobservationwindow", "msds-lockoutduration",
-                                     "msds-passwordsettingsprecedence", "msds-passwordcomplexityenabled", "Description",
-                                     "msds-passwordreversibleencryptionenabled", "msds-minimumpasswordage", "msds-maximumpasswordage"])
+        resp = self.search(searchFilter="(objectclass=msDS-PasswordSettings)", attributes=["name", "msds-lockoutthreshold", "msds-psoappliesto", "msds-minimumpasswordlength", "msds-passwordhistorylength", "msds-lockoutobservationwindow", "msds-lockoutduration", "msds-passwordsettingsprecedence", "msds-passwordcomplexityenabled", "Description", "msds-passwordreversibleencryptionenabled", "msds-minimumpasswordage", "msds-maximumpasswordage"])
         resp_parsed = parse_result_attributes(resp)
         for attrs in resp_parsed:
             policyName = attrs.get("name", "")
@@ -1483,17 +1457,7 @@ class ldap(connection):
 
     def pass_pol(self):
         search_filter = "(objectClass=domainDNS)"
-        attributes = [
-            "minPwdLength",
-            "pwdHistoryLength",
-            "maxPwdAge",
-            "minPwdAge",
-            "lockoutThreshold",
-            "lockoutDuration",
-            "lockOutObservationWindow",
-            "forceLogoff",
-            "pwdProperties"
-        ]
+        attributes = ["minPwdLength", "pwdHistoryLength", "maxPwdAge", "minPwdAge", "lockoutThreshold", "lockoutDuration", "lockOutObservationWindow", "forceLogoff", "pwdProperties"]
 
         resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
@@ -1503,6 +1467,7 @@ class ldap(connection):
             return
 
         for policy in resp_parsed:
+
             def ldap_to_filetime(ldap_time):
                 """Convert LDAP time to FILETIME format for convert function"""
                 if not ldap_time or ldap_time == "0":

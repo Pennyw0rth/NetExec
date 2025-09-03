@@ -47,7 +47,7 @@ def sid_to_str(sid):
             identifier_authority = hex(identifier_authority)
 
         # loop over the count of small endians
-        sub_authority = "-" + "-".join([str(int.from_bytes(sid[8 + (i * 4): 12 + (i * 4)], byteorder="little")) for i in range(sub_authorities)])
+        sub_authority = "-" + "-".join([str(int.from_bytes(sid[8 + (i * 4) : 12 + (i * 4)], byteorder="little")) for i in range(sub_authorities)])
         return "S-" + str(revision) + "-" + str(identifier_authority) + sub_authority
     except Exception:
         pass

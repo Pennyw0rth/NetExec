@@ -67,12 +67,7 @@ class database(BaseDB):
 
         # create new host
         if not results:
-            new_host = {
-                "ip": ip,
-                "hostname": hostname,
-                "domain": domain,
-                "os": os
-            }
+            new_host = {"ip": ip, "hostname": hostname, "domain": domain, "os": os}
             hosts = [new_host]
         # update existing hosts data
         else:

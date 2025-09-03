@@ -90,23 +90,13 @@ class winrm(connection):
 
         endpoints = {}
 
-        headers = {
-            "Content-Length": "0",
-            "Keep-Alive": "true",
-            "Content-Type": "application/soap+xml;charset=UTF-8",
-            "User-Agent": "Microsoft WinRM Client",
-            "Authorization": "Negotiate TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAGAbEdAAAADw=="
-        }
+        headers = {"Content-Length": "0", "Keep-Alive": "true", "Content-Type": "application/soap+xml;charset=UTF-8", "User-Agent": "Microsoft WinRM Client", "Authorization": "Negotiate TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAGAbEdAAAADw=="}
 
         for protocol in self.args.check_proto:
             endpoints[protocol] = {}
             endpoints[protocol]["port"] = self.port[self.args.check_proto.index(protocol)] if len(self.port) == 2 else self.port[0]
-            endpoints[protocol]["url"] = "{}://{}:{}/wsman".format(
-                protocol,
-                self.host if not self.is_ipv6 else f"[{self.host}]",
-                endpoints[protocol]["port"]
-            )
-            endpoints[protocol]["ssl"] = (protocol != "http")
+            endpoints[protocol]["url"] = "{}://{}:{}/wsman".format(protocol, self.host if not self.is_ipv6 else f"[{self.host}]", endpoints[protocol]["port"])
+            endpoints[protocol]["ssl"] = protocol != "http"
 
         for protocol in endpoints:
             self.port = endpoints[protocol]["port"]
