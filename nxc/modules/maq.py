@@ -22,7 +22,7 @@ class NXCModule:
     description = "Retrieves the MachineAccountQuota domain-level attribute"
     supported_protocols = ["ldap"]
     category = CATEGORY.ENUMERATION
-    
+
     def on_login(self, context, connection):
          context.log.display("Getting the MachineAccountQuota")
          try:
