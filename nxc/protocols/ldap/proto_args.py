@@ -14,6 +14,7 @@ def proto_args(parser, parents):
     egroup.add_argument("--asreproast", help="Output AS_REP response to crack with hashcat to file")
     egroup.add_argument("--kerberoasting", help="Output TGS ticket to crack with hashcat to file")
     egroup.add_argument("--no-preauth-targets", nargs=1, dest="no_preauth_targets", help="Targeted kerberoastable users")
+    egroup.add_argument("--targetedkerberoast", help="Add temporary SPN to users without one, request TGS, then remove it")
 
     vgroup = ldap_parser.add_argument_group("Retrieve useful information on the domain")
     vgroup.add_argument("--base-dn", metavar="BASE_DN", dest="base_dn", type=str, default=None, help="base DN for search queries")
