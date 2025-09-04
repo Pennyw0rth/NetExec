@@ -513,7 +513,7 @@ class NXCModule:
 
     name = "spider_plus"
     description = "List files recursively and save a JSON share-file metadata to the 'OUTPUT_FOLDER'. See module options for finer configuration."
-    category = "enum"  # Added to fix the loading error
+    category = CATEGORY.CREDENTIAL_DUMPING
     supported_protocols = ["smb"]
 
     def options(self, context, module_options):
