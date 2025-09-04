@@ -37,6 +37,7 @@ dependencies = [
     "pypykatz>=0.6.8",
     "python-dateutil>=2.8.2",
     "python-libnmap>=0.7.3",
+    "PySocks>=1.7.1",
     "requests>=2.27.1",
     "rich>=13.3.5",
     "sqlalchemy>=2.0.4",
