@@ -288,7 +288,7 @@ class smb(connection):
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
-        signing = colored("signing:Req", host_info_colors[0], attrs=["bold"]) if self.signing else colored("signing:NotReq", host_info_colors[1], attrs=["bold"])
+        signing = colored("signingReq", host_info_colors[0], attrs=["bold"]) if self.signing else colored("signingNotReq", host_info_colors[1], attrs=["bold"])
         smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
         ntlm = colored(f" (NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
         null_auth = colored(f" (Null Auth:{self.null_auth})", host_info_colors[2], attrs=["bold"]) if self.null_auth else ""
