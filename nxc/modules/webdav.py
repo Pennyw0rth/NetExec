@@ -1,3 +1,4 @@
+from nxc.helpers.misc import CATEGORY
 from nxc.protocols.smb.remotefile import RemoteFile
 from impacket import nt_errors
 from impacket.smb3structs import FILE_READ_DATA
@@ -15,8 +16,7 @@ class NXCModule:
     name = "webdav"
     description = "Checks whether the WebClient service is running on the target"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """MSG     Info message when the WebClient service is running. '{}' is replaced by the target."""

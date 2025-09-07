@@ -1,6 +1,7 @@
 import sys
 from impacket.dcerpc.v5 import samr, epm, transport
 from impacket.dcerpc.v5.rpcrt import DCERPCException
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -12,8 +13,7 @@ class NXCModule:
     name = "change-password"
     description = "Change or reset user passwords via various protocols"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = False
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context, module_options):
         """

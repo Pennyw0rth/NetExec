@@ -1,4 +1,5 @@
 import sys
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -7,8 +8,7 @@ class NXCModule:
     name = "mssql_coerce"
     description = "Execute arbitrary SQL commands on the target MSSQL server"
     supported_protocols = ["mssql"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self):
         self.mssql_conn = None

@@ -6,6 +6,7 @@ import base64
 import re
 import pypykatz
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import TMP_PATH
 from os.path import abspath, join
 from datetime import datetime
@@ -15,8 +16,7 @@ class NXCModule:
     name = "procdump"
     description = "Get lsass dump using procdump64 and parse the result with pypykatz"
     supported_protocols = ["smb"]
-    opsec_safe = True  # not really
-    multiple_hosts = True
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         r"""

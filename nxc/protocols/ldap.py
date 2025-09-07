@@ -10,6 +10,7 @@ from re import sub, IGNORECASE
 from zipfile import ZipFile
 from termcolor import colored
 from dns import resolver
+from dateutil.relativedelta import relativedelta as rd
 
 from Cryptodome.Hash import MD4
 from OpenSSL.SSL import SysCallError
@@ -37,13 +38,13 @@ from impacket.ntlm import getNTLMSSPType1
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.misc import get_bloodhound_info, convert, d2b
 from nxc.logger import NXCAdapter, nxc_logger
 from nxc.protocols.ldap.bloodhound import BloodHound
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.ntlm_parser import parse_challenge
-from nxc.helpers.misc import get_bloodhound_info
 from nxc.paths import CONFIG_PATH, NXC_PATH
 
 ldap_error_status = {
@@ -170,55 +171,33 @@ class ldap(connection):
         )
 
     def create_conn_obj(self):
-        target = ""
-        target_domain = ""
-        base_dn = ""
         try:
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.host}"
             self.logger.info(f"Connecting to {ldap_url} with no baseDN")
-            try:
-                self.ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.host)
-                if self.ldap_connection:
-                    self.logger.debug(f"ldap_connection: {self.ldap_connection}")
-            except SysCallError as e:
-                if proto == "ldaps":
-                    self.logger.fail(f"LDAPs connection to {ldap_url} failed - {e}")
-                    # https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/enable-ldap-over-ssl-3rd-certification-authority
-                    self.logger.fail("Even if the port is open, LDAPS may not be configured")
-                else:
-                    self.logger.fail(f"LDAP connection to {ldap_url} failed: {e}")
-                return False
 
-            resp = self.ldap_connection.search(
-                scope=ldapasn1_impacket.Scope("baseObject"),
-                attributes=["defaultNamingContext", "dnsHostName"],
-                sizeLimit=0,
-            )
-            resp_parsed = parse_result_attributes(resp)[0]
-
-            target = resp_parsed["dnsHostName"]
-            base_dn = resp_parsed["defaultNamingContext"]
-            target_domain = sub(
-                r",DC=",
-                ".",
-                base_dn[base_dn.lower().find("dc="):],
-                flags=IGNORECASE,
-            )[3:]
+            self.ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.host)
+            if self.ldap_connection:
+                self.logger.debug(f"ldap_connection: {self.ldap_connection}")
+        except SysCallError as e:
+            if proto == "ldaps":
+                self.logger.fail(f"LDAPs connection to {ldap_url} failed - {e}")
+                # https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/enable-ldap-over-ssl-3rd-certification-authority
+                self.logger.fail("Even if the port is open, LDAPS may not be configured")
+            else:
+                self.logger.fail(f"LDAP connection to {ldap_url} failed: {e}")
+            return False
         except ConnectionRefusedError as e:
             self.logger.debug(f"{e} on host {self.host}")
             return False
         except OSError as e:
             if e.errno in (EHOSTUNREACH, ENETUNREACH, ETIMEDOUT):
-                self.logger.info(f"Error connecting to {self.host} - {e}")
+                self.logger.info(f"Error connecting to {self.host}: {e}")
                 return False
             else:
-                self.logger.error(f"Error getting ldap info {e}")
+                self.logger.error(f"Error connecting to {self.host}: {e}")
+                return False
 
-        self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
-        self.target = target
-        self.targetDomain = target_domain
-        self.baseDN = base_dn
         return True
 
     def get_ldap_username(self):
@@ -282,9 +261,39 @@ class ldap(connection):
                 raise
 
     def enum_host_info(self):
+        # Enumerate LDAP info
+        target = ""
+        target_domain = ""
+        base_dn = ""
+        try:
+            resp = self.ldap_connection.search(
+                scope=ldapasn1_impacket.Scope("baseObject"),
+                attributes=["defaultNamingContext", "dnsHostName"],
+                sizeLimit=0,
+            )
+            resp_parsed = parse_result_attributes(resp)[0]
+
+            target = resp_parsed["dnsHostName"]
+            base_dn = resp_parsed["defaultNamingContext"]
+            target_domain = sub(
+                r",DC=",
+                ".",
+                base_dn[base_dn.lower().find("dc="):],
+                flags=IGNORECASE,
+            )[3:]
+        except Exception as e:
+            self.logger.fail(f"Failed to enumerate host info for {self.host}, error: {e!s}")
+
+        self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
+        self.target = target
+        self.targetDomain = target_domain
+        self.baseDN = base_dn
+
+        # Parse hostname and remoteName
         self.hostname = self.target.split(".")[0].upper() if "." in self.target else self.target
         self.remoteName = self.target
 
+        # Parse NTLM challenge
         ntlm_challenge = None
         bindRequest = ldapasn1_impacket.BindRequest()
         bindRequest["version"] = 3
@@ -664,7 +673,7 @@ class ldap(connection):
         resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
         answers = []
-        if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "") and self.username != "":
+        if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "" or self.use_kcache) and self.username != "":
             for item in resp_parsed:
                 self.sid_domain = "-".join(item["objectSid"].split("-")[:-1])
 
@@ -693,7 +702,7 @@ class ldap(connection):
         t /= 10000000
         return t
 
-    def search(self, searchFilter, attributes, sizeLimit=0, baseDN=None) -> list:
+    def search(self, searchFilter, attributes, sizeLimit=0, baseDN=None, searchControls=None) -> list:
         if baseDN is None and self.args.base_dn is not None:
             baseDN = self.args.base_dn
         elif baseDN is None:
@@ -711,7 +720,7 @@ class ldap(connection):
                     searchFilter=searchFilter,
                     attributes=attributes,
                     sizeLimit=sizeLimit,
-                    searchControls=paged_search_control,
+                    searchControls=searchControls if searchControls else paged_search_control,
                 )
         except ldap_impacket.LDAPSearchError as e:
             if "sizeLimitExceeded" in str(e):
@@ -781,7 +790,7 @@ class ldap(connection):
             attributes = ["member"]
         else:
             search_filter = "(objectCategory=group)"
-            attributes = ["cn", "member"]
+            attributes = ["cn", "member", "description"]
         resp = self.search(search_filter, attributes, 0)
         resp_parsed = parse_result_attributes(resp)
         self.logger.debug(f"Total of records returned {len(resp_parsed)}")
@@ -798,12 +807,13 @@ class ldap(connection):
                 for user in resp_parsed[0]["member"]:
                     self.logger.highlight(user.split(",")[0].split("=")[1])
         else:
+            self.logger.highlight(f"{'-Group-':<40} {'-Members-':<9} {'-Description-':<60}")
             for item in resp_parsed:
                 try:
                     # Fix if group has only one member
                     if not isinstance(item.get("member", []), list):
                         item["member"] = [item["member"]]
-                    self.logger.highlight(f"{item['cn']:<40} membercount: {len(item.get('member', []))}")
+                    self.logger.highlight(f"{item['cn']:<40} {len(item.get('member', [])):<9} {item.get('description', '')}")
                 except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
@@ -818,15 +828,12 @@ class ldap(connection):
                 self.logger.highlight(item["name"] + "$")
 
     def dc_list(self):
-        # Building the search filter
-        resolv = resolver.Resolver()
-        if self.args.dns_server:
-            resolv.nameservers = [self.args.dns_server]
-        else:
-            resolv.nameservers = [self.host]
+        # bypass host resolver configuration via configure=False (default pulls from /etc/resolv.conf or registry on Windows)
+        resolv = resolver.Resolver(configure=False)
+        resolv.nameservers = [self.args.dns_server] if self.args.dns_server else [self.host]
+        self.logger.debug(f"DNS Server option: {self.args.dns_server}, using DNS server: {resolv.nameservers}")
         resolv.timeout = self.args.dns_timeout
 
-        # Function to resolve and display hostnames
         def resolve_and_display_hostname(name, domain_name=None):
             prefix = f"[{domain_name}] " if domain_name else ""
             try:
@@ -1277,15 +1284,13 @@ class ldap(connection):
     def gmsa(self):
         self.logger.display("Getting GMSA Passwords")
         search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
-        gmsa_accounts = self.ldap_connection.search(
-            searchBase=self.baseDN,
+        gmsa_accounts = self.search(
             searchFilter=search_filter,
             attributes=[
                 "sAMAccountName",
                 "msDS-ManagedPassword",
                 "msDS-GroupMSAMembership",
             ],
-            sizeLimit=0,
         )
         gmsa_accounts_parsed = parse_result_attributes(gmsa_accounts)
         if gmsa_accounts_parsed:
@@ -1395,6 +1400,172 @@ class ldap(connection):
                 self.logger.highlight(f"Account: {gmsa_id:<20} NTLM: {passwd}")
         else:
             self.logger.fail("No string provided :'(")
+
+    def pso(self):
+        """
+        Get the Fine Grained Password Policy/PSOs
+        Initial FGPP/PSO script written by @n00py: https://github.com/n00py/GetFGPP
+        """
+        # Convert LDAP time to human readable format
+        def pso_days(ldap_time):
+            return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).days} days"
+
+        def pso_mins(ldap_time):
+            return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).minutes} minutes"
+
+        # Are there even any FGPPs?
+        self.logger.info("Attempting to enumerate policies...")
+        resp = self.search(searchFilter="(objectclass=*)", baseDN=f"CN=Password Settings Container,CN=System,{self.baseDN}", attributes=[])
+        if len(resp) > 1:
+            self.logger.highlight(f"{len(resp) - 1} PSO Objects found!")
+            self.logger.highlight("")
+            self.logger.success("Attempting to enumerate objects with an applied policy...")
+
+        # Who do they apply to?
+        resp = self.search(searchFilter="(objectclass=*)", attributes=["DistinguishedName", "msDS-PSOApplied"])
+        resp_parsed = parse_result_attributes(resp)
+        for attrs in resp_parsed:
+            if "msDS-PSOApplied" in attrs:
+                # Get the distinguished name from the original response for objectName
+                for orig_resp in resp:
+                    if isinstance(orig_resp, ldapasn1_impacket.SearchResultEntry):
+                        self.logger.highlight(f"Object: {orig_resp['objectName']}")
+                        break
+                self.logger.highlight("Applied Policy: ")
+                pso_applied = attrs["msDS-PSOApplied"]
+                self.logger.highlight(f"\t{pso_applied}")
+                self.logger.highlight("")
+
+        # Let's find out even more details!
+        self.logger.info("Attempting to enumerate details...\n")
+        resp = self.search(searchFilter="(objectclass=msDS-PasswordSettings)",
+                          attributes=["name", "msds-lockoutthreshold", "msds-psoappliesto", "msds-minimumpasswordlength",
+                                     "msds-passwordhistorylength", "msds-lockoutobservationwindow", "msds-lockoutduration",
+                                     "msds-passwordsettingsprecedence", "msds-passwordcomplexityenabled", "Description",
+                                     "msds-passwordreversibleencryptionenabled", "msds-minimumpasswordage", "msds-maximumpasswordage"])
+        resp_parsed = parse_result_attributes(resp)
+        for attrs in resp_parsed:
+            policyName = attrs.get("name", "")
+            description = attrs.get("description", "")
+            passwordLength = attrs.get("msDS-MinimumPasswordLength", "")
+            passwordhistorylength = attrs.get("msDS-PasswordHistoryLength", "")
+            lockoutThreshold = attrs.get("msDS-LockoutThreshold", "")
+            observationWindow = attrs.get("msDS-LockoutObservationWindow", "")
+            lockoutDuration = attrs.get("msDS-LockoutDuration", "")
+            complexity = attrs.get("msDS-PasswordComplexityEnabled", "")
+            minPassAge = attrs.get("msDS-MinimumPasswordAge", "")
+            maxPassAge = attrs.get("msDS-MaximumPasswordAge", "")
+            reverseibleEncryption = attrs.get("msDS-PasswordReversibleEncryptionEnabled", "")
+            precedence = attrs.get("msDS-PasswordSettingsPrecedence", "")
+            policyApplies = attrs.get("msDS-PSOAppliesTo", "")
+
+            self.logger.highlight(f"Policy Name: {policyName}")
+            if description:
+                self.logger.highlight(f"Description: {description}")
+            self.logger.highlight(f"Minimum Password Length: {passwordLength}")
+            self.logger.highlight(f"Minimum Password History Length: {passwordhistorylength}")
+            self.logger.highlight(f"Lockout Threshold: {lockoutThreshold}")
+            self.logger.highlight(f"Observation Window: {pso_mins(observationWindow)}")
+            self.logger.highlight(f"Lockout Duration: {pso_mins(lockoutDuration)}")
+            self.logger.highlight(f"Complexity Enabled: {complexity}")
+            self.logger.highlight(f"Minimum Password Age: {pso_days(minPassAge)}")
+            self.logger.highlight(f"Maximum Password Age: {pso_days(maxPassAge)}")
+            self.logger.highlight(f"Reversible Encryption: {reverseibleEncryption}")
+            self.logger.highlight(f"Precedence: {precedence} (Lower is Higher Priority)")
+            self.logger.highlight("Policy Applies to:")
+            if isinstance(policyApplies, list):
+                for value in policyApplies:
+                    if value:
+                        self.logger.highlight(f"\t{value}")
+            elif policyApplies:
+                self.logger.highlight(f"\t{policyApplies}")
+            self.logger.highlight("")
+
+    def pass_pol(self):
+        search_filter = "(objectClass=domainDNS)"
+        attributes = [
+            "minPwdLength",
+            "pwdHistoryLength",
+            "maxPwdAge",
+            "minPwdAge",
+            "lockoutThreshold",
+            "lockoutDuration",
+            "lockOutObservationWindow",
+            "forceLogoff",
+            "pwdProperties"
+        ]
+
+        resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
+        resp_parsed = parse_result_attributes(resp)
+
+        if not resp_parsed:
+            self.logger.fail("No domain password policy found!")
+            return
+
+        for policy in resp_parsed:
+            def ldap_to_filetime(ldap_time):
+                """Convert LDAP time to FILETIME format for convert function"""
+                if not ldap_time or ldap_time == "0":
+                    return 0, 0
+
+                time_int = int(ldap_time)
+                if time_int < 0:
+                    time_int = abs(time_int)
+
+                low = time_int & 0xFFFFFFFF
+                high = (time_int >> 32) & 0xFFFFFFFF
+                if ldap_time.startswith("-") or int(ldap_time) < 0:
+                    high = -high
+
+                return low, high
+
+            min_pass_len = policy.get("minPwdLength", "None")
+            pass_hist_len = policy.get("pwdHistoryLength", "None")
+            max_pwd_age_low, max_pwd_age_high = ldap_to_filetime(policy.get("maxPwdAge", "0"))
+            max_pass_age = convert(max_pwd_age_low, max_pwd_age_high)
+            min_pwd_age_low, min_pwd_age_high = ldap_to_filetime(policy.get("minPwdAge", "0"))
+            min_pass_age = convert(min_pwd_age_low, min_pwd_age_high)
+            accnt_lock_thres = policy.get("lockoutThreshold", "None")
+            lockout_duration_val = policy.get("lockoutDuration", "0")
+            lock_accnt_dur = convert(0, int(lockout_duration_val) if lockout_duration_val != "0" else 0, lockout=True)
+            lockout_obs_val = policy.get("lockOutObservationWindow", "0")
+            rst_accnt_lock_counter = convert(0, int(lockout_obs_val) if lockout_obs_val != "0" else 0, lockout=True)
+            force_logoff_low, force_logoff_high = ldap_to_filetime(policy.get("forceLogoff", "0"))
+            force_logoff_time = convert(force_logoff_low, force_logoff_high)
+
+            # Convert password properties using existing d2b function
+            pwd_properties = policy.get("pwdProperties", "0")
+            pass_prop = d2b(int(pwd_properties)) if pwd_properties != "0" else "000000"
+
+            # Use the same formatting and constants as SMB passpol
+            PASSCOMPLEX = {
+                5: "Domain Password Complex:",
+                4: "Domain Password No Anon Change:",
+                3: "Domain Password No Clear Change:",
+                2: "Domain Password Lockout Admins:",
+                1: "Domain Password Store Cleartext:",
+                0: "Domain Refuse Password Change:",
+            }
+
+            # Pretty print using same format as SMB
+            self.logger.success(f"Dumping password info for domain: {self.domain}")
+            self.logger.highlight(f"Minimum password length: {min_pass_len}")
+            self.logger.highlight(f"Password history length: {pass_hist_len}")
+            self.logger.highlight(f"Maximum password age: {max_pass_age}")
+            self.logger.highlight("")
+            self.logger.highlight(f"Password Complexity Flags: {pass_prop or 'None'}")
+
+            for i, a in enumerate(pass_prop):
+                self.logger.highlight(f"\t{PASSCOMPLEX[i]} {a!s}")
+
+            self.logger.highlight("")
+            self.logger.highlight(f"Minimum password age: {min_pass_age}")
+            self.logger.highlight(f"Reset Account Lockout Counter: {rst_accnt_lock_counter}")
+            self.logger.highlight(f"Locked Account Duration: {lock_accnt_dur}")
+            self.logger.highlight(f"Account Lockout Threshold: {accnt_lock_thres}")
+            self.logger.highlight(f"Forced Log off Time: {force_logoff_time}")
+
+            break  # Only process first policy result
 
     def bloodhound(self):
         # Check which version is desired

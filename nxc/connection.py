@@ -1,3 +1,5 @@
+from datetime import datetime
+import os
 import random
 import sys
 import contextlib
@@ -15,6 +17,7 @@ from nxc.helpers.logger import highlight
 from nxc.loaders.moduleloader import ModuleLoader
 from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
+from nxc.paths import NXC_PATH
 from nxc.protocols.ldap.laps import laps_search
 from nxc.helpers.pfx import pfx_auth
 
@@ -155,6 +158,11 @@ class connection:
         self.port = self.args.port
         self.local_ip = None
         self.dns_server = self.args.dns_server
+
+        # Construct the output file template using os.path.join for OS compatibility
+        base_log_dir = os.path.join(os.path.expanduser(NXC_PATH), "logs")
+        filename_pattern = f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
+        self.output_file_template = os.path.join(base_log_dir, "{output_folder}", filename_pattern)
 
         # DNS resolution
         dns_result = self.resolver(target)

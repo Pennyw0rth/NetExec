@@ -1,5 +1,6 @@
 from datetime import datetime
 from nxc.helpers.logger import write_log
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 
 
@@ -12,8 +13,7 @@ class NXCModule:
     name = "enum_dns"
     description = "Uses WMI to dump DNS from an AD DNS Server"
     supported_protocols = ["smb", "wmi"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

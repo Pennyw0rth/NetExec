@@ -29,6 +29,8 @@ def proto_args(parser, parents):
     vgroup.add_argument("--dc-list", action="store_true", help="Enumerate Domain Controllers")
     vgroup.add_argument("--get-sid", action="store_true", help="Get domain sid")
     vgroup.add_argument("--active-users", nargs="*", help="Get Active Domain Users Accounts")
+    vgroup.add_argument("--pso", action="store_true", help="Get Fine Grained Password Policy/PSOs")
+    vgroup.add_argument("--pass-pol", action="store_true", help="Dump password policy")
 
     ggroup = ldap_parser.add_argument_group("Retrieve gmsa on the remote DC", "Options to play with gmsa")
     ggroup.add_argument("--gmsa", action="store_true", help="Enumerate GMSA passwords")

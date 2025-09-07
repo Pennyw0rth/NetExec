@@ -5,7 +5,7 @@ import time
 
 from impacket.system_errors import ERROR_NO_MORE_ITEMS, ERROR_FILE_NOT_FOUND, ERROR_OBJECT_NOT_FOUND
 from termcolor import colored
-
+from nxc.helpers.misc import CATEGORY
 from nxc.logger import nxc_logger
 from impacket.dcerpc.v5 import rrp, samr, scmr
 from impacket.dcerpc.v5.rrp import DCERPCSessionError
@@ -87,8 +87,7 @@ class NXCModule:
     name = "wcc"
     description = "Check various security configuration items on Windows machines"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     def __init__(self):
         self.context = None
@@ -179,6 +178,7 @@ class HostChecker:
             ConfigCheck("CredentialGuard enabled", "Checks if CredentialGuard is enabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard", "EnableVirtualizationBasedSecurity", 1), ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "LsaCfgFlags", 1)]]),
             ConfigCheck("Lsass run as PPL", "Checks if lsass runs as a protected process", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "RunAsPPL", 1)]]),
             ConfigCheck("No Powershell v2", "Checks if powershell v2 is available", checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\PowerShell\\3\\PowerShellEngine", "PSCompatibleVersion", "2.0", not_(operator.contains))]]),
+            ConfigCheck("LLMNR disabled", "Checks if LLMNR is disabled", checker_args=[[self, ("HKLM\\Software\\policies\\Microsoft\\Windows NT\\DNSClient", "EnableMulticast", 0)]]),
             ConfigCheck("LmCompatibilityLevel == 5", "Checks if LmCompatibilityLevel is set to 5", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "LmCompatibilityLevel", 5, operator.ge)]]),
             ConfigCheck("NBTNS disabled", "Checks if NBTNS is disabled on all interfaces", checkers=[self.check_nbtns]),
             ConfigCheck("mDNS disabled", "Checks if mDNS is disabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\DNScache\\Parameters", "EnableMDNS", 0)]]),
@@ -454,13 +454,21 @@ class HostChecker:
         return ok, reasons
 
     def check_nbtns(self):
+        adapters_key = "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}"
         key_name = "HKLM\\SYSTEM\\CurrentControlSet\\Services\\NetBT\\Parameters\\Interfaces"
         subkeys = self.reg_get_subkeys(self.dce, self.connection, key_name)
         success = False
         reasons = []
         missing = 0
         nbtns_enabled = 0
+
         for subkey in subkeys:
+            # Ignore Microsoft Kernel Debug Network Adapter
+            kdnic_key = adapters_key + "\\0000"
+            kdnic_uuid = self.reg_query_value(self.dce, self.connection, kdnic_key, "NetCfgInstanceId")
+            if subkey.lower() == ("Tcpip_" + kdnic_uuid).replace("\x00", "").lower():
+                continue
+
             value = self.reg_query_value(self.dce, self.connection, key_name + "\\" + subkey, "NetbiosOptions")
             if isinstance(value, DCERPCSessionError):
                 if value.error_code == ERROR_OBJECT_NOT_FOUND:
