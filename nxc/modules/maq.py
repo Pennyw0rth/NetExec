@@ -33,10 +33,4 @@ class NXCModule:
             context.log.fail("No LDAP entries returned.")
             return
 
-        maq = entries[0].get("ms-DS-MachineAccountQuota")
-        if isinstance(maq, list):
-            maq = maq[0] if maq else None
-        if isinstance(maq, (bytes, bytearray)):
-            maq = maq.decode("utf-8", errors="ignore")
-
-        context.log.highlight(f"MachineAccountQuota: {maq if maq else '<not set>'}")
+        context.log.highlight(f"MachineAccountQuota: {entries[0]['ms-DS-MachineAccountQuota']}")
