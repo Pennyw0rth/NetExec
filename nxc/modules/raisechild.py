@@ -42,7 +42,7 @@ class NXCModule:
         self.context        = context
         self.module_options = module_options
 
-    def on_login(self, context, connection):
+    def on_admin_login(self, context, connection):
         self.context = context
         context.log.display("Running raisechild module...")
         self.get_domain_sid(connection)
