@@ -174,6 +174,10 @@ netexec smb TARGET_HOST -u '' -p '' -M petitpotam
 netexec smb TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce
 netexec smb TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce --continue-on-success
 netexec smb TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE
+##### SMB Credfile
+netexec smb TARGET_HOST --credfile TEST_CREDFILE --no-bruteforce
+netexec smb TARGET_HOST --credfile TEST_CREDFILE --no-bruteforce --continue-on-success
+netexec smb TARGET_HOST --credfile TEST_CREDFILE
 ##### SMB Hash File
 netexec smb TARGET_HOST -u LOGIN_USERNAME -H tests/data/test_hashes.txt
 netexec smb TARGET_HOST -u TEST_USER_FILE -H tests/data/test_hashes.txt
@@ -278,6 +282,10 @@ netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x ipconfig
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
 netexec ssh TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce
 netexec ssh TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce --continue-on-success
+##### SSH Credfile
+netexec ssh TARGET_HOST --credfile TEST_CREDFILE --no-bruteforce
+netexec ssh TARGET_HOST --credfile TEST_CREDFILE --no-bruteforce --continue-on-success
+netexec ssh TARGET_HOST --credfile TEST_CREDFILE
 netexec ssh TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --key-file tests/data/test_key.priv
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p '' --key-file tests/data/test_key.priv
@@ -295,6 +303,10 @@ netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --put tests/data/tes
 netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --get test_file.txt
 netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce
 netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce --continue-on-success
+##### FTP Credfile
+netexec ftp TARGET_HOST --credfile TEST_CREDFILE --no-bruteforce
+netexec ftp TARGET_HOST --credfile TEST_CREDFILE --no-bruteforce --continue-on-success
+netexec ftp TARGET_HOST --credfile TEST_CREDFILE
 netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE
 ##### NFS
 netexec nfs TARGET_HOST -u "" -p "" --shares
