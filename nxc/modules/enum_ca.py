@@ -23,14 +23,14 @@ class NXCModule:
 
     name = "enum_ca"
     description = "Anonymously uses RPC endpoints to hunt for ADCS CAs"
-    supported_protocols = ["smb"]  # Example: ['smb', 'mssql']
+    supported_protocols = ["smb"]
 
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options
 
     def options(self, context, module_options):
-        pass
+        """No options available"""
 
     def on_login(self, context, connection):
         self.__username = connection.username
@@ -78,7 +78,7 @@ class NXCModule:
                RPC_PROXY_CONN_A1_0X6BA_ERR in error_text:
                 context.log.fail("This usually means the target does not allow "
                                  "to connect to its epmapper using RpcProxy.")
-            return False
+            return
 
         for entry in entries:
             tmpUUID = str(entry["tower"]["Floors"][0])
@@ -96,7 +96,7 @@ class NXCModule:
                             context.log.highlight("Web enrollment found on HTTP (ESC8).")
                     except requests.RequestException as e:
                         context.log.debug(e)
-                    return None
+                    return
 
     def __fetchList(self, doKerberos, rpctransport):
         dce = rpctransport.get_dce_rpc()
