@@ -185,6 +185,10 @@ netexec smb TARGET_HOST -u TEST_USER_FILE -H tests/data/test_hashes.txt
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --wmi-namespace root/cimv2
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x whoami
+##### WMI Credfile
+netexec wmi TARGET_HOST --credfile TEST_CREDFILE --no-bruteforce
+netexec wmi TARGET_HOST --credfile TEST_CREDFILE --no-bruteforce --continue-on-success
+netexec wmi TARGET_HOST --credfile TEST_CREDFILE
 ##### WMI Modules
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M ioxidresolver
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M spooler
@@ -209,6 +213,10 @@ netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --admin-co
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --gmsa
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --pso
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --pass-pol
+##### LDAP Credfile
+netexec ldap TARGET_HOST --credfile TEST_CREDFILE --no-bruteforce
+netexec ldap TARGET_HOST --credfile TEST_CREDFILE --no-bruteforce --continue-on-success
+netexec ldap TARGET_HOST --credfile TEST_CREDFILE
 ##### LDAP Modules
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -L
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M adcs
@@ -234,6 +242,10 @@ netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --lsa --d
 netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --lsa --dump-method powershell
 netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --laps
 netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --check-proto http
+##### WINRM Credfile
+netexec winrm TARGET_HOST --credfile TEST_CREDFILE --no-bruteforce
+netexec winrm TARGET_HOST --credfile TEST_CREDFILE --no-bruteforce --continue-on-success
+netexec winrm TARGET_HOST --credfile TEST_CREDFILE
 netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --check-proto https
 netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --check-proto http https
 netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --port 5985
@@ -247,6 +259,10 @@ netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M ntds-d
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # Need a space at the end for kerb regex
 netexec {DNS} mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # Need a space at the end for kerb regex
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --rid-brute
+##### MSSQL Credfile
+netexec mssql TARGET_HOST --credfile TEST_CREDFILE --no-bruteforce
+netexec mssql TARGET_HOST --credfile TEST_CREDFILE --no-bruteforce --continue-on-success
+netexec mssql TARGET_HOST --credfile TEST_CREDFILE
 ##### MSSQL PowerShell
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig --force-ps32
@@ -278,6 +294,10 @@ netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --nla-scree
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --screenshot
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x ipconfig
+##### RDP Credfile
+netexec rdp TARGET_HOST --credfile TEST_CREDFILE --no-bruteforce
+netexec rdp TARGET_HOST --credfile TEST_CREDFILE --no-bruteforce --continue-on-success
+netexec rdp TARGET_HOST --credfile TEST_CREDFILE
 ##### SSH - Default test passwords and random key; switch these out if you want correct authentication
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
 netexec ssh TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce
