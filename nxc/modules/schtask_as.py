@@ -236,6 +236,6 @@ class NXCModule:
                 for ext in [".bat", ".inf", ".cer", ".pfx", ".req", ".rsp"]:
                     try:
                         connection.conn.deleteFile(self.share, f"{self.tmp_path}\\{random_file_prefix}{ext}")
-                        context.log.success(f"Successfully deleted {self.tmp_path}\\{random_file_prefix}{ext}")
+                        context.log.debug(f"Successfully deleted {self.tmp_path}\\{random_file_prefix}{ext}")
                     except Exception as e:
                         context.log.fail(f"Couldn't delete {self.tmp_path}\\{random_file_prefix}{ext} : {e}")
