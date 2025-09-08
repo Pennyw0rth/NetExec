@@ -382,6 +382,42 @@ class connection:
         secret = []
         cred_type = []
 
+        # Parse credfile if specified - break it into username and password lists
+        if hasattr(self.args, 'credfile') and self.args.credfile:
+            try:
+                cred_usernames = []
+                cred_passwords = []
+                
+                with open(self.args.credfile, errors=("ignore" if self.args.ignore_pw_decoding else "strict")) as credfile:
+                    for line in credfile:
+                        line = line.strip()
+                        if not line or ':' not in line:
+                            continue
+                        
+                        user_part, pass_part = line.split(':', 1)
+                        cred_usernames.append(user_part.strip())
+                        cred_passwords.append(pass_part.strip())
+                
+                # Add credfile usernames and passwords to the args lists
+                if not hasattr(self.args, 'username'):
+                    self.args.username = []
+                if not hasattr(self.args, 'password'):
+                    self.args.password = []
+                
+                self.args.username.extend(cred_usernames)
+                self.args.password.extend(cred_passwords)
+                
+            except UnicodeDecodeError as e:
+                self.logger.error(f"{type(e).__name__}: Could not decode credfile. Make sure the file only contains UTF-8 characters.")
+                self.logger.error("You can ignore non UTF-8 characters with the option '--ignore-pw-decoding'")
+                sys.exit(1)
+            except FileNotFoundError:
+                self.logger.error(f"Credfile not found: {self.args.credfile}")
+                sys.exit(1)
+            except Exception as e:
+                self.logger.error(f"Error reading credfile: {e}")
+                sys.exit(1)
+
         # Parse usernames
         for user in self.args.username:
             if isfile(user):
@@ -533,7 +569,7 @@ class connection:
             cred_type.extend(db_cred_type)
             data.extend(db_data)
 
-        if self.args.username:
+        if self.args.username or (hasattr(self.args, 'credfile') and self.args.credfile):
             parsed_domain, parsed_username, parsed_owned, parsed_secret, parsed_cred_type, parsed_data = self.parse_credentials()
             domain.extend(parsed_domain)
             username.extend(parsed_username)
