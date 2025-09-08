@@ -35,10 +35,6 @@ class NXCModule:
         remote_file = None
 
         try:
-            if not getattr(connection, "username", None) and not getattr(connection, "password", None):
-                context.log.debug("WebDAV skipped: unauthenticated/null session (IPC$ likely denied).")
-                return
-
             remote_file = RemoteFile(connection.conn, "DAV RPC Service", "IPC$", access=FILE_READ_DATA)
             remote_file.open_file()
 
