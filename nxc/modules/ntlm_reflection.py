@@ -3,10 +3,12 @@ from impacket.dcerpc.v5 import transport, rrp
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.smbconnection import SessionError
 from nxc.helpers.misc import CATEGORY
+from impacket.nmb import NetBIOSError
 
 
 class NXCModule:
     # https://www.synacktiv.com/en/publications/ntlm-reflection-is-dead-long-live-ntlm-reflection-an-in-depth-analysis-of-cve-2025
+    # Modified by azoxlpf to handle BrokenPipe/transport errors gracefully
     name = "ntlm_reflection"
     description = "Attempt to check if the OS is vulnerable to CVE-2025-33073 (NTLM Reflection attack)"
     supported_protocols = ["smb"]
@@ -76,21 +78,27 @@ class NXCModule:
                     self.context.log.info(f"RemoteRegistry is probably deactivated: {e}")
                 else:
                     self.context.log.debug(f"Unexpected error: {e}")
+            except (BrokenPipeError, ConnectionResetError, NetBIOSError, OSError) as e:
+                context.log.debug(f"ntlm_reflection: DCERPC transport error: {e.__class__.__name__}: {e}")
 
     def trigger_winreg(self, connection, context):
         # Original idea from https://twitter.com/splinter_code/status/1715876413474025704
         # Basically triggers the RemoteRegistry to start without admin privs
-        tid = connection.connectTree("IPC$")
         try:
-            connection.openFile(
-                tid,
-                r"\winreg",
-                0x12019F,
-                creationOption=0x40,
-                fileAttributes=0x80,
-            )
-        except SessionError as e:
-            # STATUS_PIPE_NOT_AVAILABLE error is expected
-            context.log.debug(str(e))
-        # Give remote registry time to start
-        time.sleep(1)
+            tid = connection.connectTree("IPC$")
+            try:
+                connection.openFile(
+                    tid,
+                    r"\winreg",
+                    0x12019F,
+                    creationOption=0x40,
+                    fileAttributes=0x80,
+                )
+            except SessionError as e:
+                # STATUS_PIPE_NOT_AVAILABLE error is expected
+                context.log.debug(str(e))
+            # Give remote registry time to start
+            time.sleep(1)
+            return True
+        except (SessionError, BrokenPipeError, ConnectionResetError, NetBIOSError, OSError):
+            return False
