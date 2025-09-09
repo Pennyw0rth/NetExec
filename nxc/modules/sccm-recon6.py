@@ -1,9 +1,7 @@
 
-import time
 from impacket.dcerpc.v5 import transport, rrp
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.dcerpc.v5.rpcrt import DCERPCException
-from impacket.smbconnection import SessionError
 from nxc.helpers.misc import CATEGORY
 from impacket.smbconnection import SMBConnection
 
@@ -23,7 +21,7 @@ class NXCModule:
         self.context = context
         self.connection = connection
 
-        self.trigger_winreg(connection.conn, context)
+        connection.trigger_winreg()
 
         rpc = transport.DCERPCTransportFactory(r"ncacn_np:445[\pipe\winreg]")
         rpc.set_smb_connection(connection.conn)
@@ -130,21 +128,3 @@ class NXCModule:
                     self.context.log.display(f"       SMB signing: {new_conn.isSigningRequired()}")
                 else:
                     self.context.log.highlight(f"       SMB signing: {new_conn.isSigningRequired()} - TAKEOVER-2")
-
-    def trigger_winreg(self, connection, context):
-        # Original idea from https://twitter.com/splinter_code/status/1715876413474025704
-        # Basically triggers the RemoteRegistry to start without admin privs
-        tid = connection.connectTree("IPC$")
-        try:
-            connection.openFile(
-                tid,
-                r"\winreg",
-                0x12019F,
-                creationOption=0x40,
-                fileAttributes=0x80,
-            )
-        except SessionError as e:
-            # STATUS_PIPE_NOT_AVAILABLE error is expected
-            context.log.debug(str(e))
-        # Give remote registry time to start
-        time.sleep(1)

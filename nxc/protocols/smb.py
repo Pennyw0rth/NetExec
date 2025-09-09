@@ -735,6 +735,32 @@ class smb(connection):
             self.logger.debug(f"Error checking port {port} on {self.host}: {e}")
             return False
 
+    def trigger_winreg(self):
+        # Original idea from https://twitter.com/splinter_code/status/1715876413474025704
+        # Basically triggers the RemoteRegistry to start without admin privs
+        try:
+            tid = self.conn.connectTree("IPC$")
+            try:
+                self.conn.openFile(
+                    tid,
+                    r"\winreg",
+                    0x12019F,
+                    creationOption=0x40,
+                    fileAttributes=0x80,
+                )
+            except SessionError as e:
+                # STATUS_PIPE_NOT_AVAILABLE error is expected
+                if "STATUS_PIPE_NOT_AVAILABLE" not in str(e):
+                    raise
+                else:
+                    self.logger.debug(f"Received expected error while triggering winreg: {e}")
+            # Give remote registry time to start
+            sleep(1)
+            return True
+        except (SessionError, BrokenPipeError, ConnectionResetError, NetBIOSError, OSError) as e:
+            self.logger.debug(f"Received unexpected error while triggering winreg: {e}")
+            return False
+
     @requires_admin
     def execute(self, payload=None, get_output=False, methods=None) -> str:
         """

