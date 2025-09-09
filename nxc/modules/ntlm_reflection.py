@@ -96,9 +96,13 @@ class NXCModule:
                 )
             except SessionError as e:
                 # STATUS_PIPE_NOT_AVAILABLE error is expected
-                context.log.debug(str(e))
+                if "STATUS_PIPE_NOT_AVAILABLE" not in str(e):
+                    raise
+                else:
+                    context.log.debug(f"Received expected error while triggering winreg: {e}")
             # Give remote registry time to start
             time.sleep(1)
             return True
-        except (SessionError, BrokenPipeError, ConnectionResetError, NetBIOSError, OSError):
+        except (SessionError, BrokenPipeError, ConnectionResetError, NetBIOSError, OSError) as e:
+            context.log.debug(f"Received unexpected error while triggering winreg: {e}")
             return False
