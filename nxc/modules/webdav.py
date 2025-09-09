@@ -38,22 +38,18 @@ class NXCModule:
             remote_file.open_file()
 
             context.log.highlight(self.output.format(connection.conn.getRemoteHost()))
-
         except SessionError as e:
             if e.getErrorCode() == nt_errors.STATUS_OBJECT_NAME_NOT_FOUND:
                 return
-
-            if e.getErrorCode() in nt_errors.ERROR_MESSAGES:
+            elif e.getErrorCode() in nt_errors.ERROR_MESSAGES:
                 context.log.fail(f"Error enumerating WebDAV: {e.getErrorString()[0]}", color="magenta")
                 return
-
-            context.log.debug(f"WebDAV SessionError (code={hex(e.getErrorCode())})")
+            else:
+                context.log.debug(f"WebDAV SessionError (code={hex(e.getErrorCode())})")
             return
-
         except (BrokenPipeError, ConnectionResetError, NetBIOSError, OSError) as e:
             context.log.debug(f"WebDAV check aborted due to transport error: {e.__class__.__name__}: {e}")
             return
-
         finally:
             with contextlib.suppress(Exception):
                 remote_file.close()
