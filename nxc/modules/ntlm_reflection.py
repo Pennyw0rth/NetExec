@@ -1,4 +1,3 @@
-import time
 from impacket.dcerpc.v5 import transport, rrp
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.smbconnection import SessionError
