@@ -43,13 +43,10 @@ class NXCModule:
                 return
             elif e.getErrorCode() in nt_errors.ERROR_MESSAGES:
                 context.log.fail(f"Error enumerating WebDAV: {e.getErrorString()[0]}", color="magenta")
-                return
             else:
                 context.log.debug(f"WebDAV SessionError (code={hex(e.getErrorCode())})")
-            return
         except (BrokenPipeError, ConnectionResetError, NetBIOSError, OSError) as e:
             context.log.debug(f"WebDAV check aborted due to transport error: {e.__class__.__name__}: {e}")
-            return
         finally:
             with contextlib.suppress(Exception):
                 remote_file.close()
