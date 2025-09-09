@@ -1,4 +1,5 @@
 
+import contextlib
 from impacket.dcerpc.v5 import transport, rrp
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.dcerpc.v5.rpcrt import DCERPCException
@@ -31,14 +32,15 @@ class NXCModule:
         dce = rpc.get_dce_rpc()
         if connection.kerberos:
             dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-        dce.connect()
-        dce.bind(rrp.MSRPC_UUID_RRP)
-
-        # Open HKEY_LOCAL_MACHINE
-        ans = rrp.hOpenLocalMachine(dce)
-        hRootKey = ans["phKey"]
 
         try:
+            dce.connect()
+            dce.bind(rrp.MSRPC_UUID_RRP)
+
+            # Open HKEY_LOCAL_MACHINE
+            ans = rrp.hOpenLocalMachine(dce)
+            hRootKey = ans["phKey"]
+
             self.EnumerateSS(dce, hRootKey)
             try:
                 self.EnumerateDB(dce, hRootKey)
@@ -49,8 +51,12 @@ class NXCModule:
                 self.context.log.info(f"Probably not a primary site server or a distribution point: {e}")
             else:
                 self.context.log.fail(f"Unexpected error: {e}")
+        except Exception as e:
+            self.context.log.fail(f"Unexpected error: {e}")
 
-        dce.disconnect()
+        finally:
+            with contextlib.suppress(Exception):
+                dce.disconnect()
 
     def EnumerateSS(self, dce, hRootKey):
         # Open the target registry key
