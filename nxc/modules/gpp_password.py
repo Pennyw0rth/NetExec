@@ -3,6 +3,7 @@ from Cryptodome.Cipher import AES
 from base64 import b64decode
 from binascii import unhexlify
 from io import BytesIO
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -14,6 +15,7 @@ class NXCModule:
     name = "gpp_password"
     description = "Retrieves the plaintext password and other information for accounts pushed through Group Policy Preferences."
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """No options available"""

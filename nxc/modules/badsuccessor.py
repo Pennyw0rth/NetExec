@@ -1,4 +1,5 @@
 from impacket.ldap import ldaptypes
+from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
 from ldap3.protocol.microsoft import security_descriptor_control
 
@@ -79,6 +80,7 @@ class NXCModule:
     name = "badsuccessor"
     description = "Check if vulnerable to bad successor attack (DMSA)"
     supported_protocols = ["ldap"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self):
         self.context = None

@@ -1,7 +1,7 @@
 # PYTHON_ARGCOMPLETE_OK
 import sys
 from nxc.helpers.logger import highlight
-from nxc.helpers.misc import identify_target_file
+from nxc.helpers.misc import identify_target_file, display_modules
 from nxc.parsers.ip import parse_targets
 from nxc.parsers.nmap import parse_nmap_xml
 from nxc.parsers.nessus import parse_nessus_file
@@ -193,19 +193,21 @@ def main():
     # with the new nxc/config.py this can be eventually removed, as it can be imported anywhere
     protocol_object.config = nxc_config
 
-    if args.module or args.list_modules:
+    if args.module or args.list_modules is not None:
         loader = ModuleLoader(args, db, nxc_logger)
         modules = loader.list_modules()
 
-    if args.list_modules:
+    if args.list_modules is not None:
+        low_privilege_modules = {m: props for m, props in modules.items() if args.protocol in props["supported_protocols"] and not props["requires_admin"]}
+        high_privilege_modules = {m: props for m, props in modules.items() if args.protocol in props["supported_protocols"] and props["requires_admin"]}
+
+        # List low privilege modules
         nxc_logger.highlight("LOW PRIVILEGE MODULES")
-        for name, props in sorted(modules.items()):
-            if args.protocol in props["supported_protocols"] and not props["requires_admin"]:
-                nxc_logger.display(f"{name:<25} {props['description']}")
+        display_modules(args, low_privilege_modules)
+
+        # List high privilege modules
         nxc_logger.highlight("\nHIGH PRIVILEGE MODULES (requires admin privs)")
-        for name, props in sorted(modules.items()):
-            if args.protocol in props["supported_protocols"] and props["requires_admin"]:
-                nxc_logger.display(f"{name:<25} {props['description']}")
+        display_modules(args, high_privilege_modules)
         exit(0)
     elif args.module and args.show_module_options:
         for module in args.module:

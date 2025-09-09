@@ -4,6 +4,7 @@ from dploot.triage.wam import WamTriage
 from dploot.lib.target import Target
 
 from nxc.helpers.logger import highlight
+from nxc.helpers.misc import CATEGORY
 from nxc.protocols.smb.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection
 
 
@@ -11,9 +12,10 @@ class NXCModule:
     name = "wam"
     description = "Dump access token from Token Broker Cache. More info here https://blog.xpnsec.com/wam-bam/. Module by zblurx"
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
-        """ """
+        """No options available"""
 
     def on_admin_login(self, context, connection):
         username = connection.username
