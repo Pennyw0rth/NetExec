@@ -53,7 +53,6 @@ class NXCModule:
                 self.context.log.fail(f"Unexpected error: {e}")
         except Exception as e:
             self.context.log.fail(f"Unexpected error: {e}")
-
         finally:
             with contextlib.suppress(Exception):
                 dce.disconnect()
