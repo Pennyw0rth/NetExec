@@ -4,6 +4,7 @@ from impacket import nt_errors
 from impacket.smb3structs import FILE_READ_DATA
 from impacket.smbconnection import SessionError
 from impacket.nmb import NetBIOSError
+import contextlib
 
 
 class NXCModule:
@@ -32,8 +33,6 @@ class NXCModule:
         Check whether the 'DAV RPC Service' pipe exists within the 'IPC$' share. This indicates
         that the WebClient service is running on the target.
         """
-        remote_file = None
-
         try:
             remote_file = RemoteFile(connection.conn, "DAV RPC Service", "IPC$", access=FILE_READ_DATA)
             remote_file.open_file()
@@ -56,8 +55,5 @@ class NXCModule:
             return
 
         finally:
-            if remote_file is not None:
-                try:
-                    remote_file.close()
-                except Exception:
-                    pass
+            with contextlib.suppress(Exception):
+                remote_file.close()
