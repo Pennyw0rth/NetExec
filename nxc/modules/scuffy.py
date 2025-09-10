@@ -63,6 +63,7 @@ class NXCModule:
                 "C$",
                 "ADMIN$",
                 "NETLOGON",
+                "SYSVOL",
             ]:
                 context.log.success(f"Found writable share: {share['name']}")
                 if not self.cleanup:
