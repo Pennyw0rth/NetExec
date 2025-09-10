@@ -545,9 +545,8 @@ class connection:
         if self.args.use_kcache:
             self.logger.debug("Trying to authenticate using Kerberos cache")
             with sem:
-                username = self.args.username[0] if len(self.args.username) else ""
-                password = self.args.password[0] if len(self.args.password) else ""
-                self.kerberos_login(self.domain, username, password, "", "", self.kdcHost, True)
+                username = self.args.username[0]  # we check this in the main() function when using kcache and set it appropriately already
+                self.kerberos_login(self.domain, username, "", "", "", self.kdcHost, True)
                 self.logger.info("Successfully authenticated using Kerberos cache")
                 return True
 
