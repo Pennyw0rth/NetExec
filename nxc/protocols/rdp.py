@@ -23,6 +23,7 @@ from asyauth.common.credentials.ntlm import NTLMCredential
 from asyauth.common.credentials.kerberos import KerberosCredential
 from asyauth.common.constants import asyauthSecret
 from asysocks.unicomm.common.target import UniTarget, UniProto
+from nxc.netexec import GLOBAL_SUMMARY_RESULTS
 
 
 class rdp(connection):
@@ -255,6 +256,10 @@ class rdp(connection):
                     self.mark_pwned(),
                 )
             )
+            # Add the successful auth to the summary
+            summaryText = f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(kerb_pass)} {self.mark_pwned()}"           
+            if summaryText:
+               GLOBAL_SUMMARY_RESULTS.append(summaryText)
             if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
             if self.admin_privs:
@@ -280,6 +285,8 @@ class rdp(connection):
                 for word in self.rdp_error_status:
                     if word in str(e):
                         reason = self.rdp_error_status[word]
+                if reason not in ["STATUS_LOGON_FAILURE", None]:
+                   GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(kerb_pass)} {reason} {self.mark_pwned()}")                                         
                 if str(e) == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
                 self.logger.fail(
@@ -301,6 +308,11 @@ class rdp(connection):
 
             self.admin_privs = True
             self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
+            # Add the successful auth to the summary
+            summaryText = f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(self.password)} {self.mark_pwned()}"
+            
+            if summaryText:
+               GLOBAL_SUMMARY_RESULTS.append(summaryText)
             if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
             if self.admin_privs:
@@ -314,6 +326,8 @@ class rdp(connection):
                 for word in self.rdp_error_status:
                     if word in str(e):
                         reason = self.rdp_error_status[word]
+                if "STATUS_LOGON_FAILURE" != reason:
+                   GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(self.password)} {reason} {self.mark_pwned()}")                         
                 if str(e) == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
                 self.logger.fail(
@@ -335,6 +349,12 @@ class rdp(connection):
 
             self.admin_privs = True
             self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
+            # Add the successful auth to the summary
+            summaryText = f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}"
+            
+            if summaryText:
+               GLOBAL_SUMMARY_RESULTS.append(summaryText)
+
             if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
             if self.admin_privs:
@@ -348,6 +368,8 @@ class rdp(connection):
                 for word in self.rdp_error_status:
                     if word in str(e):
                         reason = self.rdp_error_status[word]
+                if "STATUS_LOGON_FAILURE" != reason:
+                   GLOBAL_SUMMARY_RESULTS.append(f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(ntlm_hash)} {reason} {self.mark_pwned()}")                         
                 if str(e) == "cannot unpack non-iterable NoneType object":
                     reason = "User valid but cannot connect"
 
