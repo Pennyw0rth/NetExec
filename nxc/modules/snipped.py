@@ -1,6 +1,7 @@
 import ntpath
 import os
 from os.path import join, getsize, exists
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 
 
@@ -9,6 +10,7 @@ class NXCModule:
     name = "snipped"
     description = "Downloads screenshots taken by the (new) Snipping Tool."
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self):
         self.context = None

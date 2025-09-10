@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import os
+import socket
 from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
 from binascii import hexlify
 from datetime import datetime
@@ -38,13 +39,13 @@ from impacket.ntlm import getNTLMSSPType1
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.misc import get_bloodhound_info, convert, d2b
 from nxc.logger import NXCAdapter, nxc_logger
 from nxc.protocols.ldap.bloodhound import BloodHound
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.ntlm_parser import parse_challenge
-from nxc.helpers.misc import get_bloodhound_info
 from nxc.paths import CONFIG_PATH, NXC_PATH
 
 ldap_error_status = {
@@ -171,55 +172,33 @@ class ldap(connection):
         )
 
     def create_conn_obj(self):
-        target = ""
-        target_domain = ""
-        base_dn = ""
         try:
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.host}"
             self.logger.info(f"Connecting to {ldap_url} with no baseDN")
-            try:
-                self.ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.host)
-                if self.ldap_connection:
-                    self.logger.debug(f"ldap_connection: {self.ldap_connection}")
-            except SysCallError as e:
-                if proto == "ldaps":
-                    self.logger.fail(f"LDAPs connection to {ldap_url} failed - {e}")
-                    # https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/enable-ldap-over-ssl-3rd-certification-authority
-                    self.logger.fail("Even if the port is open, LDAPS may not be configured")
-                else:
-                    self.logger.fail(f"LDAP connection to {ldap_url} failed: {e}")
-                return False
 
-            resp = self.ldap_connection.search(
-                scope=ldapasn1_impacket.Scope("baseObject"),
-                attributes=["defaultNamingContext", "dnsHostName"],
-                sizeLimit=0,
-            )
-            resp_parsed = parse_result_attributes(resp)[0]
-
-            target = resp_parsed["dnsHostName"]
-            base_dn = resp_parsed["defaultNamingContext"]
-            target_domain = sub(
-                r",DC=",
-                ".",
-                base_dn[base_dn.lower().find("dc="):],
-                flags=IGNORECASE,
-            )[3:]
+            self.ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.host)
+            if self.ldap_connection:
+                self.logger.debug(f"ldap_connection: {self.ldap_connection}")
+        except SysCallError as e:
+            if proto == "ldaps":
+                self.logger.fail(f"LDAPs connection to {ldap_url} failed - {e}")
+                # https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/enable-ldap-over-ssl-3rd-certification-authority
+                self.logger.fail("Even if the port is open, LDAPS may not be configured")
+            else:
+                self.logger.fail(f"LDAP connection to {ldap_url} failed: {e}")
+            return False
         except ConnectionRefusedError as e:
             self.logger.debug(f"{e} on host {self.host}")
             return False
         except OSError as e:
             if e.errno in (EHOSTUNREACH, ENETUNREACH, ETIMEDOUT):
-                self.logger.info(f"Error connecting to {self.host} - {e}")
+                self.logger.info(f"Error connecting to {self.host}: {e}")
                 return False
             else:
-                self.logger.error(f"Error getting ldap info {e}")
+                self.logger.error(f"Error connecting to {self.host}: {e}")
+                return False
 
-        self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
-        self.target = target
-        self.targetDomain = target_domain
-        self.baseDN = base_dn
         return True
 
     def get_ldap_username(self):
@@ -283,9 +262,39 @@ class ldap(connection):
                 raise
 
     def enum_host_info(self):
+        # Enumerate LDAP info
+        target = ""
+        target_domain = ""
+        base_dn = ""
+        try:
+            resp = self.ldap_connection.search(
+                scope=ldapasn1_impacket.Scope("baseObject"),
+                attributes=["defaultNamingContext", "dnsHostName"],
+                sizeLimit=0,
+            )
+            resp_parsed = parse_result_attributes(resp)[0]
+
+            target = resp_parsed["dnsHostName"]
+            base_dn = resp_parsed["defaultNamingContext"]
+            target_domain = sub(
+                r",DC=",
+                ".",
+                base_dn[base_dn.lower().find("dc="):],
+                flags=IGNORECASE,
+            )[3:]
+        except Exception as e:
+            self.logger.fail(f"Failed to enumerate host info for {self.host}, error: {e!s}")
+
+        self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
+        self.target = target
+        self.targetDomain = target_domain
+        self.baseDN = base_dn
+
+        # Parse hostname and remoteName
         self.hostname = self.target.split(".")[0].upper() if "." in self.target else self.target
         self.remoteName = self.target
 
+        # Parse NTLM challenge
         ntlm_challenge = None
         bindRequest = ldapasn1_impacket.BindRequest()
         bindRequest["version"] = 3
@@ -782,7 +791,7 @@ class ldap(connection):
             attributes = ["member"]
         else:
             search_filter = "(objectCategory=group)"
-            attributes = ["cn", "member"]
+            attributes = ["cn", "member", "description"]
         resp = self.search(search_filter, attributes, 0)
         resp_parsed = parse_result_attributes(resp)
         self.logger.debug(f"Total of records returned {len(resp_parsed)}")
@@ -799,12 +808,13 @@ class ldap(connection):
                 for user in resp_parsed[0]["member"]:
                     self.logger.highlight(user.split(",")[0].split("=")[1])
         else:
+            self.logger.highlight(f"{'-Group-':<40} {'-Members-':<9} {'-Description-':<60}")
             for item in resp_parsed:
                 try:
                     # Fix if group has only one member
                     if not isinstance(item.get("member", []), list):
                         item["member"] = [item["member"]]
-                    self.logger.highlight(f"{item['cn']:<40} membercount: {len(item.get('member', []))}")
+                    self.logger.highlight(f"{item['cn']:<40} {len(item.get('member', [])):<9} {item.get('description', '')}")
                 except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
@@ -819,15 +829,13 @@ class ldap(connection):
                 self.logger.highlight(item["name"] + "$")
 
     def dc_list(self):
-        # Building the search filter
-        resolv = resolver.Resolver()
-        if self.args.dns_server:
-            resolv.nameservers = [self.args.dns_server]
-        else:
-            resolv.nameservers = [self.host]
+        # bypass host resolver configuration via configure=False (default pulls from /etc/resolv.conf or registry on Windows)
+        resolv = resolver.Resolver(configure=False)
+        ns = self.args.dns_server or self.host
+        resolv.nameservers = [socket.gethostbyname(ns)]
+        self.logger.debug(f"DNS Server option: {self.args.dns_server}, using DNS server: {resolv.nameservers}")
         resolv.timeout = self.args.dns_timeout
 
-        # Function to resolve and display hostnames
         def resolve_and_display_hostname(name, domain_name=None):
             prefix = f"[{domain_name}] " if domain_name else ""
             try:
@@ -1278,15 +1286,13 @@ class ldap(connection):
     def gmsa(self):
         self.logger.display("Getting GMSA Passwords")
         search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
-        gmsa_accounts = self.ldap_connection.search(
-            searchBase=self.baseDN,
+        gmsa_accounts = self.search(
             searchFilter=search_filter,
             attributes=[
                 "sAMAccountName",
                 "msDS-ManagedPassword",
                 "msDS-GroupMSAMembership",
             ],
-            sizeLimit=0,
         )
         gmsa_accounts_parsed = parse_result_attributes(gmsa_accounts)
         if gmsa_accounts_parsed:
@@ -1476,6 +1482,92 @@ class ldap(connection):
             elif policyApplies:
                 self.logger.highlight(f"\t{policyApplies}")
             self.logger.highlight("")
+
+    def pass_pol(self):
+        search_filter = "(objectClass=domainDNS)"
+        attributes = [
+            "minPwdLength",
+            "pwdHistoryLength",
+            "maxPwdAge",
+            "minPwdAge",
+            "lockoutThreshold",
+            "lockoutDuration",
+            "lockOutObservationWindow",
+            "forceLogoff",
+            "pwdProperties"
+        ]
+
+        resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
+        resp_parsed = parse_result_attributes(resp)
+
+        if not resp_parsed:
+            self.logger.fail("No domain password policy found!")
+            return
+
+        for policy in resp_parsed:
+            def ldap_to_filetime(ldap_time):
+                """Convert LDAP time to FILETIME format for convert function"""
+                if not ldap_time or ldap_time == "0":
+                    return 0, 0
+
+                time_int = int(ldap_time)
+                if time_int < 0:
+                    time_int = abs(time_int)
+
+                low = time_int & 0xFFFFFFFF
+                high = (time_int >> 32) & 0xFFFFFFFF
+                if ldap_time.startswith("-") or int(ldap_time) < 0:
+                    high = -high
+
+                return low, high
+
+            min_pass_len = policy.get("minPwdLength", "None")
+            pass_hist_len = policy.get("pwdHistoryLength", "None")
+            max_pwd_age_low, max_pwd_age_high = ldap_to_filetime(policy.get("maxPwdAge", "0"))
+            max_pass_age = convert(max_pwd_age_low, max_pwd_age_high)
+            min_pwd_age_low, min_pwd_age_high = ldap_to_filetime(policy.get("minPwdAge", "0"))
+            min_pass_age = convert(min_pwd_age_low, min_pwd_age_high)
+            accnt_lock_thres = policy.get("lockoutThreshold", "None")
+            lockout_duration_val = policy.get("lockoutDuration", "0")
+            lock_accnt_dur = convert(0, int(lockout_duration_val) if lockout_duration_val != "0" else 0, lockout=True)
+            lockout_obs_val = policy.get("lockOutObservationWindow", "0")
+            rst_accnt_lock_counter = convert(0, int(lockout_obs_val) if lockout_obs_val != "0" else 0, lockout=True)
+            force_logoff_low, force_logoff_high = ldap_to_filetime(policy.get("forceLogoff", "0"))
+            force_logoff_time = convert(force_logoff_low, force_logoff_high)
+
+            # Convert password properties using existing d2b function
+            pwd_properties = policy.get("pwdProperties", "0")
+            pass_prop = d2b(int(pwd_properties)) if pwd_properties != "0" else "000000"
+
+            # Use the same formatting and constants as SMB passpol
+            PASSCOMPLEX = {
+                5: "Domain Password Complex:",
+                4: "Domain Password No Anon Change:",
+                3: "Domain Password No Clear Change:",
+                2: "Domain Password Lockout Admins:",
+                1: "Domain Password Store Cleartext:",
+                0: "Domain Refuse Password Change:",
+            }
+
+            # Pretty print using same format as SMB
+            self.logger.success(f"Dumping password info for domain: {self.domain}")
+            self.logger.highlight(f"Minimum password length: {min_pass_len}")
+            self.logger.highlight(f"Password history length: {pass_hist_len}")
+            self.logger.highlight(f"Maximum password age: {max_pass_age}")
+            self.logger.highlight("")
+            self.logger.highlight(f"Password Complexity Flags: {pass_prop or 'None'}")
+
+            for i, a in enumerate(pass_prop):
+                self.logger.highlight(f"\t{PASSCOMPLEX[i]} {a!s}")
+
+            self.logger.highlight("")
+            self.logger.highlight(f"Minimum password age: {min_pass_age}")
+            self.logger.highlight(f"Reset Account Lockout Counter: {rst_accnt_lock_counter}")
+            self.logger.highlight(f"Locked Account Duration: {lock_accnt_dur}")
+            self.logger.highlight(f"Account Lockout Threshold: {accnt_lock_thres}")
+            self.logger.highlight(f"Forced Log off Time: {force_logoff_time}")
+
+            break  # Only process first policy result
 
     def bloodhound(self):
         # Check which version is desired

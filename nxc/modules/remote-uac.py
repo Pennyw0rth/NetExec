@@ -1,5 +1,6 @@
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -7,6 +8,7 @@ class NXCModule:
     name = "remote-uac"
     description = "Enable or disable remote UAC"
     supported_protocols = ["smb"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

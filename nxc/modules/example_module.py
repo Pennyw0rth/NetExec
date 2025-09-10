@@ -1,4 +1,5 @@
 from nxc.helpers.modules import add_loot_data
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -11,6 +12,7 @@ class NXCModule:
     name = "example_module"  # Make sure this is unique and one word (no spaces)
     description = "I do something"
     supported_protocols = []  # Example: ['smb', 'mssql']
+    category = CATEGORY.ENUMERATION  # Must be one of "Enumeration", "Privilege Escalation" or "Credential Dumping". Use what fits best.
 
     def __init__(self):
         self.context = None
