@@ -1169,7 +1169,7 @@ class smb(connection):
                 # Calculate max lengths for formatting
                 maxSidLen = max(len(key) + 1 for key in sessions)
                 maxSidLen = max(maxSidLen, len("SID") + 1)
-                maxUsernameLen = max(len(vals["Username"] + vals["Domain"]) + 1 for vals in sessions.values()) + 1
+                maxUsernameLen = max(len(str(vals["Username"]) + str(vals["Domain"])) + 1 for vals in sessions.values()) + 1
                 maxUsernameLen = max(maxUsernameLen, len("USERNAME") + 1)
 
                 # Create the template for formatting
