@@ -14,7 +14,7 @@ def proto_args(parser, parents):
     egroup = ldap_parser.add_argument_group("Retrieve hash on the remote DC", "Options to get hashes from Kerberos")
     egroup.add_argument("--asreproast", help="Output AS_REP response to crack with hashcat to file")
     kerberoasting_arg = egroup.add_argument("--kerberoasting", "--kerberoast", help="Output TGS ticket to crack with hashcat to file")
-    kerberoast_users_arg = egroup.add_argument("--kerberoast-users", nargs="+", dest="kerberoast_users", action=get_conditional_action(_StoreAction), make_required=[], help="Target specific users for kerberoasting (usernames or file containing usernames)")
+    kerberoast_users_arg = egroup.add_argument("--kerberoast-account", nargs="+", dest="kerberoast_account", action=get_conditional_action(_StoreAction), make_required=[], help="Target specific accounts for kerberoasting (sAMAccountNames or file containing sAMAccountNames)")
     egroup.add_argument("--no-preauth-targets", nargs=1, dest="no_preauth_targets", help="Targeted kerberoastable users")
 
     # Make kerberoast-users require kerberoasting

@@ -1039,23 +1039,23 @@ class ldap(connection):
                         f.write(line + "\n")
             return
 
-        if self.args.kerberoast_users:
-            target_usernames = []
-            for item in self.args.kerberoast_users:
+        if self.args.kerberoast_account:
+            target_accounts = []
+            for item in self.args.kerberoast_account:
                 if os.path.isfile(item):
                     try:
                         with open(item, encoding="utf-8") as f:
-                            target_usernames.extend(line.strip() for line in f if line.strip())
+                            target_accounts.extend(line.strip() for line in f if line.strip())
                     except Exception as e:
                         self.logger.fail(f"Failed to read file '{item}': {e}")
                 else:
-                    target_usernames.append(item.strip())
+                    target_accounts.append(item.strip())
 
-            self.logger.info(f"Targeting specific users for kerberoasting: {', '.join(target_usernames)}")
+            self.logger.info(f"Targeting specific accounts for kerberoasting: {', '.join(target_accounts)}")
 
             # build search filter for specific users
-            user_filter = "".join([f"(sAMAccountName={username})" for username in target_usernames])
-            searchFilter = f"(&(servicePrincipalName=*)(!(objectCategory=computer))(|{user_filter}))"
+            user_filter = "".join([f"(sAMAccountName={username})" for username in target_accounts])
+            searchFilter = f"(&(servicePrincipalName=*)(|{user_filter}))"
         else:
             # default to all
             searchFilter = "(&(servicePrincipalName=*)(!(objectCategory=computer)))"
