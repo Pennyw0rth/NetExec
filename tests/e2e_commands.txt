@@ -292,7 +292,9 @@ netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sudo-check --sudo-
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --put-file TEST_NORMAL_FILE /tmp/test_file.txt --put-file TEST_NORMAL_FILE /tmp/test_file2.txt
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --get-file /tmp/test_file.txt /tmp/test_file.txt --get-file /tmp/test_file.txt /tmp/test_file2.txt
 ##### SSH MODULES
-netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M ephemeral
+netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -x 'uname -a' -M ephemeral
+netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M ephemeral -o COMMAND='uname -a'
+netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M ephemeral -o SCRIPT='data/netexec_ephemeral_test_script.sh'
 ##### FTP- Default test passwords and random key; switch these out if you want correct authentication
 netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
 netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --ls
