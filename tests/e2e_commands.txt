@@ -287,17 +287,6 @@ netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sudo-check --sudo-
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sudo-check --sudo-check-method mkfifo --get-output-tries 10
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --put-file TEST_NORMAL_FILE /tmp/test_file.txt --put-file TEST_NORMAL_FILE /tmp/test_file2.txt
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --get-file /tmp/test_file.txt /tmp/test_file.txt --get-file /tmp/test_file.txt /tmp/test_file2.txt
-##### SMB Modules
-nxc ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --module ssh_socks
-nxc ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --module ssh_socks --port TARGET_PORT
-nxc ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --module ssh_socks -o PORT=1080,KEX=diffie-hellman-group1-sha1,HOSTKEY=ssh-dss
-nxc ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --module persist_key
-nxc ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --module persist_key -o PUBKEY=/home/kali/.ssh/id_ed25519.pub
-nxc ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --module persist_key -o USER=alice
-nxc ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --module persist_key -o BACKUP=false
-nxc ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --module persist_key -o REMOVE=true
-nxc ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --module persist_key -o REMOVE=backup
-nxc ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --module persist_key -o KEX=diffie-hellman-group14-sha1,HOSTKEY=ssh-rsa
 ##### FTP- Default test passwords and random key; switch these out if you want correct authentication
 netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
 netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --ls
