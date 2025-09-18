@@ -1,0 +1,5 @@
+Administrator:Passw0rd!
+Anonymous:None
+ftp:ftp
+guest:guest
+robert.baratheon:iamthekingoftheworld
