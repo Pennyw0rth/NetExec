@@ -357,6 +357,17 @@ class ldap(connection):
         self.logger.extra["hostname"] = self.hostname
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({cbt_status}) {ntlm}")
 
+        # Génération du fichier hosts avec le même format que SMB
+        if hasattr(self.args, 'generate_hosts_file') and self.args.generate_hosts_file:
+            with open(self.args.generate_hosts_file, "a+") as host_file:
+                # Format identique à SMB: IP     FQDN [domain si DC] hostname
+                fqdn = f"{self.hostname}.{self.targetDomain}" if self.targetDomain else self.hostname
+                # Pour LDAP on peut détecter basiquement si c'est un DC par le nom ou supposer que oui
+                dc_part = f" {self.targetDomain}" if self.targetDomain else ""
+                host_file.write(f"{self.host}     {fqdn}{dc_part} {self.hostname}\n")
+                self.logger.debug(f"Line added to {self.args.generate_hosts_file}: {self.host}    {fqdn}{dc_part} {self.hostname}")
+
+
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.username = username if not self.args.use_kcache else self.username    # With ccache we get the username from the ticket
         self.password = password

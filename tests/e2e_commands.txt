@@ -194,6 +194,7 @@ netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M ntds-dum
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M ntds-dump-raw -o TARGET=SAM,LSA,NTDS
 ##### LDAP
 netexec {DNS} ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS
+netexec ldap TARGET_HOST --generate-hosts-file /tmp/hostsfile
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --users
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --users-export /tmp/userlistOutputFilename.txt
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --groups
