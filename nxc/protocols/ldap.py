@@ -858,13 +858,15 @@ class ldap(connection):
                                 self.logger.highlight(f"{prefix}{name} NS = {colored(rdata.to_text(), host_info_colors[0])}")
                                 return
                     except resolver.NXDOMAIN:
-                        self.logger.fail(f"{prefix}{name} = Host not found (NXDOMAIN)")
+                        self.logger.fail(f"{prefix}{name} ({record_type}) = Host not found (NXDOMAIN)")
                     except resolver.Timeout:
-                        self.logger.fail(f"{prefix}{name} = Connection timed out")
+                        self.logger.fail(f"{prefix}{name} ({record_type}) = Connection timed out")
                     except resolver.NoAnswer:
-                        self.logger.fail(f"{prefix}{name} = DNS server did not respond")
+                        self.logger.fail(f"{prefix}{name} ({record_type}) = DNS server did not respond")
+                    except resolver.NoNameservers:
+                        self.logger.fail(f"{prefix}{name} ({record_type}) = No nameservers available")
                     except Exception as e:
-                        self.logger.fail(f"{prefix}{name} encountered an unexpected error: {e}")
+                        self.logger.fail(f"{prefix}{name} ({record_type}) encountered an unexpected error: {e}")
             except Exception as e:
                 self.logger.fail(f"Skipping item(dNSHostName) {prefix}{name}, error: {e}")
 
