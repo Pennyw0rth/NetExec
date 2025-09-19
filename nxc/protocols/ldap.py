@@ -1067,6 +1067,7 @@ class ldap(connection):
             "MemberOf",
             "pwdLastSet",
             "lastLogon",
+            "objectClass",
         ]
         resp = self.search(searchFilter, attributes, 0)
         resp_parsed = parse_result_attributes(resp)
@@ -1111,6 +1112,7 @@ class ldap(connection):
                             sessionKey,
                             user["sAMAccountName"],
                             downLevelLogonName,
+                            is_computer="computer" in user.get("objectClass", [])
                         )
 
                         pwdLastSet = "<never>" if str(user.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(user["pwdLastSet"]))))
