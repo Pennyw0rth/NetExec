@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import os
+import socket
 from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
 from binascii import hexlify
 from datetime import datetime
@@ -830,7 +831,8 @@ class ldap(connection):
     def dc_list(self):
         # bypass host resolver configuration via configure=False (default pulls from /etc/resolv.conf or registry on Windows)
         resolv = resolver.Resolver(configure=False)
-        resolv.nameservers = [self.args.dns_server] if self.args.dns_server else [self.host]
+        ns = self.args.dns_server or self.host
+        resolv.nameservers = [socket.gethostbyname(ns)]
         self.logger.debug(f"DNS Server option: {self.args.dns_server}, using DNS server: {resolv.nameservers}")
         resolv.timeout = self.args.dns_timeout
 
@@ -856,13 +858,15 @@ class ldap(connection):
                                 self.logger.highlight(f"{prefix}{name} NS = {colored(rdata.to_text(), host_info_colors[0])}")
                                 return
                     except resolver.NXDOMAIN:
-                        self.logger.fail(f"{prefix}{name} = Host not found (NXDOMAIN)")
+                        self.logger.fail(f"{prefix}{name} ({record_type}) = Host not found (NXDOMAIN)")
                     except resolver.Timeout:
-                        self.logger.fail(f"{prefix}{name} = Connection timed out")
+                        self.logger.fail(f"{prefix}{name} ({record_type}) = Connection timed out")
                     except resolver.NoAnswer:
-                        self.logger.fail(f"{prefix}{name} = DNS server did not respond")
+                        self.logger.fail(f"{prefix}{name} ({record_type}) = DNS server did not respond")
+                    except resolver.NoNameservers:
+                        self.logger.fail(f"{prefix}{name} ({record_type}) = No nameservers available")
                     except Exception as e:
-                        self.logger.fail(f"{prefix}{name} encountered an unexpected error: {e}")
+                        self.logger.fail(f"{prefix}{name} ({record_type}) encountered an unexpected error: {e}")
             except Exception as e:
                 self.logger.fail(f"Skipping item(dNSHostName) {prefix}{name}, error: {e}")
 
@@ -1037,8 +1041,27 @@ class ldap(connection):
                         f.write(line + "\n")
             return
 
-        # Building the search filter
-        searchFilter = "(&(servicePrincipalName=*)(!(objectCategory=computer)))"
+        if self.args.kerberoast_users:
+            target_usernames = []
+            for item in self.args.kerberoast_users:
+                if os.path.isfile(item):
+                    try:
+                        with open(item, encoding="utf-8") as f:
+                            target_usernames.extend(line.strip() for line in f if line.strip())
+                    except Exception as e:
+                        self.logger.fail(f"Failed to read file '{item}': {e}")
+                else:
+                    target_usernames.append(item.strip())
+
+            self.logger.info(f"Targeting specific users for kerberoasting: {', '.join(target_usernames)}")
+
+            # build search filter for specific users
+            user_filter = "".join([f"(sAMAccountName={username})" for username in target_usernames])
+            searchFilter = f"(&(servicePrincipalName=*)(!(objectCategory=computer))(|{user_filter}))"
+        else:
+            # default to all
+            searchFilter = "(&(servicePrincipalName=*)(!(objectCategory=computer)))"
+
         attributes = [
             "sAMAccountName",
             "userAccountControl",

