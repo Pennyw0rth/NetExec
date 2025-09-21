@@ -211,7 +211,7 @@ class NXCModule:
 
             if self.ca_name and self.template_name:
 
-                dump_path = path.join(NXC_PATH, "schtask_as")
+                dump_path = path.join(NXC_PATH, "modules/schtask_as")
                 if not path.isdir(dump_path):
                     makedirs(dump_path)
 
