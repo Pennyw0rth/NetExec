@@ -23,22 +23,19 @@ class NXCModule:
         return subparsers
 
     def __init__(self, context=None, module_options=None):
-        print(module_options)
         self.context = context
         self.server = module_options.server
         self.base_dn = module_options.base_dn
         self.regex = re.compile(r"(https?://.+)")
 
-    def on_login(self, context, connection):
-        """On a successful LDAP login we perform a search for all PKI Enrollment Server or Certificate Templates Names."""
-        self.context = context
+    def on_login(self, _, connection):
         if self.server is None:
             search_filter = "(objectClass=pKIEnrollmentService)"
         else:
             search_filter = f"(distinguishedName=CN={self.server},CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,"
-            self.context.log.highlight(f"Using PKI CN: {self.server}")
+            self.context.highlight(f"Using PKI CN: {self.server}")
 
-        context.log.display(f"Starting LDAP search with search filter '{search_filter}'")
+        self.context.display(f"Starting LDAP search with search filter '{search_filter}'")
 
         try:
             sc = ldap.SimplePagedResultsControl()
@@ -64,9 +61,9 @@ class NXCModule:
                 )
         except LDAPSearchError as e:
             if "noSuchObject" in str(e):
-                context.log.fail("No ADCS infrastructure found.")
+                self.context.fail("No ADCS infrastructure found.")
             else:
-                context.log.fail(f"Obtained unexpected exception: {e}")
+                self.context.fail(f"Obtained unexpected exception: {e}")
 
     def process_servers(self, item):
         """Function that is called to process the items obtain by the LDAP search when listing PKI Enrollment Servers."""
@@ -93,14 +90,14 @@ class NXCModule:
                             urls.append(match.group(1))
         except Exception as e:
             entry = host_name or "item"
-            self.context.log.fail(f"Skipping {entry}, cannot process LDAP entry due to error: '{e!s}'")
+            self.context.fail(f"Skipping {entry}, cannot process LDAP entry due to error: '{e!s}'")
 
         if host_name:
-            self.context.log.highlight(f"Found PKI Enrollment Server: {host_name}")
+            self.context.highlight(f"Found PKI Enrollment Server: {host_name}")
         if cn:
-            self.context.log.highlight(f"Found CN: {cn}")
+            self.context.highlight(f"Found CN: {cn}")
         for url in urls:
-            self.context.log.highlight(f"Found PKI Enrollment WebService: {url}")
+            self.context.highlight(f"Found PKI Enrollment WebService: {url}")
 
     def process_templates(self, item):
         """Function that is called to process the items obtain by the LDAP search when listing Certificate Templates Names for a specific PKI Enrollment Server."""
@@ -118,8 +115,8 @@ class NXCModule:
                         templates.append(template_name)
         except Exception as e:
             entry = template_name or "item"
-            self.context.log.fail(f"Skipping {entry}, cannot process LDAP entry due to error: '{e}'")
+            self.context.fail(f"Skipping {entry}, cannot process LDAP entry due to error: '{e}'")
 
         if templates:
             for t in templates:
-                self.context.log.highlight(f"Found Certificate Template: {t}")
+                self.context.highlight(f"Found Certificate Template: {t}")
