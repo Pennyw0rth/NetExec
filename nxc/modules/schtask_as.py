@@ -205,8 +205,9 @@ class NXCModule:
                 for line in output.splitlines():
                     self.logger.highlight(line.rstrip())
 
-        except Exception:
-            self.logger.debug(f"Error executing command via atexec, traceback: {format_exc()}")
+        except Exception as e:
+            self.logger.fail(f"Error executing command via atexec: {e}")
+            self.logger.debug(f"Traceback: {format_exc()}")
         finally:
             if self.binary_to_upload:
                 try:
