@@ -26,102 +26,89 @@ def gen_cli_args():
         DISTANCE = ""
     CODENAME = "SmoothOperator"
 
-    # --- GENERIC / OUTPUT / DNS PARSERS ---
     generic_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
-    ggroup = generic_parser.add_argument_group("Generic", "Generic options for nxc across protocols")
-    ggroup.add_argument("--version", action="store_true", help="Display nxc version")
-    ggroup.add_argument("-t", "--threads", type=int, default=256, help="number of concurrent threads")
-    ggroup.add_argument("--timeout", type=int, default=None, help="max timeout per thread")
-    ggroup.add_argument("--jitter", metavar="INTERVAL", help="random delay between each authentication")
-    # expose -M here (we will use -M flow)
-    ggroup.add_argument("-M", "--module", help="Select module to use", dest="module")
+    generic_group = generic_parser.add_argument_group("Generic", "Generic options for nxc across protocols")
+    generic_group.add_argument("--version", action="store_true", help="Display nxc version")
+    generic_group.add_argument("-t", "--threads", type=int, dest="threads", default=256, help="set how many concurrent threads to use")
+    generic_group.add_argument("--timeout", default=None, type=int, help="max timeout in seconds of each thread")
+    generic_group.add_argument("--jitter", metavar="INTERVAL", type=str, help="sets a random delay between each authentication")
+    generic_group.add_argument("-M", "--module", help="Select module to use", dest="module")
 
     output_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
-    ogroup = output_parser.add_argument_group("Output", "Output options")
-    ogroup.add_argument("--verbose", action="store_true")
-    ogroup.add_argument("--debug", action="store_true")
-    ogroup.add_argument("--no-progress", action="store_true")
-    ogroup.add_argument("--log", metavar="LOG")
+    output_group = output_parser.add_argument_group("Output", "Options to set verbosity levels and control output")
+    output_group.add_argument("--verbose", action="store_true", help="enable verbose output")
+    output_group.add_argument("--debug", action="store_true", help="enable debug level information")
+    output_group.add_argument("--no-progress", action="store_true", help="do not displaying progress bar during scan")
+    output_group.add_argument("--log", metavar="LOG", help="export result into a custom file")
 
     dns_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
-    dgroup = dns_parser.add_argument_group("DNS")
-    dgroup.add_argument("-6", dest="force_ipv6", action="store_true")
-    dgroup.add_argument("--dns-server")
-    dgroup.add_argument("--dns-tcp", action="store_true")
-    dgroup.add_argument("--dns-timeout", type=int, default=3)
+    dns_group = dns_parser.add_argument_group("DNS")
+    dns_group.add_argument("-6", dest="force_ipv6", action="store_true", help="Enable force IPv6")
+    dns_group.add_argument("--dns-server", action="store", help="Specify DNS server (default: Use hosts file & System DNS)")
+    dns_group.add_argument("--dns-tcp", action="store_true", help="Use TCP instead of UDP for DNS queries")
+    dns_group.add_argument("--dns-timeout", action="store", type=int, default=3, help="DNS query timeout in seconds")
 
-    # --- MAIN PARSER (disable abbreviation to avoid --hello => --help) ---
     parser = argparse.ArgumentParser(
         description=rf"""
- .   .
-.|   |.     _   _          _     _____
-||   ||    | \ | |   ___  | |_  | ____| __  __   ___    ___
-\\( )//    |  \| |  / _ \ | __| |  _|   \ \/ /  / _ \  / __|
-.=[ ]=.    | |\  | |  __/ | |_  | |___   >  <  |  __/ | (__
-/ /˙-˙\ \   |_| \_|  \___|  \__| |_____| /_/\_\  \___|  \___|
-˙ \   / ˙
- ˙   ˙
+     .   .
+    .|   |.     _   _          _     _____
+    ||   ||    | \ | |   ___  | |_  | ____| __  __   ___    ___
+    \\( )//    |  \| |  / _ \ | __| |  _|   \ \/ /  / _ \  / __|
+    .=[ ]=.    | |\  | |  __/ | |_  | |___   >  <  |  __/ | (__
+   / /˙-˙\ \   |_| \_|  \___|  \__| |_____| /_/\_\  \___|  \___|
+   ˙ \   / ˙
+     ˙   ˙
 
-The network execution tool
-Maintained as open source by @NeffIsBack, @MJHallenbeck, @_zblurx
+    The network execution tool
+    Maintained as an open source project by @NeffIsBack, @MJHallenbeck, @_zblurx
 
-Documentation: https://www.netexec.wiki/
+    For documentation and usage examples, visit: https://www.netexec.wiki/
 
-{highlight('Version', 'red')}: {highlight(VERSION)}
-{highlight('Codename', 'red')}: {highlight(CODENAME)}
-{highlight('Commit', 'red')} : {highlight(COMMIT)}
-""",
+    {highlight('Version', 'red')} : {highlight(VERSION)}
+    {highlight('Codename', 'red')}: {highlight(CODENAME)}
+    {highlight('Commit', 'red')}  : {highlight(COMMIT)}
+    """,
         formatter_class=RawTextHelpFormatter,
-        parents=[generic_parser, output_parser, dns_parser],
-        allow_abbrev=False
+        parents=[generic_parser, output_parser, dns_parser]
     )
 
-    # --- SUBPARSERS FOR PROTOCOLS ---
-    proto_subparsers = parser.add_subparsers(title="Available Protocols", dest="protocol")
+    subparsers = parser.add_subparsers(title="Available Protocols", dest="protocol")
 
-    # Standard shared parser for protocols
-    std_parser = argparse.ArgumentParser(add_help=False, parents=[generic_parser, output_parser, dns_parser],
-                                        formatter_class=DisplayDefaultsNotNone)
-    std_parser.add_argument("target", nargs="+",
-                            help="Target IP(s), ranges, CIDR(s), hostnames, files, XML, Nessus")
+    std_parser = argparse.ArgumentParser(add_help=False, parents=[generic_parser, output_parser, dns_parser], formatter_class=DisplayDefaultsNotNone)
+    std_parser.add_argument("target", nargs="+", help="Target IP(s), ranges, CIDR(s), hostnames, files, XML, Nessus")
+    credential_group = std_parser.add_argument_group("Authentication", "Options for authenticating")
+    credential_group.add_argument("-u", "--username", metavar="USERNAME", dest="username", nargs="+", default=[], help="username(s) or file(s) containing usernames")
+    credential_group.add_argument("-p", "--password", metavar="PASSWORD", dest="password", nargs="+", default=[], help="password(s) or file(s) containing passwords")
+    credential_group.add_argument("-id", metavar="CRED_ID", nargs="+", default=[], type=str, dest="cred_id", help="database credential ID(s) to use for authentication")
+    credential_group.add_argument("--ignore-pw-decoding", action="store_true", help="Ignore non UTF-8 characters when decoding the password file")
+    credential_group.add_argument("--no-bruteforce", action="store_true", help="No spray when using file for username and password (user1 => password1, user2 => password2)")
+    credential_group.add_argument("--continue-on-success", action="store_true", help="continues authentication attempts even after successes")
+    credential_group.add_argument("--gfail-limit", metavar="LIMIT", type=int, help="max number of global failed login attempts")
+    credential_group.add_argument("--ufail-limit", metavar="LIMIT", type=int, help="max number of failed login attempts per username")
+    credential_group.add_argument("--fail-limit", metavar="LIMIT", type=int, help="max number of failed login attempts per host")
 
-    # --- Authentication groups ---
-    cred_group = std_parser.add_argument_group("Authentication")
-    cred_group.add_argument("-u", "--username", nargs="+", default=[])
-    cred_group.add_argument("-p", "--password", nargs="+", default=[])
-    cred_group.add_argument("-id", nargs="+", default=[], type=str, dest="cred_id")
-    cred_group.add_argument("--ignore-pw-decoding", action="store_true")
-    cred_group.add_argument("--no-bruteforce", action="store_true")
-    cred_group.add_argument("--continue-on-success", action="store_true")
-    cred_group.add_argument("--gfail-limit", type=int)
-    cred_group.add_argument("--ufail-limit", type=int)
-    cred_group.add_argument("--fail-limit", type=int)
+    kerberos_group = std_parser.add_argument_group("Kerberos", "Options for Kerberos authentication")
+    kerberos_group.add_argument("-k", "--kerberos", action="store_true", help="Use Kerberos authentication")
+    kerberos_group.add_argument("--use-kcache", action="store_true", help="Use Kerberos authentication from ccache file (KRB5CCNAME)")
+    kerberos_group.add_argument("--aesKey", metavar="AESKEY", nargs="+", help="AES key to use for Kerberos Authentication (128 or 256 bits)")
+    kerberos_group.add_argument("--kdcHost", metavar="KDCHOST", help="FQDN of the domain controller. If omitted it will use the domain part (FQDN) specified in the target parameter")
 
-    kerberos_group = std_parser.add_argument_group("Kerberos")
-    kerberos_group.add_argument("-k", "--kerberos", action="store_true")
-    kerberos_group.add_argument("--use-kcache", action="store_true")
-    kerberos_group.add_argument("--aesKey", nargs="+")
-    kerberos_group.add_argument("--kdcHost")
+    certificate_group = std_parser.add_argument_group("Certificate", "Options for certificate authentication")
+    certificate_group.add_argument("--pfx-cert", metavar="PFXCERT", help="Use certificate authentication from pfx file .pfx")
+    certificate_group.add_argument("--pfx-base64", metavar="PFXB64", help="Use certificate authentication from pfx file encoded in base64")
+    certificate_group.add_argument("--pfx-pass", metavar="PFXPASS", help="Password of the pfx certificate")
+    certificate_group.add_argument("--pem-cert", metavar="PEMCERT", help="Use certificate authentication from PEM file")
+    certificate_group.add_argument("--pem-key", metavar="PEMKEY", help="Private key for the PEM format")
 
-    cert_group = std_parser.add_argument_group("Certificate")
-    cert_group.add_argument("--pfx-cert")
-    cert_group.add_argument("--pfx-base64")
-    cert_group.add_argument("--pfx-pass")
-    cert_group.add_argument("--pem-cert")
-    cert_group.add_argument("--pem-key")
-
-    # --- Load protocol arguments dynamically ---
     p_loader = ProtocolLoader()
+    protocols = p_loader.get_protocols()
+
     try:
-        protocols = p_loader.get_protocols()
-    except Exception:
-        protocols = {}
-    try:
-        for proto in protocols:
-            proto_obj = p_loader.load_protocol(protocols[proto]["argspath"])
-            proto_subparsers = proto_obj.proto_args(proto_subparsers, [std_parser])
+        for protocol in protocols:
+            protocol_object = p_loader.load_protocol(protocols[protocol]["argspath"])
+            subparsers = protocol_object.proto_args(subparsers, [std_parser])
     except Exception as e:
-        nxc_logger.exception(f"Error loading proto_args: {e}")
+        nxc_logger.exception(f"Error loading proto_args from proto_args.py file in protocol folder: {protocol} - {e}")
 
     # --- LOAD MODULES (collect for listing + for -M) ---
     modules_paths = [(path_join(dirname(nxc.__file__), "modules"), "nxc.modules")]
@@ -152,7 +139,7 @@ Documentation: https://www.netexec.wiki/
                 continue
 
     # --- Attach module listing to the protocol help (epilog), without positional subparsers ---
-    for proto_name, proto_parser in proto_subparsers.choices.items():
+    for proto_name, proto_parser in subparsers.choices.items():
         mods = per_proto_modules.get(proto_name, [])
         if not mods:
             continue
