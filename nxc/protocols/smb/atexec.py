@@ -116,7 +116,7 @@ class TSCH_EXEC:
             "C:\\Windows\\System32\\cmd.exe",
             "C:\\Windows\\System32\\..\\System32\\cmd",
             "C:\\Windows\\System32\\..\\System32\\cmd.exe",
-            "C:\\Windows\\..\\Windows\\System32\\cmd"
+            "C:\\Windows\\..\\Windows\\System32\\cmd",
             "C:\\Windows\\..\\Windows\\System32\\cmd.exe",
         ]
         cmd_path = random.choice(random_cmd_path)
