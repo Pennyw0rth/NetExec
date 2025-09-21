@@ -207,7 +207,7 @@ class NXCModule:
 
         except Exception as e:
             self.logger.fail(f"Error executing command via atexec: {e}")
-            self.logger.debug(f"Traceback: {format_exc()}")
+            self.logger.debug(format_exc())
         finally:
             if self.binary_to_upload:
                 try:
