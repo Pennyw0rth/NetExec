@@ -207,10 +207,9 @@ def gen_cli_args():
         argv = sys.argv[1:]
         mod_pos = None
         for i, tok in enumerate(argv):
-            if tok in ("-M", "--module") and i + 1 < len(argv):
-                if argv[i + 1] == selected_module:
-                    mod_pos = i + 1
-                    break
+            if tok in ("-M", "--module") and i + 1 < len(argv) and argv[i + 1] == selected_module:
+                mod_pos = i + 1
+                break
             if tok.startswith("--module="):
                 val = tok.split("=", 1)[1]
                 if val == selected_module:
