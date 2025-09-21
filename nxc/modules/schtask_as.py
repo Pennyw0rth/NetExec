@@ -162,7 +162,7 @@ class NXCModule:
                         self.command_to_run = f"{self.output_file_location}\\{self.command_to_run}"
                         self.logger.success(f"Binary {self.binary_to_upload_name} successfully uploaded in {self.output_file_location}\\{self.binary_to_upload_name}")
                     except Exception as e:
-                        self.logger.fail(f"Error writing file to share {self.output_file_location}: {e}")
+                        self.logger.fail(f"Error writing file to {self.output_file_location}: {e}")
                         return
 
         self.logger.display("Connecting to the remote Service control endpoint")
