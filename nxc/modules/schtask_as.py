@@ -61,6 +61,12 @@ class NXCModule:
 
         # ADCS certificate request options
         self.ca_name = module_options.get("CA")
+        if self.ca_name:
+            if "\\" not in self.ca_name:
+                context.log.fail("CA name must be in the following format: SERVER_NAME\\CertificateAuthority_Name")
+                exit(1)
+            elif "\\\\" in self.ca_name:
+                self.ca_name = self.ca_name.replace("\\\\", "\\")
         self.template_name = module_options.get("TEMPLATE")
 
     def on_admin_login(self, context, connection):
