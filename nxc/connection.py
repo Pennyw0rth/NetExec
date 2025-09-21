@@ -246,8 +246,10 @@ class connection:
             self.print_host_info()
             if self.login() or (self.username == "" and self.password == ""):
                 if hasattr(self.args, "module") and self.args.module:
+                    print(f"MODULE {self.args.module} called")
                     self.load_modules()
                     self.logger.debug("Calling modules")
+                    print(self.modules)
                     self.call_modules()
                 else:
                     self.logger.debug("Calling command arguments")
@@ -587,10 +589,37 @@ class connection:
         return highlight(f"({pwned_label})" if self.admin_privs else "")
 
     def load_modules(self):
-        self.logger.info(f"Loading modules for target: {self.host}")
-        loader = ModuleLoader(self.args, self.db, self.logger)
-        self.modules = []
+        """
+        Charge dynamiquement les modules depuis nxc.modules et instancie
+        uniquement celui demandé dans self.args.module en passant context et module_options.
+        """
+        from importlib import import_module
+        from pkgutil import iter_modules
+        from os.path import dirname, join as path_join
+        import nxc
 
-        for module_path in self.module_paths:
-            module = loader.init_module(module_path)
-            self.modules.append(module)
+        self.modules = []
+        self.logger.info(f"Loading modules for target: {self.host}")
+
+        # Construire module_options à passer à chaque module
+        module_options = getattr(self, "_build_module_options", dict)()
+
+        modules_paths = [(path_join(dirname(nxc.__file__), "modules"), "nxc.modules")]
+        for path, import_base in modules_paths:
+            for module_info in iter_modules(path=[path]):
+                try:
+                    module_pkg = import_module(f"{import_base}.{module_info.name}")
+                    module_class = getattr(module_pkg, "NXCModule", None)
+                    if not module_class:
+                        continue
+
+                    # On instancie en passant context et module_options
+                    inst_module = module_class(context=self.logger, module_options=self.args)
+
+                    # On ajoute uniquement si c'est le module demandé
+                    requested_module = getattr(self.args, "module", None) or getattr(self.args, "module_name", None)
+                    if inst_module.name == requested_module:
+                        self.modules.append(inst_module)
+                        self.logger.debug(f"Loaded module {inst_module.name} with options: {module_options}")
+                except Exception as e:
+                    self.logger.exception(f"Cannot load module {module_info.name}: {e}")

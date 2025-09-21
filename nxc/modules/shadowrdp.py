@@ -16,16 +16,14 @@ class NXCModule:
         self.module_options = module_options
         self.action = None
 
-    def options(self, context, module_options):
-
-        if "ACTION" not in module_options:
-            context.log.fail("ACTION option not specified!")
-            exit(1)
-
-        if module_options["ACTION"].lower() not in ["enable", "disable"]:
-            context.log.fail("ACTION must be either enable, disable or query")
-            exit(1)
-        self.action = module_options["ACTION"].lower()
+    def register_module_options(self, subparsers):
+        print("REGISTER SHADOWRDP")
+        subparsers.add_argument("--hello")
+        group = subparsers.add_mutually_exclusive_group(required=True)
+        group.add_argument("--enable", help="Enable shadow RDP", action="store_true", dest="enable")
+        group.add_argument("--disable", help="Disable shadow RDP", action="store_true", dest="disable")
+        subparsers.set_defaults(module="shadowrdp")
+        return subparsers
 
     def on_admin_login(self, context, connection):
         try:
@@ -57,7 +55,7 @@ class NXCModule:
                             "Shadow\x00")
 
                 # Disable remote UAC
-                if self.action == "disable":
+                if self.module_options.disable:
                     rrp.hBaseRegSetValue(
                         remoteOps._RemoteOperations__rrp,
                         keyHandle,
@@ -68,7 +66,7 @@ class NXCModule:
                     context.log.highlight("Shadow RDP disabled")
 
                 # Enable remote UAC
-                if self.action == "enable":
+                if self.module_options.enable:
                     rrp.hBaseRegSetValue(
                         remoteOps._RemoteOperations__rrp,
                         keyHandle,

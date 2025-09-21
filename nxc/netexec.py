@@ -157,45 +157,6 @@ def main():
     # with the new nxc/config.py this can be eventually removed, as it can be imported anywhere
     protocol_object.config = nxc_config
 
-    if args.module or args.list_modules is not None:
-        loader = ModuleLoader(args, db, nxc_logger)
-        modules = loader.list_modules()
-
-    if args.list_modules is not None:
-        low_privilege_modules = {m: props for m, props in modules.items() if args.protocol in props["supported_protocols"] and not props["requires_admin"]}
-        high_privilege_modules = {m: props for m, props in modules.items() if args.protocol in props["supported_protocols"] and props["requires_admin"]}
-
-        # List low privilege modules
-        nxc_logger.highlight("LOW PRIVILEGE MODULES")
-        display_modules(args, low_privilege_modules)
-
-        # List high privilege modules
-        nxc_logger.highlight("\nHIGH PRIVILEGE MODULES (requires admin privs)")
-        display_modules(args, high_privilege_modules)
-        exit(0)
-    elif args.module and args.show_module_options:
-        for module in args.module:
-            nxc_logger.display(f"{module} module options:\n{modules[module]['options']}")
-        exit(0)
-    elif args.show_module_options:
-        nxc_logger.error("--options requires -M/--module")
-        exit(1)
-    elif args.module:
-        # Check the modules for sanity before loading the protocol
-        nxc_logger.debug(f"Modules to be Loaded for sanity check: {args.module}, {type(args.module)}")
-        proto_module_paths = []
-        for m in args.module:
-            if m not in modules:
-                nxc_logger.error(f"Module not found: {m}")
-                exit(1)
-
-            nxc_logger.debug(f"Loading module for sanity check {m} at path {modules[m]['path']}")
-            module = loader.init_module(modules[m]["path"])
-
-            # Add modules paths to the protocol object so it can load them itself
-            proto_module_paths.append(modules[m]["path"])
-        protocol_object.module_paths = proto_module_paths
-
     if args.protocol == "rdp" and args.execute:
         ans = input(highlight("[!] Executing remote command via RDP will disconnect the Windows session (not log off) if the targeted user is connected via RDP, do you want to continue ? [Y/n] ", "red"))
         if ans.lower() not in ["y", "yes", ""]:

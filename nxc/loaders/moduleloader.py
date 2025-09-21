@@ -19,40 +19,13 @@ class ModuleLoader:
         self.logger = logger
 
     def module_is_sane(self, module, module_path):
-        """Check if a module has the proper attributes"""
-        module_error = False
-        if not hasattr(module, "name"):
-            self.logger.fail(f"{module_path} missing the name variable")
-            module_error = True
-        elif hasattr(module, "name") and module.name != module_path.split("/")[-1].split("\\")[-1][:-3]:
-            self.logger.fail(f"{module_path} filename must match the module name {module.name}")
-            module_error = True
-        elif not hasattr(module, "description"):
-            self.logger.fail(f"{module_path} missing the description variable")
-            module_error = True
-        elif not hasattr(module, "category"):
-            self.logger.fail(f"{module_path} missing the category variable")
-            module_error = True
-        elif not hasattr(module, "supported_protocols"):
-            self.logger.fail(f"{module_path} missing the supported_protocols variable")
-            module_error = True
-        elif not hasattr(module, "options"):
-            self.logger.fail(f"{module_path} missing the options function")
-            module_error = True
-        elif not hasattr(module, "on_login") and not (module, "on_admin_login"):
-            self.logger.fail(f"{module_path} missing the on_login/on_admin_login function(s)")
-            module_error = True
-
-        return not module_error
+        return True
 
     def load_module(self, module_path):
         """Load a module, initializing it and checking that it has the proper attributes"""
         try:
             spec = importlib.util.spec_from_file_location("NXCModule", module_path)
-            module = spec.loader.load_module().NXCModule()
-
-            if self.module_is_sane(module, module_path):
-                return module
+            return spec.loader.load_module().NXCModule()
         except Exception as e:
             self.logger.fail(f"Failed loading module at {module_path}: {e}")
             self.logger.debug(traceback.format_exc())

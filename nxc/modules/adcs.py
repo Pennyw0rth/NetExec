@@ -22,19 +22,10 @@ class NXCModule:
         self.server = None
         self.regex = None
 
-    def options(self, context, module_options):
-        """
-        SERVER             PKI Enrollment Server to enumerate templates for. Default is None, use CN name
-        BASE_DN            The base domain name for the LDAP query
-        """
-        self.regex = re.compile(r"(https?://.+)")
-
-        self.server = None
-        self.base_dn = None
-        if module_options and "SERVER" in module_options:
-            self.server = module_options["SERVER"]
-        if module_options and "BASE_DN" in module_options:
-            self.base_dn = module_options["BASE_DN"]
+    def register_module_options(self, subparsers):
+        subparsers.add_argument("--basedn", required=True, help="FUCKIT")
+        subparsers.set_defaults(module="adcs")
+        return subparsers
 
     def on_login(self, context, connection):
         """On a successful LDAP login we perform a search for all PKI Enrollment Server or Certificate Templates Names."""
