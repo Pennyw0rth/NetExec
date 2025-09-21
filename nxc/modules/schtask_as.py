@@ -205,7 +205,7 @@ class NXCModule:
             if self.binary_to_upload:
                 try:
                     connection.conn.deleteFile(self.share, f"{self.output_file_location}\\{self.binary_to_upload_name}")
-                    self.logger.success(f"Binary {self.output_file_location}{self.binary_to_upload_name} successfully deleted")
+                    self.logger.success(f"Binary {self.output_file_location}\\{self.binary_to_upload_name} successfully deleted")
                 except Exception as e:
                     self.logger.fail(f"Error deleting {self.output_file_location}{self.binary_to_upload_name} on {self.share}: {e}")
 
