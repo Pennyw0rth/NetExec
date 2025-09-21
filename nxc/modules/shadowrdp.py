@@ -17,8 +17,6 @@ class NXCModule:
         self.action = None
 
     def register_module_options(self, subparsers):
-        print("REGISTER SHADOWRDP")
-        subparsers.add_argument("--hello")
         group = subparsers.add_mutually_exclusive_group(required=True)
         group.add_argument("--enable", help="Enable shadow RDP", action="store_true", dest="enable")
         group.add_argument("--disable", help="Disable shadow RDP", action="store_true", dest="disable")
