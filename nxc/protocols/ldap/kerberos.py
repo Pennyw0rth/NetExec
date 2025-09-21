@@ -46,7 +46,7 @@ class KerberosAttacks:
         if self.password is None:
             self.password = ""
 
-    def output_tgs(self, tgs, old_session_key, session_key, username, spn, fd=None):
+    def output_tgs(self, tgs, old_session_key, session_key, username, spn, fd=None, is_computer=False):
         decoded_tgs = decoder.decode(tgs, asn1Spec=TGS_REP())[0]
 
         # According to RFC4757 (RC4-HMAC) the cipher part is like:
@@ -63,44 +63,32 @@ class KerberosAttacks:
         # Regarding AES encryption type (AES128 CTS HMAC-SHA1 96 and AES256 CTS HMAC-SHA1 96)
         # last 12 bytes of the encrypted ticket represent the checksum of the decrypted
         # ticket
-        if decoded_tgs["ticket"]["enc-part"]["etype"] == constants.EncryptionTypes.rc4_hmac.value:
-            entry = "$krb5tgs${}$*{}${}${}*${}${}".format(
-                constants.EncryptionTypes.rc4_hmac.value,
-                username,
-                decoded_tgs["ticket"]["realm"],
-                spn.replace(":", "~"),
-                hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][:16].asOctets()).decode(),
-                hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][16:].asOctets()).decode(),
-            )
-        elif decoded_tgs["ticket"]["enc-part"]["etype"] == constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value:
-            entry = "$krb5tgs${}${}${}$*{}*${}${}".format(
-                constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value,
-                username,
-                decoded_tgs["ticket"]["realm"],
-                spn.replace(":", "~"),
-                hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][-12:].asOctets()).decode(),
-                hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][:-12:].asOctets()).decode,
-            )
-        elif decoded_tgs["ticket"]["enc-part"]["etype"] == constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value:
-            entry = "$krb5tgs${}${}${}$*{}*${}${}".format(
-                constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value,
-                username,
-                decoded_tgs["ticket"]["realm"],
-                spn.replace(":", "~"),
-                hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][-12:].asOctets()).decode(),
-                hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][:-12:].asOctets()).decode(),
-            )
-        elif decoded_tgs["ticket"]["enc-part"]["etype"] == constants.EncryptionTypes.des_cbc_md5.value:
-            entry = "$krb5tgs${}$*{}${}${}*${}${}".format(
-                constants.EncryptionTypes.des_cbc_md5.value,
-                username,
-                decoded_tgs["ticket"]["realm"],
-                spn.replace(":", "~"),
-                hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][:16].asOctets()).decode(),
-                hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][16:].asOctets()).decode(),
-            )
+
+        # Define variables
+        enc = decoded_tgs["ticket"]["enc-part"]
+        etype = enc["etype"]
+        cipher = enc["cipher"].asOctets()
+        realm = decoded_tgs["ticket"]["realm"]
+        spn_fmt = spn.replace(":", "~")
+
+        # Replace username if it's a computer account
+        if is_computer:
+            account = f"host{username.rstrip('$').lower()}.{str(realm).lower()}"
         else:
-            nxc_logger.error(f"Skipping {decoded_tgs['ticket']['sname']['name-string'][0]}/{decoded_tgs['ticket']['sname']['name-string'][1]} due to incompatible e-type {decoded_tgs['ticket']['enc-part']['etype']:d}")
+            if username.endswith("$"):
+                nxc_logger.fail("Account ends with $, but is_computer is False. TGS output is likely to be incorrect.")
+            account = username
+
+        if etype in (constants.EncryptionTypes.rc4_hmac.value, constants.EncryptionTypes.des_cbc_md5.value):
+            chk = hexlify(cipher[:16]).decode()
+            data = hexlify(cipher[16:]).decode()
+            entry = f"$krb5tgs${etype}$*{account}${realm}${spn_fmt}*${chk}${data}"
+        elif etype in (constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value, constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value):
+            chk = hexlify(cipher[-12:]).decode()
+            data = hexlify(cipher[:-12]).decode()
+            entry = f"$krb5tgs${etype}${account}${realm}$*{spn_fmt}*${chk}${data}"
+        else:
+            nxc_logger.fail(f"Skipping {decoded_tgs['ticket']['sname']['name-string'][0]}/{decoded_tgs['ticket']['sname']['name-string'][1]} due to incompatible e-type {decoded_tgs['ticket']['enc-part']['etype']:d}")
 
         return entry
 
