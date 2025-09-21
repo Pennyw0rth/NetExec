@@ -246,7 +246,6 @@ class connection:
             self.print_host_info()
             if self.login() or (self.username == "" and self.password == ""):
                 if hasattr(self.args, "module") and self.args.module:
-                    print(f"MODULE {self.args.module} called")
                     self.load_modules()
                     self.logger.debug("Calling modules")
                     print(self.modules)
@@ -622,4 +621,5 @@ class connection:
                         self.modules.append(inst_module)
                         self.logger.debug(f"Loaded module {inst_module.name} with options: {module_options}")
                 except Exception as e:
-                    self.logger.exception(f"Cannot load module {module_info.name}: {e}")
+                    #self.logger.exception(f"Cannot load module {module_info.name}: {e}")
+                    pass

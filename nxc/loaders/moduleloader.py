@@ -1,98 +1,65 @@
 import nxc
+import argparse
 import importlib
-import traceback
-import sys
-
 from os import listdir
-from os.path import dirname
-from os.path import join as path_join
-
-from nxc.context import Context
-from nxc.logger import NXCAdapter
-from nxc.paths import NXC_PATH
+from os.path import dirname, join
 
 
 class ModuleLoader:
-    def __init__(self, args, db, logger):
-        self.args = args
-        self.db = db
-        self.logger = logger
-
-    def module_is_sane(self, module, module_path):
-        return True
-
-    def load_module(self, module_path):
-        """Load a module, initializing it and checking that it has the proper attributes"""
-        try:
-            spec = importlib.util.spec_from_file_location("NXCModule", module_path)
-            return spec.loader.load_module().NXCModule()
-        except Exception as e:
-            self.logger.fail(f"Failed loading module at {module_path}: {e}")
-            self.logger.debug(traceback.format_exc())
-
-    def init_module(self, module_path):
-        """Initialize a module for execution"""
-        module = None
-        module = self.load_module(module_path)
-
-        if module:
-            self.logger.debug(f"Supported protocols: {module.supported_protocols}")
-            self.logger.debug(f"Protocol: {self.args.protocol}")
-            if self.args.protocol in module.supported_protocols:
-                try:
-                    module_logger = NXCAdapter(extra={"module_name": module.name.upper()})
-                except Exception as e:
-                    self.logger.fail(f"Error loading NXCAdaptor for module {module.name.upper()}: {e}")
-                context = Context(self.db, module_logger, self.args)
-                module_options = {}
-
-                for option in self.args.module_options:
-                    key, value = option.split("=", 1)
-                    module_options[str(key).upper()] = value
-
-                module.options(context, module_options)
-                return module
-            else:
-                self.logger.fail(f"Module {module.name.upper()} is not supported for protocol {self.args.protocol}")
-                sys.exit(1)
-
-    def get_module_info(self, module_path):
-        """Get the path, description, and options from a module"""
-        try:
-            spec = importlib.util.spec_from_file_location("NXCModule", module_path)
-            module_spec = spec.loader.load_module().NXCModule
-
-            module = {
-                f"{module_spec.name}": {
-                    "path": module_path,
-                    "description": module_spec.description,
-                    "options": module_spec.options.__doc__,
-                    "supported_protocols": module_spec.supported_protocols,
-                    "category": module_spec.category,
-                    "requires_admin": bool(hasattr(module_spec, "on_admin_login") and callable(module_spec.on_admin_login)),
-                }
-            }
-            if self.module_is_sane(module_spec, module_path):
-                return module
-        except Exception as e:
-            self.logger.fail(f"Failed loading module at {module_path}: {e}")
-            self.logger.debug(traceback.format_exc())
+    def __init__(self):
+        self.modules_map = {}        # Stores {module_name: class}
+        self.per_proto_modules = {}  # Stores {proto_name: [(module_name, description)]
+        self.required_attrs = ["name", "description", "supported_protocols", "__init__", "register_module_options"]
 
     def list_modules(self):
-        """List modules without initializing them"""
-        modules = {}
-        modules_paths = [
-            path_join(dirname(nxc.__file__), "modules"),
-            path_join(NXC_PATH, "modules"),
-        ]
+        """List modules from nxc/modules directory"""
+        modules_paths = [(join(dirname(nxc.__file__), "modules"), "nxc.modules")]
 
-        for path in modules_paths:
-            for module in listdir(path):
-                if module[-3:] == ".py" and module != "example_module.py":
-                    try:
-                        module_path = path_join(path, module)
-                        module_data = self.get_module_info(module_path)
-                        modules.update(module_data)
-                    except Exception as e:
-                        self.logger.debug(f"Error loading module {module}: {e}")
-        return modules
+        for path, import_base in modules_paths:
+            for module_file in listdir(path):
+                if not module_file.endswith(".py") or module_file == "example_module.py":
+                    continue
+
+                mod_name = module_file[:-3]
+                module_pkg = importlib.import_module(f"{import_base}.{mod_name}")
+                module_class = getattr(module_pkg, "NXCModule", None)
+                if not module_class:
+                    continue
+
+                # Validate that each module has got the necessary attributes
+                if not all(hasattr(module_class, attr) for attr in self.required_attrs):
+                    continue
+
+                self.modules_map[module_class.name] = module_class
+                for proto in module_class.supported_protocols:
+                    self.per_proto_modules.setdefault(proto, []).append((module_class.name, module_class.description))
+
+        print(self.modules_map)
+        print(self.per_proto_modules)
+
+        return self.modules_map, self.per_proto_modules
+
+    def get_module_class(self, module_name):
+        """Return the class for a given module name"""
+        return self.modules_map.get(module_name)
+
+    def print_module_help(self, module_name):
+        """Special case: show help for a module directly"""
+        module_class = self.get_module_class(module_name)
+        if not module_class:
+            print(f"Module '{module_name}' not found")
+            return
+
+        parser = argparse.ArgumentParser(
+            prog=f"{module_name}",
+            description=getattr(module_class, "description", ""),
+            formatter_class=nxc.helpers.args.DisplayDefaultsNotNone,
+            add_help=True,
+            allow_abbrev=False
+        )
+        try:
+            module_class.register_module_options(parser)
+        except TypeError:
+            module_class.register_module_options(None, parser)
+
+        parser.print_help()
