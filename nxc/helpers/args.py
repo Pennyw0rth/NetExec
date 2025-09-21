@@ -1,14 +1,19 @@
-from argparse import ArgumentDefaultsHelpFormatter, SUPPRESS, OPTIONAL, ZERO_OR_MORE
+from argparse import ArgumentDefaultsHelpFormatter, SUPPRESS, OPTIONAL, ZERO_OR_MORE, RawTextHelpFormatter
 from argparse import Action
 
 
-class DisplayDefaultsNotNone(ArgumentDefaultsHelpFormatter):
+class DisplayDefaultsNotNone(RawTextHelpFormatter, ArgumentDefaultsHelpFormatter):
+    """
+    Combines RawTextHelpFormatter (keep line breaks) with
+    ArgumentDefaultsHelpFormatter (show defaults if not None).
+    """
     def _get_help_string(self, action):
-        help_string = action.help
-        if "%(default)" not in action.help and action.default is not SUPPRESS:
+        help_string = action.help or ""
+        if "%(default)" not in help_string and action.default is not SUPPRESS:
             defaulting_nargs = [OPTIONAL, ZERO_OR_MORE]
-            if (action.option_strings or action.nargs in defaulting_nargs) and action.default:  # Only add default info if it's not None
-                help_string += " (default: %(default)s)"  # NORUFF
+            # Only show default if it's meaningful
+            if (action.option_strings or action.nargs in defaulting_nargs) and action.default not in (None, [], {}, "", False):
+                help_string += " (default: %(default)s)"
         return help_string
 
 
