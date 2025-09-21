@@ -1,6 +1,6 @@
 import os
 from traceback import format_exc
-from nxc.helpers.misc import CATEGORY
+from nxc.helpers.misc import CATEGORY, gen_random_string
 from nxc.protocols.smb.atexec import TSCH_EXEC
 
 
@@ -17,20 +17,27 @@ class NXCModule:
     supported_protocols = ["smb"]
     category = CATEGORY.PRIVILEGE_ESCALATION
 
-    def __init__(self, context=None, module_options=None):
-        self.context = context
-        self.module_options = module_options
-
-    def register_module_options(self, subparsers):
-        subparsers.add_argument("--useras", required=True, help="User to execute command as")
-        subparsers.add_argument("--cmd", required=True, help="Command to execute")
+    @staticmethod
+    def register_module_options(subparsers):
+        subparsers.add_argument("--runas", help="User to execute command as", required=True)
+        subparsers.add_argument("--cmd", help="Command to execute", required=True)
         subparsers.add_argument("--binary", help="Upload a binary to execute")
-        subparsers.add_argument("--task", help="Name for the scheduled task")
-        subparsers.add_argument("--file", help="Name for the output file")
-        subparsers.add_argument("--location", help="Location for the output file")
-        subparsers.add_argument("--silentcommand", action="store_true", help="Execute without retrieving output")
+        subparsers.add_argument("--task", help="Name for the scheduled task", default=gen_random_string(8))
+        subparsers.add_argument("--file", help="Name for the output file", default=gen_random_string(8))
+        subparsers.add_argument("--location", help="Location for the output file", default="\\Windows\\Temp")
+        subparsers.add_argument("--silentcommand", action="store_true", default=True, help="Execute without retrieving output")
         subparsers.set_defaults(module="schtask_as")
         return subparsers
+
+    def __init__(self, context=None, module_options=None):
+        self.context = context
+        self.run_task_as = module_options.runas
+        self.command_to_run = module_options.cmd
+        self.binary_to_upload = module_options.binary
+        self.task_name = module_options.task
+        self.output_filename = module_options.file
+        self.output_file_location = module_options.location
+        self.show_output = module_options.silentcommand
 
     def on_admin_login(self, context, connection):
         self.logger = context.log

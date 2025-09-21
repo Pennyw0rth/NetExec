@@ -7,7 +7,6 @@ from nxc.helpers.misc import CATEGORY
 class NXCModule:
     """
     Find PKI Enrollment Services in Active Directory and Certificate Templates Names.
-
     Module by Tobias Neitzel (@qtc_de) and Sam Freeside (@snovvcrash)
     """
 
@@ -16,16 +15,19 @@ class NXCModule:
     supported_protocols = ["ldap"]
     category = CATEGORY.ENUMERATION
 
-    def __init__(self, context=None, module_options=None):
-        self.context = context
-        self.module_options = module_options
-        self.server = None
-        self.regex = None
-
-    def register_module_options(self, subparsers):
-        subparsers.add_argument("--basedn", required=True, help="FUCKIT")
+    @staticmethod
+    def register_module_options(subparsers):
+        subparsers.add_argument("--base-dn", help="The base domain name for the LDAP query")
+        subparsers.add_argument("--server", help="PKI Enrollment Server to enumerate templates for. Default is None, use CN name")
         subparsers.set_defaults(module="adcs")
         return subparsers
+
+    def __init__(self, context=None, module_options=None):
+        print(module_options)
+        self.context = context
+        self.server = module_options.server
+        self.base_dn = module_options.base_dn
+        self.regex = re.compile(r"(https?://.+)")
 
     def on_login(self, context, connection):
         """On a successful LDAP login we perform a search for all PKI Enrollment Server or Certificate Templates Names."""
