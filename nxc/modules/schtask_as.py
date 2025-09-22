@@ -30,7 +30,7 @@ class NXCModule:
         return subparsers
 
     def __init__(self, context=None, module_options=None):
-        self.context = context
+        self.logger = context.log
         self.run_task_as = module_options.runas
         self.command_to_run = module_options.cmd
         self.binary_to_upload = module_options.binary
@@ -39,35 +39,35 @@ class NXCModule:
         self.output_file_location = module_options.location
         self.show_output = module_options.silentcommand
 
-    def on_admin_login(self, _, connection):
+    def on_admin_login(self, connection):
         if self.command_to_run is None:
-            self.context.fail("You need to specify a CMD to run")
+            self.logger.fail("You need to specify a CMD to run")
             return
 
         if self.run_task_as is None:
-            self.context.fail("You need to specify a USER to run the command as")
+            self.logger.fail("You need to specify a USER to run the command as")
             return
 
         if self.show_output is False:
-            self.context.display("Command will be executed silently without output")
+            self.logger.display("Command will be executed silently without output")
 
         if self.binary_to_upload:
             if not os.path.isfile(self.binary_to_upload):
-                self.context.fail(f"Cannot find {self.binary_to_upload}")
+                self.logger.fail(f"Cannot find {self.binary_to_upload}")
                 return
             else:
-                self.context.display(f"Uploading {self.binary_to_upload}")
+                self.logger.display(f"Uploading {self.binary_to_upload}")
                 binary_file_location = self.tmp_path if self.output_file_location is None else self.output_file_location
                 with open(self.binary_to_upload, "rb") as binary_to_upload:
                     try:
                         self.binary_to_upload_name = os.path.basename(self.binary_to_upload)
                         connection.conn.putFile(self.share, f"{binary_file_location}{self.binary_to_upload_name}", binary_to_upload.read)
-                        self.context.success(f"Binary {self.binary_to_upload_name} successfully uploaded in {binary_file_location}{self.binary_to_upload_name}")
+                        self.logger.success(f"Binary {self.binary_to_upload_name} successfully uploaded in {binary_file_location}{self.binary_to_upload_name}")
                     except Exception as e:
-                        self.context.fail(f"Error writing file to share {binary_file_location}: {e}")
+                        self.logger.fail(f"Error writing file to share {binary_file_location}: {e}")
                         return
 
-        self.context.info("Connecting to the remote Service control endpoint")
+        self.logger.info("Connecting to the remote Service control endpoint")
         try:
             exec_method = TSCH_EXEC(
                 connection.host if not connection.kerberos else connection.hostname + "." + connection.domain,
@@ -80,7 +80,7 @@ class NXCModule:
                 connection.host,
                 connection.kdcHost,
                 connection.hash,
-                self.context,
+                self.logger,
                 connection.args.get_output_tries,
                 connection.args.share,
                 self.run_task_as,
@@ -90,7 +90,7 @@ class NXCModule:
                 self.output_file_location,
             )
 
-            self.context.info(f"Executing '{self.command_to_run}' as '{self.run_task_as}'")
+            self.logger.info(f"Executing '{self.command_to_run}' as '{self.run_task_as}'")
             output = exec_method.execute(self.command_to_run, self.show_output)
 
             try:
@@ -101,15 +101,15 @@ class NXCModule:
                 output = output.decode("cp437")
             if output:
                 for line in output.splitlines():
-                    self.context.highlight(line.rstrip())
+                    self.logger.highlight(line.rstrip())
 
         except Exception:
-            self.context.debug("Error executing command via atexec, traceback:")
-            self.context.debug(format_exc())
+            self.logger.debug("Error executing command via atexec, traceback:")
+            self.logger.debug(format_exc())
         finally:
             if self.binary_to_upload:
                 try:
                     connection.conn.deleteFile(self.share, f"{binary_file_location}{self.binary_to_upload_name}")
-                    self.context.success(f"Binary {binary_file_location}{self.binary_to_upload_name} successfully deleted")
+                    self.logger.success(f"Binary {binary_file_location}{self.binary_to_upload_name} successfully deleted")
                 except Exception as e:
-                    self.context.fail(f"Error deleting {binary_file_location}{self.binary_to_upload_name} on {self.share}: {e}")
+                    self.logger.fail(f"Error deleting {binary_file_location}{self.binary_to_upload_name} on {self.share}: {e}")

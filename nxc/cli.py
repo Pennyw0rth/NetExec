@@ -165,7 +165,7 @@ def gen_cli_args():
     modules_map, per_proto_modules = module_loader.list_modules()
     attach_modules_epilog(subparsers, per_proto_modules)
 
-    # --- Module help if requested directly (-M <module> -h) ---
+    # Module help if requested directly (-M <module> -h)
     argv_tail = sys.argv[1:]
     if "-M" in argv_tail or "--module" in " ".join(argv_tail):
         sel_mod = extract_module_name(argv_tail)
@@ -182,7 +182,7 @@ def gen_cli_args():
     if selected_module:
         module_class = modules_map.get(selected_module)
         if not module_class:
-            print(f"Module '{selected_module}' not found")
+            print(f"[ A CHANGER ] Module '{selected_module}' not found")
             sys.exit(1)
 
         global_opts_set = {opt for a in parser._actions for opt in getattr(a, "option_strings", [])}

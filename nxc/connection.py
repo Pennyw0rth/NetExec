@@ -246,10 +246,11 @@ class connection:
             self.print_host_info()
             if self.login() or (self.username == "" and self.password == ""):
                 if hasattr(self.args, "module") and self.args.module:
-                    self.load_modules()
-                    self.logger.debug("Calling modules")
-                    print(self.modules)
-                    self.call_modules()
+                    # Loads modules via the ModuleLoader
+                    self.modules, _ = ModuleLoader().list_modules()
+                    self.logger.debug(f"Calling module: {self.args.module}")
+                    # Calls the desired module
+                    self.call_module()
                 else:
                     self.logger.debug("Calling command arguments")
                     self.call_cmd_args()
@@ -276,34 +277,37 @@ class connection:
                 self.logger.debug(f"Calling {attr}()")
                 getattr(self, attr)()
 
-    def call_modules(self):
-        """Calls modules and performs various actions based on the module's attributes.
+    def call_module(self):
+        self.logger.debug(f"Loading module {self.args.module} - {self.args.module}")
+        module_logger = NXCAdapter(
+            extra={
+                "module_name": self.args.module.upper(),
+                "host": self.host,
+                "port": self.port,
+                "hostname": self.hostname,
+            },
+        )
 
-        It iterates over the modules specified in the command line arguments.
-        For each module, it loads the module and creates a context object, then calls functions based on the module's attributes.
-        """
-        for module in self.modules:
-            self.logger.debug(f"Loading module {module.name} - {module}")
-            module_logger = NXCAdapter(
-                extra={
-                    "module_name": module.name.upper(),
-                    "host": self.host,
-                    "port": self.port,
-                    "hostname": self.hostname,
-                },
-            )
+        self.logger.debug(f"Loading context for module {self.args.module}")
 
-            self.logger.debug(f"Loading context for module {module.name} - {module}")
-            context = Context(self.db, module_logger, self.args)
-            context.localip = self.local_ip
+        # Creates the NXC context
+        context = Context(self.db, module_logger, self.args)
+        context.localip = self.local_ip
 
-            if hasattr(module, "on_login"):
-                self.logger.debug(f"Module {module.name} has on_login method")
-                module.on_login(context, self)
+        # Instantiate the module to run passing:
+        # - The NXC Context
+        # - Necessary args
+        module_instance = self.modules[self.args.module](context, self.args)
 
-            if self.admin_privs and hasattr(module, "on_admin_login"):
-                self.logger.debug(f"Module {module.name} has on_admin_login method")
-                module.on_admin_login(context, self)
+        # Calls on_login() module's function
+        if hasattr(module_instance, "on_login"):
+            self.logger.debug(f"Module {module_instance.name} has on_login method")
+            module_instance.on_login(self)
+
+        # Calls on_admin_login module's function
+        if self.admin_privs and hasattr(module_instance, "on_admin_login"):
+            self.logger.debug(f"Module {module_instance.name} has on_admin_login method")
+            module_instance.on_admin_login(self)
 
     def inc_failed_login(self, username):
         global global_failed_logins, user_failed_logins
@@ -586,40 +590,3 @@ class connection:
 
     def mark_pwned(self):
         return highlight(f"({pwned_label})" if self.admin_privs else "")
-
-    def load_modules(self):
-        """
-        Charge dynamiquement les modules depuis nxc.modules et instancie
-        uniquement celui demandé dans self.args.module en passant context et module_options.
-        """
-        from importlib import import_module
-        from pkgutil import iter_modules
-        from os.path import dirname, join as path_join
-        import nxc
-
-        self.modules = []
-        self.logger.info(f"Loading modules for target: {self.host}")
-
-        # Construire module_options à passer à chaque module
-        module_options = getattr(self, "_build_module_options", dict)()
-
-        modules_paths = [(path_join(dirname(nxc.__file__), "modules"), "nxc.modules")]
-        for path, import_base in modules_paths:
-            for module_info in iter_modules(path=[path]):
-                try:
-                    module_pkg = import_module(f"{import_base}.{module_info.name}")
-                    module_class = getattr(module_pkg, "NXCModule", None)
-                    if not module_class:
-                        continue
-
-                    # On instancie en passant context et module_options
-                    inst_module = module_class(context=self.logger, module_options=self.args)
-
-                    # On ajoute uniquement si c'est le module demandé
-                    requested_module = getattr(self.args, "module", None) or getattr(self.args, "module_name", None)
-                    if inst_module.name == requested_module:
-                        self.modules.append(inst_module)
-                        self.logger.debug(f"Loaded module {inst_module.name} with options: {module_options}")
-                except Exception as e:
-                    #self.logger.exception(f"Cannot load module {module_info.name}: {e}")
-                    pass
