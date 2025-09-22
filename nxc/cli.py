@@ -182,7 +182,7 @@ def gen_cli_args():
     if selected_module:
         module_class = modules_map.get(selected_module)
         if not module_class:
-            print(f"[ A CHANGER ] Module '{selected_module}' not found")
+            nxc_logger.error(f"Module '{selected_module.upper()}' not found")
             sys.exit(1)
 
         global_opts_set = {opt for a in parser._actions for opt in getattr(a, "option_strings", [])}

@@ -246,11 +246,19 @@ class connection:
             self.print_host_info()
             if self.login() or (self.username == "" and self.password == ""):
                 if hasattr(self.args, "module") and self.args.module:
-                    # Loads modules via the ModuleLoader
-                    self.modules, _ = ModuleLoader().list_modules()
-                    self.logger.debug(f"Calling module: {self.args.module}")
-                    # Calls the desired module
-                    self.call_module()
+                    # ModuleLoader().list_modules() retrives:
+                    # - self.modules the list of module as well as their classes
+                    # - self.modules_per_protocol {"protocol_name": [("module_name": "description_module")]}
+                    self.modules, self.modules_per_protocol = ModuleLoader().list_modules()
+                    # If self.args.module in list of modules triaged by protocol name then we call_module()
+                    if self.args.module in [module_name for module_name, _ in self.modules_per_protocol[self.args.protocol]]:
+                        self.logger.debug(f"Calling module: {self.args.module}")
+                        # Calls the desired module
+                        self.call_module()
+                    else:
+                        # Else that means the user tried to launch a module not handled for that protocol
+                        self.logger.error(f"Module {self.args.module.upper()} is not available for proto {self.args.protocol}")
+                # If self.args.module is None, then no module was called
                 else:
                     self.logger.debug("Calling command arguments")
                     self.call_cmd_args()
@@ -287,7 +295,6 @@ class connection:
                 "hostname": self.hostname,
             },
         )
-
         self.logger.debug(f"Loading context for module {self.args.module}")
 
         # Creates the NXC context

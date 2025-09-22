@@ -25,8 +25,14 @@ class ModuleLoader:
                 # Retrieves the module's class
                 module_class = getattr(module_pkg, "NXCModule", None)
 
-                # Validate that each module has got the necessary attributes
-                required_attrs = ["name", "description", "supported_protocols", "__init__", "register_module_options"]
+                # Validate that each module has got the necessary attributes:
+                # - A name
+                # - A description
+                # - The list of supported protocols ["smb", "ldap"]
+                # - A __init__ function
+                # - The register_module_options function
+                # - A NXC category
+                required_attrs = ["name", "description", "supported_protocols", "__init__", "register_module_options", "category"]
                 if not all(hasattr(module_class, attr) for attr in required_attrs):
                     continue
 
