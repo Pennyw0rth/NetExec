@@ -8,23 +8,23 @@ from os.path import dirname, join
 class ModuleLoader:
     def __init__(self):
         self.module_names = []
-        self.modules_map = {}        # Stores { module_name: class }
-        self.per_proto_modules = {}  # Stores { proto_name: [( module_name, description )]
+        self.modules_map = {}
+        self.per_proto_modules = {}
         self.modules_dir = join(dirname(nxc.__file__), "modules")
         self.import_base = "nxc.modules"
 
     def list_modules(self, parse_modules_attributes: bool = False):
         """
-        Liste les modules dans nxc/modules.
+        List modules stored in nxc/modules
 
         Args:
             parse_modules_attributes (bool):
-                - False → retourne juste les noms de fichiers .py valides
-                - True  → retourne un mapping modules_map et per_proto_modules
+                - False = returns only the list of module filenames ()
+                - True  = returns entirely parsed module classes
 
         Returns:
-            - Si parse_modules_attributes=False → list[str]
-            - Si parse_modules_attributes=True  → (dict[str, class], dict[str, list[tuple[str, str]]])
+            - If parse_modules_attributes=False : list[str]
+            - If parse_modules_attributes=True  : (dict[str, class], dict[str, list[tuple[str, str]]])
         """
         for module_file in listdir(self.modules_dir):
             if not module_file.endswith(".py") or module_file == "example_module.py":
@@ -46,6 +46,7 @@ class ModuleLoader:
             if not module_class:
                 continue
 
+            # These are the required attributes we need in every modules so that everything works correctly
             required_attrs = {"name", "description", "supported_protocols", "__init__", "register_module_options", "category", }
             if not all(hasattr(module_class, attr) for attr in required_attrs):
                 continue
@@ -70,9 +71,7 @@ class ModuleLoader:
             add_help=True,
             allow_abbrev=False
         )
-        try:
-            module_class.register_module_options(parser)
-        except TypeError:
-            module_class.register_module_options(None, parser)
+
+        module_class.register_module_options(parser)
 
         parser.print_help()
