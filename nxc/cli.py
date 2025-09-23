@@ -46,7 +46,7 @@ def gen_cli_args():
 
     # Is used to retrieve the list of modules
     module_loader = ModuleLoader()
-    # Not that False means that NXC won't parse all modules attibutes
+    # Note that False means that NXC won't parse all modules attibutes
     module_choises = module_loader.list_modules(False)
     module_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     module_group = module_parser.add_argument_group("Modules", "Options for nxc modules")
