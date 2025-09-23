@@ -82,12 +82,12 @@ class NXCModule:
     supported_protocols = ["ldap"]
     category = CATEGORY.ENUMERATION
 
-    def __init__(self):
-        self.context = None
-        self.module_options = None
+    @staticmethod
+    def register_module_options(subparsers):
+        return subparsers
 
-    def options(self, context, module_options):
-        """No options available"""
+    def __init__(self, context=None, module_options=None):
+        self.context = context
 
     def is_excluded_sid(self, sid, domain_sid):
         if sid in EXCLUDED_SIDS:
@@ -171,7 +171,7 @@ class NXCModule:
         except Exception:
             return sid
 
-    def on_login(self, context, connection):
+    def on_login(self, connection):
         self.connection = connection
 
         # Check for a domain controller with Windows Server 2025
@@ -185,9 +185,9 @@ class NXCModule:
             if "2025" in dc["operatingSystem"]:
                 out = connection.resolver(dc["dNSHostName"])
                 dc_ip = out["host"] if out else "Unknown IP"
-                context.log.success(f"Found domain controller with operating system Windows Server 2025: {dc_ip} ({dc['dNSHostName']})")
+                self.context.log.success(f"Found domain controller with operating system Windows Server 2025: {dc_ip} ({dc['dNSHostName']})")
             else:
-                context.log.fail("No domain controller with operating system Windows Server 2025 found, attack not possible. Enumerate dMSA objects anyway.")
+                self.context.log.fail("No domain controller with operating system Windows Server 2025 found, attack not possible. Enumerate dMSA objects anyway.")
 
         # Enumerate dMSA objects
         controls = security_descriptor_control(sdflags=0x07)  # OWNER_SECURITY_INFORMATION
@@ -197,20 +197,20 @@ class NXCModule:
             searchControls=controls
         )
 
-        context.log.debug(f"Found {len(resp)} entries")
+        self.context.log.debug(f"Found {len(resp)} entries")
 
         results = self.find_bad_successor_ous(resp)
 
         if results:
-            context.log.success(f"Found {len(results)} results")
+            self.context.log.success(f"Found {len(results)} results")
         else:
-            context.log.highlight("No account found")
+            self.context.log.highlight("No account found")
 
         for sid, ous in results.items():
             samaccountname = self.resolve_sid_to_name(sid)
 
             for ou in ous:
                 if sid == samaccountname:
-                    context.log.highlight(f"{sid}, {ou}")
+                    self.context.log.highlight(f"{sid}, {ou}")
                 else:
-                    context.log.highlight(f"{samaccountname} ({sid}), {ou}")
+                    self.context.log.highlight(f"{samaccountname} ({sid}), {ou}")
