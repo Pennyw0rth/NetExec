@@ -16,10 +16,15 @@ class NXCModule:
     supported_protocols = ["smb"]
     category = CATEGORY.ENUMERATION
 
-    def options(self, context, module_options):
+    @staticmethod
+    def register_module_options(subparsers):
+        return subparsers
+
+    def __init__(self, context=None, module_options=None):
+        self.logger = context.log
         self.output = "NTLMv1 allowed on: {} - LmCompatibilityLevel = {}"
 
-    def on_admin_login(self, context, connection):
+    def on_admin_login(self, connection):
         try:
             remote_ops = RemoteOperations(connection.conn, False)
             remote_ops.enableRegistry()
@@ -42,14 +47,14 @@ class NXCModule:
                     )
 
                 except rrp.DCERPCSessionError:
-                    context.log.debug("Unable to reference lmcompatabilitylevel, which probably means ntlmv1 is not set")
+                    self.logger.debug("Unable to reference lmcompatabilitylevel, which probably means ntlmv1 is not set")
 
                 # Changed by Defte
                 # Unless this keys is set to 3 or higher, NTLMv1 can be used
                 if data in [0, 1, 2]:
-                    context.log.highlight(self.output.format(connection.conn.getRemoteHost(), data))
+                    self.logger.highlight(self.output.format(connection.conn.getRemoteHost(), data))
 
         except DCERPCSessionError as e:
-            context.log.debug(f"Error connecting to RemoteRegistry: {e}")
+            self.logger.debug(f"Error connecting to RemoteRegistry: {e}")
         finally:
             remote_ops.finish()
