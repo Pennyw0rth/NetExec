@@ -154,9 +154,6 @@ def gen_cli_args():
         modules_map, per_proto_modules = module_loader.list_modules(True)
         sel_mod = initial_args.module
         module_class = modules_map.get(sel_mod)
-        if not module_class:
-            nxc_logger.error(f"Module '{sel_mod}' not found")
-            sys.exit(1)
 
         # If --options is specified, then we print the module's options
         if initial_args.show_module_options:
