@@ -10,28 +10,20 @@ class NXCModule:
     supported_protocols = ["smb"]
     category = CATEGORY.PRIVILEGE_ESCALATION
 
+    @staticmethod
+    def register_module_options(subparsers):
+        group = subparsers.add_mutually_exclusive_group(required=True)
+        group.add_argument("--enable", help="Enable remote UAC", action="store_true", dest="enable")
+        group.add_argument("--disable", help="Disable remote UAC", action="store_true", dest="disable")
+        subparsers.set_defaults(module="remoteuac")
+        return subparsers
+
     def __init__(self, context=None, module_options=None):
         self.context = context
-        self.module_options = module_options
-        self.action = None
+        self.enable = module_options.enable
+        self.disable = module_options.disable
 
-    def options(self, context, module_options):
-        """
-        Enables UAC (prevent non RID500 account to get high priv token remotely)
-        Disables UAC (allow non RID500 account to get high priv token remotely)
-
-        ACTION:     "enable" or "disable" (required)
-        """
-        if "ACTION" not in module_options:
-            context.log.fail("ACTION option not specified!")
-            return
-
-        if module_options["ACTION"].lower() not in ["enable", "disable"]:
-            context.log.fail("ACTION must be either enable, disable or query")
-            return
-        self.action = module_options["ACTION"].lower()
-
-    def on_admin_login(self, context, connection):
+    def on_admin_login(self, connection):
         try:
             remoteOps = RemoteOperations(connection.conn, False)
             remoteOps.enableRegistry()
@@ -46,20 +38,20 @@ class NXCModule:
                     rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "LocalAccountTokenFilterPolicy\x00")
                 except Exception as e:
                     if "ERROR_FILE_NOT_FOUND" in str(e):
-                        context.log.debug("Registry key 'LocalAccountTokenFilterPolicy' does not exist, creating it")
+                        self.context.log.debug("Registry key 'LocalAccountTokenFilterPolicy' does not exist, creating it")
                         ans = rrp.hBaseRegCreateKey(remoteOps._RemoteOperations__rrp, keyHandle, "LocalAccountTokenFilterPolicy\x00")
 
                 # Disable remote UAC
-                if self.action == "disable":
+                if self.disable:
                     rrp.hBaseRegSetValue(remoteOps._RemoteOperations__rrp, keyHandle, "LocalAccountTokenFilterPolicy\x00", rrp.REG_DWORD, 1)
-                    context.log.highlight("Remote UAC disabled")
+                    self.context.log.highlight("Remote UAC disabled")
 
                 # Enable remote UAC
-                if self.action == "enable":
+                if self.enable:
                     rrp.hBaseRegSetValue(remoteOps._RemoteOperations__rrp, keyHandle, "LocalAccountTokenFilterPolicy\x00", rrp.REG_DWORD, 0)
-                    context.log.highlight("Remote UAC enabled")
+                    self.context.log.highlight("Remote UAC enabled")
 
         except Exception as e:
-            context.log.debug(f"Error {e}")
+            self.context.log.debug(f"Error {e}")
         finally:
             remoteOps.finish()
