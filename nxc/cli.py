@@ -160,7 +160,8 @@ def gen_cli_args():
 
         # If --options is specified, then we print the module's options
         if initial_args.show_module_options:
-            module_loader.print_module_help(sel_mod)
+            parser = module_loader.print_module_help(sel_mod)
+            parser.print_help()
             sys.exit(0)
 
         protocol_parser = parser._subparsers._group_actions[0].choices.get(initial_args.protocol)

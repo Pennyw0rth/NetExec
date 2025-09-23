@@ -43,9 +43,6 @@ class ModuleLoader:
             except Exception:
                 continue
 
-            if not module_class:
-                continue
-
             # These are the required attributes we need in every modules so that everything works correctly
             required_attrs = {"name", "description", "supported_protocols", "__init__", "register_module_options", "category", }
             if not all(hasattr(module_class, attr) for attr in required_attrs):
@@ -59,11 +56,10 @@ class ModuleLoader:
 
     def print_module_help(self, module_name):
         """Special case: show help for a module directly"""
+        # Loads the module's class
         module_class = self.modules_map.get(module_name)
-        if not module_class:
-            print(f"Module '{module_name}' not found")
-            return
 
+        # Create a parser for that module only
         parser = argparse.ArgumentParser(
             prog=f"{module_name}",
             description=getattr(module_class, "description", ""),
@@ -72,6 +68,7 @@ class ModuleLoader:
             allow_abbrev=False
         )
 
+        # Registers module's options
         module_class.register_module_options(parser)
-
-        parser.print_help()
+        # return the parser so that cli.py print_help()
+        return parser
