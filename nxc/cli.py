@@ -132,7 +132,7 @@ def gen_cli_args():
         print(f"{VERSION} - {CODENAME} - {COMMIT} - {DISTANCE}")
         sys.exit(1)
 
-    # If -L is specified, then we load all modules and prints them grouped by category and admin requirement
+    # If -L is specified, list all modules by privilege and category
     if initial_args.list_modules is not False:
         modules_map, per_proto_modules = module_loader.list_modules(True)
 
@@ -143,25 +143,37 @@ def gen_cli_args():
             if not mods:
                 nxc_logger.fail(f"No modules for the {initial_args.protocol} protocol")
             else:
-                # Group modules by category and admin requirement
-                grouped = {}
+                # Separate modules into LOW and HIGH privilege
+                low_priv = []
+                high_priv = []
+
                 for name, _ in mods:
                     cls = modules_map.get(name)
                     if cls is None:
                         continue
-                    category = getattr(cls, "category", "UNCATEGORIZED")
-                    requires_admin = "admin" if hasattr(cls, "on_admin_login") else "non-admin"
+                    requires_admin = hasattr(cls, "on_admin_login")
+                    entry = (name, getattr(cls, "category", "UNCATEGORIZED"), getattr(cls, "description", ""))
+                    if requires_admin:
+                        high_priv.append(entry)
+                    else:
+                        low_priv.append(entry)
 
-                    grouped.setdefault(category, {}).setdefault(requires_admin, []).append((name, getattr(cls, "description", "")))
+                def print_group(title, module_list):
+                    if not module_list:
+                        return
+                    nxc_logger.display(f"\n{title}")
+                    # Group by category
+                    grouped = {}
+                    for name, cat, desc in module_list:
+                        grouped.setdefault(cat, []).append((name, desc))
+                    for cat_name, entries in grouped.items():
+                        nxc_logger.display(f"\n{cat_name}")
+                        for n, desc in sorted(entries, key=lambda x: x[0].lower()):
+                            nxc_logger.display(f"{n.ljust(25)} {desc}")
 
-                # Display grouped modules
-                for category_name, admin_groups in grouped.items():
-                    nxc_logger.display(f"Category: {category_name}")
-                    for admin_flag, module_list in admin_groups.items():
-                        nxc_logger.display(f"  {admin_flag.upper()}:")
-                        max_name_len = max(len(n) for n, _ in module_list)
-                        for n, desc in sorted(module_list, key=lambda x: x[0].lower()):
-                            nxc_logger.display(f"    {n.ljust(max_name_len)} : {desc}")
+                # Print LOW and HIGH privilege modules
+                print_group("LOW PRIVILEGE MODULES", low_priv)
+                print_group("HIGH PRIVILEGE MODULES (requires admin privs)", high_priv)
 
         sys.exit(0)
 
