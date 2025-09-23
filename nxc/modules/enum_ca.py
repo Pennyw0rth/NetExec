@@ -27,14 +27,14 @@ class NXCModule:
     supported_protocols = ["smb"]
     category = CATEGORY.ENUMERATION
 
+    @staticmethod
+    def register_module_options(subparsers):
+        return subparsers
+
     def __init__(self, context=None, module_options=None):
         self.context = context
-        self.module_options = module_options
 
-    def options(self, context, module_options):
-        pass
-
-    def on_login(self, context, connection):
+    def on_login(self, connection):
         self.__username = connection.username
         self.__password = connection.password
         self.__domain = connection.domain
@@ -43,16 +43,16 @@ class NXCModule:
         self.__port = 135.
         self.__stringbinding = ""
 
-        if context.hash and ":" in context.hash[0]:
-            hashList = context.hash[0].split(":")
+        if self.context.hash and ":" in self.context.hash[0]:
+            hashList = self.context.hash[0].split(":")
             self.__nthash = hashList[-1]
             self.__lmhash = hashList[0]
-        elif context.hash and ":" not in context.hash[0]:
-            self.__nthash = context.hash[0]
+        elif self.context.hash and ":" not in self.context.hash[0]:
+            self.__nthash = self.context.hash[0]
             self.__lmhash = "00000000000000000000000000000000"
 
         self.__stringbinding = self.KNOWN_PROTOCOLS[self.__port]["bindstr"] % connection.host
-        context.log.debug(f"StringBinding {self.__stringbinding}")
+        self.context.log.debug(f"StringBinding {self.__stringbinding}")
 
         rpctransport = transport.DCERPCTransportFactory(self.__stringbinding)
 
@@ -72,13 +72,13 @@ class NXCModule:
             entries = self.__fetchList(connection.kerberos, rpctransport)
         except Exception as e:
             error_text = f"Protocol failed: {e}"
-            context.log.fail(error_text)
+            self.context.log.fail(error_text)
 
             if RPC_PROXY_INVALID_RPC_PORT_ERR in error_text or \
                RPC_PROXY_RPC_OUT_DATA_404_ERR in error_text or \
                RPC_PROXY_CONN_A1_404_ERR in error_text or \
                RPC_PROXY_CONN_A1_0X6BA_ERR in error_text:
-                context.log.fail("This usually means the target does not allow "
+                self.context.log.fail("This usually means the target does not allow "
                                  "to connect to its epmapper using RpcProxy.")
                 return
         for entry in entries:
@@ -86,17 +86,17 @@ class NXCModule:
 
             if uuid.uuidtup_to_bin(uuid.string_to_uuidtup(tmpUUID))[:18] in epm.KNOWN_UUIDS:
                 exename = epm.KNOWN_UUIDS[uuid.uuidtup_to_bin(uuid.string_to_uuidtup(tmpUUID))[:18]]
-                context.log.debug(f"EXEs {exename}")
+                self.context.log.debug(f"EXEs {exename}")
                 if exename == "certsrv.exe":
-                    context.log.highlight("Active Directory Certificate Services Found.")
+                    self.context.log.highlight("Active Directory Certificate Services Found.")
                     url = f"http://{connection.host}/certsrv/certfnsh.asp"
-                    context.log.highlight(url)
+                    self.context.log.highlight(url)
                     try:
                         response = requests.get(url, timeout=5)
                         if response.status_code == 401 and "WWW-Authenticate" in response.headers and "ntlm" in response.headers["WWW-Authenticate"].lower():
-                            context.log.highlight("Web enrollment found on HTTP (ESC8).")
+                            self.context.log.highlight("Web enrollment found on HTTP (ESC8).")
                     except requests.RequestException as e:
-                        context.log.debug(e)
+                        self.context.log.debug(e)
                     return
 
     def __fetchList(self, doKerberos, rpctransport):
