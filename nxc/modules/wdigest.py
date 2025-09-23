@@ -13,10 +13,9 @@ class NXCModule:
 
     @staticmethod
     def register_module_options(subparsers):
-        group = subparsers.add_mutually_exclusive_group(required=True)
+        group = subparsers.add_mutually_exclusive_group()
         group.add_argument("--enable", help="Enable wdigest", action="store_true", dest="enable")
         group.add_argument("--disable", help="Disable wdigest", action="store_true", dest="disable")
-        group.add_argument("--check", help="Check if wdigest is activated", action="store_true", dest="check")
         subparsers.set_defaults(module="wdigest")
         return subparsers
 
@@ -24,22 +23,9 @@ class NXCModule:
         self.context = context
         self.enable = getattr(module_options, "enable", False)
         self.disable = getattr(module_options, "disable", False)
-        self.check = getattr(module_options, "check", False)
 
     def on_admin_login(self, connection):
         """Centralized RemoteOperations logic for enable/disable/check actions."""
-        action = None
-        if self.enable:
-            action = "enable"
-        elif self.disable:
-            action = "disable"
-        elif self.check:
-            action = "check"
-
-        if not action:
-            self.context.log.fail("No action specified for wdigest module")
-            return
-
         remote_ops = RemoteOperations(connection.conn, False)
         remote_ops.enableRegistry()
 
@@ -54,13 +40,13 @@ class NXCModule:
             )
             key_handle = ans["phkResult"]
 
-            if action == "enable":
+            if self.enable:
                 rrp.hBaseRegSetValue(remote_ops._RemoteOperations__rrp, key_handle, "UseLogonCredential\x00", rrp.REG_DWORD, 1)
                 _, data = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "UseLogonCredential\x00")
                 if int(data) == 1:
                     self.context.log.success("UseLogonCredential registry key created successfully")
 
-            elif action == "disable":
+            elif self.disable:
                 try:
                     rrp.hBaseRegDeleteValue(remote_ops._RemoteOperations__rrp, key_handle, "UseLogonCredential\x00")
                 except Exception:
@@ -72,7 +58,7 @@ class NXCModule:
                 except DCERPCException:
                     self.context.log.success("UseLogonCredential registry key deleted successfully")
 
-            elif action == "check":
+            else:
                 try:
                     _, data = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "UseLogonCredential\x00")
                     if int(data) == 1:
