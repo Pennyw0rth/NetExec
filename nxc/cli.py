@@ -132,9 +132,10 @@ def gen_cli_args():
         print(f"{VERSION} - {CODENAME} - {COMMIT} - {DISTANCE}")
         sys.exit(1)
 
-    # If -L is specified, then we load all modules and prints those usable for the specified protocol
+    # If -L is specified, then we load all modules and prints them grouped by category and admin requirement
     if initial_args.list_modules is not False:
         modules_map, per_proto_modules = module_loader.list_modules(True)
+
         if not initial_args.protocol:
             nxc_logger.fail("Specify a protocol with -L to list modules.")
         else:
@@ -142,10 +143,26 @@ def gen_cli_args():
             if not mods:
                 nxc_logger.fail(f"No modules for the {initial_args.protocol} protocol")
             else:
-                nxc_logger.display(f"Available {initial_args.protocol.upper()} modules:")
-                max_name_len = max(len(n) for n, _ in mods)
-                for n, desc in sorted(mods, key=lambda x: x[0].lower()):
-                    nxc_logger.display(f"  {n.ljust(max_name_len)} : {desc}")
+                # Group modules by category and admin requirement
+                grouped = {}
+                for name, _ in mods:
+                    cls = modules_map.get(name)
+                    if cls is None:
+                        continue
+                    category = getattr(cls, "category", "UNCATEGORIZED")
+                    requires_admin = "admin" if hasattr(cls, "on_admin_login") else "non-admin"
+
+                    grouped.setdefault(category, {}).setdefault(requires_admin, []).append((name, getattr(cls, "description", "")))
+
+                # Display grouped modules
+                for category_name, admin_groups in grouped.items():
+                    nxc_logger.display(f"Category: {category_name}")
+                    for admin_flag, module_list in admin_groups.items():
+                        nxc_logger.display(f"  {admin_flag.upper()}:")
+                        max_name_len = max(len(n) for n, _ in module_list)
+                        for n, desc in sorted(module_list, key=lambda x: x[0].lower()):
+                            nxc_logger.display(f"    {n.ljust(max_name_len)} : {desc}")
+
         sys.exit(0)
 
     # If -M is specified, then checks if --options is specified to print related infos
