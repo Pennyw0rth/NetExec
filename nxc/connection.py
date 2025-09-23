@@ -258,7 +258,7 @@ class connection:
                             self.call_module(module)
                         else:
                             # Else that means the user tried to launch a module not handled for that protocol
-                            self.logger.error(f"Module {self.args.module.upper()} is not available for proto {self.args.protocol}")
+                            self.logger.error(f"Module {module.upper()} is not available for proto {self.args.protocol}")
                 # If self.args.module is None, then no module was called
                 else:
                     self.logger.debug("Calling command arguments")
