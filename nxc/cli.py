@@ -50,7 +50,7 @@ def gen_cli_args():
     module_choises = module_loader.list_modules(False)
     module_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     module_group = module_parser.add_argument_group("Modules", "Options for nxc modules")
-    module_group.add_argument("-M", "--module", choices=module_choises, help="Select module to use", dest="module", action="store", metavar="MODULE")
+    module_group.add_argument("-M", "--modules", choices=module_choises, help="Select module to use", dest="modules", action="append", metavar="MODULES")
     module_group.add_argument("-L", "--list-modules", action="store_true", help="List available modules")
     module_group.add_argument("--options", dest="show_module_options", action="store_true", help="Display module options")
 
@@ -149,25 +149,28 @@ def gen_cli_args():
         sys.exit(0)
 
     # If -M is specified, then checks if --options is specified to print related infos
-    if initial_args.module:
+    if initial_args.modules:
         modules_map, per_proto_modules = module_loader.list_modules(True)
-        sel_mod = initial_args.module
-        module_class = modules_map.get(sel_mod)
 
-        # If --options is specified, then we print the module's options
-        if initial_args.show_module_options:
-            # First the generic helper
-            parser.print_help()
-            print(f"\nModule {initial_args.module} options:")
-            # Then the module's one
-            parser = module_loader.print_module_help(sel_mod)
-            parser.print_help()
-            sys.exit(0)
+        for module in initial_args.modules:
+            module_class = modules_map.get(module)
 
-        # We retrieve the protocol's parser
-        protocol_parser = parser._subparsers._group_actions[0].choices.get(initial_args.protocol)
-        # And send it to the module's so that it can register its own options
-        module_class.register_module_options(protocol_parser)
+            # If --options is specified, then we print the module's options
+            if initial_args.show_module_options:
+                # Making sure --options is used on a single module
+                if len(initial_args.modules) > 1:
+                    nxc_logger.error("You can not use --options when specifying multiple modules")
+                    sys.exit()
+
+                # Then the module's one
+                parser = module_loader.print_module_help(module)
+                parser.print_help()
+                sys.exit(0)
+
+            # We retrieve the protocol's parser
+            protocol_parser = parser._subparsers._group_actions[0].choices.get(initial_args.protocol)
+            # And send it to the module's so that it can register its own options
+            module_class.register_module_options(protocol_parser)
 
     # Parse the complete thing and returns the args as well as version
     argcomplete.autocomplete(parser, always_complete_options=False)
