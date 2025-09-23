@@ -21,7 +21,7 @@ class NXCModule:
         return subparsers
 
     def __init__(self, context=None, module_options=None):
-        self.logger = context.log
+        self.context = context
         self.output = "NTLMv1 allowed on: {} - LmCompatibilityLevel = {}"
 
     def on_admin_login(self, connection):
@@ -47,14 +47,14 @@ class NXCModule:
                     )
 
                 except rrp.DCERPCSessionError:
-                    self.logger.debug("Unable to reference lmcompatabilitylevel, which probably means ntlmv1 is not set")
+                    self.context.log.debug("Unable to reference lmcompatabilitylevel, which probably means ntlmv1 is not set")
 
                 # Changed by Defte
                 # Unless this keys is set to 3 or higher, NTLMv1 can be used
                 if data in [0, 1, 2]:
-                    self.logger.highlight(self.output.format(connection.conn.getRemoteHost(), data))
+                    self.context.log.highlight(self.output.format(connection.conn.getRemoteHost(), data))
 
         except DCERPCSessionError as e:
-            self.logger.debug(f"Error connecting to RemoteRegistry: {e}")
+            self.context.log.debug(f"Error connecting to RemoteRegistry: {e}")
         finally:
             remote_ops.finish()

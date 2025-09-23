@@ -20,7 +20,7 @@ class NXCModule:
         return subparsers
 
     def __init__(self, context=None, module_options=None):
-        self.logger = context.log
+        self.context = context
         self.enable = module_options.enable
         self.disable = module_options.disable
 
@@ -45,14 +45,14 @@ class NXCModule:
                 # Disable Shadow RDP
                 if self.disable:
                     rrp.hBaseRegSetValue(remoteOps._RemoteOperations__rrp, keyHandle, "Shadow\x00", rrp.REG_DWORD, 0)
-                    self.logger.highlight("Shadow RDP disabled")
+                    self.context.log.highlight("Shadow RDP disabled")
 
                 # Enable Shadow RDP
                 if self.enable:
                     rrp.hBaseRegSetValue(remoteOps._RemoteOperations__rrp, keyHandle, "Shadow\x00", rrp.REG_DWORD, 2)
-                    self.logger.highlight("Shadow RDP with full access enabled")
+                    self.context.log.highlight("Shadow RDP with full access enabled")
 
         except Exception as e:
-            self.logger.debug(f"Error {e}")
+            self.context.log.debug(f"Error {e}")
         finally:
             remoteOps.finish()

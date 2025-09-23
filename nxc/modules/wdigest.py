@@ -21,7 +21,7 @@ class NXCModule:
         return subparsers
 
     def __init__(self, context=None, module_options=None):
-        self.logger = context.log
+        self.context = context
         self.enable = getattr(module_options, "enable", False)
         self.disable = getattr(module_options, "disable", False)
         self.check = getattr(module_options, "check", False)
@@ -37,7 +37,7 @@ class NXCModule:
             action = "check"
 
         if not action:
-            self.logger.fail("No action specified for wdigest module")
+            self.context.log.fail("No action specified for wdigest module")
             return
 
         remote_ops = RemoteOperations(connection.conn, False)
@@ -58,32 +58,32 @@ class NXCModule:
                 rrp.hBaseRegSetValue(remote_ops._RemoteOperations__rrp, key_handle, "UseLogonCredential\x00", rrp.REG_DWORD, 1)
                 _, data = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "UseLogonCredential\x00")
                 if int(data) == 1:
-                    self.logger.success("UseLogonCredential registry key created successfully")
+                    self.context.log.success("UseLogonCredential registry key created successfully")
 
             elif action == "disable":
                 try:
                     rrp.hBaseRegDeleteValue(remote_ops._RemoteOperations__rrp, key_handle, "UseLogonCredential\x00")
                 except Exception:
-                    self.logger.success("UseLogonCredential registry key not present")
+                    self.context.log.success("UseLogonCredential registry key not present")
                     return
 
                 try:
                     rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "UseLogonCredential\x00")
                 except DCERPCException:
-                    self.logger.success("UseLogonCredential registry key deleted successfully")
+                    self.context.log.success("UseLogonCredential registry key deleted successfully")
 
             elif action == "check":
                 try:
                     _, data = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "UseLogonCredential\x00")
                     if int(data) == 1:
-                        self.logger.success("UseLogonCredential registry key is enabled")
+                        self.context.log.success("UseLogonCredential registry key is enabled")
                     else:
-                        self.logger.fail(f"Unexpected registry value for UseLogonCredential: {data}")
+                        self.context.log.fail(f"Unexpected registry value for UseLogonCredential: {data}")
                 except DCERPCException as d:
                     if "winreg.HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest" in str(d):
-                        self.logger.fail("UseLogonCredential registry key is disabled (registry key not found)")
+                        self.context.log.fail("UseLogonCredential registry key is disabled (registry key not found)")
                     else:
-                        self.logger.fail("UseLogonCredential registry key not present")
+                        self.context.log.fail("UseLogonCredential registry key not present")
 
         finally:
             with contextlib.suppress(Exception):
