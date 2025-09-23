@@ -13,6 +13,7 @@ class NXCModule:
 
     @staticmethod
     def register_module_options(subparsers):
+        print(f"HELLO THERE: {subparsers}")
         group = subparsers.add_mutually_exclusive_group(required=True)
         group.add_argument("--enable", help="Enable shadow RDP", action="store_true", dest="enable")
         group.add_argument("--disable", help="Disable shadow RDP", action="store_true", dest="disable")

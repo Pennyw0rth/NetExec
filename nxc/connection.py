@@ -249,7 +249,7 @@ class connection:
                     # ModuleLoader().list_modules() retrives:
                     # - self.modules the list of module as well as their classes
                     # - self.modules_per_protocol {"protocol_name": [("module_name": "description_module")]}
-                    self.modules, self.modules_per_protocol = ModuleLoader().list_modules()
+                    self.modules, self.modules_per_protocol = ModuleLoader().list_modules(True)
                     # If self.args.module in list of modules triaged by protocol name then we call_module()
                     if self.args.module in [module_name for module_name, _ in self.modules_per_protocol[self.args.protocol]]:
                         self.logger.debug(f"Calling module: {self.args.module}")
