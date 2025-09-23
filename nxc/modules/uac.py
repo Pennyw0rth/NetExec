@@ -10,14 +10,14 @@ class NXCModule:
     supported_protocols = ["smb"]
     category = CATEGORY.ENUMERATION
 
+    @staticmethod
+    def register_module_options(subparsers):
+        return subparsers
+
     def __init__(self, context=None, module_options=None):
         self.context = context
-        self.module_options = module_options
 
-    def options(self, context, module_options):
-        """ """
-
-    def on_admin_login(self, context, connection):
+    def on_admin_login(self, connection):
         remoteOps = RemoteOperations(connection.conn, False)
         remoteOps.enableRegistry()
 
@@ -29,12 +29,12 @@ class NXCModule:
             "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System",
         )
         keyHandle = ans["phkResult"]
-        dataType, uac_value = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "EnableLUA")
+        _, uac_value = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "EnableLUA")
 
         if uac_value == 1:
-            context.log.highlight("UAC Status: 1 (UAC Enabled)")
+            self.context.log.highlight("UAC Status: 1 (UAC Enabled)")
         elif uac_value == 0:
-            context.log.highlight("UAC Status: 0 (UAC Disabled)")
+            self.context.log.highlight("UAC Status: 0 (UAC Disabled)")
 
         rrp.hBaseRegCloseKey(remoteOps._RemoteOperations__rrp, keyHandle)
         remoteOps.finish()
