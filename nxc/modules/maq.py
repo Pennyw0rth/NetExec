@@ -14,19 +14,23 @@ class NXCModule:
       Podalirius: @podalirius_
     """
 
-    def options(self, context, module_options):
-        """No options available"""
+    @staticmethod
+    def register_module_options(subparsers):
+        return subparsers
 
     name = "maq"
     description = "Retrieves the MachineAccountQuota domain-level attribute"
     supported_protocols = ["ldap"]
     category = CATEGORY.ENUMERATION
 
-    def on_login(self, context, connection):
-        context.log.display("Getting the MachineAccountQuota")
+    def __init__(self, context=None, module_options=None):
+        self.context = context
+
+    def on_login(self, connection):
+        self.context.log.display("Getting the MachineAccountQuota")
         result = connection.search("(objectClass=*)", ["ms-DS-MachineAccountQuota"])
         try:
             maq = result[0]["attributes"][0]["vals"][0]
-            context.log.highlight(f"MachineAccountQuota: {maq}")
+            self.context.log.highlight(f"MachineAccountQuota: {maq}")
         except PyAsn1Error:
-            context.log.highlight("MachineAccountQuota: <not set>")
+            self.context.log.highlight("MachineAccountQuota: <not set>")

@@ -18,14 +18,15 @@ class NXCModule:
     supported_protocols = ["smb"]
     category = CATEGORY.ENUMERATION
 
-    def options(self, context, module_options):
-        """MSG     Info message when the WebClient service is running. '{}' is replaced by the target."""
+    def __init__(self, context=None, module_options=None):
+        self.context = context
         self.output = "WebClient Service enabled on: {}"
 
-        if "MSG" in module_options:
-            self.output = module_options["MSG"]
+    @staticmethod
+    def register_module_options(subparsers):
+        return subparsers
 
-    def on_login(self, context, connection):
+    def on_login(self, connection):
         """
         Check whether the 'DAV RPC Service' pipe exists within the 'IPC$' share. This indicates
         that the WebClient service is running on the target.
@@ -36,12 +37,12 @@ class NXCModule:
             remote_file.open_file()
             remote_file.close()
 
-            context.log.highlight(self.output.format(connection.conn.getRemoteHost()))
+            self.context.log.highlight(self.output.format(connection.conn.getRemoteHost()))
 
         except SessionError as e:
             if e.getErrorCode() == nt_errors.STATUS_OBJECT_NAME_NOT_FOUND:
                 pass
             elif e.getErrorCode() in nt_errors.ERROR_MESSAGES:
-                context.log.fail(f"Error enumerating WebDAV: {e.getErrorString()[0]}", color="magenta")
+                self.context.log.fail(f"Error enumerating WebDAV: {e.getErrorString()[0]}", color="magenta")
             else:
                 raise e
