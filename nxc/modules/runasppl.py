@@ -11,14 +11,14 @@ class NXCModule:
     supported_protocols = ["smb"]
     category = CATEGORY.ENUMERATION
 
+    @staticmethod
+    def register_module_options(subparsers):
+        return subparsers
+
     def __init__(self, context=None, module_options=None):
         self.context = context
-        self.module_options = module_options
 
-    def options(self, context, module_options):
-        """"""
-
-    def on_admin_login(self, context, connection):
+    def on_admin_login(self, connection):
         try:
             remote_ops = RemoteOperations(connection.conn, False)
             remote_ops.enableRegistry()
@@ -40,14 +40,14 @@ class NXCModule:
                         "RunAsPPL\x00",
                     )
                 except rrp.DCERPCSessionError as e:
-                    context.log.debug(f"RunAsPPL error {e} on host {connection.host}")
+                    self.context.log.debug(f"RunAsPPL error {e} on host {connection.host}")
 
                 if data is None or data not in [1, 2]:
-                    context.log.highlight("RunAsPPL disabled")
+                    self.context.log.highlight("RunAsPPL disabled")
                 else:
-                    context.log.highlight("RunAsPPL enabled")
+                    self.context.log.highlight("RunAsPPL enabled")
 
         except DCERPCSessionError as e:
-            context.log.debug(f"Error connecting to RemoteRegistry {e} on host {connection.host}")
+            self.context.log.debug(f"Error connecting to RemoteRegistry {e} on host {connection.host}")
         finally:
             remote_ops.finish()
