@@ -82,12 +82,7 @@ def gen_cli_args():
 
     # Standard parsers
     std_parser = argparse.ArgumentParser(add_help=False, parents=[generic_parser, output_parser, dns_parser, module_parser], formatter_class=DisplayDefaultsNotNone)
-    std_parser.add_argument(
-        "target",
-        nargs="+" if not (module_parser.parse_known_args()[0].list_modules is not None or module_parser.parse_known_args()[0].show_module_options or generic_parser.parse_known_args()[0].version) else "*",
-        type=str,
-        help="the target IP(s), range(s), CIDR(s), hostname(s), FQDN(s), file(s) containing a list of targets, NMap XML or .Nessus file(s)"
-    )
+    std_parser.add_argument("target", nargs="*", type=str, help="the target IP(s), range(s), CIDR(s), hostname(s), FQDN(s), file(s) containing a list of targets, NMap XML or .Nessus file(s)")
 
     # Credentials
     credential_group = std_parser.add_argument_group("Authentication", "Options for authenticating")
