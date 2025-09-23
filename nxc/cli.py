@@ -164,7 +164,9 @@ def gen_cli_args():
             parser.print_help()
             sys.exit(0)
 
+        # We retrieve the protocol parser
         protocol_parser = parser._subparsers._group_actions[0].choices.get(initial_args.protocol)
+        # And send it to the module's so that it can register its own options
         module_class.register_module_options(protocol_parser)
 
     # Parse the complete thing and returns the args as well as version
