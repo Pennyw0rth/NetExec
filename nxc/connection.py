@@ -245,19 +245,20 @@ class connection:
             self.enum_host_info()
             self.print_host_info()
             if self.login() or (self.username == "" and self.password == ""):
-                if hasattr(self.args, "module") and self.args.module:
+                if hasattr(self.args, "modules") and self.args.modules:
                     # ModuleLoader().list_modules() retrives:
                     # - self.modules the list of module as well as their classes
                     # - self.modules_per_protocol {"protocol_name": [("module_name": "description_module")]}
                     self.modules, self.modules_per_protocol = ModuleLoader().list_modules(True)
-                    # If self.args.module in list of modules triaged by protocol name then we call_module()
-                    if self.args.module in [module_name for module_name, _ in self.modules_per_protocol[self.args.protocol]]:
-                        self.logger.debug(f"Calling module: {self.args.module}")
-                        # Calls the desired module
-                        self.call_module()
-                    else:
-                        # Else that means the user tried to launch a module not handled for that protocol
-                        self.logger.error(f"Module {self.args.module.upper()} is not available for proto {self.args.protocol}")
+                    for module in self.args.modules:
+                        # If self.args.module in list of modules triaged by protocol name then we call_module()
+                        if module in [module_name for module_name, _ in self.modules_per_protocol[self.args.protocol]]:
+                            self.logger.debug(f"Calling module: {module}")
+                            # Calls the desired module
+                            self.call_module(module)
+                        else:
+                            # Else that means the user tried to launch a module not handled for that protocol
+                            self.logger.error(f"Module {self.args.module.upper()} is not available for proto {self.args.protocol}")
                 # If self.args.module is None, then no module was called
                 else:
                     self.logger.debug("Calling command arguments")
@@ -285,17 +286,18 @@ class connection:
                 self.logger.debug(f"Calling {attr}()")
                 getattr(self, attr)()
 
-    def call_module(self):
-        self.logger.debug(f"Loading module {self.args.module} - {self.args.module}")
+    def call_module(self, module):
+        self.logger.debug(f"Loading module {module}")
+
         module_logger = NXCAdapter(
             extra={
-                "module_name": self.args.module.upper(),
+                "module_name": module.upper(),
                 "host": self.host,
                 "port": self.port,
                 "hostname": self.hostname,
             },
         )
-        self.logger.debug(f"Loading context for module {self.args.module}")
+        self.logger.debug(f"Loading context for module {module}")
 
         # Creates the NXC context
         context = Context(self.db, module_logger, self.args)
@@ -304,7 +306,7 @@ class connection:
         # Instantiate the module to run passing:
         # - The NXC Context
         # - Necessary args
-        module_instance = self.modules[self.args.module](context, self.args)
+        module_instance = self.modules[module](context, self.args)
 
         # Calls on_login() module's function
         if hasattr(module_instance, "on_login"):
