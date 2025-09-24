@@ -14,17 +14,20 @@ class NXCModule:
     supported_protocols = ["ldap"]
     category = CATEGORY.ENUMERATION
 
-    def options(self, context, module_options):
-        """USER  Enumerate information about a different SamAccountName"""
-        self.username = None
-        if "USER" in module_options:
-            self.username = module_options["USER"]
+    @staticmethod
+    def register_module_options(subparsers):
+        subparsers.add_argument("--user-to-query", help="Username to query LDAP for", required=True)
+        return subparsers
 
-    def on_login(self, context, connection):
+    def __init__(self, context=None, module_options=None):
+        self.context = context
+        self.username = module_options.user_to_query
+
+    def on_login(self, connection):
         searchBase = connection.ldap_connection._baseDN
         searchFilter = f"(sAMAccountName={connection.username})" if self.username is None else f"(sAMAccountName={format(self.username)})"
 
-        context.log.debug(f"Using naming context: {searchBase} and {searchFilter} as search filter")
+        self.context.log.debug(f"Using naming context: {searchBase} and {searchFilter} as search filter")
 
         # Get attributes of provided user
         r = connection.ldap_connection.search(
@@ -54,15 +57,15 @@ class NXCModule:
 
             # Process name
             if "name" in response:
-                context.log.highlight(f"Name: {response['name']}")
+                self.context.log.highlight(f"Name: {response['name']}")
 
             # Process Description
             if "description" in response:
-                context.log.highlight(f"Description: {response['description']}")
+                self.context.log.highlight(f"Description: {response['description']}")
 
             # Process sAMAccountName
             if "sAMAccountName" in response:
-                context.log.highlight(f"sAMAccountName: {response['sAMAccountName']}")
+                self.context.log.highlight(f"sAMAccountName: {response['sAMAccountName']}")
 
             # Process userAccountControl
             if "userAccountControl" in response:
@@ -71,64 +74,64 @@ class NXCModule:
                 DONT_EXPIRE_PASSWORD = 0x10000
                 is_disabled = (uac & ACCOUNTDISABLE) != 0
                 password_never_expires = (uac & DONT_EXPIRE_PASSWORD) != 0
-                context.log.highlight(f"Enabled: {'No' if is_disabled else 'Yes'}")
-                context.log.highlight(f"Password Never Expires: {'Yes' if password_never_expires else 'No'}")
+                self.context.log.highlight(f"Enabled: {'No' if is_disabled else 'Yes'}")
+                self.context.log.highlight(f"Password Never Expires: {'Yes' if password_never_expires else 'No'}")
 
             # Process User PrincipalName
             if "userPrincipalName" in response:
-                context.log.highlight(f"User Principal Name: {response['userPrincipalName']}")
+                self.context.log.highlight(f"User Principal Name: {response['userPrincipalName']}")
 
             # Process mail
             if "mail" in response:
-                context.log.highlight(f"Email: {response['mail']}")
+                self.context.log.highlight(f"Email: {response['mail']}")
 
             # Process lastLogon
             if "lastLogon" in response:
                 filetime_str = response["lastLogon"]
                 filetime_int = int(filetime_str)
                 if filetime_int == 0:
-                    context.log.highlight("Last logon: Never")
+                    self.context.log.highlight("Last logon: Never")
                 else:
                     dt = datetime.datetime(1601, 1, 1) + datetime.timedelta(microseconds=filetime_int / 10)
-                    context.log.highlight(f"Last logon: {dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+                    self.context.log.highlight(f"Last logon: {dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
 
             # Process pwdLastSet
             if "pwdLastSet" in response:
                 filetime_str = response["pwdLastSet"]
                 filetime_int = int(filetime_str)
                 if filetime_int == 0:
-                    context.log.highlight("Password Last Set: Never")
+                    self.context.log.highlight("Password Last Set: Never")
                 else:
                     dt = datetime.datetime(1601, 1, 1) + datetime.timedelta(microseconds=filetime_int / 10)
-                    context.log.highlight(f"Password Last Set: {dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+                    self.context.log.highlight(f"Password Last Set: {dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
 
             # Process Bad Password Count
             if "badPwdCount" in response:
-                context.log.highlight(f"Bad Password Count: {response['badPwdCount']}")
+                self.context.log.highlight(f"Bad Password Count: {response['badPwdCount']}")
 
             # Process servicePrincipalName
             if "servicePrincipalName" in response:
-                context.log.highlight("Service Account Name(s) found - Potentially Kerberoastable user!")
+                self.context.log.highlight("Service Account Name(s) found - Potentially Kerberoastable user!")
                 spns = response["servicePrincipalName"]
                 if isinstance(spns, list):
                     for spn in spns:
-                        context.log.highlight(f"Service Account Name: {spn}")
+                        self.context.log.highlight(f"Service Account Name: {spn}")
                 else:
-                    context.log.highlight(f"Service Account Name: {spns}")
+                    self.context.log.highlight(f"Service Account Name: {spns}")
 
             # Process DistinguishedName
             if "distinguishedName" in response:
-                context.log.highlight(f"Distinguished Name: {response['distinguishedName']}")
+                self.context.log.highlight(f"Distinguished Name: {response['distinguishedName']}")
 
             # Process memberOf
             if "memberOf" in response:
                 groups = response["memberOf"]
                 if isinstance(groups, list):
                     for group in groups:
-                        context.log.highlight(f"Member of: {group}")
+                        self.context.log.highlight(f"Member of: {group}")
                 else:
-                    context.log.highlight(f"Member of: {groups}")
+                    self.context.log.highlight(f"Member of: {groups}")
 
             # Process User Sid
             if "objectSid" in response:
-                context.log.highlight(f"User SID: {response['objectSid']}")
+                self.context.log.highlight(f"User SID: {response['objectSid']}")
