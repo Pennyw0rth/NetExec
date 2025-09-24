@@ -265,6 +265,17 @@ conf = {
             ]
         },
         {
+            "name": "Check Point Endpoint Security",
+            "services": [
+                {"name": "CPDA", "description": "Check Point Endpoint Agent"},
+                {"name": "vsmon", "description": "Check Point Endpoint Security Network Protection"},
+                {"name": "CPFileAnlyz", "description": "Check Point Endpoint Security File Analyzer"},
+                {"name": "EPClientUIService", "description": "Check Point Endpoint Security Client UI"}
+
+            ],
+            "pipes": []
+        },
+        {
             "name": "ESET",
             "services": [
                 {"name": "ekm", "description": "ESET"},
