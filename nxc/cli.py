@@ -45,9 +45,8 @@ def gen_cli_args():
     dns_group.add_argument("--dns-tcp", action="store_true", help="Use TCP instead of UDP for DNS queries")
     dns_group.add_argument("--dns-timeout", action="store", type=int, default=3, help="DNS query timeout in seconds")
 
-    # Is used to retrieve the list of modules
+    # Loads available modules without parsing all their attributes
     module_loader = ModuleLoader()
-    # Note that False means that NXC won't parse all modules attibutes
     module_choises = module_loader.list_modules(parse_modules_attributes=False)
     module_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     module_group = module_parser.add_argument_group("Modules", "Options for nxc modules")
@@ -121,7 +120,7 @@ def gen_cli_args():
         except Exception as e:
             nxc_logger.exception(f"Error loading proto_args for {proto}: {e}")
 
-    # Partially parse filled options
+    # Partially parse filled options so that we can extract --version, -M and -L for further parsing
     argcomplete.autocomplete(parser, always_complete_options=False)
     initial_args, _ = parser.parse_known_args()
 
@@ -133,6 +132,8 @@ def gen_cli_args():
         print(f"{VERSION} - {CODENAME} - {COMMIT} - {DISTANCE}")
         sys.exit(1)
 
+    # Retrieves the protocol parser that is filled.
+    # For example if nxc smb, it will retrieve the smb parser # With the smb options
     protocol_parser = parser._subparsers._group_actions[0].choices.get(initial_args.protocol)
 
     if initial_args.list_modules is not None:
@@ -155,7 +156,7 @@ def gen_cli_args():
 
         sys.exit(0)
 
-    # If -M is specified, then checks if --options is specified to print related infos
+    # If -M is specified, we load all modules including their attributes
     if initial_args.modules:
         modules = module_loader.list_modules(parse_modules_attributes=True)
 
@@ -169,19 +170,21 @@ def gen_cli_args():
 
             # If --options is specified, then we print the module's options
             if initial_args.show_module_options:
-                # Making sure --options is used on a single module
+                # But before we make sure --options is not used when specifying multiple modules
                 if len(initial_args.modules) > 1:
                     nxc_logger.error("You can not use --options when specifying multiple modules")
                     sys.exit(1)
 
+                # Print the module helper
                 parser = module_loader.print_module_help(module)
                 parser.print_help()
                 sys.exit(0)
 
-            # And send it to the module's so that it can register its own options
+            # If we are not listing its options, we send the protocol parser to the module
+            # So that it can register its own options which are added to global argparse
             module_class.register_module_options(protocol_parser)
 
-    # Parse the complete thing and returns the args as well as version
+    # Parse the argparser and returns the final args object
     argcomplete.autocomplete(parser, always_complete_options=False)
     final_args = parser.parse_args()
 

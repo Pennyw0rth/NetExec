@@ -257,9 +257,7 @@ class connection:
                         continue
 
                     if self.args.protocol not in module_info["supported_protocols"]:
-                        self.logger.error(
-                            f"Module {module.upper()} is not available for protocol {self.args.protocol}"
-                        )
+                        self.logger.error(f"Module {module.upper()} is not available for protocol {self.args.protocol}")
                         continue
 
                     self.logger.debug(f"Calling module: {module}")
@@ -307,12 +305,12 @@ class connection:
         context = Context(self.db, module_logger, self.args)
         context.localip = self.local_ip
 
-        # Instantiate the module using the stored class from self.modules
         module_info = self.modules.get(module_name)
         if not module_info:
             self.logger.error(f"Module {module_name} not found in loaded modules")
             return
 
+        # Instantiate the module using the stored class from self.modules and pass it context, connection and args
         module_class = module_info["class"]
         module_instance = module_class(context, self, self.args)
 
