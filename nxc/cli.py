@@ -171,13 +171,12 @@ def gen_cli_args():
             # If --options is specified, then we print the module's options
             if initial_args.show_module_options:
                 # But before we make sure --options is not used when specifying multiple modules
-                if len(initial_args.modules) > 1:
-                    nxc_logger.error("You can not use --options when specifying multiple modules")
-                    sys.exit(1)
+                for module in initial_args.modules:
+                    # Print the module helper
+                    parser = module_loader.print_module_help(module)
+                    parser.print_help()
+                    print("\n")
 
-                # Print the module helper
-                parser = module_loader.print_module_help(module)
-                parser.print_help()
                 sys.exit(0)
 
             # If we are not listing its options, we send the protocol parser to the module
