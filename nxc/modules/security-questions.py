@@ -3,6 +3,7 @@ from impacket.nt_errors import STATUS_MORE_ENTRIES
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from json import loads
 from traceback import format_exc as traceback_format_exc
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -17,6 +18,7 @@ class NXCModule:
     name = "security-questions"
     description = "Gets security questions and answers for users on computer"
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module):
         pass
