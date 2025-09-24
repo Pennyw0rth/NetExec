@@ -15,12 +15,13 @@ class NXCModule:
     def register_module_options(subparsers):
         return subparsers
 
-    def __init__(self, context=None, module_options=None):
+    def __init__(self, context=None, connection=None, module_options=None):
         self.context = context
+        self.connection = connection
 
-    def on_admin_login(self, connection):
+    def on_admin_login(self):
         try:
-            remote_ops = RemoteOperations(connection.conn, False)
+            remote_ops = RemoteOperations(self.connection.conn, False)
             remote_ops.enableRegistry()
 
             if remote_ops._RemoteOperations__rrp:
@@ -40,7 +41,7 @@ class NXCModule:
                         "RunAsPPL\x00",
                     )
                 except rrp.DCERPCSessionError as e:
-                    self.context.log.debug(f"RunAsPPL error {e} on host {connection.host}")
+                    self.context.log.debug(f"RunAsPPL error {e} on host {self.connection.host}")
 
                 if data is None or data not in [1, 2]:
                     self.context.log.highlight("RunAsPPL disabled")
@@ -48,6 +49,6 @@ class NXCModule:
                     self.context.log.highlight("RunAsPPL enabled")
 
         except DCERPCSessionError as e:
-            self.context.log.debug(f"Error connecting to RemoteRegistry {e} on host {connection.host}")
+            self.context.log.debug(f"Error connecting to RemoteRegistry {e} on host {self.connection.host}")
         finally:
             remote_ops.finish()

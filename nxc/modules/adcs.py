@@ -22,13 +22,14 @@ class NXCModule:
         subparsers.set_defaults(module="adcs")
         return subparsers
 
-    def __init__(self, context=None, module_options=None):
-        self.context = context.log
+    def __init__(self, context=None, connection=None, module_options=None):
+        self.context = context
+        self.connection = connection
         self.server = module_options.server
         self.base_dn = module_options.base_dn
         self.regex = re.compile(r"(https?://.+)")
 
-    def on_login(self, connection):
+    def on_login(self):
         if self.server is None:
             search_filter = "(objectClass=pKIEnrollmentService)"
         else:
@@ -39,10 +40,10 @@ class NXCModule:
 
         try:
             sc = ldap.SimplePagedResultsControl()
-            base_dn_root = connection.ldap_connection._baseDN if self.base_dn is None else self.base_dn
+            base_dn_root = self.connection.ldap_connection._baseDN if self.base_dn is None else self.base_dn
 
             if self.server is None:
-                connection.ldap_connection.search(
+                self.connection.ldap_connection.search(
                     searchFilter=search_filter,
                     attributes=[],
                     sizeLimit=0,
@@ -51,7 +52,7 @@ class NXCModule:
                     searchBase="CN=Configuration," + base_dn_root,
                 )
             else:
-                connection.ldap_connection.search(
+                self.connection.ldap_connection.search(
                     searchFilter=search_filter + base_dn_root + ")",
                     attributes=["certificateTemplates"],
                     sizeLimit=0,

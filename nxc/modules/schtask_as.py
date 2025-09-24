@@ -29,8 +29,9 @@ class NXCModule:
         subparsers.set_defaults(module="schtask_as")
         return subparsers
 
-    def __init__(self, context=None, module_options=None):
+    def __init__(self, context=None, connection=None, module_options=None):
         self.context = context
+        self.connection = connection
         self.run_task_as = module_options.runas
         self.command_to_run = module_options.cmd
         self.binary_to_upload = module_options.binary
@@ -39,7 +40,7 @@ class NXCModule:
         self.output_file_location = module_options.location
         self.show_output = module_options.silentcommand
 
-    def on_admin_login(self, connection):
+    def on_admin_login(self):
         if self.command_to_run is None:
             self.context.log.fail("You need to specify a CMD to run")
             return
@@ -61,7 +62,7 @@ class NXCModule:
                 with open(self.binary_to_upload, "rb") as binary_to_upload:
                     try:
                         self.binary_to_upload_name = os.path.basename(self.binary_to_upload)
-                        connection.conn.putFile(self.share, f"{binary_file_location}{self.binary_to_upload_name}", binary_to_upload.read)
+                        self.connection.conn.putFile(self.share, f"{binary_file_location}{self.binary_to_upload_name}", binary_to_upload.read)
                         self.context.log.success(f"Binary {self.binary_to_upload_name} successfully uploaded in {binary_file_location}{self.binary_to_upload_name}")
                     except Exception as e:
                         self.context.log.fail(f"Error writing file to share {binary_file_location}: {e}")
@@ -70,19 +71,19 @@ class NXCModule:
         self.context.log.info("Connecting to the remote Service control endpoint")
         try:
             exec_method = TSCH_EXEC(
-                connection.host if not connection.kerberos else connection.hostname + "." + connection.domain,
-                connection.smb_share_name,
-                connection.username,
-                connection.password,
-                connection.domain,
-                connection.kerberos,
-                connection.aesKey,
-                connection.host,
-                connection.kdcHost,
-                connection.hash,
+                self.connection.host if not self.connection.kerberos else self.connection.hostname + "." + self.connection.domain,
+                self.connection.smb_share_name,
+                self.connection.username,
+                self.connection.password,
+                self.connection.domain,
+                self.connection.kerberos,
+                self.connection.aesKey,
+                self.connection.host,
+                self.connection.kdcHost,
+                self.connection.hash,
                 self.context.log,
-                connection.args.get_output_tries,
-                connection.args.share,
+                self.connection.args.get_output_tries,
+                self.connection.args.share,
                 self.run_task_as,
                 self.command_to_run,
                 self.output_filename,
@@ -95,7 +96,7 @@ class NXCModule:
 
             try:
                 if not isinstance(output, str):
-                    output = output.decode(connection.args.codec)
+                    output = output.decode(self.connection.args.codec)
             except UnicodeDecodeError:
                 # Required to decode specific French characters otherwise it'll print b"<result>"
                 output = output.decode("cp437")
@@ -109,7 +110,7 @@ class NXCModule:
         finally:
             if self.binary_to_upload:
                 try:
-                    connection.conn.deleteFile(self.share, f"{binary_file_location}{self.binary_to_upload_name}")
+                    self.connection.conn.deleteFile(self.share, f"{binary_file_location}{self.binary_to_upload_name}")
                     self.context.log.success(f"Binary {binary_file_location}{self.binary_to_upload_name} successfully deleted")
                 except Exception as e:
                     self.context.log.fail(f"Error deleting {binary_file_location}{self.binary_to_upload_name} on {self.share}: {e}")

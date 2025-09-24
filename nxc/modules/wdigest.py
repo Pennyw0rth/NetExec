@@ -19,14 +19,15 @@ class NXCModule:
         subparsers.set_defaults(module="wdigest")
         return subparsers
 
-    def __init__(self, context=None, module_options=None):
+    def __init__(self, context=None, connection=None, module_options=None):
         self.context = context
+        self.connection = connection
         self.enable = getattr(module_options, "enable", False)
         self.disable = getattr(module_options, "disable", False)
 
-    def on_admin_login(self, connection):
+    def on_login(self):
         """Centralized RemoteOperations logic for enable/disable/check actions."""
-        remote_ops = RemoteOperations(connection.conn, False)
+        remote_ops = RemoteOperations(self.connection.conn, False)
         remote_ops.enableRegistry()
 
         try:

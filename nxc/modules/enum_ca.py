@@ -31,13 +31,14 @@ class NXCModule:
     def register_module_options(subparsers):
         return subparsers
 
-    def __init__(self, context=None, module_options=None):
+    def __init__(self, context=None, connection=None, module_options=None):
         self.context = context
+        self.connection = connection
 
-    def on_login(self, connection):
-        self.__username = connection.username
-        self.__password = connection.password
-        self.__domain = connection.domain
+    def on_login(self):
+        self.__username = self.connection.username
+        self.__password = self.connection.password
+        self.__domain = self.connection.domain
         self.__lmhash = ""
         self.__nthash = ""
         self.__port = 135.
@@ -51,7 +52,7 @@ class NXCModule:
             self.__nthash = self.context.hash[0]
             self.__lmhash = "00000000000000000000000000000000"
 
-        self.__stringbinding = self.KNOWN_PROTOCOLS[self.__port]["bindstr"] % connection.host
+        self.__stringbinding = self.KNOWN_PROTOCOLS[self.__port]["bindstr"] % self.connection.host
         self.context.log.debug(f"StringBinding {self.__stringbinding}")
 
         rpctransport = transport.DCERPCTransportFactory(self.__stringbinding)
@@ -59,17 +60,17 @@ class NXCModule:
         if self.__port in [139, 445]:
             # Setting credentials for SMB
             rpctransport.set_credentials(self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash)
-            rpctransport.setRemoteHost(connection.host)
+            rpctransport.setRemoteHost(self.connection.host)
             rpctransport.set_dport(self.__port)
         elif self.__port == 443:
             # Setting credentials only for RPC Proxy, but not for the MSRPC level
             rpctransport.set_credentials(self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash)
             rpctransport.set_auth_type(AUTH_NTLM)
         else:
-            rpctransport.setRemoteHost(connection.host)
+            rpctransport.setRemoteHost(self.connection.host)
 
         try:
-            entries = self.__fetchList(connection.kerberos, rpctransport)
+            entries = self.__fetchList(self.connection.kerberos, rpctransport)
         except Exception as e:
             error_text = f"Protocol failed: {e}"
             self.context.log.fail(error_text)
@@ -89,7 +90,7 @@ class NXCModule:
                 self.context.log.debug(f"EXEs {exename}")
                 if exename == "certsrv.exe":
                     self.context.log.highlight("Active Directory Certificate Services Found.")
-                    url = f"http://{connection.host}/certsrv/certfnsh.asp"
+                    url = f"http://{self.connection.host}/certsrv/certfnsh.asp"
                     self.context.log.highlight(url)
                     try:
                         response = requests.get(url, timeout=5)

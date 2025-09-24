@@ -14,11 +14,12 @@ class NXCModule:
     def register_module_options(subparsers):
         return subparsers
 
-    def __init__(self, context=None, module_options=None):
+    def __init__(self, context=None, connection=None, module_options=None):
         self.context = context
+        self.connection = connection
 
-    def on_admin_login(self, connection):
-        remoteOps = RemoteOperations(connection.conn, False)
+    def on_admin_login(self):
+        remoteOps = RemoteOperations(self.connection.conn, False)
         remoteOps.enableRegistry()
 
         ans = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)

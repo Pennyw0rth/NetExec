@@ -19,18 +19,19 @@ class NXCModule:
         subparsers.add_argument("--user-to-query", help="Username to query LDAP for", required=True)
         return subparsers
 
-    def __init__(self, context=None, module_options=None):
+    def __init__(self, context=None, connection=None, module_options=None):
         self.context = context
+        self.connection = connection
         self.username = module_options.user_to_query
 
-    def on_login(self, connection):
-        searchBase = connection.ldap_connection._baseDN
-        searchFilter = f"(sAMAccountName={connection.username})" if self.username is None else f"(sAMAccountName={format(self.username)})"
+    def on_login(self):
+        searchBase = self.connection.ldap_connection._baseDN
+        searchFilter = f"(sAMAccountName={self.connection.username})" if self.username is None else f"(sAMAccountName={format(self.username)})"
 
         self.context.log.debug(f"Using naming context: {searchBase} and {searchFilter} as search filter")
 
         # Get attributes of provided user
-        r = connection.ldap_connection.search(
+        r = self.connection.ldap_connection.search(
             searchBase=searchBase,
             searchFilter=searchFilter,
             attributes=[

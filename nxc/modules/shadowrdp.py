@@ -19,14 +19,15 @@ class NXCModule:
         subparsers.set_defaults(module="shadowrdp")
         return subparsers
 
-    def __init__(self, context=None, module_options=None):
+    def __init__(self, context=None, connection=None, module_options=None):
         self.context = context
+        self.connection = connection
         self.enable = module_options.enable
         self.disable = module_options.disable
 
-    def on_admin_login(self, connection):
+    def on_admin_login(self):
         try:
-            remoteOps = RemoteOperations(connection.conn, False)
+            remoteOps = RemoteOperations(self.connection.conn, False)
             remoteOps.enableRegistry()
             if remoteOps._RemoteOperations__rrp:
                 ans = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)

@@ -18,26 +18,27 @@ class NXCModule:
     supported_protocols = ["smb"]
     category = CATEGORY.ENUMERATION
 
-    def __init__(self, context=None, module_options=None):
-        self.context = context
-        self.output = "WebClient Service enabled on: {}"
-
     @staticmethod
     def register_module_options(subparsers):
         return subparsers
 
-    def on_login(self, connection):
+    def __init__(self, context=None, connection=None, module_options=None):
+        self.context = context
+        self.connection = connection
+        self.output = "WebClient Service enabled on: {}"
+
+    def on_login(self):
         """
         Check whether the 'DAV RPC Service' pipe exists within the 'IPC$' share. This indicates
         that the WebClient service is running on the target.
         """
         try:
-            remote_file = RemoteFile(connection.conn, "DAV RPC Service", "IPC$", access=FILE_READ_DATA)
+            remote_file = RemoteFile(self.connection.conn, "DAV RPC Service", "IPC$", access=FILE_READ_DATA)
 
             remote_file.open_file()
             remote_file.close()
 
-            self.context.log.highlight(self.output.format(connection.conn.getRemoteHost()))
+            self.context.log.highlight(self.output.format(self.connection.conn.getRemoteHost()))
 
         except SessionError as e:
             if e.getErrorCode() == nt_errors.STATUS_OBJECT_NAME_NOT_FOUND:

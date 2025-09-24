@@ -86,8 +86,9 @@ class NXCModule:
     def register_module_options(subparsers):
         return subparsers
 
-    def __init__(self, context=None, module_options=None):
+    def __init__(self, context=None, connection=None, module_options=None):
         self.context = context
+        self.connection = connection
 
     def is_excluded_sid(self, sid, domain_sid):
         if sid in EXCLUDED_SIDS:
@@ -171,8 +172,7 @@ class NXCModule:
         except Exception:
             return sid
 
-    def on_login(self, connection):
-        self.connection = connection
+    def on_login(self):
 
         # Check for a domain controller with Windows Server 2025
         resp = self.connection.search(
@@ -183,7 +183,7 @@ class NXCModule:
 
         for dc in parsed_resp:
             if "2025" in dc["operatingSystem"]:
-                out = connection.resolver(dc["dNSHostName"])
+                out = self.connection.resolver(dc["dNSHostName"])
                 dc_ip = out["host"] if out else "Unknown IP"
                 self.context.log.success(f"Found domain controller with operating system Windows Server 2025: {dc_ip} ({dc['dNSHostName']})")
             else:

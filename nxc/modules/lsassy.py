@@ -33,20 +33,21 @@ class NXCModule:
         subparsers.set_defaults(module="lsassy")
         return subparsers
 
-    def __init__(self, context=None, module_options=None):
+    def __init__(self, context=None, connection=None, module_options=None):
         self.context = context
+        self.connection = connection
         self.method = module_options.method
         self.dump_tickets = module_options.dump_tickets
         self.save_dir = module_options.save_dir
         self.ticket_type = module_options.ticket_type
 
-    def on_admin_login(self, connection):
-        host = connection.host
-        domain_name = connection.domain
-        username = connection.username
-        password = getattr(connection, "password", "")
-        lmhash = getattr(connection, "lmhash", "")
-        nthash = getattr(connection, "nthash", "")
+    def on_admin_login(self):
+        host = self.connection.host
+        domain_name = self.connection.domain
+        username = self.connection.username
+        password = getattr(self.connection, "password", "")
+        lmhash = getattr(self.connection, "lmhash", "")
+        nthash = getattr(self.connection, "nthash", "")
 
         session = Session()
         session.get_session(
@@ -128,7 +129,7 @@ class NXCModule:
                 credentials_output.append(cred)
 
         self.context.log.debug("Calling process_credentials")
-        self.process_credentials(connection, credentials_output)
+        self.process_credentials(self.connection, credentials_output)
 
     def write_tickets(self, tickets, host):
         if not tickets:
