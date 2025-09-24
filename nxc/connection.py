@@ -317,15 +317,15 @@ class connection:
             return
 
         module_class = module_info["class"]
-        module_instance = module_class(context, self.args)
+        module_instance = module_class(context, self, self.args)
 
         if hasattr(module_instance, "on_login"):
             self.logger.debug(f"Module {module_instance.name} has on_login method")
-            module_instance.on_login(self)
+            module_instance.on_login()
 
         if self.admin_privs and hasattr(module_instance, "on_admin_login"):
             self.logger.debug(f"Module {module_instance.name} has on_admin_login method")
-            module_instance.on_admin_login(self)
+            module_instance.on_admin_login()
 
     def inc_failed_login(self, username):
         global global_failed_logins, user_failed_logins
