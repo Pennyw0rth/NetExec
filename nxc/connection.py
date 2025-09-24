@@ -238,32 +238,40 @@ class connection:
     def proto_flow(self):
         self.logger.debug("Kicking off proto_flow")
         self.proto_logger()
+
         if not self.create_conn_obj():
             self.logger.info(f"Failed to create connection object for target {self.host}, exiting...")
-        else:
-            self.logger.debug("Created connection object")
-            self.enum_host_info()
-            self.print_host_info()
-            if self.login() or (self.username == "" and self.password == ""):
-                if hasattr(self.args, "modules") and self.args.modules:
-                    # ModuleLoader().list_modules() retrives:
-                    # - self.modules the list of module as well as their classes
-                    # - self.modules_per_protocol {"protocol_name": [("module_name": "description_module")]}
-                    self.modules, self.modules_per_protocol = ModuleLoader().list_modules(True)
-                    for module in self.args.modules:
-                        # If self.args.module in list of modules triaged by protocol name then we call_module()
-                        if module in [module_name for module_name, _ in self.modules_per_protocol[self.args.protocol]]:
-                            self.logger.debug(f"Calling module: {module}")
-                            # Calls the desired module
-                            self.call_module(module)
-                        else:
-                            # Else that means the user tried to launch a module not handled for that protocol
-                            self.logger.error(f"Module {module.upper()} is not available for proto {self.args.protocol}")
-                # If self.args.module is None, then no module was called
-                else:
-                    self.logger.debug("Calling command arguments")
-                    self.call_cmd_args()
-            self.disconnect()
+            return
+
+        self.logger.debug("Created connection object")
+        self.enum_host_info()
+        self.print_host_info()
+
+        if self.login() or (self.username == "" and self.password == ""):
+            if getattr(self.args, "modules", None):
+                # Charge tous les modules avec leurs métadonnées
+                self.modules = ModuleLoader().list_modules(parse_modules_attributes=True)
+                # flat=True retourne le dict enrichi {name: {description, supported_protocols, category, requires_admin}}
+
+                for module in self.args.modules:
+                    module_info = self.modules.get(module)
+                    if not module_info:
+                        self.logger.error(f"Unknown module {module.upper()}")
+                        continue
+
+                    if self.args.protocol not in module_info["supported_protocols"]:
+                        self.logger.error(
+                            f"Module {module.upper()} is not available for protocol {self.args.protocol}"
+                        )
+                        continue
+
+                    self.logger.debug(f"Calling module: {module}")
+                    self.call_module(module)
+            else:
+                self.logger.debug("Calling command arguments")
+                self.call_cmd_args()
+
+        self.disconnect()
 
     def call_cmd_args(self):
         """Calls all the methods specified by the command line arguments
@@ -286,34 +294,35 @@ class connection:
                 self.logger.debug(f"Calling {attr}()")
                 getattr(self, attr)()
 
-    def call_module(self, module):
-        self.logger.debug(f"Loading module {module}")
+    def call_module(self, module_name):
+        self.logger.debug(f"Loading module {module_name}")
 
         module_logger = NXCAdapter(
             extra={
-                "module_name": module.upper(),
+                "module_name": module_name.upper(),
                 "host": self.host,
                 "port": self.port,
                 "hostname": self.hostname,
             },
         )
-        self.logger.debug(f"Loading context for module {module}")
+        self.logger.debug(f"Loading context for module {module_name}")
 
-        # Creates the NXC context
         context = Context(self.db, module_logger, self.args)
         context.localip = self.local_ip
 
-        # Instantiate the module to run passing:
-        # - The NXC Context
-        # - Necessary args
-        module_instance = self.modules[module](context, self.args)
+        # Instantiate the module using the stored class from self.modules
+        module_info = self.modules.get(module_name)
+        if not module_info:
+            self.logger.error(f"Module {module_name} not found in loaded modules")
+            return
 
-        # Calls on_login() module's function
+        module_class = module_info["class"]
+        module_instance = module_class(context, self.args)
+
         if hasattr(module_instance, "on_login"):
             self.logger.debug(f"Module {module_instance.name} has on_login method")
             module_instance.on_login(self)
 
-        # Calls on_admin_login module's function
         if self.admin_privs and hasattr(module_instance, "on_admin_login"):
             self.logger.debug(f"Module {module_instance.name} has on_admin_login method")
             module_instance.on_admin_login(self)

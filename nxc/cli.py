@@ -6,6 +6,7 @@ from argparse import RawTextHelpFormatter
 
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.helpers.logger import highlight
+from nxc.helpers.misc import display_modules
 from nxc.helpers.args import DisplayDefaultsNotNone
 from nxc.logger import nxc_logger, setup_debug_logging
 from nxc.loaders.moduleloader import ModuleLoader
@@ -47,11 +48,11 @@ def gen_cli_args():
     # Is used to retrieve the list of modules
     module_loader = ModuleLoader()
     # Note that False means that NXC won't parse all modules attibutes
-    module_choises = module_loader.list_modules(False)
+    module_choises = module_loader.list_modules(parse_modules_attributes=False)
     module_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     module_group = module_parser.add_argument_group("Modules", "Options for nxc modules")
     module_group.add_argument("-M", "--modules", choices=module_choises, help="Select module to use", dest="modules", action="append", metavar="MODULES")
-    module_group.add_argument("-L", "--list-modules", action="store_true", help="List available modules")
+    module_group.add_argument("-L", "--list-modules", nargs="?", type=str, const="", help="List available modules (optional: category name)")
     module_group.add_argument("--options", dest="show_module_options", action="store_true", help="Display module options")
 
     parser = argparse.ArgumentParser(
@@ -132,72 +133,52 @@ def gen_cli_args():
         print(f"{VERSION} - {CODENAME} - {COMMIT} - {DISTANCE}")
         sys.exit(1)
 
-    # If -L is specified, list all modules by privilege and category
-    if initial_args.list_modules is not False:
-        modules_map, per_proto_modules = module_loader.list_modules(True)
+    protocol_parser = parser._subparsers._group_actions[0].choices.get(initial_args.protocol)
 
-        if not initial_args.protocol:
-            nxc_logger.fail("Specify a protocol with -L to list modules.")
-        else:
-            mods = per_proto_modules.get(initial_args.protocol, [])
-            if not mods:
-                nxc_logger.fail(f"No modules for the {initial_args.protocol} protocol")
-            else:
-                # Separate modules into LOW and HIGH privilege
-                low_priv = []
-                high_priv = []
+    if initial_args.list_modules is not None:
+        modules = module_loader.list_modules(parse_modules_attributes=True)
 
-                for name, _ in mods:
-                    cls = modules_map.get(name)
-                    if cls is None:
-                        continue
-                    requires_admin = hasattr(cls, "on_admin_login")
-                    entry = (name, getattr(cls, "category", "UNCATEGORIZED"), getattr(cls, "description", ""))
-                    if requires_admin:
-                        high_priv.append(entry)
-                    else:
-                        low_priv.append(entry)
+        low_privilege_modules = {
+            m: props for m, props in modules.items()
+            if initial_args.protocol.lower() in props["supported_protocols"] and not props["requires_admin"]
+        }
+        high_privilege_modules = {
+            m: props for m, props in modules.items()
+            if initial_args.protocol.lower() in props["supported_protocols"] and props["requires_admin"]
+        }
 
-                def print_group(title, module_list):
-                    if not module_list:
-                        return
-                    nxc_logger.display(f"\n{title}")
-                    # Group by category
-                    grouped = {}
-                    for name, cat, desc in module_list:
-                        grouped.setdefault(cat, []).append((name, desc))
-                    for cat_name, entries in grouped.items():
-                        nxc_logger.display(f"\n{cat_name}")
-                        for n, desc in sorted(entries, key=lambda x: x[0].lower()):
-                            nxc_logger.display(f"{n.ljust(25)} {desc}")
+        nxc_logger.highlight("LOW PRIVILEGE MODULES")
+        display_modules(initial_args, low_privilege_modules)
 
-                # Print LOW and HIGH privilege modules
-                print_group("LOW PRIVILEGE MODULES", low_priv)
-                print_group("HIGH PRIVILEGE MODULES (requires admin privs)", high_priv)
+        nxc_logger.highlight("\nHIGH PRIVILEGE MODULES (requires admin privs)")
+        display_modules(initial_args, high_privilege_modules)
 
         sys.exit(0)
 
     # If -M is specified, then checks if --options is specified to print related infos
     if initial_args.modules:
-        modules_map, per_proto_modules = module_loader.list_modules(True)
+        modules = module_loader.list_modules(parse_modules_attributes=True)
 
         for module in initial_args.modules:
-            module_class = modules_map.get(module)
+            module_info = modules.get(module)
+            if not module_info:
+                nxc_logger.error(f"Unknown module: {module}")
+                sys.exit(1)
+
+            module_class = module_info["class"]
 
             # If --options is specified, then we print the module's options
             if initial_args.show_module_options:
                 # Making sure --options is used on a single module
                 if len(initial_args.modules) > 1:
                     nxc_logger.error("You can not use --options when specifying multiple modules")
-                    sys.exit()
+                    sys.exit(1)
 
                 # Then the module's one
                 parser = module_loader.print_module_help(module)
                 parser.print_help()
                 sys.exit(0)
 
-            # We retrieve the protocol's parser
-            protocol_parser = parser._subparsers._group_actions[0].choices.get(initial_args.protocol)
             # And send it to the module's so that it can register its own options
             module_class.register_module_options(protocol_parser)
 
