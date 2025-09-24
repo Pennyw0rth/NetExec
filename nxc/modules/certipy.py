@@ -6,6 +6,7 @@ from certipy.lib.target import Target, DnsResolver
 from certipy.lib.formatting import pretty_print
 from datetime import datetime
 
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 
 
@@ -14,6 +15,7 @@ class NXCModule:
     name = "certipy"
     description = "certipy find command with options to export the result to text/csv/json. Default: Show only vulnerable templates"
     supported_protocols = ["ldap"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
