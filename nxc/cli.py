@@ -174,7 +174,6 @@ def gen_cli_args():
                     nxc_logger.error("You can not use --options when specifying multiple modules")
                     sys.exit(1)
 
-                # Then the module's one
                 parser = module_loader.print_module_help(module)
                 parser.print_help()
                 sys.exit(0)
