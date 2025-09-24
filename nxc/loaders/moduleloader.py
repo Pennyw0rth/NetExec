@@ -71,8 +71,9 @@ class ModuleLoader:
             prog=module_name,
             description=module_info["description"],
             formatter_class=nxc.helpers.args.DisplayDefaultsNotNone,
-            add_help=True,
+            add_help=False,
             allow_abbrev=False,
+            usage=argparse.SUPPRESS
         )
         module_class.register_module_options(parser)
         return parser

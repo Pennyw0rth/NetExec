@@ -173,6 +173,7 @@ def gen_cli_args():
                 # But before we make sure --options is not used when specifying multiple modules
                 for module in initial_args.modules:
                     # Print the module helper
+                    nxc_logger.display(f"{module} options are:")
                     parser = module_loader.print_module_help(module)
                     parser.print_help()
                     print("\n")
