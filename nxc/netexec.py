@@ -1,13 +1,12 @@
 # PYTHON_ARGCOMPLETE_OK
 import sys
 from nxc.helpers.logger import highlight
-from nxc.helpers.misc import identify_target_file, display_modules
+from nxc.helpers.misc import identify_target_file
 from nxc.parsers.ip import parse_targets
 from nxc.parsers.nmap import parse_nmap_xml
 from nxc.parsers.nessus import parse_nessus_file
 from nxc.cli import gen_cli_args
 from nxc.loaders.protocolloader import ProtocolLoader
-from nxc.loaders.moduleloader import ModuleLoader
 from nxc.first_run import first_run_setup
 from nxc.paths import NXC_PATH, WORKSPACE_DIR
 from nxc.console import nxc_console
