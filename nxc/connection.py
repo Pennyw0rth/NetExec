@@ -249,10 +249,7 @@ class connection:
 
         if self.login() or (self.username == "" and self.password == ""):
             if getattr(self.args, "modules", None):
-                # Charge tous les modules avec leurs métadonnées
                 self.modules = ModuleLoader().list_modules(parse_modules_attributes=True)
-                # flat=True retourne le dict enrichi {name: {description, supported_protocols, category, requires_admin}}
-
                 for module in self.args.modules:
                     module_info = self.modules.get(module)
                     if not module_info:
