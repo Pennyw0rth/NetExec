@@ -44,7 +44,7 @@ dependencies = [
     "terminaltables>=3.1.0",
     "xmltodict>=0.13.0",
     # Git Dependencies
-    "certipy @ git+https://github.com/ly4k/Certipy",
+    "certipy-ad @ git+https://github.com/Pennyw0rth/Certipy",
     "impacket @ git+https://github.com/Pennyw0rth/impacket.git",
     "oscrypto @ git+https://github.com/wbond/oscrypto",
     "pynfsclient @ git+https://github.com/Pennyw0rth/NfsClient",
