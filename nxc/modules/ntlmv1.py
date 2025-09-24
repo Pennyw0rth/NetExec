@@ -20,13 +20,14 @@ class NXCModule:
     def register_module_options(subparsers):
         return subparsers
 
-    def __init__(self, context=None, module_options=None):
+    def __init__(self, context=None, connection=None, module_options=None):
         self.context = context
+        self.connection = connection
         self.output = "NTLMv1 allowed on: {} - LmCompatibilityLevel = {}"
 
-    def on_admin_login(self, connection):
+    def on_admin_login(self):
         try:
-            remote_ops = RemoteOperations(connection.conn, False)
+            remote_ops = RemoteOperations(self.connection.conn, False)
             remote_ops.enableRegistry()
 
             if remote_ops._RemoteOperations__rrp:
@@ -52,7 +53,7 @@ class NXCModule:
                 # Changed by Defte
                 # Unless this keys is set to 3 or higher, NTLMv1 can be used
                 if data in [0, 1, 2]:
-                    self.context.log.highlight(self.output.format(connection.conn.getRemoteHost(), data))
+                    self.context.log.highlight(self.output.format(self.connection.conn.getRemoteHost(), data))
 
         except DCERPCSessionError as e:
             self.context.log.debug(f"Error connecting to RemoteRegistry: {e}")

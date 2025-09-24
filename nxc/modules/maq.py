@@ -23,12 +23,13 @@ class NXCModule:
     supported_protocols = ["ldap"]
     category = CATEGORY.ENUMERATION
 
-    def __init__(self, context=None, module_options=None):
+    def __init__(self, context=None, connection=None, module_options=None):
         self.context = context
+        self.connection = connection
 
-    def on_login(self, connection):
+    def on_login(self):
         self.context.log.display("Getting the MachineAccountQuota")
-        result = connection.search("(objectClass=*)", ["ms-DS-MachineAccountQuota"])
+        result = self.connection.search("(objectClass=*)", ["ms-DS-MachineAccountQuota"])
         try:
             maq = result[0]["attributes"][0]["vals"][0]
             self.context.log.highlight(f"MachineAccountQuota: {maq}")
