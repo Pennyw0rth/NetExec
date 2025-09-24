@@ -126,9 +126,11 @@ def looks_like_domain_user(runas: str) -> bool:
     if not runas:
         return False
     runas = runas.lower()
-    return (
-        "\\" in runas and not runas.startswith("nt ") and not runas.startswith("builtin\\") and not runas.endswith("$")  # Computer accounts
-    )
+    has_domain_separator = "\\" in runas
+    not_nt_account = not runas.startswith("nt ")
+    not_builtin_account = not runas.startswith("builtin\\")
+    not_computer_account = not runas.endswith("$")  # Computer accounts
+    return has_domain_separator and not_nt_account and not_builtin_account and not_computer_account
 
 
 class NXCModule:
