@@ -279,7 +279,19 @@ class NXCModule:
                     continue
 
                 # Build result row
-                row = {"host": hostname, "path": rel_path, "runas": meta.get("runas"), "command": meta.get("command"), "arguments": meta.get("arguments"), "author": meta.get("author"), "date": meta.get("date"), "logon_type": meta.get("logon_type"), "is_domain_user": looks_like_domain_user(meta.get("runas", "")), "is_high_value": False, "has_stored_creds": False}
+                row = {
+                    "host": hostname,
+                    "path": rel_path,
+                    "runas": meta.get("runas"),
+                    "command": meta.get("command"),
+                    "arguments": meta.get("arguments"),
+                    "author": meta.get("author"),
+                    "date": meta.get("date"),
+                    "logon_type": meta.get("logon_type"),
+                    "is_domain_user": looks_like_domain_user(meta.get("runas", "")),
+                    "is_high_value": False,
+                    "has_stored_creds": False,
+                }
 
                 # Determine if credentials are stored
                 logon_type = (meta.get("logon_type") or "").strip().lower()
