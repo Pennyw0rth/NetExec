@@ -348,7 +348,7 @@ class winrm(connection):
         user_credentials_paths = [
             ntpath.join("C:\\Users", self.username, "AppData\\Roaming\\Microsoft\\Credentials"),
             ntpath.join("C:\\Users", self.username, "AppData\\Local\\Microsoft\\Credentials")
-        ] 
+        ]
 
         sids = self.ps_execute(f"Get-ChildItem -Path {user_masterkey_path} -Name -Directory -Include 'S-*'", True)
         if not sids:
