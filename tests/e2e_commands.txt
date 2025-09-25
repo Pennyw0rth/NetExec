@@ -95,6 +95,9 @@ netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M ioxidres
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M security-questions
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M remove-mic
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M backup_operator
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M ntlm_reflection
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M ntds-dump-raw
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M ntds-dump-raw -o TARGET=SAM,LSA,NTDS
 # currently hanging indefinitely - TODO: look into this
 #netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M keepass_discover
 #netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M keepass_trigger -o ACTION=ALL USER=LOGIN_USERNAME KEEPASS_CONFIG_PATH="C:\\Users\\LOGIN_USERNAME\\AppData\\Roaming\\KeePass\\KeePass.config.xml"
@@ -187,6 +190,8 @@ netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M get_netc
 #netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M rdp -o ACTION=enable
 #netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M rdp -o ACTION=disable
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M bitlocker
+netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M ntds-dump-raw
+netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M ntds-dump-raw -o TARGET=SAM,LSA,NTDS
 ##### LDAP
 netexec {DNS} ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --users
@@ -194,11 +199,15 @@ netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --users-ex
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --groups
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --get-sid
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p '' --asreproast /tmp/output.txt
-netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --kerberoasting /tmp/output2.txt
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --kerberoasting /tmp/kerberoasting1.txt
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --kerberoast /tmp/kerberoasting2.txt
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --kerberoasting /tmp/kerberoasting3.txt --kerberoast-users test_user
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --trusted-for-delegation
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --admin-count
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --gmsa
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --pso
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --pass-pol
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --dc-list
 ##### LDAP Modules
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -L
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M adcs
@@ -232,6 +241,8 @@ netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --port 59
 netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --check-proto http --port 5985
 netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --check-proto https --port 5986
 ##### WINRM Modules
+netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M ntds-dump-raw
+netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M ntds-dump-raw -o TARGET=SAM,LSA,NTDS
 netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M aws-credentials
 ##### MSSQL
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # Need a space at the end for kerb regex

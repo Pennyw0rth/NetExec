@@ -14,6 +14,7 @@ from lsassy.session import Session
 from impacket.krb5.ccache import CCache
 
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 
 
@@ -21,6 +22,7 @@ class NXCModule:
     name = "lsassy"
     description = "Dump lsass and parse the result remotely with lsassy"
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self, context=None, module_options=None):
         self.context = context
