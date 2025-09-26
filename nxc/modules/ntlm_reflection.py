@@ -74,7 +74,7 @@ class NXCModule:
                 if not connection.conn.isSigningRequired():  # Not vulnerable if SMB signing is enabled
                     context.log.highlight(f"VULNERABLE (can relay SMB to any protocols on {self.context.log.extra['host']})")
                 else:
-                    context.log.highlight(f"VULNERABLE (can relay SMB to any others protocols except SMB on {self.context.log.extra['host']})")
+                    context.log.highlight(f"VULNERABLE (can relay SMB to other protocols except SMB on {self.context.log.extra['host']})")
         except SessionError as e:
             if "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
                 self.context.log.info(f"RemoteRegistry is probably deactivated: {e}")
