@@ -48,34 +48,36 @@ class NXCModule:
     def on_login(self, context, connection):
         self.context = context
         self.connection = connection
-        if not connection.conn.isSigningRequired():  # Not vulnerable if SMB signing is enabled
-            connection.trigger_winreg()
-            rpc = transport.DCERPCTransportFactory(r"ncacn_np:445[\pipe\winreg]")
-            rpc.set_smb_connection(connection.conn)
-            if connection.kerberos:
-                rpc.set_kerberos(connection.kerberos, kdcHost=connection.kdcHost)
-            dce = rpc.get_dce_rpc()
-            if connection.kerberos:
-                dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-            try:
-                dce.connect()
-                dce.bind(rrp.MSRPC_UUID_RRP)
-                # Reading UBR from registry
-                hRootKey = rrp.hOpenLocalMachine(dce)["phKey"]
-                hKey = rrp.hBaseRegOpenKey(dce, hRootKey, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion")["phkResult"]
-                ubr = rrp.hBaseRegQueryValue(dce, hKey, "UBR")[1]
-                version_str = f"{connection.server_os_major}.{connection.server_os_minor}.{connection.server_os_build}.{ubr}" if ubr else None
-                dce.disconnect()
-                if not version_str:
-                    self.context.log.info("Could not determine OS version from registry")
-                    return
-                vuln = self.is_vulnerable(connection.server_os_major, connection.server_os_minor, connection.server_os_build, ubr)
-                if vuln:
-                    context.log.highlight(f"VULNERABLE to {self.name}! {connection.server_os} ({version_str})")
-            except SessionError as e:
-                if "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
-                    self.context.log.info(f"RemoteRegistry is probably deactivated: {e}")
+        connection.trigger_winreg()
+        rpc = transport.DCERPCTransportFactory(r"ncacn_np:445[\pipe\winreg]")
+        rpc.set_smb_connection(connection.conn)
+        if connection.kerberos:
+            rpc.set_kerberos(connection.kerberos, kdcHost=connection.kdcHost)
+        dce = rpc.get_dce_rpc()
+        if connection.kerberos:
+            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+        try:
+            dce.connect()
+            dce.bind(rrp.MSRPC_UUID_RRP)
+            # Reading UBR from registry
+            hRootKey = rrp.hOpenLocalMachine(dce)["phKey"]
+            hKey = rrp.hBaseRegOpenKey(dce, hRootKey, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion")["phkResult"]
+            ubr = rrp.hBaseRegQueryValue(dce, hKey, "UBR")[1]
+            version_str = f"{connection.server_os_major}.{connection.server_os_minor}.{connection.server_os_build}.{ubr}" if ubr else None
+            dce.disconnect()
+            if not version_str:
+                self.context.log.info("Could not determine OS version from registry")
+                return
+            vuln = self.is_vulnerable(connection.server_os_major, connection.server_os_minor, connection.server_os_build, ubr)
+            if vuln:
+                if not connection.conn.isSigningRequired():  # Not vulnerable if SMB signing is enabled
+                    context.log.highlight(f"VULNERABLE (can relay SMB to any protocols on {self.context.log.extra['host']})")
                 else:
-                    self.context.log.debug(f"Unexpected error: {e}")
-            except (BrokenPipeError, ConnectionResetError, NetBIOSError, OSError) as e:
-                context.log.debug(f"ntlm_reflection: DCERPC transport error: {e.__class__.__name__}: {e}")
+                    context.log.highlight(f"VULNERABLE (can relay SMB to any others protocols except SMB on {self.context.log.extra['host']})")
+        except SessionError as e:
+            if "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
+                self.context.log.info(f"RemoteRegistry is probably deactivated: {e}")
+            else:
+                self.context.log.debug(f"Unexpected error: {e}")
+        except (BrokenPipeError, ConnectionResetError, NetBIOSError, OSError) as e:
+            context.log.debug(f"ntlm_reflection: DCERPC transport error: {e.__class__.__name__}: {e}")
