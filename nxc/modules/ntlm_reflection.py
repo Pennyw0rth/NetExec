@@ -8,6 +8,7 @@ from impacket.nmb import NetBIOSError
 class NXCModule:
     # https://www.synacktiv.com/en/publications/ntlm-reflection-is-dead-long-live-ntlm-reflection-an-in-depth-analysis-of-cve-2025
     # Modified by azoxlpf to handle BrokenPipe/transport errors gracefully
+    # Modified by Defte following the discovery of ctjf (https://github.com/Pennyw0rth/NetExec/issues/928) and the research done along side with @NeffIsBack and I
     name = "ntlm_reflection"
     description = "Attempt to check if the OS is vulnerable to CVE-2025-33073 (NTLM Reflection attack)"
     supported_protocols = ["smb"]
