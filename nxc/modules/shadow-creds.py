@@ -34,7 +34,7 @@ class _PywLoggerAdapter:
 
         if any(p in low for p in self._notfound_patterns):
             self.not_found = True
-            # downrank to verbose to avoid double-print; we'll emit a clear fail later
+            # downrank to verbose to avoid double-print
             if self.verbosity >= 2:
                 self.context.log.debug(txt)
             return
