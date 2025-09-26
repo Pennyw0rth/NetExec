@@ -4,7 +4,9 @@ from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from pywhisker.pywhisker import ShadowCredentials, init_ldap_session
-import secrets, string
+import secrets
+import string
+
 
 class _PywLoggerAdapter:
     """Forward pywhisker logs to NetExec's logger, and flag specific conditions."""
@@ -13,7 +15,7 @@ class _PywLoggerAdapter:
         self.verbosity = verbosity
         self.quiet = quiet
         self.perm_denied = False
-        self.not_found   = False
+        self.not_found = False
 
         self._denied_patterns = (
             "insuff_access_rights",
@@ -56,6 +58,7 @@ class _PywLoggerAdapter:
 
     def warning(self, msg):
         self.context.log.highlight(msg)
+
 
 class NXCModule:
     """
@@ -101,11 +104,11 @@ class NXCModule:
         self.out_dir.mkdir(parents=True, exist_ok=True)
 
     def _gather_conn_info(self, connection):
-        self.domain   = getattr(connection, "domain", None)
-        self.dc_ip    = getattr(connection, "dc_ip", None) or getattr(connection, "host", None)
+        self.domain = getattr(connection, "domain", None)
+        self.dc_ip = getattr(connection, "dc_ip", None) or getattr(connection, "host", None)
         self.username = getattr(connection, "username", None)
         self.password = getattr(connection, "password", None)
-        self.nthash   = getattr(connection, "nthash", None)
+        self.nthash = getattr(connection, "nthash", None)
         if not self.domain:
             self.context.log.fail("Missing 'domain' on connection")
             exit(1)
@@ -138,7 +141,6 @@ class NXCModule:
         srv, sess = init_ldap_session(args, self.domain, self.username, password, lmhash, nthash)
         context.log.debug("Created LDAP session via pywhisker.init_ldap_session()")
         return srv, sess
-
 
     def _step_shadow_creds(self, context, connection):
         # Create LDAP session
