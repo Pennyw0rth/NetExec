@@ -9,9 +9,9 @@ from pathlib import Path
 from sqlite3 import connect
 from threading import Lock
 
-from sqlalchemy import MetaData, create_engine, func
+from sqlalchemy import create_engine, MetaData, func
 from sqlalchemy.exc import IllegalStateChangeError
-from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.orm import sessionmaker, scoped_session
 
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.logger import nxc_logger
@@ -19,9 +19,7 @@ from nxc.paths import WORKSPACE_DIR
 
 
 def create_db_engine(db_path):
-    return create_engine(
-        f"sqlite:///{db_path}", isolation_level="AUTOCOMMIT", future=True
-    )
+    return create_engine(f"sqlite:///{db_path}", isolation_level="AUTOCOMMIT", future=True)
 
 
 def open_config(config_path):
@@ -142,14 +140,7 @@ def format_host_query(q, filter_term, HostsTable):
         like_term = func.lower(f"%{filter_term}%")
 
         # check if the hostname column exists for hostname searching
-        q = (
-            q.filter(
-                ip_column.like(like_term)
-                | func.lower(HostsTable.c.hostname).like(like_term)
-            )
-            if hasattr(HostsTable.c, "hostname")
-            else q.filter(ip_column.like(like_term))
-        )
+        q = q.filter(ip_column.like(like_term) | func.lower(HostsTable.c.hostname).like(like_term)) if hasattr(HostsTable.c, "hostname") else q.filter(ip_column.like(like_term))
 
     return q
 

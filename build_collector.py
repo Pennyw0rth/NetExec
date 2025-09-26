@@ -48,9 +48,7 @@ def build_nxc():
     [shutil.rmtree(p) for p in Path("build").glob("**/*.dist-info")]
 
     env = Environment(
-        built_at=datetime.utcfromtimestamp(int(time.time())).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        ),
+        built_at=datetime.utcfromtimestamp(int(time.time())).strftime("%Y-%m-%d %H:%M:%S"),
         entry_point="nxc.netexec:main",
         script=None,
         compile_pyc=False,
@@ -70,9 +68,7 @@ def build_nxc():
 def build_nxcdb():
     nxc_logger.print_msg("building nxcdb")
     env = Environment(
-        built_at=datetime.utcfromtimestamp(int(time.time())).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        ),
+        built_at=datetime.utcfromtimestamp(int(time.time())).strftime("%Y-%m-%d %H:%M:%S"),
         entry_point="nxc.nxcdb:main",
         script=None,
         compile_pyc=False,

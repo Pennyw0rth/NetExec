@@ -1,29 +1,19 @@
-import argparse
 import cmd
 import csv
-import os
 import sys
+import os
+import argparse
 from os import listdir
 from os.path import exists
 from os.path import join as path_join
 from textwrap import dedent
-
-from requests import ConnectionError, get, post
-from termcolor import colored
+from requests import get, post, ConnectionError
 from terminaltables import AsciiTable
+from termcolor import colored
 
-from nxc.database import (
-    create_db_engine,
-    create_workspace,
-    get_db,
-    get_workspace,
-    open_config,
-    set_workspace,
-    write_configfile,
-)
 from nxc.loaders.protocolloader import ProtocolLoader
-from nxc.logger import nxc_logger
 from nxc.paths import CONFIG_PATH, WORKSPACE_DIR
+from nxc.database import create_db_engine, open_config, get_workspace, get_db, write_configfile, create_workspace, set_workspace
 
 
 class UserExitedProto(Exception):
@@ -35,7 +25,7 @@ def print_table(data, title=None):
     table = AsciiTable(data)
     if title:
         table.title = title
-    nxc_logger.print_msg(table.table)
+    print(table.table)
     print()
 
 
@@ -85,7 +75,7 @@ def complete_export(text, line):
 
 
 def print_help(help_string):
-    nxc_logger.print_msg(dedent(help_string))
+    print(dedent(help_string))
 
 
 class DatabaseNavigator(cmd.Cmd):
@@ -113,7 +103,7 @@ class DatabaseNavigator(cmd.Cmd):
 
     def do_export(self, line):
         if not line:
-            nxc_logger.print_msg("[-] not enough arguments")
+            print("[-] not enough arguments")
             return
         line = line.split()
         command = line[0].lower()
@@ -122,9 +112,7 @@ class DatabaseNavigator(cmd.Cmd):
         # Users
         if command == "creds":
             if len(line) < 3:
-                nxc_logger.print_msg(
-                    "[-] invalid arguments, export creds <simple|detailed|hashcat> <filename>"
-                )
+                print("[-] invalid arguments, export creds <simple|detailed|hashcat> <filename>")
                 return
 
             filename = line[2]
@@ -164,21 +152,16 @@ class DatabaseNavigator(cmd.Cmd):
                     if cred[4] == "hash":
                         usernames.append(cred[2])
                         passwords.append(cred[3])
-                output_list = [
-                    ":".join(combination)
-                    for combination in zip(usernames, passwords, strict=True)
-                ]
+                output_list = [":".join(combination) for combination in zip(usernames, passwords, strict=True)]
                 write_list(filename, output_list)
             else:
-                nxc_logger.print_msg(f"[-] No such export option: {line[1]}")
+                print(f"[-] No such export option: {line[1]}")
                 return
-            nxc_logger.print_msg("[+] Creds exported")
+            print("[+] Creds exported")
         # Hosts
         elif command == "hosts":
             if len(line) < 3:
-                nxc_logger.print_msg(
-                    "[-] invalid arguments, export hosts <simple|detailed|signing> <filename>"
-                )
+                print("[-] invalid arguments, export hosts <simple|detailed|signing> <filename>")
                 return
 
             csv_header_simple = (
@@ -219,15 +202,13 @@ class DatabaseNavigator(cmd.Cmd):
                 signing_hosts = [host[1] for host in hosts]
                 write_list(filename, signing_hosts)
             else:
-                nxc_logger.print_msg(f"[-] No such export option: {line[1]}")
+                print(f"[-] No such export option: {line[1]}")
                 return
-            nxc_logger.print_msg("[+] Hosts exported")
+            print("[+] Hosts exported")
         # Shares
         elif command == "shares":
             if len(line) < 3:
-                nxc_logger.print_msg(
-                    "[-] invalid arguments, export shares <simple|detailed> <filename>"
-                )
+                print("[-] invalid arguments, export shares <simple|detailed> <filename>")
                 return
 
             shares = self.db.get_shares()
@@ -236,17 +217,13 @@ class DatabaseNavigator(cmd.Cmd):
 
             if line[1].lower() == "simple":
                 write_csv(filename, csv_header, shares)
-                nxc_logger.print_msg("[+] shares exported")
+                print("[+] shares exported")
             # Detailed view gets hostname, usernames, and true false statement
             elif line[1].lower() == "detailed":
                 formatted_shares = []
                 for share in shares:
                     user = self.db.get_users(share[2])[0]
-                    share_host = (
-                        self.db.get_hosts(share[1])[0][2]
-                        if self.db.get_hosts(share[1])
-                        else "ERROR"
-                    )
+                    share_host = self.db.get_hosts(share[1])[0][2] if self.db.get_hosts(share[1]) else "ERROR"
 
                     entry = (
                         share[0],  # shareID
@@ -259,16 +236,14 @@ class DatabaseNavigator(cmd.Cmd):
                     )
                     formatted_shares.append(entry)
                 write_csv(filename, csv_header, formatted_shares)
-                nxc_logger.print_msg("[+] Shares exported")
+                print("[+] Shares exported")
             else:
-                nxc_logger.print_msg(f"[-] No such export option: {line[1]}")
+                print(f"[-] No such export option: {line[1]}")
                 return
         # Local Admin
         elif command == "local_admins":
             if len(line) < 3:
-                nxc_logger.print_msg(
-                    "[-] invalid arguments, export local_admins <simple|detailed> <filename>"
-                )
+                print("[-] invalid arguments, export local_admins <simple|detailed> <filename>")
                 return
 
             # These values don't change between simple and detailed
@@ -292,14 +267,12 @@ class DatabaseNavigator(cmd.Cmd):
                     formatted_local_admins.append(formatted_entry)
                 write_csv(filename, csv_header, formatted_local_admins)
             else:
-                nxc_logger.print_msg(f"[-] No such export option: {line[1]}")
+                print(f"[-] No such export option: {line[1]}")
                 return
-            nxc_logger.print_msg("[+] Local Admins exported")
+            print("[+] Local Admins exported")
         elif command == "dpapi":
             if len(line) < 3:
-                nxc_logger.print_msg(
-                    "[-] invalid arguments, export dpapi <simple|detailed> <filename>"
-                )
+                print("[-] invalid arguments, export dpapi <simple|detailed> <filename>")
                 return
 
             # These values don't change between simple and detailed
@@ -333,23 +306,17 @@ class DatabaseNavigator(cmd.Cmd):
                     formatted_dpapi_secret.append(formatted_entry)
                 write_csv(filename, csv_header, formatted_dpapi_secret)
             else:
-                nxc_logger.print_msg(f"[-] No such export option: {line[1]}")
+                print(f"[-] No such export option: {line[1]}")
                 return
-            nxc_logger.print_msg("[+] DPAPI secrets exported")
+            print("[+] DPAPI secrets exported")
         elif command == "keys":
-            keys = (
-                self.db.get_keys()
-                if line[1].lower() == "all"
-                else self.db.get_keys(key_id=int(line[1]))
-            )
+            keys = self.db.get_keys() if line[1].lower() == "all" else self.db.get_keys(key_id=int(line[1]))
             writable_keys = [key[2] for key in keys]
             filename = line[2]
             write_list(filename, writable_keys)
         elif command == "wcc":
             if len(line) < 3:
-                nxc_logger.print_msg(
-                    "[-] invalid arguments, export wcc <simple|detailed> <filename>"
-                )
+                print("[-] invalid arguments, export wcc <simple|detailed> <filename>")
                 return
 
             csv_header_simple = (
@@ -359,15 +326,7 @@ class DatabaseNavigator(cmd.Cmd):
                 "check",
                 "status",
             )
-            csv_header_detailed = (
-                "id",
-                "ip",
-                "hostname",
-                "check",
-                "description",
-                "status",
-                "reasons",
-            )
+            csv_header_detailed = ("id", "ip", "hostname", "check", "description", "status", "reasons")
             filename = line[2]
             host_mapping = {}
             check_mapping = {}
@@ -409,13 +368,11 @@ class DatabaseNavigator(cmd.Cmd):
                 signing_hosts = [host[1] for host in hosts]
                 write_list(filename, signing_hosts)
             else:
-                nxc_logger.print_msg(f"[-] No such export option: {line[1]}")
+                print(f"[-] No such export option: {line[1]}")
                 return
-            nxc_logger.print_msg("[+] WCC exported")
+            print("[+] WCC exported")
         else:
-            nxc_logger.print_msg(
-                "[-] Invalid argument, specify creds, hosts, local_admins, shares, wcc or dpapi"
-            )
+            print("[-] Invalid argument, specify creds, hosts, local_admins, shares, wcc or dpapi")
 
     @staticmethod
     def help_export():
@@ -463,11 +420,7 @@ class DatabaseNavigator(cmd.Cmd):
                     creds = r.json()
 
                     for cred in creds["creds"]:
-                        if (
-                            cred["credtype"] == "token"
-                            or cred["credtype"] == "krbtgt"
-                            or cred["username"].endswith("$")
-                        ):
+                        if cred["credtype"] == "token" or cred["credtype"] == "krbtgt" or cred["username"].endswith("$"):
                             continue
                         self.db.add_credential(
                             cred["credtype"],
@@ -475,15 +428,11 @@ class DatabaseNavigator(cmd.Cmd):
                             cred["username"],
                             cred["password"],
                         )
-                    nxc_logger.print_msg("[+] Empire credential import successful")
+                    print("[+] Empire credential import successful")
                 else:
-                    nxc_logger.print_msg(
-                        "[-] Error authenticating to Empire's RESTful API server!"
-                    )
+                    print("[-] Error authenticating to Empire's RESTful API server!")
             except ConnectionError as e:
-                nxc_logger.print_msg(
-                    f"[-] Unable to connect to Empire's RESTful API server: {e}"
-                )
+                print(f"[-] Unable to connect to Empire's RESTful API server: {e}")
 
 
 class NXCDBMenu(cmd.Cmd):
@@ -511,9 +460,7 @@ class NXCDBMenu(cmd.Cmd):
             self.config.set("nxc", "last_used_db", proto)
             write_configfile(self.config, self.config_path)
             try:
-                proto_menu = db_nav_object.navigator(
-                    self, db_object.database(self.conn), proto
-                )
+                proto_menu = db_nav_object.navigator(self, db_object.database(self.conn), proto)
                 proto_menu.cmdloop()
             except UserExitedProto:
                 pass
@@ -537,16 +484,16 @@ class NXCDBMenu(cmd.Cmd):
 
         if subcommand == "create":
             new_workspace = line.split()[1].strip()
-            nxc_logger.print_msg(f"[*] Creating workspace '{new_workspace}'")
+            print(f"[*] Creating workspace '{new_workspace}'")
             create_workspace(new_workspace, self.p_loader)
             self.do_workspace(new_workspace)
         elif subcommand == "list":
-            nxc_logger.print_msg("[*] Enumerating Workspaces")
+            print("[*] Enumerating Workspaces")
             for workspace in listdir(path_join(WORKSPACE_DIR)):
                 if workspace == self.workspace:
-                    nxc_logger.print_msg(f" * {colored(workspace, 'green')}")
+                    print(f" * {colored(workspace, 'green')}")
                 else:
-                    nxc_logger.print_msg(f"   {workspace}")
+                    print(f"   {workspace}")
         elif exists(path_join(WORKSPACE_DIR, line)):
             self.config.set("nxc", "workspace", line)
             write_configfile(self.config, self.config_path)
@@ -578,7 +525,7 @@ class NXCDBMenu(cmd.Cmd):
 
 def main():
     if not exists(CONFIG_PATH):
-        nxc_logger.print_msg("[-] Unable to find config file")
+        print("[-] Unable to find config file")
         sys.exit(1)
 
     parser = argparse.ArgumentParser(
@@ -612,9 +559,9 @@ def main():
         current_workspace = get_workspace(open_config(CONFIG_PATH))
         for workspace in listdir(path_join(WORKSPACE_DIR)):
             if workspace == current_workspace:
-                nxc_logger.print_msg(f" * {colored(workspace, 'green')}")
+                print(f" * {colored(workspace, 'green')}")
             else:
-                nxc_logger.print_msg(f"   {workspace}")
+                print(f"   {workspace}")
         sys.exit()
 
     try:
