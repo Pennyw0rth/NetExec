@@ -17,19 +17,19 @@ class NXCModule:
     def __init__(self):
         self.server = None
         self.results = {
-            'WUServer': None,                         # WSUS server URL
-            'WUStatusServer': None,                   # Status server URL
-            'UseWUServer': None,                      # WSUS enforced by GPO
-            'NoAutoUpdate': None,                     # Disable auto update
-            'AUOptions': None,                        # Update install mode
-            'ScheduledInstallDay': None,              # Planned install day
-            'ScheduledInstallTime': None,             # Planned install time
-            'RescheduleWaitTime': None,               # Delay before retry
-            'DetectionFrequency': None,               # Detection interval
-            'DetectionFrequencyEnabled': None,        # Enable detection interval
-            'NoAutoRebootWithLoggedOnUsers': None,    # Prevent reboot if user logged
-            'LastSuccessTime': None,                  # Last successful update check
-            'NextDetectionTime': None,                # Next scheduled detection
+            "WUServer": None,                         # WSUS server URL
+            "WUStatusServer": None,                   # Status server URL
+            "UseWUServer": None,                      # WSUS enforced by GPO
+            "NoAutoUpdate": None,                     # Disable auto update
+            "AUOptions": None,                        # Update install mode
+            "ScheduledInstallDay": None,              # Planned install day
+            "ScheduledInstallTime": None,             # Planned install time
+            "RescheduleWaitTime": None,               # Delay before retry
+            "DetectionFrequency": None,               # Detection interval
+            "DetectionFrequencyEnabled": None,        # Enable detection interval
+            "NoAutoRebootWithLoggedOnUsers": None,    # Prevent reboot if user logged
+            "LastSuccessTime": None,                  # Last successful update check
+            "NextDetectionTime": None,                # Next scheduled detection
         }
 
     def options(self, context, module_options):
@@ -72,9 +72,9 @@ class NXCModule:
     def _rrp_query(self, remote_ops, subkey, value_name):
         try:
             ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
-            hklm = ans['phKey']
+            hklm = ans["phKey"]
             ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, hklm, subkey)
-            key = ans['phkResult']
+            key = ans["phkResult"]
             _type, data = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key, value_name)
             return data
         except Exception:
@@ -87,19 +87,19 @@ class NXCModule:
         q = lambda subkey, name: self._rrp_query(remote_ops, subkey, name)
 
         # Policies
-        self.results['WUServer'] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate", "WUServer")
-        self.results['WUStatusServer'] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate", "WUStatusServer")
-        self.results['UseWUServer'] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "UseWUServer")
-        self.results['NoAutoUpdate'] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "NoAutoUpdate")
-        self.results['AUOptions'] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "AUOptions")
-        self.results['ScheduledInstallDay'] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "ScheduledInstallDay")
-        self.results['ScheduledInstallTime'] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "ScheduledInstallTime")
-        self.results['RescheduleWaitTime'] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "RescheduleWaitTime")
-        self.results['DetectionFrequency'] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "DetectionFrequency")
-        self.results['DetectionFrequencyEnabled'] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "DetectionFrequencyEnabled")
-        self.results['NoAutoRebootWithLoggedOnUsers'] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "NoAutoRebootWithLoggedOnUsers")
-        self.results['LastSuccessTime'] = q(r"SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update", "LastSuccessTime")
-        self.results['NextDetectionTime'] = q(r"SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update", "NextDetectionTime")
+        self.results["WUServer"] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate", "WUServer")
+        self.results["WUStatusServer"] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate", "WUStatusServer")
+        self.results["UseWUServer"] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "UseWUServer")
+        self.results["NoAutoUpdate"] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "NoAutoUpdate")
+        self.results["AUOptions"] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "AUOptions")
+        self.results["ScheduledInstallDay"] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "ScheduledInstallDay")
+        self.results["ScheduledInstallTime"] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "ScheduledInstallTime")
+        self.results["RescheduleWaitTime"] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "RescheduleWaitTime")
+        self.results["DetectionFrequency"] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "DetectionFrequency")
+        self.results["DetectionFrequencyEnabled"] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "DetectionFrequencyEnabled")
+        self.results["NoAutoRebootWithLoggedOnUsers"] = q(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "NoAutoRebootWithLoggedOnUsers")
+        self.results["LastSuccessTime"] = q(r"SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update", "LastSuccessTime")
+        self.results["NextDetectionTime"] = q(r"SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update", "NextDetectionTime")
 
     def _winrm_collect(self, context, connection):
         out = connection.execute(self._PS_ENUM_SCRIPT, get_output=True, shell_type="powershell")
@@ -111,7 +111,7 @@ class NXCModule:
         try:
             obj = json.loads(out)
         except Exception:
-            start = out.find('{')
+            start = out.find("{")
             if start != -1:
                 obj = json.loads(out[start:])
             else:
@@ -122,19 +122,19 @@ class NXCModule:
             return obj.get(section, {}).get(name)
 
         self.results.update({
-            'WUServer': get_prop('Policies', 'WUServer'),
-            'WUStatusServer': get_prop('Policies', 'WUStatusServer'),
-            'UseWUServer': get_prop('PoliciesAU', 'UseWUServer'),
-            'NoAutoUpdate': get_prop('PoliciesAU', 'NoAutoUpdate'),
-            'AUOptions': get_prop('PoliciesAU', 'AUOptions'),
-            'ScheduledInstallDay': get_prop('PoliciesAU', 'ScheduledInstallDay'),
-            'ScheduledInstallTime': get_prop('PoliciesAU', 'ScheduledInstallTime'),
-            'RescheduleWaitTime': get_prop('PoliciesAU', 'RescheduleWaitTime'),
-            'DetectionFrequency': get_prop('PoliciesAU', 'DetectionFrequency'),
-            'DetectionFrequencyEnabled': get_prop('PoliciesAU', 'DetectionFrequencyEnabled'),
-            'NoAutoRebootWithLoggedOnUsers': get_prop('PoliciesAU', 'NoAutoRebootWithLoggedOnUsers'),
-            'LastSuccessTime': get_prop('ClientAuto', 'LastSuccessTime'),
-            'NextDetectionTime': get_prop('ClientAuto', 'NextDetectionTime'),
+            "WUServer": get_prop("Policies", "WUServer"),
+            "WUStatusServer": get_prop("Policies", "WUStatusServer"),
+            "UseWUServer": get_prop("PoliciesAU", "UseWUServer"),
+            "NoAutoUpdate": get_prop("PoliciesAU", "NoAutoUpdate"),
+            "AUOptions": get_prop("PoliciesAU", "AUOptions"),
+            "ScheduledInstallDay": get_prop("PoliciesAU", "ScheduledInstallDay"),
+            "ScheduledInstallTime": get_prop("PoliciesAU", "ScheduledInstallTime"),
+            "RescheduleWaitTime": get_prop("PoliciesAU", "RescheduleWaitTime"),
+            "DetectionFrequency": get_prop("PoliciesAU", "DetectionFrequency"),
+            "DetectionFrequencyEnabled": get_prop("PoliciesAU", "DetectionFrequencyEnabled"),
+            "NoAutoRebootWithLoggedOnUsers": get_prop("PoliciesAU", "NoAutoRebootWithLoggedOnUsers"),
+            "LastSuccessTime": get_prop("ClientAuto", "LastSuccessTime"),
+            "NextDetectionTime": get_prop("ClientAuto", "NextDetectionTime"),
         })
         return True
 
@@ -145,8 +145,8 @@ class NXCModule:
             except Exception:
                 return None
 
-        wus = self.results.get('WUServer')
-        use_wus = _to_int(self.results.get('UseWUServer'))
+        wus = self.results.get("WUServer")
+        use_wus = _to_int(self.results.get("UseWUServer"))
 
         is_http = isinstance(wus, str) and wus.lower().startswith("http://")
         is_used = (use_wus == 1)
