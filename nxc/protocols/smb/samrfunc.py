@@ -7,6 +7,7 @@ from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.nmb import NetBIOSError
 from impacket.smbconnection import SessionError
+from nxc.protocols.ldap.constants import WELL_KNOWN_SIDS
 
 
 class SamrFunc:
@@ -231,7 +232,9 @@ class LSAQuery:
 
     def lookup_sids(self, sids):
         """Use a list comprehension to generate the names list.
-
-        It calls the hLsarLookupSids() method directly in the list comprehension and extracts the "Name" value from each element in the "Names" list.
+        If the user is requesting a single SID and it is a well known SID, return the well known SID name to avoid a lookup.
+        Otherwise, it calls the hLsarLookupSids() method directly in the list comprehension and extracts the "Name" value from each element in the "Names" list.
         """
+        if len(sids) == 1 and sids[0] in WELL_KNOWN_SIDS:
+            return [WELL_KNOWN_SIDS[sids[0]]]
         return [translated_names["Name"] for translated_names in lsat.hLsarLookupSids(self.dce, self.policy_handle, sids, lsat.LSAP_LOOKUP_LEVEL.LsapLookupWksta)["TranslatedNames"]["Names"]]
