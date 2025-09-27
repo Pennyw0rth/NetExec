@@ -27,6 +27,8 @@ import platform
 if sys.stdout.encoding == "cp1252":
     sys.stdout.reconfigure(encoding="utf-8")
 
+GLOBAL_SUMMARY_RESULTS = []
+
 # Increase file_limit to prevent error "Too many open files"
 if platform.system() != "Windows":
     import resource
@@ -66,6 +68,19 @@ async def start_run(protocol_obj, args, db, targets):  # noqa: RUF029
         except Exception:
             nxc_logger.exception(f"Exception for target {targets[futures.index(future)]}: {future.exception()}")
 
+    # Summarise all our results. Exclude modules and only when the targets are over 10 or users are in a file
+    if GLOBAL_SUMMARY_RESULTS and args.summary and (not args.module or len(args.module) < 1):
+        if ((len(targets) > 10 and len(args.username) > 0) or
+            (len(args.username) > 0 and os.path.isfile(args.username[0]))):#this allows for gen-relay-list where no summary required
+        
+            print() #add a blank line for aestetics
+            nxc_logger.highlight("[*] Summary of non-failed authentications:")
+            for line in GLOBAL_SUMMARY_RESULTS:           
+                status_code = line.strip().split()[-2]
+                if any(status_code.startswith(prefix) for prefix in ["STATUS_", "KDC_", "LDAP_", "USER_", "None"]):
+                    nxc_logger.fail(line, color="magenta")
+                else:
+                    nxc_logger.success(line, color="green")
 
 def main():
     first_run_setup(nxc_logger)
