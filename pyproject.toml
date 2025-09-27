@@ -43,6 +43,7 @@ dependencies = [
     "termcolor>=2.4.0",
     "terminaltables>=3.1.0",
     "xmltodict>=0.13.0",
+    "pywhisker>=0.1.2",
     # Git Dependencies
     "impacket @ git+https://github.com/Pennyw0rth/impacket.git",
     "oscrypto @ git+https://github.com/wbond/oscrypto",
