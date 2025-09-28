@@ -1,7 +1,5 @@
 import os
-import ssl
 import random
-import socket
 import contextlib
 from io import StringIO
 
@@ -28,7 +26,6 @@ from impacket.tds import (
     TDS_ENVCHANGE_LANGUAGE,
     TDS_ENVCHANGE_CHARSET,
     TDS_ENVCHANGE_PACKETSIZE,
-    TDS_PRELOGIN,
     TDS_ENCRYPT_REQ,
     TDS_ENCRYPT_OFF
 )
@@ -60,12 +57,11 @@ class mssql(connection):
     def create_conn_obj(self):
         try:
             self.conn = tds.MSSQL(self.host, self.port, self.remoteName)
-            # Default has not timeout option in tds.MSSQL.connect() function, let rewrite it.
             self.conn.connect()
         except Exception as e:
             self.logger.debug(f"Error connecting to MSSQL service on host: {self.host}, reason: {e}")
             with contextlib.suppress(Exception):
-                sock.close()
+                self.conn.disconnect()
             return False
         else:
             self.is_mssql = True
@@ -93,7 +89,7 @@ class mssql(connection):
     @reconnect_mssql
     def enum_host_info(self):
         challenge = None
-        
+
         try:
             # If the MSSQL Server responds with a TDS_ENCRYPT_REQ or TDS_ENCRYPT_OFF then we need to setup a TLS context
             resp = self.conn.preLogin()
@@ -120,9 +116,9 @@ class mssql(connection):
 
             # Send the NTLMSSP Negotiate or SQL Auth Packet
             self.conn.sendTDS(tds.TDS_LOGIN7, login.getData())
-            
+
             # According to the specs, if encryption is TDS_ENCRYPT_OFF, we must encrypt the first Login packet
-            if resp['Encryption'] == TDS_ENCRYPT_OFF:
+            if resp["Encryption"] == TDS_ENCRYPT_OFF:
                 self.conn.tlsSocket = None
 
             tdsx = self.conn.recvTDS()
