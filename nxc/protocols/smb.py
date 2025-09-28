@@ -288,11 +288,23 @@ class smb(connection):
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
-        signing = colored("signingReq", host_info_colors[0], attrs=["bold"]) if self.signing else colored("signingNotReq", host_info_colors[1], attrs=["bold"])
-        smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
-        ntlm = colored(f" (NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
-        null_auth = colored(f" (Null Auth:{self.null_auth})", host_info_colors[2], attrs=["bold"]) if self.null_auth else ""
-        self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}){ntlm}{null_auth}")
+        signing = colored(f"SigningReq:{self.signing}", host_info_colors[0 if self.signing else 1], attrs=["bold"])
+        smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2 if self.smbv1 else 3], attrs=["bold"])
+        ntlm = (colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else "")
+        null_auth = (colored(f"(Null Auth:{self.null_auth})", host_info_colors[2], attrs=["bold"]) if self.null_auth else "")
+
+        smb_infos = [
+            self.server_os,
+            f"x{self.os_arch}" if self.os_arch else "",
+            f"(name:{self.hostname})",
+            f"(domain:{self.targetDomain})",
+            f"({signing})",
+        ]
+
+        if self.smbv1: smb_infos.append(f"({smbv1})")
+
+        smb_infos.extend([ntlm, null_auth])
+        self.logger.display(" ".join(smb_info for smb_info in smb_infos if smb_info))
 
         if self.args.generate_hosts_file or self.args.generate_krb5_file:
             if self.args.generate_hosts_file:
