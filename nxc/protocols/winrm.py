@@ -1,12 +1,12 @@
 import os
 import base64
+import traceback
 import requests
 import urllib3
 import logging
 import ntpath
 import xml.etree.ElementTree as ET
 
-from io import StringIO
 from datetime import datetime
 from pypsrp.wsman import NAMESPACES
 from pypsrp.client import Client
@@ -264,8 +264,8 @@ class winrm(connection):
                 return result[0]
             self.logger.success(f"Executed command (shell type: {shell_type})")
             if not self.args.no_output:
-                for line in StringIO(result[0]).readlines():
-                    self.logger.highlight(line.strip())
+                for line in result[0].splitlines():
+                    self.logger.highlight(line.rstrip())
 
     def ps_execute(self, payload=None, get_output=False):
         command = payload if payload else self.args.ps_execute
