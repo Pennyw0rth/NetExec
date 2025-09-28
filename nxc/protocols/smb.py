@@ -331,7 +331,7 @@ class smb(connection):
                     [domain_realm]
                         .{self.domain} = {self.domain.upper()}
                         {self.domain} = {self.domain.upper()}
-                    """).strip()
+                    """)
                     host_file.write(data)
                     self.logger.debug(data)
                     self.logger.success(f"krb5 conf saved to: {self.args.generate_krb5_file}")
