@@ -2,8 +2,9 @@ import os
 import random
 import contextlib
 from io import StringIO
+from termcolor import colored
 
-from nxc.config import process_secret
+from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.connection import requires_admin
 from nxc.logger import NXCAdapter
@@ -93,9 +94,11 @@ class mssql(connection):
         try:
             # If the MSSQL Server responds with a TDS_ENCRYPT_REQ or TDS_ENCRYPT_OFF then we need to setup a TLS context
             resp = self.conn.preLogin()
+            self.encryption = False
             if resp["Encryption"] == TDS_ENCRYPT_REQ or resp["Encryption"] == TDS_ENCRYPT_OFF:
                 # We switch to a TLS context handled by tds.py
                 self.conn.set_tls_context()
+                self.encryption = True
 
             login = tds.TDS_LOGIN()
             login["HostName"] = ""
@@ -119,6 +122,7 @@ class mssql(connection):
 
             # According to the specs, if encryption is TDS_ENCRYPT_OFF, we must encrypt the first Login packet
             if resp["Encryption"] == TDS_ENCRYPT_OFF:
+                self.encryption = False
                 self.conn.tlsSocket = None
 
             tdsx = self.conn.recvTDS()
@@ -148,7 +152,8 @@ class mssql(connection):
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain})")
+        encryption = colored(f"Encryption:{self.encryption}", host_info_colors[0 if self.encryption else 1], attrs=["bold"])
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption})")
 
     @reconnect_mssql
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
