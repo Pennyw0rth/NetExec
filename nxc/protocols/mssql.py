@@ -1,4 +1,5 @@
 import os
+import ssl
 import random
 import socket
 import contextlib
@@ -27,6 +28,9 @@ from impacket.tds import (
     TDS_ENVCHANGE_LANGUAGE,
     TDS_ENVCHANGE_CHARSET,
     TDS_ENVCHANGE_PACKETSIZE,
+    TDS_PRELOGIN,
+    TDS_ENCRYPT_REQ,
+    TDS_ENCRYPT_OFF
 )
 
 
@@ -56,16 +60,11 @@ class mssql(connection):
     def create_conn_obj(self):
         try:
             self.conn = tds.MSSQL(self.host, self.port, self.remoteName)
-            # Default has not timeout option in tds.MSSQL.connect() function, let rewrite it.
-            af, socktype, proto, canonname, sa = socket.getaddrinfo(self.host, self.port, 0, socket.SOCK_STREAM)[0]
-            sock = socket.socket(af, socktype, proto)
-            sock.settimeout(self.args.mssql_timeout)
-            sock.connect(sa)
-            self.conn.socket = sock
-            if not self.is_mssql:
-                self.conn.preLogin()
+            self.conn.connect()
         except Exception as e:
             self.logger.debug(f"Error connecting to MSSQL service on host: {self.host}, reason: {e}")
+            with contextlib.suppress(Exception):
+                sock.close()
             return False
         else:
             self.is_mssql = True
@@ -94,6 +93,14 @@ class mssql(connection):
     def enum_host_info(self):
         challenge = None
         try:
+            
+            # If the MSSQL Server responds with a TDS_ENCRYPT_REQ or TDS_ENCRYPT_OFF 
+            # Then it means we need to setup a TLS context
+            resp = self.conn.preLogin()
+            if resp['Encryption'] == TDS_ENCRYPT_REQ or resp['Encryption'] == TDS_ENCRYPT_OFF:
+                # We switch to a TLS context handled by tds.py
+                self.conn.set_tls_context()
+
             login = tds.TDS_LOGIN()
             login["HostName"] = ""
             login["AppName"] = ""
