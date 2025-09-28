@@ -397,20 +397,24 @@ class winrm(connection):
                 cred = CredentialFile(data)
                 blob = DPAPI_BLOB(cred["Data"])
 
-                decrypted = blob.decrypt(masterkey)
-                if decrypted is not None:
-                    self.logger.success(f"Successfully decrypted credentials in {creds_file}:")
-                    creds = CREDENTIAL_BLOB(decrypted)
-                    target = creds["Target"].decode("utf-16le")
-                    username = creds["Username"].decode("utf-16le")
-                    try:
-                        password = creds["Unknown3"].decode("utf-16le")
-                    except UnicodeDecodeError:
-                        password = creds["Unknown3"].decode("latin-1")
-                    self.logger.highlight(f"{target} - {username}:{password}")
+                try:
+                    decrypted = blob.decrypt(masterkey)
+                    if decrypted is not None:
+                        self.logger.success(f"Successfully decrypted credentials in {creds_file}:")
+                        creds = CREDENTIAL_BLOB(decrypted)
+                        target = creds["Target"].decode("utf-16le")
+                        username = creds["Username"].decode("utf-16le")
+                        try:
+                            password = creds["Unknown3"].decode("utf-16le")
+                        except UnicodeDecodeError:
+                            password = creds["Unknown3"].decode("latin-1")
+                        self.logger.highlight(f"{target} - {username}:{password}")
 
-                    if self.args.verbose:
-                        creds.dump()
+                        if self.args.verbose:
+                            creds.dump()
+                except Exception as e:
+                    self.logger.display(f"Failed to decrypt credentials in {creds_file} with masterkey...")
+                    self.logger.debug(f"Got exception decrypting: {e}")
 
     def get_master_key(self, masterkey_file, sid, password, verbose):
         """
