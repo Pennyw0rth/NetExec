@@ -152,7 +152,7 @@ class mssql(connection):
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
-        encryption = colored(f"Encryption:{self.encryption}", host_info_colors[0 if self.encryption else 1], attrs=["bold"])
+        encryption = colored(f"EncryptionReq:{self.encryption}", host_info_colors[0 if self.encryption else 1], attrs=["bold"])
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption})")
 
     @reconnect_mssql
