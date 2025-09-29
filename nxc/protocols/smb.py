@@ -5,6 +5,7 @@ import re
 import struct
 import ipaddress
 from Cryptodome.Hash import MD4
+from textwrap import dedent
 
 from impacket.smbconnection import SMBConnection, SessionError
 from impacket.smb import SMB_DIALECT
@@ -314,23 +315,23 @@ class smb(connection):
                     self.logger.debug(f"Line added to {self.args.generate_hosts_file} {self.host}    {self.hostname}.{self.targetDomain}{dc_part} {self.hostname}")
             elif self.args.generate_krb5_file and self.isdc:
                 with open(self.args.generate_krb5_file, "w+") as host_file:
-                    data = f"""
-[libdefaults]
-    dns_lookup_kdc = false
-    dns_lookup_realm = false
-    default_realm = {self.domain.upper()}
+                    data = dedent(f"""
+                    [libdefaults]
+                        dns_lookup_kdc = false
+                        dns_lookup_realm = false
+                        default_realm = {self.domain.upper()}
 
-[realms]
-    {self.domain.upper()} = {{
-        kdc = {self.hostname.lower()}.{self.domain}
-        admin_server = {self.hostname.lower()}.{self.domain}
-        default_domain = {self.domain}
-    }}
+                    [realms]
+                        {self.domain.upper()} = {{
+                            kdc = {self.hostname.lower()}.{self.domain}
+                            admin_server = {self.hostname.lower()}.{self.domain}
+                            default_domain = {self.domain}
+                        }}
 
-[domain_realm]
-    .{self.domain} = {self.domain.upper()}
-    {self.domain} = {self.domain.upper()}
-"""
+                    [domain_realm]
+                        .{self.domain} = {self.domain.upper()}
+                        {self.domain} = {self.domain.upper()}
+                    """).strip()
                     host_file.write(data)
                     self.logger.debug(data)
                     self.logger.success(f"krb5 conf saved to: {self.args.generate_krb5_file}")
@@ -1195,7 +1196,7 @@ class smb(connection):
                 # Calculate max lengths for formatting
                 maxSidLen = max(len(key) + 1 for key in sessions)
                 maxSidLen = max(maxSidLen, len("SID") + 1)
-                maxUsernameLen = max(len(vals["Username"] + vals["Domain"]) + 1 for vals in sessions.values()) + 1
+                maxUsernameLen = max(len(str(vals["Username"]) + str(vals["Domain"])) + 1 for vals in sessions.values()) + 1
                 maxUsernameLen = max(maxUsernameLen, len("USERNAME") + 1)
 
                 # Create the template for formatting
