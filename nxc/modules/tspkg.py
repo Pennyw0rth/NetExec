@@ -7,10 +7,15 @@ from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
+    """
+    Enable, disable, or check AllowDefaultCredentials to control TSPKG / CredSSP credential delegation
+    Module by @E1A
+    """
+    
     name = "tspkg"
     description = (
-        "Creates/Deletes the 'AllowDefaultCredentials' registry key"
-        "enabling TSPKG/CredSSP credential dumping"
+        "Creates, removes or inspects the AllowDefaultCredentials registry entry"
+        "to enable or disable TSPKG / CredSSP credential delegation used for credential-dumping"
     )
     supported_protocols = ["smb"]
     category = CATEGORY.CREDENTIAL_DUMPING
