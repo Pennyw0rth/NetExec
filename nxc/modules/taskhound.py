@@ -973,7 +973,6 @@ class NXCModule:
             log_method("        Next Step: Try DPAPI Dump / Task Manipulation")
 
     def _save_backup(self, tasks: list[tuple[str, bytes]], context, hostname: str):
-        #         """Save raw XML files for offline analysis"""
         try:
             backup_path = Path(self.backup_dir) / hostname
             backup_path.mkdir(parents=True, exist_ok=True)
