@@ -726,7 +726,6 @@ class NXCModule:
         }
 
     def _apply_bloodhound_analysis(self, task_data: dict) -> None:
-        #         """Apply BloodHound analysis to task data"""
         runas = task_data["runas"]
         if not runas:
             return
