@@ -61,7 +61,6 @@ class HighValueLoader:
         self.format_type = "unknown"
 
     def load(self) -> bool:
-        #         def load(self) -> bool:
         """Load high-value users from CSV or JSON file"""
         if not Path(self.path).exists():
             return False
