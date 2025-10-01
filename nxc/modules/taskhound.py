@@ -833,7 +833,6 @@ class NXCModule:
             context.log.fail(f"Error saving plain text file: {e}")
 
     def _save_csv(self, results: list[dict], output_path, base_filename: str, context):
-        #         """Save results in CSV format"""
         import csv
 
         filename = output_path / f"{base_filename}.csv"
