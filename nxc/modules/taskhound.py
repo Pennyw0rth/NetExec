@@ -317,7 +317,6 @@ class HighValueLoader:
         return True
 
     def is_high_value(self, username: str) -> bool:
-        #         """Check if a username is high-value"""
         if not self.loaded:
             return False
         return username.lower() in self.hv_users
