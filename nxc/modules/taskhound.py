@@ -883,7 +883,6 @@ class NXCModule:
             context.log.fail(f"Error saving JSON file: {e}")
 
     def _display_results(self, results: list[dict], context):
-        #         """Display enumeration results"""
         if not results:
             context.log.fail("No interesting scheduled tasks found")
             return
