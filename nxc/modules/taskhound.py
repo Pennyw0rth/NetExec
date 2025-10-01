@@ -75,7 +75,6 @@ class HighValueLoader:
             return False
 
     def _load_json(self) -> bool:
-        #         """Load from JSON format - Supports both Legacy and BHCE"""
         with open(self.path, encoding="utf-8-sig") as f:  # Handle BOM
             data = json.load(f)
 
