@@ -96,7 +96,6 @@ class HighValueLoader:
             return False
 
     def _is_bhce_format(self, data: Any) -> bool:
-        #         """Detect BHCE format by presence of isTierZero field in nodes"""
         if not isinstance(data, dict):
             return False
 
