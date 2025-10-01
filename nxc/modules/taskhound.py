@@ -913,7 +913,6 @@ class NXCModule:
             self._display_task(row, context)
 
     def _display_task(self, row: dict, context):
-        #         """Display individual task information in the new format"""
         path = row["path"]
         runas = row["runas"]
         command = row["command"] or ""
