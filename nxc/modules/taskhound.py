@@ -107,7 +107,6 @@ class HighValueLoader:
         return any(isinstance(node_data, dict) and "isTierZero" in node_data for node_data in nodes.values())
 
     def _has_fields(self, headers) -> bool:
-        #         """Return True if headers contain the required fields"""
         if not headers:
             return False
         lower = {h.strip().lower() for h in headers}
