@@ -672,7 +672,6 @@ class NXCModule:
         return results
 
     def _process_tasks(self, tasks: list[tuple[str, bytes]], context, hostname: str) -> list[dict]:
-        #         """Process task XML files and extract relevant information"""
         results = []
 
         for rel_path, xml_data in tasks:
