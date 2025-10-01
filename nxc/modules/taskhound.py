@@ -305,7 +305,6 @@ class HighValueLoader:
         return True
 
     def _load_csv(self) -> bool:
-        #         """Load from CSV format - Supports both Legacy and BHCE"""
         with open(self.path, encoding="utf-8-sig") as f:  # Handle BOM
             reader = csv.DictReader(f)
             if not self._has_fields(reader.fieldnames):
