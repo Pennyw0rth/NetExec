@@ -865,7 +865,6 @@ class NXCModule:
             context.log.fail(f"Error saving CSV file: {e}")
 
     def _save_json(self, results: list[dict], output_path, base_filename: str, context):
-        #         """Save results in JSON format"""
         import json
         from datetime import datetime
 
