@@ -120,7 +120,6 @@ class HighValueLoader:
         return traditional_format or new_format
 
     def _load_bhce_json(self, data: dict[str, Any]) -> bool:
-        #         """Load BloodHound Community Edition format"""
         nodes = data.get("nodes", {})
 
         # Process each node
