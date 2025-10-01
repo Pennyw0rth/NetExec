@@ -392,7 +392,7 @@ class HighValueLoader:
         # Create a mapping of SID to display name for output
         sid_to_name = {}
         if len(group_sids) == len(group_names):
-            sid_to_name = dict(zip(group_sids, group_names, strict=False))
+            sid_to_name = dict(zip(group_sids, group_names))
 
         matching_tier0_groups = []
 
