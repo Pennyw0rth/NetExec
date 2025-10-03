@@ -154,10 +154,7 @@ class smb(connection):
                 dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
             dce.connect()
             try:
-                dce.bind(
-                    MSRPC_UUID_PORTMAP,
-                    transfer_syntax=("71710533-BEBA-4937-8319-B5DBEF9CCC36", "1.0"),
-                )
+                dce.bind(MSRPC_UUID_PORTMAP, transfer_syntax=("71710533-BEBA-4937-8319-B5DBEF9CCC36", "1.0"))
             except DCERPCException as e:
                 if str(e).find("syntaxes_not_supported") >= 0:
                     dce.disconnect()
@@ -173,6 +170,10 @@ class smb(connection):
     def enum_host_info(self):
         self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
         self.is_host_dc()
+
+        # Create SMBv1 connection to get host info, connection will be reinitiated on login
+        if not self.args.no_smbv1:
+            self.smbv1 = self.create_smbv1_conn()
 
         try:
             self.conn.login("", "")
@@ -273,10 +274,6 @@ class smb(connection):
             self.conn.logoff()
         except Exception as e:
             self.logger.debug(f"Error logging off system: {e}")
-
-        # Check smbv1
-        if not self.args.no_smbv1:
-            self.smbv1 = self.create_smbv1_conn(check=True)
 
         try:
             self.db.add_host(
@@ -603,8 +600,6 @@ class smb(connection):
         Tries to create a connection object to the target host.
         On first try, it will try to create a SMBv3 connection.
         On further tries, it will remember which SMB version is supported and create a connection object accordingly.
-
-        :param no_smbv1: If True, it will not try to create a SMBv1 connection
         """
         # Initial negotiation
         if self.smbv3 is None:
