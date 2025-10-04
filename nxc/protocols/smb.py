@@ -601,7 +601,9 @@ class smb(connection):
         """
         # Initial negotiation
         if self.smbv1 is None and not no_smbv1 and not self.args.no_smbv1:
-            if not self.create_smbv1_conn() and not self.is_timed_out:
+            if self.create_smbv1_conn():
+                return True
+            elif not self.is_timed_out:
                 # Fallback if SMBv1 fails
                 return self.create_smbv3_conn()
             else:
