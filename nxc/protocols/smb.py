@@ -605,7 +605,7 @@ class smb(connection):
                 # Fallback if SMBv1 fails
                 return self.create_smbv3_conn()
             else:
-                return True
+                return False
         elif self.smbv3 is not False:
             if not self.create_smbv3_conn():
                 # Fallback if SMBv3 fails
