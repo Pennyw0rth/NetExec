@@ -56,3 +56,7 @@ nxc/modules/azurearc.py
 # Run from source against a lab target
 * python -m nxc.netexec smb 192.168.1.100 -u USER -p 'PASS' -M azurearc -o CHECK=true
 * python -m nxc.netexec smb 192.168.1.100 -u USER -p 'PASS' -M azurearc
+
+
+### For more technical info
+https://www.nsideattacklogic.de/azure-arc-part-1-escalation-from-on-premises-to-cloud/
