@@ -30,7 +30,7 @@ nxc smb 192.168.1.100 -u USER -p 'PASS' -M azurearc
   "token_type": "Bearer",
   "resource": "https://management.azure.com"
 }
-```
+
 
 🔍 How It Works (Behavior)
 Presence check via SMB listing:
@@ -44,10 +44,13 @@ Read the .key contents (requires local admin).
 2.Second GET with Authorization: Basic <key> to obtain token JSON.
 Write JSON to OUTFILE, fetch via SMB, and delete the file.
 
+```
+
 📸 Screenshots
 <img width="1201" height="450" alt="2025-10-05_16h20_40" src="https://github.com/user-attachments/assets/41ae5d89-0756-44dd-a0a5-7d936d3879c2" />
 <img width="1189" height="391" alt="2025-10-05_17h29_40" src="https://github.com/user-attachments/assets/1b362d70-aace-4c94-bcbf-beb7e0679d3d" />
 
+```bash
 
 🔒 OPSEC & Scope Notes
 Local admin required on the target (matches Arc’s security boundary).
@@ -58,4 +61,4 @@ Be mindful of token lifetime and endpoint logging.
 🧭 References
 NSIDE Attack Logic  Azure Arc - Part 1 - Escalation from On-Premises to Cloud
 https://www.nsideattacklogic.de/azure-arc-part-1-escalation-from-on-premises-to-cloud/
-
+```
