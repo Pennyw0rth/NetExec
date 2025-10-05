@@ -12,6 +12,8 @@ Enumerates Azure Arc presence on Windows targets and, when present, retrieves a 
 - **Presence check** (`CHECK=true`): Detects Arc agent by listing well-known install paths.
 - **Token retrieval** (default): Executes the IMDS challenge/response locally on the target and returns JSON containing `access_token`.
 
+* Added the module file at:  
+nxc/modules/azurearc.py
 ---
 
 ## ⚙️ Usage
