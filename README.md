@@ -48,8 +48,8 @@ nxc smb 192.168.1.100 -u USER -p 'PASS' -M azurearc
 git clone https://github.com/Pennyw0rth/NetExec.git
 
 # Add the module file at:
-# nxc/modules/azurearc.py
+nxc/modules/azurearc.py
 
 # Run from source against a lab target
-python -m nxc.netexec smb 192.168.1.100 -u USER -p 'PASS' -M azurearc -o CHECK=true
-python -m nxc.netexec smb 192.168.1.100 -u USER -p 'PASS' -M azurearc
+* python -m nxc.netexec smb 192.168.1.100 -u USER -p 'PASS' -M azurearc -o CHECK=true
+* python -m nxc.netexec smb 192.168.1.100 -u USER -p 'PASS' -M azurearc
