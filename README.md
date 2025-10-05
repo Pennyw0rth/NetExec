@@ -24,6 +24,9 @@ Write JSON to outfile, fetch via SMB, delete outfile.
 ## Screenshot
 <img width="1201" height="450" alt="2025-10-05_16h20_40" src="https://github.com/user-attachments/assets/8b824c35-7595-43f1-90f1-627bb9962712" />
 
+<img width="1189" height="391" alt="2025-10-05_17h29_40" src="https://github.com/user-attachments/assets/b25305f9-1946-4e6c-8c9f-028e0bded0ff" />
+
+
 **Presence check only (Arc installed)**
 nxc smb 192.168.1.100 -u USER -p 'PASS' -M azurearc -o CHECK=true
 [+] Azure Arc agent appears to be installed
