@@ -30,7 +30,7 @@ nxc smb 192.168.1.100 -u USER -p 'PASS' -M azurearc
   "token_type": "Bearer",
   "resource": "https://management.azure.com"
 }
-
+```
 
 🔍 How It Works (Behavior)
 Presence check via SMB listing:
