@@ -34,14 +34,14 @@ nxc smb 192.168.1.100 -u USER -p 'PASS' -M azurearc
 
 #### 🔍 How It Works (Behavior)
 ### Presence check via SMB listing:
-C:\Program Files\AzureConnectedMachineAgent\*
+C:\Program Files\AzureConnectedMachineAgent\*  
 C:\Program Files (x86)\AzureConnectedMachineAgent\*
 
 ### Token retrieval on target (PowerShell):
-1.GET http://localhost:40342/metadata/identity/oauth2/token?resource=...&api-version=...
-→ expect 401 with WWW-Authenticate: Basic realm="<path to .key>"
+1.GET http://localhost:40342/metadata/identity/oauth2/token?resource=...&api-version=...\
+→ expect 401 with WWW-Authenticate: Basic realm="<path to .key>"\
 Read the .key contents (requires local admin).
-2.Second GET with Authorization: Basic <key> to obtain token JSON.
+2.Second GET with Authorization: Basic <key> to obtain token JSON.\
 Write JSON to OUTFILE, fetch via SMB, and delete the file.
 
 
@@ -53,12 +53,12 @@ Write JSON to OUTFILE, fetch via SMB, and delete the file.
 
 
 ### 🔒 OPSEC & Scope Notes
-Local admin required on the target (matches Arc’s security boundary).
+Local admin required on the target (matches Arc’s security boundary).\
 Tokens are written to a temp file on the target only long enough to read back via SMB. the file is then deleted.
 Be mindful of token lifetime and endpoint logging.
 
 
 ### 🧭 References
-NSIDE Attack Logic  Azure Arc - Part 1 - Escalation from On-Premises to Cloud
+NSIDE Attack Logic  Azure Arc - Part 1 - Escalation from On-Premises to Cloud\
 https://www.nsideattacklogic.de/azure-arc-part-1-escalation-from-on-premises-to-cloud/
 
