@@ -35,24 +35,39 @@ class NXCModule:
     def on_login(self, context, connection):
         resp = connection.search(
             searchFilter="(objectCategory=computer)",
-            attributes=["dNSHostName", "operatingSystem"]
+            attributes=["dNSHostName", "operatingSystem", "sAMAccountName"]
         )
         resp_parsed = parse_result_attributes(resp)
 
         answers = []
         context.log.debug(f"Total number of records returned: {len(resp_parsed)}")
 
+        # detect domain suffix from any valid dnshostname
+        domain = None
+        for entry in resp_parsed:
+            dn = entry.get("dNSHostName")
+            if dn and "." in dn:
+                domain = dn.split(".", 1)[1]
+                break
+
         for item in resp_parsed:
-            dns_host_name = item["dNSHostName"]
-            operating_system = item.get("operatingSystem", "Unknown OS")
+            dns_host_name = item.get("dNSHostName") or item.get("sAMAccountName")
+
+            # handle machine accounts with only samaccountname
+            if "." not in dns_host_name:
+                dns_host_name = dns_host_name.rstrip("$")
+                if domain:
+                    dns_host_name = f"{dns_host_name}.{domain}"
+
+            operating_system = item.get("operatingSystem") or "Unknown OS"
 
             if self.netbios_only:
-                netbios_name = dns_host_name.split(".")[0]
-                answer = netbios_name
+                answer = dns_host_name.split(".")[0]
             elif self.fqdn_only:
                 answer = dns_host_name
             else:
                 answer = f"{dns_host_name} ({operating_system})"
+
             answers.append(answer)
 
         context.log.success("Found the following computers:")
