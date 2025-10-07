@@ -1648,7 +1648,11 @@ class ldap(connection):
         self.logger.highlight("Resolved collection methods: " + ", ".join(list(collect)))
 
         self.logger.debug("Using DNS to retrieve domain information")
-        ad.dns_resolve(domain=self.domain)
+        try:
+            ad.dns_resolve(domain=self.domain)
+        except resolver.LifetimeTimeout:
+            self.logger.fail("Bloodhound-python failed to resolve domain information, try specifying the DNS server.")
+            return None
 
         if self.args.kerberos:
             self.logger.highlight("Using kerberos auth without ccache, getting TGT")
