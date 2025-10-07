@@ -1609,7 +1609,7 @@ class ldap(connection):
             self.logger.fail("Or if you installed with pipx:")
             self.logger.fail("pipx runpip netexec uninstall -y bloodhound")
             self.logger.fail("pipx inject netexec bloodhound-ce --force")
-            return False
+            return
 
         elif not use_bhce and is_ce:
             self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
@@ -1623,7 +1623,7 @@ class ldap(connection):
             self.logger.fail("Or if you installed with pipx:")
             self.logger.fail("pipx runpip netexec uninstall -y bloodhound-ce")
             self.logger.fail("pipx inject netexec bloodhound --force")
-            return False
+            return
 
         auth = ADAuthentication(
             username=self.username,
@@ -1644,11 +1644,15 @@ class ldap(connection):
         )
         collect = resolve_collection_methods("Default" if not self.args.collection else self.args.collection)
         if not collect:
-            return None
+            return
         self.logger.highlight("Resolved collection methods: " + ", ".join(list(collect)))
 
         self.logger.debug("Using DNS to retrieve domain information")
-        ad.dns_resolve(domain=self.domain)
+        try:
+            ad.dns_resolve(domain=self.domain)
+        except (resolver.LifetimeTimeout, resolver.NoNameservers):
+            self.logger.fail("Bloodhound-python failed to resolve domain information, try specifying the DNS server.")
+            return
 
         if self.args.kerberos:
             self.logger.highlight("Using kerberos auth without ccache, getting TGT")
@@ -1661,16 +1665,21 @@ class ldap(connection):
         bloodhound = BloodHound(ad, self.hostname, self.host, self.port)
         bloodhound.connect()
 
-        bloodhound.run(
-            collect=collect,
-            num_workers=10,
-            disable_pooling=False,
-            timestamp=timestamp,
-            fileNamePrefix=self.output_filename.split("/")[-1],
-            computerfile=None,
-            cachefile=None,
-            exclude_dcs=False,
-        )
+        try:
+            bloodhound.run(
+                collect=collect,
+                num_workers=10,
+                disable_pooling=False,
+                timestamp=timestamp,
+                fileNamePrefix=self.output_filename.split("/")[-1],
+                computerfile=None,
+                cachefile=None,
+                exclude_dcs=False,
+            )
+        except Exception as e:
+            self.logger.fail(f"BloodHound collection failed: {e.__class__.__name__} - {e}")
+            self.logger.debug(f"BloodHound collection failed: {e.__class__.__name__} - {e}", exc_info=True)
+            return
 
         self.output_filename += f"_{timestamp}"
 
