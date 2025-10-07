@@ -1650,7 +1650,7 @@ class ldap(connection):
         self.logger.debug("Using DNS to retrieve domain information")
         try:
             ad.dns_resolve(domain=self.domain)
-        except resolver.LifetimeTimeout:
+        except (resolver.LifetimeTimeout, resolver.NoNameservers):
             self.logger.fail("Bloodhound-python failed to resolve domain information, try specifying the DNS server.")
             return None
 
