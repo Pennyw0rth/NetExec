@@ -1665,16 +1665,21 @@ class ldap(connection):
         bloodhound = BloodHound(ad, self.hostname, self.host, self.port)
         bloodhound.connect()
 
-        bloodhound.run(
-            collect=collect,
-            num_workers=10,
-            disable_pooling=False,
-            timestamp=timestamp,
-            fileNamePrefix=self.output_filename.split("/")[-1],
-            computerfile=None,
-            cachefile=None,
-            exclude_dcs=False,
-        )
+        try:
+            bloodhound.run(
+                collect=collect,
+                num_workers=10,
+                disable_pooling=False,
+                timestamp=timestamp,
+                fileNamePrefix=self.output_filename.split("/")[-1],
+                computerfile=None,
+                cachefile=None,
+                exclude_dcs=False,
+            )
+        except Exception as e:
+            self.logger.fail(f"BloodHound collection failed: {e.__class__.__name__} - {e}")
+            self.logger.debug(f"BloodHound collection failed: {e.__class__.__name__} - {e}", exc_info=True)
+            return None
 
         self.output_filename += f"_{timestamp}"
 
