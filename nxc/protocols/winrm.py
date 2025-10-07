@@ -15,6 +15,7 @@ from termcolor import colored
 from dploot.lib.utils import is_guid, is_credfile
 from impacket.dpapi import MasterKeyFile, MasterKey, CredHist, DomainKey, CredentialFile, deriveKeysFromUser, DPAPI_BLOB, CREDENTIAL_BLOB
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
+from impacket.uuid import bin_to_string
 
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
@@ -368,7 +369,7 @@ class winrm(connection):
                     self.conn.fetch(key_path, local_key_file)
                     decrypted_key = self.get_master_key(local_key_file, sid, self.password)
                     if decrypted_key:
-                        masterkeys.append(decrypted_key)
+                        masterkeys.append((stripped_key, decrypted_key))
 
         if not masterkeys:
             self.logger.fail("Could not decrypt any keys")
@@ -391,14 +392,17 @@ class winrm(connection):
             return
 
         for creds_file in credential_files:
-            for masterkey in masterkeys:
-                with open(creds_file, "rb") as fp:
-                    data = fp.read()
-                cred = CredentialFile(data)
-                blob = DPAPI_BLOB(cred["Data"])
+            with open(creds_file, "rb") as fp:
+                data = fp.read()
+            cred = CredentialFile(data)
+            blob = DPAPI_BLOB(cred["Data"])
 
+            guid_masterkey = bin_to_string(blob["GuidMasterKey"])
+            right_key = next((key for guid, key in masterkeys if guid.lower() == guid_masterkey.lower()), None)
+
+            if right_key is not None:
                 try:
-                    decrypted = blob.decrypt(masterkey)
+                    decrypted = blob.decrypt(right_key)
                     if decrypted is not None:
                         self.logger.success(f"Successfully decrypted credentials in {creds_file}:")
                         creds = CREDENTIAL_BLOB(decrypted)
@@ -412,6 +416,8 @@ class winrm(connection):
                 except Exception as e:
                     self.logger.fail(f"Failed to decrypt credentials in {creds_file} with masterkey: {e!s}")
                     self.logger.debug(traceback.format_exc())
+            else:
+                self.logger.fail(f"No matching masterkey found for credentials in {creds_file} (need {guid_masterkey})")
 
     def get_master_key(self, masterkey_file, sid, password):
         """
