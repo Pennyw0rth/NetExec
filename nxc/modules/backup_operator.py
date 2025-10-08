@@ -118,3 +118,11 @@ class NXCModule:
             context.log.display("netexec smb dc_ip -u user -p pass -x \"del C:\\Windows\\sysvol\\sysvol\\SECURITY && del C:\\Windows\\sysvol\\sysvol\\SAM && del C:\\Windows\\sysvol\\sysvol\\SYSTEM\"")  # noqa: Q003
         else:
             context.log.display("Successfully deleted dump files !")
+
+    def _strip_root_key(self, dce, key_name):
+        # Let's strip the root key
+        key_name.split("\\")[0]
+        sub_key = "\\".join(key_name.split("\\")[1:])
+        ans = rrp.hOpenLocalMachine(dce)
+        h_root_key = ans["phKey"]
+        return h_root_key, sub_key
