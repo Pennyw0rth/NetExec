@@ -58,3 +58,13 @@ class AliasLoader:
         new_argv.extend(expanded_args)
 
         sys.argv[:] = new_argv
+
+    # Alias help (--list-alias)
+    def list_aliases(self):
+        if not self.aliases:
+            self.logger.display("No aliases defined in your config file.")
+            return
+
+        self.logger.highlight("AVAILABLE ALIASES")
+        for name, expansion in self.aliases.items():
+            self.logger.display(f"  {name:<15} →  {expansion}")

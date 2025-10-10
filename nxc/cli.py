@@ -81,12 +81,12 @@ def gen_cli_args():
     mgroup.add_argument("--options", dest="show_module_options", action="store_true", help="display module options")
     # Alias args
     alias_loader = AliasLoader()
-    mgroup.add_argument("-A", "--aliases", choices=list(alias_loader.aliases.keys()), dest="aliases", action="append", help="Call multible module at once, aliases are defined in the config file")
-
+    mgroup.add_argument("-A", "--alias", choices=list(alias_loader.aliases.keys()), dest="aliases", action="append", help="Call multible module at once, aliases are defined in the config file")
+    mgroup.add_argument("--list-aliases", action="store_true", help="List available aliases and their module expansions (from the config file)")
     subparsers = parser.add_subparsers(title="Available Protocols", dest="protocol")
 
     std_parser = argparse.ArgumentParser(add_help=False, parents=[generic_parser, output_parser, dns_parser], formatter_class=DisplayDefaultsNotNone)
-    std_parser.add_argument("target", nargs="+" if not (module_parser.parse_known_args()[0].list_modules is not None or module_parser.parse_known_args()[0].show_module_options or generic_parser.parse_known_args()[0].version) else "*", type=str, help="the target IP(s), range(s), CIDR(s), hostname(s), FQDN(s), file(s) containing a list of targets, NMap XML or .Nessus file(s)")
+    std_parser.add_argument("target", nargs="+" if not (module_parser.parse_known_args()[0].list_modules is not None or module_parser.parse_known_args()[0].show_module_options or generic_parser.parse_known_args()[0].version or module_parser.parse_known_args()[0].list_aliases) else "*", type=str, help="the target IP(s), range(s), CIDR(s), hostname(s), FQDN(s), file(s) containing a list of targets, NMap XML or .Nessus file(s)")
     credential_group = std_parser.add_argument_group("Authentication", "Options for authenticating")
     credential_group.add_argument("-u", "--username", metavar="USERNAME", dest="username", nargs="+", default=[], help="username(s) or file(s) containing usernames")
     credential_group.add_argument("-p", "--password", metavar="PASSWORD", dest="password", nargs="+", default=[], help="password(s) or file(s) containing passwords")
@@ -131,6 +131,10 @@ def gen_cli_args():
     if args.version:
         print(f"{VERSION} - {CODENAME} - {COMMIT} - {DISTANCE}")
         sys.exit(1)
+
+    if args.list_aliases:
+        alias_loader.list_aliases()
+        sys.exit(0)
 
     # Expand aliases into actual module/options arguments
     alias_loader.expand_aliases(args)
