@@ -12,6 +12,7 @@ from nxc.helpers.logger import highlight
 from nxc.helpers.args import DisplayDefaultsNotNone
 from nxc.logger import nxc_logger, setup_debug_logging
 import importlib.metadata
+from nxc.loaders.aliasloader import AliasLoader
 
 
 def gen_cli_args():
@@ -78,6 +79,9 @@ def gen_cli_args():
     mgroup.add_argument("-o", metavar="MODULE_OPTION", nargs="+", default=[], dest="module_options", help="module options")
     mgroup.add_argument("-L", "--list-modules", nargs="?", type=str, const="", help="list available modules")
     mgroup.add_argument("--options", dest="show_module_options", action="store_true", help="display module options")
+    # Alias args
+    alias_loader = AliasLoader()
+    mgroup.add_argument("-A", "--aliases", choices=list(alias_loader.aliases.keys()), dest="aliases", action="append", help="Call multible module at once, aliases are defined in the config file")
 
     subparsers = parser.add_subparsers(title="Available Protocols", dest="protocol")
 
@@ -127,6 +131,12 @@ def gen_cli_args():
     if args.version:
         print(f"{VERSION} - {CODENAME} - {COMMIT} - {DISTANCE}")
         sys.exit(1)
+
+    # Expand aliases into actual module/options arguments
+    alias_loader.expand_aliases(args)
+    # Re-parse args after expansion so -M and options are recognized correctly
+    argcomplete.autocomplete(parser, always_complete_options=False)
+    args, _ = parser.parse_known_args()
 
     # Multiply output_tries by 10 to enable more fine granural control, see exec methods
     if hasattr(args, "get_output_tries"):
