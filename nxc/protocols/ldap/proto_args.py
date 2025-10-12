@@ -45,5 +45,51 @@ def proto_args(parser, parents):
     bgroup = ldap_parser.add_argument_group("Bloodhound Scan", "Options to play with Bloodhoud")
     bgroup.add_argument("--bloodhound", action="store_true", help="Perform a Bloodhound scan")
     bgroup.add_argument("-c", "--collection", default="Default", help="Which information to collect. Supported: Group, LocalAdmin, Session, Trusts, Default, DCOnly, DCOM, RDP, PSRemote, LoggedOn, Container, ObjectProps, ACL, All. You can specify more than one by separating them with a comma")
+    rh = ldap_parser.add_argument_group("RustHound-CE")
+    rh.add_argument(
+        "--rusthound",
+        action="store_true",
+        help="Use RustHound-CE collector instead of BloodHound.py",
+    )
+    rh.add_argument(
+        "--rh-bin",
+        default="rusthound-ce",
+        help="Path/binary name for RustHound-CE (default: rusthound-ce)",
+    )
+    rh.add_argument(
+        "--rh-output",
+        default=None,
+        help="Output ZIP/dir path for RustHound results (default: temp dir)",
+    )
+    rh.add_argument(
+        "--rh-collection", default="All", help="RustHound collection set (default: All)"
+    )
+    rh.add_argument(
+        "--rh-domain",
+        default=None,
+        help="Override AD domain (auto-detected if omitted)",
+    )
+    rh.add_argument(
+        "--rh-zip",
+        action="store_true",
+        help="Ask RustHound to zip results if supported; otherwise NetExec zips",
+    )
+    rh.add_argument(
+        "--rh-extra",
+        default=None,
+        help="Extra args to pass through to RustHound (quoted string)",
+    )
 
+    # Ingest behavior: reuse existing BloodHound ingest to push results
+    rh.add_argument(
+        "--rh-ingest",
+        action="store_true",
+        help="After collection, reuse NetExec BloodHound ingest to push results",
+    )
+    rh.add_argument(
+        "--rh-timeout",
+        type=int,
+        default=900,
+        help="Timeout in seconds for RustHound collection (default: 900s)",
+    )
     return parser

@@ -170,6 +170,17 @@ class ldap(connection):
                 "hostname": self.hostname,
             }
         )
+    _RH_ALREADY_RAN = set()
+
+
+    def _zip_dir(src_dir: Path, zip_path: Path):
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for root, _, files in os.walk(src_dir):
+                for f in files:
+                    full = Path(root) / f
+                    rel = full.relative_to(src_dir)
+                    zf.write(full, rel.as_posix())
+        return zip_path
 
     def create_conn_obj(self):
         try:
@@ -1690,3 +1701,240 @@ class ldap(connection):
                 if each_file.startswith(self.output_filename.split("/")[-1]) and each_file.endswith("json"):
                     z.write(each_file)
                     os.remove(each_file)
+
+
+
+
+    def rusthound(self):
+        """
+        Run RustHound-CE as an external binary using arguments mapped from NetExec.
+        - Probes rusthound binary (--help) to detect supported flags.
+        - Converts NetExec args to appropriate rusthound flags (tries common variants).
+        - Runs the binary, zips results if needed, and optionally saves a copy for BH-CE ingestion.
+
+        Relies on helpers in this module/class:
+        - _zip_dir(src_dir: Path, zip_path: Path)
+        - _save_bh_zip(artifact: Path)   # optional helper if you kept ingest reuse
+        """
+        import os
+        import shlex
+        import shutil
+        import subprocess
+        import tempfile
+        import uuid
+        from pathlib import Path
+
+        # ----- single-run guard per target/domain/user/process -----
+        key = (
+            getattr(self, "host", None),
+            getattr(self, "domain", None),
+            getattr(self, "username", None),
+            os.getpid(),
+        )
+        try:
+            _seen = _RH_ALREADY_RAN
+        except NameError:
+            _seen = set()
+            globals()["_RH_ALREADY_RAN"] = _seen
+        if key in _seen:
+            self.logger.debug(
+                "RustHound already executed for this target in this process; skipping."
+            )
+            return
+        _seen.add(key)
+        # also stop future call_cmd_args() passes from invoking again in this connection
+        try:
+            self.args.rusthound = False
+        except Exception:
+            pass
+
+        # ----- read CLI args / context -----
+        rh_bin = getattr(self.args, "rh_bin", "rusthound-ce")
+        rh_output_opt = getattr(
+            self.args, "rh_output", None
+        )  # may be .zip or a directory
+        rh_collection = getattr(self.args, "rh_collection", "All")
+        rh_domain = getattr(self.args, "rh_domain", None) or getattr(
+            self, "domain", None
+        )
+        rh_extra = getattr(self.args, "rh_extra", None)
+        rh_ingest = getattr(self.args, "rh_ingest", False)
+        rh_timeout = getattr(self.args, "rh_timeout", 900)
+
+        # Sanity: binary exists?
+        if not shutil.which(rh_bin) and not Path(rh_bin).exists():
+            self.logger.fail(f"RustHound-CE binary not found: {rh_bin}")
+            return
+
+        # Probe --help to detect supported flags
+        def _probe_help(binpath, timeout=6):
+            try:
+                p = subprocess.run(
+                    [binpath, "--help"], capture_output=True, text=True, timeout=timeout
+                )
+                return (p.stdout or "") + (p.stderr or "")
+            except Exception:
+                return ""
+
+        help_text = _probe_help(str(rh_bin))
+
+        def _supports(token: str) -> bool:
+            return token in help_text
+
+        # ----- Decide stage dir (always a directory for --output) and final ZIP path (optional) -----
+        # NEVER use args.log here; logs are text files.
+        final_zip_dest: Path | None = None
+        tmp_dir: tempfile.TemporaryDirectory | None = None
+
+        if rh_output_opt:
+            outp = Path(rh_output_opt).expanduser().resolve()
+            if outp.suffix.lower() == ".zip":
+                # User wants a zip file here -> create a fresh stage dir, zip to this file after run
+                final_zip_dest = outp
+                tmp_dir = tempfile.TemporaryDirectory(prefix="nxc-rh-")
+                stage_dir = Path(tmp_dir.name) / (
+                    "rusthound_stage_" + uuid.uuid4().hex[:8]
+                )
+            else:
+                # User gave a directory -> write there (ensure clean-ish) and we’ll create rusthound.zip next to it
+                stage_dir = outp
+        else:
+            # No explicit output -> use a temp stage dir and later zip next to it
+            tmp_dir = tempfile.TemporaryDirectory(prefix="nxc-rh-")
+            stage_dir = Path(tmp_dir.name) / ("rusthound_stage_" + uuid.uuid4().hex[:8])
+
+        # Ensure fresh stage directory
+        if stage_dir.exists():
+            try:
+                shutil.rmtree(stage_dir, ignore_errors=True)
+            except Exception:
+                pass
+        stage_dir.mkdir(parents=True, exist_ok=True)
+
+        # ----- Build rusthound command -----
+        cmd = [str(rh_bin)]
+
+        def _try_add(candidates, value=None, boolean=False):
+            nonlocal cmd
+            for flag in candidates:
+                if _supports(flag):
+                    if boolean:
+                        cmd.append(flag)
+                    else:
+                        cmd += [flag, str(value)]
+                    return True
+            return False
+
+        # domain
+        if rh_domain:
+            _try_add(["--domain", "-d"], rh_domain)
+
+        # DC / server to talk to: prefer kdcHost then host
+        dc_host = (
+            getattr(self, "kdcHost", None)
+            or getattr(self, "dc_ip", None)
+            or getattr(self, "host", None)
+        )
+        if dc_host:
+            _try_add(["--dc", "--server", "--target"], dc_host)
+
+        # collection set (RustHound-CE uses --collectionmethod)
+        _try_add(["--collectionmethod", "--collections", "-c"], rh_collection)
+
+        # credentials
+        cred_added = False
+        username = getattr(self, "username", None)
+        password = getattr(self, "password", None)
+        nthash = getattr(self, "nthash", None) or getattr(self, "hash", None)
+        if username:
+            cred_added |= _try_add(["--username", "-u", "--user"], username)
+        if password:
+            cred_added |= _try_add(["--password", "-p", "--pass"], password)
+        if nthash:
+            cred_added |= _try_add(["--hash", "--ntlm-hash"], nthash)
+
+        # DNS server
+        dns_server = getattr(self.args, "dns_server", None)
+        if dns_server:
+            _try_add(["--dns-server", "--nameserver", "--ns"], dns_server)
+
+        # Always pass a DIRECTORY to rusthound's output
+        _try_add(["--output", "-o"], str(stage_dir))
+
+        # User-provided extras (highest precedence / appended at end)
+        if rh_extra:
+            try:
+                cmd += shlex.split(rh_extra)
+            except Exception:
+                cmd.append(rh_extra)
+
+        # Heads-up if we had creds but couldn't pass them (unknown flags)
+        if (username or password or nthash) and not cred_added:
+            self.logger.warning(
+                "RustHound-CE did not accept username/password/hash via detected flags. "
+                "Consider supplying supported flags via --rh-extra, or run RustHound separately and use --rh-output."
+            )
+
+        # ----- Run -----
+        self.logger.info(
+            "Running RustHound-CE: " + " ".join(shlex.quote(x) for x in cmd)
+        )
+        run_ok = False
+        try:
+            subprocess.run(cmd, check=True, timeout=rh_timeout)
+            run_ok = True
+        except subprocess.TimeoutExpired:
+            self.logger.fail(f"RustHound-CE timed out after {rh_timeout}s")
+        except subprocess.CalledProcessError as e:
+            self.logger.fail(f"RustHound-CE exited with {e.returncode}")
+
+        if not run_ok:
+            if tmp_dir:
+                tmp_dir.cleanup()
+            return
+
+        # ----- Package artifact -----
+        # RustHound typically writes JSONs into stage_dir / "rusthound_out"
+        rh_out = stage_dir / "rusthound_out"
+        src_dir = rh_out if rh_out.is_dir() else stage_dir
+
+        try:
+            if final_zip_dest:
+                # User asked for a .zip specifically
+                final_zip_dest.parent.mkdir(parents=True, exist_ok=True)
+                _zip_dir(src_dir, final_zip_dest)
+                artifact = final_zip_dest
+            else:
+                # Default: create a rusthound.zip alongside the stage dir
+                # If user passed a directory in --rh-output, put zip next to that dir
+                # If temp dir, the zip lands in the temp's parent
+                zip_path = stage_dir.parent / "rusthound.zip"
+                _zip_dir(src_dir, zip_path)
+                artifact = zip_path
+        except Exception as e:
+            self.logger.warning(f"Failed to package RustHound artifact: {e}")
+            # fallback: try to find an existing zip in stage_dir
+            zips = list(stage_dir.rglob("*.zip"))
+            artifact = zips[0] if zips else None
+
+        if not artifact or not artifact.exists():
+            self.logger.warning(
+                "RustHound artifact not found after run; try --rh-output <path>.zip to control destination."
+            )
+            if tmp_dir:
+                tmp_dir.cleanup()
+            return
+
+        self.logger.highlight(f"RustHound artifact ready: {artifact}")
+
+        # Optional: reuse BloodHound ingest path
+        if rh_ingest:
+            try:
+                self._save_bh_zip(artifact)
+            except Exception as e:
+                self.logger.warning(f"RustHound ingest failed: {e}")
+
+        # Cleanup temp stage dir if we created one
+        if tmp_dir:
+            tmp_dir.cleanup()
+
