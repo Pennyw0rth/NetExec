@@ -65,6 +65,16 @@ ldap_error_status = {
 _RH_ALREADY_RAN = set()
 
 
+def _zip_dir(src_dir: Path, zip_path: Path):
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, _, files in os.walk(src_dir):
+            for f in files:
+                full = Path(root) / f
+                rel = full.relative_to(src_dir)
+                zf.write(full, rel.as_posix())
+    return zip_path
+
+
 def resolve_collection_methods(methods):
     """Convert methods (string) to list of validated methods to resolve"""
     valid_methods = [
@@ -161,15 +171,6 @@ class ldap(connection):
         self.scope = None
 
         connection.__init__(self, args, db, host)
-
-    def _zip_dir(src_dir: Path, zip_path: Path):
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            for root, _, files in os.walk(src_dir):
-                for f in files:
-                    full = Path(root) / f
-                    rel = full.relative_to(src_dir)
-                    zf.write(full, rel.as_posix())
-        return zip_path
 
     def proto_logger(self):
         self.logger = NXCAdapter(

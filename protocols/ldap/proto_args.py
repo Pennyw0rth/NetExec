@@ -148,6 +148,7 @@ def proto_args(parser, parents):
         default="Default",
         help="Which information to collect. Supported: Group, LocalAdmin, Session, Trusts, Default, DCOnly, DCOM, RDP, PSRemote, LoggedOn, Container, ObjectProps, ACL, All. You can specify more than one by separating them with a comma",
     )
+    # --- RustHound-CE args (place after existing BloodHound group) ---
     rh = ldap_parser.add_argument_group("RustHound-CE")
     rh.add_argument(
         "--rusthound",
