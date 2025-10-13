@@ -5,7 +5,6 @@ import urllib3
 import logging
 import xml.etree.ElementTree as ET
 
-from io import StringIO
 from datetime import datetime
 from pypsrp.wsman import NAMESPACES
 from pypsrp.client import Client
