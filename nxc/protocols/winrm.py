@@ -261,8 +261,12 @@ class winrm(connection):
                 return result[0]
             self.logger.success(f"Executed command (shell type: {shell_type})")
             if not self.args.no_output:
-                for line in StringIO(result[0]).readlines():
-                    self.logger.highlight(line.strip())
+                if result[2] == 0:
+                    for line in result[0].replace("\r", "").splitlines():
+                        self.logger.highlight(line.strip())
+                else:
+                    for line in result[1].replace("\r", "").splitlines():
+                        self.logger.fail(line.strip())
 
     def ps_execute(self, payload=None, get_output=False):
         command = payload if payload else self.args.ps_execute
