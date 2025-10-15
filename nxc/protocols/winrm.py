@@ -8,6 +8,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from pypsrp.wsman import NAMESPACES
 from pypsrp.client import Client
+from pypsrp.powershell import PSDataStreams
 from termcolor import colored
 
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
@@ -260,12 +261,35 @@ class winrm(connection):
                 return result[0]
             self.logger.success(f"Executed command (shell type: {shell_type})")
             if not self.args.no_output:
-                if result[2] == 0:
-                    for line in result[0].replace("\r", "").splitlines():
-                        self.logger.highlight(line.strip())
+                if shell_type == "powershell":
+                    result: tuple[str, PSDataStreams, bool]
+                    if result[2]:
+                        self.logger.fail("Error executing powershell command, non-zero return code")
+                    # Display all channels of the PSDataStreams
+                    for msg in result[1].debug:
+                        self.logger.debug(str(msg).rstrip())
+                    for msg in result[1].verbose:
+                        self.logger.display(str(msg).rstrip())
+                    for msg in result[1].information:
+                        self.logger.display(str(msg).rstrip())
+                    for msg in result[1].progress:
+                        self.logger.display(str(msg).rstrip())
+                    for msg in result[1].warning:
+                        self.logger.display(str(msg).rstrip())
+                    for msg in result[1].error:
+                        self.logger.fail(str(msg).rstrip())
+                    # Display stdout
+                    for line in result[0].splitlines():
+                        self.logger.highlight(line.rstrip())
                 else:
-                    for line in result[1].replace("\r", "").splitlines():
-                        self.logger.fail(line.strip())
+                    # Tuple of (stdout, stderr, returncode)
+                    result: tuple[str, str, int]
+                    if result[2] == 0:
+                        for line in result[0].replace("\r", "").splitlines():
+                            self.logger.highlight(line.rstrip())
+                    else:
+                        for line in result[1].replace("\r", "").splitlines():
+                            self.logger.fail(line.rstrip())
 
     def ps_execute(self, payload=None, get_output=False):
         command = payload if payload else self.args.ps_execute
