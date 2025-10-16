@@ -99,7 +99,8 @@ class NXCModule:
                     s = row.get("is_sysadmin") or row.get("IS_SYSADMIN")
                 else:
                     try:
-                        a = row[0]; s = row[1]
+                        a = row[0] 
+                        s = row[1]
                     except Exception:
                         a = s = None
                 try:
