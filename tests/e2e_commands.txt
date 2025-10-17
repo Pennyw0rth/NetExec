@@ -304,3 +304,27 @@ netexec nfs TARGET_HOST -u "" -p "" --shares
 netexec nfs TARGET_HOST -u "" -p "" --enum-shares
 netexec nfs TARGET_HOST -u "" -p "" --get-file /NFStest/test/test.txt ../test.txt
 netexec nfs TARGET_HOST -u "" -p "" --put-file ../test.txt /NFStest/test
+##### DNS Module
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o H=true
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o ACTION=list
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o ACTION=list-dn
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o A=add R=e2e-test-pc D=10.10.10.10
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o A=query R=e2e-test-pc
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o A=modify R=e2e-test-pc D=10.10.10.11
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o A=remove R=e2e-test-pc D=10.10.10.11
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o A=resurrect R=e2e-test-pc
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o A=add R=e2e-test-pc D=10.10.10.10
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o A=ldapdelete R=e2e-test-pc
+# DNS Module - Advanced Options
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o ACTION=add RECORD=long-name-pc DATA=10.10.10.15
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o ACTION=ldapdelete RECORD=long-name-pc
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o ACTION=list OPTIONS=forest
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o ACTION=add RECORD=forest-pc OPTIONS=forest DATA=10.10.10.20
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o ACTION=query RECORD=forest-pc OPTIONS=forest
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o ACTION=ldapdelete RECORD=forest-pc OPTIONS=forest
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o ACTION=list OPTIONS=legacy
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o ACTION=add RECORD=multi-pc DATA=10.10.10.30
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o ACTION=add RECORD=multi-pc DATA=10.10.10.31 ALLOWMULTIPLE=true
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o ACTION=query RECORD=multi-pc
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns -o ACTION=ldapdelete RECORD=multi-pc
