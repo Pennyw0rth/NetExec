@@ -226,8 +226,6 @@ class smb(connection):
 
         if self.args.domain:
             self.domain = self.args.domain
-        elif self.args.use_kcache:  # Fixing domain trust, just pull the auth domain out of the ticket
-            self.domain = CCache.parseFile()[0]
         else:
             self.domain = self.targetDomain
 
@@ -648,8 +646,16 @@ class smb(connection):
                     relay_list.write(self.host + "\n")
 
     def generate_tgt(self):
+        if not self.username:
+            self.logger.error("No username provided, cannot generate TGT")
+            return False
+
         self.logger.info(f"Attempting to get TGT for {self.username}@{self.domain}")
-        userName = Principal(self.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+        try:
+            userName = Principal(self.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+        except Exception as e:
+            self.logger.fail(f"Failed to create Principal object: {e}")
+            return False
 
         try:
             tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(
@@ -667,13 +673,15 @@ class smb(connection):
 
             ccache = CCache()
             ccache.fromTGT(tgt, oldSessionKey, sessionKey)
-            tgt_file = f"{self.args.generate_tgt}.ccache"
+            tgt_file = f"{self.args.generate_tgt}.ccache" if not self.args.generate_tgt.endswith(".ccache") else self.args.generate_tgt
             ccache.saveFile(tgt_file)
 
             self.logger.success(f"TGT saved to: {tgt_file}")
             self.logger.success(f"Run the following command to use the TGT: export KRB5CCNAME={tgt_file}")
+            return True
         except Exception as e:
             self.logger.fail(f"Failed to get TGT: {e}")
+            return False
 
     def check_dc_ports(self, timeout=1):
         """Check multiple DC-specific ports in case first check fails"""
@@ -818,7 +826,7 @@ class smb(connection):
                 try:
                     # https://github.com/fortra/impacket/issues/1611
                     if self.kerberos:
-                        raise Exception("MMCExec current is buggly with kerberos")
+                        raise Exception("MMCExec current is buggy with kerberos")
                     exec_method = MMCEXEC(
                         self.remoteName,
                         self.smb_share_name,
@@ -1614,7 +1622,10 @@ class smb(connection):
     def local_groups(self):
         self.logger.display("Enumerating with SAMRPC protocol")
         try:
-            groups, members = SamrFunc(self).get_local_groups(self.args.local_groups)
+            samr_func = SamrFunc(self)
+            if not samr_func.lsa_query.dce or not samr_func.samr_query.dce:
+                return
+            groups, members = samr_func.get_local_groups(self.args.local_groups)
         except DCERPCException as e:
             self.logger.fail(f"Error enumerating local groups: {e}")
             return

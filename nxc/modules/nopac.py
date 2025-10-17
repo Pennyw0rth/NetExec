@@ -19,6 +19,10 @@ class NXCModule:
         """No options available"""
 
     def on_login(self, context, connection):
+        if not connection.username:
+            context.log.debug("Blank username, cannot get a Kerberos Principal object")
+            return False
+
         user_name = Principal(connection.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
         try:
             tgt_with_pac, cipher, old_session_key, session_key = getKerberosTGT(

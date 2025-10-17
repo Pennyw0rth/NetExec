@@ -5,6 +5,7 @@
 from impacket.dcerpc.v5 import transport, lsat, lsad, samr
 from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
+from impacket.krb5.kerberosv5 import KerberosError
 from impacket.nmb import NetBIOSError
 from impacket.smbconnection import SessionError
 
@@ -18,8 +19,8 @@ class SamrFunc:
         self.password = connection.password
         self.domain = connection.domain
         self.hash = connection.hash
-        self.lmhash = ""
-        self.nthash = ""
+        self.lmhash = connection.lmhash
+        self.nthash = connection.nthash
         self.aesKey = connection.aesKey
         self.doKerberos = connection.kerberos
         self.kdcHost = connection.kdcHost
@@ -34,8 +35,8 @@ class SamrFunc:
         if self.password is None:
             self.password = ""
 
-        self.samr_query = SAMRQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.addr, remote_host=self.host, kerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, logger=self.logger)
-        self.lsa_query = LSAQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.addr, remote_host=self.host, kdcHost=self.kdcHost, kerberos=self.doKerberos, aesKey=self.aesKey, logger=self.logger)
+        self.samr_query = SAMRQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.addr, remote_host=self.host, lmhash=self.lmhash, nthash=self.nthash, kerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, logger=self.logger)
+        self.lsa_query = LSAQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.addr, remote_host=self.host, lmhash=self.lmhash, nthash=self.nthash, kdcHost=self.kdcHost, kerberos=self.doKerberos, aesKey=self.aesKey, logger=self.logger)
 
     def get_builtin_groups(self, group):
         domains = self.samr_query.get_domains()
@@ -84,12 +85,12 @@ class SamrFunc:
 
 
 class SAMRQuery:
-    def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", kerberos=None, kdcHost="", aesKey="", logger=None,):
+    def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", lmhash="", nthash="", kerberos=None, kdcHost="", aesKey="", logger=None):
         self.__username = username
         self.__password = password
         self.__domain = domain
-        self.__lmhash = ""
-        self.__nthash = ""
+        self.__lmhash = lmhash
+        self.__nthash = nthash
         self.__aesKey = aesKey
         self.__port = port
         self.__remote_name = remote_name
@@ -98,7 +99,10 @@ class SAMRQuery:
         self.__kdcHost = kdcHost
         self.logger = logger
         self.dce = self.get_dce()
-        self.server_handle = self.get_server_handle()
+        if self.dce:
+            self.server_handle = self.get_server_handle()
+        else:
+            return
 
     def get_transport(self):
         string_binding = rf"ncacn_np:{self.__port}[\pipe\samr]"
@@ -126,10 +130,16 @@ class SAMRQuery:
             dce.connect()
             dce.bind(samr.MSRPC_UUID_SAMR)
         except NetBIOSError as e:
-            self.logger.error(f"NetBIOSError on Connection: {e}")
+            self.logger.fail(f"NetBIOSError on Connection: {e}")
             return None
         except SessionError as e:
-            self.logger.error(f"SessionError on Connection: {e}")
+            error_code, error_string = e.getErrorString()
+            if error_code == "KDC_ERR_S_PRINCIPAL_UNKNOWN":
+                self.logger.fail(f"Error {error_code} when creating SAMRPC connection, which means the server {self.__remote_host} is not an object in the Kerberos realm (try using an FQDN)")
+            elif error_code == "KDC_ERR_C_PRINCIPAL_UNKNOWN":
+                self.logger.fail(f"Error {error_code} when creating SAMRPC connection, which means the user {self.__username} is not an object in the Kerberos realm")
+            else:
+                self.logger.fail(f"SessionError on SAMRPC Connection: {e}")
             return None
         return dce
 
@@ -177,21 +187,24 @@ class SAMRQuery:
 
 
 class LSAQuery:
-    def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", kdcHost="", aesKey="", kerberos=None, logger=None):
+    def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", lmhash="", nthash="", kdcHost="", aesKey="", kerberos=None, logger=None):
         self.__username = username
         self.__password = password
         self.__domain = domain
-        self.__lmhash = ""
-        self.__nthash = ""
+        self.__lmhash = lmhash
+        self.__nthash = nthash
         self.__aesKey = aesKey
         self.__port = port
         self.__remote_name = remote_name
         self.__remote_host = remote_host
         self.__kdcHost = kdcHost
         self.__kerberos = kerberos
-        self.dce = self.get_dce()
-        self.policy_handle = self.get_policy_handle()
         self.logger = logger
+        self.dce = self.get_dce()
+        if self.dce:
+            self.policy_handle = self.get_policy_handle()
+        else:
+            return
 
     def get_transport(self):
         string_binding = f"ncacn_np:{self.__remote_name}[\\pipe\\lsarpc]"
@@ -222,6 +235,15 @@ class LSAQuery:
             dce.bind(lsat.MSRPC_UUID_LSAT)
         except NetBIOSError as e:
             self.logger.fail(f"NetBIOSError on Connection: {e}")
+            return None
+        except KerberosError as e:
+            error_code, error_string = e.getErrorString()
+            if error_code == "KDC_ERR_S_PRINCIPAL_UNKNOWN":
+                self.logger.fail(f"Error {error_code} when creating LSA connection, which means the server {self.__remote_host} is not an object in the Kerberos realm (try using an FQDN)")
+            elif error_code == "KDC_ERR_C_PRINCIPAL_UNKNOWN":
+                self.logger.fail(f"Error {error_code} when creating LSA connection, which means the user {self.__username} is not an object in the Kerberos realm")
+            else:
+                self.logger.fail(f"KerberosError on LSA Connection: {e}")
             return None
         return dce
 
