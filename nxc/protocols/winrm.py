@@ -265,19 +265,14 @@ class winrm(connection):
                     result: tuple[str, PSDataStreams, bool]
                     if result[2]:
                         self.logger.fail("Error executing powershell command, non-zero return code")
-                    # Display all channels of the PSDataStreams
-                    for msg in result[1].debug:
-                        self.logger.debug(str(msg).rstrip())
-                    for msg in result[1].verbose:
-                        self.logger.display(str(msg).rstrip())
-                    for msg in result[1].information:
-                        self.logger.display(str(msg).rstrip())
-                    for msg in result[1].progress:
-                        self.logger.display(str(msg).rstrip())
-                    for msg in result[1].warning:
-                        self.logger.display(str(msg).rstrip())
-                    for msg in result[1].error:
-                        self.logger.fail(str(msg).rstrip())
+                    for out_type in ["debug", "verbose", "information", "progress", "warning", "error"]:
+                        stream: list[str] = getattr(result[1], out_type)
+                        for msg in stream:
+                            if str(msg) != "None":
+                                if out_type == "error":
+                                    self.logger.fail(str(msg).rstrip())
+                                else:
+                                    self.logger.display(str(msg).rstrip())
                     # Display stdout
                     for line in result[0].splitlines():
                         self.logger.highlight(line.rstrip())
