@@ -1,18 +1,21 @@
 import asyncio
 import os
 from datetime import datetime
-
-from aardwolf.commons.target import RDPTarget
-
+from termcolor import colored
+import socket
+import struct
+from nxc.config import host_info_colors
 from nxc.connection import connection
 from nxc.helpers.logger import highlight
 from nxc.logger import NXCAdapter
 from nxc.paths import NXC_PATH
+from aardwolf.commons.target import RDPTarget
 from aardwolf.vncconnection import VNCConnection
 from aardwolf.commons.iosettings import RDPIOSettings
 from aardwolf.commons.queuedata.constants import VIDEO_FORMAT
 from asyauth.common.credentials import UniCredential
 from asyauth.common.constants import asyauthSecret, asyauthProtocol
+import contextlib
 
 
 class vnc(connection):
@@ -24,6 +27,8 @@ class vnc(connection):
         self.url = None
         self.target = None
         self.credential = None
+        self.RBFversion = "3.8"
+        self.noauth = False  # True when security type is 1
         connection.__init__(self, args, db, host)
 
     def proto_flow(self):
@@ -50,18 +55,53 @@ class vnc(connection):
         )
 
     def print_host_info(self):
-        self.logger.display(f"VNC connecting to {self.hostname}")
+        noauth = colored(f" (No Auth:{self.noauth})", host_info_colors[2], attrs=["bold"]) if self.noauth else ""
+        self.logger.display(f"RBF {self.RBFversion} {'' if self.RBFversion == '3.8' else '(Not supported)'} {noauth}")
+
+    def probe_rfb33(self):
+        # Attempt an RFB 3.3 handshake
+        with contextlib.suppress(Exception), socket.create_connection((self.host, self.port), timeout=1.0) as s:
+
+            # Read the server banner (usually "RFB 003.003\n" or similar)
+            banner = s.recv(12)
+            if not banner.startswith(b"RFB"):
+                return None
+            self.logger.debug(f"RFB 3.3 probe: server banner={banner!r}")
+
+            # Always send 3.3 client banner
+            s.sendall(b"RFB 003.003\n")
+
+            # Expect a 4-byte uint32 security type
+            sec = s.recv(4)
+            if len(sec) != 4:
+                return None
+
+            return struct.unpack("!I", sec)[0]
+
+        return None
 
     def create_conn_obj(self):
         try:
             self.target = RDPTarget(ip=self.host, port=self.port)
-            credential = UniCredential(protocol=asyauthProtocol.PLAIN, stype=asyauthSecret.NONE)
+            credential = UniCredential(protocol=asyauthProtocol.PLAIN, stype=asyauthSecret.NONE, secret="")
             self.conn = VNCConnection(target=self.target, credentials=credential, iosettings=self.iosettings)
             asyncio.run(self.connect_vnc(True))
+            # If no errors, secure type 1 is supported by the service
+            self.noauth = True
         except Exception as e:
             self.logger.debug(str(e))
             if "Server supports:" not in str(e):
-                return False
+                self.logger.debug("Exception message was empty; probing server with RFB 3.3 handshake...")
+                sec = self.probe_rfb33()
+                if sec is None:
+                    self.logger.debug("RFB 3.3 probe: no response or malformed response. The server likely closed the connection or sent a non-standard handshake.")
+                    return False
+                else:
+                    self.logger.debug(f"RFB 3.3 probe: server returned security-type={sec!r}")
+                    self.RBFversion = "3.3"
+                    if (sec == 1):
+                        self.noauth = True
+                    return True
         return True
 
     async def connect_vnc(self, discover=False):
