@@ -125,7 +125,7 @@ def gen_cli_args():
         sys.exit(1)
 
     if args.version:
-        nxc_logger.print_msg(f"{VERSION} - {CODENAME} - {COMMIT} - {DISTANCE}")
+        nxc_logger.display(f"{VERSION} - {CODENAME} - {COMMIT} - {DISTANCE}")
         sys.exit(1)
 
     # Multiply output_tries by 10 to enable more fine granural control, see exec methods

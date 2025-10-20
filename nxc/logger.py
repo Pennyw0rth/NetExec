@@ -127,14 +127,6 @@ class NXCAdapter(logging.LoggerAdapter):
         return (f"{module_name:<24} {self.extra['host']:<15} {self.extra['port']:<6} {self.extra['hostname'] if self.extra['hostname'] else 'NONE':<16} {msg}", kwargs)
 
     @no_debug
-    def print_msg(self, msg, to_file=False, *args, **kwargs):
-        """For print statements, with option to log to file"""
-        text = Text.from_ansi(msg)
-        nxc_console.print(text, *args, **kwargs)
-        if to_file:
-            self.log_console_to_file(text, *args, **kwargs)
-
-    @no_debug
     def display(self, msg, *args, **kwargs):
         """Display text to console, formatted for nxc"""
         msg, kwargs = self.format(f"{colored('[*]', 'blue', attrs=['bold'])} {msg}", kwargs)
