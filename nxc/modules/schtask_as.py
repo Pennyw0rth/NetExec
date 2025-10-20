@@ -228,12 +228,7 @@ class NXCModule:
                     makedirs(dump_path)
 
                 # Polling loop to wait for the PFX to be ready (avoid fixed sleep)
-                max_wait_seconds = getattr(connection.args, "get_output_tries", None)
-                try:
-                    # connection.args.get_output_tries may be an int or str; normalize
-                    max_wait_seconds = 120 if max_wait_seconds is None else int(max_wait_seconds)
-                except Exception:
-                    max_wait_seconds = 120
+                max_wait_seconds = getattr(connection.args, "get_output_tries", 60)
 
                 pfx_local_path = path.join(dump_path, f"{self.run_task_as}.pfx")
                 pfx_remote_path = f"{self.output_file_location}\\{self.output_filename}.pfx"
