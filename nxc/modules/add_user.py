@@ -11,7 +11,7 @@ from ldap3 import Tls, MODIFY_ADD, MODIFY_REPLACE
 class NXCModule:
     name = "add_user"
     description = "Adds, deletes, or changes a domain user via LDAP (AD/DC targets)."
-    supported_protocols = ["ldap", "smb"]
+    supported_protocols = ["ldap"]
     opsec_safe = False
     multiple_hosts = True
 
