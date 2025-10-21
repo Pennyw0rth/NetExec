@@ -7,6 +7,7 @@ import ssl
 import ldap3
 import sys
 from ldap3 import Tls, MODIFY_ADD, MODIFY_REPLACE
+from nxc.helpers.misc import CATEGORY
 
 class NXCModule:
     name = "add_user"
@@ -14,6 +15,7 @@ class NXCModule:
     supported_protocols = ["ldap"]
     opsec_safe = False
     multiple_hosts = True
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context, module_options):
         self.__userName = module_options.get("USERNAME", module_options.get("NAME", "foobar"))
@@ -187,5 +189,5 @@ class NXCModule:
                                 context.log.highlight(f'Failed to add "{self.__userName}" to group "{self.__groupName}": {c.result}')
                 except Exception as e:
                     context.log.exception(e)
-                            
+
         c.unbind()
