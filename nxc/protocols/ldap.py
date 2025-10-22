@@ -820,13 +820,13 @@ class ldap(connection):
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
 
     def computers(self):
-        resp = self.search(f"(sAMAccountType={SAM_MACHINE_ACCOUNT})", ["name"], 0)
+        resp = self.search(f"(sAMAccountType={SAM_MACHINE_ACCOUNT})", ["sAMAccountName"])
         resp_parsed = parse_result_attributes(resp)
 
         if resp:
             self.logger.display(f"Total records returned: {len(resp_parsed)}")
             for item in resp_parsed:
-                self.logger.highlight(item["name"] + "$")
+                self.logger.highlight(item["sAMAccountName"])
 
     def dc_list(self):
         # bypass host resolver configuration via configure=False (default pulls from /etc/resolv.conf or registry on Windows)
