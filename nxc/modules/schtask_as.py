@@ -222,21 +222,18 @@ class NXCModule:
                     self.logger.fail(f"Error deleting {self.output_file_location}{self.binary_to_upload_name} on {self.share}: {e}")
 
             if self.ca_name and self.template_name:
-
                 dump_path = path.join(NXC_PATH, "modules/schtask_as")
                 if not path.isdir(dump_path):
                     makedirs(dump_path)
 
-                # Polling loop to wait for the PFX to be ready (avoid fixed sleep)
-                max_wait_seconds = getattr(connection.args, "get_output_tries", 60)
-
                 pfx_local_path = path.join(dump_path, f"{self.run_task_as}.pfx")
                 pfx_remote_path = f"{self.output_file_location}\\{self.output_filename}.pfx"
 
-                self.logger.debug(f"Waiting up to {max_wait_seconds}s for remote PFX: {pfx_remote_path}")
-
+                # Polling loop to wait for the PFX to be ready (avoid fixed sleep)
                 pfx_fetched = False
                 last_exception = None
+                max_wait_seconds = 60
+                self.logger.debug(f"Waiting up to {max_wait_seconds}s for remote PFX: {pfx_remote_path}")
                 for second in range(max_wait_seconds):
                     try:
                         # try to download; open local file only on success
