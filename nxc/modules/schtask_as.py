@@ -113,6 +113,7 @@ class NXCModule:
             )
             certutil -user -repairstore my !HASH! > nul 2>&1
             certutil -user -exportPFX -p "" -f my !HASH! "%BASE%.pfx" NoChain,NoRoot > nul 2>&1
+            certutil -user -delstore my !HASH! > nul 2>&1
 
             if exist "%BASE%.pfx" (
                 exit /b 0
@@ -232,7 +233,7 @@ class NXCModule:
                 # Polling loop to wait for the PFX to be ready (avoid fixed sleep)
                 pfx_fetched = False
                 last_exception = None
-                max_wait_seconds = 60
+                max_wait_seconds = 15
                 self.logger.debug(f"Waiting up to {max_wait_seconds}s for remote PFX: {pfx_remote_path}")
                 for second in range(max_wait_seconds):
                     try:
