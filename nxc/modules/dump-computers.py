@@ -4,7 +4,7 @@ from nxc.parsers.ldap_results import parse_result_attributes
 
 class NXCModule:
     name = "dump-computers"
-    description = "Dumps all computers in the domain"
+    description = "Dumps FQDN and OS of all computers in the domain"
     supported_protocols = ["ldap"]
     category = CATEGORY.ENUMERATION
 
