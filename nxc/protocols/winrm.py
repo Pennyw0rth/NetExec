@@ -5,7 +5,6 @@ import urllib3
 import logging
 import xml.etree.ElementTree as ET
 
-from datetime import datetime
 from pypsrp.wsman import NAMESPACES
 from pypsrp.client import Client
 from pypsrp.powershell import PSDataStreams
@@ -19,7 +18,6 @@ from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.misc import gen_random_string
 from nxc.helpers.ntlm_parser import parse_challenge
 from nxc.logger import NXCAdapter
-from nxc.paths import NXC_PATH
 
 urllib3.disable_warnings()
 
