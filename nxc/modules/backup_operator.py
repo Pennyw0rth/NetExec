@@ -1,6 +1,7 @@
 import contextlib
 import os
 import datetime
+from time import sleep
 
 from impacket.examples.secretsdump import SAMHashes, LSASecrets, LocalOperations
 from impacket.smbconnection import SessionError
@@ -100,6 +101,7 @@ class NXCModule:
 
                 context.log.display(f"Cleaning dump with user {self.domain_admin} and hash {self.domain_admin_hash} on domain {connection.domain}")
                 connection.execute("del C:\\Windows\\sysvol\\sysvol\\SECURITY && del C:\\Windows\\sysvol\\sysvol\\SAM && del C:\\Windows\\sysvol\\sysvol\\SYSTEM")
+                sleep(0.2)
                 for hive in ["SAM", "SECURITY", "SYSTEM"]:
                     try:
                         out = connection.conn.listPath("SYSVOL", hive)
