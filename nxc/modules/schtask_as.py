@@ -121,7 +121,6 @@ class NXCModule:
                 exit /b 2
             )
             """).encode())
-
             connection.conn.putFile(self.share, f"{self.output_file_location}\\{self.output_filename}.bat", batch_file.read)
             self.logger.success("Upload batch file successfully")
 
