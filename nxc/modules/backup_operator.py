@@ -1,13 +1,11 @@
 import contextlib
-import os
-import datetime
+from time import sleep
 
 from impacket.examples.secretsdump import SAMHashes, LSASecrets, LocalOperations
 from impacket.smbconnection import SessionError
 from impacket.dcerpc.v5 import transport, rrp
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from nxc.helpers.misc import CATEGORY
-from nxc.paths import NXC_PATH
 
 
 class NXCModule:
@@ -62,7 +60,7 @@ class NXCModule:
                 dce.disconnect()
 
         # copy remote file to local
-        log_path = os.path.expanduser(f"{NXC_PATH}/logs/{connection.hostname}_{connection.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}.".replace(":", "-"))
+        log_path = f"{connection.output_filename}."
         for hive in ["SAM", "SECURITY", "SYSTEM"]:
             connection.get_file_single(hive, log_path + hive)
 
