@@ -243,11 +243,11 @@ class connection:
             self.enum_host_info()
 
             # Construct the output file template using os.path.join for OS compatibility
-            base_log_dir = os.path.join(os.path.expanduser(NXC_PATH), "logs")
+            base_log_dir = os.path.join(NXC_PATH, "logs")
             filename_pattern = f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
             self.output_file_template = os.path.join(base_log_dir, "{output_folder}", filename_pattern)
             # Default output filename for logs
-            self.output_filename = self.output_file_template.format(output_folder="logs")
+            self.output_filename = os.path.join(base_log_dir, filename_pattern)
 
             self.print_host_info()
             if self.login() or (self.username == "" and self.password == ""):
