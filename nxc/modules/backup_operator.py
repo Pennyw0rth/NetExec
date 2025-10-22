@@ -1,7 +1,6 @@
 import contextlib
 import os
 import datetime
-from time import sleep
 
 from impacket.examples.secretsdump import SAMHashes, LSASecrets, LocalOperations
 from impacket.smbconnection import SessionError

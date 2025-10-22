@@ -488,8 +488,8 @@ def pfx_auth(self):
         return None
 
     username = self.args.username[0]
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S").replace(":", "-")
-    log_ccache = os.path.normpath(os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}_{timestamp}-{username}.ccache"))
+    basename = f"{self.hostname}_{self.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}-{username}.ccache"
+    log_ccache = os.path.normpath(os.path.expanduser(f"{NXC_PATH}/logs/{basename}"))
 
     # Request a TGT with the cert data
     req = ini.build_asreq(self.domain, username)

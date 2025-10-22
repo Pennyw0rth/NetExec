@@ -54,7 +54,6 @@ class rdp(connection):
         self.iosettings.video_bpp_max = 32
         # PIL produces incorrect picture for some reason?! TODO: check bug
         self.iosettings.video_out_format = VIDEO_FORMAT.PNG  #
-        self.output_filename = None
         self.domain = None
         self.server_os = None
         self.url = None
@@ -140,7 +139,6 @@ class rdp(connection):
                         self.hostname = info_domain["computername"]
                         self.server_os = info_domain["os_guess"] + " Build " + str(info_domain["os_build"])
                         self.logger.extra["hostname"] = self.hostname
-                        self.output_filename = os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
                     break
 
         if self.args.domain:

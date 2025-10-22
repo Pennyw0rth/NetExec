@@ -29,7 +29,6 @@ class winrm(connection):
         self.domain = ""
         self.targedDomain = ""
         self.server_os = None
-        self.output_filename = None
         self.endpoint = None
         self.lmhash = ""
         self.nthash = ""
@@ -74,8 +73,6 @@ class winrm(connection):
             self.domain = self.args.domain
         if self.args.local_auth:
             self.domain = self.hostname
-
-        self.output_filename = os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
     def print_host_info(self):
         self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"

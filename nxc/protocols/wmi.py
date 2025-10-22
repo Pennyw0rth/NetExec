@@ -141,8 +141,6 @@ class wmi(connection):
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
-        self.output_filename = os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
-
     def print_host_info(self):
         self.logger.extra["protocol"] = "RPC"
         self.logger.extra["port"] = "135"
