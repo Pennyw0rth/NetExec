@@ -5,10 +5,10 @@ import urllib3
 import logging
 import xml.etree.ElementTree as ET
 
-from io import StringIO
 from datetime import datetime
 from pypsrp.wsman import NAMESPACES
 from pypsrp.client import Client
+from pypsrp.powershell import PSDataStreams
 from termcolor import colored
 
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
@@ -261,8 +261,30 @@ class winrm(connection):
                 return result[0]
             self.logger.success(f"Executed command (shell type: {shell_type})")
             if not self.args.no_output:
-                for line in StringIO(result[0]).readlines():
-                    self.logger.highlight(line.strip())
+                if shell_type == "powershell":
+                    result: tuple[str, PSDataStreams, bool]
+                    if result[2]:
+                        self.logger.fail("Error executing powershell command, non-zero return code")
+                    for out_type in ["debug", "verbose", "information", "progress", "warning", "error"]:
+                        stream: list[str] = getattr(result[1], out_type)
+                        for msg in stream:
+                            if str(msg) != "None":
+                                if out_type == "error":
+                                    self.logger.fail(str(msg).rstrip())
+                                else:
+                                    self.logger.display(str(msg).rstrip())
+                    # Display stdout
+                    for line in result[0].splitlines():
+                        self.logger.highlight(line.rstrip())
+                else:
+                    # Tuple of (stdout, stderr, returncode)
+                    result: tuple[str, str, int]
+                    if result[2] == 0:
+                        for line in result[0].replace("\r", "").splitlines():
+                            self.logger.highlight(line.rstrip())
+                    else:
+                        for line in result[1].replace("\r", "").splitlines():
+                            self.logger.fail(line.rstrip())
 
     def ps_execute(self, payload=None, get_output=False):
         command = payload if payload else self.args.ps_execute
