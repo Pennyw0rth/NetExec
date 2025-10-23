@@ -1451,7 +1451,48 @@ class smb(connection):
             if self.args.shares and self.args.shares.lower() not in perms.lower():
                 continue
             self.logger.highlight(f"{name:<15} {perms:<15} {remark}")
+
+        # Export shares to CSV file if --shares-export flag is set
+        if hasattr(self.args, "shares_export") and self.args.shares_export:
+            self._export_shares_to_csv(permissions)
+
         return permissions
+
+    def _export_shares_to_csv(self, permissions):
+        """
+        Export enumerated shares to a CSV file with format: IP;HOSTNAME;SHARE;PERMISSIONS;REMARK
+        Uses file locking to handle concurrent writes from multiple threads
+        """
+        import os
+        from threading import Lock
+
+        # Use a class-level lock to prevent race conditions when multiple threads write to the same file
+        if not hasattr(smb, "_csv_export_lock"):
+            smb._csv_export_lock = Lock()
+
+        csv_file = self.args.shares_export
+        file_exists = os.path.exists(csv_file)
+
+        try:
+            with smb._csv_export_lock, open(csv_file, "a", encoding="utf-8") as f:
+                # Write header if file doesn't exist or is empty
+                if not file_exists or os.path.getsize(csv_file) == 0:
+                    f.write("IP;HOSTNAME;SHARE;PERMISSIONS;REMARK\n")
+
+                # Write each share to the CSV file
+                for share in permissions:
+                    share_name = share["name"]
+                    access = ",".join(share["access"]) if share["access"] else "NONE"
+                    remark = share.get("remark", "")
+                    # Apply filter if --shares argument is used
+                    if self.args.shares and self.args.shares.lower() not in access.lower():
+                        continue
+                    csv_line = f"{self.host};{self.hostname};{share_name};{access};{remark}\n"
+                    f.write(csv_line)
+
+            self.logger.success(f"Shares exported to {csv_file}")
+        except Exception as e:
+            self.logger.fail(f"Error exporting shares to CSV: {e}")
 
     def dir(self):
         search_path = ntpath.join(self.args.dir, "*")
