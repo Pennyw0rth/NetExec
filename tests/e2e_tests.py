@@ -100,6 +100,12 @@ def get_cli_args():
         help="Path to the file containing test passwords",
     )
     parser.add_argument(
+        "--test-credfile",
+        required=False,
+        default=normpath(join(script_dir, "data", "test_credfile.txt")),
+        help="Path to the file containing test credentials in user:pass format",
+    )
+    parser.add_argument(
         "--amsi-bypass-file",
         required=False,
         default=normpath(join(script_dir, "data", "test_amsi_bypass.txt")),
@@ -181,6 +187,7 @@ def replace_command(args, line):
         .replace("KERBEROS ", kerberos)\
         .replace("TEST_USER_FILE", args.test_user_file)\
         .replace("TEST_PASSWORD_FILE", args.test_password_file)\
+        .replace("TEST_CREDFILE", args.test_credfile)\
         .replace("AMSI_BYPASS_FILE", args.amsi_bypass_file)\
         .replace("TEST_NORMAL_FILE", args.test_normal_file)\
         .replace("{DNS}", dns_server)\

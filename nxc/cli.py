@@ -86,6 +86,7 @@ def gen_cli_args():
     credential_group = std_parser.add_argument_group("Authentication", "Options for authenticating")
     credential_group.add_argument("-u", "--username", metavar="USERNAME", dest="username", nargs="+", default=[], help="username(s) or file(s) containing usernames")
     credential_group.add_argument("-p", "--password", metavar="PASSWORD", dest="password", nargs="+", default=[], help="password(s) or file(s) containing passwords")
+    credential_group.add_argument("--credfile", metavar="CREDFILE", dest="credfile", help="file containing credentials in format 'user:pass' (one per line)")
     credential_group.add_argument("-id", metavar="CRED_ID", nargs="+", default=[], type=str, dest="cred_id", help="database credential ID(s) to use for authentication")
     credential_group.add_argument("--ignore-pw-decoding", action="store_true", help="Ignore non UTF-8 characters when decoding the password file")
     credential_group.add_argument("--no-bruteforce", action="store_true", help="No spray when using file for username and password (user1 => password1, user2 => password2)")
