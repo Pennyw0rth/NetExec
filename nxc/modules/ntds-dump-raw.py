@@ -176,8 +176,11 @@ class NXCModule:
         if self.number_of_file_to_extract != 0:
             self.logger.fail("Unable to find all needed files, trying to work with what we have")
 
-        self.logger.success("Heads up, hashes on the way...")
-        self.dump_hashes()
+        if "SYSTEM" in self.extracted_files_location_local and self.extracted_files_location_local["SYSTEM"] != "":
+            self.logger.success("Heads up, hashes on the way...")
+            self.dump_hashes()
+        else:
+            self.logger.fail("SYSTEM file not found, unable to proceed with hash extraction")
 
     def dump_hashes(self):
         """Dumping NTDS and SAM hashes locally from the extracted files"""
