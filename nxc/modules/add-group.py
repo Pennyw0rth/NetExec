@@ -50,7 +50,9 @@ class NXCModule:
             context.log.fail("USER and GROUP parameter is required!")
             sys.exit(1)
 
-        """if not self.group and not self.ou:
+        """
+        To do
+        if not self.group and not self.ou:
             context.log.fail("Either GROUP or OU parameter is required!")
             sys.exit(1)"""
 
