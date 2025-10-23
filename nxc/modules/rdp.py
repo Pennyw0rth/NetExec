@@ -1,6 +1,7 @@
 from sys import exit
 
 from nxc.connection import dcom_FirewallChecker
+from nxc.helpers.misc import CATEGORY
 
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
@@ -15,6 +16,7 @@ class NXCModule:
     name = "rdp"
     description = "Enables/Disables RDP"
     supported_protocols = ["smb", "wmi"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
