@@ -201,7 +201,7 @@ netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --get-sid
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p '' --asreproast /tmp/output.txt
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --kerberoasting /tmp/kerberoasting1.txt
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --kerberoast /tmp/kerberoasting2.txt
-netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --kerberoasting /tmp/kerberoasting3.txt --kerberoast-users test_user
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --kerberoasting /tmp/kerberoasting3.txt --kerberoast-account test_user
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --trusted-for-delegation
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --admin-count
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --gmsa

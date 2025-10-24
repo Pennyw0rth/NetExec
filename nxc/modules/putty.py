@@ -154,13 +154,13 @@ class NXCModule:
         return sessions
 
     def extract_session(self, sessions):
-        proxycreds_file = f"{NXC_PATH}/modules/PuTTY/putty_proxycreds_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
+        proxycreds_file = f"{NXC_PATH}/modules/PuTTY/putty_proxycreds_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}"
         for session in sessions:
             if session["private_key_path"]:
                 makedirs(f"{NXC_PATH}/modules/PuTTY", exist_ok=True)
                 share = session["private_key_path"].split(":")[0] + "$"
                 file_path = session["private_key_path"].split(":")[1]
-                download_path = f"{NXC_PATH}/modules/PuTTY/putty_{session['user']}_{session['session_name']}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.sec".replace(":", "-")
+                download_path = f"{NXC_PATH}/modules/PuTTY/putty_{session['user']}_{session['session_name']}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.sec"
 
                 buf = BytesIO()
                 with open(download_path, "wb") as file:

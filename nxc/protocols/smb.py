@@ -117,8 +117,6 @@ class smb(connection):
         self.nthash = ""
         self.remote_ops = None
         self.bootkey = None
-        self.output_file_template = None
-        self.output_filename = None
         self.smbv1 = None   # Check if SMBv1 is supported
         self.smbv3 = None   # Check if SMBv3 is supported
         self.is_timed_out = False
