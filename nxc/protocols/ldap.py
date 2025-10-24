@@ -46,7 +46,7 @@ from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.ntlm_parser import parse_challenge
-from nxc.paths import CONFIG_PATH, NXC_PATH
+from nxc.paths import CONFIG_PATH
 
 ldap_error_status = {
     "1": "STATUS_NOT_SUPPORTED",
@@ -149,7 +149,6 @@ class ldap(connection):
         self.targetDomain = ""
         self.remote_ops = None
         self.bootkey = None
-        self.output_filename = None
         self.smbv1 = None
         self.signing = False
         self.signing_required = None
@@ -332,9 +331,6 @@ class ldap(connection):
             result = self.resolver(self.domain)
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
-
-        filename = f"{self.hostname}_{self.host}".replace(":", "-")
-        self.output_filename = os.path.expanduser(os.path.join(NXC_PATH, "logs", filename))
 
         try:
             self.db.add_host(
@@ -1681,11 +1677,9 @@ class ldap(connection):
             self.logger.debug(f"BloodHound collection failed: {e.__class__.__name__} - {e}", exc_info=True)
             return
 
-        self.output_filename += f"_{timestamp}"
-
-        self.logger.highlight(f"Compressing output into {self.output_filename}bloodhound.zip")
+        self.logger.highlight(f"Compressing output into {self.output_filename}_bloodhound.zip")
         list_of_files = os.listdir(os.getcwd())
-        with ZipFile(self.output_filename + "bloodhound.zip", "w") as z:
+        with ZipFile(f"{self.output_filename}_bloodhound.zip", "w") as z:
             for each_file in list_of_files:
                 if each_file.startswith(self.output_filename.split("/")[-1]) and each_file.endswith("json"):
                     z.write(each_file)

@@ -5,7 +5,6 @@ import urllib3
 import logging
 import xml.etree.ElementTree as ET
 
-from datetime import datetime
 from pypsrp.wsman import NAMESPACES
 from pypsrp.client import Client
 from pypsrp.powershell import PSDataStreams
@@ -19,7 +18,6 @@ from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.misc import gen_random_string
 from nxc.helpers.ntlm_parser import parse_challenge
 from nxc.logger import NXCAdapter
-from nxc.paths import NXC_PATH
 
 urllib3.disable_warnings()
 
@@ -29,7 +27,6 @@ class winrm(connection):
         self.domain = ""
         self.targedDomain = ""
         self.server_os = None
-        self.output_filename = None
         self.endpoint = None
         self.lmhash = ""
         self.nthash = ""
@@ -74,8 +71,6 @@ class winrm(connection):
             self.domain = self.args.domain
         if self.args.local_auth:
             self.domain = self.hostname
-
-        self.output_filename = os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
     def print_host_info(self):
         self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
