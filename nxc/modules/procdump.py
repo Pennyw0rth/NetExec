@@ -114,41 +114,63 @@ class NXCModule:
             with open(abspath(join(self.dir_result, machine_name)), "rb") as dump:
                 try:
                     credz_bh = []
+                    # Try to parse the minidump with pypykatz and guard against API changes / None returns
+                    pypy_parse = None
                     try:
-                        pypy_parse = pypykatz.parse_minidump_external(dump)
+                        # pypykatz historically exposes parse_minidump_external but other entrypoints may exist
+                        if hasattr(pypykatz, "parse_minidump_external"):
+                            pypy_parse = pypykatz.parse_minidump_external(dump)
+                        elif hasattr(pypykatz, "parse_minidump_file"):
+                            pypy_parse = pypykatz.parse_minidump_file(dump)
+                        else:
+                            # fallback (some installs expose nested module)
+                            try:
+                                from pypykatz.pypykatz import pypykatz as _pypykatz_inner
+                                if hasattr(_pypykatz_inner, "parse_minidump_external"):
+                                    pypy_parse = _pypykatz_inner.parse_minidump_external(dump)
+                                elif hasattr(_pypykatz_inner, "parse_minidump_file"):
+                                    pypy_parse = _pypykatz_inner.parse_minidump_file(dump)
+                            except Exception:
+                                pypy_parse = None
                     except Exception as e:
                         pypy_parse = None
                         context.log.fail(f"Error parsing minidump: {e}")
 
-                    ssps = [
-                        "msv_creds",
-                        "wdigest_creds",
-                        "ssp_creds",
-                        "livessp_creds",
-                        "kerberos_creds",
-                        "credman_creds",
-                        "tspkg_creds",
-                    ]
-                    for luid in pypy_parse.logon_sessions:
-                        for ssp in ssps:
-                            for cred in getattr(pypy_parse.logon_sessions[luid], ssp, []):
-                                domain = getattr(cred, "domainname", None)
-                                username = getattr(cred, "username", None)
-                                password = getattr(cred, "password", None)
-                                NThash = getattr(cred, "NThash", None)
-                                if NThash is not None:
-                                    NThash = NThash.hex()
-                                if username and (password or NThash) and "$" not in username:
-                                    print_pass = password if password else NThash
-                                    context.log.highlight(domain + "\\" + username + ":" + print_pass)
-                                    if "." not in domain and domain.upper() in connection.domain.upper():
-                                        domain = connection.domain
-                                        credz_bh.append(
-                                            {
-                                                "username": username.upper(),
-                                                "domain": domain.upper(),
-                                            }
-                                        )
+                    # If parsing failed or returned None, log and skip parsing loop (dump is preserved locally)
+                    if not pypy_parse:
+                        context.log.fail("pypykatz returned no parsed object (None) — dump preserved for manual analysis.")
+                    else:
+                        ssps = [
+                            "msv_creds",
+                            "wdigest_creds",
+                            "ssp_creds",
+                            "livessp_creds",
+                            "kerberos_creds",
+                            "credman_creds",
+                            "tspkg_creds",
+                        ]
+                        # use getattr so we don't blow up if the structure changed
+                        for luid in getattr(pypy_parse, "logon_sessions", {}):
+
+                            for ssp in ssps:
+                                for cred in getattr(pypy_parse.logon_sessions[luid], ssp, []):
+                                    domain = getattr(cred, "domainname", None)
+                                    username = getattr(cred, "username", None)
+                                    password = getattr(cred, "password", None)
+                                    NThash = getattr(cred, "NThash", None)
+                                    if NThash is not None:
+                                        NThash = NThash.hex()
+                                    if username and (password or NThash) and "$" not in username:
+                                        print_pass = password if password else NThash
+                                        context.log.highlight(domain + "\\" + username + ":" + print_pass)
+                                        if "." not in domain and domain.upper() in connection.domain.upper():
+                                            domain = connection.domain
+                                            credz_bh.append(
+                                                {
+                                                    "username": username.upper(),
+                                                    "domain": domain.upper(),
+                                                }
+                                            )
                     if len(credz_bh) > 0:
                         add_user_bh(credz_bh, None, context.log, connection.config)
                 except Exception as e:
