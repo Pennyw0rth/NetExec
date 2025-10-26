@@ -3,7 +3,7 @@
 # v0.4
 
 import re
-import pypykatz
+from pypykatz.pypykatz import pypykatz
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.misc import CATEGORY
 from nxc.paths import DATA_PATH, TMP_PATH
@@ -114,8 +114,8 @@ class NXCModule:
                     try:
                         pypy_parse = pypykatz.parse_minidump_external(dump)
                     except Exception as e:
-                        pypy_parse = None
                         context.log.fail(f"Error parsing minidump: {e}")
+                        return
 
                     ssps = [
                         "msv_creds",
