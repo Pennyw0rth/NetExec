@@ -31,19 +31,6 @@ class vnc(connection):
         self.noauth = False  # True when security type is 1
         connection.__init__(self, args, db, host)
 
-    def proto_flow(self):
-        self.proto_logger()
-        if self.create_conn_obj():
-            self.print_host_info()
-            if self.login():
-                if hasattr(self.args, "module") and self.args.module:
-                    self.load_modules()
-                    self.logger.debug("Calling modules")
-                    self.call_modules()
-                else:
-                    self.logger.debug("Calling command arguments")
-                    self.call_cmd_args()
-
     def proto_logger(self):
         self.logger = NXCAdapter(
             extra={
