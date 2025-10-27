@@ -11,7 +11,6 @@ from impacket.structure import Structure
 from ldap3 import LEVEL
 from os.path import expanduser
 from nxc.helpers.misc import CATEGORY
-from nxc.logger import nxc_logger
 from nxc.paths import NXC_PATH
 from nxc.parsers.ldap_results import parse_result_attributes
 
@@ -84,12 +83,12 @@ class NXCModule:
             if module_options["ALL"].lower() == "true" or module_options["ALL"] == "1":
                 self.showall = True
             else:
-                nxc_logger.display("Could not parse ALL option.")
+                context.log.display("Could not parse ALL option.")
         if module_options and "ONLY_HOSTS" in module_options:
             if module_options["ONLY_HOSTS"].lower() == "true" or module_options["ONLY_HOSTS"] == "1":
                 self.showhosts = True
             else:
-                nxc_logger.display("Could not parse ONLY_HOSTS option.")
+                context.log.display("Could not parse ONLY_HOSTS option.")
 
     def on_login(self, context, connection):
         zone = ldap2domain(connection.baseDN)
