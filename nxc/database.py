@@ -27,7 +27,7 @@ def open_config(config_path):
         config = configparser.ConfigParser()
         config.read(config_path)
     except Exception as e:
-        nxc_logger.display(f"[-] Error reading nxc.conf: {e}")
+        print(f"[-] Error reading nxc.conf: {e}")
         sys.exit(1)
     return config
 
@@ -40,7 +40,7 @@ def set_workspace(config_path, workspace_name):
     config = open_config(config_path)
     config.set("nxc", "workspace", workspace_name)
     write_configfile(config, config_path)
-    nxc_logger.display(f"[*] Workspace set to {workspace_name}")
+    print(f"[*] Workspace set to {workspace_name}")
 
 
 def get_db(config):
@@ -63,9 +63,7 @@ def init_protocol_dbs(workspace_name, p_loader=None):
         proto_db_path = path_join(WORKSPACE_DIR, workspace_name, f"{protocol}.db")
 
         if not exists(proto_db_path):
-            nxc_logger.display(
-                f"[*] Initializing {protocol.upper()} protocol database"
-            )
+            print(f"[*] Initializing {protocol.upper()} protocol database")
             conn = connect(proto_db_path)
             c = conn.cursor()
 
@@ -93,9 +91,9 @@ def create_workspace(workspace_name, p_loader=None):
         None
     """
     if exists(path_join(WORKSPACE_DIR, workspace_name)):
-        nxc_logger.display(f"[-] Workspace {workspace_name} already exists")
+        print(f"[-] Workspace {workspace_name} already exists")
     else:
-        nxc_logger.display(f"[*] Creating {workspace_name} workspace")
+        print(f"[*] Creating {workspace_name} workspace")
         mkdir(path_join(WORKSPACE_DIR, workspace_name))
 
     init_protocol_dbs(workspace_name, p_loader)
@@ -103,7 +101,7 @@ def create_workspace(workspace_name, p_loader=None):
 
 def delete_workspace(workspace_name):
     shutil.rmtree(path_join(WORKSPACE_DIR, workspace_name))
-    nxc_logger.display(f"[*] Workspace {workspace_name} deleted")
+    print(f"[*] Workspace {workspace_name} deleted")
 
 
 def initialize_db():

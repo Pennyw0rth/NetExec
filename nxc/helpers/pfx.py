@@ -129,8 +129,8 @@ class myPKINIT(PKINIT):
     def setup(self, dh_params=None):
         self.issuer = self.certificate.issuer.native["common_name"]
         if dh_params is None:
-            print("Generating DH params...")
-            print("DH params generated.")
+            nxc_logger.display("Generating DH params...")
+            nxc_logger.display("DH params generated.")
         else:
             if isinstance(dh_params, dict):
                 self.diffie = DirtyDH.from_dict(dh_params)
