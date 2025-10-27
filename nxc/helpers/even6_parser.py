@@ -4,6 +4,7 @@ import struct
 import uuid
 
 from datetime import datetime
+from nxc.logger import nxc_logger
 
 
 class Substitution:
@@ -45,7 +46,7 @@ class Substitution:
         elif self._type == 0xf:
             return str(uuid.UUID(bytes_le=value.data))
         else:
-            print("Unknown value type", hex(value.type))
+            nxc_logger.display(f"Unknown value type {hex(value.type)}")
 
 
 class Value:
@@ -70,7 +71,7 @@ class Attribute:
         elif next_token[0] == 0x0e:
             self._value = Substitution(buf, offset + 1 + self._name.length)
         else:
-            print("Unknown attribute next_token", hex(next_token[0]), hex(offset + 1 + self._name.length))
+            nxc_logger.display(f"Unknown attribute next_token {hex(next_token[0])} {hex(offset + 1 + self._name.length)}")
 
         self.length = 1 + self._name.length + self._value.length
 
@@ -123,7 +124,7 @@ class Element:
                     elif next_token == 0x0e or next_token == 0x0d:
                         element = Substitution(buf, ofs)
                     else:
-                        print("Unknown intern next_token", hex(next_token), hex(ofs))
+                        nxc_logger.display(f"Unknown intern next_token {hex(next_token)} {hex(ofs)}")
                         break
 
                     self._children.append(element)
@@ -135,7 +136,7 @@ class Element:
                 ofs += 1
                 break
             else:
-                print("Unknown element next_token", hex(next_token), hex(ofs))
+                nxc_logger.display(f"Unknown element next_token {hex(next_token)} {hex(ofs)}")
                 break
 
         self.length = ofs - offset
@@ -181,7 +182,7 @@ class TemplateInstance:
 
             self.length = 22 + self._xml.length + 5 + num_values * 4 + values_length
         else:
-            print("Unknown template token", hex(next_token))
+            nxc_logger.display(f"Unknown template token {hex(next_token)}")
 
     def xml(self, template=None):
         return self._xml.xml(self)
@@ -196,7 +197,7 @@ class BinXML:
         elif next_token == 0x01 or next_token == 0x41:
             self._element = Element(buf, offset + 4)
         else:
-            print("Unknown binxml token", hex(next_token))
+            nxc_logger.display(f"Unknown binxml token {hex(next_token)}")
 
         self.length = 4 + self._element.length
 
