@@ -68,7 +68,7 @@ class NXCModule:
 
     def toggle_xp_cmdshell(self, enable: bool):
         """Enables or disables xp_cmdshell while preserving 'show advanced options' state.
-        No xp_cmdshell execution: uses permission check + sys.configurations.value_in_use verification.
+        Uses IS_SRVROLEMEMBER('sysadmin') OR fn_my_permissions(NULL,'SERVER') to decide.
         """
         desired_state = "1" if enable else "0"
 
@@ -79,47 +79,58 @@ class NXCModule:
         with contextlib.suppress(Exception):
             self.mssql_conn.sql_query("EXEC sp_configure 'show advanced options', '1'; RECONFIGURE;")
 
-        # 1) Silent permission check: ALTER SETTINGS or sysadmin
+        # 1) Permission checks: prefer sysadmin check, fallback to fn_my_permissions (ALTER SETTINGS)
         has_permission = False
-        permission_query = (
-            "SELECT "
-            "HAS_PERMS_BY_NAME(NULL, 'SERVER', 'ALTER SETTINGS') AS can_alter_settings, "
-            "IS_SRVROLEMEMBER('sysadmin') AS is_sysadmin;"
-        )
+        is_sysadmin = None
 
+        # Check sysadmin first
         try:
-            permission_query_result = self.mssql_conn.sql_query(permission_query)
-            if permission_query_result and len(permission_query_result) > 0:
-                first_row = permission_query_result[0]
-                if isinstance(first_row, dict):
-                    can_alter_settings = first_row.get("can_alter_settings") or first_row.get("CAN_ALTER_SETTINGS")
-                    is_sysadmin = first_row.get("is_sysadmin") or first_row.get("IS_SYSADMIN")
+            sysadmin_result = self.mssql_conn.sql_query("SELECT IS_SRVROLEMEMBER('sysadmin') AS is_sysadmin;")
+            if sysadmin_result and len(sysadmin_result) > 0:
+                row = sysadmin_result[0]
+                if isinstance(row, dict):
+                    is_sysadmin = row.get("is_sysadmin") or row.get("IS_SYSADMIN")
                 else:
                     try:
-                        can_alter_settings, is_sysadmin = first_row[0], first_row[1]
+                        is_sysadmin = row[0]
                     except Exception:
-                        can_alter_settings = is_sysadmin = None
+                        is_sysadmin = None
 
-                # Normalize and check permissions
                 try:
-                    if (can_alter_settings is not None and int(can_alter_settings) == 1) or \
-                       (is_sysadmin is not None and int(is_sysadmin) == 1):
+                    if is_sysadmin is not None and int(is_sysadmin) == 1:
                         has_permission = True
-                    else:
-                        alter_perm_str = str(can_alter_settings).strip().lower() if can_alter_settings is not None else ""
-                        sysadmin_perm_str = str(is_sysadmin).strip().lower() if is_sysadmin is not None else ""
-                        if alter_perm_str in ("1", "true", "ok") or sysadmin_perm_str in ("1", "true", "ok"):
-                            has_permission = True
+                        self.context.log.info("Permission check: user is sysadmin.")
                 except Exception:
-                    if str(can_alter_settings).strip().lower() in ("1", "true", "ok") or \
-                       str(is_sysadmin).strip().lower() in ("1", "true", "ok"):
+                    if str(is_sysadmin).strip().lower() in ("1", "true", "ok"):
                         has_permission = True
-            else:
-                has_permission = False
+                        self.context.log.info("Permission check: user is sysadmin.")
         except Exception:
-            has_permission = False
+            is_sysadmin = None
 
-        # If both checks explicitly say no, abort early
+        # If not sysadmin, check fn_my_permissions for ALTER SETTINGS
+        if not has_permission:
+            try:
+                perms = self.mssql_conn.sql_query("SELECT permission_name FROM fn_my_permissions(NULL, 'SERVER');")
+                if perms:
+                    for prow in perms:
+                        perm_name = ""
+                        if isinstance(prow, dict):
+                            # some drivers return column lowercase/uppercase
+                            perm_name = (prow.get("permission_name") or prow.get("PERMISSION_NAME") or "")
+                        else:
+                            try:
+                                perm_name = str(prow[0])
+                            except Exception:
+                                perm_name = ""
+                        if "ALTER SETTINGS" in perm_name.upper():
+                            has_permission = True
+                            self.context.log.info("Permission check: ALTER SETTINGS found via fn_my_permissions.")
+                            break
+            except Exception:
+                # If fn_my_permissions fails, we cannot confirm ALTER SETTINGS via this method
+                pass
+
+        # If neither check succeeded, abort early
         if not has_permission:
             self.context.log.fail("You do not have permission to enable xp_cmdshell.")
             self.restore_show_advanced_options()
