@@ -1,11 +1,12 @@
 from nxc.helpers.misc import CATEGORY
+import contextlib
 
 
 class NXCModule:
     """
     Enables or disables xp_cmdshell in MSSQL Server.
     Module by crosscutsaw
-    Modified by @azoxlpf to add a permission check so the module doesn’t show success when the user lacks rights.
+    Modified by @azoxlpf to add a permission check so the module does not show success when the user lacks rights.
     """
 
     name = "enable_cmdshell"
@@ -49,118 +50,115 @@ class NXCModule:
         """Backs up the current state of 'show advanced options'."""
         query = "SELECT CAST(value AS INT) AS value FROM sys.configurations WHERE name = 'show advanced options'"
         try:
-            res = self.mssql_conn.sql_query(query)
-            if res:
-                row = res[0]
-                if isinstance(row, dict) and "value" in row:
-                    self.advanced_options_backup = int(row["value"])
+            query_result = self.mssql_conn.sql_query(query)
+            if query_result:
+                result_row = query_result[0]
+                if isinstance(result_row, dict) and "value" in result_row:
+                    self.advanced_options_backup = int(result_row["value"])
                 else:
-                    self.advanced_options_backup = int(row[0])
+                    self.advanced_options_backup = int(result_row[0])
         except Exception:
             self.advanced_options_backup = None
 
     def restore_show_advanced_options(self):
         """Restores the original state of 'show advanced options' if needed."""
         if self.advanced_options_backup is not None and self.advanced_options_backup == 0:
-            try:
+            with contextlib.suppress(Exception):
                 self.mssql_conn.sql_query("EXEC sp_configure 'show advanced options', '0'; RECONFIGURE;")
-            except Exception:
-                pass
 
     def toggle_xp_cmdshell(self, enable: bool):
         """Enables or disables xp_cmdshell while preserving 'show advanced options' state.
         No xp_cmdshell execution: uses permission check + sys.configurations.value_in_use verification.
         """
-        state = "1" if enable else "0"
+        desired_state = "1" if enable else "0"
 
         # Backup 'show advanced options' state
         self.backup_show_advanced_options()
 
         # Enable 'show advanced options' if it was disabled (best-effort)
-        try:
+        with contextlib.suppress(Exception):
             self.mssql_conn.sql_query("EXEC sp_configure 'show advanced options', '1'; RECONFIGURE;")
-        except Exception:
-            pass
 
         # 1) Silent permission check: ALTER SETTINGS or sysadmin
-        res = None
+        has_permission = False
+        permission_query = (
+            "SELECT "
+            "HAS_PERMS_BY_NAME(NULL, 'SERVER', 'ALTER SETTINGS') AS can_alter_settings, "
+            "IS_SRVROLEMEMBER('sysadmin') AS is_sysadmin;"
+        )
+
         try:
-            perm_q = (
-                "SELECT "
-                "HAS_PERMS_BY_NAME(NULL, 'SERVER', 'ALTER SETTINGS') AS can_alter_settings, "
-                "IS_SRVROLEMEMBER('sysadmin') AS is_sysadmin;"
-            )
-            res = self.mssql_conn.sql_query(perm_q)
-            has_perm = False
-            if res and len(res) > 0:
-                row = res[0]
-                if isinstance(row, dict):
-                    a = row.get("can_alter_settings") or row.get("CAN_ALTER_SETTINGS")
-                    s = row.get("is_sysadmin") or row.get("IS_SYSADMIN")
+            permission_query_result = self.mssql_conn.sql_query(permission_query)
+            if permission_query_result and len(permission_query_result) > 0:
+                first_row = permission_query_result[0]
+                if isinstance(first_row, dict):
+                    can_alter_settings = first_row.get("can_alter_settings") or first_row.get("CAN_ALTER_SETTINGS")
+                    is_sysadmin = first_row.get("is_sysadmin") or first_row.get("IS_SYSADMIN")
                 else:
                     try:
-                        a = row[0] 
-                        s = row[1]
+                        can_alter_settings, is_sysadmin = first_row[0], first_row[1]
                     except Exception:
-                        a = s = None
+                        can_alter_settings = is_sysadmin = None
+
+                # Normalize and check permissions
                 try:
-                    if a is not None and int(a) == 1:
-                        has_perm = True
-                    elif s is not None and int(s) == 1:
-                        has_perm = True
+                    if (can_alter_settings is not None and int(can_alter_settings) == 1) or \
+                       (is_sysadmin is not None and int(is_sysadmin) == 1):
+                        has_permission = True
                     else:
-                        sa = str(a).strip().lower() if a is not None else ""
-                        ss = str(s).strip().lower() if s is not None else ""
-                        if sa in ("1", "true", "ok") or ss in ("1", "true", "ok"):
-                            has_perm = True
+                        alter_perm_str = str(can_alter_settings).strip().lower() if can_alter_settings is not None else ""
+                        sysadmin_perm_str = str(is_sysadmin).strip().lower() if is_sysadmin is not None else ""
+                        if alter_perm_str in ("1", "true", "ok") or sysadmin_perm_str in ("1", "true", "ok"):
+                            has_permission = True
                 except Exception:
-                    if str(a).strip().lower() in ("1", "true", "ok") or str(s).strip().lower() in ("1", "true", "ok"):
-                        has_perm = True
+                    if str(can_alter_settings).strip().lower() in ("1", "true", "ok") or \
+                       str(is_sysadmin).strip().lower() in ("1", "true", "ok"):
+                        has_permission = True
             else:
-                has_perm = False
+                has_permission = False
         except Exception:
-            has_perm = False
+            has_permission = False
 
         # If both checks explicitly say no, abort early
-        if has_perm is False and res and len(res) > 0:
+        if not has_permission:
             self.context.log.fail("You do not have permission to enable xp_cmdshell.")
             self.restore_show_advanced_options()
             return
 
         # 2) Attempt to set xp_cmdshell
         try:
-            self.mssql_conn.sql_query(f"EXEC sp_configure 'xp_cmdshell', '{state}'; RECONFIGURE;")
-        except Exception as e:
-            err = str(e).lower()
-            if "permission" in err or "not exist" in err:
+            self.mssql_conn.sql_query(f"EXEC sp_configure 'xp_cmdshell', '{desired_state}'; RECONFIGURE;")
+        except Exception as exception_obj:
+            error_message = str(exception_obj).lower()
+            if "permission" in error_message or "not exist" in error_message:
                 self.context.log.fail("You do not have permission to enable xp_cmdshell.")
             else:
-                self.context.log.fail(f"Failed to execute command: {e}")
+                self.context.log.fail(f"Failed to execute command: {exception_obj}")
             self.restore_show_advanced_options()
             return
 
         # 3) Verify via sys.configurations.value_in_use (no xp_cmdshell execution)
-        verify_q = "SELECT CAST(value_in_use AS INT) AS value_in_use FROM sys.configurations WHERE name = 'xp_cmdshell';"
-        verified = False
+        verify_query = "SELECT CAST(value_in_use AS INT) AS value_in_use FROM sys.configurations WHERE name = 'xp_cmdshell';"
+        is_verified = False
+
         try:
             for _ in range(2):  # read twice in case of propagation delay
-                vres = self.mssql_conn.sql_query(verify_q)
-                if vres and len(vres) > 0:
-                    row = vres[0]
-                    if isinstance(row, dict):
-                        raw = row.get("value_in_use") if "value_in_use" in row else next(iter(row.values()), None)
-                    else:
-                        raw = row[0]
+                xp_cmdshell_state_result = self.mssql_conn.sql_query(verify_query)
+                if xp_cmdshell_state_result and len(xp_cmdshell_state_result) > 0:
+                    result_row = xp_cmdshell_state_result[0]
+                    value_in_use = result_row.get("value_in_use") or next(iter(result_row.values()), None) if isinstance(result_row, dict) else result_row[0]
+
                     try:
-                        verified = int(raw) == (1 if enable else 0)
+                        is_verified = int(value_in_use) == (1 if enable else 0)
                     except Exception:
-                        verified = str(raw).strip() == ("1" if enable else "0")
-                    if verified:
+                        is_verified = str(value_in_use).strip() == desired_state
+
+                    if is_verified:
                         break
         except Exception:
-            verified = False
+            is_verified = False
 
-        if verified:
+        if is_verified:
             action_text = "enabled" if enable else "disabled"
             self.context.log.success(f"xp_cmdshell successfully {action_text}.")
         else:
