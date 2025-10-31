@@ -14,7 +14,7 @@ class NXCModule:
     category = CATEGORY.ENUMERATION
 
     # Reference table from MSRC report
-    # https://msrc.microsoft.com/update-guide/fr-FRS/vulnerability/CVE-2025-33073
+    # https://msrc.microsoft.com/update-guide/fr-FRS/vulnerability/CVE-2025-58726
     MSRC_PATCHES = {    # key = (major, minor, build), value = minimum patched UBR
         (6, 1, 7601): 23571,      # Windows Server 2008 SP2
         (6, 1, 7601): 27974,      # Windows Server 2008 R2 SP1
