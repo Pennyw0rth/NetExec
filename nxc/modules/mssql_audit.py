@@ -54,23 +54,23 @@ class NXCModule:
         except Exception:
             pass
 
-        return {"name": "UNKNOWN", "type": "Unknown", "kerberoastable": False}
+        return {"name": "UNKNOWN", "type": "Unknown"}
 
     def parse_service_account(self, account):
         """Parse service account type"""
         if not account:
-            return {"name": "UNKNOWN", "type": "Unknown", "kerberoastable": False}
+            return {"name": "UNKNOWN", "type": "Unknown"}
 
         account_upper = account.upper()
 
         if account_upper.startswith(("NT SERVICE\\", "NT AUTHORITY\\")):
-            return {"name": account, "type": "Local Service", "kerberoastable": False}
+            return {"name": account, "type": "Local Service"}
         elif account_upper in ("LOCALSYSTEM", "LOCAL SYSTEM"):
-            return {"name": account, "type": "Local System", "kerberoastable": False}
+            return {"name": account, "type": "Local System"}
         elif "\\" in account:
-            return {"name": account, "type": "Domain Account", "kerberoastable": True}
+            return {"name": account, "type": "Domain Account"}
 
-        return {"name": account, "type": "Unknown", "kerberoastable": False}
+        return {"name": account, "type": "Unknown"}
 
     def check_sysadmin(self):
         """Check if current user has sysadmin"""
@@ -181,7 +181,7 @@ class NXCModule:
         """Print formatted report"""
         # Service Account
         svc = findings["service_account"]
-        svc_str = f"{svc['name']} (\033[91m{svc['type']}\033[0m)" if svc["type"] == "Domain Account" else f"{svc['name']} ({svc['type']})"
+        svc_str = f"{svc['name']} \033[91m({svc['type']})\033[0m" if svc["type"] == "Domain Account" else f"{svc['name']} ({svc['type']})"
         self.context.log.highlight(f"Service Account:          {svc_str}")
 
         # Sysadmin
