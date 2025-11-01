@@ -59,7 +59,7 @@ class NXCModule:
         dns_server = getattr(connection.args, "dns_server", None)
         if not dns_server:
             try:
-                # If connection.host is an IP, use it as DNS (common in lab setups)
+                # If connection.host is an IP, use it as DNS
                 socket.inet_aton(connection.host)
                 dns_server = connection.host
             except Exception:
