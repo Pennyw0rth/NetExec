@@ -38,7 +38,9 @@ class database(BaseDB):
             "ip" text,
             "hostname" text,
             "domain" text,
-            "os" text
+            "os" text,
+            "signing_required" bool,
+            "channel_binding" text
             )"""
         )
 
@@ -57,7 +59,7 @@ class database(BaseDB):
                 )
                 sys.exit()
 
-    def add_host(self, ip, hostname, domain, os):
+    def add_host(self, ip, hostname, domain, os, signing_required, channel_binding):
         """Check if this host has already been added to the database, if not, add it in."""
         hosts = []
         updated_ids = []
@@ -71,7 +73,9 @@ class database(BaseDB):
                 "ip": ip,
                 "hostname": hostname,
                 "domain": domain,
-                "os": os
+                "os": os,
+                "signing_required": signing_required,
+                "channel_binding": channel_binding
             }
             hosts = [new_host]
         # update existing hosts data
@@ -85,6 +89,12 @@ class database(BaseDB):
                     host_data["hostname"] = hostname
                 if domain is not None:
                     host_data["domain"] = domain
+                if os is not None:
+                    host_data["os"] = os
+                if signing_required is not None:
+                    host_data["signing_required"] = signing_required
+                if channel_binding is not None:
+                    host_data["channel_binding"] = channel_binding
                 # only add host to be updated if it has changed
                 if host_data not in hosts:
                     hosts.append(host_data)
