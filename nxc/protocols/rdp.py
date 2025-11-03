@@ -448,11 +448,9 @@ class rdp(connection):
                         self.logger.fail("Warning: Clipboard may not be fully initialized, no output can be retrieved")
                         return ""
 
-            if not clipboard_ready and get_output:
-                self.logger.fail("Clipboard cannot be initialized, no output can be retrieved")
-                return ""
-            else:
-                self.logger.success("Clipboard is ready, proceeding with command execution")
+                if not clipboard_ready:
+                    self.logger.fail("Clipboard cannot be initialized, no output can be retrieved")
+                    return ""
 
             # Wait for desktop to be available
             await asyncio.sleep(self.args.cmd_delay)
@@ -494,6 +492,8 @@ class rdp(connection):
                     else:
                         self.logger.fail("Clipboard is empty or contains non-text data")
                     return clipboard_text
+                else:
+                    self.logger.success("Executed command without retrieving output")
 
                 self.logger.debug("Command execution completed")
                 return None
