@@ -853,7 +853,7 @@ class ldap(connection):
                             elif record_type == "NS":
                                 self.logger.highlight(f"{prefix}{name} NS = {colored(rdata.to_text(), host_info_colors[0])}")
                                 return
-                    except dns.resolver.NXDOMAIN:
+                    except resolver.NXDOMAIN:
                         self.logger.fail(f"{prefix}{name} ({record_type}) = Host not found (NXDOMAIN)")
                     except resolver.Timeout:
                         self.logger.fail(f"{prefix}{name} ({record_type}) = Connection timed out")
@@ -1618,7 +1618,7 @@ class ldap(connection):
             ip_map[normalized_key] = self.host
             short_key = normalized_key.split(".")[0]
             ip_map.setdefault(short_key, self.host)
-            setattr(ad, "_nxc_dc_ip_map", ip_map)
+            ad._nxc_dc_ip_map = ip_map
 
             self.logger.debug(f"BloodHound fallback hints: dc={normalized_key}, ip={self.host}, map_keys={list(ip_map.keys())}")
 
