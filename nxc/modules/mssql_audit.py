@@ -1,5 +1,5 @@
 from nxc.helpers.misc import CATEGORY
-
+from termcolor import colored
 
 class NXCModule:
     """
@@ -181,30 +181,30 @@ class NXCModule:
         """Print formatted report"""
         # Service Account
         svc = findings["service_account"]
-        svc_str = f"{svc['name']} \033[91m({svc['type']})\033[0m" if svc["type"] == "Domain Account" else f"{svc['name']} ({svc['type']})"
+        svc_str = f"{svc['name']} {colored(f'({svc['type']})', 'red')}" if svc["type"] == "Domain Account" else f"{svc['name']} ({svc['type']})"
         self.context.log.highlight(f"Service Account:          {svc_str}")
 
         # Sysadmin
         if findings["is_sysadmin"]:
-            self.context.log.display("Sysadmin Access:          \033[91mYES\033[0m")
+            self.context.log.display(f"Sysadmin Access:          {colored('YES', 'red')}")
         else:
             self.context.log.display("Sysadmin Access:          NO")
 
         # xp_dirtree
         if findings["xp_dirtree"] == "EXPLOITABLE":
-            self.context.log.display("xp_dirtree:               \033[91mEXPLOITABLE\033[0m")
+            self.context.log.display(f"xp_dirtree:               {colored('EXPLOITABLE', 'red')}")
         else:
             self.context.log.display(f"xp_dirtree:               {findings['xp_dirtree']}")
 
         # xp_fileexist
         if findings["xp_fileexist"] == "EXPLOITABLE":
-            self.context.log.display("xp_fileexist:             \033[91mEXPLOITABLE\033[0m")
+            self.context.log.display(f"xp_fileexist:             {colored('EXPLOITABLE', 'red')}")
         else:
             self.context.log.display(f"xp_fileexist:             {findings['xp_fileexist']}")
 
         # MSSQL Relay
         if findings["extended_protection"] in ("OFF", "ALLOWED"):
-            self.context.log.display(f"MSSQL Relay:              \033[91mEXPLOITABLE\033[0m (Extended Protection: {findings['extended_protection']})")
+            self.context.log.display(f"MSSQL Relay:              {colored('EXPLOITABLE', 'red')} (Extended Protection: {findings['extended_protection']})")
         elif findings["extended_protection"] == "REQUIRED":
             self.context.log.display(f"MSSQL Relay:              MITIGATED (Extended Protection: {findings['extended_protection']})")
         else:
@@ -212,7 +212,7 @@ class NXCModule:
 
         # Impersonation
         if findings["impersonation"]:
-            self.context.log.display(f"Impersonation:            \033[91m{len(findings['impersonation'])} user(s) can impersonate\033[0m")
+            self.context.log.display(f"Impersonation:            {colored(f'{len(findings['impersonation'])} user(s) can impersonate', 'red')}")
             for imp in findings["impersonation"]:
                 self.context.log.highlight(f"  → {imp['grantee']} can impersonate {imp['grantor']}")
         elif not findings["is_sysadmin"]:
@@ -225,7 +225,7 @@ class NXCModule:
             has_exploit = any(s["has_sa"] or s["is_rpc_out_enabled"] for s in findings["linked_servers"])
 
             if has_exploit:
-                self.context.log.display("\033[91mLinked servers found:\033[0m")
+                self.context.log.display(colored("Linked servers found:", 'red'))
             else:
                 self.context.log.display("Linked servers found:")
 
@@ -246,7 +246,7 @@ class NXCModule:
 
                 link_info = f"{link['name']} {login_str}"
                 if flags:
-                    link_info += f" [\033[91m{', '.join(flags)}\033[0m]"
+                    link_info += f" [{colored(', '.join(flags), 'red')}]"
                     self.context.log.highlight(f"  → {link_info}")
                 else:
                     self.context.log.display(f"  → {link_info}")
