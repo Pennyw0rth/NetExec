@@ -853,7 +853,7 @@ class ldap(connection):
                             elif record_type == "NS":
                                 self.logger.highlight(f"{prefix}{name} NS = {colored(rdata.to_text(), host_info_colors[0])}")
                                 return
-                    except resolver.NXDOMAIN:
+                    except dns.resolver.NXDOMAIN:
                         self.logger.fail(f"{prefix}{name} ({record_type}) = Host not found (NXDOMAIN)")
                     except resolver.Timeout:
                         self.logger.fail(f"{prefix}{name} ({record_type}) = Connection timed out")
