@@ -1588,6 +1588,108 @@ class ldap(connection):
 
             break  # Only process first policy result
 
+    def _seed_bloodhound_dc_hint(self, ad, dc_fqdn):
+        """Seed BloodHound AD state when DNS SRV lookups fail."""
+        if not dc_fqdn:
+            return False
+
+        normalized_dc = dc_fqdn.lower()
+        try:
+            self.logger.debug(f"Attempting BloodHound fallback seed for {normalized_dc} -> {self.host}")
+            ad.override_dc(normalized_dc)
+            if not ad.gcs():
+                ad.override_gc(normalized_dc)
+
+            if not ad.kdcs():
+                ad._kdcs = [normalized_dc]
+
+            if not getattr(ad, "baseDN", None) and self.baseDN:
+                ad.baseDN = self.baseDN
+            if not getattr(ad, "domain", None) and self.domain:
+                ad.domain = self.domain
+
+            if getattr(ad, "dns_tcp", None) is None:
+                ad.dns_tcp = self.args.dns_tcp
+            if getattr(ad, "nameserver", None) is None:
+                ad.nameserver = self.args.dns_server
+
+            ip_map = getattr(ad, "_nxc_dc_ip_map", {})
+            normalized_key = normalized_dc.rstrip(".")
+            ip_map[normalized_key] = self.host
+            short_key = normalized_key.split(".")[0]
+            ip_map.setdefault(short_key, self.host)
+            setattr(ad, "_nxc_dc_ip_map", ip_map)
+
+            self.logger.debug(f"BloodHound fallback hints: dc={normalized_key}, ip={self.host}, map_keys={list(ip_map.keys())}")
+
+            if getattr(ad, "auth", None):
+                if hasattr(ad.auth, "set_kdc"):
+                    ad.auth.set_kdc(self.host)
+                else:
+                    ad.auth.kdc = self.host
+
+            self.logger.info(f"Seeded fallback DC mapping: {normalized_key} -> {self.host}")
+            return True
+        except Exception as exc:
+            self.logger.fail(f"Fallback seeding failed: {exc}")
+            self.logger.debug("BloodHound fallback seeding exception", exc_info=True)
+            return False
+
+    @staticmethod
+    def _ensure_bloodhound_ldap_patch():
+        from bloodhound.ad import domain as bh_domain
+
+        if getattr(bh_domain.ADDC, "_nxc_dns_fallback_patched", False):
+            return
+
+        original_ldap_connect = bh_domain.ADDC.ldap_connect
+
+        def ldap_connect_with_fallback(self, protocol=None, resolver=False):
+            fallback_map = getattr(self.ad, "_nxc_dc_ip_map", {})
+            lookup_keys = [self.hostname.lower(), self.hostname.lower().rstrip("."), self.hostname.rstrip("."), self.hostname]
+            fallback_ip = next((fallback_map[key] for key in lookup_keys if key in fallback_map), None)
+
+            def _attempt_direct(ip_value):
+                proto = protocol or getattr(self.ad, "ldap_default_protocol", "ldap")
+                nxc_logger.debug(f"LDAP fallback: connecting to {self.hostname} via cached IP {ip_value}")
+                ldap_conn = self.ad.auth.getLDAPConnection(
+                    hostname=self.hostname,
+                    ip=ip_value,
+                    baseDN=self.ad.baseDN,
+                    protocol=proto,
+                )
+                if resolver:
+                    self.resolverldap = ldap_conn
+                else:
+                    self.ldap = ldap_conn
+                if ldap_conn:
+                    nxc_logger.debug(f"LDAP fallback connect succeeded for {self.hostname} -> {ip_value}")
+                return ldap_conn is not None
+
+            if fallback_ip:
+                try:
+                    if _attempt_direct(fallback_ip):
+                        return True
+                except Exception as exc:
+                    nxc_logger.debug(f"Initial LDAP fallback attempt failed for {self.hostname}: {exc}", exc_info=True)
+
+            try:
+                result = original_ldap_connect(self, protocol, resolver)
+                if result:
+                    return result
+            except Exception as exc:
+                nxc_logger.debug(f"Original LDAP connect raised {exc}; trying fallback", exc_info=True)
+            if fallback_ip:
+                try:
+                    return _attempt_direct(fallback_ip)
+                except Exception as exc:
+                    nxc_logger.debug(f"Secondary LDAP fallback attempt failed for {self.hostname}: {exc}", exc_info=True)
+            return False
+
+        bh_domain.ADDC.ldap_connect = ldap_connect_with_fallback
+        bh_domain.ADDC._nxc_dns_fallback_patched = True
+        bh_domain.ADDC._nxc_original_ldap_connect = original_ldap_connect
+
     def bloodhound(self):
         # Check which version is desired
         use_bhce = self.config.getboolean("BloodHound-CE", "bhce_enabled", fallback=False)
@@ -1641,14 +1743,39 @@ class ldap(connection):
         collect = resolve_collection_methods("Default" if not self.args.collection else self.args.collection)
         if not collect:
             return
-        self.logger.highlight("Resolved collection methods: " + ", ".join(list(collect)))
-
         self.logger.debug("Using DNS to retrieve domain information")
+        fallback_seeded = False
+        mapping_seeded = False
+        dc_fqdn = None
         try:
             ad.dns_resolve(domain=self.domain)
-        except (resolver.LifetimeTimeout, resolver.NoNameservers):
-            self.logger.fail("Bloodhound-python failed to resolve domain information, try specifying the DNS server.")
-            return
+            self.logger.debug("BloodHound AD.dns_resolve() OK")
+            dc_fqdn = self.remoteName
+            if dc_fqdn and "." not in dc_fqdn and self.domain:
+                dc_fqdn = f"{dc_fqdn.lower()}.{self.domain}"
+            if not dc_fqdn and ad.dcs():
+                dc_fqdn = ad.dcs()[0]
+            if not dc_fqdn:
+                fallback_host = f"{self.hostname.lower()}.{self.domain}" if self.domain else self.hostname.lower()
+                dc_fqdn = fallback_host
+            mapping_seeded = self._seed_bloodhound_dc_hint(ad, dc_fqdn) or mapping_seeded
+        except (resolver.LifetimeTimeout, resolver.NoNameservers) as e:
+            self.logger.fail(f"BloodHound-python failed to resolve domain information via DNS ({e}), applying fallback with connected DC/host.")
+            fallback_host = f"{self.hostname.lower()}.{self.domain}" if self.domain else self.hostname.lower()
+            dc_fqdn = self.remoteName if self.remoteName and "." in self.remoteName else fallback_host
+            fallback_seeded = self._seed_bloodhound_dc_hint(ad, dc_fqdn)
+            mapping_seeded = mapping_seeded or fallback_seeded
+            if not fallback_seeded:
+                return
+        except Exception as e:
+            # Other DNS errors (e.g., NXDOMAIN)
+            self.logger.fail(f"BloodHound-python DNS resolution error: {e}, applying fallback with connected DC/host.")
+            fallback_host = f"{self.hostname.lower()}.{self.domain}" if self.domain else self.hostname.lower()
+            dc_fqdn = self.remoteName if self.remoteName and "." in self.remoteName else fallback_host
+            fallback_seeded = self._seed_bloodhound_dc_hint(ad, dc_fqdn)
+            mapping_seeded = mapping_seeded or fallback_seeded
+            if not fallback_seeded:
+                return
 
         if self.args.kerberos:
             self.logger.highlight("Using kerberos auth without ccache, getting TGT")
@@ -1658,6 +1785,9 @@ class ldap(connection):
             auth.load_ccache()
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S") + "_"
+        if mapping_seeded:
+            self._ensure_bloodhound_ldap_patch()
+
         bloodhound = BloodHound(ad, self.hostname, self.host, self.port)
         bloodhound.connect()
 
