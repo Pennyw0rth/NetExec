@@ -307,3 +307,103 @@ class KerberosAttacks:
         else:
             hash_tgt += f"{hexlify(as_rep['enc-part']['cipher'].asOctets()[:16]).decode()}${hexlify(as_rep['enc-part']['cipher'].asOctets()[16:]).decode()}"
         return hash_tgt
+
+    def check_user_exists(self, userName):
+        """
+        Check if a user exists via Kerberos AS-REQ without pre-authentication.
+        Returns:
+            True: User exists (got KDC_ERR_PREAUTH_REQUIRED or AS_REP)
+            False: User does not exist (got KDC_ERR_C_PRINCIPAL_UNKNOWN)
+            None: Unexpected error occurred
+        """
+        nxc_logger.debug(f"Checking if user {userName} exists via AS-REQ")
+        
+        client_name = Principal(userName, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+        as_req = AS_REQ()
+
+        domain = self.targetDomain.upper()
+        server_name = Principal(f"krbtgt/{domain}", type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+
+        as_req["pvno"] = 5
+        as_req["msg-type"] = int(constants.ApplicationTagNumbers.AS_REQ.value)
+
+        req_body = seq_set(as_req, "req-body")
+
+        opts = [constants.KDCOptions.forwardable.value]
+        req_body["kdc-options"] = constants.encodeFlags(opts)
+
+        seq_set(req_body, "sname", server_name.components_to_asn1)
+        seq_set(req_body, "cname", client_name.components_to_asn1)
+
+        if domain == "":
+            nxc_logger.error("Empty Domain not allowed in Kerberos")
+            return None
+
+        req_body["realm"] = domain
+        
+        # Set time parameters
+        now = datetime.utcnow() + timedelta(days=1) if utc_failed else datetime.now(UTC) + timedelta(days=1)
+        req_body["till"] = KerberosTime.to_asn1(now)
+        req_body["rtime"] = KerberosTime.to_asn1(now)
+        req_body["nonce"] = random.getrandbits(31)
+
+        # Request multiple encryption types to maximize compatibility
+        supported_ciphers = (
+            int(constants.EncryptionTypes.rc4_hmac.value),
+            int(constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value),
+            int(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value),
+        )
+        seq_set_iter(req_body, "etype", supported_ciphers)
+
+        message = encoder.encode(as_req)
+
+        # If kdcHost isn't set, use the target IP for DNS resolution
+        if not self.kdcHost:
+            self.kdcHost = self.host
+
+        try:
+            r = sendReceive(message, domain, self.kdcHost)
+        except KerberosError as e:
+            error_code = e.getErrorCode()
+            if error_code == constants.ErrorCodes.KDC_ERR_C_PRINCIPAL_UNKNOWN.value:
+                # User does not exist
+                nxc_logger.debug(f"User {userName} does not exist (KDC_ERR_C_PRINCIPAL_UNKNOWN)")
+                return False
+            elif error_code == constants.ErrorCodes.KDC_ERR_PREAUTH_REQUIRED.value:
+                # User exists and requires pre-authentication (normal)
+                nxc_logger.debug(f"User {userName} exists (KDC_ERR_PREAUTH_REQUIRED)")
+                return True
+            elif error_code == constants.ErrorCodes.KDC_ERR_CLIENT_REVOKED.value:
+                # User exists but account is disabled
+                nxc_logger.debug(f"User {userName} exists but account is disabled (KDC_ERR_CLIENT_REVOKED)")
+                return True
+            elif error_code == constants.ErrorCodes.KDC_ERR_KEY_EXPIRED.value:
+                # User exists but password expired
+                nxc_logger.debug(f"User {userName} exists but password expired (KDC_ERR_KEY_EXPIRED)")
+                return True
+            else:
+                # Unexpected error
+                nxc_logger.debug(f"Unexpected Kerberos error for {userName}: {e} (code: {error_code})")
+                return None
+        except Exception as e:
+            nxc_logger.debug(f"Unexpected error checking user {userName}: {e}")
+            return None
+
+        # If we get here, we received a response (likely AS_REP)
+        # This means the user exists and doesn't require pre-auth
+        try:
+            as_rep = decoder.decode(r, asn1Spec=AS_REP())[0]
+            nxc_logger.debug(f"User {userName} exists (no pre-auth required, received AS_REP)")
+            return True
+        except Exception:
+            # Could be a different response type
+            try:
+                krb_error = decoder.decode(r, asn1Spec=KRB_ERROR())[0]
+                error_code = krb_error["error-code"]
+                nxc_logger.debug(f"User {userName} returned KRB_ERROR with code: {error_code}")
+                if error_code == constants.ErrorCodes.KDC_ERR_C_PRINCIPAL_UNKNOWN.value:
+                    return False
+                return True
+            except Exception:
+                nxc_logger.debug(f"Unexpected response format for user {userName}")
+                return None

@@ -996,6 +996,77 @@ class ldap(connection):
                     with open(self.args.asreproast, "a+") as hash_asreproast:
                         hash_asreproast.write(f"{hash_TGT}\n")
 
+    def check_user(self):
+        """
+        Check if a single username is valid via Kerberos AS-REQ request.
+        This checks user existence without triggering badPwdCount by analyzing KDC error responses.
+        """
+        username = self.args.check_user.strip()
+        
+        self.logger.display(f"Checking username: {username}")
+        
+        kerberos_attacks = KerberosAttacks(self)
+        result = kerberos_attacks.check_user_exists(username)
+        
+        if result is True:
+            self.logger.highlight(f"[+] {username} - Valid username")
+        elif result is False:
+            self.logger.fail(f"[-] {username} - Invalid username (does not exist)")
+        else:
+            self.logger.fail(f"[!] {username} - Error during check")
+
+    def enum_users(self):
+        """
+        Enumerate valid domain usernames via Kerberos AS-REQ requests.
+        This checks user existence without triggering badPwdCount by analyzing KDC error responses.
+        """
+        usernames = []
+        
+        # Parse input - can be usernames or files containing usernames
+        for item in self.args.enum_users:
+            if os.path.isfile(item):
+                try:
+                    with open(item, encoding="utf-8") as f:
+                        usernames.extend(line.strip() for line in f if line.strip())
+                    self.logger.info(f"Loaded {len([line.strip() for line in open(item) if line.strip()])} usernames from file: {item}")
+                except Exception as e:
+                    self.logger.fail(f"Failed to read file '{item}': {e}")
+                    return
+            else:
+                usernames.append(item.strip())
+
+        if not usernames:
+            self.logger.fail("No usernames provided for enumeration")
+            return
+
+        self.logger.display(f"Starting Kerberos user enumeration with {len(usernames)} username(s)")
+        
+        valid_users = []
+        invalid_users = []
+        errors = []
+        
+        kerberos_attacks = KerberosAttacks(self)
+        
+        for username in usernames:
+            result = kerberos_attacks.check_user_exists(username)
+            
+            if result is True:
+                valid_users.append(username)
+                self.logger.highlight(f"[+] {username} - Valid username")
+            elif result is False:
+                invalid_users.append(username)
+                self.logger.verbose(f"[-] {username} - Invalid username")
+            else:
+                errors.append(username)
+                self.logger.fail(f"[!] {username} - Error during check")
+        
+        # Summary
+        self.logger.display("")
+        self.logger.success(f"Enumeration complete: {len(valid_users)} valid, {len(invalid_users)} invalid, {len(errors)} errors")
+        
+        if valid_users:
+            self.logger.display(f"Valid usernames: {', '.join(valid_users)}")
+
     def kerberoasting(self):
         if self.args.no_preauth_targets:
             usernames = []

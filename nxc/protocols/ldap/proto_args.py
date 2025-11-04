@@ -16,6 +16,10 @@ def proto_args(parser, parents):
     kerberoasting_arg = egroup.add_argument("--kerberoasting", "--kerberoast", help="Output TGS ticket to crack with hashcat to file")
     kerberoast_users_arg = egroup.add_argument("--kerberoast-account", nargs="+", dest="kerberoast_account", action=get_conditional_action(_StoreAction), make_required=[], help="Target specific accounts for kerberoasting (sAMAccountNames or file containing sAMAccountNames)")
     egroup.add_argument("--no-preauth-targets", nargs=1, dest="no_preauth_targets", help="Targeted kerberoastable users")
+    
+    kgroup = ldap_parser.add_argument_group("Kerberos User Enumeration", "Enumerate valid usernames via Kerberos (no badPwdCount increment)")
+    kgroup.add_argument("--check-user", dest="check_user", help="Check if a single username is valid via Kerberos")
+    kgroup.add_argument("--enum-users", nargs="+", dest="enum_users", help="Enumerate multiple valid usernames via Kerberos (usernames or file containing usernames)")
 
     # Make kerberoast-users require kerberoasting
     kerberoast_users_arg.make_required = [kerberoasting_arg]
