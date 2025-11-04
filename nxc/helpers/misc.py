@@ -4,10 +4,158 @@ import string
 import re
 import inspect
 import os
+import threading
 from termcolor import colored
 from ipaddress import ip_address
 from nxc.logger import nxc_logger
 from time import strftime, gmtime
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import wraps
+
+
+
+def threaded_enumeration(items_param="items", max_workers=10, progress_threshold=100, show_progress=True):
+    """
+    Decorator to add multi-threading support to enumeration methods.
+
+    This decorator transforms a sequential enumeration function into a concurrent one,
+    automatically handling threading, progress bars, and result aggregation.
+
+    Args:
+        items_param (str): Name of the parameter containing the list of items to enumerate.
+                          Default: "items"
+        max_workers (int): Maximum number of concurrent threads. Default: 10
+        progress_threshold (int): Minimum number of items before showing progress bar.
+                                 Set to 0 to always show. Default: 100
+        show_progress (bool): Whether to show progress bar. Default: True
+
+    Usage:
+        @threaded_enumeration(items_param="usernames", max_workers=20, progress_threshold=50)
+        def enumerate_users(self, usernames):
+            '''Process a single username and return result'''
+            result = self.check_username(username)
+            return {"username": username, "valid": result}
+
+    The decorated function should:
+        1. Accept an iterable as a parameter (name specified by items_param)
+        2. Process ONE item from that iterable
+        3. Return a result dict or None
+
+    The decorator will:
+        1. Extract the items list from function parameters
+        2. Call the function once per item in parallel threads
+        3. Show progress bar if enabled and threshold met
+        4. Return a list of all results (excluding None values)
+
+    Returns:
+        list: Aggregated results from all thread executions (None values filtered out)
+
+    Example:
+        @threaded_enumeration(items_param="users", max_workers=15)
+        def check_users(self, users):
+            # This function processes ONE user at a time
+            # Called automatically by the decorator for each user in the list
+            is_valid = self.kerberos_check(users)
+            if is_valid:
+                self.logger.highlight(f"Valid: {users}")
+                return {"user": users, "valid": True}
+            return None
+
+        # Call like normal - the decorator handles threading
+        results = connection.check_users(["admin", "user1", "user2"])
+        # results = [{"user": "admin", "valid": True}, ...]
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Get the instance (self) if it's a method
+            instance = args[0] if args else None
+
+            # Extract the items list from parameters
+            sig = inspect.signature(func)
+            bound_args = sig.bind(*args, **kwargs)
+            bound_args.apply_defaults()
+
+            if items_param not in bound_args.arguments:
+                raise ValueError(
+                    f"Parameter '{items_param}' not found in function {func.__name__}. "
+                    f"Available parameters: {list(bound_args.arguments.keys())}"
+                )
+
+            items = bound_args.arguments[items_param]
+
+            # Validate items is iterable
+            if not hasattr(items, "__iter__") or isinstance(items, (str, bytes)):
+                raise TypeError(
+                    f"Parameter '{items_param}' must be an iterable (list, tuple, etc.), "
+                    f"got {type(items).__name__}"
+                )
+
+            items_list = list(items)
+            total = len(items_list)
+
+            if total == 0:
+                return []
+
+            results = []
+
+            # Determine if we should show progress
+            use_progress = show_progress and total > progress_threshold
+
+            def process_item(item):
+                """Process a single item by calling the original function"""
+                # Create new args with just the single item
+                new_kwargs = bound_args.arguments.copy()
+                new_kwargs[items_param] = item
+
+                # Remove 'self' from kwargs if present
+                new_kwargs.pop('self', None)
+
+                # Call function with instance if it's a method
+                if instance is not None:
+                    return func(instance, **new_kwargs)
+                else:
+                    return func(**new_kwargs)
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {executor.submit(process_item, item): item for item in items_list}
+
+                if use_progress:
+                    # Import here to avoid circular imports
+                    from rich.progress import Progress
+                    from nxc.console import nxc_console
+
+                    with Progress(console=nxc_console) as progress:
+                        task = progress.add_task(
+                            f"[cyan]Processing {total} {items_param}",
+                            total=total
+                        )
+
+                        for future in as_completed(futures):
+                            try:
+                                result = future.result()
+                                if result is not None:
+                                    results.append(result)
+                            except Exception as e:
+                                item = futures[future]
+                                nxc_logger.error(f"Error processing {item}: {e}")
+                            finally:
+                                progress.update(task, advance=1)
+                else:
+                    # No progress bar - just collect results
+                    for future in as_completed(futures):
+                        try:
+                            result = future.result()
+                            if result is not None:
+                                results.append(result)
+                        except Exception as e:
+                            item = futures[future]
+                            nxc_logger.error(f"Error processing {item}: {e}")
+
+            return results
+
+        return wrapper
+    return decorator
 
 
 def identify_target_file(target_file):
