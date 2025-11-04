@@ -13,6 +13,7 @@ from termcolor import colored
 from dns import resolver
 from dateutil.relativedelta import relativedelta as rd
 
+from rich.progress import Progress
 from Cryptodome.Hash import MD4
 from OpenSSL.SSL import SysCallError
 from bloodhound.ad.authentication import ADAuthentication
@@ -47,6 +48,7 @@ from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.ntlm_parser import parse_challenge
 from nxc.paths import CONFIG_PATH
+from nxc.console import nxc_console
 
 ldap_error_status = {
     "1": "STATUS_NOT_SUPPORTED",
@@ -1002,12 +1004,12 @@ class ldap(connection):
         This checks user existence without triggering badPwdCount by analyzing KDC error responses.
         """
         username = self.args.check_user.strip()
-        
+
         self.logger.display(f"Checking username: {username}")
-        
+
         kerberos_attacks = KerberosAttacks(self)
         result = kerberos_attacks.check_user_exists(username)
-        
+
         if result is True:
             self.logger.highlight(f"[+] {username} - Valid username")
         elif result is False:
@@ -1021,14 +1023,16 @@ class ldap(connection):
         This checks user existence without triggering badPwdCount by analyzing KDC error responses.
         """
         usernames = []
-        
+
         # Parse input - can be usernames or files containing usernames
         for item in self.args.enum_users:
             if os.path.isfile(item):
                 try:
                     with open(item, encoding="utf-8") as f:
                         usernames.extend(line.strip() for line in f if line.strip())
-                    self.logger.info(f"Loaded {len([line.strip() for line in open(item) if line.strip()])} usernames from file: {item}")
+                    self.logger.info(
+                        f"Loaded {len([line.strip() for line in open(item) if line.strip()])} usernames from file: {item}"
+                    )
                 except Exception as e:
                     self.logger.fail(f"Failed to read file '{item}': {e}")
                     return
@@ -1039,31 +1043,59 @@ class ldap(connection):
             self.logger.fail("No usernames provided for enumeration")
             return
 
-        self.logger.display(f"Starting Kerberos user enumeration with {len(usernames)} username(s)")
-        
+        self.logger.display(
+            f"Starting Kerberos user enumeration with {len(usernames)} username(s)"
+        )
+
         valid_users = []
         invalid_users = []
         errors = []
-        
+
         kerberos_attacks = KerberosAttacks(self)
-        
-        for username in usernames:
-            result = kerberos_attacks.check_user_exists(username)
-            
-            if result is True:
-                valid_users.append(username)
-                self.logger.highlight(f"[+] {username} - Valid username")
-            elif result is False:
-                invalid_users.append(username)
-                self.logger.verbose(f"[-] {username} - Invalid username")
-            else:
-                errors.append(username)
-                self.logger.fail(f"[!] {username} - Error during check")
-        
+
+        # Use progress bar for large username lists (>100)
+        total = len(usernames)
+        if total > 100:
+            with Progress(console=nxc_console) as progress:
+                task = progress.add_task(
+                    f"[cyan]Enumerating {total} {'username' if total == 1 else 'usernames'}",
+                    total=total
+                )
+
+                for username in usernames:
+                    result = kerberos_attacks.check_user_exists(username)
+
+                    if result is True:
+                        valid_users.append(username)
+                        self.logger.highlight(f"[+] {username} - Valid username")
+                    elif result is False:
+                        invalid_users.append(username)
+                        # Invalid usernames are not logged (silent, like other enumeration methods)
+                    else:
+                        errors.append(username)
+                        self.logger.fail(f"[!] {username} - Error during check")
+
+                    progress.update(task, advance=1)
+        else:
+            # For small lists, no progress bar needed
+            for username in usernames:
+                result = kerberos_attacks.check_user_exists(username)
+
+                if result is True:
+                    valid_users.append(username)
+                    self.logger.highlight(f"[+] {username} - Valid username")
+                elif result is False:
+                    invalid_users.append(username)
+                    # Invalid usernames are not logged (silent, like other enumeration methods)
+                else:
+                    errors.append(username)
+                    self.logger.fail(f"[!] {username} - Error during check")
+
         # Summary
-        self.logger.display("")
-        self.logger.success(f"Enumeration complete: {len(valid_users)} valid, {len(invalid_users)} invalid, {len(errors)} errors")
-        
+        self.logger.success(
+            f"Enumeration complete: {len(valid_users)} valid, {len(invalid_users)} invalid, {len(errors)} errors"
+        )
+
         if valid_users:
             self.logger.display(f"Valid usernames: {', '.join(valid_users)}")
 
