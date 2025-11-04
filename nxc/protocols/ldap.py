@@ -1061,11 +1061,12 @@ class ldap(connection):
         if valid_users:
             self.logger.display(f"Valid usernames: {', '.join(valid_users)}")
 
-    @threaded_enumeration(items_param="usernames", max_workers=10, progress_threshold=100)
+    @threaded_enumeration(items_param="usernames", progress_threshold=100)
     def _check_username_batch(self, usernames):
         """
         Check a single username via Kerberos AS-REQ.
         This method is decorated to run concurrently for multiple usernames.
+        The number of threads is automatically determined from self.args.threads (--threads CLI argument).
 
         Args:
             usernames: Single username to check (despite plural name, decorator handles iteration)

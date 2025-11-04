@@ -14,7 +14,7 @@ from functools import wraps
 
 
 
-def threaded_enumeration(items_param="items", max_workers=10, progress_threshold=100, show_progress=True):
+def threaded_enumeration(items_param="items", max_workers=None, progress_threshold=100, show_progress=True):
     """
     Decorator to add multi-threading support to enumeration methods.
 
@@ -24,13 +24,22 @@ def threaded_enumeration(items_param="items", max_workers=10, progress_threshold
     Args:
         items_param (str): Name of the parameter containing the list of items to enumerate.
                           Default: "items"
-        max_workers (int): Maximum number of concurrent threads. Default: 10
+        max_workers (int): Maximum number of concurrent threads. If None, uses self.args.threads
+                          from the instance, or defaults to 10 if not available. Default: None
         progress_threshold (int): Minimum number of items before showing progress bar.
                                  Set to 0 to always show. Default: 100
         show_progress (bool): Whether to show progress bar. Default: True
 
     Usage:
+        # Use explicit max_workers
         @threaded_enumeration(items_param="usernames", max_workers=20, progress_threshold=50)
+        def enumerate_users(self, usernames):
+            '''Process a single username and return result'''
+            result = self.check_username(username)
+            return {"username": username, "valid": result}
+
+        # Or use None to automatically use self.args.threads
+        @threaded_enumeration(items_param="usernames", progress_threshold=50)
         def enumerate_users(self, usernames):
             '''Process a single username and return result'''
             result = self.check_username(username)
@@ -99,6 +108,16 @@ def threaded_enumeration(items_param="items", max_workers=10, progress_threshold
 
             results = []
 
+            # Determine max_workers: use decorator parameter, then self.args.threads, then default 10
+            workers = max_workers
+            if workers is None:
+                if instance and hasattr(instance, 'args') and hasattr(instance.args, 'threads'):
+                    workers = instance.args.threads
+                    nxc_logger.debug(f"Using {workers} threads from --threads argument")
+                else:
+                    workers = 10
+                    nxc_logger.debug(f"Using default {workers} threads")
+
             # Determine if we should show progress
             use_progress = show_progress and total > progress_threshold
 
@@ -117,7 +136,7 @@ def threaded_enumeration(items_param="items", max_workers=10, progress_threshold
                 else:
                     return func(**new_kwargs)
 
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            with ThreadPoolExecutor(max_workers=workers) as executor:
                 futures = {executor.submit(process_item, item): item for item in items_list}
 
                 if use_progress:
