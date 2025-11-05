@@ -394,8 +394,8 @@ class kerberos(connection):
             self.logger.display(f"Valid usernames: {', '.join(valid_users)}")
 
             # Save to file if requested
-            if self.args.log:
-                output_file = f"{self.args.log}_valid_users.txt"
+            if hasattr(self.args, "users_export") and self.args.users_export:
+                output_file = self.args.users_export
                 try:
                     with open(output_file, "w") as f:
                         f.write("\n".join(valid_users))

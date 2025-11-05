@@ -34,4 +34,9 @@ def proto_args(parser, parents):
         help="IP address or FQDN of the Domain Controller (KDC)"
     )
 
+    kerberos_parser.add_argument(
+        "--users-export",
+        help="Enumerate domain users and export them to the specified file"
+    )
+
     return parser
