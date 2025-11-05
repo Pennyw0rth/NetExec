@@ -9,8 +9,8 @@ from impacket.krb5.kerberosv5 import sendReceive, KerberosError
 from impacket.krb5.types import Principal, KerberosTime
 from pyasn1.codec.der import encoder
 
+# Local library imports
 from nxc.logger import nxc_logger
-
 
 class KerberosUserEnum:
     """
