@@ -311,13 +311,14 @@ class KerberosAttacks:
     def check_user_exists(self, userName):
         """
         Check if a user exists via Kerberos AS-REQ without pre-authentication.
+
         Returns:
             True: User exists (got KDC_ERR_PREAUTH_REQUIRED or AS_REP)
             False: User does not exist (got KDC_ERR_C_PRINCIPAL_UNKNOWN)
             None: Unexpected error occurred
         """
         nxc_logger.debug(f"Checking if user {userName} exists via AS-REQ")
-        
+
         client_name = Principal(userName, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
         as_req = AS_REQ()
 
@@ -340,7 +341,7 @@ class KerberosAttacks:
             return None
 
         req_body["realm"] = domain
-        
+
         # Set time parameters
         now = datetime.utcnow() + timedelta(days=1) if utc_failed else datetime.now(UTC) + timedelta(days=1)
         req_body["till"] = KerberosTime.to_asn1(now)

@@ -1,21 +1,16 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import socket
 import time
 import binascii
 from impacket.krb5 import constants
-from impacket.krb5.asn1 import AS_REQ, AS_REP, TGS_REQ, TGS_REP, KRB_ERROR
-from impacket.krb5.kerberosv5 import sendReceive, KerberosError, getKerberosTGT
+from impacket.krb5.kerberosv5 import getKerberosTGT
 from impacket.krb5.types import Principal, KerberosException
-from impacket.krb5.ccache import CCache
-from pyasn1.codec.der import decoder
 
 from nxc.connection import connection
-from nxc.config import host_info_colors, process_secret
+from nxc.config import process_secret
 from nxc.logger import NXCAdapter
 from nxc.helpers.misc import threaded_enumeration
-from nxc.helpers.logger import highlight
 from nxc.protocols.kerberos.kerberosattacks import KerberosUserEnum
 
 
@@ -45,7 +40,7 @@ class kerberos(connection):
                 "protocol": "KRB5",
                 "host": self.host,
                 "port": self.port,
-                "hostname": self.hostname if hasattr(self, 'hostname') else self.host,
+                "hostname": self.hostname if hasattr(self, "hostname") else self.host,
             }
         )
 
@@ -67,7 +62,7 @@ class kerberos(connection):
                 self.logger.fail(f"Kerberos port {self.port} is closed on {self.host}")
                 return False
 
-        except socket.timeout:
+        except TimeoutError:
             self.logger.fail(f"Connection timeout to {self.host}:{self.port}")
             return False
         except Exception as e:
@@ -131,7 +126,7 @@ class kerberos(connection):
                 user_item = user_item.strip()
                 try:
                     # Try to open as file
-                    with open(user_item, 'r') as f:
+                    with open(user_item) as f:
                         file_users = [line.strip() for line in f if line.strip()]
                         usernames.extend(file_users)
                         self.logger.info(f"Loaded {len(file_users)} usernames from {user_item}")
@@ -411,8 +406,8 @@ class kerberos(connection):
             if self.args.log:
                 output_file = f"{self.args.log}_valid_users.txt"
                 try:
-                    with open(output_file, 'w') as f:
-                        f.write('\n'.join(valid_users))
+                    with open(output_file, "w") as f:
+                        f.write("\n".join(valid_users))
                     self.logger.success(f"Valid usernames saved to {output_file}")
                 except Exception as e:
                     self.logger.fail(f"Error saving valid usernames: {e}")
@@ -439,7 +434,7 @@ class kerberos(connection):
         )
 
         # Add delay if requested (for stealth/rate limiting)
-        if hasattr(self.args, 'delay') and self.args.delay > 0:
+        if hasattr(self.args, "delay") and self.args.delay > 0:
             time.sleep(self.args.delay)
 
         result = kerberos_enum.check_user_exists(usernames)
@@ -456,5 +451,3 @@ class kerberos(connection):
         else:
             self.logger.error(f"[!] {usernames}: {result}")
             return {"username": usernames, "status": "error", "error": result}
-
-

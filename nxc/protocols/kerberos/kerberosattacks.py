@@ -1,5 +1,4 @@
 # Standard library imports
-import socket
 import random
 from datetime import datetime, timezone
 
@@ -65,35 +64,35 @@ class KerberosUserEnum:
             as_req = AS_REQ()
 
             # Set domain
-            as_req['pvno'] = 5
-            as_req['msg-type'] = int(constants.ApplicationTagNumbers.AS_REQ.value)
+            as_req["pvno"] = 5
+            as_req["msg-type"] = int(constants.ApplicationTagNumbers.AS_REQ.value)
 
             # Request body
-            req_body = seq_set(as_req, 'req-body')
+            req_body = seq_set(as_req, "req-body")
 
             # KDC Options - request forwardable and renewable tickets
             opts = list()
             opts.append(constants.KDCOptions.forwardable.value)
             opts.append(constants.KDCOptions.renewable.value)
             opts.append(constants.KDCOptions.renewable_ok.value)
-            req_body['kdc-options'] = constants.encodeFlags(opts)
+            req_body["kdc-options"] = constants.encodeFlags(opts)
 
             # Set client principal
-            seq_set(req_body, 'cname', client_principal.components_to_asn1)
-            req_body['realm'] = self.domain
+            seq_set(req_body, "cname", client_principal.components_to_asn1)
+            req_body["realm"] = self.domain
 
             # Set server principal (krbtgt)
             server_principal = Principal(
-                f'krbtgt/{self.domain}',
+                f"krbtgt/{self.domain}",
                 type=constants.PrincipalNameType.NT_PRINCIPAL.value
             )
-            seq_set(req_body, 'sname', server_principal.components_to_asn1)
+            seq_set(req_body, "sname", server_principal.components_to_asn1)
 
             now = datetime.now(timezone.utc)
 
-            req_body['till'] = KerberosTime.to_asn1(now.replace(year=now.year + 1))
-            req_body['rtime'] = KerberosTime.to_asn1(now.replace(year=now.year + 1))
-            req_body['nonce'] = random.randint(1, 2147483647)  # Random 32-bit positive integer
+            req_body["till"] = KerberosTime.to_asn1(now.replace(year=now.year + 1))
+            req_body["rtime"] = KerberosTime.to_asn1(now.replace(year=now.year + 1))
+            req_body["nonce"] = random.randint(1, 2147483647)  # Random 32-bit positive integer
 
             # Set encryption types - prefer AES
             supported_ciphers = (
@@ -101,7 +100,7 @@ class KerberosUserEnum:
                 constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value,
                 constants.EncryptionTypes.rc4_hmac.value,
             )
-            seq_set_iter(req_body, 'etype', supported_ciphers)
+            seq_set_iter(req_body, "etype", supported_ciphers)
 
             # No preauthentication data (this is key for enumeration)
             # We deliberately don't include PA-DATA to trigger preauth required response
@@ -133,19 +132,17 @@ class KerberosUserEnum:
 
                 else:
                     # Other Kerberos error
-                    error_msg = constants.ErrorCodes(error_code).name if hasattr(constants.ErrorCodes, '_value2member_map_') else str(error_code)
+                    error_msg = constants.ErrorCodes(error_code).name if hasattr(constants.ErrorCodes, "_value2member_map_") else str(error_code)
                     nxc_logger.debug(f"Kerberos error for {username}: {error_msg}")
                     return f"KRB_ERROR_{error_code}"
 
             # If we get an AS-REP without error, user exists (very rare without preauth)
             return True
 
-        except socket.timeout:
+        except TimeoutError:
             return "TIMEOUT"
-        except socket.error as e:
+        except OSError as e:
             return f"SOCKET_ERROR: {e}"
         except Exception as e:
             nxc_logger.debug(f"Unexpected error checking {username}: {e}")
             return f"ERROR: {e}"
-
-

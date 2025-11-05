@@ -4,14 +4,12 @@ import string
 import re
 import inspect
 import os
-import threading
 from termcolor import colored
 from ipaddress import ip_address
 from nxc.logger import nxc_logger
 from time import strftime, gmtime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
-
 
 
 def threaded_enumeration(items_param="items", max_workers=None, progress_threshold=100, show_progress=True):
@@ -111,7 +109,7 @@ def threaded_enumeration(items_param="items", max_workers=None, progress_thresho
             # Determine max_workers: use decorator parameter, then self.args.threads, then default 10
             workers = max_workers
             if workers is None:
-                if instance and hasattr(instance, 'args') and hasattr(instance.args, 'threads'):
+                if instance and hasattr(instance, "args") and hasattr(instance.args, "threads"):
                     workers = instance.args.threads
                     nxc_logger.debug(f"Using {workers} threads from --threads argument")
                 else:
@@ -128,7 +126,7 @@ def threaded_enumeration(items_param="items", max_workers=None, progress_thresho
                 new_kwargs[items_param] = item
 
                 # Remove 'self' from kwargs if present
-                new_kwargs.pop('self', None)
+                new_kwargs.pop("self", None)
 
                 # Call function with instance if it's a method
                 if instance is not None:
