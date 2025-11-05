@@ -71,7 +71,7 @@ class KerberosUserEnum:
             req_body = seq_set(as_req, "req-body")
 
             # KDC Options - request forwardable and renewable tickets
-            opts = list()
+            opts = []
             opts.append(constants.KDCOptions.forwardable.value)
             opts.append(constants.KDCOptions.renewable.value)
             opts.append(constants.KDCOptions.renewable_ok.value)
@@ -109,7 +109,7 @@ class KerberosUserEnum:
             message = encoder.encode(as_req)
 
             try:
-                response = sendReceive(message, self.domain, self.kdcHost)
+                sendReceive(message, self.domain, self.kdcHost)
             except KerberosError as e:
                 # Analyze the error code to determine user status
                 error_code = e.getErrorCode()

@@ -393,7 +393,7 @@ class KerberosAttacks:
         # If we get here, we received a response (likely AS_REP)
         # This means the user exists and doesn't require pre-auth
         try:
-            as_rep = decoder.decode(r, asn1Spec=AS_REP())[0]
+            decoder.decode(r, asn1Spec=AS_REP())[0]
             nxc_logger.debug(f"User {userName} exists (no pre-auth required, received AS_REP)")
             return True
         except Exception:
@@ -402,9 +402,7 @@ class KerberosAttacks:
                 krb_error = decoder.decode(r, asn1Spec=KRB_ERROR())[0]
                 error_code = krb_error["error-code"]
                 nxc_logger.debug(f"User {userName} returned KRB_ERROR with code: {error_code}")
-                if error_code == constants.ErrorCodes.KDC_ERR_C_PRINCIPAL_UNKNOWN.value:
-                    return False
-                return True
+                return error_code != constants.ErrorCodes.KDC_ERR_C_PRINCIPAL_UNKNOWN.value
             except Exception:
                 nxc_logger.debug(f"Unexpected response format for user {userName}")
                 return None

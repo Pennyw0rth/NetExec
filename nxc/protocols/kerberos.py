@@ -3,6 +3,7 @@
 import socket
 import time
 import binascii
+import contextlib
 from impacket.krb5 import constants
 from impacket.krb5.kerberosv5 import getKerberosTGT
 from impacket.krb5.types import Principal, KerberosException
@@ -45,9 +46,7 @@ class kerberos(connection):
         )
 
     def create_conn_obj(self):
-        """
-        Create connection object (minimal for Kerberos - just validate KDC is reachable)
-        """
+        """Create connection object (minimal for Kerberos - just validate KDC is reachable)"""
         try:
             # Test if the KDC port is open
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -70,9 +69,7 @@ class kerberos(connection):
             return False
 
     def enum_host_info(self):
-        """
-        Enumerate basic host information
-        """
+        """Enumerate basic host information"""
         # Set domain from args
         if self.args.domain:
             self.domain = self.args.domain.upper()
@@ -204,9 +201,7 @@ class kerberos(connection):
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
-        """
-        Authenticate to Kerberos KDC using username and NTLM hash.
-        """
+        """Authenticate to Kerberos KDC using username and NTLM hash."""
         self.username = username
         self.domain = domain
 
@@ -264,9 +259,7 @@ class kerberos(connection):
             return False
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
-        """
-        Authenticate using Kerberos with various credential types.
-        """
+        """Authenticate using Kerberos with various credential types."""
         self.username = username
         self.password = password
         self.domain = domain
@@ -356,15 +349,13 @@ class kerberos(connection):
         if result is True:
             self.logger.success(f"{self.domain}\\{username}")
             # Add to database
-            try:
+            with contextlib.suppress(Exception):
                 self.db.add_host(
                     self.host,
                     self.hostname,
                     self.domain,
                     "Kerberos"
                 )
-            except Exception:
-                pass
             return True
         elif result == "ACCOUNT_DISABLED":
             self.logger.highlight(f"{self.domain}\\{username} (disabled)")
