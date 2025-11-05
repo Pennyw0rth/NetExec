@@ -1,28 +1,13 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-"""
-Kerberos Attack & Enumeration Module
-
-This module provides Kerberos-specific attack and enumeration capabilities,
-particularly focusing on user enumeration without incrementing badPwdCount.
-"""
-
+# Standard library imports
 import socket
-from binascii import hexlify
-from datetime import datetime
-try:
-    from datetime import UTC
-    utc_failed = False
-except ImportError:
-    utc_failed = True
+from datetime import datetime, timezone
 
+# External library imports
 from impacket.krb5 import constants
-from impacket.krb5.asn1 import AS_REQ, AS_REP, KRB_ERROR, seq_set, seq_set_iter, KERB_PA_PAC_REQUEST
+from impacket.krb5.asn1 import AS_REQ, seq_set, seq_set_iter
 from impacket.krb5.kerberosv5 import sendReceive, KerberosError
 from impacket.krb5.types import Principal, KerberosTime
-from pyasn1.codec.der import decoder, encoder
-from pyasn1.type.univ import noValue
+from pyasn1.codec.der import encoder
 
 from nxc.logger import nxc_logger
 
@@ -103,11 +88,8 @@ class KerberosUserEnum:
             )
             seq_set(req_body, 'sname', server_principal.components_to_asn1)
 
-            # Set time fields
-            if utc_failed:
-                now = datetime.utcnow()
-            else:
-                now = datetime.now(UTC).replace(tzinfo=None)
+            now = datetime.now(timezone.utc)
+
             req_body['till'] = KerberosTime.to_asn1(now.replace(year=now.year + 1))
             req_body['rtime'] = KerberosTime.to_asn1(now.replace(year=now.year + 1))
             req_body['nonce'] = 123456789  # Can be any value
