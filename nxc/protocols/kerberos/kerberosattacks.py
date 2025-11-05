@@ -1,5 +1,6 @@
 # Standard library imports
 import socket
+import random
 from datetime import datetime, timezone
 
 # External library imports
@@ -92,7 +93,7 @@ class KerberosUserEnum:
 
             req_body['till'] = KerberosTime.to_asn1(now.replace(year=now.year + 1))
             req_body['rtime'] = KerberosTime.to_asn1(now.replace(year=now.year + 1))
-            req_body['nonce'] = 123456789  # Can be any value
+            req_body['nonce'] = random.randint(1, 2147483647)  # Random 32-bit positive integer
 
             # Set encryption types - prefer AES
             supported_ciphers = (
