@@ -1,19 +1,20 @@
-#!/usr/bin/env python3
-
+# Built-in imports
 import socket
 import time
 import binascii
 import contextlib
+
+# Third party imports
 from impacket.krb5 import constants
 from impacket.krb5.kerberosv5 import getKerberosTGT
 from impacket.krb5.types import Principal, KerberosException
 
+# Local library imports
 from nxc.connection import connection
 from nxc.config import process_secret
 from nxc.logger import NXCAdapter
 from nxc.helpers.misc import threaded_enumeration
 from nxc.protocols.kerberos.kerberosattacks import KerberosUserEnum
-
 
 class kerberos(connection):
     """
