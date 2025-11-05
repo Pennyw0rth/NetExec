@@ -1,11 +1,7 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """
-Database module for Kerberos protocol
+Database module for Kerberos protocol.
 
-Currently minimal - just provides compatibility with NetExec's database structure.
-Can be extended in the future to store enumeration results, discovered users, etc.
+Currently minimal.
 """
 
 
