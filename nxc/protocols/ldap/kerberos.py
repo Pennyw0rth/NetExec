@@ -307,8 +307,6 @@ class KerberosAttacks:
         else:
             hash_tgt += f"{hexlify(as_rep['enc-part']['cipher'].asOctets()[:16]).decode()}${hexlify(as_rep['enc-part']['cipher'].asOctets()[16:]).decode()}"
         return hash_tgt
-
-    def check_user_exists(self, userName):
         """
         Check if a user exists via Kerberos AS-REQ without pre-authentication.
 
