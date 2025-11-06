@@ -316,7 +316,8 @@ class FirefoxTriage:
     @staticmethod
     def decrypt_3des_cbc(key, iv, ciphertext):
         """Decrypt using 3DES-CBC (legacy Firefox)"""
-        cipher = DES3.new(key=key, mode=DES3.MODE_CBC, iv=iv)
+        # 3DES requires exactly 24-byte keys - truncate if longer
+        cipher = DES3.new(key=key[:24], mode=DES3.MODE_CBC, iv=iv)
         data = cipher.decrypt(ciphertext)
         nb = data[-1]
         if isinstance(nb, str):
