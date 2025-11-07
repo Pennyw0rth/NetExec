@@ -29,7 +29,7 @@ class vnc(connection):
         self.credential = None
         self.RFBversion = "3.8"
         self.noauth = False  # True when security type is 1
-        self.sec = None
+        self.stype = None
         connection.__init__(self, args, db, host)
 
     def proto_logger(self):
@@ -44,7 +44,7 @@ class vnc(connection):
 
     def print_host_info(self):
         noauth = colored(f" (No Auth:{self.noauth})", host_info_colors[2], attrs=["bold"]) if self.noauth else ""
-        self.logger.display(f"RFB {self.RFBversion} {'' if self.RFBversion == '3.8' else '(Not supported)'} {noauth}")
+        self.logger.display(f"RFB {self.RFBversion} (security types: {self.stype}){'' if self.RFBversion == '3.8' else ' (Not supported)'}{noauth}")
 
     def probe_rfb(self):
         # Attempt an RFB handshake
@@ -64,12 +64,14 @@ class vnc(connection):
 
             if self.RFBversion == "3.3":
                 # Expect a 4-byte uint32 security type
-                sec = s.recv(4)
-                if len(sec) != 4:
+                raw_stype = s.recv(4)
+                if len(raw_stype) != 4:
                     return None
-                return [struct.unpack("!I", sec)[0]]
+                stypes = struct.unpack("!I", raw_stype)[0]
+                self.logger.debug(f"Security types: {stypes}")
+                return [stypes]
 
-            # 3.8 return a list of supporter security types
+            # 3.8 return a list of supported security types
             else:
                 nbytes = s.recv(1)  # Number of security types
                 if not nbytes:
@@ -83,19 +85,19 @@ class vnc(connection):
                     return None
 
                 # Read n one-byte security type IDs (e.g. 1=None, 2=VNCAuth)
-                types = list(s.recv(n))
-                self.logger.debug(f"RFB 3.8 security types: {types}")
-                return types
+                stypes = list(s.recv(n))
+                self.logger.debug(f"Security types: {stypes}")
+                return stypes
 
         return None
 
     def enum_host_info(self):
-        self.sec = self.probe_rfb()
-        if self.sec is None:
+        self.stype = self.probe_rfb()
+        if self.stype is None:
             self.logger.debug("RFB probe: no response or malformed response. The server likely closed the connection or sent a non-standard handshake.")
         else:
-            self.logger.debug(f"RFB probe: server returned security-type={self.sec!r}")
-            if (1 in self.sec):
+            self.logger.debug(f"RFB probe: server returned security-type={self.stype!r}")
+            if (1 in self.stype):
                 self.noauth = True
 
     def create_conn_obj(self):
@@ -119,7 +121,7 @@ class vnc(connection):
         return True
 
     def plaintext_login(self, username, password):
-        if 2 in self.sec:
+        if 2 in self.stype and self.RFBversion != "3.3":  # Only try plaintext for RFB 3.8 with sec type 2 (password)
             try:
                 stype = asyauthSecret.PASS
                 if password == "":
@@ -146,7 +148,7 @@ class vnc(connection):
                 self.logger.fail(f"{password} {'Authentication failed'}")
                 return False
         else:
-            self.logger.debug("VNC server does not support password authentication")
+            self.logger.debug("VNC server uses RFB 3.3 and/or does not support password authentication")
 
     async def screen(self):
         self.conn = VNCConnection(target=self.target, credentials=self.credential, iosettings=self.iosettings)
