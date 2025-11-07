@@ -27,8 +27,9 @@ class vnc(connection):
         self.url = None
         self.target = None
         self.credential = None
-        self.RBFversion = "3.8"
+        self.RFBversion = "3.8"
         self.noauth = False  # True when security type is 1
+        self.sec = None
         connection.__init__(self, args, db, host)
 
     def proto_logger(self):
@@ -43,52 +44,70 @@ class vnc(connection):
 
     def print_host_info(self):
         noauth = colored(f" (No Auth:{self.noauth})", host_info_colors[2], attrs=["bold"]) if self.noauth else ""
-        self.logger.display(f"RBF {self.RBFversion} {'' if self.RBFversion == '3.8' else '(Not supported)'} {noauth}")
+        self.logger.display(f"RFB {self.RFBversion} {'' if self.RFBversion == '3.8' else '(Not supported)'} {noauth}")
 
-    def probe_rfb33(self):
-        # Attempt an RFB 3.3 handshake
+    def probe_rfb(self):
+        # Attempt an RFB handshake
         with contextlib.suppress(Exception), socket.create_connection((self.host, self.port), timeout=1.0) as s:
 
             # Read the server banner (usually "RFB 003.003\n" or similar)
             banner = s.recv(12)
             if not banner.startswith(b"RFB"):
                 return None
-            self.logger.debug(f"RFB 3.3 probe: server banner={banner!r}")
+            self.logger.debug(f"RFB probe: server banner={banner!r}")
+            if b"003.003" in banner:
+                self.RFBversion = "3.3"
+            else:
+                self.RFBversion = "3.8"
 
-            # Always send 3.3 client banner
-            s.sendall(b"RFB 003.003\n")
+            s.sendall(banner)
 
-            # Expect a 4-byte uint32 security type
-            sec = s.recv(4)
-            if len(sec) != 4:
-                return None
+            if self.RFBversion == "3.3":
+                # Expect a 4-byte uint32 security type
+                sec = s.recv(4)
+                if len(sec) != 4:
+                    return None
+                return [struct.unpack("!I", sec)[0]]
 
-            return struct.unpack("!I", sec)[0]
+            # 3.8 return a list of supporter security types
+            else:
+                nbytes = s.recv(1)  # Number of security types
+                if not nbytes:
+                    return None
+                n = nbytes[0]
+                if n == 0:
+                    # Server reports failure; read reason
+                    ln = struct.unpack("!I", s.recv(4))[0]
+                    reason = s.recv(ln)
+                    self.logger.debug(f"RFB failure: {reason!r}")
+                    return None
+
+                # Read n one-byte security type IDs (e.g. 1=None, 2=VNCAuth)
+                types = list(s.recv(n))
+                self.logger.debug(f"RFB 3.8 security types: {types}")
+                return types
 
         return None
+
+    def enum_host_info(self):
+        self.sec = self.probe_rfb()
+        if self.sec is None:
+            self.logger.debug("RFB probe: no response or malformed response. The server likely closed the connection or sent a non-standard handshake.")
+        else:
+            self.logger.debug(f"RFB probe: server returned security-type={self.sec!r}")
+            if (1 in self.sec):
+                self.noauth = True
 
     def create_conn_obj(self):
         try:
             self.target = RDPTarget(ip=self.host, port=self.port)
-            credential = UniCredential(protocol=asyauthProtocol.PLAIN, stype=asyauthSecret.NONE, secret="")
+            credential = UniCredential(protocol=asyauthProtocol.PLAIN, stype=asyauthSecret.PASS)
             self.conn = VNCConnection(target=self.target, credentials=credential, iosettings=self.iosettings)
             asyncio.run(self.connect_vnc(True))
-            # If no errors, secure type 1 is supported by the service
-            self.noauth = True
         except Exception as e:
             self.logger.debug(str(e))
-            if "Server supports:" not in str(e):
-                self.logger.debug("Exception message was empty; probing server with RFB 3.3 handshake...")
-                sec = self.probe_rfb33()
-                if sec is None:
-                    self.logger.debug("RFB 3.3 probe: no response or malformed response. The server likely closed the connection or sent a non-standard handshake.")
-                    return False
-                else:
-                    self.logger.debug(f"RFB 3.3 probe: server returned security-type={sec!r}")
-                    self.RBFversion = "3.3"
-                    if (sec == 1):
-                        self.noauth = True
-                    return True
+            if "Connect call failed" in str(e):
+                return False
         return True
 
     async def connect_vnc(self, discover=False):
@@ -100,39 +119,34 @@ class vnc(connection):
         return True
 
     def plaintext_login(self, username, password):
-        try:
-            stype = asyauthSecret.PASS
-            if password == "":
-                stype = asyauthSecret.NONE
-            self.credential = UniCredential(secret=password, protocol=asyauthProtocol.PLAIN, stype=stype)
-            self.conn = VNCConnection(
-                target=self.target,
-                credentials=self.credential,
-                iosettings=self.iosettings,
-            )
-            asyncio.run(self.connect_vnc())
-
-            self.admin_privs = True
-            self.logger.success(
-                "{} {}".format(
-                    password,
-                    highlight(f"({self.config.get('nxc', 'pwn3d_label')})" if self.admin_privs else ""),
+        if 2 in self.sec:
+            try:
+                stype = asyauthSecret.PASS
+                if password == "":
+                    stype = asyauthSecret.NONE
+                self.credential = UniCredential(secret=password, protocol=asyauthProtocol.PLAIN, stype=stype)
+                self.conn = VNCConnection(
+                    target=self.target,
+                    credentials=self.credential,
+                    iosettings=self.iosettings,
                 )
-            )
-            return True
+                asyncio.run(self.connect_vnc())
 
-        except Exception as e:
-            self.logger.debug(str(e))
-            if "Server supports: 1" in str(e):
+                self.admin_privs = True
                 self.logger.success(
                     "{} {}".format(
-                        "No password seems to be accepted by the server",
+                        password,
                         highlight(f"({self.config.get('nxc', 'pwn3d_label')})" if self.admin_privs else ""),
                     )
                 )
-            else:
+                return True
+
+            except Exception as e:
+                self.logger.debug(str(e))
                 self.logger.fail(f"{password} {'Authentication failed'}")
-            return False
+                return False
+        else:
+            self.logger.debug("VNC server does not support password authentication")
 
     async def screen(self):
         self.conn = VNCConnection(target=self.target, credentials=self.credential, iosettings=self.iosettings)
