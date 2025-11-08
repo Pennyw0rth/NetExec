@@ -1,3 +1,6 @@
+from nxc.helpers.misc import CATEGORY
+
+
 class NXCModule:
     """
     Enumerate SQL Server linked servers
@@ -7,6 +10,7 @@ class NXCModule:
     name = "enum_links"
     description = "Enumerate linked SQL Servers and their login configurations."
     supported_protocols = ["mssql"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self):
         self.mssql_conn = None
@@ -25,7 +29,7 @@ class NXCModule:
                 self.context.log.display(f"  - {server}")
         else:
             self.context.log.fail("No linked servers found.")
-            
+
         if connection.admin_privs:
             res = self.mssql_conn.sql_query("EXEC sp_helplinkedsrvlogin")
             srvs = [srv for srv in res if srv["Local Login"] != "NULL"]

@@ -518,7 +518,7 @@ class nfs(connection):
     def get_root_handles(self, mount_fh):
         """
         Get possible root handles to escape to the root filesystem
-        Sources: 
+        Sources:
         https://elixir.bootlin.com/linux/v6.13.4/source/fs/nfsd/nfsfh.h#L47-L62
         https://elixir.bootlin.com/linux/v6.13.4/source/include/linux/exportfs.h#L25
         https://github.com/hvs-consulting/nfs-security-tooling/blob/main/nfs_analyze/nfs_analyze.py
