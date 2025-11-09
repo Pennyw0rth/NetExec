@@ -338,7 +338,7 @@ class smb(connection):
     # Public Authentication Methods (called by connection.py)
     # ============================================================
 
-    def kerberos_login(self, domain: str, username: str, password: str = None, ntlm_hash: str = "", aesKey: str = "", kdcHost: str = "", useCache: bool = False):
+    def kerberos_login(self, domain: str, username: str, password: str | None = None, ntlm_hash: str = "", aesKey: str = "", kdcHost: str = "", useCache: bool = False):
         """
         Authenticate using Kerberos.
 
@@ -648,10 +648,8 @@ class smb(connection):
             return False
 
         # Add to database
-        try:
+        with contextlib.suppress(Exception):
             self.db.add_credential("plaintext", domain, username, "")
-        except Exception:
-            pass
 
         return True
 

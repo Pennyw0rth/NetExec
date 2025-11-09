@@ -9,6 +9,7 @@ from ipaddress import ip_address
 from nxc.logger import nxc_logger
 from time import strftime, gmtime
 
+
 def identify_target_file(target_file):
     with open(target_file) as target_file_handle:
         for i, line in enumerate(target_file_handle):

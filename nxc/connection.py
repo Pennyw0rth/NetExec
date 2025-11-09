@@ -402,9 +402,8 @@ class connection:
                         owned.append(False)
             else:
                 # Check if user looks like a file path but doesn't exist
-                if "/" in user or "\\" in user:
-                    if not isfile(user):
-                        self.logger.warning(f"File not found: {user} - treating as username")
+                if ("/" in user or "\\" in user) and not isfile(user):
+                    self.logger.warning(f"File not found: {user} - treating as username")
 
                 if "\\" in user and len(user.split("\\")) == 2:
                     domain_single, username_single = user.split("\\")
@@ -429,9 +428,8 @@ class connection:
                     sys.exit(1)
             else:
                 # Check if password looks like a file path but doesn't exist
-                if "/" in password or "\\" in password:
-                    if not isfile(password):
-                        self.logger.warning(f"File not found: {password} - treating as password")
+                if ("/" in password or "\\" in password) and not isfile(password):
+                    self.logger.warning(f"File not found: {password} - treating as password")
 
                 secret.append(password)
                 cred_type.append("plaintext")
