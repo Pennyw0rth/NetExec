@@ -10,8 +10,9 @@ from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
+    """Module made by @azoxlpf"""
     name = "raisechild"
-    description = "Compromise parent domain from child domain via trust abuse @azoxlpf"
+    description = "Compromise parent domain from child domain via trust abuse"
     supported_protocols = ["ldap"]
     category = CATEGORY.PRIVILEGE_ESCALATION
 
