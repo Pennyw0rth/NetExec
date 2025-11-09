@@ -401,7 +401,12 @@ class connection:
                         username.append(username_single.strip())
                         owned.append(False)
             else:
-                if "\\" in user:
+                # Check if user looks like a file path but doesn't exist
+                if "/" in user or "\\" in user:
+                    if not isfile(user):
+                        self.logger.warning(f"File not found: {user} - treating as username")
+
+                if "\\" in user and len(user.split("\\")) == 2:
                     domain_single, username_single = user.split("\\")
                 else:
                     domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain is not None else self.domain
@@ -423,6 +428,11 @@ class connection:
                     self.logger.error("You can ignore non UTF-8 characters with the option '--ignore-pw-decoding'")
                     sys.exit(1)
             else:
+                # Check if password looks like a file path but doesn't exist
+                if "/" in password or "\\" in password:
+                    if not isfile(password):
+                        self.logger.warning(f"File not found: {password} - treating as password")
+
                 secret.append(password)
                 cred_type.append("plaintext")
 
@@ -570,6 +580,13 @@ class connection:
             cred_type = ["plaintext"]
             if not (username[0] or secret[0] or domain[0]):
                 return False
+
+        # If no secrets provided, add None to allow authentication attempts (useful for user enumeration)
+        if len(secret) == 0 and len(username) > 0:
+            self.logger.debug("No secrets provided, adding None to allow authentication attempts")
+            secret = [None]
+            cred_type = ["plaintext"]
+            data = [None]
 
         if not self.args.no_bruteforce:
             for secr_index, secr in enumerate(secret):
