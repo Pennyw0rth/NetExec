@@ -30,8 +30,7 @@ class NXCModule:
 
     def options(self, context, module_options):
         """
-        Forge a Kerberos TGT using the child domain's krbtgt hash,
-        with an extra SID targeting privileged groups in the parent domain.
+        Forge a Kerberos TGT using the child domain's krbtgt hash, with an extra SID targeting privileged groups in the parent domain.
         Requires an existing trust with the parent.
 
         USER        Target username to forge the ticket for (default: Administrator)
@@ -39,9 +38,9 @@ class NXCModule:
         RID         RID used for the extra SID (default: 519 = Enterprise Admins)
 
         Examples:
-            -o USER=DC01$
-            -o USER_ID=1001
-            -o RID=512
+        netexec ldap <ip> -u <username> -p <password> -M raisechild -o USER=DC01$
+        netexec ldap <ip> -u <username> -p <password> -M raisechild -o USER_ID=1001
+        netexec ldap <ip> -u <username> -p <password> -M raisechild -o RID=512
         """
         self.context = context
         self.module_options = module_options
