@@ -79,19 +79,18 @@ class NXCModule:
                 if trust_type == 2 and trust_direction in (1, 3):
                     self.parent_domain = trust_partner or trust_name
 
-                    if isinstance(trust_sid, bytes):
-                        try:
-                            revision = trust_sid[0]
-                            count = trust_sid[1]
-                            id_auth = int.from_bytes(trust_sid[2:8], byteorder="big")
-                            sub_auths = [
-                                str(int.from_bytes(trust_sid[8 + i * 4 : 12 + i * 4], byteorder="little"))
-                                for i in range(count)
-                            ]
-                            trust_sid = f"S-{revision}-{id_auth}-" + "-".join(sub_auths)
-                        except Exception as e:
-                            self.context.log.fail(f"Failed to convert parent SID to string: {e}")
-                            trust_sid = None
+                    try:
+                        revision = trust_sid[0]
+                        count = trust_sid[1]
+                        id_auth = int.from_bytes(trust_sid[2:8], byteorder="big")
+                        sub_auths = [
+                            str(int.from_bytes(trust_sid[8 + i * 4 : 12 + i * 4], byteorder="little"))
+                            for i in range(count)
+                        ]
+                        trust_sid = f"S-{revision}-{id_auth}-" + "-".join(sub_auths)
+                    except Exception as e:
+                        self.context.log.fail(f"Failed to convert parent SID to string: {e}")
+                        trust_sid = None
 
                     self.parent_sid = trust_sid
                     self.context.log.highlight(f"Parent domain name: {self.parent_domain}")
@@ -102,7 +101,7 @@ class NXCModule:
             self.context.log.fail(f"Failed to query trustedDomain entries: {e}")
 
     def get_domain_sid(self, connection):
-        if hasattr(connection, "sid_domain") and connection.sid_domain:
+        if connection.sid_domain:
             self.child_sid = connection.sid_domain
             self.context.log.highlight(f"Child Domain SID: {self.child_sid}")
         else:
