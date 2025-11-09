@@ -222,15 +222,6 @@ netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M subnets
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M user-desc
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M whoami
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dump-computers
-##### KERBEROS
-netexec kerberos TARGET_HOST -d DOMAIN -u LOGIN_USERNAME
-netexec kerberos TARGET_HOST -d DOMAIN -u TEST_USER_FILE
-netexec kerberos TARGET_HOST -d DOMAIN -u LOGIN_USERNAME --dc-ip DC_IP
-netexec kerberos TARGET_HOST -d DOMAIN -u LOGIN_USERNAME -p LOGIN_PASSWORD
-netexec kerberos TARGET_HOST -d DOMAIN -u TEST_USER_FILE -p LOGIN_PASSWORD
-netexec kerberos TARGET_HOST -d DOMAIN -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce
-netexec kerberos TARGET_HOST -d DOMAIN -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce --continue-on-success
-netexec kerberos TARGET_HOST -d DOMAIN -u LOGIN_USERNAME
 ##### WINRM
 netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig
