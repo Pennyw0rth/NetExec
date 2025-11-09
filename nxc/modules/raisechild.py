@@ -108,50 +108,29 @@ class NXCModule:
             self.context.log.fail("Could not retrieve child domain SID from connection.")
 
     def _get_smb_session(self, ldap_conn):
-        target = ldap_conn.host
-        remote_name = getattr(ldap_conn, "hostname", None) or target
-        # Upper-case realm for Kerberos; keep short NetBIOS for NTLM
-        domain_fqdn = (getattr(ldap_conn, "domain", "") or "").upper()
-        domain_net = domain_fqdn.split(".")[0] if domain_fqdn else ""
-
         smb = SMBConnection(
-            remoteName=remote_name,
-            remoteHost=target,
+            remoteName=ldap_conn.hostname,
+            remoteHost=ldap_conn.host,
             sess_port=445,
         )
 
-        use_k = bool(
-            getattr(ldap_conn, "kerberos", False)
-            or getattr(ldap_conn, "use_kcache", False)
-            or getattr(ldap_conn, "aesKey", None)
-        )
-
-        cred_hash = getattr(ldap_conn, "hash", "") or ""
-        lmhash, nthash = "", ""
-        if cred_hash:
-            if ":" in cred_hash:
-                lmhash, nthash = cred_hash.split(":", 1)
-            else:
-                nthash = cred_hash
-
-        if use_k:
+        if ldap_conn.kerberos:
             smb.kerberosLogin(
-                user=ldap_conn.username or "",
-                password=getattr(ldap_conn, "password", "") or "",
-                domain=domain_fqdn,
-                lmhash=lmhash,
-                nthash=nthash,
-                aesKey=getattr(ldap_conn, "aesKey", "") or "",
-                kdcHost=getattr(ldap_conn, "kdcHost", None) or target,
-                useCache=getattr(ldap_conn, "use_kcache", False),
+                user=ldap_conn.username,
+                password=ldap_conn.password,
+                domain=ldap_conn.domain,
+                lmhash=ldap_conn.lmhash,
+                nthash=ldap_conn.nthash,
+                aesKey=ldap_conn.aesKey,
+                kdcHost=ldap_conn.kdcHost,
+                useCache=ldap_conn.use_kcache,
             )
-        elif nthash or lmhash:
+        elif ldap_conn.nthash or ldap_conn.lmhash:
             # NTLM pass-the-hash
-            smb.login(ldap_conn.username or "", "", domain_net, lmhash=lmhash, nthash=nthash)
+            smb.login(ldap_conn.username, "", ldap_conn.domain, lmhash=ldap_conn.lmhash, nthash=ldap_conn.nthash)
         else:
             # NTLM with cleartext password
-            smb.login(ldap_conn.username, getattr(ldap_conn, "password", "") or "", domain_net)
-
+            smb.login(ldap_conn.username, ldap_conn.password, ldap_conn.domain)
         return smb
 
     def _dcsync_krbtgt(self, smb_conn, connection):
