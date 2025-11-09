@@ -398,13 +398,11 @@ def kerberos_asreq_user_enum(domain: str, username: str, kdcHost: str) -> str:
         )
         seq_set(req_body, "sname", server_principal.components_to_asn1)
 
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.timezone.utc)
 
         req_body["till"] = KerberosTime.to_asn1(now.replace(year=now.year + 1))
         req_body["rtime"] = KerberosTime.to_asn1(now.replace(year=now.year + 1))
-        req_body["nonce"] = random.randint(
-            1, 2147483647
-        )  # Random 32-bit positive integer
+        req_body["nonce"] = random.getrandbits(31)
 
         # Set encryption types - prefer AES
         supported_ciphers = (

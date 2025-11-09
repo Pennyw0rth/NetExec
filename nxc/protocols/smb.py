@@ -358,10 +358,10 @@ class smb(connection):
         Returns:
             bool: True if authentication/enumeration succeeded
         """
-        # Check if this is user enumeration mode
-        if self.args.continue_on_success and password is None and not ntlm_hash and not aesKey:
+        # Check if this is user enumeration mode (no credentials provided)
+        if password is None and not ntlm_hash and not aesKey and not useCache:
             # User enumeration mode: AS-REQ probing without badPwdCount increment
-            return self._kerberos_user_enum(domain, username, kdcHost)
+            return self._kerberos_user_verification(domain, username, kdcHost)
 
         if password == "":
             self.logger.warning("Using blank password will increment badPwdCount")
@@ -526,8 +526,13 @@ class smb(connection):
             if nthash:
                 self.nthash = nthash
 
-            if not all(s == "" for s in [self.nthash, password, aesKey]):
-                kerb_pass = next(s for s in [self.nthash, password, aesKey] if s)
+            # Determine which credential is being used for logging
+            if self.nthash:
+                kerb_pass = self.nthash
+            elif password:
+                kerb_pass = password
+            elif aesKey:
+                kerb_pass = aesKey
             else:
                 kerb_pass = ""
                 self.logger.debug(f"Attempting to do Kerberos Login with useCache: {useCache}")
@@ -594,7 +599,7 @@ class smb(connection):
                 self.inc_failed_login(username)
             return False
 
-    def _kerberos_user_enum(self, domain: str, username: str, kdcHost: str):
+    def _kerberos_user_verification(self, domain: str, username: str, kdcHost: str):
         """
         Enumerate if username exists via Kerberos AS-REQ (no badPwdCount increment).
 
@@ -614,51 +619,41 @@ class smb(connection):
         # Call the pure function from kerberos.py
         result = kerberos_asreq_user_enum(domain.upper(), username, kdc_host)
 
-        # Parse result and log appropriately
-        if result == "valid":
-            # User exists and is active
-            self.logger.success(f"{domain}\\{username}")
-
-            # Add to database
-            try:
-                self.db.add_credential("plaintext", domain, username, "")
-            except Exception:
-                pass
-
-            return True
-
-        elif result == "disabled":
-            # User exists but disabled
-            self.logger.highlight(f"{domain}\\{username} (account disabled)")
-
-            # Still add to database as it's a valid username
-            try:
-                self.db.add_credential("plaintext", domain, username, "")
-            except Exception:
-                pass
-
-            return True
-
-        elif result == "invalid":
+        if result == "invalid":
             # User doesn't exist - only show in debug mode during enumeration
             self.logger.debug(f"{domain}\\{username} (user does not exist)")
             return False
 
-        elif result == "wrong_realm":
+        if result == "wrong_realm":
             # Wrong domain
             self.logger.fail(f"{domain}\\{username} (wrong realm/domain)")
             return False
 
-        elif result.startswith("error:"):
+        if result.startswith("error:"):
             # Error occurred
             error_msg = result.split(":", 1)[1]
             self.logger.warning(f"{domain}\\{username} ({error_msg})")
             return False
 
+        # Parse result and log appropriately
+        if result == "valid":
+            # User exists and is active
+            self.logger.success(f"{domain}\\{username}")
+        elif result == "disabled":
+            # User exists but disabled
+            self.logger.success(f"{domain}\\{username} (account disabled)")
         else:
             # Unknown result
             self.logger.debug(f"{domain}\\{username} (unknown result: {result})")
             return False
+
+        # Add to database
+        try:
+            self.db.add_credential("plaintext", domain, username, "")
+        except Exception:
+            pass
+
+        return True
 
     # ============================================================
     # SMB Connection Management
