@@ -29,6 +29,9 @@ import platform
 if sys.stdout.encoding == "cp1252":
     sys.stdout.reconfigure(encoding="utf-8")
 
+
+from nxc.helpers.opengraph import opengraph
+
 # Increase file_limit to prevent error "Too many open files"
 if platform.system() != "Windows":
     import resource
@@ -224,6 +227,10 @@ def main():
     try:
         asyncio.run(start_run(protocol_object, args, db, targets))
     finally:
+        if args.opengraph is not None:
+            opengraph.update_node_ids_to_guids(args.opengraph)
+            nxc_logger.debug(opengraph.to_json())
+            opengraph.save()
         db_engine.dispose()
 
 
