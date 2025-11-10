@@ -16,7 +16,7 @@ import importlib.metadata
 
 def gen_cli_args():
     setup_debug_logging()
-    
+
     try:
         VERSION, COMMIT = importlib.metadata.version("netexec").split("+")
         DISTANCE, COMMIT = COMMIT.split(".")
@@ -24,30 +24,29 @@ def gen_cli_args():
         VERSION = importlib.metadata.version("netexec")
         COMMIT = ""
         DISTANCE = ""
-    CODENAME = "NeedForSpeed"
-    nxc_logger.debug(f"NXC VERSION: {VERSION} - {CODENAME} - {COMMIT} - {DISTANCE}")
-    
+    CODENAME = "SmoothOperator"
+
     generic_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     generic_group = generic_parser.add_argument_group("Generic", "Generic options for nxc across protocols")
     generic_group.add_argument("--version", action="store_true", help="Display nxc version")
     generic_group.add_argument("-t", "--threads", type=int, dest="threads", default=256, help="set how many concurrent threads to use")
     generic_group.add_argument("--timeout", default=None, type=int, help="max timeout in seconds of each thread")
     generic_group.add_argument("--jitter", metavar="INTERVAL", type=str, help="sets a random delay between each authentication")
-    
+
     output_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     output_group = output_parser.add_argument_group("Output", "Options to set verbosity levels and control output")
     output_group.add_argument("--verbose", action="store_true", help="enable verbose output")
     output_group.add_argument("--debug", action="store_true", help="enable debug level information")
     output_group.add_argument("--no-progress", action="store_true", help="do not displaying progress bar during scan")
     output_group.add_argument("--log", metavar="LOG", help="export result into a custom file")
-    
+
     dns_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     dns_group = dns_parser.add_argument_group("DNS")
     dns_group.add_argument("-6", dest="force_ipv6", action="store_true", help="Enable force IPv6")
     dns_group.add_argument("--dns-server", action="store", help="Specify DNS server (default: Use hosts file & System DNS)")
     dns_group.add_argument("--dns-tcp", action="store_true", help="Use TCP instead of UDP for DNS queries")
     dns_group.add_argument("--dns-timeout", action="store", type=int, default=3, help="DNS query timeout in seconds")
-    
+
     parser = argparse.ArgumentParser(
         description=rf"""
      .   .
@@ -61,7 +60,7 @@ def gen_cli_args():
 
     The network execution tool
     Maintained as an open source project by @NeffIsBack, @MJHallenbeck, @_zblurx
-    
+
     For documentation and usage examples, visit: https://www.netexec.wiki/
 
     {highlight('Version', 'red')} : {highlight(VERSION)}
@@ -77,13 +76,13 @@ def gen_cli_args():
     mgroup = module_parser.add_argument_group("Modules", "Options for nxc modules")
     mgroup.add_argument("-M", "--module", choices=get_module_names(), action="append", metavar="MODULE", help="module to use")
     mgroup.add_argument("-o", metavar="MODULE_OPTION", nargs="+", default=[], dest="module_options", help="module options")
-    mgroup.add_argument("-L", "--list-modules", action="store_true", help="list available modules")
+    mgroup.add_argument("-L", "--list-modules", nargs="?", type=str, const="", help="list available modules")
     mgroup.add_argument("--options", dest="show_module_options", action="store_true", help="display module options")
 
     subparsers = parser.add_subparsers(title="Available Protocols", dest="protocol")
 
     std_parser = argparse.ArgumentParser(add_help=False, parents=[generic_parser, output_parser, dns_parser], formatter_class=DisplayDefaultsNotNone)
-    std_parser.add_argument("target", nargs="+" if not (module_parser.parse_known_args()[0].list_modules or module_parser.parse_known_args()[0].show_module_options or generic_parser.parse_known_args()[0].version) else "*", type=str, help="the target IP(s), range(s), CIDR(s), hostname(s), FQDN(s), file(s) containing a list of targets, NMap XML or .Nessus file(s)")
+    std_parser.add_argument("target", nargs="+" if not (module_parser.parse_known_args()[0].list_modules is not None or module_parser.parse_known_args()[0].show_module_options or generic_parser.parse_known_args()[0].version) else "*", type=str, help="the target IP(s), range(s), CIDR(s), hostname(s), FQDN(s), file(s) containing a list of targets, NMap XML or .Nessus file(s)")
     credential_group = std_parser.add_argument_group("Authentication", "Options for authenticating")
     credential_group.add_argument("-u", "--username", metavar="USERNAME", dest="username", nargs="+", default=[], help="username(s) or file(s) containing usernames")
     credential_group.add_argument("-p", "--password", metavar="PASSWORD", dest="password", nargs="+", default=[], help="password(s) or file(s) containing passwords")
@@ -107,12 +106,6 @@ def gen_cli_args():
     certificate_group.add_argument("--pfx-pass", metavar="PFXPASS", help="Password of the pfx certificate")
     certificate_group.add_argument("--pem-cert", metavar="PEMCERT", help="Use certificate authentication from PEM file")
     certificate_group.add_argument("--pem-key", metavar="PEMKEY", help="Private key for the PEM format")
-    
-    server_group = std_parser.add_argument_group("Servers", "Options for nxc servers")
-    server_group.add_argument("--server", choices={"http", "https"}, default="https", help="use the selected server")
-    server_group.add_argument("--server-host", type=str, default="0.0.0.0", metavar="HOST", help="IP to bind the server to")
-    server_group.add_argument("--server-port", metavar="PORT", type=int, help="start the server on the specified port")
-    server_group.add_argument("--connectback-host", type=str, metavar="CHOST", help="IP for the remote system to connect back to")    
 
     p_loader = ProtocolLoader()
     protocols = p_loader.get_protocols()
@@ -124,7 +117,7 @@ def gen_cli_args():
     except Exception as e:
         nxc_logger.exception(f"Error loading proto_args from proto_args.py file in protocol folder: {protocol} - {e}")
 
-    argcomplete.autocomplete(parser)
+    argcomplete.autocomplete(parser, always_complete_options=False)
     args = parser.parse_args()
 
     if len(sys.argv) == 1:
@@ -139,7 +132,7 @@ def gen_cli_args():
     if hasattr(args, "get_output_tries"):
         args.get_output_tries = args.get_output_tries * 10
 
-    return args
+    return args, [CODENAME, VERSION, COMMIT, DISTANCE]
 
 
 def get_module_names():

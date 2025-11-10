@@ -39,7 +39,7 @@ class database(BaseDB):
         db_conn.execute(
             """CREATE TABLE "hosts" (
             "id" integer PRIMARY KEY,
-            "ip" text,
+            "ip" text UNIQUE,
             "hostname" text,
             "domain" text,
             "os" text,
@@ -177,6 +177,16 @@ class database(BaseDB):
                 self.DpapiBackupkey = Table("dpapi_backupkey", self.metadata, autoload_with=self.db_engine)
                 self.ConfChecksTable = Table("conf_checks", self.metadata, autoload_with=self.db_engine)
                 self.ConfChecksResultsTable = Table("conf_checks_results", self.metadata, autoload_with=self.db_engine)
+
+                # Check if Database Schema is correct, due to hanging issues reported on discord introduced by https://github.com/Pennyw0rth/NetExec/pull/658
+                from sqlalchemy.schema import UniqueConstraint
+                ip_is_unique = False
+                for constraint in self.HostsTable.constraints:
+                    if isinstance(constraint, UniqueConstraint) and constraint.columns[0].name == "ip":
+                        ip_is_unique = True
+                        break
+                if not ip_is_unique:
+                    raise NoSuchTableError("ip is not unique in hosts table")
             except (NoInspectionAvailable, NoSuchTableError):
                 print(
                     f"""
@@ -257,7 +267,7 @@ class database(BaseDB):
         # TODO: find a way to abstract this away to a single Upsert call
         q = Insert(self.HostsTable)  # .returning(self.HostsTable.c.id)
         update_columns = {col.name: col for col in q.excluded if col.name not in "id"}
-        q = q.on_conflict_do_update(index_elements=self.HostsTable.primary_key, set_=update_columns)
+        q = q.on_conflict_do_update(index_elements=["ip"], set_=update_columns)
 
         self.db_execute(q, hosts)  # .scalar()
         # we only return updated IDs for now - when RETURNING clause is allowed we can return inserted
@@ -451,18 +461,18 @@ class database(BaseDB):
             return [results]
         # if we're filtering by domain controllers
         elif filter_term == "dc":
-            q = q.filter(self.HostsTable.c.dc is True)
+            q = q.filter(self.HostsTable.c.dc == True)  # noqa: E712
             if domain:
                 q = q.filter(func.lower(self.HostsTable.c.domain) == func.lower(domain))
         elif filter_term == "signing":
             # generally we want hosts that are vulnerable, so signing disabled
-            q = q.filter(self.HostsTable.c.signing is False)
+            q = q.filter(self.HostsTable.c.signing == False)  # noqa: E712
         elif filter_term == "spooler":
-            q = q.filter(self.HostsTable.c.spooler is True)
+            q = q.filter(self.HostsTable.c.spooler == True)  # noqa: E712
         elif filter_term == "zerologon":
-            q = q.filter(self.HostsTable.c.zerologon is True)
+            q = q.filter(self.HostsTable.c.zerologon == True)  # noqa: E712
         elif filter_term == "petitpotam":
-            q = q.filter(self.HostsTable.c.petitpotam is True)
+            q = q.filter(self.HostsTable.c.petitpotam == True)  # noqa: E712
         elif filter_term is not None and filter_term.startswith("domain"):
             domain = filter_term.split()[1]
             like_term = func.lower(f"%{domain}%")

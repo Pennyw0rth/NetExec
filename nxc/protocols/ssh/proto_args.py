@@ -1,5 +1,5 @@
 from argparse import _StoreAction
-from nxc.helpers.args import DisplayDefaultsNotNone
+from nxc.helpers.args import DisplayDefaultsNotNone, get_conditional_action
 
 
 def proto_args(parser, parents):
@@ -22,17 +22,3 @@ def proto_args(parser, parents):
     cgroup.add_argument("-x", metavar="COMMAND", dest="execute", help="execute the specified command")
 
     return parser
-
-def get_conditional_action(baseAction):
-    class ConditionalAction(baseAction):
-        def __init__(self, option_strings, dest, **kwargs):
-            x = kwargs.pop("make_required", [])
-            super().__init__(option_strings, dest, **kwargs)
-            self.make_required = x
-
-        def __call__(self, parser, namespace, values, option_string=None):
-            for x in self.make_required:
-                x.required = True
-            super().__call__(parser, namespace, values, option_string)
-
-    return ConditionalAction

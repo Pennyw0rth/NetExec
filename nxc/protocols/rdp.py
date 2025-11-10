@@ -9,20 +9,20 @@ from impacket.krb5.ccache import CCache
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.logger import NXCAdapter
-from nxc.config import host_info_colors
-from nxc.config import process_secret
+from nxc.config import host_info_colors, process_secret
+from nxc.paths import NXC_PATH
 
 from aardwolf.connection import RDPConnection
 from aardwolf.commons.queuedata.constants import VIDEO_FORMAT
+from aardwolf.commons.queuedata.keyboard import RDP_KEYBOARD_UNICODE
 from aardwolf.commons.iosettings import RDPIOSettings
 from aardwolf.commons.target import RDPTarget
+from aardwolf.keyboard.layoutmanager import KeyboardLayoutManager
 from aardwolf.protocol.x224.constants import SUPP_PROTOCOLS
 from asyauth.common.credentials.ntlm import NTLMCredential
 from asyauth.common.credentials.kerberos import KerberosCredential
 from asyauth.common.constants import asyauthSecret
 from asysocks.unicomm.common.target import UniTarget, UniProto
-
-from nxc.paths import NXC_PATH
 
 
 class rdp(connection):
@@ -30,7 +30,6 @@ class rdp(connection):
         self.domain = None
         self.server_os = None
         self.iosettings = RDPIOSettings()
-        self.iosettings.channels = []
         self.iosettings.video_out_format = VIDEO_FORMAT.RAW
         self.iosettings.clipboard_use_pyperclip = False
         self.protoflags_nla = [
@@ -55,7 +54,6 @@ class rdp(connection):
         self.iosettings.video_bpp_max = 32
         # PIL produces incorrect picture for some reason?! TODO: check bug
         self.iosettings.video_out_format = VIDEO_FORMAT.PNG  #
-        self.output_filename = None
         self.domain = None
         self.server_os = None
         self.url = None
@@ -141,7 +139,6 @@ class rdp(connection):
                         self.hostname = info_domain["computername"]
                         self.server_os = info_domain["os_guess"] + " Build " + str(info_domain["os_build"])
                         self.logger.extra["hostname"] = self.hostname
-                        self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
                     break
 
         if self.args.domain:
@@ -358,6 +355,207 @@ class rdp(connection):
                 )
             return False
 
+    async def _send_keystrokes(self, text, delay=0.02):
+        """Helper method to send keystrokes to the RDP session"""
+        for char in text:
+            key_event = RDP_KEYBOARD_UNICODE()
+            key_event.char = char
+            key_event.is_pressed = True
+            await self.conn.ext_in_queue.put(key_event)
+            await asyncio.sleep(delay)
+
+    async def _send_enter(self):
+        """Helper method to send Enter key to the RDP session"""
+        await self.conn.send_key_virtualkey("VK_RETURN", True, False)
+        await asyncio.sleep(0.05)
+        await self.conn.send_key_virtualkey("VK_RETURN", False, False)
+
+    async def _send_win_r(self):
+        """Helper method to send Windows+R key combination to open Run dialog"""
+        try:
+            self.logger.debug("Sending Win+R using scancode method")
+
+            layout = KeyboardLayoutManager().get_layout_by_shortname("enus")
+
+            win_scancode = layout.vk_to_scancode("VK_LWIN")
+            await self.conn.send_key_scancode(win_scancode, True, False)
+            await asyncio.sleep(0.1)
+
+            r_scancode = layout.char_to_scancode("r")[0]
+            await self.conn.send_key_scancode(r_scancode, True, False)
+            await asyncio.sleep(0.1)
+
+            await self.conn.send_key_scancode(r_scancode, False, False)
+            await asyncio.sleep(0.1)
+
+            await self.conn.send_key_scancode(win_scancode, False, False)
+
+            await asyncio.sleep(0.5)
+
+            self.logger.debug("Win+R sent successfully")
+            return True
+        except (ConnectionResetError, ConnectionError, OSError) as e:
+            self.logger.debug(f"Connection error while waiting for clipboard: {e!s}")
+            self.logger.fail("Connection was reset by the remote host")
+            return False
+        except Exception as e:
+            self.logger.debug(f"Error sending Win+R: {e!s}")
+            self.logger.debug("Using fallback approach for opening command prompt")
+            return False
+
+    async def execute_shell(self, payload, get_output, shell_type):
+        # Append | clip to send output to clipboard
+        if shell_type == "cmd":
+            payload_with_clip = f"{payload} | clip & exit"
+        elif shell_type == "powershell":
+            payload_with_clip = f"try {{ {payload} 2>&1 | clip}} catch {{ $_ | clip}}; exit"
+        else:
+            self.logger.fail(f"Unsupported shell type: {shell_type}")
+            return None
+        self.logger.debug(f"Executing command: {payload_with_clip}")
+
+        # Create a connection
+        try:
+            self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
+            await self.connect_rdp()
+        except Exception as e:
+            self.logger.debug(f"Error connecting to RDP: {e!s}")
+            return None
+
+        try:
+            if get_output:
+                self.logger.success("Waiting for clipboard to be ready...")
+                clipboard_ready = False
+                await asyncio.sleep(self.args.cmd_delay)
+
+                timeout_counter = 0
+                while not clipboard_ready and timeout_counter < (self.args.clipboard_delay * 10):  # Convert seconds to deciseconds
+                    try:
+                        data = await asyncio.wait_for(self.conn.ext_out_queue.get(), timeout=0.1)
+                        if hasattr(data, "type") and data.type.name == "CLIPBOARD_READY":
+                            clipboard_ready = True
+                            self.logger.debug("Clipboard is ready!")
+                            break
+                    except asyncio.TimeoutError:
+                        timeout_counter += 1
+                        continue
+                    except (ConnectionResetError, ConnectionError, OSError) as e:
+                        self.logger.debug(f"Connection error while waiting for clipboard: {e!s}")
+                        self.logger.fail("Connection was reset by the remote host")
+                        return ""
+                    except Exception as e:
+                        self.logger.debug(f"Error waiting for clipboard: {e!s}")
+                        self.logger.fail("Warning: Clipboard may not be fully initialized, no output can be retrieved")
+                        return ""
+
+                if not clipboard_ready:
+                    self.logger.fail("Clipboard cannot be initialized, no output can be retrieved")
+                    return ""
+
+            # Wait for desktop to be available
+            await asyncio.sleep(self.args.cmd_delay)
+
+            try:
+                # Try to open Run dialog using Windows+R
+                self.logger.debug("Attempting to open Run dialog")
+                win_r_success = await self._send_win_r()
+
+                if win_r_success:
+                    self.logger.debug(f"Launching {shell_type} via Run dialog")
+                    await self._send_keystrokes(f"{shell_type}.exe")
+                    await self._send_enter()
+                    await asyncio.sleep(self.args.cmd_delay)  # Wait for cmd window to open
+                else:
+                    # Fallback: Try direct command typing (assumes cmd may already be open)
+                    self.logger.debug(f"Sending {shell_type} command directly")
+                    await self._send_keystrokes(f"{shell_type}.exe")
+                    await self._send_enter()
+                    await asyncio.sleep(self.args.cmd_delay)
+
+                # Type the command with | clip
+                self.logger.debug(f"Typing command: {payload_with_clip}")
+                await self._send_keystrokes(payload_with_clip)
+                await self._send_enter()
+
+                # Wait for command to execute
+                await asyncio.sleep(self.args.cmd_delay)
+
+                if get_output:
+                    # Get the current clipboard text
+                    self.logger.debug("Getting clipboard content...")
+                    clipboard_text = await self.conn.get_current_clipboard_text()
+
+                    if clipboard_text:
+                        self.logger.debug("Command output retrieved from clipboard:")
+                        for line in clipboard_text.lstrip().strip("\n").splitlines():
+                            self.logger.highlight(line)
+                    else:
+                        self.logger.fail("Clipboard is empty or contains non-text data")
+                    return clipboard_text
+                else:
+                    self.logger.success("Executed command without retrieving output")
+
+                self.logger.debug("Command execution completed")
+                return None
+
+            except (ConnectionResetError, ConnectionError, OSError) as e:
+                self.logger.debug(f"Connection error during command execution: {e!s}")
+                self.logger.fail("Connection was reset by the remote host during command execution")
+                return None
+            except Exception as e:
+                self.logger.debug(f"Error during command execution: {e!s}")
+                if "cannot unpack non-iterable NoneType object" in str(e):
+                    self.logger.fail("RDP connection was terminated unexpectedly")
+                else:
+                    self.logger.fail(f"Command execution failed: {e!s}")
+                return None
+
+        except (ConnectionResetError, ConnectionError, OSError) as e:
+            self.logger.debug(f"Connection error: {e!s}")
+            self.logger.fail("Connection was reset by the remote host")
+            return None
+        except Exception as e:
+            self.logger.debug(f"Unexpected error: {e!s}")
+            self.logger.fail(f"Command execution failed: {e!s}")
+            return None
+        finally:
+            # Always clean up the connection
+            if self.conn is not None:
+                self.logger.debug("Terminating RDP connection")
+                try:
+                    await self.conn.terminate()
+                except Exception as e:
+                    self.logger.debug(f"Error terminating connection: {e!s}")
+
+    def execute(self, payload=None, shell_type="cmd"):
+        """Execute a command via RDP"""
+        if not payload:
+            payload = self.args.execute
+
+        get_output = bool(not self.args.no_output)
+
+        self.logger.success(f"Executing command: {payload} with delay {self.args.cmd_delay} seconds")
+
+        try:
+            result = asyncio.run(self.execute_shell(payload, get_output, shell_type))
+
+            if result:
+                self.logger.debug("Command execution completed")
+            return result
+        except Exception as e:
+            self.logger.error(f"Command execution error: {e!s}")
+            if shell_type == "cmd":
+                self.logger.info("Cannot execute command via cmd - now switching to PowerShell to attempt execution")
+                try:
+                    return self.execute(payload, shell_type="powershell")
+                except Exception as e2:
+                    self.logger.fail(f"Execute command failed, error: {e2!s}")
+            else:
+                self.logger.fail(f"Execute command failed, error: {e!s}")
+
+    def ps_execute(self):
+        self.execute(payload=self.args.ps_execute, shell_type="powershell")
+
     async def screen(self):
         try:
             self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
@@ -368,7 +566,7 @@ class rdp(connection):
         await asyncio.sleep(5)
         if self.conn is not None and self.conn.desktop_buffer_has_data is True:
             buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-            filename = os.path.expanduser(f"~/.nxc/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
+            filename = os.path.expanduser(f"{NXC_PATH}/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
             buffer.save(filename, "png")
             self.logger.highlight(f"Screenshot saved {filename}")
 

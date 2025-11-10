@@ -203,7 +203,7 @@ class nfs(connection):
         for node in export_nodes:
 
             # Collect the names of the groups associated with this export node
-            group_names = self.group_names(node.ex_groups)
+            group_names = self.group_names(node.ex_groups) or ["Everyone"]
             networks.append(group_names)
 
             # If there are more export nodes, process them recursively. More than one share.
@@ -262,7 +262,7 @@ class nfs(connection):
 
                         read_perm, write_perm, exec_perm = self.get_permissions(file_handle)
                         self.mount.umnt(self.auth)
-                        self.logger.highlight(f"{self.auth['uid']:<11}{'r' if read_perm else '-'}{'w' if write_perm else '-'}{('x' if exec_perm else '-'):<7}{convert_size(used_space) + "/" + convert_size(total_space):<16} {share:<30} {', '.join(network) if network else 'No network':<15}")
+                        self.logger.highlight(f"{self.auth['uid']:<11}{'r' if read_perm else '-'}{'w' if write_perm else '-'}{('x' if exec_perm else '-'):<7}{convert_size(used_space) + '/' + convert_size(total_space):<16} {share:<30} {', '.join(network) if network else 'No network':<15}")
                 except Exception as e:
                     self.logger.fail(f"Failed to list share: {share} - {e}")
 
@@ -516,7 +516,7 @@ class nfs(connection):
     def get_root_handles(self, mount_fh):
         """
         Get possible root handles to escape to the root filesystem
-        Sources: 
+        Sources:
         https://elixir.bootlin.com/linux/v6.13.4/source/fs/nfsd/nfsfh.h#L47-L62
         https://elixir.bootlin.com/linux/v6.13.4/source/include/linux/exportfs.h#L25
         https://github.com/hvs-consulting/nfs-security-tooling/blob/main/nfs_analyze/nfs_analyze.py
@@ -562,8 +562,8 @@ class nfs(connection):
         # Format for the file id see: https://elixir.bootlin.com/linux/v6.13.4/source/include/linux/exportfs.h#L25
         fh = bytearray(mount_fh)
         if filesystem in [FileID.ext, FileID.unknown]:
-            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x02\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x02\x00\x00\x00"))    # noqa: E226 FURB113
-            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x80\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x80\x00\x00\x00"))    # noqa: E226
+            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x02\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x02\x00\x00\x00"))  # noqa: E226
+            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x80\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x80\x00\x00\x00"))  # noqa: E226
         if filesystem in [FileID.btrfs, FileID.unknown]:
             # Iterate over btrfs subvolumes, use 16 as default similar to the guys from nfs-security-tooling
             for i in range(16):
@@ -622,7 +622,11 @@ class nfs(connection):
         # NORMAL LS CALL (without root escape)
         if self.args.share:
             mount_info = self.mount.mnt(self.args.share, self.auth)
-            mount_fh = mount_info["mountinfo"]["fhandle"]
+            if mount_info["status"] != 0:
+                self.logger.fail(f"Could not mount share {self.args.share}: {NFSSTAT3[mount_info['status']]}")
+                return
+            else:
+                mount_fh = mount_info["mountinfo"]["fhandle"]
         elif self.root_escape:
             # Interestingly we don't actually have to mount the share if we already got the handle
             self.logger.success(f"Successful escape on share: {self.escape_share}")
@@ -728,7 +732,7 @@ def convert_size(size_bytes):
     if size_bytes == 0:
         return "0B"
     size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
-    i = int(math.floor(math.log(size_bytes, 1024)))
+    i = math.floor(math.log(size_bytes, 1024))
     p = math.pow(1024, i)
     s = round(size_bytes / p, 1)
     return f"{s}{size_name[i]}"

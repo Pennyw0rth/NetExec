@@ -1,4 +1,5 @@
 from dploot.lib.target import Target
+from nxc.helpers.misc import CATEGORY
 from nxc.protocols.smb.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
 
 
@@ -10,16 +11,22 @@ class NXCModule:
     """
 
     name = "firefox"
-    description = "Dump credentials from Firefox"
+    description = "[REMOVED] Dump credentials from Firefox"
     supported_protocols = ["smb"]
-    opsec_safe = True  # Does the module touch disk?
-    multiple_hosts = True  # Does it make sense to run this module on multiple hosts at a time?
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
-        """COOKIES    Get also Firefox cookies"""
+        """
+        [REMOVED] use the --dpapi flag instead of the module firefox.
+
+        COOKIES    Get also Firefox cookies
+        """
         self.gather_cookies = "COOKIES" in module_options
 
     def on_admin_login(self, context, connection):
+        context.log.fail("[REMOVED] Use the --dpapi flag instead of the module firefox.")
+        return
+
         host = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
         domain = connection.domain
         username = connection.username
