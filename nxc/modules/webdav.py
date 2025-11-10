@@ -5,6 +5,7 @@ from impacket.smb3structs import FILE_READ_DATA
 from impacket.smbconnection import SessionError
 from impacket.nmb import NetBIOSError
 import contextlib
+from nxc.helpers.opengraph import opengraph
 
 
 class NXCModule:
@@ -33,6 +34,7 @@ class NXCModule:
         Check whether the 'DAV RPC Service' pipe exists within the 'IPC$' share. This indicates
         that the WebClient service is running on the target.
         """
+        opengraph.add_tag(str.upper(f"{connection.hostname}.{connection.domain}"), "webclientrunning", True)
         try:
             remote_file = RemoteFile(connection.conn, "DAV RPC Service", "IPC$", access=FILE_READ_DATA)
             remote_file.open_file()
