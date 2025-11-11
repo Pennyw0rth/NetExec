@@ -78,9 +78,6 @@ class OpenGraph:
     def to_dict(self):
         """Return the full OpenGraph dict."""
         return {
-            "metadata": {
-                "source_kind": "NetExec"
-            },
             "graph": {
                 "nodes": [
                     {"id": nid, **ndata} for nid, ndata in self.nodes.items()
