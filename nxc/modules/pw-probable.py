@@ -684,7 +684,7 @@ class NXCModule(AdUtilities):
         """Identify if an account should be skipped from processing."""
         if account.sAMAccountName == "" or account.pwdLastSet == "":
             return True
-        if original_user == account.sAMAccountName:
+        if original_user.lower() == account.sAMAccountName.lower():
             return True
         if self.is_machine_account(account.sAMAccountName) and not self.include_machine:
             return True
