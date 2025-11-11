@@ -64,6 +64,7 @@ def parse_task_xml(xml_content):
                 result["enabled"] = elem.text.strip()
 
     except ET.ParseError:
+        # Silently ignore malformed XML - return partial results with what we could parse
         pass
 
     return result
