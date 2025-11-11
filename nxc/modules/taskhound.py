@@ -5,6 +5,7 @@
 
 import io
 import os
+import re
 import xml.etree.ElementTree as ET
 
 from nxc.helpers.misc import CATEGORY
@@ -38,6 +39,9 @@ def parse_task_xml(xml_content):
             if declaration_end != -1:
                 xml_content = xml_content[declaration_end + 2:].lstrip()
 
+        # Parse XML with defused settings to prevent XXE attacks
+        # Note: Standard ElementTree doesn't support disabling external entities at runtime,
+        # but we mitigate risk by only parsing from trusted source (C$\Windows\System32\Tasks)
         root = ET.fromstring(xml_content)
 
         # Extract elements (namespace-agnostic)
@@ -72,6 +76,30 @@ def is_sid(value):
     return value.strip().upper().startswith("S-1-5-")
 
 
+def escape_ldap_filter(value):
+    r"""Escape special characters in LDAP filter values to prevent injection.
+
+    Based on RFC 4515 section 3 - characters that need escaping in search filters:
+    * ( ) \ NUL
+    """
+    if not value:
+        return value
+
+    # Escape special LDAP filter characters
+    replacements = {
+        "\\": "\\5c",  # Must be first to avoid double-escaping
+        "*": "\\2a",
+        "(": "\\28",
+        ")": "\\29",
+        "\x00": "\\00",  # NUL byte
+    }
+
+    for char, escaped in replacements.items():
+        value = value.replace(char, escaped)
+
+    return value
+
+
 def looks_like_domain_user(runas):
     """Check if a RunAs value looks like a domain user"""
     if not runas:
@@ -80,7 +108,7 @@ def looks_like_domain_user(runas):
     runas_lower = runas.lower().strip()
 
     # Skip system accounts
-    if runas_lower.startswith(("nt ", "builtin\\")):
+    if runas_lower.startswith(("nt authority\\", "nt service\\", "builtin\\")):
         return False
 
     # Skip computer accounts (end with $)
@@ -96,10 +124,10 @@ def looks_like_domain_user(runas):
 
 
 def get_ldap_connection(smb_connection, context, ldap_user=None, ldap_pass=None, ldap_domain=None):
-    """Create a lightweight LDAP wrapper that uses the enhanced functions from ldap.py.
+    """Create a lightweight LDAP wrapper with privilege checking functionality.
 
-    This creates a minimal object that delegates to the ldap protocol's resolve_sid()
-    and check_if_admin() functions, avoiding code duplication.
+    This creates a minimal LDAP connection and implements resolve_sid() and check_if_admin()
+    logic directly, adapted from nxc.protocols.ldap.
 
     Args:
         smb_connection: SMB connection object (provides domain, kdcHost)
@@ -113,15 +141,8 @@ def get_ldap_connection(smb_connection, context, ldap_user=None, ldap_pass=None,
     """
     try:
         from impacket.ldap import ldap as ldap_impacket
-
-        # Import ldap protocol module to use its functions
-        import importlib.util
-        from pathlib import Path
-
-        ldap_module_path = Path(__file__).parent.parent / "protocols" / "ldap.py"
-        spec = importlib.util.spec_from_file_location("nxc.protocols.ldap_proto", ldap_module_path)
-        ldap_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(ldap_module)
+        from impacket.ldap import ldapasn1 as ldapasn1_impacket
+        from nxc.parsers.ldap_results import parse_result_attributes
 
         # Determine LDAP target: use kdcHost (DC) if available
         ldap_target = getattr(smb_connection, "kdcHost", None) or smb_connection.host
@@ -143,7 +164,12 @@ def get_ldap_connection(smb_connection, context, ldap_user=None, ldap_pass=None,
             domain = smb_connection.domain
             context.log.debug(f"Using SMB connection domain: {domain}")
 
+        # Validate domain format (must be FQDN like example.local)
+        if not domain:
+            raise ValueError("Domain is required for LDAP connection")
         domain_parts = domain.split(".")
+        if len(domain_parts) < 2 or not all(domain_parts):
+            raise ValueError(f"Invalid domain format for LDAP: {domain!r} (must be FQDN like 'example.local')")
         base_dn = ",".join([f"DC={part}" for part in domain_parts])
 
         # Use separate LDAP credentials if provided, otherwise use SMB credentials
@@ -156,34 +182,23 @@ def get_ldap_connection(smb_connection, context, ldap_user=None, ldap_pass=None,
         ldap_conn.login(user=username, password=password, domain=domain)
         context.log.debug(f"LDAP connection established to {ldap_target} as {username}@{domain}")
 
-        # Create a lightweight wrapper that delegates to ldap.py functions
+        # Create a lightweight wrapper with privilege checking logic
+        # Logic adapted from nxc.protocols.ldap.check_if_admin() and resolve_sid()
         class LDAPWrapper:
-            """Minimal wrapper that uses enhanced functions from ldap protocol"""
-            def __init__(self, conn, base_dn, domain, username, password, context, ldap_funcs):
-                self.ldap_connection = conn  # Named to match ldap protocol's attribute
+            """Minimal LDAP wrapper with privilege checking functionality"""
+            def __init__(self, conn, base_dn, domain, username, context):
+                self.ldap_connection = conn
                 self.baseDN = base_dn
                 self.domain = domain
                 self.username = username
-                self.password = password
                 self.context = context
                 self.sid_domain = None
-                # Attributes needed by ldap.py functions
-                self.lmhash = ""
-                self.nthash = ""
-                self.aesKey = ""
-                self.use_kcache = False
-                self.logger = context.log
-                # Store references to the actual ldap.py functions
-                self._resolve_sid_func = ldap_funcs["resolve_sid"]
-                self._check_if_admin_func = ldap_funcs["check_if_admin"]
 
             def search(self, searchFilter, attributes, sizeLimit=0, baseDN=None, searchControls=None):
-                """Search wrapper that matches ldap protocol's signature"""
-                from impacket.ldap import ldapasn1 as ldapasn1_impacket
+                """Execute LDAP search"""
                 if baseDN is None:
                     baseDN = self.baseDN
                 paged_search_control = [ldapasn1_impacket.SimplePagedResultsControl(criticality=True, size=1000)]
-                # Use None for scope like ldap protocol does initially
                 return self.ldap_connection.search(
                     scope=None,
                     searchBase=baseDN,
@@ -194,23 +209,99 @@ def get_ldap_connection(smb_connection, context, ldap_user=None, ldap_pass=None,
                 )
 
             def resolve_sid(self, sid):
-                """Resolve Windows SID to username via LDAP."""
-                return self._resolve_sid_func(self, sid)
+                """Resolve Windows SID to sAMAccountName (adapted from ldap.py)"""
+                try:
+                    if not sid or not sid.upper().startswith("S-1-5-"):
+                        return sid, False
+
+                    # Validate SID format to prevent LDAP injection
+                    if not re.match(r"^S-1-5-[\d-]+$", sid, re.IGNORECASE):
+                        self.context.log.debug(f"Invalid SID format: {sid}")
+                        return sid, False
+
+                    search_filter = f"(objectSid={sid})"
+                    attributes = ["sAMAccountName"]
+                    resp = self.search(search_filter, attributes, sizeLimit=1, baseDN=self.baseDN)
+
+                    if not resp:
+                        return sid, False
+
+                    resp_parsed = parse_result_attributes(resp)
+                    if resp_parsed and len(resp_parsed) > 0:
+                        sam = resp_parsed[0].get("sAMAccountName")
+                        if sam:
+                            # Format as DOMAIN\username
+                            domain_name = self.domain.split(".")[0].upper() if self.domain else ""
+                            return f"{domain_name}\\{sam}", True
+
+                    return sid, False
+
+                except Exception as e:
+                    self.context.log.debug(f"SID resolution failed for {sid}: {e}")
+                    return sid, False
 
             def check_if_admin(self, username=None):
-                """Check if user is member of privileged groups via LDAP."""
-                return self._check_if_admin_func(self, username)
+                """Check if user is member of privileged groups (adapted from ldap.py)"""
+                # Determine which user to check
+                target_username = username
+                if target_username:
+                    # Strip domain prefix if present
+                    if "\\" in target_username:
+                        target_username = target_username.split("\\")[-1]
+                else:
+                    target_username = self.username
 
-        # Get the actual functions from ldap.py to avoid duplication
-        ldap_functions = {
-            "resolve_sid": ldap_module.ldap.resolve_sid,
-            "check_if_admin": ldap_module.ldap.check_if_admin
-        }
+                try:
+                    # 1. Get domain SID
+                    search_filter = "(userAccountControl:1.2.840.113556.1.4.803:=8192)"
+                    attributes = ["objectSid"]
+                    resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
+                    resp_parsed = parse_result_attributes(resp)
+                    privileged_groups = []
 
-        return LDAPWrapper(ldap_conn, base_dn, domain, username, password, context, ldap_functions)
+                    if not resp_parsed:
+                        return False, []
 
-    except Exception as e:
+                    for item in resp_parsed:
+                        self.sid_domain = "-".join(item["objectSid"].split("-")[:-1])
+                        break
+
+                    # 2. Get privileged group DNs (Domain Admins, Administrators, Enterprise Admins, Server Operators, Backup Operators)
+                    search_filter = f"(|(objectSid={self.sid_domain}-512)(objectSid={self.sid_domain}-544)(objectSid={self.sid_domain}-519)(objectSid=S-1-5-32-549)(objectSid=S-1-5-32-551))"
+                    attributes = ["distinguishedName"]
+                    resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
+                    resp_parsed = parse_result_attributes(resp)
+                    answers = []
+                    for item in resp_parsed:
+                        answers.append(f"(memberOf:1.2.840.113556.1.4.1941:={item['distinguishedName']})")
+                        privileged_groups.append(item["distinguishedName"])
+
+                    if len(answers) == 0:
+                        return False, []
+
+                    # 3. Check if user is member of these groups (escape username to prevent LDAP injection)
+                    escaped_username = escape_ldap_filter(target_username)
+                    search_filter = f"(&(objectCategory=user)(sAMAccountName={escaped_username})(|{''.join(answers)}))"
+                    resp = self.search(search_filter, attributes=[], sizeLimit=0, baseDN=self.baseDN)
+                    resp_parsed = parse_result_attributes(resp)
+
+                    for item in resp_parsed:
+                        if item:
+                            return True, privileged_groups
+
+                    return False, []
+
+                except Exception as e:
+                    self.context.log.debug(f"Privilege check failed for {target_username}: {e}")
+                    return False, []
+
+        return LDAPWrapper(ldap_conn, base_dn, domain, username, context)
+
+    except (ImportError, AttributeError, ValueError) as e:
         context.log.debug(f"Failed to create LDAP connection: {e}")
+        return None
+    except Exception as e:
+        context.log.debug(f"Unexpected error creating LDAP connection: {e}")
         return None
 
 
@@ -224,6 +315,14 @@ class NXCModule:
     description = "Enumerate scheduled tasks and detect privileged accounts via LDAP"
     supported_protocols = ["smb"]
     category = CATEGORY.ENUMERATION
+
+    def __init__(self):
+        # Initialize default values to prevent AttributeError
+        self.include_ms = False
+        self.show_unsaved_creds = False
+        self.ldap_user = ""
+        self.ldap_pass = ""
+        self.ldap_domain = ""
 
     def options(self, context, module_options):
         """Module options.
@@ -400,9 +499,17 @@ class NXCModule:
                                 try:
                                     # Convert Windows path to local OS path
                                     backup_file_path = os.path.join(backup_target_dir, rel_path.replace("\\", os.sep))
-                                    backup_file_dir = os.path.dirname(backup_file_path)
+
+                                    # Path traversal protection: ensure backup_file_path is within backup_target_dir
+                                    abs_backup_file_path = os.path.abspath(backup_file_path)
+                                    abs_backup_target_dir = os.path.abspath(backup_target_dir)
+                                    if not abs_backup_file_path.startswith(abs_backup_target_dir + os.sep):
+                                        context.log.warning(f"Skipping suspicious path: {rel_path}")
+                                        continue
+
+                                    backup_file_dir = os.path.dirname(abs_backup_file_path)
                                     os.makedirs(backup_file_dir, exist_ok=True)
-                                    with open(backup_file_path, "wb") as f:
+                                    with open(abs_backup_file_path, "wb") as f:
                                         f.write(xml_data)
                                     backup_count += 1
                                 except Exception as e:

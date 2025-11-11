@@ -664,13 +664,13 @@ class ldap(connection):
         self.logger.highlight(f"Domain SID {self.sid_domain}")
 
     def check_if_admin(self, username=None):
-        """
+        r"""
         Check if a user is a member of privileged groups.
-        
+
         Args:
             username: Optional username to check. If None, checks the currently authenticated user.
                      Can be in format "username" or "DOMAIN\\username".
-        
+
         Returns:
             tuple: (is_admin, privileged_groups) where is_admin is bool and privileged_groups is list of group DNs
         """
@@ -682,15 +682,15 @@ class ldap(connection):
                 target_username = target_username.split("\\")[-1]
         else:
             target_username = self.username
-        
-        # 1. get SID of the domaine
+
+        # 1. get SID of the domain
         search_filter = "(userAccountControl:1.2.840.113556.1.4.803:=8192)"
         attributes = ["objectSid"]
         resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
         answers = []
         privileged_groups = []
-        
+
         if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "" or self.use_kcache) and self.username != "":
             for item in resp_parsed:
                 self.sid_domain = "-".join(item["objectSid"].split("-")[:-1])
@@ -712,7 +712,7 @@ class ldap(connection):
             search_filter = f"(&(objectCategory=user)(sAMAccountName={target_username})(|{''.join(answers)}))"
             resp = self.search(search_filter, attributes=[], sizeLimit=0, baseDN=self.baseDN)
             resp_parsed = parse_result_attributes(resp)
-            
+
             # If checking current user, set admin_privs attribute
             if username is None:
                 for item in resp_parsed:
@@ -724,30 +724,30 @@ class ldap(connection):
                 for item in resp_parsed:
                     if item:
                         return True, privileged_groups
-        
+
         return False, []
 
     def resolve_sid(self, sid):
-        """
+        r"""
         Resolve a Windows SID to sAMAccountName.
-        
+
         Args:
             sid: Windows SID string (e.g., "S-1-5-21-...")
-            
+
         Returns:
             tuple: (username, success) where username is "DOMAIN\\username" if successful, else original sid
         """
         try:
             if not sid or not sid.upper().startswith("S-1-5-"):
                 return sid, False
-            
+
             search_filter = f"(objectSid={sid})"
             attributes = ["sAMAccountName"]
             resp = self.search(search_filter, attributes, sizeLimit=1, baseDN=self.baseDN)
-            
+
             if not resp:
                 return sid, False
-            
+
             resp_parsed = parse_result_attributes(resp)
             if resp_parsed and len(resp_parsed) > 0:
                 sam = resp_parsed[0].get("sAMAccountName")
@@ -755,9 +755,9 @@ class ldap(connection):
                     # Format as DOMAIN\username
                     domain = self.domain.split(".")[0].upper() if self.domain else ""
                     return f"{domain}\\{sam}", True
-            
+
             return sid, False
-            
+
         except Exception as e:
             self.logger.debug(f"SID resolution failed for {sid}: {e}")
             return sid, False
