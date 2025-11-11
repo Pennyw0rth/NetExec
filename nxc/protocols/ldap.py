@@ -14,6 +14,7 @@ from termcolor import colored
 from dns import resolver
 from dateutil.relativedelta import relativedelta as rd
 
+
 from OpenSSL.SSL import SysCallError
 from bloodhound.ad.authentication import ADAuthentication
 from bloodhound.ad.domain import AD
@@ -48,6 +49,8 @@ from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.negotiate_parser import parse_challenge
+from nxc.helpers.opengraph import opengraph
+from nxc.helpers.misc import detect_if_ip
 from nxc.paths import CONFIG_PATH
 
 ldap_error_status = {
@@ -280,6 +283,11 @@ class ldap(connection):
             )
         except Exception as e:
             self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
+
+    def opengraph_host_info(self):
+        if detect_if_ip(self.host):
+            opengraph.add_tag(f"{self.hostname}.{self.domain}", "IP_Address", self.host)
+        opengraph.add_tag(f"{self.hostname}.{self.domain}", "ldapsigning", self.signing_required)
 
     def print_host_info(self):
         self.logger.debug("Printing host info for LDAP")

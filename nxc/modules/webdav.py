@@ -34,12 +34,12 @@ class NXCModule:
         Check whether the 'DAV RPC Service' pipe exists within the 'IPC$' share. This indicates
         that the WebClient service is running on the target.
         """
-        opengraph.add_tag(str.upper(f"{connection.hostname}.{connection.domain}"), "webclientrunning", True)
         try:
             remote_file = RemoteFile(connection.conn, "DAV RPC Service", "IPC$", access=FILE_READ_DATA)
             remote_file.open_file()
 
             context.log.highlight(self.output.format(connection.conn.getRemoteHost()))
+            opengraph.add_tag(f"{connection.hostname}.{connection.domain}", "webclientrunning", True)
         except SessionError as e:
             if e.getErrorCode() == nt_errors.STATUS_OBJECT_NAME_NOT_FOUND:
                 return
