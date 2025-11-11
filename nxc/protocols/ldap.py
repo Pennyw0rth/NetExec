@@ -46,7 +46,7 @@ from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.ntlm_parser import parse_challenge
-from nxc.paths import CONFIG_PATH, NXC_PATH
+from nxc.paths import CONFIG_PATH
 
 ldap_error_status = {
     "1": "STATUS_NOT_SUPPORTED",
@@ -149,7 +149,6 @@ class ldap(connection):
         self.targetDomain = ""
         self.remote_ops = None
         self.bootkey = None
-        self.output_filename = None
         self.smbv1 = None
         self.signing = False
         self.signing_required = None
@@ -332,9 +331,6 @@ class ldap(connection):
             result = self.resolver(self.domain)
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
-
-        filename = f"{self.hostname}_{self.host}".replace(":", "-")
-        self.output_filename = os.path.expanduser(os.path.join(NXC_PATH, "logs", filename))
 
         try:
             self.db.add_host(
@@ -888,13 +884,13 @@ class ldap(connection):
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
 
     def computers(self):
-        resp = self.search(f"(sAMAccountType={SAM_MACHINE_ACCOUNT})", ["name"], 0)
+        resp = self.search(f"(sAMAccountType={SAM_MACHINE_ACCOUNT})", ["sAMAccountName"])
         resp_parsed = parse_result_attributes(resp)
 
         if resp:
             self.logger.display(f"Total records returned: {len(resp_parsed)}")
             for item in resp_parsed:
-                self.logger.highlight(item["name"] + "$")
+                self.logger.highlight(item["sAMAccountName"])
 
     def dc_list(self):
         # bypass host resolver configuration via configure=False (default pulls from /etc/resolv.conf or registry on Windows)
@@ -1677,7 +1673,7 @@ class ldap(connection):
             self.logger.fail("Or if you installed with pipx:")
             self.logger.fail("pipx runpip netexec uninstall -y bloodhound")
             self.logger.fail("pipx inject netexec bloodhound-ce --force")
-            return False
+            return
 
         elif not use_bhce and is_ce:
             self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
@@ -1691,7 +1687,7 @@ class ldap(connection):
             self.logger.fail("Or if you installed with pipx:")
             self.logger.fail("pipx runpip netexec uninstall -y bloodhound-ce")
             self.logger.fail("pipx inject netexec bloodhound --force")
-            return False
+            return
 
         auth = ADAuthentication(
             username=self.username,
@@ -1712,11 +1708,15 @@ class ldap(connection):
         )
         collect = resolve_collection_methods("Default" if not self.args.collection else self.args.collection)
         if not collect:
-            return None
+            return
         self.logger.highlight("Resolved collection methods: " + ", ".join(list(collect)))
 
         self.logger.debug("Using DNS to retrieve domain information")
-        ad.dns_resolve(domain=self.domain)
+        try:
+            ad.dns_resolve(domain=self.domain)
+        except (resolver.LifetimeTimeout, resolver.NoNameservers):
+            self.logger.fail("Bloodhound-python failed to resolve domain information, try specifying the DNS server.")
+            return
 
         if self.args.kerberos:
             self.logger.highlight("Using kerberos auth without ccache, getting TGT")
@@ -1729,22 +1729,25 @@ class ldap(connection):
         bloodhound = BloodHound(ad, self.hostname, self.host, self.port)
         bloodhound.connect()
 
-        bloodhound.run(
-            collect=collect,
-            num_workers=10,
-            disable_pooling=False,
-            timestamp=timestamp,
-            fileNamePrefix=self.output_filename.split("/")[-1],
-            computerfile=None,
-            cachefile=None,
-            exclude_dcs=False,
-        )
+        try:
+            bloodhound.run(
+                collect=collect,
+                num_workers=10,
+                disable_pooling=False,
+                timestamp=timestamp,
+                fileNamePrefix=self.output_filename.split("/")[-1],
+                computerfile=None,
+                cachefile=None,
+                exclude_dcs=False,
+            )
+        except Exception as e:
+            self.logger.fail(f"BloodHound collection failed: {e.__class__.__name__} - {e}")
+            self.logger.debug(f"BloodHound collection failed: {e.__class__.__name__} - {e}", exc_info=True)
+            return
 
-        self.output_filename += f"_{timestamp}"
-
-        self.logger.highlight(f"Compressing output into {self.output_filename}bloodhound.zip")
+        self.logger.highlight(f"Compressing output into {self.output_filename}_bloodhound.zip")
         list_of_files = os.listdir(os.getcwd())
-        with ZipFile(self.output_filename + "bloodhound.zip", "w") as z:
+        with ZipFile(f"{self.output_filename}_bloodhound.zip", "w") as z:
             for each_file in list_of_files:
                 if each_file.startswith(self.output_filename.split("/")[-1]) and each_file.endswith("json"):
                     z.write(each_file)

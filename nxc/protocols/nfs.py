@@ -664,6 +664,14 @@ class nfs(connection):
             return
         content = self.format_directory(dir_listing)
 
+        # If there are more entries than we could receive, get cookie from last entry and continue
+        while not dir_listing["resok"]["reply"]["eof"]:
+            cookie_verf = dir_listing["resok"]["cookieverf"]
+            cookie = content[-1]["cookie"]
+            dir_listing = self.nfs3.readdirplus(curr_fh, cookie=cookie, cookie_verf=cookie_verf, auth=self.auth)
+            more_content = self.format_directory(dir_listing)
+            content.extend(more_content)
+
         # Sometimes the NFS Server does not return the attributes for the files
         # However, they can still be looked up individually is missing
         for item in content:
@@ -689,6 +697,8 @@ class nfs(connection):
         Highlight log the content of the directory provided by a READDIRPLUS call.
         Expects an FORMATED output of self.format_directory.
         """
+        # Sort items linux-like by name
+        content = sorted(content, key=lambda x: x["name"].lower())
         self.logger.highlight(f"{'UID':<11}{'Perms':<7}{'File Size':<14}{'File Path'}")
         self.logger.highlight(f"{'---':<11}{'-----':<7}{'---------':<14}{'---------'}")
         for item in content:
@@ -716,9 +726,7 @@ class nfs(connection):
             nextentry = entry["nextentry"][0] if entry["nextentry"] else None
             entry.pop("nextentry")
             items.append(entry)
-
-        # Sort by name to be linux-like
-        return sorted(items, key=lambda x: x["name"].decode())
+        return items
 
     def update_auth(self, file_handle):
         """Update the UID and GID for the file handle"""
