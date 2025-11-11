@@ -289,7 +289,7 @@ conf = {
             ],
             "pipes": [{"name": "nod_scriptmon_pipe", "processes": [""]}],
         },
-	{
+        {
             "name": "FortiClient",
             "services": [
                 {"name": "FA_Scheduler", "description": "FortiClient Service Scheduler"},
