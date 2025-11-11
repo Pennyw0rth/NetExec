@@ -13,7 +13,6 @@ from impacket.nt_errors import STATUS_MORE_ENTRIES
 
 from nxc.logger import nxc_logger
 from nxc.protocols.smb.passpol import PassPolDump
-from nxc.protocols.smb.samruser import UserSamrDump
 
 from nxc.helpers.misc import CATEGORY
 
@@ -121,7 +120,7 @@ class UserSamrDumpWithHandlers(AdUtilities):
         self.doKerberos = connection.kerberos
         self.host = connection.host
         self.kdcHost = connection.kdcHost
-        self.protocols = UserSamrDump.KNOWN_PROTOCOLS.keys()
+        self.protocols = self.KNOWN_PROTOCOLS.keys()
         self.users = []
         self.rpc_transport = None
         self.dce = None
@@ -145,7 +144,7 @@ class UserSamrDumpWithHandlers(AdUtilities):
         # Try all requested protocols until one works.
         for protocol in self.protocols:
             try:
-                protodef = UserSamrDump.KNOWN_PROTOCOLS[protocol]
+                protodef = self.KNOWN_PROTOCOLS[protocol]
                 port = protodef[1]
             except KeyError:
                 self.logger.debug(f"Invalid Protocol: {protocol}")
