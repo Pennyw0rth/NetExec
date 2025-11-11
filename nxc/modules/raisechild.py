@@ -256,6 +256,7 @@ class NXCModule:
             raise ValueError(f"Invalid NT-hash format : {raw}")
         return raw.lower()
 
+    # Rest is stolen from impacket's ticketer.py
     @staticmethod
     def _getFileTime(unix_seconds: int) -> int:
         return unix_seconds * 10_000_000 + 116_444_736_000_000_000
@@ -489,8 +490,7 @@ class NXCModule:
 
         return enc_asrep_part, enc_ticket_part, pac_infos
 
-    def _signEncryptTicket(self, as_rep: AS_REP, enc_asrep_part: EncASRepPart, enc_ticket_part: EncTicketPart,
-                              pac_infos: dict, krbtgt_key: Key, enctype_value: int) -> tuple[bytes, Key]:
+    def _signEncryptTicket(self, as_rep: AS_REP, enc_asrep_part: EncASRepPart, enc_ticket_part: EncTicketPart, pac_infos: dict, krbtgt_key: Key, enctype_value: int) -> tuple[bytes, Key]:
         def zero_pad(n: int) -> bytes: return b"\x00" * self._getPadLength(n)
 
         pac_buffer_order = [PAC_LOGON_INFO, PAC_CLIENT_INFO_TYPE, PAC_REQUESTOR_INFO, PAC_SERVER_CHECKSUM, PAC_PRIVSVR_CHECKSUM]
@@ -532,12 +532,8 @@ class NXCModule:
         checksum_function_server = _checksum_table[server_checksum_struct["SignatureType"]]
         checksum_function_kdc = _checksum_table[kdc_checksum_struct["SignatureType"]]
 
-        server_checksum_struct["Signature"] = checksum_function_server.checksum(
-            krbtgt_key, KERB_NON_KERB_CKSUM_SALT, pac_bytes_for_checksum
-        )
-        kdc_checksum_struct["Signature"] = checksum_function_kdc.checksum(
-            krbtgt_key, KERB_NON_KERB_CKSUM_SALT, server_checksum_struct["Signature"]
-        )
+        server_checksum_struct["Signature"] = checksum_function_server.checksum(krbtgt_key, KERB_NON_KERB_CKSUM_SALT, pac_bytes_for_checksum)
+        kdc_checksum_struct["Signature"] = checksum_function_kdc.checksum(krbtgt_key, KERB_NON_KERB_CKSUM_SALT, server_checksum_struct["Signature"])
 
         rebuilt_blobs: list[bytes] = []
         for buffer_type, buffer_bytes, padding in pac_blobs_with_padding:
