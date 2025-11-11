@@ -238,7 +238,7 @@ class NXCModule:
         self._createRequestorInfoPac(pac_infos, self.child_sid, int(user_rid))
 
         as_rep = self._buildAsrep(domain_upper, admin_name, enctype_value)
-        enc_asrep_part, enc_ticket_part, pac_infos = self._buildEncParts(as_rep, domain_upper, admin_name, int("87600"), enctype_value, pac_infos)
+        enc_asrep_part, enc_ticket_part, pac_infos = self._buildEncParts(as_rep, domain_upper, admin_name, 87600, enctype_value, pac_infos)
 
         self._injectExtraSids(pac_infos, extra_sid)
 
@@ -268,8 +268,7 @@ class NXCModule:
     def _getBlockLength(length: int) -> int:
         return (length + 7) // 8 * 8
 
-    def _createBasicValidationInfo(self, username: str, domain: str, domain_sid: str,
-                                  groups: list[int], user_rid: int) -> VALIDATION_INFO:
+    def _createBasicValidationInfo(self, username: str, domain: str, domain_sid: str, groups: list[int], user_rid: int) -> VALIDATION_INFO:
         kerbdata = KERB_VALIDATION_INFO()
 
         now_utc = datetime.datetime.now(datetime.timezone.utc)
