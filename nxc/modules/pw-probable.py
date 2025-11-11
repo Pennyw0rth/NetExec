@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from contextlib import contextmanager, nullcontext
+from contextlib import nullcontext
 
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ldap import ldap as ldap_impacket
@@ -290,8 +290,6 @@ class UserSamrDumpWithHandlers(AdUtilities):
 
         [handler.start() for handler in self.handlers]
 
-        users = []
-
         for user in user_ids:
             self.logger.debug(f"Calling hSamrOpenUser for RID {user}")
             open_user_resp = samr.hSamrOpenUser(
@@ -321,14 +319,13 @@ class UserSamrDumpWithHandlers(AdUtilities):
                 userAccountControl=0,
                 badPwdCount=bad_pwd_count,
                 description=user_description)
-            users.append(account)
+
+            yield account
 
             # Passing the user onto any handlers.
             [handler.handle(account) for handler in self.handlers]
 
             samr.hSamrCloseHandle(self.dce, open_user_resp["UserHandle"])
-
-        return users
 
     def _ensure_success(self, response, message):
         """Convenience wrapper for checking response from samr"""
@@ -591,9 +588,7 @@ class NXCModule(AdUtilities):
                 resp = e.getAnswers()
             else:
                 nxc_logger.debug(e)
-                return False
-
-        valid_users = []
+                return
 
         user_list_handler = UserListPrinterHandler(connection) if self.output_users else UserListNullHandler()
         user_list_handler.start()
@@ -619,16 +614,13 @@ class NXCModule(AdUtilities):
                     elif str(attribute["type"]) == "description":
                         account.description = str(attribute["vals"][0])
 
-                valid_users.append(account)
-
+                yield account
                 user_list_handler.handle(account)
             except Exception as e:
                 context.log.debug("Exception:", exc_info=True)
                 context.log.debug(f"Skipping item, cannot process due to error {e!s}")
 
         user_list_handler.cleanup()
-
-        return valid_users
 
     def safe_open(self, path, mode, encoding="utf-8"):
         """Context aware open"""
