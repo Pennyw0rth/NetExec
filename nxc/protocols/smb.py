@@ -58,6 +58,7 @@ from nxc.helpers.logger import highlight
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.powershell import create_ps_command
 from nxc.helpers.misc import detect_if_ip
+from nxc.helpers.opengraph import opengraph
 from nxc.protocols.ldap.resolution import LDAPResolution
 
 from dploot.triage.vaults import VaultsTriage
@@ -289,6 +290,11 @@ class smb(connection):
             result = self.resolver(self.domain)
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
+
+    def opengraph_host_info(self):
+        if detect_if_ip(self.host):
+            opengraph.add_tag(f"{self.hostname}.{self.domain}", "IP_Address", self.host)
+        opengraph.add_tag(f"{self.hostname}.{self.domain}", "smbsigning", self.signing)
 
     def print_host_info(self):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
@@ -1213,6 +1219,8 @@ class smb(connection):
 
                     row = template.format(USERNAME=user_full, SID=sid)
                     result.append(row)
+                    if sid.startswith("S-1-5-21"):  # remove virtual/service accounts
+                        opengraph.add_edge("HasSession", f"{self.hostname}.{self.domain}", sid)
 
                 self.logger.success("Remote Registry enumerated sessions")
                 for row in result:

@@ -211,12 +211,13 @@ def main():
         nxc_logger.highlight(highlight("[!] Jitter is only throttling authentications per target!", "red"))
 
     try:
+        if args.opengraph is not None:
+            opengraph.simple_bh_mapping(args.opengraph)  # load fqdn 2 oid mapping
         asyncio.run(start_run(protocol_object, args, db, targets))
     except KeyboardInterrupt:
         nxc_logger.debug("Got keyboard interrupt")
     finally:
         if args.opengraph is not None:
-            opengraph.update_node_ids_to_guids(args.opengraph)
             nxc_logger.debug(opengraph.to_json())
             opengraph.save()
         db_engine.dispose()
