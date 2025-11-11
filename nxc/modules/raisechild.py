@@ -216,7 +216,7 @@ class NXCModule:
 
     def forge_golden_ticket(self, connection):
         """
-        Forge a golden ticket for the child domain using the krbtgt NT-hash.
+        Forge a golden ticket for the parent domain using the krbtgt NT-hash.
         Supports optional USER, RID and USER_ID module options.
         """
         nthash = self._clean_nthash(self.krbtgt_hash)
