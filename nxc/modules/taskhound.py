@@ -180,7 +180,14 @@ def get_ldap_connection(smb_connection, context, ldap_user=None, ldap_pass=None,
         if ldap_user:
             context.log.display(f"Using separate LDAP credentials: {username}@{domain}")
 
-        ldap_conn.login(user=username, password=password, domain=domain)
+        # Support hash-based authentication (common with -H flag in NetExec)
+        nthash = getattr(smb_connection, "nthash", "")
+        lmhash = getattr(smb_connection, "lmhash", "")
+        if nthash and not password:
+            context.log.debug(f"Using NTLM hash authentication for LDAP connection")
+            ldap_conn.login(user=username, password="", domain=domain, lmhash=lmhash, nthash=nthash)
+        else:
+            ldap_conn.login(user=username, password=password, domain=domain)
         context.log.debug(f"LDAP connection established to {ldap_target} as {username}@{domain}")
 
         # Create a lightweight wrapper with privilege checking logic
