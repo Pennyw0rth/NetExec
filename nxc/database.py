@@ -171,14 +171,11 @@ class BaseDB:
 
                 return reflected_table
             except (NoInspectionAvailable, NoSuchTableError, ValueError) as e:
-                print(dedent(
-                    f"""
-                    [-] Error reflecting table '{table.__tablename__}' for the '{self.protocol}' protocol:
-                    [-] {e} - This means there is a DB schema mismatch
-                    [-] This is probably because a newer version of nxc is being run on an old DB schema
-                    [-] Optionally save the old DB data (`cp {self.db_path} ~/nxc_{self.protocol.lower()}.bak`)
-                    [-] Then remove the {self.protocol} DB (`rm -f {self.db_path}`) and run nxc to initialize the new DB"""
-                ).strip())
+                nxc_logger.fail(f"Schema mismatch detected for table '{table.__tablename__}' in protocol '{self.protocol}'")
+                nxc_logger.debug(e)
+                nxc_logger.fail("This is probably because a newer version of nxc is being run on an old DB schema.")
+                nxc_logger.fail(f"Optionally save the old DB data (`cp {self.db_path} ~/nxc_{self.protocol.lower()}.bak`)")
+                nxc_logger.fail(f"Then remove the {self.protocol} DB (`rm -f {self.db_path}`) and run nxc to initialize the new DB")
                 sys.exit()
 
     def shutdown_db(self):
