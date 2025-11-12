@@ -1,4 +1,4 @@
-from impacket.ldap import ldap, ldaptypes, ldapasn1 as ldapasn1_impacket
+from impacket.ldap import ldap, ldaptypes
 from impacket.ldap.ldap import LDAPSearchError
 from ldap3.protocol.microsoft import security_descriptor_control
 from nxc.helpers.misc import CATEGORY
