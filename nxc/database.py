@@ -7,6 +7,7 @@ from os.path import exists
 from os.path import join as path_join
 from pathlib import Path
 from threading import Lock
+from textwrap import dedent
 
 from sqlalchemy import Table, create_engine, MetaData, func
 from sqlalchemy.exc import (
@@ -102,7 +103,7 @@ def initialize_db():
 
     # Even if the default workspace exists, we still need to check if every protocol has a database (in case of a new protocol)
     init_protocol_dbs("default")
-    
+
 
 def format_host_query(q, filter_term, HostsTable):
     """One annoying thing is that if you search for an ip such as '10.10.10.5',
@@ -119,8 +120,8 @@ def format_host_query(q, filter_term, HostsTable):
     else:
         nxc_logger.debug("Neither 'ip' nor 'host' columns found in the table")
         return q
-   
-    # first we check if its an ip address 
+
+    # first we check if its an ip address
     try:
         ipaddress.ip_address(filter_term)
         nxc_logger.debug(f"filter_term is an IP address: {filter_term}")
@@ -128,7 +129,7 @@ def format_host_query(q, filter_term, HostsTable):
     except ValueError:
         nxc_logger.debug(f"filter_term is not an IP address: {filter_term}")
         like_term = func.lower(f"%{filter_term}%")
-        
+
         # check if the hostname column exists for hostname searching
         q = q.filter(ip_column.like(like_term) | func.lower(HostsTable.c.hostname).like(like_term)) if hasattr(HostsTable.c, "hostname") else q.filter(ip_column.like(like_term))
 
@@ -150,34 +151,34 @@ class BaseDB:
 
     def reflect_tables(self):
         raise NotImplementedError("Reflect tables not implemented")
-    
+
     def reflect_table(self, table):
         with self.db_engine.connect():
             try:
                 reflected_table = Table(table.__tablename__, self.metadata, autoload_with=self.db_engine)
-                
+
                 # Check for column addition / deletion
                 reflected_columns = set(reflected_table.columns.keys())
                 orm_columns = {column.name for column in table.__table__.columns}
                 if reflected_columns != orm_columns:
                     raise ValueError(f"Schema mismatch detected! ORM columns: {orm_columns}, Reflected columns: {reflected_columns}")
-                
+
                 # Check for constraint changes
-                reflected_constraints = [(type(c), c.columns.keys()) for c in reflected_table._sorted_constraints] 
-                orm_constraints = [(type(c), c.columns.keys()) for c in table.__table__._sorted_constraints] 
+                reflected_constraints = [(type(c), c.columns.keys()) for c in reflected_table._sorted_constraints]
+                orm_constraints = [(type(c), c.columns.keys()) for c in table.__table__._sorted_constraints]
                 if reflected_constraints != orm_constraints:
                     raise ValueError(f"Schema mismatch detected! ORM constraints: {orm_constraints}, Reflected constraints: {reflected_constraints}")
-                
+
                 return reflected_table
             except (NoInspectionAvailable, NoSuchTableError, ValueError) as e:
-                print(
+                print(dedent(
                     f"""
-                    [-] Error reflecting table {table.__tablename__} for the {self.protocol} protocol:
+                    [-] Error reflecting table '{table.__tablename__}' for the '{self.protocol}' protocol:
                     [-] {e} - This means there is a DB schema mismatch
                     [-] This is probably because a newer version of nxc is being run on an old DB schema
                     [-] Optionally save the old DB data (`cp {self.db_path} ~/nxc_{self.protocol.lower()}.bak`)
                     [-] Then remove the {self.protocol} DB (`rm -f {self.db_path}`) and run nxc to initialize the new DB"""
-                )
+                ).strip())
                 sys.exit()
 
     def shutdown_db(self):
