@@ -1,5 +1,5 @@
 
-from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, func, select, delete
+from sqlalchemy import Boolean, Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, func, select, delete
 from sqlalchemy.dialects.sqlite import Insert  # used for upsert
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -37,6 +37,8 @@ class database(BaseDB):
         hostname = Column(String)
         domain = Column(String)
         os = Column(String)
+        signing_required = Column(Boolean)
+        channel_binding = Column(String)
 
         __table_args__ = (
             PrimaryKeyConstraint("id"),
@@ -50,7 +52,7 @@ class database(BaseDB):
         self.UsersTable = self.reflect_table(self.User)
         self.HostsTable = self.reflect_table(self.Host)
 
-    def add_host(self, ip, hostname, domain, os):
+    def add_host(self, ip, hostname, domain, os, signing_required, channel_binding):
         """Check if this host has already been added to the database, if not, add it in."""
         hosts = []
         updated_ids = []
@@ -64,7 +66,9 @@ class database(BaseDB):
                 "ip": ip,
                 "hostname": hostname,
                 "domain": domain,
-                "os": os
+                "os": os,
+                "signing_required": signing_required,
+                "channel_binding": channel_binding
             }
             hosts = [new_host]
         # update existing hosts data
@@ -78,6 +82,12 @@ class database(BaseDB):
                     host_data["hostname"] = hostname
                 if domain is not None:
                     host_data["domain"] = domain
+                if os is not None:
+                    host_data["os"] = os
+                if signing_required is not None:
+                    host_data["signing_required"] = signing_required
+                if channel_binding is not None:
+                    host_data["channel_binding"] = channel_binding
                 # only add host to be updated if it has changed
                 if host_data not in hosts:
                     hosts.append(host_data)
