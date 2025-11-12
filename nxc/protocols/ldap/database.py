@@ -1,5 +1,5 @@
 
-from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, func, select, delete
+from sqlalchemy import Boolean, Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, func, select, delete
 from sqlalchemy.dialects.sqlite import Insert  # used for upsert
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -37,6 +37,8 @@ class database(BaseDB):
         hostname = Column(String)
         domain = Column(String)
         os = Column(String)
+        signing_required = Column(Boolean)
+        channel_binding = Column(String)
 
         __table_args__ = (
             PrimaryKeyConstraint("id"),
