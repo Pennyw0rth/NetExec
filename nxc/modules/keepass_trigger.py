@@ -5,7 +5,9 @@ from csv import reader
 from base64 import b64encode
 from io import BytesIO, StringIO
 from xml.etree import ElementTree as ET
+from nxc.helpers.misc import CATEGORY
 from nxc.helpers.powershell import get_ps_script
+from nxc.paths import TMP_PATH
 
 
 class NXCModule:
@@ -20,11 +22,10 @@ class NXCModule:
     name = "keepass_trigger"
     description = "Set up a malicious KeePass trigger to export the database in cleartext."
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
     # while the module only executes legit powershell commands on the target (search and edit files)
     # some EDR like Trend Micro flag base64-encoded powershell as malicious
     # the option PSH_EXEC_METHOD can be used to avoid such execution, and will drop scripts on the target
-    opsec_safe = False
-    multiple_hosts = False
 
     def __init__(self):
         # module options
@@ -39,7 +40,7 @@ class NXCModule:
         self.share = "C$"
         self.remote_temp_script_path = "C:\\Windows\\Temp\\temp.ps1"
         self.keepass_binary_path = "C:\\Program Files\\KeePass Password Safe 2\\KeePass.exe"
-        self.local_export_path = "/tmp"
+        self.local_export_path = TMP_PATH
         self.trigger_name = "export_database"
         self.poll_frequency_seconds = 5
         self.dummy_service_name = "OneDrive Sync KeePass"

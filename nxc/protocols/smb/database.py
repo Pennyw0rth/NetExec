@@ -469,18 +469,18 @@ class database(BaseDB):
             return [results]
         # if we're filtering by domain controllers
         elif filter_term == "dc":
-            q = q.filter(self.HostsTable.c.dc is True)
+            q = q.filter(self.HostsTable.c.dc == True)  # noqa: E712
             if domain:
                 q = q.filter(func.lower(self.HostsTable.c.domain) == func.lower(domain))
         elif filter_term == "signing":
             # generally we want hosts that are vulnerable, so signing disabled
-            q = q.filter(self.HostsTable.c.signing is False)
+            q = q.filter(self.HostsTable.c.signing == False)  # noqa: E712
         elif filter_term == "spooler":
-            q = q.filter(self.HostsTable.c.spooler is True)
+            q = q.filter(self.HostsTable.c.spooler == True)  # noqa: E712
         elif filter_term == "zerologon":
-            q = q.filter(self.HostsTable.c.zerologon is True)
+            q = q.filter(self.HostsTable.c.zerologon == True)  # noqa: E712
         elif filter_term == "petitpotam":
-            q = q.filter(self.HostsTable.c.petitpotam is True)
+            q = q.filter(self.HostsTable.c.petitpotam == True)  # noqa: E712
         elif filter_term is not None and filter_term.startswith("domain"):
             domain = filter_term.split()[1]
             like_term = func.lower(f"%{domain}%")

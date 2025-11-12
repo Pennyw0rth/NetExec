@@ -1,5 +1,4 @@
 import configparser
-import os
 
 from sqlalchemy import Boolean, Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, select, func, delete
 from sqlalchemy.dialects.sqlite import Insert
@@ -7,11 +6,11 @@ from sqlalchemy.ext.declarative import declarative_base
 
 from nxc.database import BaseDB, format_host_query
 from nxc.logger import nxc_logger
-from nxc.paths import NXC_PATH
+from nxc.paths import CONFIG_PATH
 
 # we can't import config.py due to a circular dependency, so we have to create redundant code unfortunately
 nxc_config = configparser.ConfigParser()
-nxc_config.read(os.path.join(NXC_PATH, "nxc.conf"))
+nxc_config.read(CONFIG_PATH)
 nxc_workspace = nxc_config.get("nxc", "workspace", fallback="default")
 
 Base = declarative_base()

@@ -5,10 +5,9 @@ import urllib3
 import logging
 import xml.etree.ElementTree as ET
 
-from io import StringIO
-from datetime import datetime
 from pypsrp.wsman import NAMESPACES
 from pypsrp.client import Client
+from pypsrp.powershell import PSDataStreams
 from termcolor import colored
 
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
@@ -20,7 +19,6 @@ from nxc.helpers.misc import gen_random_string
 from nxc.helpers.ntlm_parser import parse_challenge
 from nxc.logger import NXCAdapter
 
-
 urllib3.disable_warnings()
 
 
@@ -29,7 +27,6 @@ class winrm(connection):
         self.domain = ""
         self.targedDomain = ""
         self.server_os = None
-        self.output_filename = None
         self.endpoint = None
         self.lmhash = ""
         self.nthash = ""
@@ -74,8 +71,6 @@ class winrm(connection):
             self.domain = self.args.domain
         if self.args.local_auth:
             self.domain = self.hostname
-
-        self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
     def print_host_info(self):
         self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
@@ -238,12 +233,9 @@ class winrm(connection):
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {e!s}")
             return False
 
-    def execute(self, payload=None, get_output=True, shell_type="cmd"):
+    def execute(self, payload=None, get_output=False, shell_type="cmd"):
         if not payload:
             payload = self.args.execute
-
-        if self.args.no_output:
-            get_output = False
 
         try:
             result = self.conn.execute_cmd(payload, encoding=self.args.codec) if shell_type == "cmd" else self.conn.execute_ps(payload)
@@ -260,13 +252,40 @@ class winrm(connection):
             else:
                 self.logger.fail(f"Execute command failed, error: {e!s}")
         else:
+            if get_output:
+                return result[0]
             self.logger.success(f"Executed command (shell type: {shell_type})")
-            buf = StringIO(result[0]).readlines() if get_output else ""
-            for line in buf:
-                self.logger.highlight(line.strip())
+            if not self.args.no_output:
+                if shell_type == "powershell":
+                    result: tuple[str, PSDataStreams, bool]
+                    if result[2]:
+                        self.logger.fail("Error executing powershell command, non-zero return code")
+                    for out_type in ["debug", "verbose", "information", "progress", "warning", "error"]:
+                        stream: list[str] = getattr(result[1], out_type)
+                        for msg in stream:
+                            if str(msg) != "None":
+                                if out_type == "error":
+                                    self.logger.fail(str(msg).rstrip())
+                                else:
+                                    self.logger.display(str(msg).rstrip())
+                    # Display stdout
+                    for line in result[0].splitlines():
+                        self.logger.highlight(line.rstrip())
+                else:
+                    # Tuple of (stdout, stderr, returncode)
+                    result: tuple[str, str, int]
+                    if result[2] == 0:
+                        for line in result[0].replace("\r", "").splitlines():
+                            self.logger.highlight(line.rstrip())
+                    else:
+                        for line in result[1].replace("\r", "").splitlines():
+                            self.logger.fail(line.rstrip())
 
-    def ps_execute(self):
-        self.execute(payload=self.args.ps_execute, get_output=True, shell_type="powershell")
+    def ps_execute(self, payload=None, get_output=False):
+        command = payload if payload else self.args.ps_execute
+        result = self.execute(payload=command, get_output=get_output, shell_type="powershell")
+        if get_output:
+            return result
 
     # Dos attack prevent:
     # if someboby executed "reg save HKLM\sam C:\windows\temp\sam" before, but didn't remove "C:\windows\temp\sam" file,

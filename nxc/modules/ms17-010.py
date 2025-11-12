@@ -5,6 +5,7 @@
 from ctypes import c_uint8, c_uint16, c_uint32, c_uint64, Structure
 import socket
 import struct
+from nxc.helpers.misc import CATEGORY
 from nxc.logger import nxc_logger
 
 
@@ -54,8 +55,7 @@ class NXCModule:
     name = "ms17-010"
     description = "MS17-010 - EternalBlue - NOT TESTED OUTSIDE LAB ENVIRONMENT"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """ """

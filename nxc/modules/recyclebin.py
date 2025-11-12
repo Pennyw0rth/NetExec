@@ -1,4 +1,5 @@
 from os import makedirs
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 from os.path import join, abspath
 from impacket.dcerpc.v5 import rrp
@@ -13,8 +14,7 @@ class NXCModule:
     name = "recyclebin"
     description = "Lists and exports users' recycle bins"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """No options available"""
