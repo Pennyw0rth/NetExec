@@ -1,10 +1,10 @@
-from sqlalchemy import Table
-from sqlalchemy.exc import (
-    NoInspectionAvailable,
-    NoSuchTableError,
-)
+from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String
+from sqlalchemy.ext.declarative import declarative_base
+
+
 from nxc.database import BaseDB
-import sys
+
+Base = declarative_base()
 
 
 class database(BaseDB):
@@ -16,55 +16,56 @@ class database(BaseDB):
 
         super().__init__(db_engine)
 
+    class Credential(Base):
+        __tablename__ = "credentials"
+        id = Column(Integer)
+        username = Column(String)
+        password = Column(String)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+        )
+
+    class Host(Base):
+        __tablename__ = "hosts"
+        id = Column(Integer)
+        ip = Column(String)
+        hostname = Column(String)
+        port = Column(Integer)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+        )
+
+    class LoggedInRelation(Base):
+        __tablename__ = "loggedin_relations"
+        id = Column(Integer)
+        cred_id = Column(Integer)
+        host_id = Column(Integer)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            ForeignKeyConstraint(["cred_id"], ["credentials.id"]),
+            ForeignKeyConstraint(["host_id"], ["hosts.id"]),
+        )
+
+    class Share(Base):
+        __tablename__ = "shares"
+        id = Column(Integer)
+        lir_id = Column(Integer)
+        data = Column(String)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            ForeignKeyConstraint(["lir_id"], ["loggedin_relations.id"]),
+        )
+
     @staticmethod
     def db_schema(db_conn):
-        db_conn.execute(
-            """CREATE TABLE "credentials" (
-            "id" integer PRIMARY KEY,
-            "username" text,
-            "password" text
-            )"""
-        )
-
-        db_conn.execute(
-            """CREATE TABLE "hosts" (
-            "id" integer PRIMARY KEY,
-            "ip" text,
-            "hostname" text,
-            "port" integer
-            )"""
-        )
-        db_conn.execute(
-            """CREATE TABLE "loggedin_relations" (
-            "id" integer PRIMARY KEY,
-            "cred_id" integer,
-            "host_id" integer,
-            FOREIGN KEY(cred_id) REFERENCES credentials(id),
-            FOREIGN KEY(host_id) REFERENCES hosts(id)
-            )"""
-        )
-        db_conn.execute(
-            """CREATE TABLE "shares" (
-            "id" integer PRIMARY KEY,
-            "lir_id" integer,
-            "data" text,
-            FOREIGN KEY(lir_id) REFERENCES loggedin_relations(id)
-            )"""
-        )
+        Base.metadata.create_all(db_conn)
 
     def reflect_tables(self):
-        with self.db_engine.connect():
-            try:
-                self.CredentialsTable = Table("credentials", self.metadata, autoload_with=self.db_engine)
-                self.HostsTable = Table("hosts", self.metadata, autoload_with=self.db_engine)
-                self.LoggedinRelationsTable = Table("loggedin_relations", self.metadata, autoload_with=self.db_engine)
-                self.SharesTable = Table("shares", self.metadata, autoload_with=self.db_engine)
-            except (NoInspectionAvailable, NoSuchTableError):
-                print(
-                    f"""
-                    [-] Error reflecting tables for the {self.protocol} protocol - this means there is a DB schema mismatch
-                    [-] This is probably because a newer version of nxc is being run on an old DB schema
-                    [-] Optionally save the old DB data (`cp {self.db_path} ~/nxc_{self.protocol.lower()}.bak`)
-                    [-] Then remove the {self.protocol} DB (`rm -f {self.db_path}`) and run nxc to initialize the new DB"""
-                )
-                sys.exit()
+        self.CredentialsTable = self.reflect_table(self.Credential)
+        self.HostsTable = self.reflect_table(self.Host)
+        self.LoggedinRelationsTable = self.reflect_table(self.LoggedInRelation)
+        self.SharesTable = self.reflect_table(self.Share)
