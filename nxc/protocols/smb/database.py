@@ -161,7 +161,7 @@ class database(BaseDB):
             ForeignKeyConstraint(["userid"], ["users.id"]),
             ForeignKeyConstraint(["hostid"], ["hosts.id"]),
         )
-    
+
     class DpapiSecret(BaseTable):
         __tablename__ = "dpapi_secrets"
         id = Column(Integer)

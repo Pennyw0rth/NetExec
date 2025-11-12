@@ -46,7 +46,7 @@ class database(BaseDB):
             ForeignKeyConstraint(["userid"], ["users.id"]),
             ForeignKeyConstraint(["hostid"], ["hosts.id"]),
         )
-   
+
     class User(Base):
         __tablename__ = "users"
         id = Column(Integer)

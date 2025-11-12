@@ -36,7 +36,7 @@ class database(BaseDB):
         __table_args__ = (
             PrimaryKeyConstraint("id"),
         )
-        
+
     @staticmethod
     def db_schema(db_conn):
         Base.metadata.create_all(db_conn)

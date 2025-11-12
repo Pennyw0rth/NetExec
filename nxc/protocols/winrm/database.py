@@ -67,7 +67,7 @@ class database(BaseDB):
             ForeignKeyConstraint(["userid"], ["users.id"]),
             ForeignKeyConstraint(["hostid"], ["hosts.id"]),
         )
-        
+
     @staticmethod
     def db_schema(db_conn):
         Base.metadata.create_all(db_conn)

@@ -60,7 +60,7 @@ class database(BaseDB):
             PrimaryKeyConstraint("id"),
             ForeignKeyConstraint(["lir_id"], ["loggedin_relations.id"]),
         )
-        
+
     @staticmethod
     def db_schema(db_conn):
         Base.metadata.create_all(db_conn)
