@@ -13,6 +13,7 @@ class SamrFunc:
     def __init__(self, connection):
         self.logger = connection.logger
         self.addr = connection.host
+        self.remote_name = connection.remoteName
         self.protocol = connection.args.port
         self.username = connection.username
         self.password = connection.password
@@ -34,8 +35,8 @@ class SamrFunc:
         if self.password is None:
             self.password = ""
 
-        self.samr_query = SAMRQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.addr, remote_host=self.host, lmhash=self.lmhash, nthash=self.nthash, kerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, logger=self.logger)
-        self.lsa_query = LSAQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.addr, remote_host=self.host, lmhash=self.lmhash, nthash=self.nthash, kdcHost=self.kdcHost, kerberos=self.doKerberos, aesKey=self.aesKey, logger=self.logger)
+        self.samr_query = SAMRQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.remote_name, remote_host=self.host, lmhash=self.lmhash, nthash=self.nthash, kerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, logger=self.logger)
+        self.lsa_query = LSAQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.remote_name, remote_host=self.host, lmhash=self.lmhash, nthash=self.nthash, kdcHost=self.kdcHost, kerberos=self.doKerberos, aesKey=self.aesKey, logger=self.logger)
 
     def get_builtin_groups(self, group):
         domains = self.samr_query.get_domains()
