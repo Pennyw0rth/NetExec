@@ -2,7 +2,6 @@ import os
 import random
 import socket
 import contextlib
-from io import StringIO
 
 from nxc.config import process_secret
 from nxc.connection import connection
