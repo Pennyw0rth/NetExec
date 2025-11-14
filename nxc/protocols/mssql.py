@@ -250,25 +250,26 @@ class mssql(connection):
             self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {error_msg if error_msg else ''}")
             return False
 
-    def mssql_query(self):
+    def query(self):
         if self.conn.lastError:
             # Invalid connection
+            self.logger.debug(f"Cannot execute query due to invalid connection: {self.conn.lastError}")
             return None
-        query = self.args.mssql_query
-        self.logger.info(f"Query to run:\n{query}")
+        self.logger.info(f"Query to run: {self.args.query}")
         try:
-            raw_output = self.conn.sql_query(query)
+            raw_output = self.conn.sql_query(self.args.query)
             self.logger.info("Executed MSSQL query")
             self.logger.debug(f"Raw output: {raw_output}")
-            for data in raw_output:
-                if isinstance(data, dict):
+            if self.conn.lastError:
+                self.logger.debug(f"Error during query execution: {self.conn.lastError}")
+                self.logger.fail(self.conn.lastError)
+            else:
+                for data in raw_output:
                     for key, value in data.items():
                         if key:
                             self.logger.highlight(f"{key}:{value}")
                         else:
                             self.logger.highlight(f"{value}")
-                else:
-                    self.logger.fail("Unexpected output")
         except Exception as e:
             self.logger.exception(f"Failed to excuted MSSQL query, reason: {e}")
             return None
@@ -284,6 +285,7 @@ class mssql(connection):
         get_output = True if not self.args.no_output else get_output
         self.logger.debug(f"{get_output=}")
 
+        output = []
         try:
             exec_method = MSSQLEXEC(self.conn, self.logger)
             output = exec_method.execute(payload)
@@ -292,10 +294,11 @@ class mssql(connection):
             self.logger.fail(f"Execute command failed, error: {e!s}")
             return False
         else:
-            self.logger.success("Executed command via mssqlexec")
-            if output:
-                output_lines = StringIO(output).readlines()
-                for line in output_lines:
+            if self.conn.lastError:
+                self.logger.fail(f"Error during command execution: {self.conn.lastError}")
+            else:
+                self.logger.success("Executed command via mssqlexec")
+                for line in output.splitlines():
                     self.logger.highlight(line.strip())
         return output
 
