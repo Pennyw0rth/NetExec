@@ -284,7 +284,7 @@ class mssql(connection):
         get_output = True if not self.args.no_output else get_output
         self.logger.debug(f"{get_output=}")
 
-        output = []
+        output = ""
         try:
             exec_method = MSSQLEXEC(self.conn, self.logger)
             output = exec_method.execute(payload)
