@@ -177,6 +177,9 @@ netexec smb TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE
 ##### SMB Hash File
 netexec smb TARGET_HOST -u LOGIN_USERNAME -H tests/data/test_hashes.txt
 netexec smb TARGET_HOST -u TEST_USER_FILE -H tests/data/test_hashes.txt
+##### SMB Azurearc Module
+nxc smb  -u '' -p '' -M azurearc
+nxc smb  -u '' -p '' -M azurearc -o CHECK=true
 ##### WMI
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --wmi-namespace root/cimv2
