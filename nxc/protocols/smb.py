@@ -1,3 +1,4 @@
+# Standard library imports
 import ntpath
 import binascii
 import os
@@ -6,6 +7,12 @@ import struct
 import ipaddress
 from Cryptodome.Hash import MD4
 from textwrap import dedent
+from time import time, ctime, sleep
+from traceback import format_exc
+import contextlib
+
+# External library imports
+from termcolor import colored
 
 from impacket.smbconnection import SMBConnection, SessionError
 from impacket.smb import SMB_DIALECT
@@ -29,6 +36,7 @@ from impacket.dcerpc.v5.epm import MSRPC_UUID_PORTMAP
 from impacket.dcerpc.v5.samr import SID_NAME_USE
 from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
 from impacket.krb5.ccache import CCache
+
 from impacket.krb5.kerberosv5 import SessionKeyDecryptionError, getKerberosTGT
 from impacket.krb5.types import KerberosException, Principal
 from impacket.krb5 import constants
@@ -38,13 +46,20 @@ from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Lo
 from impacket.smb3structs import FILE_SHARE_WRITE, FILE_SHARE_DELETE, SMB2_0_IOCTL_IS_FSCTL
 from impacket.dcerpc.v5 import tsts as TSTS
 
+from dploot.triage.vaults import VaultsTriage
+from dploot.triage.browser import BrowserTriage, LoginData, GoogleRefreshToken, Cookie
+from dploot.triage.credentials import CredentialsTriage
+from dploot.lib.target import Target
+from dploot.triage.sccm import SCCMTriage, SCCMCred, SCCMSecret, SCCMCollection
+
+# Local library imports
 from nxc.config import process_secret, host_info_colors, check_guest_account
 from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
 from nxc.protocols.smb.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection
 from nxc.protocols.smb.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
-from nxc.protocols.smb.kerberos import kerberos_login_with_S4U
+from nxc.protocols.smb.kerberos import kerberos_login_with_S4U, kerberos_asreq_user_enum
 from nxc.protocols.smb.wmiexec import WMIEXEC
 from nxc.protocols.smb.atexec import TSCH_EXEC
 from nxc.protocols.smb.smbexec import SMBEXEC
@@ -59,17 +74,6 @@ from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.powershell import create_ps_command
 from nxc.helpers.misc import detect_if_ip
 from nxc.protocols.ldap.resolution import LDAPResolution
-
-from dploot.triage.vaults import VaultsTriage
-from dploot.triage.browser import BrowserTriage, LoginData, GoogleRefreshToken, Cookie
-from dploot.triage.credentials import CredentialsTriage
-from dploot.lib.target import Target
-from dploot.triage.sccm import SCCMTriage, SCCMCred, SCCMSecret, SCCMCollection
-
-from time import time, ctime, sleep
-from traceback import format_exc
-from termcolor import colored
-import contextlib
 
 smb_share_name = gen_random_string(5).upper()
 
@@ -330,8 +334,178 @@ class smb(connection):
 
         return self.host, self.hostname, self.targetDomain
 
-    def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
-        self.logger.debug(f"KDC set to: {kdcHost}")
+    # ============================================================
+    # Public Authentication Methods (called by connection.py)
+    # ============================================================
+
+    def kerberos_login(self, domain: str, username: str, password: str | None = None, ntlm_hash: str = "", aesKey: str = "", kdcHost: str = "", useCache: bool = False):
+        """
+        Authenticate using Kerberos.
+
+        If --continue-on-success is set with no password and username list,
+        performs user enumeration via AS-REQ without incrementing badPwdCount.
+        Otherwise, performs normal Kerberos authentication.
+
+        Args:
+            domain: Target domain
+            username: Username to authenticate or enumerate
+            password: Password (None for enumeration mode)
+            ntlm_hash: NTLM hash for authentication
+            aesKey: AES key for authentication
+            kdcHost: KDC host address
+            useCache: Use Kerberos ticket cache
+
+        Returns:
+            bool: True if authentication/enumeration succeeded
+        """
+        # Check if this is user enumeration mode (no credentials provided)
+        if password is None and not ntlm_hash and not aesKey and not useCache:
+            # User enumeration mode: AS-REQ probing without badPwdCount increment
+            return self._kerberos_user_verification(domain, username, kdcHost)
+
+        if password == "":
+            self.logger.warning("Using blank password will increment badPwdCount")
+
+        # Normal Kerberos authentication
+        return self._kerberos_authenticate(domain, username, password, ntlm_hash, aesKey, kdcHost, useCache)
+
+    def plaintext_login(self, domain, username, password):
+        # Re-connect since we logged off
+        self.create_conn_obj()
+        try:
+            self.password = password
+            self.username = username
+            self.domain = domain
+
+            self.conn.login(self.username, self.password, domain)
+            self.logger.debug(f"Logged in with password to SMB with {domain}/{self.username}")
+            self.is_guest = bool(self.conn.isGuestSession())
+            self.logger.debug(f"{self.is_guest=}")
+            if "Unix" not in self.server_os:
+                self.check_if_admin()
+
+            self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
+            self.db.add_credential("plaintext", domain, self.username, self.password)
+            user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
+            host_id = self.db.get_hosts(self.host)[0].id
+            self.db.add_loggedin_relation(user_id, host_id)
+
+            out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_guest()}{self.mark_pwned()}"
+            self.logger.success(out)
+
+            if not self.args.local_auth and self.username != "":
+                add_user_bh(self.username, self.domain, self.logger, self.config)
+            if self.admin_privs:
+                self.logger.debug(f"Adding admin user: {self.domain}/{self.username}:{self.password}@{self.host}")
+                self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host, user_id=user_id)
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
+
+            # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
+            if self.args.continue_on_success and self.signing:
+                with contextlib.suppress(Exception):
+                    self.conn.logoff()
+            return True
+        except SessionError as e:
+            error, desc = e.getErrorString()
+            self.logger.fail(
+                f'{domain}\\{self.username}:{process_secret(self.password)} {error} {f"({desc})" if self.args.verbose else ""}',
+                color="magenta" if error in smb_error_status else "red",
+            )
+            if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED"] and self.args.module == ["change-password"]:
+                return True
+            if error not in smb_error_status:
+                self.inc_failed_login(username)
+                return False
+        except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
+            self.logger.fail(f"Connection Error: {e}")
+            return False
+        except BrokenPipeError:
+            self.logger.fail("Broken Pipe Error while attempting to login")
+            return False
+
+    def hash_login(self, domain: str, username: str, ntlm_hash: str):
+        # Re-connect since we logged off
+        self.create_conn_obj()
+        lmhash = ""
+        nthash = ""
+        try:
+            self.domain = domain
+            self.username = username
+            # This checks to see if we didn't provide the LM Hash
+            if ntlm_hash.find(":") != -1:
+                lmhash, nthash = ntlm_hash.split(":")
+                self.hash = nthash
+            else:
+                nthash = ntlm_hash
+                self.hash = ntlm_hash
+            if lmhash:
+                self.lmhash = lmhash
+            if nthash:
+                self.nthash = nthash
+
+            self.conn.login(self.username, "", domain, lmhash, nthash)
+            self.logger.debug(f"Logged in with hash to SMB with {domain}/{self.username}")
+            self.is_guest = bool(self.conn.isGuestSession())
+            self.logger.debug(f"{self.is_guest=}")
+            if "Unix" not in self.server_os:
+                self.check_if_admin()
+
+            self.db.add_credential("hash", domain, self.username, self.hash)
+            user_id = self.db.get_credential("hash", domain, self.username, self.hash)
+            host_id = self.db.get_hosts(self.host)[0].id
+            self.db.add_loggedin_relation(user_id, host_id)
+
+            out = f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_guest()}{self.mark_pwned()}"
+            self.logger.success(out)
+
+            if not self.args.local_auth and self.username != "":
+                add_user_bh(self.username, self.domain, self.logger, self.config)
+            if self.admin_privs:
+                self.db.add_admin_user("hash", domain, self.username, nthash, self.host, user_id=user_id)
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
+
+            # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
+            if self.args.continue_on_success and self.signing:
+                with contextlib.suppress(Exception):
+                    self.conn.logoff()
+            return True
+        except SessionError as e:
+            error, desc = e.getErrorString()
+            self.logger.fail(
+                f"{domain}\\{self.username}:{process_secret(self.hash)} {error} {f'({desc})' if self.args.verbose else ''}",
+                color="magenta" if error in smb_error_status else "red",
+            )
+            if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED"] and self.args.module == ["change-password"]:
+                return True
+            if error not in smb_error_status:
+                self.inc_failed_login(self.username)
+                return False
+        except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
+            self.logger.fail(f"Connection Error: {e}")
+            return False
+        except BrokenPipeError:
+            self.logger.fail("Broken Pipe Error while attempting to login")
+            return False
+
+    def _kerberos_authenticate(self, domain: str, username: str, password: str, ntlm_hash: str, aesKey: str, kdcHost: str, useCache: bool):
+        """
+        Perform Kerberos authentication to SMB service.
+
+        This is the internal implementation that handles the actual Kerberos
+        authentication process including S4U delegation if requested.
+
+        Args:
+            domain: Target domain
+            username: Username to authenticate
+            password: Password for authentication
+            ntlm_hash: NTLM hash for authentication
+            aesKey: AES key for authentication
+            kdcHost: KDC host address
+            useCache: Use Kerberos ticket cache
+
+        Returns:
+            bool: True if authentication succeeded, False otherwise
+        """
         # Re-connect since we logged off
         self.create_conn_obj()
         lmhash = ""
@@ -352,8 +526,13 @@ class smb(connection):
             if nthash:
                 self.nthash = nthash
 
-            if not all(s == "" for s in [self.nthash, password, aesKey]):
-                kerb_pass = next(s for s in [self.nthash, password, aesKey] if s)
+            # Determine which credential is being used for logging
+            if self.nthash:
+                kerb_pass = self.nthash
+            elif password:
+                kerb_pass = password
+            elif aesKey:
+                kerb_pass = aesKey
             else:
                 kerb_pass = ""
                 self.logger.debug(f"Attempting to do Kerberos Login with useCache: {useCache}")
@@ -420,123 +599,63 @@ class smb(connection):
                 self.inc_failed_login(username)
             return False
 
-    def plaintext_login(self, domain, username, password):
-        # Re-connect since we logged off
-        self.create_conn_obj()
-        try:
-            self.password = password
-            self.username = username
-            self.domain = domain
+    def _kerberos_user_verification(self, domain: str, username: str, kdcHost: str):
+        """
+        Enumerate if username exists via Kerberos AS-REQ (no badPwdCount increment).
 
-            self.conn.login(self.username, self.password, domain)
-            self.logger.debug(f"Logged in with password to SMB with {domain}/{self.username}")
-            self.is_guest = bool(self.conn.isGuestSession())
-            self.logger.debug(f"{self.is_guest=}")
-            if "Unix" not in self.server_os:
-                self.check_if_admin()
+        This is called when --continue-on-success is set with no password.
+        It uses AS-REQ without preauthentication to probe user existence.
 
-            self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
-            self.db.add_credential("plaintext", domain, self.username, self.password)
-            user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
-            host_id = self.db.get_hosts(self.host)[0].id
-            self.db.add_loggedin_relation(user_id, host_id)
+        Args:
+            domain: Target domain
+            username: Username to check
+            kdcHost: KDC host address
 
-            out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_guest()}{self.mark_pwned()}"
-            self.logger.success(out)
+        Returns:
+            bool: True if user exists, False otherwise
+        """
+        kdc_host = kdcHost if kdcHost else self.host
 
-            if not self.args.local_auth and self.username != "":
-                add_user_bh(self.username, self.domain, self.logger, self.config)
-            if self.admin_privs:
-                self.logger.debug(f"Adding admin user: {self.domain}/{self.username}:{self.password}@{self.host}")
-                self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host, user_id=user_id)
-                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
+        # Call the pure function from kerberos.py
+        result = kerberos_asreq_user_enum(domain.upper(), username, kdc_host)
 
-            # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
-            if self.args.continue_on_success and self.signing:
-                with contextlib.suppress(Exception):
-                    self.conn.logoff()
-            return True
-        except SessionError as e:
-            error, desc = e.getErrorString()
-            self.logger.fail(
-                f'{domain}\\{self.username}:{process_secret(self.password)} {error} {f"({desc})" if self.args.verbose else ""}',
-                color="magenta" if error in smb_error_status else "red",
-            )
-            if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED"] and self.args.module == ["change-password"]:
-                return True
-            if error not in smb_error_status:
-                self.inc_failed_login(username)
-                return False
-        except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
-            self.logger.fail(f"Connection Error: {e}")
-            return False
-        except BrokenPipeError:
-            self.logger.fail("Broken Pipe Error while attempting to login")
+        if result == "invalid":
+            # User doesn't exist - only show in debug mode during enumeration
+            self.logger.debug(f"{domain}\\{username} (user does not exist)")
             return False
 
-    def hash_login(self, domain, username, ntlm_hash):
-        # Re-connect since we logged off
-        self.create_conn_obj()
-        lmhash = ""
-        nthash = ""
-        try:
-            self.domain = domain
-            self.username = username
-            # This checks to see if we didn't provide the LM Hash
-            if ntlm_hash.find(":") != -1:
-                lmhash, nthash = ntlm_hash.split(":")
-                self.hash = nthash
-            else:
-                nthash = ntlm_hash
-                self.hash = ntlm_hash
-            if lmhash:
-                self.lmhash = lmhash
-            if nthash:
-                self.nthash = nthash
-
-            self.conn.login(self.username, "", domain, lmhash, nthash)
-            self.logger.debug(f"Logged in with hash to SMB with {domain}/{self.username}")
-            self.is_guest = bool(self.conn.isGuestSession())
-            self.logger.debug(f"{self.is_guest=}")
-            if "Unix" not in self.server_os:
-                self.check_if_admin()
-
-            self.db.add_credential("hash", domain, self.username, self.hash)
-            user_id = self.db.get_credential("hash", domain, self.username, self.hash)
-            host_id = self.db.get_hosts(self.host)[0].id
-            self.db.add_loggedin_relation(user_id, host_id)
-
-            out = f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_guest()}{self.mark_pwned()}"
-            self.logger.success(out)
-
-            if not self.args.local_auth and self.username != "":
-                add_user_bh(self.username, self.domain, self.logger, self.config)
-            if self.admin_privs:
-                self.db.add_admin_user("hash", domain, self.username, nthash, self.host, user_id=user_id)
-                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
-
-            # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
-            if self.args.continue_on_success and self.signing:
-                with contextlib.suppress(Exception):
-                    self.conn.logoff()
-            return True
-        except SessionError as e:
-            error, desc = e.getErrorString()
-            self.logger.fail(
-                f"{domain}\\{self.username}:{process_secret(self.hash)} {error} {f'({desc})' if self.args.verbose else ''}",
-                color="magenta" if error in smb_error_status else "red",
-            )
-            if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED"] and self.args.module == ["change-password"]:
-                return True
-            if error not in smb_error_status:
-                self.inc_failed_login(self.username)
-                return False
-        except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
-            self.logger.fail(f"Connection Error: {e}")
+        if result == "wrong_realm":
+            # Wrong domain
+            self.logger.fail(f"{domain}\\{username} (wrong realm/domain)")
             return False
-        except BrokenPipeError:
-            self.logger.fail("Broken Pipe Error while attempting to login")
+
+        if result.startswith("error:"):
+            # Error occurred
+            error_msg = result.split(":", 1)[1]
+            self.logger.warning(f"{domain}\\{username} ({error_msg})")
             return False
+
+        # Parse result and log appropriately
+        if result == "valid":
+            # User exists and is active
+            self.logger.success(f"{domain}\\{username}")
+        elif result == "disabled":
+            # User exists but disabled
+            self.logger.success(f"{domain}\\{username} (account disabled)")
+        else:
+            # Unknown result
+            self.logger.debug(f"{domain}\\{username} (unknown result: {result})")
+            return False
+
+        # Add to database
+        with contextlib.suppress(Exception):
+            self.db.add_credential("plaintext", domain, username, "")
+
+        return True
+
+    # ============================================================
+    # SMB Connection Management
+    # ============================================================
 
     def create_smbv1_conn(self, check=False):
         self.logger.info(f"Creating SMBv1 connection to {self.host}")
