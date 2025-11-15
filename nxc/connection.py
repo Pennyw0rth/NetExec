@@ -1,8 +1,11 @@
 from datetime import datetime
 import os
 import random
+import socket as _socket
+import re
 import sys
 import contextlib
+import socks
 
 from os.path import isfile
 from threading import BoundedSemaphore
@@ -11,6 +14,7 @@ from time import sleep
 from ipaddress import ip_address
 from dns import resolver, rdatatype
 from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
+from impacket.dcerpc.v5 import transport
 
 from nxc.config import pwned_label
 from nxc.helpers.logger import highlight
@@ -86,6 +90,60 @@ def get_host_addr_info(target, force_ipv6, dns_server, dns_tcp, dns_timeout):
 
     return result
 
+def _setup_socks_proxy(args, logger):
+    """
+    Configure a global SOCKS5 proxy using PySocks and enable remote DNS (rdns=True).
+    Returns True if a proxy was configured, False otherwise.
+    """
+    proxy = getattr(args, "proxy", None)
+    if not proxy:
+        return False
+
+    uri = proxy.strip()
+    # Accepts "socks5://host:port", "[::1]:1080" or "host:port"
+    if "://" in uri:
+        scheme, uri = uri.split("://", 1)
+        scheme = scheme.lower()
+        if scheme not in ("socks5",):
+            logger.fail(f"Unsupported proxy scheme '{scheme}'. Only socks5 is supported.")
+            sys.exit(1)
+
+    host = None
+    port = None
+
+    # IPv6 with brackets: [fe80::1]:1080
+    if uri.startswith("["):
+        m = re.match(r"^\[(?P<host>.+)\]:(?P<port>\d+)$", uri)
+        if m:
+            host = m.group("host")
+            port = int(m.group("port"))
+    else:
+        # Split host and port on the last colon to be safe with hostnames/IPv4
+        if ":" in uri:
+            host, port_str = uri.rsplit(":", 1)
+            try:
+                port = int(port_str)
+            except ValueError:
+                logger.fail(f"Invalid port in --proxy value: {port_str}")
+                sys.exit(1)
+
+    if not host or not port:
+        logger.fail("Invalid --proxy value. Expected format: [socks5://]HOST:PORT (e.g., 127.0.0.1:1080).")
+        sys.exit(1)
+
+    socks.setdefaultproxy(
+        socks.SOCKS5,
+        host,
+        port,
+        rdns=True,
+    )
+
+    # Monkey-patch socket to force usage of the SOCKS5 proxy
+    _socket.socket = socks.socksocket
+    _socket.create_connection = socks.create_connection
+
+    logger.info(f"SOCKS5 proxy enabled via {host}:{port} (RDNS enabled)")
+    return True
 
 def requires_admin(func):
     def _decorator(self, *args, **kwargs):
@@ -162,6 +220,7 @@ class connection:
         self.dns_server = self.args.dns_server
 
         # DNS resolution
+        self.proxied = _setup_socks_proxy(self.args, self.logger)
         dns_result = self.resolver(target)
         if dns_result:
             self.host, self.is_ipv6, self.is_link_local_ipv6 = dns_result["host"], dns_result["is_ipv6"], dns_result["is_link_local_ipv6"]
@@ -192,6 +251,9 @@ class connection:
 
     def resolver(self, target):
         try:
+            if getattr(self.args, "proxy", None):
+                return {"host": target, "is_ipv6": False, "is_link_local_ipv6": False}
+
             return get_host_addr_info(
                 target=target,
                 force_ipv6=self.args.force_ipv6,
