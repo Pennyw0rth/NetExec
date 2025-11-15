@@ -6,13 +6,15 @@ from os import mkdir
 from os.path import exists
 from os.path import join as path_join
 from pathlib import Path
-from sqlite3 import connect
 from threading import Lock
 
-from sqlalchemy import create_engine, MetaData, func
-from sqlalchemy.exc import IllegalStateChangeError
+from sqlalchemy import Table, create_engine, MetaData, func
+from sqlalchemy.exc import (
+    IllegalStateChangeError,
+    NoInspectionAvailable,
+    NoSuchTableError,
+)
 from sqlalchemy.orm import sessionmaker, scoped_session
-
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.logger import nxc_logger
 from nxc.paths import WORKSPACE_DIR
@@ -57,25 +59,15 @@ def init_protocol_dbs(workspace_name, p_loader=None):
     if p_loader is None:
         p_loader = ProtocolLoader()
     protocols = p_loader.get_protocols()
-
     for protocol in protocols:
         protocol_object = p_loader.load_protocol(protocols[protocol]["dbpath"])
         proto_db_path = path_join(WORKSPACE_DIR, workspace_name, f"{protocol}.db")
 
         if not exists(proto_db_path):
             print(f"[*] Initializing {protocol.upper()} protocol database")
-            conn = connect(proto_db_path)
-            c = conn.cursor()
-
-            # try to prevent some weird sqlite I/O errors
-            c.execute("PRAGMA journal_mode = OFF")
-            c.execute("PRAGMA foreign_keys = 1")
-
-            protocol_object.database.db_schema(c)
-
-            # commit the changes and close everything off
-            conn.commit()
-            conn.close()
+            db_engine = create_db_engine(proto_db_path)
+            protocol_object.database.db_schema(db_engine)
+            db_engine.dispose()
 
 
 def create_workspace(workspace_name, p_loader=None):
@@ -158,6 +150,32 @@ class BaseDB:
 
     def reflect_tables(self):
         raise NotImplementedError("Reflect tables not implemented")
+
+    def reflect_table(self, table):
+        with self.db_engine.connect():
+            try:
+                reflected_table = Table(table.__tablename__, self.metadata, autoload_with=self.db_engine)
+
+                # Check for column addition / deletion
+                reflected_columns = set(reflected_table.columns.keys())
+                orm_columns = {column.name for column in table.__table__.columns}
+                if reflected_columns != orm_columns:
+                    raise ValueError(f"Schema mismatch detected! ORM columns: {orm_columns}, Reflected columns: {reflected_columns}")
+
+                # Check for constraint changes
+                reflected_constraints = [(type(c), c.columns.keys()) for c in reflected_table._sorted_constraints]
+                orm_constraints = [(type(c), c.columns.keys()) for c in table.__table__._sorted_constraints]
+                if reflected_constraints != orm_constraints:
+                    raise ValueError(f"Schema mismatch detected! ORM constraints: {orm_constraints}, Reflected constraints: {reflected_constraints}")
+
+                return reflected_table
+            except (NoInspectionAvailable, NoSuchTableError, ValueError) as e:
+                nxc_logger.fail(f"Schema mismatch detected for table '{table.__tablename__}' in protocol '{self.protocol}'")
+                nxc_logger.debug(e)
+                nxc_logger.fail("This is probably because a newer version of nxc is being run on an old DB schema.")
+                nxc_logger.fail(f"Optionally save the old DB data (`cp {self.db_path} ~/nxc_{self.protocol.lower()}.bak`)")
+                nxc_logger.fail(f"Then remove the {self.protocol} DB (`rm -f {self.db_path}`) and run nxc to initialize the new DB")
+                sys.exit()
 
     def shutdown_db(self):
         try:

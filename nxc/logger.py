@@ -179,7 +179,11 @@ class NXCAdapter(logging.LoggerAdapter):
         file_creation = False
 
         if not os.path.isfile(output_file):
-            open(output_file, "x")  # noqa: SIM115
+            try:
+                open(output_file, "x")  # noqa: SIM115
+            except FileNotFoundError:
+                print(f"{colored('[-]', 'red', attrs=['bold'])} Log file path does not exist: {os.path.dirname(output_file)}")
+                exit(1)
             file_creation = True
 
         file_handler = RotatingFileHandler(output_file, maxBytes=100000, encoding="utf-8")
