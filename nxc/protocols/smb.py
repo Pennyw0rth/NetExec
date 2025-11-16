@@ -674,8 +674,9 @@ class smb(connection):
             self.logger.debug(f"Using principal {principal} for ST")
             ccache.credentials[0]["server"].fromPrincipal(principal)
 
-        ccache.saveFile(f"{self.args.generate_st}.ccache")
-        self.logger.success(f"Saved ST to {self.args.generate_st}.ccache")
+        st_file = f"{self.args.generate_st.removesuffix('.ccache')}.ccache"
+        ccache.saveFile(st_file)
+        self.logger.success(f"Saved ST to {st_file}")
 
     def generate_tgt(self):
         self.logger.info(f"Attempting to get TGT for {self.username}@{self.domain}")
@@ -697,7 +698,7 @@ class smb(connection):
 
             ccache = CCache()
             ccache.fromTGT(tgt, oldSessionKey, sessionKey)
-            tgt_file = f"{self.args.generate_tgt}.ccache"
+            tgt_file = f"{self.args.generate_tgt.removesuffix('.ccache')}.ccache"
             ccache.saveFile(tgt_file)
 
             self.logger.success(f"TGT saved to: {tgt_file}")
