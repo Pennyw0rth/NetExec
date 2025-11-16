@@ -1,4 +1,5 @@
-from nxc.helpers.args import DefaultTrackingAction, DisplayDefaultsNotNone
+from nxc.helpers.args import DefaultTrackingAction, DisplayDefaultsNotNone, get_conditional_action
+from argparse import _StoreAction
 
 
 def proto_args(parser, parents):
@@ -12,8 +13,12 @@ def proto_args(parser, parents):
 
     egroup = ldap_parser.add_argument_group("Retrieve hash on the remote DC", "Options to get hashes from Kerberos")
     egroup.add_argument("--asreproast", help="Output AS_REP response to crack with hashcat to file")
-    egroup.add_argument("--kerberoasting", help="Output TGS ticket to crack with hashcat to file")
+    kerberoasting_arg = egroup.add_argument("--kerberoasting", "--kerberoast", help="Output TGS ticket to crack with hashcat to file")
+    kerberoast_users_arg = egroup.add_argument("--kerberoast-account", nargs="+", dest="kerberoast_account", action=get_conditional_action(_StoreAction), make_required=[], help="Target specific accounts for kerberoasting (sAMAccountNames or file containing sAMAccountNames)")
     egroup.add_argument("--no-preauth-targets", nargs=1, dest="no_preauth_targets", help="Targeted kerberoastable users")
+
+    # Make kerberoast-users require kerberoasting
+    kerberoast_users_arg.make_required = [kerberoasting_arg]
 
     vgroup = ldap_parser.add_argument_group("Retrieve useful information on the domain")
     vgroup.add_argument("--base-dn", metavar="BASE_DN", dest="base_dn", type=str, default=None, help="base DN for search queries")
@@ -30,6 +35,7 @@ def proto_args(parser, parents):
     vgroup.add_argument("--get-sid", action="store_true", help="Get domain sid")
     vgroup.add_argument("--active-users", nargs="*", help="Get Active Domain Users Accounts")
     vgroup.add_argument("--pso", action="store_true", help="Get Fine Grained Password Policy/PSOs")
+    vgroup.add_argument("--pass-pol", action="store_true", help="Dump password policy")
 
     ggroup = ldap_parser.add_argument_group("Retrieve gmsa on the remote DC", "Options to play with gmsa")
     ggroup.add_argument("--gmsa", action="store_true", help="Enumerate GMSA passwords")

@@ -1,5 +1,5 @@
 from argparse import _StoreTrueAction, _StoreAction
-from nxc.helpers.args import DisplayDefaultsNotNone, DefaultTrackingAction
+from nxc.helpers.args import DisplayDefaultsNotNone, DefaultTrackingAction, get_conditional_action
 
 
 def proto_args(parser, parents):
@@ -46,21 +46,22 @@ def proto_args(parser, parents):
     mapping_enum_group.add_argument("--interfaces", action="store_true", help="Enumerate network interfaces")
     mapping_enum_group.add_argument("--no-write-check", action="store_true", help="Skip write check on shares (avoid leaving traces when missing delete permissions)")
     mapping_enum_group.add_argument("--filter-shares", nargs="+", help="Filter share by access, option 'READ' 'WRITE' or 'READ,WRITE'")
-    mapping_enum_group.add_argument("--smb-sessions", action="store_true", help="Enumerate active smb sessions")
     mapping_enum_group.add_argument("--disks", action="store_true", help="Enumerate disks")
-    mapping_enum_group.add_argument("--loggedon-users-filter", action="store", help="only search for specific user, works with regex")
-    mapping_enum_group.add_argument("--loggedon-users", nargs="?", const="", help="Enumerate logged on users, if a user is specified than a regex filter is applied.")
     mapping_enum_group.add_argument("--users", nargs="*", metavar="USER", help="Enumerate domain users, if a user is specified than only its information is queried.")
     mapping_enum_group.add_argument("--users-export", help="Enumerate domain users and export them to the specified file")
     mapping_enum_group.add_argument("--groups", nargs="?", const="", metavar="GROUP", help="Enumerate domain groups, if a group is specified than its members are Enumerated")
-    mapping_enum_group.add_argument("--computers", nargs="?", const="", metavar="COMPUTER", help="Enumerate computer users")
     mapping_enum_group.add_argument("--local-groups", nargs="?", const="", metavar="GROUP", help="Enumerate local groups, if a group is specified then its members are Enumerated")
+    mapping_enum_group.add_argument("--computers", nargs="?", const="", metavar="COMPUTER", help="Enumerate computer users")
     mapping_enum_group.add_argument("--pass-pol", action="store_true", help="dump password policy")
     mapping_enum_group.add_argument("--rid-brute", nargs="?", type=int, const=4000, metavar="MAX_RID", help="Enumerate users by bruteforcing RIDs")
+    mapping_enum_group.add_argument("--smb-sessions", action="store_true", help="Enumerate active smb sessions")
+    mapping_enum_group.add_argument("--reg-sessions", type=str, nargs="?", const="", help="Enumerate users sessions using the Remote Registry. If a username is given, filter for it. If a file is given, filter for listed usernames. If no value is given, list all.")
+    mapping_enum_group.add_argument("--loggedon-users", nargs="?", const="", help="Enumerate logged on users, if a user is specified than a regex filter is applied.")
+    mapping_enum_group.add_argument("--loggedon-users-filter", action="store", help="only search for specific user, works with regex")
     mapping_enum_group.add_argument("--qwinsta", type=str, nargs="?", const="", help="Enumerate user sessions. If a username is given, filter for it; if a file is given, filter for listed usernames. If no value is given, list all.")
     mapping_enum_group.add_argument("--tasklist", type=str, nargs="?", const=True, help="Enumerate running processes and filter for the specified one if specified")
     mapping_enum_group.add_argument("--taskkill", type=str, help="Kills a specific PID or a proces name's PID's")
-    
+
     wmi_group = smb_parser.add_argument_group("WMI", "Options for WMI Queries")
     wmi_group.add_argument("--wmi", metavar="QUERY", type=str, help="issues the specified WMI query")
     wmi_group.add_argument("--wmi-namespace", metavar="NAMESPACE", default="root\\cimv2", help="WMI Namespace")
@@ -101,18 +102,3 @@ def proto_args(parser, parents):
     posh_group.add_argument("--no-encode", action="store_true", default=False, help="Do not encode the PowerShell command ran on target")
 
     return parser
-
-
-def get_conditional_action(baseAction):
-    class ConditionalAction(baseAction):
-        def __init__(self, option_strings, dest, **kwargs):
-            x = kwargs.pop("make_required", [])
-            super().__init__(option_strings, dest, **kwargs)
-            self.make_required = x
-
-        def __call__(self, parser, namespace, values, option_string=None):
-            for x in self.make_required:
-                x.required = True
-            super().__call__(parser, namespace, values, option_string)
-
-    return ConditionalAction

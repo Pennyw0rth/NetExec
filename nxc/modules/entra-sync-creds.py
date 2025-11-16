@@ -1,5 +1,6 @@
 
 from base64 import b64encode
+from nxc.helpers.misc import CATEGORY
 from nxc.helpers.powershell import get_ps_script
 
 
@@ -14,6 +15,7 @@ class NXCModule:
     description = "Extract Entra ID sync credentials from the target host"
     supported_protocols = ["smb"]
     opsec_safe = True
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self):
         self.context = None

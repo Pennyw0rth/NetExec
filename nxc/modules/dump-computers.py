@@ -1,10 +1,12 @@
+from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
 
 
 class NXCModule:
     name = "dump-computers"
-    description = "Dumps all computers in the domain"
+    description = "Dumps FQDN and OS of all computers in the domain"
     supported_protocols = ["ldap"]
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """
@@ -41,8 +43,11 @@ class NXCModule:
         context.log.debug(f"Total number of records returned: {len(resp_parsed)}")
 
         for item in resp_parsed:
-            dns_host_name = item["dNSHostName"]
+            dns_host_name = item.get("dNSHostName")
             operating_system = item.get("operatingSystem", "Unknown OS")
+            if not dns_host_name:
+                context.log.debug(f"Skipping computer without dNSHostName: {item.get('cn', '<unknown>')}")
+                continue
 
             if self.netbios_only:
                 netbios_name = dns_host_name.split(".")[0]

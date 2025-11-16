@@ -2,7 +2,6 @@ import os
 import random
 import socket
 import contextlib
-from io import StringIO
 
 from nxc.config import process_secret
 from nxc.connection import connection
@@ -250,25 +249,26 @@ class mssql(connection):
             self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {error_msg if error_msg else ''}")
             return False
 
-    def mssql_query(self):
+    def query(self):
         if self.conn.lastError:
             # Invalid connection
+            self.logger.debug(f"Cannot execute query due to invalid connection: {self.conn.lastError}")
             return None
-        query = self.args.mssql_query
-        self.logger.info(f"Query to run:\n{query}")
+        self.logger.info(f"Query to run: {self.args.query}")
         try:
-            raw_output = self.conn.sql_query(query)
+            raw_output = self.conn.sql_query(self.args.query)
             self.logger.info("Executed MSSQL query")
             self.logger.debug(f"Raw output: {raw_output}")
-            for data in raw_output:
-                if isinstance(data, dict):
+            if self.conn.lastError:
+                self.logger.debug(f"Error during query execution: {self.conn.lastError}")
+                self.logger.fail(self.conn.lastError)
+            else:
+                for data in raw_output:
                     for key, value in data.items():
                         if key:
                             self.logger.highlight(f"{key}:{value}")
                         else:
                             self.logger.highlight(f"{value}")
-                else:
-                    self.logger.fail("Unexpected output")
         except Exception as e:
             self.logger.exception(f"Failed to excuted MSSQL query, reason: {e}")
             return None
@@ -284,6 +284,7 @@ class mssql(connection):
         get_output = True if not self.args.no_output else get_output
         self.logger.debug(f"{get_output=}")
 
+        output = ""
         try:
             exec_method = MSSQLEXEC(self.conn, self.logger)
             output = exec_method.execute(payload)
@@ -292,10 +293,11 @@ class mssql(connection):
             self.logger.fail(f"Execute command failed, error: {e!s}")
             return False
         else:
-            self.logger.success("Executed command via mssqlexec")
-            if output:
-                output_lines = StringIO(output).readlines()
-                for line in output_lines:
+            if self.conn.lastError:
+                self.logger.fail(f"Error during command execution: {self.conn.lastError}")
+            else:
+                self.logger.success("Executed command via mssqlexec")
+                for line in output.splitlines():
                     self.logger.highlight(line.strip())
         return output
 
@@ -435,3 +437,74 @@ class mssql(connection):
 
             so_far += simultaneous
         return entries
+
+    def _qname(self, ident: str) -> str:
+        if ident is None:
+            return "[]"
+        return "[" + str(ident).replace("]", "]]") + "]"
+
+    def list_databases(self):
+        try:
+            q = (
+                "SELECT d.name AS DatabaseName, "
+                "       suser_sname(d.owner_sid) AS Owner "
+                "FROM sys.databases d "
+                "ORDER BY d.name;"
+            )
+            rows = self.conn.sql_query(q) or []
+            if not rows:
+                self.logger.display("No databases returned")
+                return
+
+            self.logger.display("Enumerated databases")
+            self.logger.highlight(f"{'Database Name':<30} {'Owner':<25}")
+            self.logger.highlight(f"{'-' * 30} {'-' * 25}")
+            for r in rows:
+                self.logger.highlight(f"{r.get('DatabaseName', ''):<30} {r.get('Owner', ''):<25}")
+            self.logger.highlight(f"Total: {len(rows)} database(s)")
+        except Exception as e:
+            self.logger.fail(f"Failed to enumerate databases: {e}")
+            self.logger.debug("list_databases error", exc_info=True)
+
+    def database(self):
+        db_arg = self.args.database
+
+        # nxc --database (no value) -> list
+        if db_arg is True or db_arg is None:
+            self.list_databases()
+            return
+
+        # nxc --database <name> -> tables
+        if isinstance(db_arg, str):
+            try:
+                safe = db_arg.replace("'", "''")
+                exists = self.conn.sql_query(f"SELECT 1 FROM sys.databases WHERE name = N'{safe}';")
+                if not exists:
+                    self.logger.fail(f"Database [{db_arg}] does not exist on the server.")
+                    return
+
+                tq = (
+                    f"SELECT t.name AS TableName, t.modify_date "
+                    f"FROM {self._qname(db_arg)}.sys.tables t "
+                    f"ORDER BY t.name;"
+                )
+                rows = self.conn.sql_query(tq) or []
+            except Exception as e:
+                self.logger.fail(f"Insufficient permissions or query error in [{db_arg}]: {e}")
+                self.logger.debug("database() error", exc_info=True)
+                return
+
+            if not rows:
+                self.logger.display(f"Database [{db_arg}] has no user tables.")
+                return
+
+            self.logger.display(f"Tables in database: {db_arg}")
+            self.logger.highlight(f"{'Table Name':<50} {'Last Modified':<25}")
+            self.logger.highlight(f"{'-' * 50} {'-' * 25}")
+            for r in rows:
+                mod = r.get("modify_date", "")
+                if mod and hasattr(mod, "strftime"):
+                    mod = mod.strftime("%Y-%m-%d %H:%M:%S")
+                self.logger.highlight(f"{r.get('TableName', ''):<50} {mod!s:<25}")
+            self.logger.highlight(f"Total: {len(rows)} table(s)")
+            return

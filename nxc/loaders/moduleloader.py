@@ -8,6 +8,7 @@ from os.path import dirname
 from os.path import join as path_join
 
 from nxc.context import Context
+from nxc.helpers.misc import CATEGORY
 from nxc.logger import NXCAdapter
 from nxc.paths import NXC_PATH
 
@@ -29,6 +30,9 @@ class ModuleLoader:
             module_error = True
         elif not hasattr(module, "description"):
             self.logger.fail(f"{module_path} missing the description variable")
+            module_error = True
+        elif not hasattr(module, "category") or module.category not in [CATEGORY.ENUMERATION, CATEGORY.CREDENTIAL_DUMPING, CATEGORY.PRIVILEGE_ESCALATION]:
+            self.logger.fail(f"{module_path} missing the category variable or invalid category")
             module_error = True
         elif not hasattr(module, "supported_protocols"):
             self.logger.fail(f"{module_path} missing the supported_protocols variable")
@@ -92,6 +96,7 @@ class ModuleLoader:
                     "description": module_spec.description,
                     "options": module_spec.options.__doc__,
                     "supported_protocols": module_spec.supported_protocols,
+                    "category": module_spec.category,
                     "requires_admin": bool(hasattr(module_spec, "on_admin_login") and callable(module_spec.on_admin_login)),
                 }
             }
