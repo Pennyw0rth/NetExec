@@ -365,12 +365,12 @@ class smb(connection):
                 serverName = Principal(self.args.delegate_spn if self.args.delegate_spn else f"cifs/{self.hostname}.{self.domain}", type=constants.PrincipalNameType.NT_SRV_INST.value)
                 tgs, sk = kerberos_login_with_S4U(domain, self.hostname, username, password, nthash, lmhash, aesKey, kdcHost, self.args.delegate, serverName, useCache, no_s4u2proxy=self.args.no_s4u2proxy)
                 self.logger.debug(f"TGS obtained for {self.args.delegate} for {serverName}")
-                
+
                 spn = f"cifs/{self.hostname}.{self.domain}"
                 if self.args.delegate_spn:
                     self.logger.debug(f"Swapping SPN to {spn} for TGS")
                     tgs = kerberos_altservice(tgs, spn)
-                
+
                 if self.args.generate_st:
                     self.save_st(tgs, sk, spn if self.args.delegate_spn else None)
 
@@ -386,7 +386,7 @@ class smb(connection):
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             if self.args.delegate:
                 used_ccache = f" through S4U with {username}"
-            
+
             if self.args.delegate_spn:
                 used_ccache = f" through S4U with {username} (w/ SPN {self.args.delegate_spn})"
 
