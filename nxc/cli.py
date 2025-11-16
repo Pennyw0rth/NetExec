@@ -35,10 +35,11 @@ def gen_cli_args():
 
     output_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     output_group = output_parser.add_argument_group("Output", "Options to set verbosity levels and control output")
-    output_group.add_argument("--verbose", action="store_true", help="enable verbose output")
-    output_group.add_argument("--debug", action="store_true", help="enable debug level information")
     output_group.add_argument("--no-progress", action="store_true", help="do not displaying progress bar during scan")
     output_group.add_argument("--log", metavar="LOG", help="export result into a custom file")
+    log_level = output_group.add_mutually_exclusive_group()
+    log_level.add_argument("--verbose", action="store_true", help="enable verbose output")
+    log_level.add_argument("--debug", action="store_true", help="enable debug level information")
 
     dns_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     dns_group = dns_parser.add_argument_group("DNS")
