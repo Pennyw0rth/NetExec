@@ -233,7 +233,7 @@ class ldap(connection):
         ldap_url = f"ldaps://{self.target}"
         try:
             ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-            ldap_connection._LDAPConnection__channel_binding_value = None
+            ldap_connection.channel_binding_value = None
             ldap_connection.login(user=" ", domain=self.domain)
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("data 80090346") >= 0:
@@ -242,9 +242,9 @@ class ldap(connection):
             # Login failed (wrong credentials). test if we get an error with an existing, but wrong CBT -> When supported
             elif str(e).find("data 52e") >= 0:
                 ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-                new_cbv = bytearray(ldap_connection._LDAPConnection__channel_binding_value)
+                new_cbv = bytearray(ldap_connection.channel_binding_value)
                 new_cbv[15] = (new_cbv[3] + 1) % 256
-                ldap_connection._LDAPConnection__channel_binding_value = bytes(new_cbv)
+                ldap_connection.channel_binding_value = bytes(new_cbv)
                 try:
                     ldap_connection.login(user=" ", domain=self.domain)
                 except ldap_impacket.LDAPSessionError as e:
