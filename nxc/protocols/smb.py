@@ -643,7 +643,7 @@ class smb(connection):
 
     def save_st(self, st, sk, new_spn=None):
         ccache = CCache()
-        tgs_rep = st['KDC_REP']
+        tgs_rep = st["KDC_REP"]
         session_key = sk
 
         try:
