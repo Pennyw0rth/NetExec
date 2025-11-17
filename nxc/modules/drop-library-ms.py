@@ -20,9 +20,9 @@ class NXCModule:
         self.module_options = module_options
         self.ignore_shares = ["C$", "ADMIN$", "NETLOGON", "SYSVOL"]
 
-        self.cleanup = False
         self.server = None
         self.lms_name = ""
+        self.cleanup = False
 
         self.local_path = None
         self.remote_path = None
@@ -34,21 +34,21 @@ class NXCModule:
         IGNORE        Specific shares to ignore (comma separated, default: C$,ADMIN$,NETLOGON,SYSVOL)
         CLEANUP     Cleaning option (True or False)
         """
-        if "CLEANUP" in module_options:
-            self.cleanup = bool(module_options["CLEANUP"])
-            context.log.debug(f"CLEANUP is set to {self.cleanup}")
+        if "SERVER" not in module_options and not self.cleanup:
+            context.log.fail("SERVER option is required")
+            exit(1)
 
         if "NAME" not in module_options:
             context.log.fail("NAME option is required!")
             exit(1)
 
-        if "SERVER" not in module_options and not self.cleanup:
-            context.log.fail("SERVER option is required")
-            exit(1)
-
         if "IGNORE" in module_options:
             self.ignore_shares = module_options["IGNORE"].split(",")
             context.log.debug(f"Ignoring shares: {self.ignore_shares}")
+
+        if "CLEANUP" in module_options:
+            self.cleanup = bool(module_options["CLEANUP"])
+            context.log.debug(f"CLEANUP is set to {self.cleanup}")
 
         self.local_path = f"{TMP_PATH}/{self.lms_name}.library-ms"
         self.remote_path = ntpath.join("\\", f"{self.lms_name}.library-ms")
