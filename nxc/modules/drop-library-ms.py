@@ -77,14 +77,14 @@ class NXCModule:
                 if self.cleanup:
                     try:
                         connection.conn.deleteFile(share["name"], self.remote_path)
-                        context.log.success(f"Deleted .library-ms file on the share {share['name']}")
+                        context.log.success(f"Deleted .library-ms file on share '{share['name']}'")
                     except Exception as e:
-                        context.log.fail(f"Error deleting .library-ms file on the share {share['name']} : {e}")
+                        context.log.fail(f"Error deleting .library-ms file on share '{share['name']}' : {e}")
 
                 else:
                     with open(self.local_path, "rb") as libms:
                         try:
                             connection.conn.putFile(share["name"], self.remote_path, libms.read)
-                            context.log.success(f"Created .library-ms file on the share {share['name']}")
+                            context.log.success(f"Created .library-ms file on share '{share['name']}'")
                         except Exception as e:
-                            context.log.fail(f"Error writing .library-ms file on the share {share['name']} : {e}")
+                            context.log.fail(f"Error writing .library-ms file on share '{share['name']}' : {e}")
