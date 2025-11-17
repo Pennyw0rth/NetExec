@@ -1,7 +1,4 @@
-import random
-import string
 import ntpath
-
 from nxc.paths import TMP_PATH
 from nxc.helpers.misc import CATEGORY
 
@@ -23,10 +20,9 @@ class NXCModule:
         self.module_options = module_options
         self.ignore_shares = ["C$", "ADMIN$", "NETLOGON", "SYSVOL"]
 
-        self.cleanup = None
+        self.cleanup = False
         self.server = None
-
-        self.lms_name = None
+        self.lms_name = ""
 
         self.local_path = None
         self.remote_path = None
@@ -37,19 +33,12 @@ class NXCModule:
         NAME        File name
         CLEANUP     Cleaning option (True or False)
         """
-        self.cleanup = False
-        self.lms_name = "".join(random.choices(string.ascii_letters, k=8))
-
         if "CLEANUP" in module_options:
             self.cleanup = bool(module_options["CLEANUP"])
             context.log.debug(f"CLEANUP is set to {self.cleanup}")
 
-        if "NAME" in module_options:
-            self.lms_name = str(module_options["NAME"])
-            context.log.debug(f"NAME is set to {self.lms_name}")
-
-        if "NAME" not in module_options and self.cleanup:
-            context.log.fail("NAME option is required when CLEANUP option is set to True")
+        if "NAME" not in module_options:
+            context.log.fail("NAME option is required!")
             exit(1)
 
         if "SERVER" not in module_options and not self.cleanup:
