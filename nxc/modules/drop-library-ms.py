@@ -31,7 +31,7 @@ class NXCModule:
         """
         SERVER      Attacker machine
         NAME        File name
-        IGNORE        Specific shares to ignore (comma separated, default: C$,ADMIN$,NETLOGON,SYSVOL)
+        IGNORE      Specific shares to ignore (comma separated, default: C$,ADMIN$,NETLOGON,SYSVOL)
         CLEANUP     Cleaning option (True or False)
         """
         if "SERVER" not in module_options and not self.cleanup:
