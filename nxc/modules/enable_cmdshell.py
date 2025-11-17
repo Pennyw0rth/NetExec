@@ -1,3 +1,6 @@
+from nxc.helpers.misc import CATEGORY
+
+
 class NXCModule:
     """
     Enables or disables xp_cmdshell in MSSQL Server.
@@ -7,6 +10,7 @@ class NXCModule:
     name = "enable_cmdshell"
     description = "Enable or disable xp_cmdshell in MSSQL Server"
     supported_protocols = ["mssql"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self):
         self.mssql_conn = None

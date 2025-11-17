@@ -6,7 +6,8 @@ def proto_args(parser, parents):
     mssql_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
     mssql_parser.add_argument("--port", default=1433, type=int, metavar="PORT", help="MSSQL port")
     mssql_parser.add_argument("--mssql-timeout", help="SQL server connection timeout", type=int, default=5)
-    mssql_parser.add_argument("-q", "--query", dest="mssql_query", metavar="QUERY", type=str, help="execute the specified query against the MSSQL DB")
+    mssql_parser.add_argument("-q", "--query", metavar="QUERY", type=str, help="execute the specified query against the mssql db")
+    mssql_parser.add_argument("--database", nargs="?", const=True, metavar="NAME", help="list databases or list tables for NAME")
 
     dgroup = mssql_parser.add_mutually_exclusive_group()
     dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, help="domain name")

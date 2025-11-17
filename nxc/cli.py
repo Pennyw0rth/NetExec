@@ -35,10 +35,11 @@ def gen_cli_args():
 
     output_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     output_group = output_parser.add_argument_group("Output", "Options to set verbosity levels and control output")
-    output_group.add_argument("--verbose", action="store_true", help="enable verbose output")
-    output_group.add_argument("--debug", action="store_true", help="enable debug level information")
     output_group.add_argument("--no-progress", action="store_true", help="do not displaying progress bar during scan")
     output_group.add_argument("--log", metavar="LOG", help="export result into a custom file")
+    log_level = output_group.add_mutually_exclusive_group()
+    log_level.add_argument("--verbose", action="store_true", help="enable verbose output")
+    log_level.add_argument("--debug", action="store_true", help="enable debug level information")
 
     dns_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     dns_group = dns_parser.add_argument_group("DNS")
@@ -60,7 +61,7 @@ def gen_cli_args():
 
     The network execution tool
     Maintained as an open source project by @NeffIsBack, @MJHallenbeck, @_zblurx
-    
+
     For documentation and usage examples, visit: https://www.netexec.wiki/
 
     {highlight('Version', 'red')} : {highlight(VERSION)}
@@ -76,13 +77,13 @@ def gen_cli_args():
     mgroup = module_parser.add_argument_group("Modules", "Options for nxc modules")
     mgroup.add_argument("-M", "--module", choices=get_module_names(), action="append", metavar="MODULE", help="module to use")
     mgroup.add_argument("-o", metavar="MODULE_OPTION", nargs="+", default=[], dest="module_options", help="module options")
-    mgroup.add_argument("-L", "--list-modules", action="store_true", help="list available modules")
+    mgroup.add_argument("-L", "--list-modules", nargs="?", type=str, const="", help="list available modules")
     mgroup.add_argument("--options", dest="show_module_options", action="store_true", help="display module options")
 
     subparsers = parser.add_subparsers(title="Available Protocols", dest="protocol")
 
     std_parser = argparse.ArgumentParser(add_help=False, parents=[generic_parser, output_parser, dns_parser], formatter_class=DisplayDefaultsNotNone)
-    std_parser.add_argument("target", nargs="+" if not (module_parser.parse_known_args()[0].list_modules or module_parser.parse_known_args()[0].show_module_options or generic_parser.parse_known_args()[0].version) else "*", type=str, help="the target IP(s), range(s), CIDR(s), hostname(s), FQDN(s), file(s) containing a list of targets, NMap XML or .Nessus file(s)")
+    std_parser.add_argument("target", nargs="+" if not (module_parser.parse_known_args()[0].list_modules is not None or module_parser.parse_known_args()[0].show_module_options or generic_parser.parse_known_args()[0].version) else "*", type=str, help="the target IP(s), range(s), CIDR(s), hostname(s), FQDN(s), file(s) containing a list of targets, NMap XML or .Nessus file(s)")
     credential_group = std_parser.add_argument_group("Authentication", "Options for authenticating")
     credential_group.add_argument("-u", "--username", metavar="USERNAME", dest="username", nargs="+", default=[], help="username(s) or file(s) containing usernames")
     credential_group.add_argument("-p", "--password", metavar="PASSWORD", dest="password", nargs="+", default=[], help="password(s) or file(s) containing passwords")

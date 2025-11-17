@@ -4,6 +4,7 @@
 from impacket.dcerpc.v5 import nrpc, epm, transport
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 import sys
+from nxc.helpers.misc import CATEGORY
 from nxc.logger import nxc_logger
 
 # Give up brute-forcing after this many attempts. If vulnerable, 256 attempts are expected to be necessary on average.
@@ -14,6 +15,7 @@ class NXCModule:
     name = "zerologon"
     description = "Module to check if the DC is vulnerable to Zerologon aka CVE-2020-1472"
     supported_protocols = ["smb", "wmi"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

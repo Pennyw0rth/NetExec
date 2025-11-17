@@ -4,6 +4,7 @@ import datetime
 from enum import Enum
 from impacket.ldap import ldaptypes
 from impacket.uuid import bin_to_string
+from nxc.helpers.misc import CATEGORY
 from nxc.helpers.msada_guids import SCHEMA_OBJECTS, EXTENDED_RIGHTS
 from nxc.parsers.ldap_results import parse_result_attributes
 from ldap3.utils.conv import escape_filter_chars
@@ -205,6 +206,7 @@ class NXCModule:
     name = "daclread"
     description = "Read and backup the Discretionary Access Control List of objects. Be careful, this module cannot read the DACLS recursively, see more explanation in the options."
     supported_protocols = ["ldap"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -220,7 +222,7 @@ class NXCModule:
 
     def options(self, context, module_options):
         """
-        Be careful, this module cannot read the DACLS recursively. 
+        Be careful, this module cannot read the DACLS recursively.
         For example, if an object has particular rights because it belongs to a group, the module will not be able to see it directly, you have to check the group rights manually.
 
         TARGET          The objects that we want to read or backup the DACLs, specified by its SamAccountName
@@ -269,7 +271,7 @@ class NXCModule:
 
         if "ACE_TYPE" in module_options:
             self.ace_type = module_options["ACE_TYPE"]
-            
+
         if "RIGHTS" in module_options:
             self.rights = module_options["RIGHTS"]
 

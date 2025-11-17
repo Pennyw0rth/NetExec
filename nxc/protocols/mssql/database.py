@@ -1,15 +1,17 @@
-import sys
 import warnings
 
-from sqlalchemy import func, select, insert, update, delete, Table
+from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, func, select, insert, update, delete
 from sqlalchemy.dialects.sqlite import Insert  # used for upsert
-from sqlalchemy.exc import SAWarning, NoInspectionAvailable, NoSuchTableError
+from sqlalchemy.exc import SAWarning
+from sqlalchemy.ext.declarative import declarative_base
 
 from nxc.database import BaseDB, format_host_query
 from nxc.logger import nxc_logger
 
 # if there is an issue with SQLAlchemy and a connection cannot be cleaned up properly it spews out annoying warnings
 warnings.filterwarnings("ignore", category=SAWarning)
+
+Base = declarative_base()
 
 
 class database(BaseDB):
@@ -20,55 +22,53 @@ class database(BaseDB):
 
         super().__init__(db_engine)
 
-    @staticmethod
-    def db_schema(db_conn):
-        db_conn.execute(
-            """CREATE TABLE "hosts" (
-            "id" integer PRIMARY KEY,
-            "ip" text,
-            "hostname" text,
-            "domain" text,
-            "os" text,
-            "instances" integer
-            )"""
-        )
-        # This table keeps track of which credential has admin access over which machine and vice-versa
-        db_conn.execute(
-            """CREATE TABLE "admin_relations" (
-            "id" integer PRIMARY KEY,
-            "userid" integer,
-            "hostid" integer,
-            FOREIGN KEY(userid) REFERENCES users(id),
-            FOREIGN KEY(hostid) REFERENCES hosts(id)
-            )"""
-        )
-        db_conn.execute(
-            """CREATE TABLE "users" (
-            "id" integer PRIMARY KEY,
-            "credtype" text,
-            "domain" text,
-            "username" text,
-            "password" text,
-            "pillaged_from_hostid" integer,
-            FOREIGN KEY(pillaged_from_hostid) REFERENCES hosts(id)
-            )"""
+    class Host(Base):
+        __tablename__ = "hosts"
+        id = Column(Integer)
+        ip = Column(String)
+        hostname = Column(String)
+        domain = Column(String)
+        os = Column(String)
+        instances = Column(Integer)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
         )
 
+    class AdminRelation(Base):
+        __tablename__ = "admin_relations"
+        id = Column(Integer)
+        userid = Column(Integer)
+        hostid = Column(Integer)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            ForeignKeyConstraint(["userid"], ["users.id"]),
+            ForeignKeyConstraint(["hostid"], ["hosts.id"]),
+        )
+
+    class User(Base):
+        __tablename__ = "users"
+        id = Column(Integer)
+        credtype = Column(String)
+        domain = Column(String)
+        username = Column(String)
+        password = Column(String)
+        pillaged_from_hostid = Column(Integer)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            ForeignKeyConstraint(["pillaged_from_hostid"], ["hosts.id"]),
+        )
+
+    @staticmethod
+    def db_schema(db_conn):
+        Base.metadata.create_all(db_conn)
+
     def reflect_tables(self):
-        with self.db_engine.connect():
-            try:
-                self.HostsTable = Table("hosts", self.metadata, autoload_with=self.db_engine)
-                self.UsersTable = Table("users", self.metadata, autoload_with=self.db_engine)
-                self.AdminRelationsTable = Table("admin_relations", self.metadata, autoload_with=self.db_engine)
-            except (NoInspectionAvailable, NoSuchTableError):
-                print(
-                    f"""
-                    [-] Error reflecting tables for the {self.protocol} protocol - this means there is a DB schema mismatch
-                    [-] This is probably because a newer version of nxc is being run on an old DB schema
-                    [-] Optionally save the old DB data (`cp {self.db_path} ~/nxc_{self.protocol.lower()}.bak`)
-                    [-] Then remove the {self.protocol} DB (`rm -f {self.db_path}`) and run nxc to initialize the new DB"""
-                )
-                sys.exit()
+        self.HostsTable = self.reflect_table(self.Host)
+        self.UsersTable = self.reflect_table(self.User)
+        self.AdminRelationsTable = self.reflect_table(self.AdminRelation)
 
     def add_host(self, ip, hostname, domain, os, instances):
         """
