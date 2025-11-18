@@ -112,6 +112,18 @@ class NXCModule:
         try:
             # Perform the SMB SAMR password change
             self._smb_samr_change(context, connection, target_username, target_domain, self.oldhash, self.newpass, new_nthash)
+        
+            # Add the target user to the DB
+            user = self.context.db.get_user(target_domain, target_username)
+
+            if user: # If the user already exist, we must first remove it
+                user_id = user[0]
+                self.context.db.remove_credentials(user_id)
+
+            if new_nthash:
+                self.context.db.add_credential("hash", target_domain, target_username, new_nthash)
+            else:
+                self.context.db.add_credential("plaintext", target_domain, target_username, self.newpass)
         except Exception as e:
             context.log.fail(f"Password change failed: {e}")
 
