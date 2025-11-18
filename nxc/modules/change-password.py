@@ -116,7 +116,8 @@ class NXCModule:
             # Add the target user to the DB
             user = self.context.db.get_user(target_domain, target_username)
 
-            if user: # If the user already exist, we must first remove it
+            # If the user already exist, we must first remove it
+            if user:
                 user_id = user[0]
                 self.context.db.remove_credentials(user_id)
 
