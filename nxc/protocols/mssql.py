@@ -538,7 +538,7 @@ class mssql(connection):
                 perSecretCallback=lambda secret: self.logger.highlight(secret),
             )
             SAM.dump()
-            SAM.export(f"{output_filename}.sam")
+            SAM.export(output_filename)
 
     @requires_admin
     def lsa(self):
