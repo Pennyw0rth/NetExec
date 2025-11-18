@@ -198,7 +198,7 @@ class database(BaseDB):
         add_links = []
 
         creds_q = select(self.UsersTable)
-        if user_id:  # noqa: SIM108
+        if user_id:
             creds_q = creds_q.filter(self.UsersTable.c.id == user_id)
         else:
             creds_q = creds_q.filter(
