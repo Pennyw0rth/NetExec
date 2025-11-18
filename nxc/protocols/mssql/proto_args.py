@@ -13,6 +13,11 @@ def proto_args(parser, parents):
     dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, help="domain name")
     dgroup.add_argument("--local-auth", action="store_true", help="authenticate locally to each target")
 
+    cgroup = mssql_parser.add_argument_group("Credential Gathering", "Options for gathering credentials")
+    cgroup.add_argument("--dump-method", action="store", default="cmd", choices={"cmd", "powershell"}, help="Select shell type in hashes dump")
+    cgroup.add_argument("--sam", action="store_true", help="dump SAM hashes from target systems")
+    cgroup.add_argument("--lsa", action="store_true", help="dump LSA secrets from target systems")
+
     cgroup = mssql_parser.add_argument_group("Command Execution", "options for executing commands")
     cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
     xgroup = cgroup.add_mutually_exclusive_group()
