@@ -95,7 +95,7 @@ exclude = [
     ".nox", ".pants.d", ".pytype", ".ruff_cache", ".svn", ".tox", ".venv",
     "__pypackages__", "_build", "buck-out", "build", "dist", "node_modules", "venv"
 ]
-line-length = 65000
+line-length = 320
 preview = true
 
 [tool.ruff.lint]
