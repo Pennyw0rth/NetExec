@@ -13,13 +13,13 @@ def proto_args(parser, parents):
     dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, default=None, help="domain to authenticate to")
     dgroup.add_argument("--local-auth", action="store_true", help="authenticate locally to each target")
 
-    cgroup = winrm_parser.add_argument_group("Credential Gathering", "Options for gathering credentials")
+    cgroup = winrm_parser.add_argument_group("Credential Gathering")
     cgroup.add_argument("--dump-method", action="store", default="cmd", choices={"cmd", "powershell"}, help="Select shell type in hashes dump for sam or lsa")
     cgroup.add_argument("--sam", action="store_true", help="dump SAM hashes from target systems")
     cgroup.add_argument("--lsa", action="store_true", help="dump LSA secrets from target systems")
     cgroup.add_argument("--dpapi", action="store_true", help="dump user's Credential Manager secrets from target systems")
 
-    cgroup = winrm_parser.add_argument_group("Command Execution", "Options for executing commands")
+    cgroup = winrm_parser.add_argument_group("Command Execution")
     cgroup.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output. If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
     cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
     cgroup.add_argument("-x", metavar="COMMAND", dest="execute", help="execute the specified command")
