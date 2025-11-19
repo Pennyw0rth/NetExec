@@ -119,30 +119,27 @@ class NXCModule:
             else:
                 self.context.db.add_credential("plaintext", target_domain, target_username, self.newpass)
         except Exception as e:
-            context.log.fail(f"Password change failed: {e}")
-
-    def _smb_samr_change(self, context, connection, target_username, target_domain, oldHash, newPassword, newHash):
-        try:
-            # Reset the password for a different user
-            if target_username != connection.username:
-                user_handle = self._hSamrOpenUser(connection, target_username)
-                samr.hSamrSetNTInternal1(self.dce, user_handle, newPassword, newHash)
-                context.log.success(f"Successfully changed password for {target_username}")
-            else:
-                # Change password for the current user
-                if newPassword:
-                    # Change the password with new password
-                    samr.hSamrUnicodeChangePasswordUser2(self.dce, "\x00", target_username, self.oldpass, newPassword, "", oldHash)
-                else:
-                    # Change the password with new hash
-                    user_handle = self._hSamrOpenUser(connection, target_username)
-                    samr.hSamrChangePasswordUser(self.dce, user_handle, self.oldpass, "", oldHash, "aad3b435b51404eeaad3b435b51404ee", newHash)
-                    context.log.highlight("Note: Target user must change password at next logon.")
-                context.log.success(f"Successfully changed password for {target_username}")
-        except Exception as e:
             context.log.fail(f"SMB-SAMR password change failed: {e}")
         finally:
             self.dce.disconnect()
+
+    def _smb_samr_change(self, context, connection, target_username, target_domain, oldHash, newPassword, newHash):
+        # Reset the password for a different user
+        if target_username != connection.username:
+            user_handle = self._hSamrOpenUser(connection, target_username)
+            samr.hSamrSetNTInternal1(self.dce, user_handle, newPassword, newHash)
+            context.log.success(f"Successfully changed password for {target_username}")
+        else:
+            # Change password for the current user
+            if newPassword:
+                # Change the password with new password
+                samr.hSamrUnicodeChangePasswordUser2(self.dce, "\x00", target_username, self.oldpass, newPassword, "", oldHash)
+            else:
+                # Change the password with new hash
+                user_handle = self._hSamrOpenUser(connection, target_username)
+                samr.hSamrChangePasswordUser(self.dce, user_handle, self.oldpass, "", oldHash, "aad3b435b51404eeaad3b435b51404ee", newHash)
+                context.log.highlight("Note: Target user must change password at next logon.")
+            context.log.success(f"Successfully changed password for {target_username}")
 
     def _hSamrOpenUser(self, connection, username):
         """Get handle to the user object"""
