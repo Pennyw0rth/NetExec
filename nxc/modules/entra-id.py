@@ -2,6 +2,7 @@
 import re
 
 from termcolor import colored
+from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.config import host_info_colors
 
@@ -12,8 +13,7 @@ class NXCModule:
     name = "entra-id"
     description = "Find the Entra ID sync server"
     supported_protocols = ["ldap"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     def __init__(self):
         self.context = None

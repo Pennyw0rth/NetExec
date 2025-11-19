@@ -1,3 +1,5 @@
+from datetime import datetime
+import os
 import random
 import sys
 import contextlib
@@ -15,6 +17,7 @@ from nxc.helpers.logger import highlight
 from nxc.loaders.moduleloader import ModuleLoader
 from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
+from nxc.paths import NXC_PATH
 from nxc.protocols.ldap.laps import laps_search
 from nxc.helpers.pfx import pfx_auth
 
@@ -132,6 +135,8 @@ class connection:
         self.db = db
         self.logger = nxc_logger
         self.conn = None
+        self.output_file_template = None
+        self.output_filename = None
 
         # Authentication info
         self.password = ""
@@ -170,6 +175,8 @@ class connection:
 
         try:
             self.proto_flow()
+        except FileNotFoundError as e:
+            self.logger.error(f"File not found error on target {target}: {e}")
         except Exception as e:
             if "ERROR_DEPENDENT_SERVICES_RUNNING" in str(e):
                 self.logger.error(f"Exception while calling proto_flow() on target {target}: {e}")
@@ -235,6 +242,14 @@ class connection:
         else:
             self.logger.debug("Created connection object")
             self.enum_host_info()
+
+            # Construct the output file template using os.path.join for OS compatibility
+            base_log_dir = os.path.join(NXC_PATH, "logs")
+            filename_pattern = f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
+            self.output_file_template = os.path.join(base_log_dir, "{output_folder}", filename_pattern)
+            # Default output filename for logs
+            self.output_filename = os.path.join(base_log_dir, filename_pattern)
+
             self.print_host_info()
             if self.login() or (self.username == "" and self.password == ""):
                 if hasattr(self.args, "module") and self.args.module:

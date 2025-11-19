@@ -1,5 +1,6 @@
 from datetime import datetime
 from nxc.helpers.logger import write_log
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 import json
 
@@ -14,8 +15,7 @@ class NXCModule:
     name = "get_netconnections"
     description = "Uses WMI to query network connections."
     supported_protocols = ["smb", "wmi"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """No options available"""

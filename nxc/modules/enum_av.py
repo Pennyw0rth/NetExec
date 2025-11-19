@@ -7,6 +7,7 @@ from impacket.dcerpc.v5 import lsat, lsad, transport
 from impacket.dcerpc.v5.dtypes import NULL, MAXIMUM_ALLOWED, RPC_UNICODE_STRING
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 import pathlib
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -18,8 +19,7 @@ class NXCModule:
     name = "enum_av"
     description = "Gathers information on all endpoint protection solutions installed on the the remote host(s) via LsarLookupNames (no privilege needed)"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -265,6 +265,17 @@ conf = {
             ]
         },
         {
+            "name": "Check Point Endpoint Security",
+            "services": [
+                {"name": "CPDA", "description": "Check Point Endpoint Agent"},
+                {"name": "vsmon", "description": "Check Point Endpoint Security Network Protection"},
+                {"name": "CPFileAnlyz", "description": "Check Point Endpoint Security File Analyzer"},
+                {"name": "EPClientUIService", "description": "Check Point Endpoint Security Client UI"}
+
+            ],
+            "pipes": []
+        },
+        {
             "name": "ESET",
             "services": [
                 {"name": "ekm", "description": "ESET"},
@@ -277,6 +288,24 @@ conf = {
                 {"name": "ehttpsrv", "description": "ESET HTTP Server"},
             ],
             "pipes": [{"name": "nod_scriptmon_pipe", "processes": [""]}],
+        },
+        {
+            "name": "FortiClient",
+            "services": [
+                {"name": "FA_Scheduler", "description": "FortiClient Service Scheduler"},
+                {"name": "FCT_SecSvr", "description": "Forticlient Endpoint Protected Process Service"}
+            ],
+            "pipes": [
+                {"name": "FortiClient_DBLogDaemon", "processes": ["FCDBLog.exe"]},
+                {"name": "FC_*", "processes": ["FortiTray.exe"]}
+            ]
+        },
+        {
+            "name": "FortiEDR",
+            "services": [
+                {"name": "FortiEDR Collector Service", "description": "Host component of the Fortinet Endpoint Detection and Response Platform"}
+            ],
+            "pipes": []
         },
         {
             "name": "G DATA Security Client",
@@ -378,7 +407,7 @@ conf = {
                 {"name": "masvc", "description": "Trellix Agent Service"},
                 {"name": "macmnsvc", "description": "Trellix Agent Common Service"},
                 {"name": "mfetp", "description": "Trellix Endpoint Threat Prevention Service"},
-                {"name": "mfewc", "description": "Trellix Endpoint Security Web Control Service"}, 
+                {"name": "mfewc", "description": "Trellix Endpoint Security Web Control Service"},
                 {"name": "mfeaack", "description": "Trellix Anti-Malware Core Service"}
             ],
             "pipes": [

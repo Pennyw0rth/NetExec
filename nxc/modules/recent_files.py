@@ -1,5 +1,6 @@
 import pylnk3
 from io import BytesIO
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -9,12 +10,11 @@ class NXCModule:
     name = "recent_files"
     description = "Extracts recently modified files"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.CREDENTIAL_DUMPING
     false_positive = [".", "..", "desktop.ini", "Public", "Default", "Default User", "All Users", ".NET v4.5", ".NET v4.5 Classic"]
 
     def options(self, context, module_options):
-        """No options"""
+        """No options available"""
 
     def on_admin_login(self, context, connection):
         lnks = []
