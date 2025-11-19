@@ -17,23 +17,27 @@ def proto_args(parser, parents):
     cgroup.add_argument("--sam", action="store_true", help="dump SAM hashes from target systems")
     cgroup.add_argument("--lsa", action="store_true", help="dump LSA secrets from target systems")
 
-    cgroup = mssql_parser.add_argument_group("Command Execution", "options for executing commands")
+    cgroup = mssql_parser.add_argument_group("Credential Gathering")
+    cgroup.add_argument("--sam", action="store_true", help="dump SAM hashes from target systems")
+    cgroup.add_argument("--lsa", action="store_true", help="dump LSA secrets from target systems")
+
+    cgroup = mssql_parser.add_argument_group("Command Execution")
     cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
     xgroup = cgroup.add_mutually_exclusive_group()
     xgroup.add_argument("-x", metavar="COMMAND", dest="execute", help="execute the specified command")
     xgroup.add_argument("-X", metavar="PS_COMMAND", dest="ps_execute", help="execute the specified PowerShell command")
 
-    psgroup = mssql_parser.add_argument_group("Powershell Options", "Options for PowerShell execution")
+    psgroup = mssql_parser.add_argument_group("Powershell Options")
     psgroup.add_argument("--force-ps32", action="store_true", default=False, help="Force the PowerShell command to run in a 32-bit process via a job; WARNING: depends on the job completing quickly, so you may have to increase the timeout")
     psgroup.add_argument("--obfs", action="store_true", default=False, help="Obfuscate PowerShell ran on target; WARNING: Defender will almost certainly trigger on this")
     psgroup.add_argument("--amsi-bypass", nargs=1, metavar="FILE", type=str, help="File with a custom AMSI bypass")
     psgroup.add_argument("--clear-obfscripts", action="store_true", help="Clear all cached obfuscated PowerShell scripts")
     psgroup.add_argument("--no-encode", action="store_true", default=False, help="Do not encode the PowerShell command ran on target")
 
-    tgroup = mssql_parser.add_argument_group("Files", "Options for put and get remote files")
+    tgroup = mssql_parser.add_argument_group("File Operations")
     tgroup.add_argument("--put-file", nargs=2, metavar=("SRC_FILE", "DEST_FILE"), help="Put a local file into remote target, ex: whoami.txt C:\\\\Windows\\\\Temp\\\\whoami.txt")
     tgroup.add_argument("--get-file", nargs=2, metavar=("SRC_FILE", "DEST_FILE"), help="Get a remote file, ex: C:\\\\Windows\\\\Temp\\\\whoami.txt whoami.txt")
 
-    mapping_enum_group = mssql_parser.add_argument_group("Mapping/Enumeration", "Options for Mapping/Enumerating")
+    mapping_enum_group = mssql_parser.add_argument_group("Mapping/Enumeration")
     mapping_enum_group.add_argument("--rid-brute", nargs="?", type=int, const=4000, metavar="MAX_RID", help="enumerate users by bruteforcing RIDs")
     return parser
