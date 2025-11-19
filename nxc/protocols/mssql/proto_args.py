@@ -17,10 +17,6 @@ def proto_args(parser, parents):
     cgroup.add_argument("--sam", action="store_true", help="dump SAM hashes from target systems")
     cgroup.add_argument("--lsa", action="store_true", help="dump LSA secrets from target systems")
 
-    cgroup = mssql_parser.add_argument_group("Credential Gathering")
-    cgroup.add_argument("--sam", action="store_true", help="dump SAM hashes from target systems")
-    cgroup.add_argument("--lsa", action="store_true", help="dump LSA secrets from target systems")
-
     cgroup = mssql_parser.add_argument_group("Command Execution")
     cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
     xgroup = cgroup.add_mutually_exclusive_group()
