@@ -430,13 +430,14 @@ class winrm(connection):
                     if decrypted is not None:
                         self.logger.debug(f"Successfully decrypted credentials in {creds_file}:")
                         creds = CREDENTIAL_BLOB(decrypted)
-                        target = creds["Target"].decode("utf-16le")
-                        username = creds["Username"].decode("utf-16le")
-                        try:
-                            password = creds["Unknown3"].decode("utf-16le")
-                        except UnicodeDecodeError:
-                            password = creds["Unknown3"].decode("latin-1")
-                        self.logger.highlight(f"{target} - {username}:{password}")
+                        if creds["Unknown3"] != b"":
+                            target = creds["Target"].decode("utf-16le")
+                            username = creds["Username"].decode("utf-16le")
+                            try:
+                                password = creds["Unknown3"].decode("utf-16le")
+                            except UnicodeDecodeError:
+                                password = creds["Unknown3"].decode("latin-1")
+                            self.logger.highlight(f"{target} - {username}:{password}")
                 except Exception as e:
                     self.logger.fail(f"Failed to decrypt credentials in {creds_file} with masterkey: {e!s}")
                     self.logger.debug(traceback.format_exc())
