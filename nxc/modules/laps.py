@@ -64,5 +64,6 @@ class NXCModule:
             laps_computers = sorted(laps_computers, key=lambda x: x[0])
             for sAMAccountName, user, password in laps_computers:
                 context.log.highlight(f"Computer:{sAMAccountName} User:{user:<15} Password:{password}")
+                context.db.add_credential("plaintext", sAMAccountName, user, password)
         else:
             context.log.fail("No result found with attribute ms-MCS-AdmPwd or msLAPS-Password !")
