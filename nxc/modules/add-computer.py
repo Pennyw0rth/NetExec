@@ -200,6 +200,7 @@ class NXCModule:
                 )
                 self.noLDAPRequired = True
                 context.log.highlight('Successfully added the machine account: "' + self.__computerName + '" with Password: "' + self.__computerPassword + '"')
+                context.db.add_credential("plaintext", self.__domain, self.__computerName, self.__computerPassword)
             except samr.DCERPCSessionError as e:
                 if e.error_code == 0xC0000022:
                     context.log.highlight("{}".format('The following user does not have the right to create a computer account: "' + self.__username + '"'))
@@ -213,6 +214,11 @@ class NXCModule:
             context.log.highlight("{}".format('Successfully deleted the "' + self.__computerName + '" Computer account'))
             self.noLDAPRequired = True
             user_handle = None
+
+            # Removing the machine account in the DB
+            user = context.db.get_user(self.__domain, self.__computerName)
+            user_ids = [row[0] for row in user]
+            context.db.remove_credentials(user_ids)
         else:
             samr.hSamrSetPasswordInternal4New(dce, user_handle, self.__computerPassword)
             if self.__noAdd:
@@ -238,6 +244,8 @@ class NXCModule:
             if serv_handle is not None:
                 samr.hSamrCloseHandle(dce, serv_handle)
             dce.disconnect()
+
+            context.db.add_credential("plaintext", self.__domain, self.__computerName, self.__computerPassword)
 
     def do_ldaps_add(self, connection, context):
         """
