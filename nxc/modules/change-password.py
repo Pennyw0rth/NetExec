@@ -113,6 +113,11 @@ class NXCModule:
             # Perform the SMB SAMR password change
             self._smb_samr_change(context, connection, target_username, target_domain, self.oldhash, self.newpass, new_nthash)
 
+            # Remove user if exists to avoid outdated credentials when we update plaintext password, but hash exists (or vice versa)
+            user = self.context.db.get_user(target_domain, target_username)
+            user_ids = [row[0] for row in user]
+            self.context.db.remove_credentials(user_ids)
+
             # Store the new credentials in the database
             if new_nthash:
                 self.context.db.add_credential("hash", target_domain, target_username, new_nthash)
