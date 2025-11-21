@@ -130,7 +130,7 @@ class NXCModule:
         # Get handle for existing computer account
         if self.__noAdd or self.__delete:
             try:
-                check_for_user = samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
+                user_rid = samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])["RelativeIds"]["Element"][0]
             except samr.DCERPCSessionError as e:
                 self.context.log.debug(f"samrLookupNamesInDomain failed: {e}")
                 if "STATUS_NONE_MAPPED" in str(e):
@@ -140,7 +140,6 @@ class NXCModule:
                     self.context.log.fail(f"Unexpected error looking up {self.__computerName} in domain {selected_domain}: {e}")
                 return
 
-            user_rid = check_for_user["RelativeIds"]["Element"][0]
             if self.__delete:
                 access = samr.DELETE
                 message = "delete"
@@ -148,8 +147,7 @@ class NXCModule:
                 access = samr.USER_FORCE_PASSWORD_CHANGE
                 message = "set the password for"
             try:
-                open_user = samr.hSamrOpenUser(dce, domain_handle, access, user_rid)
-                user_handle = open_user["UserHandle"]
+                user_handle = samr.hSamrOpenUser(dce, domain_handle, access, user_rid)["UserHandle"]
             except samr.DCERPCSessionError as e:
                 self.context.log.debug(f"samrOpenUser failed: {e}")
                 if "STATUS_ACCESS_DENIED" in str(e):
@@ -170,13 +168,13 @@ class NXCModule:
                     self.context.log.fail(f"Unexpected error looking up {self.__computerName} in domain {selected_domain}: {e}")
                     return
             try:
-                create_user = samr.hSamrCreateUser2InDomain(
+                user_handle = samr.hSamrCreateUser2InDomain(
                     dce,
                     domain_handle,
                     self.__computerName,
                     samr.USER_WORKSTATION_TRUST_ACCOUNT,
                     samr.USER_FORCE_PASSWORD_CHANGE,
-                )
+                )["UserHandle"]
                 self.noLDAPRequired = True
                 self.context.log.highlight(f"Successfully added the machine account: '{self.__computerName}' with Password: '{self.__computerPassword}'")
                 self.context.db.add_credential("plaintext", self.__domain, self.__computerName, self.__computerPassword)
@@ -187,7 +185,6 @@ class NXCModule:
                 elif "STATUS_DS_MACHINE_ACCOUNT_QUOTA_EXCEEDED" in str(e):
                     self.context.log.fail(f"The following user exceeded their machine account quota: {self.__username}")
                 return
-            user_handle = create_user["UserHandle"]
 
         if self.__delete:
             samr.hSamrDeleteUser(dce, user_handle)
@@ -204,10 +201,8 @@ class NXCModule:
                 self.context.log.highlight(f"Successfully set the password of machine '{self.__computerName}' with password '{self.__computerPassword}'")
                 self.noLDAPRequired = True
             else:
-                check_for_user = samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
-                user_rid = check_for_user["RelativeIds"]["Element"][0]
-                open_user = samr.hSamrOpenUser(dce, domain_handle, samr.MAXIMUM_ALLOWED, user_rid)
-                user_handle = open_user["UserHandle"]
+                user_rid = samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])["RelativeIds"]["Element"][0]
+                user_handle = samr.hSamrOpenUser(dce, domain_handle, samr.MAXIMUM_ALLOWED, user_rid)["UserHandle"]
                 req = samr.SAMPR_USER_INFO_BUFFER()
                 req["tag"] = samr.USER_INFORMATION_CLASS.UserControlInformation
                 req["Control"]["UserAccountControl"] = samr.USER_WORKSTATION_TRUST_ACCOUNT
