@@ -1,14 +1,11 @@
 import os
-
 from io import StringIO
-from datetime import datetime
 
 from nxc.helpers.ntlm_parser import parse_challenge
 from nxc.config import process_secret
 from nxc.connection import connection, dcom_FirewallChecker, requires_admin
 from nxc.logger import NXCAdapter
 from nxc.protocols.wmi import wmiexec, wmiexec_event
-from nxc.paths import NXC_PATH
 
 from impacket import ntlm
 from impacket.uuid import uuidtup_to_bin
@@ -140,8 +137,6 @@ class wmi(connection):
             result = self.resolver(self.domain)
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
-
-        self.output_filename = os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
 
     def print_host_info(self):
         self.logger.extra["protocol"] = "RPC"

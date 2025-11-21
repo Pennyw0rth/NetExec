@@ -46,7 +46,7 @@ from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.ntlm_parser import parse_challenge
-from nxc.paths import CONFIG_PATH, NXC_PATH
+from nxc.paths import CONFIG_PATH
 
 ldap_error_status = {
     "1": "STATUS_NOT_SUPPORTED",
@@ -149,7 +149,6 @@ class ldap(connection):
         self.targetDomain = ""
         self.remote_ops = None
         self.bootkey = None
-        self.output_filename = None
         self.smbv1 = None
         self.signing = False
         self.signing_required = None
@@ -234,7 +233,7 @@ class ldap(connection):
         ldap_url = f"ldaps://{self.target}"
         try:
             ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-            ldap_connection._LDAPConnection__channel_binding_value = None
+            ldap_connection.channel_binding_value = None
             ldap_connection.login(user=" ", domain=self.domain)
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("data 80090346") >= 0:
@@ -243,9 +242,9 @@ class ldap(connection):
             # Login failed (wrong credentials). test if we get an error with an existing, but wrong CBT -> When supported
             elif str(e).find("data 52e") >= 0:
                 ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-                new_cbv = bytearray(ldap_connection._LDAPConnection__channel_binding_value)
+                new_cbv = bytearray(ldap_connection.channel_binding_value)
                 new_cbv[15] = (new_cbv[3] + 1) % 256
-                ldap_connection._LDAPConnection__channel_binding_value = bytes(new_cbv)
+                ldap_connection.channel_binding_value = bytes(new_cbv)
                 try:
                     ldap_connection.login(user=" ", domain=self.domain)
                 except ldap_impacket.LDAPSessionError as e:
@@ -333,15 +332,14 @@ class ldap(connection):
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
-        filename = f"{self.hostname}_{self.host}".replace(":", "-")
-        self.output_filename = os.path.expanduser(os.path.join(NXC_PATH, "logs", filename))
-
         try:
             self.db.add_host(
                 self.host,
                 self.hostname,
                 self.domain,
-                self.server_os
+                self.server_os,
+                self.signing_required,
+                self.cbt_status
             )
         except Exception as e:
             self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
@@ -820,13 +818,13 @@ class ldap(connection):
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
 
     def computers(self):
-        resp = self.search(f"(sAMAccountType={SAM_MACHINE_ACCOUNT})", ["name"], 0)
+        resp = self.search(f"(sAMAccountType={SAM_MACHINE_ACCOUNT})", ["sAMAccountName"])
         resp_parsed = parse_result_attributes(resp)
 
         if resp:
             self.logger.display(f"Total records returned: {len(resp_parsed)}")
             for item in resp_parsed:
-                self.logger.highlight(item["name"] + "$")
+                self.logger.highlight(item["sAMAccountName"])
 
     def dc_list(self):
         # bypass host resolver configuration via configure=False (default pulls from /etc/resolv.conf or registry on Windows)
@@ -1681,11 +1679,9 @@ class ldap(connection):
             self.logger.debug(f"BloodHound collection failed: {e.__class__.__name__} - {e}", exc_info=True)
             return
 
-        self.output_filename += f"_{timestamp}"
-
-        self.logger.highlight(f"Compressing output into {self.output_filename}bloodhound.zip")
+        self.logger.highlight(f"Compressing output into {self.output_filename}_bloodhound.zip")
         list_of_files = os.listdir(os.getcwd())
-        with ZipFile(self.output_filename + "bloodhound.zip", "w") as z:
+        with ZipFile(f"{self.output_filename}_bloodhound.zip", "w") as z:
             for each_file in list_of_files:
                 if each_file.startswith(self.output_filename.split("/")[-1]) and each_file.endswith("json"):
                     z.write(each_file)

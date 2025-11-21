@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import socket
 from os import makedirs
 from certipy.commands.find import Find
 from certipy.lib.target import Target, DnsResolver
@@ -52,14 +53,31 @@ class NXCModule:
             self.text = module_options["TEXT"].lower() in ["true", "1", "yes"]
 
     def on_login(self, context, connection):
-        resolv = DnsResolver.create(connection.args.dns_server if connection.args.dns_server else connection.host)
+        dns_server = connection.args.dns_server
+        if not dns_server:
+            try:
+                # If connection.host is an IP, use it as DNS
+                socket.inet_aton(connection.host)
+                dns_server = connection.host
+            except Exception:
+                # Otherwise let DnsResolver use system resolver (None)
+                dns_server = None
+
+        resolv = DnsResolver.create(dns_server)
+
+        # prefer connection.hostname if present, otherwise connection.host
+        remote = (connection.hostname or connection.host) or ""
+        remote = (f"{remote}.{connection.domain}".lower() if "." not in remote else remote.lower()) if connection.domain else remote.lower()
+
         target = Target(
             resolver=resolv,
             domain=connection.domain,
             username=connection.username,
             password=connection.password,
+            remote_name=connection.remoteName,
             lmhash=connection.lmhash,
             nthash=connection.nthash,
+            do_kerberos=connection.kerberos,
             target_ip=connection.host,
             ldap_port=connection.port,
             ldap_scheme="ldaps" if connection.port == 636 else "ldap",
