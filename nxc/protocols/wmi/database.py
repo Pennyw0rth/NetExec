@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, PrimaryKeyConstraint, String
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from nxc.database import BaseDB
 
 Base = declarative_base()
