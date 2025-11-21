@@ -61,6 +61,8 @@ class NXCModule:
             sys.exit(1)
 
     def on_login(self, context, connection):
+        self.context = context
+        self.connection = connection
         self.__domain = connection.domain
         self.__domainNetbios = connection.domain
         self.__kdcHost = connection.kdcHost
@@ -73,24 +75,14 @@ class NXCModule:
         self.__lmhash = connection.lmhash
 
         # First try to add via SAMR over SMB
-        self.do_samr_add(context)
+        self.do_samr_add()
 
         # If SAMR fails now try over LDAPS
         if not self.noLDAPRequired:
-            self.do_ldaps_add(connection, context)
+            self.do_ldaps_add()
 
-    def do_samr_add(self, context):
-        """
-        Connects to a target server and performs various operations related to adding or deleting machine accounts.
-
-        Args:
-        ----
-            context (object): The context object.
-
-        Returns:
-        -------
-            None
-        """
+    def do_samr_add(self):
+        """Connects to a target server and performs various operations related to adding or deleting machine accounts."""
         string_binding = epm.hept_map(self.__host, samr.MSRPC_UUID_SAMR, protocol="ncacn_np")
         string_binding = string_binding.replace(self.__host, self.__kdcHost) if self.__kdcHost is not None else string_binding
 
@@ -119,10 +111,10 @@ class NXCModule:
         if len(domains_without_builtin) > 1:
             domain = list(filter(lambda x: x["Name"].lower() == self.__domainNetbios, domains))
             if len(domain) != 1:
-                context.log.highlight("{}".format('This domain does not exist: "' + self.__domainNetbios + '"'))
-                context.log.highlight("Available domain(s):")
+                self.context.log.highlight("{}".format('This domain does not exist: "' + self.__domainNetbios + '"'))
+                self.context.log.highlight("Available domain(s):")
                 for domain in domains:
-                    context.log.highlight(f" * {domain['Name']}")
+                    self.context.log.highlight(f" * {domain['Name']}")
                 raise Exception
             else:
                 selected_domain = domain[0]["Name"]
@@ -132,7 +124,7 @@ class NXCModule:
         samr_lookup_domain_response = samr.hSamrLookupDomainInSamServer(dce, serv_handle, selected_domain)
         domain_sid = samr_lookup_domain_response["DomainId"]
 
-        context.log.debug(f"Opening domain {selected_domain}...")
+        self.context.log.debug(f"Opening domain {selected_domain}...")
         samr_open_domain_response = samr.hSamrOpenDomain(dce, serv_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_CREATE_USER, domain_sid)
         domain_handle = samr_open_domain_response["DomainHandle"]
 
@@ -141,9 +133,9 @@ class NXCModule:
                 check_for_user = samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
             except samr.DCERPCSessionError as e:
                 if e.error_code == 0xC0000073:
-                    context.log.highlight(f"{self.__computerName} not found in domain {selected_domain}")
+                    self.context.log.highlight(f"{self.__computerName} not found in domain {selected_domain}")
                     self.noLDAPRequired = True
-                context.log.exception(e)
+                self.context.log.exception(e)
 
             user_rid = check_for_user["RelativeIds"]["Element"][0]
             if self.__delete:
@@ -157,15 +149,15 @@ class NXCModule:
                 user_handle = open_user["UserHandle"]
             except samr.DCERPCSessionError as e:
                 if e.error_code == 0xC0000022:
-                    context.log.highlight(f"{self.__username + ' does not have the right to ' + message + ' ' + self.__computerName}")
+                    self.context.log.highlight(f"{self.__username + ' does not have the right to ' + message + ' ' + self.__computerName}")
                     self.noLDAPRequired = True
-                context.log.exception(e)
+                self.context.log.exception(e)
         else:
             if self.__computerName is not None:
                 try:
                     samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
                     self.noLDAPRequired = True
-                    context.log.highlight("{}".format('Computer account already exists with the name: "' + self.__computerName + '"'))
+                    self.context.log.highlight("{}".format('Computer account already exists with the name: "' + self.__computerName + '"'))
                 except samr.DCERPCSessionError as e:
                     if e.error_code != 0xC0000073:
                         raise
@@ -189,30 +181,30 @@ class NXCModule:
                     samr.USER_FORCE_PASSWORD_CHANGE,
                 )
                 self.noLDAPRequired = True
-                context.log.highlight('Successfully added the machine account: "' + self.__computerName + '" with Password: "' + self.__computerPassword + '"')
-                context.db.add_credential("plaintext", self.__domain, self.__computerName, self.__computerPassword)
+                self.context.log.highlight('Successfully added the machine account: "' + self.__computerName + '" with Password: "' + self.__computerPassword + '"')
+                self.context.db.add_credential("plaintext", self.__domain, self.__computerName, self.__computerPassword)
             except samr.DCERPCSessionError as e:
                 if e.error_code == 0xC0000022:
-                    context.log.highlight("{}".format('The following user does not have the right to create a computer account: "' + self.__username + '"'))
+                    self.context.log.highlight("{}".format('The following user does not have the right to create a computer account: "' + self.__username + '"'))
                 elif e.error_code == 0xC00002E7:
-                    context.log.highlight("{}".format('The following user exceeded their machine account quota: "' + self.__username + '"'))
-                context.log.exception(e)
+                    self.context.log.highlight("{}".format('The following user exceeded their machine account quota: "' + self.__username + '"'))
+                self.context.log.exception(e)
             user_handle = create_user["UserHandle"]
 
         if self.__delete:
             samr.hSamrDeleteUser(dce, user_handle)
-            context.log.highlight("{}".format('Successfully deleted the "' + self.__computerName + '" Computer account'))
+            self.context.log.highlight("{}".format('Successfully deleted the "' + self.__computerName + '" Computer account'))
             self.noLDAPRequired = True
             user_handle = None
 
             # Removing the machine account in the DB
-            user = context.db.get_user(self.__domain, self.__computerName)
+            user = self.context.db.get_user(self.__domain, self.__computerName)
             user_ids = [row[0] for row in user]
-            context.db.remove_credentials(user_ids)
+            self.context.db.remove_credentials(user_ids)
         else:
             samr.hSamrSetPasswordInternal4New(dce, user_handle, self.__computerPassword)
             if self.__noAdd:
-                context.log.highlight("{}".format('Successfully set the password of machine "' + self.__computerName + '" with password "' + self.__computerPassword + '"'))
+                self.context.log.highlight("{}".format('Successfully set the password of machine "' + self.__computerName + '" with password "' + self.__computerPassword + '"'))
                 self.noLDAPRequired = True
             else:
                 check_for_user = samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
@@ -224,7 +216,7 @@ class NXCModule:
                 req["Control"]["UserAccountControl"] = samr.USER_WORKSTATION_TRUST_ACCOUNT
                 samr.hSamrSetInformationUser2(dce, user_handle, req)
                 if not self.noLDAPRequired:
-                    context.log.highlight("{}".format('Successfully added the machine account "' + self.__computerName + '" with Password: "' + self.__computerPassword + '"'))
+                    self.context.log.highlight("{}".format('Successfully added the machine account "' + self.__computerName + '" with Password: "' + self.__computerPassword + '"'))
                 self.noLDAPRequired = True
 
             if user_handle is not None:
@@ -235,54 +227,39 @@ class NXCModule:
                 samr.hSamrCloseHandle(dce, serv_handle)
             dce.disconnect()
 
-            context.db.add_credential("plaintext", self.__domain, self.__computerName, self.__computerPassword)
+            self.context.db.add_credential("plaintext", self.__domain, self.__computerName, self.__computerPassword)
 
-    def do_ldaps_add(self, connection, context):
-        """
-        Performs an LDAPS add operation.
-
-        Args:
-        ----
-            connection (Connection): The LDAP connection object.
-            context (Context): The context object.
-
-        Returns:
-        -------
-            None
-
-        Raises:
-        ------
-            None
-        """
-        ldap_domain = connection.domain.replace(".", ",dc=")
+    def do_ldaps_add(self):
+        """Performs an LDAPS add operation."""
+        ldap_domain = self.connection.domain.replace(".", ",dc=")
         spns = [
             f"HOST/{self.__computerName}",
-            f"HOST/{self.__computerName}.{connection.domain}",
+            f"HOST/{self.__computerName}.{self.connection.domain}",
             f"RestrictedKrbHost/{self.__computerName}",
-            f"RestrictedKrbHost/{self.__computerName}.{connection.domain}",
+            f"RestrictedKrbHost/{self.__computerName}.{self.connection.domain}",
         ]
         ucd = {
-            "dnsHostName": f"{self.__computerName}.{connection.domain}",
+            "dnsHostName": f"{self.__computerName}.{self.connection.domain}",
             "userAccountControl": 0x1000,
             "servicePrincipalName": spns,
             "sAMAccountName": self.__computerName,
             "unicodePwd": f"{self.__computerPassword}".encode("utf-16-le")
         }
         tls = ldap3.Tls(validate=ssl.CERT_NONE, version=ssl.PROTOCOL_TLSv1_2, ciphers="ALL:@SECLEVEL=0")
-        ldap_server = ldap3.Server(connection.host, use_ssl=True, port=636, get_info=ldap3.ALL, tls=tls)
-        c = ldap3.Connection(ldap_server, f"{connection.username}@{connection.domain}", connection.password)
+        ldap_server = ldap3.Server(self.connection.host, use_ssl=True, port=636, get_info=ldap3.ALL, tls=tls)
+        c = ldap3.self.connection(ldap_server, f"{self.connection.username}@{self.connection.domain}", self.connection.password)
         c.bind()
 
         if self.__delete:
             result = c.delete(f"cn={self.__computerName},cn=Computers,dc={ldap_domain}")
             if result:
-                context.log.highlight(f'Successfully deleted the "{self.__computerName}" Computer account')
+                self.context.log.highlight(f'Successfully deleted the "{self.__computerName}" Computer account')
             elif result is False and c.last_error == "noSuchObject":
-                context.log.highlight(f'Computer named "{self.__computerName}" was not found')
+                self.context.log.highlight(f'Computer named "{self.__computerName}" was not found')
             elif result is False and c.last_error == "insufficientAccessRights":
-                context.log.highlight(f'Insufficient Access Rights to delete the Computer "{self.__computerName}"')
+                self.context.log.highlight(f'Insufficient Access Rights to delete the Computer "{self.__computerName}"')
             else:
-                context.log.highlight(f'Unable to delete the "{self.__computerName}" Computer account. The error was: {c.last_error}')
+                self.context.log.highlight(f'Unable to delete the "{self.__computerName}" Computer account. The error was: {c.last_error}')
         else:
             result = c.add(
                 f"cn={self.__computerName},cn=Computers,dc={ldap_domain}",
@@ -290,11 +267,11 @@ class NXCModule:
                 ucd
             )
             if result:
-                context.log.highlight(f'Successfully added the machine account: "{self.__computerName}" with Password: "{self.__computerPassword}"')
-                context.log.highlight("You can try to verify this with the nxc command:")
-                context.log.highlight(f"nxc ldap {connection.host} -u {connection.username} -p {connection.password} -M group-mem -o GROUP='Domain Computers'")
+                self.context.log.highlight(f'Successfully added the machine account: "{self.__computerName}" with Password: "{self.__computerPassword}"')
+                self.context.log.highlight("You can try to verify this with the nxc command:")
+                self.context.log.highlight(f"nxc ldap {self.connection.host} -u {self.connection.username} -p {self.connection.password} -M group-mem -o GROUP='Domain Computers'")
             elif result is False and c.last_error == "entryAlreadyExists":
-                context.log.highlight(f"The Computer account '{self.__computerName}' already exists")
+                self.context.log.highlight(f"The Computer account '{self.__computerName}' already exists")
             elif not result:
-                context.log.highlight(f"Unable to add the '{self.__computerName}' Computer account. The error was: {c.last_error}")
+                self.context.log.highlight(f"Unable to add the '{self.__computerName}' Computer account. The error was: {c.last_error}")
             c.unbind()
