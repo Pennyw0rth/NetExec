@@ -75,10 +75,10 @@ class NXCModule:
         self.__lmhash = connection.lmhash
 
         # First try to add via SAMR over SMB
-        self.do_samr_add()
+        # self.do_samr_add()
 
         # If SAMR fails now try over LDAPS
-        if not self.noLDAPRequired:
+        if not self.noLDAPRequired or True:
             self.do_ldaps_add()
 
     def do_samr_add(self):
@@ -230,40 +230,44 @@ class NXCModule:
         c = ldap3.Connection(ldap_server, f"{self.connection.username}@{self.connection.domain}", self.connection.password)
         c.bind()
 
+        sAMAccountName = self.__computerName
+        name = self.__computerName.rstrip("$")
+
         if self.__delete:
-            result = c.delete(f"cn={self.__computerName.rstrip('$')},cn=Computers,{ldap_domain}")
+            result = c.delete(f"cn={name},cn=Computers,{ldap_domain}")
             if result:
-                self.context.log.highlight(f'Successfully deleted the "{self.__computerName}" Computer account')
+                self.context.log.highlight(f'Successfully deleted the "{sAMAccountName}" Computer account')
             elif result is False and c.last_error == "noSuchObject":
-                self.context.log.fail(f'Computer named "{self.__computerName}" was not found')
+                self.context.log.fail(f'Computer named "{sAMAccountName}" was not found')
             elif result is False and c.last_error == "insufficientAccessRights":
-                self.context.log.fail(f'Insufficient Access Rights to delete the Computer "{self.__computerName}"')
+                self.context.log.fail(f'Insufficient Access Rights to delete the Computer "{sAMAccountName}"')
             else:
-                self.context.log.fail(f'Unable to delete the "{self.__computerName}" Computer account. The error was: {c.last_error}')
+                self.context.log.fail(f'Unable to delete the "{sAMAccountName}" Computer account. The error was: {c.last_error}')
         else:
             spns = [
-                f"HOST/{self.__computerName}",
-                f"HOST/{self.__computerName}.{self.connection.domain}",
-                f"RestrictedKrbHost/{self.__computerName}",
-                f"RestrictedKrbHost/{self.__computerName}.{self.connection.domain}",
+                f"HOST/{name}",
+                f"HOST/{name}.{self.connection.domain}",
+                f"RestrictedKrbHost/{name}",
+                f"RestrictedKrbHost/{name}.{self.connection.domain}",
             ]
             result = c.add(
-                f"cn={self.__computerName},cn=Computers,{ldap_domain}",
+                f"cn={name},cn=Computers,{ldap_domain}",
                 ["top", "person", "organizationalPerson", "user", "computer"],
                 {
-                    "dnsHostName": f"{self.__computerName}.{self.connection.domain}",
+                    "dnsHostName": f"{name}.{self.connection.domain}",
                     "userAccountControl": 0x1000,
                     "servicePrincipalName": spns,
-                    "sAMAccountName": self.__computerName,
+                    "sAMAccountName": sAMAccountName,
                     "unicodePwd": f"{self.__computerPassword}".encode("utf-16-le")
                 }
             )
+            print(c.last_error)
             if result:
-                self.context.log.highlight(f'Successfully added the machine account: "{self.__computerName}" with Password: "{self.__computerPassword}"')
+                self.context.log.highlight(f'Successfully added the machine account: "{sAMAccountName}" with Password: "{self.__computerPassword}"')
                 self.context.log.highlight("You can try to verify this with the nxc command:")
                 self.context.log.highlight(f"nxc ldap {self.connection.host} -u {self.connection.username} -p {self.connection.password} -M group-mem -o GROUP='Domain Computers'")
             elif result is False and c.last_error == "entryAlreadyExists":
-                self.context.log.fail(f"The Computer account '{self.__computerName}' already exists")
+                self.context.log.fail(f"The Computer account '{sAMAccountName}' already exists")
             elif not result:
-                self.context.log.fail(f"Unable to add the '{self.__computerName}' Computer account. The error was: {c.last_error}")
+                self.context.log.fail(f"Unable to add the '{sAMAccountName}' Computer account. The error was: {c.last_error}")
         c.unbind()
