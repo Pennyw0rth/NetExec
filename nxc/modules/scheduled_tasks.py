@@ -92,16 +92,8 @@ class NXCModule:
         
         try:
             # Note: WMI doesn't have a direct scheduled tasks class in older Windows
-            # We'll use a PowerShell approach through WMI execution
-            ps_script = "Get-ScheduledTask | Select-Object TaskName, State | ConvertTo-Json"
-            
-            output = connection.wmi(
-                f'SELECT * FROM Win32_Process WHERE Name="powershell.exe"',
-                "root\\cimv2"
-            )
-            
+            # Fallback to PowerShell method as it's more reliable
             context.log.display("WMI enumeration requires PowerShell execution capability")
-            # Fallback to PowerShell method
             self._enumerate_via_powershell(context, connection)
             
         except Exception as e:

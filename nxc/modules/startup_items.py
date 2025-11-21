@@ -44,13 +44,6 @@ class NXCModule:
         """Enumerate common autorun registry keys"""
         context.log.display("Checking registry autorun entries...")
         
-        autorun_keys = [
-            r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
-            r"SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce",
-            r"SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Run",
-            r"SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\RunOnce",
-        ]
-        
         ps_command = """
         $keys = @(
             'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run',

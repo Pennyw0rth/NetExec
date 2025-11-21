@@ -46,30 +46,33 @@ class NXCModule:
                         continue
                     
                     # Check for Login Data (saved passwords)
-                    login_data_path = f"Users\\{username}\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Login Data"
+                    login_data_dir = f"Users\\{username}\\AppData\\Local\\Google\\Chrome\\User Data\\Default"
                     try:
-                        connection.conn.getFile("C$", login_data_path, lambda x: None)
-                        found_files.append(("Chrome Login Data", username, login_data_path))
-                        context.log.success(f"Found Chrome Login Data for {username}")
+                        files = connection.conn.listPath("C$", login_data_dir + "\\*")
+                        if any(f.get_longname() == "Login Data" for f in files):
+                            found_files.append(("Chrome Login Data", username, login_data_dir + "\\Login Data"))
+                            context.log.success(f"Found Chrome Login Data for {username}")
                     except Exception:
                         pass
                     
                     # Check for Cookies if requested
                     if self.gather_cookies:
-                        cookies_path = f"Users\\{username}\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Cookies"
+                        cookies_dir = f"Users\\{username}\\AppData\\Local\\Google\\Chrome\\User Data\\Default"
                         try:
-                            connection.conn.getFile("C$", cookies_path, lambda x: None)
-                            found_files.append(("Chrome Cookies", username, cookies_path))
-                            context.log.success(f"Found Chrome Cookies for {username}")
+                            files = connection.conn.listPath("C$", cookies_dir + "\\*")
+                            if any(f.get_longname() == "Cookies" for f in files):
+                                found_files.append(("Chrome Cookies", username, cookies_dir + "\\Cookies"))
+                                context.log.success(f"Found Chrome Cookies for {username}")
                         except Exception:
                             pass
                     
                     # Also check Chromium
-                    chromium_login_path = f"Users\\{username}\\AppData\\Local\\Chromium\\User Data\\Default\\Login Data"
+                    chromium_login_dir = f"Users\\{username}\\AppData\\Local\\Chromium\\User Data\\Default"
                     try:
-                        connection.conn.getFile("C$", chromium_login_path, lambda x: None)
-                        found_files.append(("Chromium Login Data", username, chromium_login_path))
-                        context.log.success(f"Found Chromium Login Data for {username}")
+                        files = connection.conn.listPath("C$", chromium_login_dir + "\\*")
+                        if any(f.get_longname() == "Login Data" for f in files):
+                            found_files.append(("Chromium Login Data", username, chromium_login_dir + "\\Login Data"))
+                            context.log.success(f"Found Chromium Login Data for {username}")
                     except Exception:
                         pass
                 

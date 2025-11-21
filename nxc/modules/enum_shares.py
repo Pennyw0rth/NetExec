@@ -50,7 +50,8 @@ class NXCModule:
                 
                 # Test write access
                 try:
-                    temp_file = f"_nxc_test_{context.localip.replace('.', '_')}.txt"
+                    import uuid
+                    temp_file = f"_nxc_test_{str(uuid.uuid4())[:8]}.txt"
                     connection.conn.putFile(share_name, temp_file, lambda: b"test")
                     connection.conn.deleteFile(share_name, temp_file)
                     write_access = True
