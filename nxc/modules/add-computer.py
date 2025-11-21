@@ -231,7 +231,7 @@ class NXCModule:
         c.bind()
 
         if self.__delete:
-            result = c.delete(f"cn={self.__computerName},cn=Computers,dc={ldap_domain}")
+            result = c.delete(f"cn={self.__computerName.rstrip('$')},cn=Computers,{ldap_domain}")
             if result:
                 self.context.log.highlight(f'Successfully deleted the "{self.__computerName}" Computer account')
             elif result is False and c.last_error == "noSuchObject":
@@ -266,4 +266,4 @@ class NXCModule:
                 self.context.log.fail(f"The Computer account '{self.__computerName}' already exists")
             elif not result:
                 self.context.log.fail(f"Unable to add the '{self.__computerName}' Computer account. The error was: {c.last_error}")
-            c.unbind()
+        c.unbind()
