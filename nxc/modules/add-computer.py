@@ -223,23 +223,11 @@ class NXCModule:
 
     def do_ldaps_add(self):
         """Performs an LDAPS add operation."""
-        ldap_domain = self.connection.domain.replace(".", ",dc=")
-        spns = [
-            f"HOST/{self.__computerName}",
-            f"HOST/{self.__computerName}.{self.connection.domain}",
-            f"RestrictedKrbHost/{self.__computerName}",
-            f"RestrictedKrbHost/{self.__computerName}.{self.connection.domain}",
-        ]
-        ucd = {
-            "dnsHostName": f"{self.__computerName}.{self.connection.domain}",
-            "userAccountControl": 0x1000,
-            "servicePrincipalName": spns,
-            "sAMAccountName": self.__computerName,
-            "unicodePwd": f"{self.__computerPassword}".encode("utf-16-le")
-        }
+        ldap_domain = f"dc={self.connection.domain.replace('.', ',dc=')}"
+
         tls = ldap3.Tls(validate=ssl.CERT_NONE, version=ssl.PROTOCOL_TLSv1_2, ciphers="ALL:@SECLEVEL=0")
         ldap_server = ldap3.Server(self.connection.host, use_ssl=True, port=636, get_info=ldap3.ALL, tls=tls)
-        c = ldap3.self.connection(ldap_server, f"{self.connection.username}@{self.connection.domain}", self.connection.password)
+        c = ldap3.Connection(ldap_server, f"{self.connection.username}@{self.connection.domain}", self.connection.password)
         c.bind()
 
         if self.__delete:
@@ -253,10 +241,22 @@ class NXCModule:
             else:
                 self.context.log.fail(f'Unable to delete the "{self.__computerName}" Computer account. The error was: {c.last_error}')
         else:
+            spns = [
+                f"HOST/{self.__computerName}",
+                f"HOST/{self.__computerName}.{self.connection.domain}",
+                f"RestrictedKrbHost/{self.__computerName}",
+                f"RestrictedKrbHost/{self.__computerName}.{self.connection.domain}",
+            ]
             result = c.add(
-                f"cn={self.__computerName},cn=Computers,dc={ldap_domain}",
+                f"cn={self.__computerName},cn=Computers,{ldap_domain}",
                 ["top", "person", "organizationalPerson", "user", "computer"],
-                ucd
+                {
+                    "dnsHostName": f"{self.__computerName}.{self.connection.domain}",
+                    "userAccountControl": 0x1000,
+                    "servicePrincipalName": spns,
+                    "sAMAccountName": self.__computerName,
+                    "unicodePwd": f"{self.__computerPassword}".encode("utf-16-le")
+                }
             )
             if result:
                 self.context.log.highlight(f'Successfully added the machine account: "{self.__computerName}" with Password: "{self.__computerPassword}"')
