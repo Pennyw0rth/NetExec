@@ -30,9 +30,6 @@ class NXCModule:
                nxc smb $DC-IP -u Username -p Password -M add-computer -o NAME="BADPC" DELETE=True
                nxc smb $DC-IP -u Username -p Password -M add-computer -o NAME="BADPC" PASSWORD="Password2" CHANGEPW=True
         """
-        self.__baseDN = None
-        self.__computerGroup = None
-        self.__method = "SAMR"
         self.__noAdd = False
         self.__delete = False
         self.noLDAPRequired = False
