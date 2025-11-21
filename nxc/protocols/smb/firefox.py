@@ -112,23 +112,23 @@ class FirefoxTriage:
                         )
                     if len(keys) == 0:
                         continue
-                    
+
                     for username, pwd, host in logins:
                         decoded_username = None
                         password = None
-                        
+
                         for key in keys:
                             try:
                                 decrypted_username = self.decrypt(key=key, iv=username[1], ciphertext=username[2])
                                 decoded_username = decrypted_username.decode("utf-8")
-                                
+
                                 decrypted_password = self.decrypt(key=key, iv=pwd[1], ciphertext=pwd[2])
                                 password = decrypted_password.decode("utf-8")
-                                
+
                                 break  # Success - stop trying other keys
                             except (UnicodeDecodeError, Exception):
                                 continue
-                        
+
                         if password is not None and decoded_username is not None:
                             data = FirefoxData(
                                 winuser=user,
@@ -197,37 +197,37 @@ class FirefoxTriage:
         fh.seek(0)
         db = sqlite3.connect(fh.name)
         cursor = db.cursor()
-        
+
         try:
             cursor.execute("SELECT item1,item2 FROM metadata WHERE id = 'password';")
             row = next(cursor)
-            
+
             if not row:
                 return []
-            
+
             global_salt, master_password, _ = self.is_master_password_correct(key_data=row, master_password=master_password)
             if not global_salt:
                 return []
-            
+
             # Get ALL keys from nssPrivate table (Firefox 144+ may have multiple)
             keys = []
             cursor.execute("SELECT a11,a102 FROM nssPrivate WHERE a11 IS NOT NULL;")
-            
+
             for row in cursor:
                 try:
                     a11 = row[0]
                     a102 = row[1]
-                    
+
                     decoded_a11 = decoder.decode(a11)
                     key = self.decrypt_3des(decoded_a11, master_password, global_salt)
-                    
+
                     if key is not None and len(key) >= 24:
                         keys.append(key)
                 except Exception:
                     continue
-            
+
             return keys
-            
+
         except Exception as e:
             self.logger.debug(f"Error extracting keys: {e}")
             return []
@@ -281,7 +281,7 @@ class FirefoxTriage:
         """
         # Determine encryption method based on IV length
         iv_length = len(iv)
-        
+
         # Firefox 144+ uses AES-256-CBC with 16-byte IV
         if iv_length == CBC_IV_LENGTH:
             return FirefoxTriage.decrypt_aes256_cbc(key, iv, ciphertext)
@@ -293,14 +293,11 @@ class FirefoxTriage:
     def decrypt_aes256_cbc(key, iv, ciphertext):
         """Decrypt using AES-256-CBC (Firefox 144+)"""
         # Expand key to 32 bytes using SHA-256 if needed
-        if len(key) >= 32:
-            aes_key = key[:32]
-        else:
-            aes_key = sha256(key).digest()
-        
+        aes_key = key[:32] if len(key) >= 32 else sha256(key).digest()
+
         cipher = AES.new(key=aes_key, mode=AES.MODE_CBC, iv=iv)
         data = cipher.decrypt(ciphertext)
-        
+
         # Remove PKCS7 padding
         if len(data) > 0:
             padding_length = data[-1]
