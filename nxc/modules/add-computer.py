@@ -127,16 +127,18 @@ class NXCModule:
         self.context.log.debug(f"Opening domain {selected_domain}...")
         domain_handle = samr.hSamrOpenDomain(dce, serv_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_CREATE_USER, domain_sid)["DomainHandle"]
 
+        # Get handle for existing computer account
         if self.__noAdd or self.__delete:
             try:
                 check_for_user = samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
             except samr.DCERPCSessionError as e:
                 self.context.log.debug(f"samrLookupNamesInDomain failed: {e}")
-                if e.error_code == 0xC0000073:
+                if "STATUS_NONE_MAPPED" in str(e):
                     self.context.log.fail(f"{self.__computerName} not found in domain {selected_domain}")
                     self.noLDAPRequired = True
                 else:
                     self.context.log.fail(f"Unexpected error looking up {self.__computerName} in domain {selected_domain}: {e}")
+                return
 
             user_rid = check_for_user["RelativeIds"]["Element"][0]
             if self.__delete:
@@ -150,31 +152,23 @@ class NXCModule:
                 user_handle = open_user["UserHandle"]
             except samr.DCERPCSessionError as e:
                 self.context.log.debug(f"samrOpenUser failed: {e}")
-                if e.error_code == 0xC0000022:
+                if "STATUS_ACCESS_DENIED" in str(e):
                     self.context.log.fail(f"{self.__username} does not have the right to {message} {self.__computerName}")
                     self.noLDAPRequired = True
                 else:
                     self.context.log.fail(f"Unexpected error opening {self.__computerName} in domain {selected_domain}: {e}")
+                return
+        # Add computer account
         else:
-            if self.__computerName is not None:
-                try:
-                    samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
-                    self.noLDAPRequired = True
-                    self.context.log.fail(f'Computer account already exists with the name: "{self.__computerName}"')
-                except samr.DCERPCSessionError as e:
-                    if e.error_code != 0xC0000073:
-                        raise
-            else:
-                found_unused = False
-                while not found_unused:
-                    self.__computerName = self.generateComputerName()
-                    try:
-                        samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
-                    except samr.DCERPCSessionError as e:
-                        if e.error_code == 0xC0000073:
-                            found_unused = True
-                        else:
-                            raise
+            try:
+                samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
+                self.noLDAPRequired = True
+                self.context.log.fail(f'Computer account already exists with the name: "{self.__computerName}"')
+            except samr.DCERPCSessionError as e:
+                self.context.log.debug(f"samrLookupNamesInDomain failed: {e}")
+                if "STATUS_NONE_MAPPED" not in str(e):
+                    self.context.log.fail(f"Unexpected error looking up {self.__computerName} in domain {selected_domain}: {e}")
+                    return
             try:
                 create_user = samr.hSamrCreateUser2InDomain(
                     dce,
@@ -184,22 +178,21 @@ class NXCModule:
                     samr.USER_FORCE_PASSWORD_CHANGE,
                 )
                 self.noLDAPRequired = True
-                self.context.log.highlight('Successfully added the machine account: "' + self.__computerName + '" with Password: "' + self.__computerPassword + '"')
+                self.context.log.highlight(f"Successfully added the machine account: '{self.__computerName}' with Password: '{self.__computerPassword}'")
                 self.context.db.add_credential("plaintext", self.__domain, self.__computerName, self.__computerPassword)
             except samr.DCERPCSessionError as e:
-                print(e)
-
-                if e.error_code == 0xC0000022:
+                self.context.log.debug(f"samrCreateUser2InDomain failed: {e}")
+                if "STATUS_ACCESS_DENIED" in str(e):
                     self.context.log.fail(f"The following user does not have the right to create a computer account: {self.__username}")
-                elif e.error_code == 0xC00002E7:
+                elif "STATUS_DS_MACHINE_ACCOUNT_QUOTA_EXCEEDED" in str(e):
                     self.context.log.fail(f"The following user exceeded their machine account quota: {self.__username}")
+                return
             user_handle = create_user["UserHandle"]
 
         if self.__delete:
             samr.hSamrDeleteUser(dce, user_handle)
-            self.context.log.highlight("{}".format('Successfully deleted the "' + self.__computerName + '" Computer account'))
+            self.context.log.highlight(f"Successfully deleted the '{self.__computerName}' Computer account")
             self.noLDAPRequired = True
-            user_handle = None
 
             # Removing the machine account in the DB
             user = self.context.db.get_user(self.__domain, self.__computerName)
@@ -208,7 +201,7 @@ class NXCModule:
         else:
             samr.hSamrSetPasswordInternal4New(dce, user_handle, self.__computerPassword)
             if self.__noAdd:
-                self.context.log.highlight("{}".format('Successfully set the password of machine "' + self.__computerName + '" with password "' + self.__computerPassword + '"'))
+                self.context.log.highlight(f"Successfully set the password of machine '{self.__computerName}' with password '{self.__computerPassword}'")
                 self.noLDAPRequired = True
             else:
                 check_for_user = samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
@@ -220,7 +213,7 @@ class NXCModule:
                 req["Control"]["UserAccountControl"] = samr.USER_WORKSTATION_TRUST_ACCOUNT
                 samr.hSamrSetInformationUser2(dce, user_handle, req)
                 if not self.noLDAPRequired:
-                    self.context.log.highlight("{}".format('Successfully added the machine account "' + self.__computerName + '" with Password: "' + self.__computerPassword + '"'))
+                    self.context.log.highlight(f"Successfully added the machine account '{self.__computerName}' with Password: '{self.__computerPassword}'")
                 self.noLDAPRequired = True
 
             if user_handle is not None:
