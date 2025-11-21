@@ -216,7 +216,7 @@ class FirefoxTriage:
             for row in cursor:
                 try:
                     a11 = row[0]
-                    a102 = row[1]
+                    a102 = row[1]  # noqa: F841
 
                     decoded_a11 = decoder.decode(a11)
                     key = self.decrypt_3des(decoded_a11, master_password, global_salt)
@@ -225,7 +225,6 @@ class FirefoxTriage:
                         keys.append(key)
                 except Exception:
                     continue
-
             return keys
 
         except Exception as e:
