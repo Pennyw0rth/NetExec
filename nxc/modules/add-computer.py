@@ -258,10 +258,9 @@ class NXCModule:
                     "userAccountControl": 0x1000,
                     "servicePrincipalName": spns,
                     "sAMAccountName": sAMAccountName,
-                    "unicodePwd": f"{self.__computerPassword}".encode("utf-16-le")
+                    "unicodePwd": f'"{self.__computerPassword}"'.encode("utf-16-le")
                 }
             )
-            print(c.last_error)
             if result:
                 self.context.log.highlight(f'Successfully added the machine account: "{sAMAccountName}" with Password: "{self.__computerPassword}"')
                 self.context.log.highlight("You can try to verify this with the nxc command:")
