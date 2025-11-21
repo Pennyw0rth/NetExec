@@ -67,20 +67,10 @@ class NXCModule:
         self.__username = connection.username
         self.__password = connection.password
         self.__host = connection.host
-        self.__port = context.smb_server_port
-        self.__aesKey = context.aesKey
-        self.__hashes = context.hash
+        self.__aesKey = connection.aesKey
         self.__doKerberos = connection.kerberos
-        self.__nthash = ""
-        self.__lmhash = ""
-
-        if context.hash and ":" in context.hash[0]:
-            hashList = context.hash[0].split(":")
-            self.__nthash = hashList[-1]
-            self.__lmhash = hashList[0]
-        elif context.hash and ":" not in context.hash[0]:
-            self.__nthash = context.hash[0]
-            self.__lmhash = "00000000000000000000000000000000"
+        self.__nthash = connection.nthash
+        self.__lmhash = connection.lmhash
 
         # First try to add via SAMR over SMB
         self.do_samr_add(context)
