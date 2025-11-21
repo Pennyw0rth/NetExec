@@ -9,7 +9,7 @@ from nxc.helpers.misc import CATEGORY
 class NXCModule:
     """
     Module by CyberCelt: @Cyb3rC3lt
-     Initial module:
+    Initial module:
         https://github.com/Cyb3rC3lt/CrackMapExec-Modules
     Thanks to the guys at impacket for the original code
     """
@@ -84,7 +84,7 @@ class NXCModule:
     def do_samr_add(self):
         """Connects to a target server and performs various operations related to adding or deleting machine accounts."""
         string_binding = epm.hept_map(self.__host, samr.MSRPC_UUID_SAMR, protocol="ncacn_np")
-        string_binding = string_binding.replace(self.__host, self.__kdcHost) if self.__kdcHost is not None else string_binding
+        string_binding = string_binding.replace(self.__host, self.__kdcHost) if self.__kdcHost else string_binding
 
         rpc_transport = transport.DCERPCTransportFactory(string_binding)
         rpc_transport.setRemoteHost(self.__host)
@@ -105,37 +105,38 @@ class NXCModule:
         samr_connect_response = samr.hSamrConnect5(dce, f"\\\\{self.__kdcHost}\x00", samr.SAM_SERVER_ENUMERATE_DOMAINS | samr.SAM_SERVER_LOOKUP_DOMAIN)
         serv_handle = samr_connect_response["ServerHandle"]
 
+        # Get the list of domains
         samr_enum_response = samr.hSamrEnumerateDomainsInSamServer(dce, serv_handle)
         domains = samr_enum_response["Buffer"]["Buffer"]
         domains_without_builtin = [domain for domain in domains if domain["Name"].lower() != "builtin"]
         if len(domains_without_builtin) > 1:
             domain = list(filter(lambda x: x["Name"].lower() == self.__domainNetbios, domains))
             if len(domain) != 1:
-                self.context.log.highlight("{}".format('This domain does not exist: "' + self.__domainNetbios + '"'))
-                self.context.log.highlight("Available domain(s):")
+                self.context.log.fail(f"This domain does not exist: '{self.__domainNetbios}'")
+                self.context.log.fail("Available domain(s):")
                 for domain in domains:
-                    self.context.log.highlight(f" * {domain['Name']}")
+                    self.context.log.fail(f" * {domain['Name']}")
                 raise Exception
             else:
                 selected_domain = domain[0]["Name"]
         else:
             selected_domain = domains_without_builtin[0]["Name"]
 
-        samr_lookup_domain_response = samr.hSamrLookupDomainInSamServer(dce, serv_handle, selected_domain)
-        domain_sid = samr_lookup_domain_response["DomainId"]
+        domain_sid = samr.hSamrLookupDomainInSamServer(dce, serv_handle, selected_domain)["DomainId"]
 
         self.context.log.debug(f"Opening domain {selected_domain}...")
-        samr_open_domain_response = samr.hSamrOpenDomain(dce, serv_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_CREATE_USER, domain_sid)
-        domain_handle = samr_open_domain_response["DomainHandle"]
+        domain_handle = samr.hSamrOpenDomain(dce, serv_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_CREATE_USER, domain_sid)["DomainHandle"]
 
         if self.__noAdd or self.__delete:
             try:
                 check_for_user = samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
             except samr.DCERPCSessionError as e:
+                self.context.log.debug(f"samrLookupNamesInDomain failed: {e}")
                 if e.error_code == 0xC0000073:
-                    self.context.log.highlight(f"{self.__computerName} not found in domain {selected_domain}")
+                    self.context.log.fail(f"{self.__computerName} not found in domain {selected_domain}")
                     self.noLDAPRequired = True
-                self.context.log.exception(e)
+                else:
+                    self.context.log.fail(f"Unexpected error looking up {self.__computerName} in domain {selected_domain}: {e}")
 
             user_rid = check_for_user["RelativeIds"]["Element"][0]
             if self.__delete:
@@ -148,16 +149,18 @@ class NXCModule:
                 open_user = samr.hSamrOpenUser(dce, domain_handle, access, user_rid)
                 user_handle = open_user["UserHandle"]
             except samr.DCERPCSessionError as e:
+                self.context.log.debug(f"samrOpenUser failed: {e}")
                 if e.error_code == 0xC0000022:
-                    self.context.log.highlight(f"{self.__username + ' does not have the right to ' + message + ' ' + self.__computerName}")
+                    self.context.log.fail(f"{self.__username} does not have the right to {message} {self.__computerName}")
                     self.noLDAPRequired = True
-                self.context.log.exception(e)
+                else:
+                    self.context.log.fail(f"Unexpected error opening {self.__computerName} in domain {selected_domain}: {e}")
         else:
             if self.__computerName is not None:
                 try:
                     samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
                     self.noLDAPRequired = True
-                    self.context.log.highlight("{}".format('Computer account already exists with the name: "' + self.__computerName + '"'))
+                    self.context.log.fail(f'Computer account already exists with the name: "{self.__computerName}"')
                 except samr.DCERPCSessionError as e:
                     if e.error_code != 0xC0000073:
                         raise
@@ -184,11 +187,12 @@ class NXCModule:
                 self.context.log.highlight('Successfully added the machine account: "' + self.__computerName + '" with Password: "' + self.__computerPassword + '"')
                 self.context.db.add_credential("plaintext", self.__domain, self.__computerName, self.__computerPassword)
             except samr.DCERPCSessionError as e:
+                print(e)
+
                 if e.error_code == 0xC0000022:
-                    self.context.log.highlight("{}".format('The following user does not have the right to create a computer account: "' + self.__username + '"'))
+                    self.context.log.fail(f"The following user does not have the right to create a computer account: {self.__username}")
                 elif e.error_code == 0xC00002E7:
-                    self.context.log.highlight("{}".format('The following user exceeded their machine account quota: "' + self.__username + '"'))
-                self.context.log.exception(e)
+                    self.context.log.fail(f"The following user exceeded their machine account quota: {self.__username}")
             user_handle = create_user["UserHandle"]
 
         if self.__delete:
@@ -255,11 +259,11 @@ class NXCModule:
             if result:
                 self.context.log.highlight(f'Successfully deleted the "{self.__computerName}" Computer account')
             elif result is False and c.last_error == "noSuchObject":
-                self.context.log.highlight(f'Computer named "{self.__computerName}" was not found')
+                self.context.log.fail(f'Computer named "{self.__computerName}" was not found')
             elif result is False and c.last_error == "insufficientAccessRights":
-                self.context.log.highlight(f'Insufficient Access Rights to delete the Computer "{self.__computerName}"')
+                self.context.log.fail(f'Insufficient Access Rights to delete the Computer "{self.__computerName}"')
             else:
-                self.context.log.highlight(f'Unable to delete the "{self.__computerName}" Computer account. The error was: {c.last_error}')
+                self.context.log.fail(f'Unable to delete the "{self.__computerName}" Computer account. The error was: {c.last_error}')
         else:
             result = c.add(
                 f"cn={self.__computerName},cn=Computers,dc={ldap_domain}",
@@ -271,7 +275,7 @@ class NXCModule:
                 self.context.log.highlight("You can try to verify this with the nxc command:")
                 self.context.log.highlight(f"nxc ldap {self.connection.host} -u {self.connection.username} -p {self.connection.password} -M group-mem -o GROUP='Domain Computers'")
             elif result is False and c.last_error == "entryAlreadyExists":
-                self.context.log.highlight(f"The Computer account '{self.__computerName}' already exists")
+                self.context.log.fail(f"The Computer account '{self.__computerName}' already exists")
             elif not result:
-                self.context.log.highlight(f"Unable to add the '{self.__computerName}' Computer account. The error was: {c.last_error}")
+                self.context.log.fail(f"Unable to add the '{self.__computerName}' Computer account. The error was: {c.last_error}")
             c.unbind()
