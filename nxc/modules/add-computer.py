@@ -75,10 +75,10 @@ class NXCModule:
         self.__lmhash = connection.lmhash
 
         # First try to add via SAMR over SMB
-        # self.do_samr_add()
+        self.do_samr_add()
 
         # If SAMR fails now try over LDAPS
-        if not self.noLDAPRequired or True:
+        if not self.noLDAPRequired:
             self.do_ldaps_add()
 
     def do_samr_add(self):
