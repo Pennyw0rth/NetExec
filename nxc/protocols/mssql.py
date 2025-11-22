@@ -207,6 +207,7 @@ class mssql(connection):
                 raise
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
+            self.db.add_credential("plaintext", self.domain, self.username, self.password)
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
@@ -238,6 +239,7 @@ class mssql(connection):
                 raise
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}")
+            self.db.add_credential("hash", self.domain, self.username, self.nthash)
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
