@@ -207,9 +207,15 @@ class mssql(connection):
                 raise
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
+            self.db.add_credential("plaintext", self.domain, self.username, self.password)
+            user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
+            host_id = self.db.get_hosts(self.host)[0].id
+            self.db.add_loggedin_relation(user_id, host_id)
+
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
+                self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
             return True
         except BrokenPipeError:
@@ -238,9 +244,15 @@ class mssql(connection):
                 raise
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}")
+            self.db.add_credential("hash", self.domain, self.username, self.nthash)
+            user_id = self.db.get_credential("hash", domain, self.username, self.nthash)
+            host_id = self.db.get_hosts(self.host)[0].id
+            self.db.add_loggedin_relation(user_id, host_id)
+
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
+                self.db.add_admin_user("hash", domain, self.username, self.nthash, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
             return True
         except BrokenPipeError:
