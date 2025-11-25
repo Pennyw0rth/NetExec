@@ -491,18 +491,26 @@ class nfs(connection):
             # Update the UID and GID for the file
             self.update_auth(file_handle)
 
-            try:
-                with open(local_file_path, "rb") as file:
-                    file_data = file.read().decode()
+            # Use wtpref as the chunk size
+            res = self.nfs3.fsinfo(file_handle, auth=self.auth)
+            if res["status"] != 0:
+                self.logger.fail(f"Error getting FSINFO for {remote_file_path}: {NFSSTAT3[res['status']]}")
+                return
+            chunk_size = res["resok"]["wtpref"]
 
-                # Write the data to the remote file
-                self.logger.info(f"Trying to write data from {local_file_path} to {remote_file_path}")
-                res = self.nfs3.write(file_handle, 0, len(file_data), file_data, 1, auth=self.auth)
-                if res["status"] != 0:
-                    self.logger.fail(f"Error writing to {remote_file_path}: {NFSSTAT3[res['status']]}")
-                    return
-                else:
-                    self.logger.success(f"Data from {local_file_path} successfully written to {remote_file_path} with permissions 777")
+            self.logger.display(f"Transferring data from {local_file_path} to {remote_file_path}")
+            try:
+                offset = 0
+                with open(local_file_path, "rb") as file:
+                    while chunk := file.read(chunk_size):
+                        # Write the data to the remote file
+                        res = self.nfs3.write(file_handle, offset, len(chunk), chunk, 1, auth=self.auth)
+                        if res["status"] != 0:
+                            self.logger.fail(f"Error writing to {remote_file_path}: {NFSSTAT3[res['status']]}")
+                            return
+                        offset += len(chunk)
+
+                self.logger.success(f"Data from {local_file_path} successfully written to {remote_file_path} with permissions 777")
             except Exception as e:
                 self.logger.fail(f"Could not write to {local_file_path}: {e}")
 
