@@ -473,7 +473,7 @@ class nfs(connection):
             # If success, file_name does not exist on remote machine. Else, trying to overwrite it.
             if lookup_response["resok"] is None:
                 # Create file
-                self.logger.display(f"Trying to create {remote_file_path}{file_name}")
+                self.logger.display(f"Trying to create {remote_file_path}")
                 res = self.nfs3.create(curr_fh, file_name, create_mode=1, mode=0o777, auth=self.auth)
                 if res["status"] != 0:
                     raise Exception(NFSSTAT3[res["status"]])
