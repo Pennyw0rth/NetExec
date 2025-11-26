@@ -480,12 +480,12 @@ class nfs(connection):
                 else:
                     file_handle = res["resok"]["obj"]["handle"]["data"]
                     self.update_auth(file_handle)
-                self.logger.success(f"{file_name} successfully created")
+                self.logger.success(f"'{file_name}' successfully created")
             else:
                 # Asking the user if they want to overwrite the file
-                ans = input(highlight(f"[!] {file_name} already exists on {remote_file_path}. Do you want to overwrite it? [Y/n] ", "red"))
+                ans = input(highlight(f"[!] '{file_name}' already exists on '{remote_file_path}'. Do you want to overwrite it? [Y/n] ", "red"))
                 if ans.lower() in ["y", "yes", ""]:
-                    self.logger.display(f"{file_name} already exists on {remote_file_path}. Trying to overwrite it...")
+                    self.logger.display(f"'{file_name}' already exists on '{remote_file_path}'. Trying to overwrite it...")
                     file_handle = lookup_response["resok"]["object"]["data"]
 
             # Update the UID and GID for the file
@@ -498,7 +498,7 @@ class nfs(connection):
                 return
             chunk_size = res["resok"]["wtpref"]
 
-            self.logger.display(f"Transferring data from {local_file_path} to {remote_file_path}")
+            self.logger.display(f"Transferring data from '{local_file_path}' to '{remote_file_path}'")
             try:
                 offset = 0
                 with open(local_file_path, "rb") as file:
@@ -506,13 +506,13 @@ class nfs(connection):
                         # Write the data to the remote file
                         res = self.nfs3.write(file_handle, offset, len(chunk), chunk, 1, auth=self.auth)
                         if res["status"] != 0:
-                            self.logger.fail(f"Error writing to {remote_file_path}: {NFSSTAT3[res['status']]}")
+                            self.logger.fail(f"Error writing to '{remote_file_path}': {NFSSTAT3[res['status']]}")
                             return
                         offset += len(chunk)
 
-                self.logger.success(f"Data from {local_file_path} successfully written to {remote_file_path} with permissions 777")
+                self.logger.success(f"Data from '{local_file_path}' successfully written to '{remote_file_path}' with permissions 777")
             except Exception as e:
-                self.logger.fail(f"Could not write to {local_file_path}: {e}")
+                self.logger.fail(f"Could not write to '{local_file_path}': {e}")
 
             # Unmount the share
             self.mount.umnt(self.auth)
