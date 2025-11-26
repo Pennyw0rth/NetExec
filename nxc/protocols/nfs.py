@@ -487,6 +487,8 @@ class nfs(connection):
                 if ans.lower() in ["y", "yes", ""]:
                     self.logger.display(f"'{file_name}' already exists on '{remote_file_path}'. Trying to overwrite it...")
                     file_handle = lookup_response["resok"]["object"]["data"]
+                else:
+                    return
 
             # Update the UID and GID for the file
             self.update_auth(file_handle)
