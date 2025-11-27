@@ -1,5 +1,5 @@
 from nxc.helpers.misc import CATEGORY
-
+from nxc.helpers.bash import get_script
 
 class NXCModule:
     name = "linux_session_enum"
@@ -14,39 +14,17 @@ class NXCModule:
     def options(self, context, module_options):
         """No module options required."""
 
+    def __init__(self):
+        try:
+            self.script = get_script("linux_session_enum/linux_session_enum.sh")
+        except Exception as e:
+            context.log.error(f"Failed to load script: {e}")
+            self.script = None
+            return
+        
     def on_login(self, context, connection):
-        # Execute the script on the remote Linux machine (requires loginctl)
-        cmd = r"""
-current_user=$(whoami)
-loginctl list-sessions --no-legend | while read sid uid seat; do
-    user=$(loginctl show-session "$sid" -p Name --value)
-    [ "$user" = "$current_user" ] && continue
-    uid_val=$(id -u "$user" 2>/dev/null)
-    if [ "$uid_val" != "" ] && [ "$uid_val" -ne 0 ] && [ "$uid_val" -lt 1000 ]; then
-        continue
-    fi
-    type=$(loginctl show-session "$sid" -p Type --value)
-    ip=$(loginctl show-session "$sid" -p RemoteHost --value)
-    if getent passwd "$user" >/dev/null 2>&1; then
-        if grep -E "^${user}:" /etc/passwd >/dev/null 2>&1; then
-            origin="local"
-        else
-            origin="domain"
-        fi
-    else
-        origin="unknown"
-    fi
-    if [ "$(id -u "$user" 2>/dev/null)" -eq 0 ] || \
-       id -nG "$user" 2>/dev/null | grep -Eq '\b(sudo|wheel|admin|root)\b'; then
-        priv="privileged"
-    else
-        priv="unprivileged"
-    fi
-    echo "$user ($type) from ${ip:-local} [$origin] [$priv]"
-done
-"""
-
-        output = connection.execute(cmd)
+	# Execute script
+        output = connection.execute(self.script)
         # Display results
         if output is None:
             context.log.error("Command failed or returned no output.")
