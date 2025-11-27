@@ -1,6 +1,7 @@
 from nxc.helpers.misc import CATEGORY
 from nxc.helpers.bash import get_script
 
+
 class NXCModule:
     name = "linux_session_enum"
     description = (
@@ -17,13 +18,12 @@ class NXCModule:
     def __init__(self):
         try:
             self.script = get_script("linux_session_enum/linux_session_enum.sh")
-        except Exception as e:
-            context.log.error(f"Failed to load script: {e}")
+        except Exception:
             self.script = None
             return
-        
+
     def on_login(self, context, connection):
-	# Execute script
+        # Execute script
         output = connection.execute(self.script)
         # Display results
         if output is None:
