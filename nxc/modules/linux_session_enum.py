@@ -13,7 +13,6 @@ class NXCModule:
 
     def options(self, context, module_options):
         """No module options required."""
-        pass
 
     def on_login(self, context, connection):
         # Execute the script on the remote Linux machine (requires loginctl)
