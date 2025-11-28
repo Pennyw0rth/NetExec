@@ -471,7 +471,7 @@ conf = {
                 {"name": "wsulavprohoster", "description": "WithSecure Ultralight Protected AV Hoster"}
             ],
             "pipes": [
-                {"name": "FS_CCFIPC_*", "processes": ["fsatpn.exe","fsatpl.exe","fshoster32.exe","fsulprothoster.exe","fsulprothoster.exe","fshoster64.exe","FsPisces.exe","fsdevcon.exe"]}
+                {"name": "FS_CCFIPC_*", "processes": ["fsatpn.exe", "fsatpl.exe", "fshoster32.exe", "fsulprothoster.exe", "fsulprothoster.exe", "fshoster64.exe", "FsPisces.exe", "fsdevcon.exe"]}
             ]
         }
     ]
