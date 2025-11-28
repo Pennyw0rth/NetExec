@@ -256,9 +256,9 @@ class rdp(connection):
                 )
             )
             # Add the successful auth to the summary
-            summaryText = f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(kerb_pass)} {self.mark_pwned()}"           
-            if summaryText:
-               GLOBAL_SUMMARY_RESULTS.append(summaryText)
+            summary_text = f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(kerb_pass)} {self.mark_pwned()}"           
+            if summary_text:
+               GLOBAL_SUMMARY_RESULTS.append(summary_text)
             if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
             if self.admin_privs:
@@ -308,10 +308,10 @@ class rdp(connection):
             self.admin_privs = True
             self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
             # Add the successful auth to the summary
-            summaryText = f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(self.password)} {self.mark_pwned()}"
+            summary_text = f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(self.password)} {self.mark_pwned()}"
             
-            if summaryText:
-               GLOBAL_SUMMARY_RESULTS.append(summaryText)
+            if summary_text:
+               GLOBAL_SUMMARY_RESULTS.append(summary_text)
             if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
             if self.admin_privs:
@@ -349,10 +349,10 @@ class rdp(connection):
             self.admin_privs = True
             self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
             # Add the successful auth to the summary
-            summaryText = f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}"
+            summary_text = f"{self.logger.extra.get("protocol")}   {self.host}   {self.port}   {self.hostname}   {domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}"
             
-            if summaryText:
-               GLOBAL_SUMMARY_RESULTS.append(summaryText)
+            if summary_text:
+               GLOBAL_SUMMARY_RESULTS.append(summary_text)
 
             if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
