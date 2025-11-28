@@ -460,7 +460,7 @@ conf = {
             "pipes": []
         },
         {
-            "name": "WithSecure",
+            "name": "WithSecure Elements",
             "services": [
                 {"name": "fsdevcon", "description": "WithSecure Device Control"},
                 {"name": "fshoster", "description": "WithSecure Hoster"},
