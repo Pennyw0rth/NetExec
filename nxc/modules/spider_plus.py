@@ -3,6 +3,7 @@ import errno
 from os.path import abspath, join, split, exists, splitext, getsize, sep
 from os import makedirs, remove, stat
 import time
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 from nxc.protocols.smb.remotefile import RemoteFile
 from impacket.smb3structs import FILE_READ_DATA
@@ -472,8 +473,7 @@ class NXCModule:
     name = "spider_plus"
     description = "List files recursively and save a JSON share-file metadata to the 'OUTPUT_FOLDER'. See module options for finer configuration."
     supported_protocols = ["smb"]
-    opsec_safe = True  # Does the module touch disk?
-    multiple_hosts = True  # Does the module support multiple hosts?
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """
