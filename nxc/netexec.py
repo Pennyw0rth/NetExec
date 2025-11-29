@@ -27,6 +27,9 @@ import platform
 if sys.stdout.encoding == "cp1252":
     sys.stdout.reconfigure(encoding="utf-8")
 
+
+from nxc.helpers.opengraph import opengraph
+
 # Increase file_limit to prevent error "Too many open files"
 if platform.system() != "Windows":
     import resource
@@ -208,10 +211,15 @@ def main():
         nxc_logger.highlight(highlight("[!] Jitter is only throttling authentications per target!", "red"))
 
     try:
+        if args.opengraph is not None:
+            opengraph.simple_bh_mapping(args.opengraph)  # load fqdn 2 oid mapping
         asyncio.run(start_run(protocol_object, args, db, targets))
     except KeyboardInterrupt:
         nxc_logger.debug("Got keyboard interrupt")
     finally:
+        if args.opengraph is not None:
+            nxc_logger.debug(opengraph.to_json())
+            opengraph.save()
         db_engine.dispose()
 
 
