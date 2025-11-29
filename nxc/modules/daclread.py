@@ -12,6 +12,7 @@ from ldap3.protocol.microsoft import security_descriptor_control
 import sys
 import traceback
 from os.path import isfile
+import re
 
 OBJECT_TYPES_GUID = {}
 OBJECT_TYPES_GUID.update(SCHEMA_OBJECTS)
@@ -219,19 +220,21 @@ class NXCModule:
         self.ace_type = "allowed"
         self.rights = None
         self.rights_guid = None
+        self.interesting_only = False
 
     def options(self, context, module_options):
         """
         Be careful, this module cannot read the DACLS recursively.
         For example, if an object has particular rights because it belongs to a group, the module will not be able to see it directly, you have to check the group rights manually.
 
-        TARGET          The objects that we want to read or backup the DACLs, specified by its SamAccountName
-        TARGET_DN       The object that we want to read or backup the DACL, specified by its DN (useful to target the domain itself)
-        PRINCIPAL       The trustee that we want to filter on
-        ACTION          The action to realise on the DACL (read, backup)
-        ACE_TYPE        The type of ACE to read (Allowed or Denied)
-        RIGHTS          An interesting right to filter on ('FullControl', 'ResetPassword', 'WriteMembers', 'DCSync')
-        RIGHTS_GUID     A right GUID that specify a particular rights to filter on
+        TARGET              The objects that we want to read or backup the DACLs, specified by its SamAccountName
+        TARGET_DN           The object that we want to read or backup the DACL, specified by its DN (useful to target the domain itself)
+        PRINCIPAL           The trustee that we want to filter on
+        ACTION              The action to realise on the DACL (read, backup)
+        ACE_TYPE            The type of ACE to read (Allowed or Denied)
+        RIGHTS              An interesting right to filter on ('FullControl', 'ResetPassword', 'WriteMembers', 'DCSync')
+        RIGHTS_GUID         A right GUID that specify a particular rights to filter on
+        INTERESTING_ONLY    Whether to exclude common or default permissions and only focus on more specific, significant ones
 
         Based on the work of @_nwodtuhs and @BlWasp_.
         """
@@ -277,6 +280,9 @@ class NXCModule:
 
         if "RIGHTS_GUID" in module_options:
             self.rights_guid = module_options["RIGHTS_GUID"]
+
+        if "INTERESTING_ONLY" in module_options:
+            self.interesting_only = module_options["INTERESTING_ONLY"].lower() in ["true", "1", "yes"]
 
     def on_login(self, context, connection):
         """On a successful LDAP login we perform a search for the targets' SID, their Security Descriptors and the principal's SID if there is one specified"""
@@ -362,13 +368,22 @@ class NXCModule:
             return ""
 
     # Parses a full DACL
-    #   - dacl : the DACL to parse, submitted in a Security Desciptor format
+    #   - dacl : the DACL to parse, submitted in a Security Descriptor format
     def parse_dacl(self, dacl):
         parsed_dacl = []
         self.context.log.debug("Parsing DACL")
         for ace in dacl["Data"]:
             parsed_ace = self.parse_ace(ace)
-            parsed_dacl.append(parsed_ace)
+            if self.interesting_only:
+                # only process SIDs > 1000
+                if (re.search(r"\(S-1-5-.*-[1-9]\d{3,}\)$", parsed_ace["Trustee (SID)"]) and
+                    (re.search(r"GenericAll|Write|Create|Delete|FullControl|Modify|ControlAccess", parsed_ace["Access mask"]) or
+                    ("ExtendedRight" in parsed_ace["Access mask"] and "ACCESS_ALLOWED" in parsed_ace["ACE Type"]))
+                ):
+                    parsed_dacl.append(parsed_ace)
+            else:
+                parsed_dacl.append(parsed_ace)
+
         return parsed_dacl
 
     # Parses an access mask to extract the different values from a simple permission
