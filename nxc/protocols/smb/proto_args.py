@@ -39,6 +39,8 @@ def proto_args(parser, parents):
     cred_gathering_group.add_argument("--pvk", action="store", help="DPAPI option. File with domain backupkey")
     cred_gathering_group.add_argument("--enabled", action="store_true", help="Only dump enabled targets from DC")
     cred_gathering_group.add_argument("--user", dest="userntds", type=str, help="Dump selected user from DC")
+    cred_gathering_group.add_argument("--aes128", action="store_true", help="Also dump Kerberos AES-128 keys from target DC (NTDS.dit)")
+    cred_gathering_group.add_argument("--aes256", action="store_true", help="Also dump Kerberos AES-256 keys from target DC (NTDS.dit)")
 
     mapping_enum_group = smb_parser.add_argument_group("Mapping/Enumeration")
     mapping_enum_group.add_argument("--shares", type=str, nargs="?", const="", help="Enumerate shares and access, filter on specified argument (read ; write ; read,write)")

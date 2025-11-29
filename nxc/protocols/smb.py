@@ -2288,6 +2288,12 @@ class smb(connection):
         NTDSFileName = None
         host_id = self.db.get_hosts(filter_term=self.host)[0][0]
 
+        # AES key extraction options (--aes128 / --aes256)
+        aes128 = getattr(self.args, "aes128", False)
+        aes256 = getattr(self.args, "aes256", False)
+        # If no AES option is requested, keep legacy "NTLM-only" behavior
+        just_ntlm = not (aes128 or aes256)
+
         def add_ntds_hash(ntds_hash, host_id):
             add_ntds_hash.ntds_hashes += 1
             if self.args.enabled:
@@ -2320,6 +2326,49 @@ class smb(connection):
         add_ntds_hash.ntds_hashes = 0
         add_ntds_hash.added_to_db = 0
 
+        printed_aes_header = False
+
+        def ntds_callback(secret_type, secret):
+            nonlocal printed_aes_header
+
+            lower = secret.lower()
+
+            # Ignore legacy DES Kerberos keys
+            if "des-cbc-md5" in lower:
+                self.logger.debug(f"Ignoring Kerberos DES key: {secret}")
+                return
+
+            # Kerberos AES keys
+            is_aes128 = "aes128-cts-hmac-sha1-96" in lower
+            is_aes256 = "aes256-cts-hmac-sha1-96" in lower
+
+            if is_aes128 or is_aes256:
+                # No AES option requested: ignore all AES keys
+                if not (aes128 or aes256):
+                    self.logger.debug(f"Ignoring Kerberos key (AES not requested): {secret}")
+                    return
+
+                if not printed_aes_header:
+                    self.logger.display("Kerberos AES keys:")
+                    printed_aes_header = True
+
+                if (is_aes128 and aes128) or (is_aes256 and aes256):
+                    line = f"{secret}"
+                    self.logger.highlight(line)
+                    ntds_callback.aes_keys += 1
+                    ntds_callback.aes_lines.append(line)
+                else:
+                    self.logger.debug(
+                        f"Ignoring Kerberos key (not matching requested AES type): {secret}"
+                    )
+                return
+
+            # Fallback: legacy NTDS behavior for NTLM hashes
+            add_ntds_hash(secret, host_id)
+
+        ntds_callback.aes_keys = 0
+        ntds_callback.aes_lines = []
+
         if self.remote_ops:
             try:
                 if self.args.ntds == "vss":
@@ -2343,20 +2392,36 @@ class smb(connection):
             noLMHash=True,
             remoteOps=self.remote_ops,
             useVSSMethod=use_vss_method,
-            justNTLM=True,
+            justNTLM=just_ntlm,
             pwdLastSet=False,
             resumeSession=None,
             outputFileName=self.output_filename,
             justUser=self.args.userntds if self.args.userntds else None,
             printUserStatus=True,
-            perSecretCallback=lambda secret_type, secret: add_ntds_hash(secret, host_id),
+            perSecretCallback=ntds_callback,
         )
 
         try:
             self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
             NTDS.dump()
             ntds_outfile = f"{self.output_filename}.ntds"
-            self.logger.success(f"Dumped {highlight(add_ntds_hash.ntds_hashes)} NTDS hashes to {ntds_outfile} of which {highlight(add_ntds_hash.added_to_db)} were added to the database")
+
+            # Append Kerberos AES keys to the same NTDS output file
+            if ntds_callback.aes_keys > 0:
+                try:
+                    with open(ntds_outfile, "a", encoding="utf-8", errors="ignore") as f:
+                        f.write("# Kerberos AES keys:\n")
+                        for line in ntds_callback.aes_lines:
+                            f.write(f"{line}\n")
+                except Exception as e:
+                    self.logger.debug(f"Error writing Kerberos AES keys to NTDS output file: {e}")
+
+            # Combined summary message for NTDS hashes and AES keys
+            if ntds_callback.aes_keys > 0:
+                self.logger.success(f"Dumped {highlight(add_ntds_hash.ntds_hashes)} NTDS hashes and {highlight(ntds_callback.aes_keys)} Kerberos AES keys to {ntds_outfile} of which {highlight(add_ntds_hash.added_to_db)} were added to the database")
+            else:
+                self.logger.success(f"Dumped {highlight(add_ntds_hash.ntds_hashes)} NTDS hashes to {ntds_outfile} of which {highlight(add_ntds_hash.added_to_db)} were added to the database")
+
             self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
             self.logger.display(f"cat {ntds_outfile} | grep -iv disabled | cut -d ':' -f1")
             self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
