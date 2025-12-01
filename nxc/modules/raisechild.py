@@ -18,7 +18,7 @@ from impacket.krb5.pac import VALIDATION_INFO, KERB_VALIDATION_INFO, PAC_LOGON_I
 from impacket.dcerpc.v5.ndr import NDRULONG
 from impacket.dcerpc.v5.samr import GROUP_MEMBERSHIP, SE_GROUP_MANDATORY, SE_GROUP_ENABLED_BY_DEFAULT, SE_GROUP_ENABLED, USER_NORMAL_ACCOUNT, USER_DONT_EXPIRE_PASSWORD
 from impacket.dcerpc.v5.dtypes import SID, RPC_SID, NULL
-from nxc.parsers.ldap_results import parse_result_attributes
+from nxc.parsers.ldap_results import ldapasn1_impacket, parse_result_attributes
 from nxc.helpers.misc import CATEGORY
 
 
@@ -146,6 +146,26 @@ class NXCModule:
             smb.login(ldap_conn.username, ldap_conn.password, ldap_conn.domain)
         return smb
 
+    def _get_domain_netbios(self, ldap_conn):
+        root_dse = parse_result_attributes(
+            ldap_conn.ldap_connection.search(
+                scope=ldapasn1_impacket.Scope("baseObject"),
+                searchBase="",
+                searchFilter="(objectClass=*)",
+                attributes=["configurationNamingContext"],
+                sizeLimit=0,
+            )
+        )[0]
+        forrest_root_dn = root_dse["configurationNamingContext"]
+
+        resp = ldap_conn.search(
+            baseDN=f"CN=Partitions,{forrest_root_dn}",
+            searchFilter=f"(&(objectCategory=crossRef)(dnsRoot={ldap_conn.targetDomain})(nETBIOSName=*))",
+            attributes=["nETBIOSName"],
+        )
+        entries = parse_result_attributes(resp)
+        return entries[0]["nETBIOSName"]
+
     def _dcsync_krbtgt(self, smb_conn, ldap_conn):
         try:
             rop = RemoteOperations(
@@ -157,7 +177,7 @@ class NXCModule:
             rop.getDrsr()
             boot_key = rop.getBootKey()
 
-            domain_netbios = ldap_conn.domain.split(".")[0]
+            domain_netbios = self._get_domain_netbios(ldap_conn)
             target_user = f"{domain_netbios}/krbtgt"
 
             def grab_hash(secret_type, secret):
