@@ -46,8 +46,7 @@ class NXCModule:
 
     def backup_show_advanced_options(self):
         """Backs up the current state of 'show advanced options'."""
-        query = "SELECT CAST(value AS INT) AS value FROM sys.configurations WHERE name = 'show advanced options'"
-        res = self.mssql_conn.sql_query(query)
+        res = self.mssql_conn.sql_query("SELECT CAST(value AS INT) AS value FROM sys.configurations WHERE name = 'show advanced options'")
         if res:
             self.advanced_options_backup = int(res[0]["value"])  # Convert to integer
 
