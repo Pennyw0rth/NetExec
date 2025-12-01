@@ -146,6 +146,15 @@ class NXCModule:
             smb.login(ldap_conn.username, ldap_conn.password, ldap_conn.domain)
         return smb
 
+    def _get_domain_netbios(self, ldap_conn):
+        resp = ldap_conn.search(
+            baseDN=f"CN=Partitions,{ldap_conn.configuration_context}",
+            searchFilter=f"(&(objectCategory=crossRef)(dnsRoot={ldap_conn.targetDomain})(nETBIOSName=*))",
+            attributes=["nETBIOSName"],
+        )
+        entries = parse_result_attributes(resp)
+        return entries[0]["nETBIOSName"]
+
     def _dcsync_krbtgt(self, smb_conn, ldap_conn):
         try:
             rop = RemoteOperations(
@@ -157,7 +166,7 @@ class NXCModule:
             rop.getDrsr()
             boot_key = rop.getBootKey()
 
-            domain_netbios = ldap_conn.domain.split(".")[0]
+            domain_netbios = self._get_domain_netbios(ldap_conn)
             target_user = f"{domain_netbios}/krbtgt"
 
             def grab_hash(secret_type, secret):
