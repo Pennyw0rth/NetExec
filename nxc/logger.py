@@ -106,6 +106,7 @@ class NXCAdapter(logging.LoggerAdapter):
         logging.getLogger("unicrypto").disabled = True
         logging.getLogger("asyncio").setLevel(logging.ERROR)
         logging.getLogger("neo4j").setLevel(logging.ERROR)
+        logging.getLogger("pypsrp").setLevel(logging.ERROR)
 
     def format(self, msg, *args, **kwargs):
         """Format msg for output

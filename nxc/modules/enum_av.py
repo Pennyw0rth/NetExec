@@ -327,6 +327,17 @@ conf = {
             "pipes": []
         },
         {
+            "name": "Kaseya Agent Endpoint",
+            "services": [
+                {"name": "KAENDKSAASC*", "description": "Virtual System Administrator Endpoint"},
+                {"name": "KAKSAASC*", "description": "Machine.Group ID:*"},
+            ],
+            "pipes": [
+                {"name": "kaseyaUserKSA*", "processes": ["KaUsrTsk.exe"]},
+                {"name": "kaseyaAgentKSA*", "processes": ["AgentMon.exe"]}
+            ]
+        },
+        {
             "name": "Kaspersky Security for Windows Server",
             "services": [
                 {"name": "kavfsslp", "description": "Kaspersky Security Exploit Prevention Service"},

@@ -8,7 +8,7 @@ from sqlalchemy.dialects.sqlite import Insert  # used for upsert
 from sqlalchemy.exc import (
     SAWarning
 )
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 
 from nxc.database import BaseDB, format_host_query
 from nxc.logger import nxc_logger
@@ -348,11 +348,7 @@ class database(BaseDB):
 
     def remove_credentials(self, creds_id):
         """Removes a credential ID from the database"""
-        del_hosts = []
-        for cred_id in creds_id:
-            q = delete(self.UsersTable).filter(self.UsersTable.c.id == cred_id)
-            del_hosts.append(q)
-        self.db_execute(q)
+        self.db_execute(delete(self.UsersTable).where(self.UsersTable.c.id.in_(creds_id)))
 
     def add_admin_user(self, credtype, domain, username, password, host, user_id=None):
         add_links = []

@@ -2263,7 +2263,7 @@ class smb(connection):
                         isRemote=True,
                         perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
                     )
-                self.logger.success("Dumping LSA secrets")
+                self.logger.display("Dumping LSA secrets")
                 self.output_filename = self.output_file_template.format(output_folder="lsa")
                 LSA.dumpCachedHashes()
                 LSA.exportCached(self.output_filename)
