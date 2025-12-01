@@ -293,8 +293,8 @@ class smb(connection):
 
     def opengraph_host_info(self):
         if detect_if_ip(self.host):
-            opengraph.add_tag(f"{self.hostname}.{self.domain}", "IP_Address", self.host)
-        opengraph.add_tag(f"{self.hostname}.{self.domain}", "smbsigning", self.signing)
+            opengraph.add_tag(self.hostname, ["Computer"], "IP_Address", self.host)
+        opengraph.add_tag(self.hostname, ["Computer"], "smbsigning", self.signing)
 
     def print_host_info(self):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
@@ -1253,7 +1253,7 @@ class smb(connection):
                     row = template.format(USERNAME=user_full, SID=sid)
                     result.append(row)
                     if sid.startswith("S-1-5-21"):  # remove virtual/service accounts
-                        opengraph.add_edge("HasSession", f"{self.hostname}.{self.domain}", sid)
+                        opengraph.add_edge("HasSession", f"{self.hostname}$", sid)
 
                 self.logger.success("Remote Registry enumerated sessions")
                 for row in result:
@@ -1710,6 +1710,8 @@ class smb(connection):
                             self.logger.highlight(f"{user_info[0]}\\{user_info[1]:<25} logon_server: {user_info[2]}")
                     else:
                         self.logger.highlight(f"{user_info[0]}\\{user_info[1]:<25} logon_server: {user_info[2]}")
+                    if user_info[1] != f"{self.hostname}$":
+                        opengraph.add_edge("HasSession", f"{self.hostname}$", user_info[1])
         except Exception as e:
             self.logger.fail(f"Error enumerating logged on users: {e}")
 

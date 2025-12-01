@@ -39,7 +39,7 @@ class NXCModule:
             remote_file.open_file()
 
             context.log.highlight(self.output.format(connection.conn.getRemoteHost()))
-            opengraph.add_tag(f"{connection.hostname}.{connection.domain}", "webclientrunning", True)
+            opengraph.add_tag(connection.hostname, ["Computer"], "webclientrunning", True)
         except SessionError as e:
             if e.getErrorCode() == nt_errors.STATUS_OBJECT_NAME_NOT_FOUND:
                 return

@@ -211,14 +211,20 @@ def main():
         nxc_logger.highlight(highlight("[!] Jitter is only throttling authentications per target!", "red"))
 
     try:
-        if args.opengraph is not None:
-            opengraph.simple_bh_mapping(args.opengraph)  # load fqdn 2 oid mapping
+        if args.opengraph:
+            if args.og_path is not None:
+                opengraph.bh_mapping(args.og_path)
+            elif args.og_ldap:
+                opengraph.ldap_mapping()
+            else:
+                nxc_logger.warning("No method was given to resolve OIDs!")
         asyncio.run(start_run(protocol_object, args, db, targets))
     except KeyboardInterrupt:
         nxc_logger.debug("Got keyboard interrupt")
     finally:
         if args.opengraph is not None:
             nxc_logger.debug(opengraph.to_json())
+            nxc_logger.debug(opengraph.name2oid)
             opengraph.save()
         db_engine.dispose()
 

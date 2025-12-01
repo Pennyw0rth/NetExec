@@ -72,7 +72,7 @@ class NXCModule:
                 return
             vuln = self.is_vulnerable(connection.server_os_major, connection.server_os_minor, connection.server_os_build, ubr)
             if vuln:
-                opengraph.add_tag(f"{connection.hostname}.{connection.domain}", "ntlm_reflection", True)
+                opengraph.add_tag(connection.hostname, ["Computer"], "ntlm_reflection", True)
                 if not connection.conn.isSigningRequired():  # Not vulnerable if SMB signing is enabled
                     context.log.highlight(f"VULNERABLE (can relay SMB to any protocol on {self.context.log.extra['host']})")
                 else:

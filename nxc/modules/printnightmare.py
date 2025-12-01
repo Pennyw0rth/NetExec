@@ -100,7 +100,7 @@ class NXCModule:
                 return False
             # If vulnerable, 'ERROR_INVALID_PARAMETER' will be returned
             if e.error_code == system_errors.ERROR_INVALID_PARAMETER:
-                opengraph.add_tag(f"{connection.hostname}.{connection.domain}", "printnightmare", True)
+                opengraph.add_tag(connection.hostname, ["Computer"], "printnightmare", True)
                 context.log.highlight("Vulnerable, next step https://github.com/ly4k/PrintNightmare")
                 return True
             context.log.fail(f"Unexpected error: {e}")
@@ -109,7 +109,7 @@ class NXCModule:
                 context.log.info("Not vulnerable :'(")
                 return False
             context.log.fail(f"Unexpected error: {e}")
-        opengraph.add_tag(f"{connection.hostname}.{connection.domain}", "printnightmare", True)
+        opengraph.add_tag(connection.hostname, ["Computer"], "printnightmare", True)
         context.log.highlight("Vulnerable, next step https://github.com/ly4k/PrintNightmare")
         return True
 
