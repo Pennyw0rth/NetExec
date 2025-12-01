@@ -1,6 +1,10 @@
 import json
 import os
-from nxc.paths import NXC_PATH
+import zipfile
+import tempfile
+import shutil
+
+from nxc.paths import NXC_PATH, TMP_PATH
 from datetime import datetime
 from nxc.logger import nxc_logger
 
@@ -9,16 +13,86 @@ class OpenGraph:
     # Collects nodes, edges, and properties for BloodHound-CE OpenGraph import.
 
     def __init__(self):
-        self.nodes = {}  # id -> node
-        self.edges = []  # list of edges
-        self.fqdn2oid = {}  # fqdn -> Object ID
+        self.nodes = {}
+        self.edges = []
+        self.name2oid = {}
 
-    def add_node(self, node_id, kinds=None, properties=None):
-        """Add a new node, or merge with an existing one."""
+# ------------------------- MAPPINF ----------------------------
+
+    def _load_json(self, path):
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+
+    def _map_computers_json(self, data):
+        for entry in data.get("data", []):
+            oid = entry.get("ObjectIdentifier")
+            props = entry.get("Properties", {})
+            sam = props.get("samaccountname")
+            if sam:
+                self.name2oid[sam.upper()] = oid
+
+    def _map_users_json(self, data):
+        for entry in data.get("data", []):
+            oid = entry.get("ObjectIdentifier")
+            props = entry.get("Properties", {})
+            sam = props.get("samaccountname")
+            if sam:
+                self.name2oid[sam.upper()] = oid
+
+    def bh_mapping(self, bh_path):
+        """Load mappings from BloodHound dump (ZIP or directory)."""
+        # If ZIP → extract to temp
+        tempdir = ""
+        if bh_path.lower().endswith(".zip"):
+            try:
+                tempdir = tempfile.mkdtemp(prefix="bh_", dir=TMP_PATH)
+                with zipfile.ZipFile(bh_path, "r") as z:
+                    z.extractall(tempdir)
+                bh_path = tempdir
+            except Exception as e:
+                nxc_logger.fail(f"Failed to unzip BloodHound data: {e}")
+                return
+
+        # Identify files
+        comp_file = None
+        user_file = None
+
+        for entry in os.listdir(bh_path):
+            if entry.endswith("computers.json"):
+                comp_file = os.path.join(bh_path, entry)
+            elif entry.endswith("users.json"):
+                user_file = os.path.join(bh_path, entry)
+
+        nxc_logger.debug(f"user file is {user_file}")
+        nxc_logger.debug(f"user file is {comp_file}")
+
+        # Load mappings
+        if comp_file:
+            self._map_computers_json(self._load_json(comp_file))
+
+        if user_file:
+            self._map_users_json(self._load_json(user_file))
+
+        nxc_logger.display(
+            f"Loaded {len(self.name2oid)} name→OID mappings from BloodHound"
+        )
+
+        if os.path.exists(tempdir):
+            shutil.rmtree(tempdir)
+
+    def ldap_mapping(self):
+        # TODO
+        pass
+
+# ------------------------- NODES AND EDGES ----------------------------
+
+    def add_node(self, node_id, kinds, properties=None):
+        if "Base" not in kinds:
+            kinds.append("Base")
         node_id = node_id.strip()
         if node_id not in self.nodes:
             self.nodes[node_id] = {
-                "kinds": kinds or ["Computer", "Base"],
+                "kinds": kinds,
                 "properties": {},
             }
         else:
@@ -30,83 +104,64 @@ class OpenGraph:
             if properties:
                 node["properties"].update(properties)
 
-    def add_tag(self, node_id, tag_name, value):
-        """Add a property/tag (e.g., module vulnerability flag)."""
-        node_id = node_id.strip().lower()
-        if node_id in self.fqdn2oid:
-            node_id = self.fqdn2oid[node_id]
-        self.add_node(node_id)  # ensure node exists
+    def add_tag(self, node_id, kinds, tag_name, value):
+        # formating node_id
+        if not node_id.startswith("S-1-5"):
+            if "Computer" in kinds:
+                node_id = node_id.strip().split(".")[0]  # remove .domain.com if fqdn
+                node_id = f"{node_id}$" if not node_id.endswith("$") else node_id
+            if "User" in kinds:
+                node_id = node_id.strip().split("@")[0]  # remove @domain.com if upn
+            node_id = node_id.upper()
+            if node_id in self.name2oid:
+                node_id = self.name2oid[node_id]
+        self.add_node(node_id, kinds)
         self.nodes[node_id]["properties"][tag_name] = value
 
     def add_edge(self, kind, start, end, start_match_by="id", end_match_by="id"):
-        """
-        Add a relationship (edge) between two nodes.
-
-        Automatically replaces FQDNs with GUIDs if:
-          - match_by == "id"
-          - and the value doesn't start with "S-1-5-21"
-        """
-        def resolve_if_needed(value, match_by):
-            if match_by == "id" and not value.strip().startswith("S-1-5-21"):  # if match by id and value is not an oid
-                # Try to map FQDN -> ObjectIdentifier if available
-                lookup = value.strip().lower()
-                if lookup in self.fqdn2oid:
-                    return self.fqdn2oid[lookup]
-            return value.strip()
-
-        resolved_start = resolve_if_needed(start, start_match_by)
-        resolved_end = resolve_if_needed(end, end_match_by)
+        def resolve(value, match_by):
+            v = value.strip()
+            if match_by == "id" and not v.startswith("S-1-5-21"):
+                lookup = v.upper()
+                if lookup in self.name2oid:
+                    return self.name2oid[lookup]
+            return v
 
         edge = {
             "kind": kind,
-            "start": {"value": resolved_start, "match_by": start_match_by},
-            "end": {"value": resolved_end, "match_by": end_match_by},
+            "start": {"value": resolve(start, start_match_by), "match_by": start_match_by},
+            "end": {"value": resolve(end, end_match_by), "match_by": end_match_by},
         }
         self.edges.append(edge)
 
-    def simple_bh_mapping(self, path):
-        """Build a mapping from host identifiers -> BloodHound node ID."""
-        mapping = {}
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-        for computers in data.get("data", {}):
-            oid = computers.get("ObjectIdentifier")
-            props = computers.get("Properties", {})
-            mapping[props["name"].strip().lower()] = oid
-        self.fqdn2oid = mapping
+# ------------------------- EXPORT ----------------------------
 
     def to_dict(self):
-        """Return the full OpenGraph dict."""
         return {
             "graph": {
-                "nodes": [
-                    {"id": nid, **ndata} for nid, ndata in self.nodes.items()
-                ],
+                "nodes": [{"id": nid, **ndata} for nid, ndata in self.nodes.items()],
                 "edges": self.edges,
             }
         }
 
     def to_json(self, indent=2):
-        """Return JSON string."""
         return json.dumps(self.to_dict(), indent=indent)
 
     def save(self):
-        """Write JSON to file."""
         if not self.nodes and not self.edges:
             nxc_logger.display("Nothing to add to OpenGraph file")
             return
 
-        base_log_dir = os.path.join(NXC_PATH, "logs")
-        filename_pattern = f"OpenGraph_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.json"
-        self.output_filename = os.path.join(base_log_dir, filename_pattern)
+        filename = f"OpenGraph_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.json"
+        fullpath = os.path.join(NXC_PATH, "logs", filename)
 
         try:
-            with open(self.output_filename, "w", encoding="utf-8") as f:
+            with open(fullpath, "w", encoding="utf-8") as f:
                 json.dump(self.to_dict(), f, indent=2)
-            nxc_logger.display(f"OpenGraph file successfully saved at {self.output_filename}")
+            nxc_logger.display(f"OpenGraph file successfully saved at {fullpath}")
         except Exception as e:
             nxc_logger.fail(f"Failed to save OpenGraph file: {e}")
 
 
-# Global instance usable anywhere
+# Global instance
 opengraph = OpenGraph()
