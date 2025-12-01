@@ -2,6 +2,7 @@ import logging
 from logging import LogRecord
 from logging.handlers import RotatingFileHandler
 import os.path
+import re
 import sys
 from nxc.console import nxc_console
 from nxc.paths import NXC_PATH
@@ -12,6 +13,17 @@ from rich.logging import RichHandler
 import functools
 import inspect
 import argparse
+
+# Error codes that indicate valid username (interesting failures)
+INTERESTING_ERRORS = {
+    "STATUS_PASSWORD_EXPIRED", "STATUS_PASSWORD_MUST_CHANGE",
+    "STATUS_ACCOUNT_DISABLED", "STATUS_ACCOUNT_EXPIRED",
+    "STATUS_ACCOUNT_LOCKED_OUT", "STATUS_ACCOUNT_RESTRICTION",
+    "STATUS_INVALID_LOGON_HOURS", "STATUS_INVALID_WORKSTATION",
+    "STATUS_LOGON_TYPE_NOT_GRANTED", "STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT",
+    "KDC_ERR_CLIENT_REVOKED", "KDC_ERR_KEY_EXPIRED",
+    "532", "533", "701", "775", "USER_ACCOUNT_LOCKED",
+}
 
 
 def parse_debug_args():
@@ -80,6 +92,10 @@ def no_debug(func):
 
 
 class NXCAdapter(logging.LoggerAdapter):
+    # Class-level variables shared across all instances for summary collection
+    summary_enabled = False
+    summary_results = []
+
     def __init__(self, extra=None, merge_extra=False):
         logging.basicConfig(
             format="%(message)s",
@@ -139,6 +155,7 @@ class NXCAdapter(logging.LoggerAdapter):
     @no_debug
     def success(self, msg, color="green", *args, **kwargs):
         """Prints some sort of success to the user"""
+        self._collect_auth_result(msg, success=True)
         msg, kwargs = self.format(f"{colored('[+]', color, attrs=['bold'])} {msg}", kwargs)
         text = Text.from_ansi(msg)
         nxc_console.print(text, *args, **kwargs)
@@ -155,10 +172,94 @@ class NXCAdapter(logging.LoggerAdapter):
     @no_debug
     def fail(self, msg, color="red", *args, **kwargs):
         """Prints a failure (may or may not be an error) - e.g. login creds didn't work"""
+        self._collect_auth_result(msg, success=False)
         msg, kwargs = self.format(f"{colored('[-]', color, attrs=['bold'])} {msg}", kwargs)
         text = Text.from_ansi(msg)
         nxc_console.print(text, *args, **kwargs)
         self.log_console_to_file(text, *args, **kwargs)
+
+    def _collect_auth_result(self, msg, success):
+        """Collect authentication results for summary display."""
+        if not NXCAdapter.summary_enabled or self.extra is None:
+            return
+        # Skip if not from a protocol context (no host info)
+        if "host" not in self.extra:
+            return
+        # Auth messages match pattern:
+        # 1. domain\user:cred or domain\user (space) - Windows protocols
+        # 2. user:cred - Non-domain protocols (SSH, FTP, VNC)
+        domain = ""
+        username = ""
+        # Try domain\user pattern first
+        domain_pattern = r"^([^\\]+)\\([^:\s]+)[:\s]"
+        match = re.match(domain_pattern, msg)
+        if match:
+            domain = match.group(1)
+            username = match.group(2)
+        else:
+            # Try user:cred pattern (no domain)
+            user_pattern = r"^([^:\s]+):"
+            match = re.match(user_pattern, msg)
+            if match:
+                username = match.group(1)
+            else:
+                return
+        # Check for admin marker
+        admin = "(Pwn3d!)" in msg or "(Admin!)" in msg
+        # Extract error code for failures
+        error = None
+        if not success:
+            for err in INTERESTING_ERRORS:
+                if err in msg:
+                    error = err
+                    break
+            # Also capture STATUS_LOGON_FAILURE and other common errors
+            status_match = re.search(r"(STATUS_\w+)", msg)
+            if status_match and error is None:
+                error = status_match.group(1)
+        self.summary_results.append({
+            "protocol": self.extra.get("protocol", "").upper(),
+            "host": self.extra.get("host", ""),
+            "port": self.extra.get("port", ""),
+            "hostname": self.extra.get("hostname", ""),
+            "domain": domain,
+            "username": username,
+            "success": success,
+            "admin": admin if success else False,
+            "error": error,
+        })
+
+    def display_summary(self):
+        """Display summary of authentication results."""
+        from nxc.config import pwned_label
+        from nxc.helpers.logger import highlight
+
+        if not self.summary_results:
+            return
+        results = self.summary_results
+        successes = [r for r in results if r.get("success")]
+        interesting = [r for r in results if not r.get("success") and r.get("error") in INTERESTING_ERRORS]
+        failed_count = len(results) - len(successes) - len(interesting)
+
+        print()  # Blank line before summary
+        self.display(f"Finished, {len(successes)} success, {len(interesting)} interesting, {failed_count} failed")
+
+        if successes:
+            self.success(f"Successful Authentications ({len(successes)}):")
+            for r in successes:
+                admin_flag = f" {highlight(f'({pwned_label})')}" if r.get("admin") else ""
+                domain_user = f"{r.get('domain', '')}\\{r.get('username', '')}"
+                if not r.get("domain"):
+                    domain_user = r.get("username", "")
+                self.success(f"  {r.get('protocol', ''):6} {r.get('host', '')}:{r.get('port', '')} {domain_user}{admin_flag}")
+
+        if interesting:
+            self.highlight(f"Interesting Failures ({len(interesting)}):")
+            for r in interesting:
+                domain_user = f"{r.get('domain', '')}\\{r.get('username', '')}"
+                if not r.get("domain"):
+                    domain_user = r.get("username", "")
+                self.highlight(f"  {r.get('protocol', ''):6} {r.get('host', '')}:{r.get('port', '')} {domain_user} - {r.get('error', 'Unknown')}")
 
     def log_console_to_file(self, text, *args, **kwargs):
         """Log the console output to a file

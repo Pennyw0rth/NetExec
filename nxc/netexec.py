@@ -11,7 +11,7 @@ from nxc.loaders.moduleloader import ModuleLoader
 from nxc.first_run import first_run_setup
 from nxc.paths import NXC_PATH, WORKSPACE_DIR
 from nxc.console import nxc_console
-from nxc.logger import nxc_logger
+from nxc.logger import nxc_logger, NXCAdapter
 from nxc.config import nxc_config, nxc_workspace, config_log
 from nxc.database import create_db_engine
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -207,11 +207,16 @@ def main():
     if args.jitter and len(targets) > 1:
         nxc_logger.highlight(highlight("[!] Jitter is only throttling authentications per target!", "red"))
 
+    if hasattr(args, "summary") and args.summary:
+        NXCAdapter.summary_enabled = True
+
     try:
         asyncio.run(start_run(protocol_object, args, db, targets))
     except KeyboardInterrupt:
         nxc_logger.debug("Got keyboard interrupt")
     finally:
+        if NXCAdapter.summary_enabled:
+            nxc_logger.display_summary()
         db_engine.dispose()
 
 
