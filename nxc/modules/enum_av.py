@@ -290,6 +290,24 @@ conf = {
             "pipes": [{"name": "nod_scriptmon_pipe", "processes": [""]}],
         },
         {
+            "name": "FortiClient",
+            "services": [
+                {"name": "FA_Scheduler", "description": "FortiClient Service Scheduler"},
+                {"name": "FCT_SecSvr", "description": "Forticlient Endpoint Protected Process Service"}
+            ],
+            "pipes": [
+                {"name": "FortiClient_DBLogDaemon", "processes": ["FCDBLog.exe"]},
+                {"name": "FC_*", "processes": ["FortiTray.exe"]}
+            ]
+        },
+        {
+            "name": "FortiEDR",
+            "services": [
+                {"name": "FortiEDR Collector Service", "description": "Host component of the Fortinet Endpoint Detection and Response Platform"}
+            ],
+            "pipes": []
+        },
+        {
             "name": "G DATA Security Client",
             "services": [
                 {"name": "AVKWCtl", "description": "Anti-virus Kit Window Control"},
@@ -307,6 +325,17 @@ conf = {
                 {"name": "STDispatch$Shavlik Protect", "description": "Ivanti Security Controls Agent Dispatcher"}
             ],
             "pipes": []
+        },
+        {
+            "name": "Kaseya Agent Endpoint",
+            "services": [
+                {"name": "KAENDKSAASC*", "description": "Virtual System Administrator Endpoint"},
+                {"name": "KAKSAASC*", "description": "Machine.Group ID:*"},
+            ],
+            "pipes": [
+                {"name": "kaseyaUserKSA*", "processes": ["KaUsrTsk.exe"]},
+                {"name": "kaseyaAgentKSA*", "processes": ["AgentMon.exe"]}
+            ]
         },
         {
             "name": "Kaspersky Security for Windows Server",
