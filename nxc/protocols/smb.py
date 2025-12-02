@@ -2310,8 +2310,8 @@ class smb(connection):
                 secret = " ".join(secret.split(" ")[:-1]) if " " in secret else secret
                 self.logger.highlight(secret)
 
-            # Filter out computer accounts for adding to db
-            if secret.find("$") == -1 and secret_type == NTDSHashes.SECRET_TYPE.NTDS:
+            # Filter out computer accounts, history hashes and kerberos keys for adding to db
+            if secret.find("$") == -1 and secret_type == NTDSHashes.SECRET_TYPE.NTDS and "_history" not in secret:
                 if secret.find("\\") != -1:
                     domain, clean_hash = secret.split("\\")
                 else:
