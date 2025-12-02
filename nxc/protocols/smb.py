@@ -2287,9 +2287,19 @@ class smb(connection):
         use_vss_method = False
         NTDSFileName = None
         host_id = self.db.get_hosts(filter_term=self.host)[0][0]
+        printed_kerb_keys_banner = False
 
         def add_hash(secret_type, secret, host_id):
-            add_hash.secrets += 1
+            nonlocal printed_kerb_keys_banner
+            if self.args.kerberos_keys and not printed_kerb_keys_banner and secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
+                self.logger.display("Kerberos keys:")
+                printed_kerb_keys_banner = True
+
+            # Count the type of secrets
+            if secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
+                add_hash.kerb_secrets += 1
+            else:
+                add_hash.nt_lm_secrets += 1
 
             # Log the secret based on args
             if self.args.enabled:
@@ -2321,7 +2331,8 @@ class smb(connection):
             else:
                 self.logger.debug("Dumped hash is a computer account, not adding to db")
 
-        add_hash.secrets = 0
+        add_hash.nt_lm_secrets = 0
+        add_hash.kerb_secrets = 0
         add_hash.added_to_db = 0
 
         if self.remote_ops:
@@ -2342,7 +2353,7 @@ class smb(connection):
             noLMHash=True,
             remoteOps=self.remote_ops,
             useVSSMethod=use_vss_method,
-            justNTLM=True,
+            justNTLM=not self.args.kerberos_keys,
             pwdLastSet=False,
             resumeSession=None,
             outputFileName=self.output_filename,
@@ -2355,7 +2366,7 @@ class smb(connection):
             self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
             NTDS.dump()
             ntds_outfile = f"{self.output_filename}.ntds"
-            self.logger.success(f"Dumped {highlight(add_hash.secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
+            self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
             self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
             self.logger.display(f"cat {ntds_outfile} | grep -iv disabled | cut -d ':' -f1")
             self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
