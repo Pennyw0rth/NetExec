@@ -627,28 +627,29 @@ class smb(connection):
             return self.create_smbv1_conn()
 
     def check_if_admin(self):
-        self.logger.debug(f"Checking if user is admin on {self.host}")
-        rpctransport = SMBTransport(self.conn.getRemoteHost(), 445, r"\svcctl", smb_connection=self.conn)
-        dce = rpctransport.get_dce_rpc()
-        try:
-            dce.connect()
-        except Exception:
-            self.admin_privs = False
-        else:
-            with contextlib.suppress(Exception):
-                dce.bind(scmr.MSRPC_UUID_SCMR)
+        if self.args.no_admin_check is None:
+            self.logger.debug(f"Checking if user is admin on {self.host}")
+            rpctransport = SMBTransport(self.conn.getRemoteHost(), 445, r"\svcctl", smb_connection=self.conn)
+            dce = rpctransport.get_dce_rpc()
             try:
-                # 0xF003F - SC_MANAGER_ALL_ACCESS
-                # http://msdn.microsoft.com/en-us/library/windows/desktop/ms685981(v=vs.85).aspx
-                scmrobj = scmr.hROpenSCManagerW(dce, f"{self.host}\x00", "ServicesActive\x00", 0xF003F)
-                scmr.hREnumServicesStatusW(dce, scmrobj["lpScHandle"])
-                self.logger.debug(f"User is admin on {self.host}!")
-                self.admin_privs = True
-            except scmr.DCERPCException:
+                dce.connect()
+            except Exception:
                 self.admin_privs = False
-            except Exception as e:
-                self.logger.fail(f"Error checking if user is admin on {self.host}: {e}")
-                self.admin_privs = False
+            else:
+                with contextlib.suppress(Exception):
+                    dce.bind(scmr.MSRPC_UUID_SCMR)
+                try:
+                    # 0xF003F - SC_MANAGER_ALL_ACCESS
+                    # http://msdn.microsoft.com/en-us/library/windows/desktop/ms685981(v=vs.85).aspx
+                    scmrobj = scmr.hROpenSCManagerW(dce, f"{self.host}\x00", "ServicesActive\x00", 0xF003F)
+                    scmr.hREnumServicesStatusW(dce, scmrobj["lpScHandle"])
+                    self.logger.debug(f"User is admin on {self.host}!")
+                    self.admin_privs = True
+                except scmr.DCERPCException:
+                    self.admin_privs = False
+                except Exception as e:
+                    self.logger.fail(f"Error checking if user is admin on {self.host}: {e}")
+                    self.admin_privs = False
 
     def gen_relay_list(self):
         if self.server_os.lower().find("windows") != -1 and self.signing is False:
