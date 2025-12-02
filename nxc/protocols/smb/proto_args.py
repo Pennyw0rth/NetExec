@@ -19,13 +19,13 @@ def proto_args(parser, parents):
     smb_parser.add_argument("--share", metavar="SHARE", default="C$", help="specify a share")
     smb_parser.add_argument("--smb-server-port", default="445", help="specify a server port for SMB", type=int)
     smb_parser.add_argument("--no-smbv1", action="store_true", help="Force to disable SMBv1 in connection")
+    smb_parser.add_argument("--no-admin-check", action="store_true", help="Avoid checking admin which queries the Service Control Manager")
     smb_parser.add_argument("--gen-relay-list", metavar="OUTPUT_FILE", help="outputs all hosts that don't require SMB signing to the specified file")
     smb_parser.add_argument("--smb-timeout", help="SMB connection timeout", type=int, default=2)
     smb_parser.add_argument("--laps", dest="laps", metavar="LAPS", type=str, help="LAPS authentification", nargs="?", const="administrator")
     smb_parser.add_argument("--generate-hosts-file", type=str, help="Generate a hosts file like from a range of IP")
     smb_parser.add_argument("--generate-krb5-file", type=str, help="Generate a krb5 file like from a range of IP")
     smb_parser.add_argument("--generate-tgt", type=str, help="Generate a tgt ticket")
-    smb_parser.add_argument("--no-admin-check", action="store_true", help="Avoid checking admin write by writting on admin$ which can trigger alerts")
     self_delegate_arg.make_required = [delegate_arg]
     generate_st.make_required = [delegate_arg]
     delegate_spn_arg.make_required = [delegate_arg]
