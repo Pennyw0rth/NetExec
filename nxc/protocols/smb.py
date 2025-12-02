@@ -2323,15 +2323,11 @@ class smb(connection):
         add_hash.secrets = 0
         add_hash.added_to_db = 0
 
-        NTDSHistory = False
-
         if self.remote_ops:
             try:
                 if self.args.ntds == "vss":
                     NTDSFileName = self.remote_ops.saveNTDS()
                     use_vss_method = True
-                # Set NTDSHistory based on self.args.history
-                NTDSHistory = bool(getattr(self.args, "history", False))
             except Exception as e:
                 self.logger.fail(e)
 
@@ -2341,7 +2337,7 @@ class smb(connection):
             NTDSFileName,
             self.bootkey,
             isRemote=True,
-            history=NTDSHistory,
+            history=self.args.history,
             noLMHash=True,
             remoteOps=self.remote_ops,
             useVSSMethod=use_vss_method,
