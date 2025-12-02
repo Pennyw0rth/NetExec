@@ -627,7 +627,7 @@ class smb(connection):
             return self.create_smbv1_conn()
 
     def check_if_admin(self):
-        if self.args.no_admin_check is None:
+        if not self.args.no_admin_check:
             self.logger.debug(f"Checking if user is admin on {self.host}")
             rpctransport = SMBTransport(self.conn.getRemoteHost(), 445, r"\svcctl", smb_connection=self.conn)
             dce = rpctransport.get_dce_rpc()
