@@ -2292,14 +2292,12 @@ class smb(connection):
             add_hash.secrets += 1
 
             # Log the secret based on args
-            if "history" in secret.lower():
-                self.logger.highlight(secret)
-            elif self.args.enabled:
+            if self.args.enabled:
                 if "Enabled" in secret:
                     secret = " ".join(secret.split(" ")[:-1])
                     self.logger.highlight(secret)
             else:
-                secret = " ".join(secret.split(" ")[:-1])
+                secret = " ".join(secret.split(" ")[:-1]) if " " in secret else secret
                 self.logger.highlight(secret)
 
             # Filter out computer accounts for adding to db
