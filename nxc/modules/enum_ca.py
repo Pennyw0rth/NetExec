@@ -32,7 +32,7 @@ class NXCModule:
         self.module_options = module_options
 
     def options(self, context, module_options):
-        pass
+        """No options available"""
 
     def on_login(self, context, connection):
         self.__username = connection.username
@@ -80,7 +80,8 @@ class NXCModule:
                RPC_PROXY_CONN_A1_0X6BA_ERR in error_text:
                 context.log.fail("This usually means the target does not allow "
                                  "to connect to its epmapper using RpcProxy.")
-                return
+            return
+
         for entry in entries:
             tmpUUID = str(entry["tower"]["Floors"][0])
 

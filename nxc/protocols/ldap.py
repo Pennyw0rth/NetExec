@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import os
+import socket
 from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
 from binascii import hexlify
 from datetime import datetime
@@ -45,7 +46,7 @@ from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.ntlm_parser import parse_challenge
-from nxc.paths import CONFIG_PATH, NXC_PATH
+from nxc.paths import CONFIG_PATH
 
 ldap_error_status = {
     "1": "STATUS_NOT_SUPPORTED",
@@ -148,7 +149,6 @@ class ldap(connection):
         self.targetDomain = ""
         self.remote_ops = None
         self.bootkey = None
-        self.output_filename = None
         self.smbv1 = None
         self.signing = False
         self.signing_required = None
@@ -157,6 +157,7 @@ class ldap(connection):
         self.no_ntlm = False
         self.sid_domain = ""
         self.scope = None
+        self.configuration_context = ""
 
         connection.__init__(self, args, db, host)
 
@@ -233,7 +234,7 @@ class ldap(connection):
         ldap_url = f"ldaps://{self.target}"
         try:
             ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-            ldap_connection._LDAPConnection__channel_binding_value = None
+            ldap_connection.channel_binding_value = None
             ldap_connection.login(user=" ", domain=self.domain)
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("data 80090346") >= 0:
@@ -242,9 +243,9 @@ class ldap(connection):
             # Login failed (wrong credentials). test if we get an error with an existing, but wrong CBT -> When supported
             elif str(e).find("data 52e") >= 0:
                 ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-                new_cbv = bytearray(ldap_connection._LDAPConnection__channel_binding_value)
+                new_cbv = bytearray(ldap_connection.channel_binding_value)
                 new_cbv[15] = (new_cbv[3] + 1) % 256
-                ldap_connection._LDAPConnection__channel_binding_value = bytes(new_cbv)
+                ldap_connection.channel_binding_value = bytes(new_cbv)
                 try:
                     ldap_connection.login(user=" ", domain=self.domain)
                 except ldap_impacket.LDAPSessionError as e:
@@ -268,11 +269,12 @@ class ldap(connection):
         try:
             resp = self.ldap_connection.search(
                 scope=ldapasn1_impacket.Scope("baseObject"),
-                attributes=["defaultNamingContext", "dnsHostName"],
+                attributes=["dnsHostName", "defaultNamingContext", "configurationNamingContext"],
                 sizeLimit=0,
             )
             resp_parsed = parse_result_attributes(resp)[0]
 
+            self.configuration_context = resp_parsed["configurationNamingContext"]
             target = resp_parsed["dnsHostName"]
             base_dn = resp_parsed["defaultNamingContext"]
             target_domain = sub(
@@ -332,15 +334,14 @@ class ldap(connection):
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
-        filename = f"{self.hostname}_{self.host}".replace(":", "-")
-        self.output_filename = os.path.expanduser(os.path.join(NXC_PATH, "logs", filename))
-
         try:
             self.db.add_host(
                 self.host,
                 self.hostname,
                 self.domain,
-                self.server_os
+                self.server_os,
+                self.signing_required,
+                self.cbt_status
             )
         except Exception as e:
             self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
@@ -819,18 +820,19 @@ class ldap(connection):
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
 
     def computers(self):
-        resp = self.search(f"(sAMAccountType={SAM_MACHINE_ACCOUNT})", ["name"], 0)
+        resp = self.search(f"(sAMAccountType={SAM_MACHINE_ACCOUNT})", ["sAMAccountName"])
         resp_parsed = parse_result_attributes(resp)
 
         if resp:
             self.logger.display(f"Total records returned: {len(resp_parsed)}")
             for item in resp_parsed:
-                self.logger.highlight(item["name"] + "$")
+                self.logger.highlight(item["sAMAccountName"])
 
     def dc_list(self):
         # bypass host resolver configuration via configure=False (default pulls from /etc/resolv.conf or registry on Windows)
         resolv = resolver.Resolver(configure=False)
-        resolv.nameservers = [self.args.dns_server] if self.args.dns_server else [self.host]
+        ns = self.args.dns_server or self.host
+        resolv.nameservers = [socket.gethostbyname(ns)]
         self.logger.debug(f"DNS Server option: {self.args.dns_server}, using DNS server: {resolv.nameservers}")
         resolv.timeout = self.args.dns_timeout
 
@@ -856,13 +858,15 @@ class ldap(connection):
                                 self.logger.highlight(f"{prefix}{name} NS = {colored(rdata.to_text(), host_info_colors[0])}")
                                 return
                     except resolver.NXDOMAIN:
-                        self.logger.fail(f"{prefix}{name} = Host not found (NXDOMAIN)")
+                        self.logger.fail(f"{prefix}{name} ({record_type}) = Host not found (NXDOMAIN)")
                     except resolver.Timeout:
-                        self.logger.fail(f"{prefix}{name} = Connection timed out")
+                        self.logger.fail(f"{prefix}{name} ({record_type}) = Connection timed out")
                     except resolver.NoAnswer:
-                        self.logger.fail(f"{prefix}{name} = DNS server did not respond")
+                        self.logger.fail(f"{prefix}{name} ({record_type}) = DNS server did not respond")
+                    except resolver.NoNameservers:
+                        self.logger.fail(f"{prefix}{name} ({record_type}) = No nameservers available")
                     except Exception as e:
-                        self.logger.fail(f"{prefix}{name} encountered an unexpected error: {e}")
+                        self.logger.fail(f"{prefix}{name} ({record_type}) encountered an unexpected error: {e}")
             except Exception as e:
                 self.logger.fail(f"Skipping item(dNSHostName) {prefix}{name}, error: {e}")
 
@@ -1037,8 +1041,27 @@ class ldap(connection):
                         f.write(line + "\n")
             return
 
-        # Building the search filter
-        searchFilter = "(&(servicePrincipalName=*)(!(objectCategory=computer)))"
+        if self.args.kerberoast_account:
+            target_accounts = []
+            for item in self.args.kerberoast_account:
+                if os.path.isfile(item):
+                    try:
+                        with open(item, encoding="utf-8") as f:
+                            target_accounts.extend(line.strip() for line in f if line.strip())
+                    except Exception as e:
+                        self.logger.fail(f"Failed to read file '{item}': {e}")
+                else:
+                    target_accounts.append(item.strip())
+
+            self.logger.info(f"Targeting specific accounts for kerberoasting: {', '.join(target_accounts)}")
+
+            # build search filter for specific users
+            user_filter = "".join([f"(sAMAccountName={username})" for username in target_accounts])
+            searchFilter = f"(&(servicePrincipalName=*)(|{user_filter}))"
+        else:
+            # default to all
+            searchFilter = "(&(servicePrincipalName=*)(!(objectCategory=computer)))"
+
         attributes = [
             "sAMAccountName",
             "userAccountControl",
@@ -1046,6 +1069,7 @@ class ldap(connection):
             "MemberOf",
             "pwdLastSet",
             "lastLogon",
+            "objectClass",
         ]
         resp = self.search(searchFilter, attributes, 0)
         resp_parsed = parse_result_attributes(resp)
@@ -1090,6 +1114,7 @@ class ldap(connection):
                             sessionKey,
                             user["sAMAccountName"],
                             downLevelLogonName,
+                            is_computer="computer" in user.get("objectClass", [])
                         )
 
                         pwdLastSet = "<never>" if str(user.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(user["pwdLastSet"]))))
@@ -1584,7 +1609,7 @@ class ldap(connection):
             self.logger.fail("Or if you installed with pipx:")
             self.logger.fail("pipx runpip netexec uninstall -y bloodhound")
             self.logger.fail("pipx inject netexec bloodhound-ce --force")
-            return False
+            return
 
         elif not use_bhce and is_ce:
             self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
@@ -1598,7 +1623,7 @@ class ldap(connection):
             self.logger.fail("Or if you installed with pipx:")
             self.logger.fail("pipx runpip netexec uninstall -y bloodhound-ce")
             self.logger.fail("pipx inject netexec bloodhound --force")
-            return False
+            return
 
         auth = ADAuthentication(
             username=self.username,
@@ -1619,11 +1644,15 @@ class ldap(connection):
         )
         collect = resolve_collection_methods("Default" if not self.args.collection else self.args.collection)
         if not collect:
-            return None
+            return
         self.logger.highlight("Resolved collection methods: " + ", ".join(list(collect)))
 
         self.logger.debug("Using DNS to retrieve domain information")
-        ad.dns_resolve(domain=self.domain)
+        try:
+            ad.dns_resolve(domain=self.domain)
+        except (resolver.LifetimeTimeout, resolver.NoNameservers):
+            self.logger.fail("Bloodhound-python failed to resolve domain information, try specifying the DNS server.")
+            return
 
         if self.args.kerberos:
             self.logger.highlight("Using kerberos auth without ccache, getting TGT")
@@ -1636,22 +1665,25 @@ class ldap(connection):
         bloodhound = BloodHound(ad, self.hostname, self.host, self.port)
         bloodhound.connect()
 
-        bloodhound.run(
-            collect=collect,
-            num_workers=10,
-            disable_pooling=False,
-            timestamp=timestamp,
-            fileNamePrefix=self.output_filename.split("/")[-1],
-            computerfile=None,
-            cachefile=None,
-            exclude_dcs=False,
-        )
+        try:
+            bloodhound.run(
+                collect=collect,
+                num_workers=10,
+                disable_pooling=False,
+                timestamp=timestamp,
+                fileNamePrefix=self.output_filename.split("/")[-1],
+                computerfile=None,
+                cachefile=None,
+                exclude_dcs=False,
+            )
+        except Exception as e:
+            self.logger.fail(f"BloodHound collection failed: {e.__class__.__name__} - {e}")
+            self.logger.debug(f"BloodHound collection failed: {e.__class__.__name__} - {e}", exc_info=True)
+            return
 
-        self.output_filename += f"_{timestamp}"
-
-        self.logger.highlight(f"Compressing output into {self.output_filename}bloodhound.zip")
+        self.logger.highlight(f"Compressing output into {self.output_filename}_bloodhound.zip")
         list_of_files = os.listdir(os.getcwd())
-        with ZipFile(self.output_filename + "bloodhound.zip", "w") as z:
+        with ZipFile(f"{self.output_filename}_bloodhound.zip", "w") as z:
             for each_file in list_of_files:
                 if each_file.startswith(self.output_filename.split("/")[-1]) and each_file.endswith("json"):
                     z.write(each_file)

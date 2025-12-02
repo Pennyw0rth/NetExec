@@ -1,12 +1,14 @@
-import time
 from impacket.dcerpc.v5 import transport, rrp
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.smbconnection import SessionError
 from nxc.helpers.misc import CATEGORY
+from impacket.nmb import NetBIOSError
 
 
 class NXCModule:
     # https://www.synacktiv.com/en/publications/ntlm-reflection-is-dead-long-live-ntlm-reflection-an-in-depth-analysis-of-cve-2025
+    # Modified by azoxlpf to handle BrokenPipe/transport errors gracefully
+    # Modified by Defte following the discovery of ctjf (https://github.com/Pennyw0rth/NetExec/issues/928) and the research done along side with @NeffIsBack and I
     name = "ntlm_reflection"
     description = "Attempt to check if the OS is vulnerable to CVE-2025-33073 (NTLM Reflection attack)"
     supported_protocols = ["smb"]
@@ -47,50 +49,36 @@ class NXCModule:
     def on_login(self, context, connection):
         self.context = context
         self.connection = connection
-        if not connection.conn.isSigningRequired():  # Not vulnerable if SMB signing is enabled
-            self.trigger_winreg(connection.conn, context)
-            rpc = transport.DCERPCTransportFactory(r"ncacn_np:445[\pipe\winreg]")
-            rpc.set_smb_connection(connection.conn)
-            if connection.kerberos:
-                rpc.set_kerberos(connection.kerberos, kdcHost=connection.kdcHost)
-            dce = rpc.get_dce_rpc()
-            if connection.kerberos:
-                dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-            try:
-                dce.connect()
-                dce.bind(rrp.MSRPC_UUID_RRP)
-                # Reading UBR from registry
-                hRootKey = rrp.hOpenLocalMachine(dce)["phKey"]
-                hKey = rrp.hBaseRegOpenKey(dce, hRootKey, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion")["phkResult"]
-                ubr = rrp.hBaseRegQueryValue(dce, hKey, "UBR")[1]
-                version_str = f"{connection.server_os_major}.{connection.server_os_minor}.{connection.server_os_build}.{ubr}" if ubr else None
-                dce.disconnect()
-                if not version_str:
-                    self.context.log.info("Could not determine OS version from registry")
-                    return
-                vuln = self.is_vulnerable(connection.server_os_major, connection.server_os_minor, connection.server_os_build, ubr)
-                if vuln:
-                    context.log.highlight(f"VULNERABLE to {self.name}! {connection.server_os} ({version_str})")
-            except SessionError as e:
-                if "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
-                    self.context.log.info(f"RemoteRegistry is probably deactivated: {e}")
-                else:
-                    self.context.log.debug(f"Unexpected error: {e}")
-
-    def trigger_winreg(self, connection, context):
-        # Original idea from https://twitter.com/splinter_code/status/1715876413474025704
-        # Basically triggers the RemoteRegistry to start without admin privs
-        tid = connection.connectTree("IPC$")
+        connection.trigger_winreg()
+        rpc = transport.DCERPCTransportFactory(r"ncacn_np:445[\pipe\winreg]")
+        rpc.set_smb_connection(connection.conn)
+        if connection.kerberos:
+            rpc.set_kerberos(connection.kerberos, kdcHost=connection.kdcHost)
+        dce = rpc.get_dce_rpc()
+        if connection.kerberos:
+            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
         try:
-            connection.openFile(
-                tid,
-                r"\winreg",
-                0x12019F,
-                creationOption=0x40,
-                fileAttributes=0x80,
-            )
+            dce.connect()
+            dce.bind(rrp.MSRPC_UUID_RRP)
+            # Reading UBR from registry
+            hRootKey = rrp.hOpenLocalMachine(dce)["phKey"]
+            hKey = rrp.hBaseRegOpenKey(dce, hRootKey, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion")["phkResult"]
+            ubr = rrp.hBaseRegQueryValue(dce, hKey, "UBR")[1]
+            version_str = f"{connection.server_os_major}.{connection.server_os_minor}.{connection.server_os_build}.{ubr}" if ubr else None
+            dce.disconnect()
+            if not version_str:
+                self.context.log.info("Could not determine OS version from registry")
+                return
+            vuln = self.is_vulnerable(connection.server_os_major, connection.server_os_minor, connection.server_os_build, ubr)
+            if vuln:
+                if not connection.conn.isSigningRequired():  # Not vulnerable if SMB signing is enabled
+                    context.log.highlight(f"VULNERABLE (can relay SMB to any protocol on {self.context.log.extra['host']})")
+                else:
+                    context.log.highlight(f"VULNERABLE (can relay SMB to other protocols except SMB on {self.context.log.extra['host']})")
         except SessionError as e:
-            # STATUS_PIPE_NOT_AVAILABLE error is expected
-            context.log.debug(str(e))
-        # Give remote registry time to start
-        time.sleep(1)
+            if "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
+                self.context.log.info(f"RemoteRegistry is probably deactivated: {e}")
+            else:
+                self.context.log.debug(f"Unexpected error: {e}")
+        except (BrokenPipeError, ConnectionResetError, NetBIOSError, OSError) as e:
+            context.log.debug(f"ntlm_reflection: DCERPC transport error: {e.__class__.__name__}: {e}")

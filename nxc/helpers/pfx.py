@@ -129,8 +129,8 @@ class myPKINIT(PKINIT):
     def setup(self, dh_params=None):
         self.issuer = self.certificate.issuer.native["common_name"]
         if dh_params is None:
-            print("Generating DH params...")
-            print("DH params generated.")
+            nxc_logger.display("Generating DH params...")
+            nxc_logger.display("DH params generated.")
         else:
             if isinstance(dh_params, dict):
                 self.diffie = DirtyDH.from_dict(dh_params)
@@ -488,8 +488,8 @@ def pfx_auth(self):
         return None
 
     username = self.args.username[0]
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S").replace(":", "-")
-    log_ccache = os.path.normpath(os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}_{timestamp}-{username}.ccache"))
+    basename = f"{self.hostname}_{self.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}-{username}.ccache"
+    log_ccache = os.path.normpath(os.path.expanduser(f"{NXC_PATH}/logs/{basename}"))
 
     # Request a TGT with the cert data
     req = ini.build_asreq(self.domain, username)

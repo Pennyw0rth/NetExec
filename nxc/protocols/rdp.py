@@ -54,7 +54,6 @@ class rdp(connection):
         self.iosettings.video_bpp_max = 32
         # PIL produces incorrect picture for some reason?! TODO: check bug
         self.iosettings.video_out_format = VIDEO_FORMAT.PNG  #
-        self.output_filename = None
         self.domain = None
         self.server_os = None
         self.url = None
@@ -140,7 +139,6 @@ class rdp(connection):
                         self.hostname = info_domain["computername"]
                         self.server_os = info_domain["os_guess"] + " Build " + str(info_domain["os_build"])
                         self.logger.extra["hostname"] = self.hostname
-                        self.output_filename = os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
                     break
 
         if self.args.domain:
@@ -450,11 +448,9 @@ class rdp(connection):
                         self.logger.fail("Warning: Clipboard may not be fully initialized, no output can be retrieved")
                         return ""
 
-            if not clipboard_ready and get_output:
-                self.logger.fail("Clipboard cannot be initialized, no output can be retrieved")
-                return ""
-            else:
-                self.logger.success("Clipboard is ready, proceeding with command execution")
+                if not clipboard_ready:
+                    self.logger.fail("Clipboard cannot be initialized, no output can be retrieved")
+                    return ""
 
             # Wait for desktop to be available
             await asyncio.sleep(self.args.cmd_delay)
@@ -496,6 +492,8 @@ class rdp(connection):
                     else:
                         self.logger.fail("Clipboard is empty or contains non-text data")
                     return clipboard_text
+                else:
+                    self.logger.success("Executed command without retrieving output")
 
                 self.logger.debug("Command execution completed")
                 return None

@@ -3,6 +3,8 @@ from nxc.protocols.smb.remotefile import RemoteFile
 from impacket import nt_errors
 from impacket.smb3structs import FILE_READ_DATA
 from impacket.smbconnection import SessionError
+from impacket.nmb import NetBIOSError
+import contextlib
 
 
 class NXCModule:
@@ -11,6 +13,7 @@ class NXCModule:
     DAV RPC Service pipe. This technique was first suggested by Lee Christensen (@tifkin_)
 
     Module by Tobias Neitzel (@qtc_de)
+    Modified by @azoxlpf to handle transport errors gracefully and avoid session crash
     """
 
     name = "webdav"
@@ -32,16 +35,18 @@ class NXCModule:
         """
         try:
             remote_file = RemoteFile(connection.conn, "DAV RPC Service", "IPC$", access=FILE_READ_DATA)
-
             remote_file.open_file()
-            remote_file.close()
 
             context.log.highlight(self.output.format(connection.conn.getRemoteHost()))
-
         except SessionError as e:
             if e.getErrorCode() == nt_errors.STATUS_OBJECT_NAME_NOT_FOUND:
-                pass
+                return
             elif e.getErrorCode() in nt_errors.ERROR_MESSAGES:
                 context.log.fail(f"Error enumerating WebDAV: {e.getErrorString()[0]}", color="magenta")
             else:
-                raise e
+                context.log.debug(f"WebDAV SessionError (code={hex(e.getErrorCode())})")
+        except (BrokenPipeError, ConnectionResetError, NetBIOSError, OSError) as e:
+            context.log.debug(f"WebDAV check aborted due to transport error: {e.__class__.__name__}: {e}")
+        finally:
+            with contextlib.suppress(Exception):
+                remote_file.close()

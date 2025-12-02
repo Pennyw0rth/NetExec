@@ -74,8 +74,8 @@ class TSCH_EXEC:
         self.__outputBuffer = data
 
     def get_end_boundary(self):
-        # Get current date and time + 5 minutes
-        end_boundary = datetime.now() + timedelta(minutes=5)
+        # Get current date and time + 1 day
+        end_boundary = datetime.now() + timedelta(days=1)
 
         # Format it to match the format in the XML: "YYYY-MM-DDTHH:MM:SS.ssssss"
         return end_boundary.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
@@ -116,7 +116,7 @@ class TSCH_EXEC:
             "C:\\Windows\\System32\\cmd.exe",
             "C:\\Windows\\System32\\..\\System32\\cmd",
             "C:\\Windows\\System32\\..\\System32\\cmd.exe",
-            "C:\\Windows\\..\\Windows\\System32\\cmd"
+            "C:\\Windows\\..\\Windows\\System32\\cmd",
             "C:\\Windows\\..\\Windows\\System32\\cmd.exe",
         ]
         cmd_path = random.choice(random_cmd_path)
@@ -196,14 +196,17 @@ class TSCH_EXEC:
                 self.logger.fail(str(e))
             return
 
-        done = False
-        while not done:
-            self.logger.debug(f"Calling SchRpcGetLastRunInfo for \\{self.task_name}")
-            resp = tsch.hSchRpcGetLastRunInfo(dce, f"\\{self.task_name}")
-            if resp["pLastRuntime"]["wYear"] != 0:
-                done = True
-            else:
-                sleep(2)
+        try:
+            done = False
+            while not done:
+                self.logger.debug(f"Calling SchRpcGetLastRunInfo for \\{self.task_name}")
+                resp = tsch.hSchRpcGetLastRunInfo(dce, f"\\{self.task_name}")
+                if resp["pLastRuntime"]["wYear"] != 0:
+                    done = True
+                else:
+                    sleep(2)
+        except tsch.DCERPCSessionError as e:
+            self.logger.fail(f"Error retrieving task last run info: {e}")
 
         self.logger.info(f"Deleting task \\{self.task_name}")
         tsch.hSchRpcDelete(dce, f"\\{self.task_name}")
