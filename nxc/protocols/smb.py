@@ -2288,18 +2288,21 @@ class smb(connection):
         NTDSFileName = None
         host_id = self.db.get_hosts(filter_term=self.host)[0][0]
 
-        def add_hash(secret, host_id):
+        def add_hash(secret_type, secret, host_id):
             add_hash.secrets += 1
+
+            # Log the secret based on args
             if "history" in secret.lower():
                 self.logger.highlight(secret)
-            else:
-                if self.args.enabled:
-                    if "Enabled" in secret:
-                        secret = " ".join(secret.split(" ")[:-1])
-                        self.logger.highlight(secret)
-                else:
+            elif self.args.enabled:
+                if "Enabled" in secret:
                     secret = " ".join(secret.split(" ")[:-1])
                     self.logger.highlight(secret)
+            else:
+                secret = " ".join(secret.split(" ")[:-1])
+                self.logger.highlight(secret)
+
+            # Filter out computer accounts for adding to db
             if secret.find("$") == -1:
                 if secret.find("\\") != -1:
                     domain, clean_hash = secret.split("\\")
@@ -2347,7 +2350,7 @@ class smb(connection):
             outputFileName=self.output_filename,
             justUser=self.args.userntds if self.args.userntds else None,
             printUserStatus=True,
-            perSecretCallback=lambda secret_type, secret: add_hash(secret, host_id),
+            perSecretCallback=lambda secret_type, secret: add_hash(secret_type, secret, host_id),
         )
 
         try:
