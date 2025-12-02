@@ -2311,7 +2311,7 @@ class smb(connection):
                 self.logger.highlight(secret)
 
             # Filter out computer accounts for adding to db
-            if secret.find("$") == -1:
+            if secret.find("$") == -1 and secret_type == NTDSHashes.SECRET_TYPE.NTDS:
                 if secret.find("\\") != -1:
                     domain, clean_hash = secret.split("\\")
                 else:
@@ -2367,8 +2367,9 @@ class smb(connection):
             NTDS.dump()
             ntds_outfile = f"{self.output_filename}.ntds"
             self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
+            if self.args.kerberos_keys:
+                self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
             self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
-            self.logger.display(f"cat {ntds_outfile} | grep -iv disabled | cut -d ':' -f1")
             self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
         except Exception as e:
             # if str(e).find('ERROR_DS_DRA_BAD_DN') >= 0:
