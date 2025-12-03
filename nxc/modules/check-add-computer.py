@@ -1,7 +1,6 @@
 import ssl
 from io import BytesIO
 import ldap3
-from impacket.smbconnection import SMBConnection
 from nxc.helpers.misc import CATEGORY
 from nxc.protocols.smb.samrfunc import LSAQuery
 
@@ -23,7 +22,6 @@ class NXCModule:
         Displays which users/groups can add workstations to the domain.
         Usage: nxc smb $DC-IP -u 'username' -p 'password' -M check-add-computer
         """
-        pass
 
     def on_login(self, context, connection):
         self.context = context
@@ -114,7 +112,7 @@ class NXCModule:
         try:
             shares = self.connection.conn.listShares()
             for share in shares:
-                if share['shi1_netname'].rstrip('\x00').upper() == 'SYSVOL':
+                if share["shi1_netname"].rstrip("\x00").upper() == "SYSVOL":
                     return True
             return False
         except Exception as e:
@@ -123,7 +121,7 @@ class NXCModule:
 
     def get_policy_file(self, policy_path):
         """Retrieve GptTmpl.inf content from given path"""
-        self.context.log.info(f"Reading policy file...")
+        self.context.log.info("Reading policy file...")
         self.context.log.debug(f"Policy path: {policy_path}")
 
         try:
@@ -140,9 +138,9 @@ class NXCModule:
             self.context.log.debug(f"Read {len(content)} bytes from policy file")
 
             # Try different encodings
-            for encoding in ['utf-16-le', 'utf-16', 'latin-1', 'utf-8']:
+            for encoding in ["utf-16-le", "utf-16", "latin-1", "utf-8"]:
                 try:
-                    decoded = content.decode(encoding, errors='ignore')
+                    decoded = content.decode(encoding, errors="ignore")
                     if decoded and len(decoded) > 0:
                         self.context.log.debug(f"Successfully decoded with {encoding}")
                         return decoded
@@ -154,7 +152,7 @@ class NXCModule:
 
         except Exception as e:
             self.context.log.fail(f"Error reading policy file: {e}")
-            self.context.log.debug(f"Full error details: {type(e).__name__}: {str(e)}")
+            self.context.log.debug(f"Full error details: {type(e).__name__}: {e!s}")
             return None
 
     def parse_machine_account_privilege(self, content):
@@ -165,7 +163,7 @@ class NXCModule:
         in_privilege_section = False
         machine_account_line = None
 
-        for line in content.split('\n'):
+        for line in content.split("\n"):
             line = line.strip()
 
             if line.upper() == "[PRIVILEGE RIGHTS]":
@@ -174,11 +172,11 @@ class NXCModule:
 
             if in_privilege_section:
                 # Check if we've moved to another section
-                if line.startswith('['):
+                if line.startswith("["):
                     break
 
                 # Look for SeMachineAccountPrivilege
-                if line.startswith('SeMachineAccountPrivilege'):
+                if line.startswith("SeMachineAccountPrivilege"):
                     machine_account_line = line
                     break
 
@@ -203,7 +201,7 @@ class NXCModule:
             return
 
         # Parse the line: SeMachineAccountPrivilege = *S-1-5-32-544,*S-1-5-21-...-512
-        parts = machine_account_line.split('=', 1)
+        parts = machine_account_line.split("=", 1)
         if len(parts) != 2:
             self.context.log.fail("Could not parse SeMachineAccountPrivilege line")
             return
@@ -215,7 +213,7 @@ class NXCModule:
             return
 
         # Split by comma and process each SID
-        sid_list = [s.strip().lstrip('*') for s in sids.split(',') if s.strip()]
+        sid_list = [s.strip().lstrip("*") for s in sids.split(",") if s.strip()]
 
         if not sid_list:
             self.context.log.info("No SIDs found in policy")
@@ -228,7 +226,7 @@ class NXCModule:
         self.context.log.highlight("Users/Groups that can add computers to the domain:")
         self.context.log.highlight("=" * 60)
 
-        for sid, name in zip(sid_list, resolved_names):
+        for sid, name in zip(sid_list, resolved_names, strict=False):
             if name and name != "":
                 self.context.log.highlight(f"  - {name} ({sid})")
             else:
