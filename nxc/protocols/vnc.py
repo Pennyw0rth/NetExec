@@ -44,7 +44,7 @@ class vnc(connection):
 
     def print_host_info(self):
         noauth = colored(f" (No Auth:{self.noauth})", host_info_colors[2], attrs=["bold"]) if self.noauth else ""
-        self.logger.display(f"RFB {self.RFBversion}{'' if self.RFBversion == 3.8 else ' (Not supported)'}{noauth}")
+        self.logger.display(f"RFB {self.RFBversion}{noauth}")
 
     def probe_rfb(self):
         # Attempt an RFB handshake
@@ -117,34 +117,31 @@ class vnc(connection):
         return True
 
     def plaintext_login(self, username, password):
-        if 2 in self.stype and self.RFBversion == 3.8:  # Only try plaintext for RFB 3.8 with sec type 2 (password)
-            try:
-                stype = asyauthSecret.PASS
-                if password == "":
-                    stype = asyauthSecret.NONE
-                self.credential = UniCredential(secret=password, protocol=asyauthProtocol.PLAIN, stype=stype)
-                self.conn = VNCConnection(
-                    target=self.target,
-                    credentials=self.credential,
-                    iosettings=self.iosettings,
-                )
-                asyncio.run(self.connect_vnc())
+        try:
+            stype = asyauthSecret.PASS
+            if password == "":
+                stype = asyauthSecret.NONE
+            self.credential = UniCredential(secret=password, protocol=asyauthProtocol.PLAIN, stype=stype)
+            self.conn = VNCConnection(
+                target=self.target,
+                credentials=self.credential,
+                iosettings=self.iosettings,
+            )
+            asyncio.run(self.connect_vnc())
 
-                self.admin_privs = True
-                self.logger.success(
-                    "{} {}".format(
-                        password,
-                        highlight(f"({self.config.get('nxc', 'pwn3d_label')})" if self.admin_privs else ""),
-                    )
+            self.admin_privs = True
+            self.logger.success(
+                "{} {}".format(
+                    password,
+                    highlight(f"({self.config.get('nxc', 'pwn3d_label')})" if self.admin_privs else ""),
                 )
-                return True
+            )
+            return True
 
-            except Exception as e:
-                self.logger.debug(str(e))
-                self.logger.fail(f"{password} {'Authentication failed'}")
-                return False
-        else:
-            self.logger.debug("VNC server doesn't use RFB 3.8 and/or does not support password authentication")
+        except Exception as e:
+            self.logger.debug(str(e))
+            self.logger.fail(f"{password} {'Authentication failed'}")
+            return False
 
     async def screen(self):
         self.conn = VNCConnection(target=self.target, credentials=self.credential, iosettings=self.iosettings)
