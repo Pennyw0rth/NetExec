@@ -1,6 +1,4 @@
-import ssl
 from io import BytesIO
-import ldap3
 from nxc.helpers.misc import CATEGORY
 from nxc.protocols.smb.samrfunc import LSAQuery
 
@@ -18,7 +16,7 @@ class NXCModule:
 
     def options(self, context, module_options):
         """
-        Check the SeMachineAccountPrivilege in the Default Domain Controllers Policy and MachineAccountQuota via LDAP.
+        Check the SeMachineAccountPrivilege in the Default Domain Controllers Policy.
         Displays which users/groups can add workstations to the domain.
         Usage: nxc smb $DC-IP -u 'username' -p 'password' -M check-add-computer
         """
@@ -67,7 +65,9 @@ class NXCModule:
             buf = BytesIO()
             connection.conn.getFile("SYSVOL", dc_policy_path, buf.write)
             if buf.getvalue():
+                self.context.log.highlight("")
                 self.context.log.highlight("Found Default Domain Controllers Policy via static path")
+                self.context.log.highlight("(don't forget to check MAQ : nxc ldap <...> -M MAQ)")
             else:
                 dc_policy_path = None
         except Exception as e:
@@ -185,18 +185,6 @@ class NXCModule:
             self.context.log.highlight("=" * 60)
             self.context.log.highlight("Default configuration applies:")
             self.context.log.highlight("  - Authenticated Users can join computers to the domain")
-            self.context.log.highlight("")
-
-            # Query MachineAccountQuota
-            maq_value = self.get_machine_account_quota()
-            if maq_value is not None:
-                if maq_value == 0:
-                    self.context.log.highlight(f"ms-DS-MachineAccountQuota: {maq_value} (You cannot add any machines)")
-                else:
-                    self.context.log.highlight(f"ms-DS-MachineAccountQuota: {maq_value} ")
-            else:
-                self.context.log.info("Default: ms-DS-MachineAccountQuota (default: 10 machines per user)")
-
             self.context.log.highlight("=" * 60)
             return
 
@@ -249,69 +237,3 @@ class NXCModule:
             # Fallback to returning UNKNOWN for all SIDs
             return [""] * len(sid_list)
 
-    def get_machine_account_quota(self):
-        """Query ms-DS-MachineAccountQuota via LDAP"""
-        try:
-            # Build LDAP domain DN
-            ldap_domain = f"dc={self.connection.targetDomain.replace('.', ',dc=')}"
-
-            self.context.log.debug(f"Querying MachineAccountQuota via LDAP on {self.connection.host}")
-
-            # Connect to LDAP (try LDAPS first, fallback to LDAP)
-            ldap_server = None
-            ldap_conn = None
-
-            # Try LDAPS (port 636)
-            try:
-                tls = ldap3.Tls(validate=ssl.CERT_NONE, version=ssl.PROTOCOL_TLSv1_2, ciphers="ALL:@SECLEVEL=0")
-                ldap_server = ldap3.Server(self.connection.host, use_ssl=True, port=636, get_info=ldap3.ALL, tls=tls)
-                ldap_conn = ldap3.Connection(
-                    ldap_server,
-                    user=f"{self.connection.username}@{self.connection.domain}",
-                    password=self.connection.password
-                )
-                if not ldap_conn.bind():
-                    ldap_conn = None
-                else:
-                    self.context.log.debug("Connected via LDAPS")
-            except Exception as e:
-                self.context.log.debug(f"LDAPS connection failed: {e}")
-
-            # Fallback to LDAP (port 389)
-            if not ldap_conn:
-                try:
-                    ldap_server = ldap3.Server(self.connection.host, port=389, get_info=ldap3.ALL)
-                    ldap_conn = ldap3.Connection(
-                        ldap_server,
-                        user=f"{self.connection.username}@{self.connection.domain}",
-                        password=self.connection.password
-                    )
-                    if not ldap_conn.bind():
-                        self.context.log.debug("LDAP connection failed")
-                        return None
-                    else:
-                        self.context.log.debug("Connected via LDAP")
-                except Exception as e:
-                    self.context.log.debug(f"LDAP connection failed: {e}")
-                    return None
-
-            # Search for ms-DS-MachineAccountQuota
-            ldap_conn.search(
-                search_base=ldap_domain,
-                search_filter="(objectClass=*)",
-                search_scope=ldap3.BASE,
-                attributes=["ms-DS-MachineAccountQuota"]
-            )
-
-            if ldap_conn.entries:
-                maq = ldap_conn.entries[0]["ms-DS-MachineAccountQuota"].value
-                self.context.log.debug(f"MachineAccountQuota retrieved: {maq}")
-                ldap_conn.unbind()
-                return int(maq) if maq is not None else None
-
-            ldap_conn.unbind()
-            return None
-
-        except Exception as e:
-            self.context.log.debug(f"Error querying MachineAccountQuota: {e}")
-            return None
