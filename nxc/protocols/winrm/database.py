@@ -83,7 +83,6 @@ class database(BaseDB):
         Check if this host has already been added to the database, if not, add it in.
         TODO: return inserted or updated row ids as a list
         """
-        domain = domain.split(".")[0].upper()
         hosts = []
 
         q = select(self.HostsTable).filter(self.HostsTable.c.ip == ip)
