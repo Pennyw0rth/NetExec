@@ -85,8 +85,6 @@ class vnc(connection):
                 self.logger.debug(f"Security types: {stypes}")
                 return stypes
 
-        return None
-
     def enum_host_info(self):
         self.stype = self.probe_rfb()
         if self.stype is None:
@@ -140,7 +138,7 @@ class vnc(connection):
 
         except Exception as e:
             self.logger.debug(str(e))
-            self.logger.fail(f"{password} {'Authentication failed'}")
+            self.logger.fail(f"{password} - Authentication failed")
             return False
 
     async def screen(self):
