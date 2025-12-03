@@ -1,4 +1,4 @@
-from argparse import _StoreTrueAction
+from argparse import _StoreTrueAction, _StoreAction
 from nxc.helpers.args import DisplayDefaultsNotNone, DefaultTrackingAction, get_conditional_action
 
 
@@ -7,6 +7,8 @@ def proto_args(parser, parents):
     smb_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
 
     delegate_arg = smb_parser.add_argument("--delegate", action="store", help="Impersonate user with S4U2Self + S4U2Proxy")
+    delegate_spn_arg = smb_parser.add_argument("--delegate-spn", action=get_conditional_action(_StoreAction), make_required=[], help="SPN to use for S4U2Proxy, if not specified the SPN used will be cifs/<target>", type=str)
+    generate_st = smb_parser.add_argument("--generate-st", type=str, dest="generate_st", action=get_conditional_action(_StoreAction), make_required=[], help="Store the S4U Service Ticket in the specified file")
     self_delegate_arg = smb_parser.add_argument("--self", dest="no_s4u2proxy", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Only do S4U2Self, no S4U2Proxy (use with delegate)")
 
     dgroup = smb_parser.add_mutually_exclusive_group()
@@ -17,6 +19,7 @@ def proto_args(parser, parents):
     smb_parser.add_argument("--share", metavar="SHARE", default="C$", help="specify a share")
     smb_parser.add_argument("--smb-server-port", default="445", help="specify a server port for SMB", type=int)
     smb_parser.add_argument("--no-smbv1", action="store_true", help="Force to disable SMBv1 in connection")
+    smb_parser.add_argument("--no-admin-check", action="store_true", help="Avoid checking admin which queries the Service Control Manager")
     smb_parser.add_argument("--gen-relay-list", metavar="OUTPUT_FILE", help="outputs all hosts that don't require SMB signing to the specified file")
     smb_parser.add_argument("--smb-timeout", help="SMB connection timeout", type=int, default=2)
     smb_parser.add_argument("--laps", dest="laps", metavar="LAPS", type=str, help="LAPS authentification", nargs="?", const="administrator")
@@ -24,8 +27,10 @@ def proto_args(parser, parents):
     smb_parser.add_argument("--generate-krb5-file", type=str, help="Generate a krb5 file like from a range of IP")
     smb_parser.add_argument("--generate-tgt", type=str, help="Generate a tgt ticket")
     self_delegate_arg.make_required = [delegate_arg]
+    generate_st.make_required = [delegate_arg]
+    delegate_spn_arg.make_required = [delegate_arg]
 
-    cred_gathering_group = smb_parser.add_argument_group("Credential Gathering", "Options for gathering credentials")
+    cred_gathering_group = smb_parser.add_argument_group("Credential Gathering")
     cred_gathering_group.add_argument("--sam", choices={"regdump", "secdump"}, nargs="?", const="regdump", help="dump SAM hashes from target systems")
     cred_gathering_group.add_argument("--lsa", choices={"regdump", "secdump"}, nargs="?", const="regdump", help="dump LSA secrets from target systems")
     cred_gathering_group.add_argument("--ntds", choices={"vss", "drsuapi"}, nargs="?", const="drsuapi", help="dump the NTDS.dit from target DCs using the specifed method")
@@ -36,7 +41,7 @@ def proto_args(parser, parents):
     cred_gathering_group.add_argument("--enabled", action="store_true", help="Only dump enabled targets from DC")
     cred_gathering_group.add_argument("--user", dest="userntds", type=str, help="Dump selected user from DC")
 
-    mapping_enum_group = smb_parser.add_argument_group("Mapping/Enumeration", "Options for Mapping/Enumerating")
+    mapping_enum_group = smb_parser.add_argument_group("Mapping/Enumeration")
     mapping_enum_group.add_argument("--shares", type=str, nargs="?", const="", help="Enumerate shares and access, filter on specified argument (read ; write ; read,write)")
     mapping_enum_group.add_argument("--dir", nargs="?", type=str, const="", help="List the content of a path (default path: '%(const)s')")
     mapping_enum_group.add_argument("--interfaces", action="store_true", help="Enumerate network interfaces")
@@ -58,11 +63,11 @@ def proto_args(parser, parents):
     mapping_enum_group.add_argument("--tasklist", type=str, nargs="?", const=True, help="Enumerate running processes and filter for the specified one if specified")
     mapping_enum_group.add_argument("--taskkill", type=str, help="Kills a specific PID or a proces name's PID's")
 
-    wmi_group = smb_parser.add_argument_group("WMI", "Options for WMI Queries")
+    wmi_group = smb_parser.add_argument_group("WMI Queries")
     wmi_group.add_argument("--wmi", metavar="QUERY", type=str, help="issues the specified WMI query")
     wmi_group.add_argument("--wmi-namespace", metavar="NAMESPACE", default="root\\cimv2", help="WMI Namespace")
 
-    spidering_group = smb_parser.add_argument_group("Spidering", "Options for spidering shares")
+    spidering_group = smb_parser.add_argument_group("Spidering Shares")
     spidering_group.add_argument("--spider", metavar="SHARE", type=str, help="share to spider")
     spidering_group.add_argument("--spider-folder", metavar="FOLDER", default=".", type=str, help="folder to spider")
     spidering_group.add_argument("--content", action="store_true", help="enable file content searching")
@@ -74,12 +79,12 @@ def proto_args(parser, parents):
     segroup.add_argument("--pattern", nargs="+", help="pattern(s) to search for in folders, filenames and file content")
     segroup.add_argument("--regex", nargs="+", help="regex(s) to search for in folders, filenames and file content")
 
-    files_group = smb_parser.add_argument_group("Files", "Options for remote file interaction")
+    files_group = smb_parser.add_argument_group("File Operations")
     files_group.add_argument("--put-file", action="append", nargs=2, metavar="FILE", help="Put a local file into remote target, ex: whoami.txt \\\\Windows\\\\Temp\\\\whoami.txt")
     files_group.add_argument("--get-file", action="append", nargs=2, metavar="FILE", help="Get a remote file, ex: \\\\Windows\\\\Temp\\\\whoami.txt whoami.txt")
     files_group.add_argument("--append-host", action="store_true", help="append the host to the get-file filename")
 
-    cmd_exec_group = smb_parser.add_argument_group("Command Execution", "Options for executing commands")
+    cmd_exec_group = smb_parser.add_argument_group("Command Execution")
     cmd_exec_group.add_argument("--exec-method", choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default="wmiexec", help="method to execute the command. Ignored if in MSSQL mode", action=DefaultTrackingAction)
     cmd_exec_group.add_argument("--dcom-timeout", help="DCOM connection timeout", type=int, default=5)
     cmd_exec_group.add_argument("--get-output-tries", help="Number of times atexec/smbexec/mmcexec tries to get results", type=int, default=10)
@@ -90,7 +95,7 @@ def proto_args(parser, parents):
     cmd_exec_method_group.add_argument("-x", metavar="COMMAND", dest="execute", help="execute the specified CMD command")
     cmd_exec_method_group.add_argument("-X", metavar="PS_COMMAND", dest="ps_execute", help="execute the specified PowerShell command")
 
-    posh_group = smb_parser.add_argument_group("Powershell Obfuscation", "Options for PowerShell script obfuscation")
+    posh_group = smb_parser.add_argument_group("Powershell Script Obfuscation")
     posh_group.add_argument("--obfs", action="store_true", help="Obfuscate PowerShell scripts")
     posh_group.add_argument("--amsi-bypass", nargs=1, metavar="FILE", help="File with a custom AMSI bypass")
     posh_group.add_argument("--clear-obfscripts", action="store_true", help="Clear all cached obfuscated PowerShell scripts")

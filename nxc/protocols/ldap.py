@@ -157,6 +157,7 @@ class ldap(connection):
         self.no_ntlm = False
         self.sid_domain = ""
         self.scope = None
+        self.configuration_context = ""
 
         connection.__init__(self, args, db, host)
 
@@ -233,7 +234,7 @@ class ldap(connection):
         ldap_url = f"ldaps://{self.target}"
         try:
             ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-            ldap_connection._LDAPConnection__channel_binding_value = None
+            ldap_connection.channel_binding_value = None
             ldap_connection.login(user=" ", domain=self.domain)
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("data 80090346") >= 0:
@@ -242,9 +243,9 @@ class ldap(connection):
             # Login failed (wrong credentials). test if we get an error with an existing, but wrong CBT -> When supported
             elif str(e).find("data 52e") >= 0:
                 ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-                new_cbv = bytearray(ldap_connection._LDAPConnection__channel_binding_value)
+                new_cbv = bytearray(ldap_connection.channel_binding_value)
                 new_cbv[15] = (new_cbv[3] + 1) % 256
-                ldap_connection._LDAPConnection__channel_binding_value = bytes(new_cbv)
+                ldap_connection.channel_binding_value = bytes(new_cbv)
                 try:
                     ldap_connection.login(user=" ", domain=self.domain)
                 except ldap_impacket.LDAPSessionError as e:
@@ -268,11 +269,12 @@ class ldap(connection):
         try:
             resp = self.ldap_connection.search(
                 scope=ldapasn1_impacket.Scope("baseObject"),
-                attributes=["defaultNamingContext", "dnsHostName"],
+                attributes=["dnsHostName", "defaultNamingContext", "configurationNamingContext"],
                 sizeLimit=0,
             )
             resp_parsed = parse_result_attributes(resp)[0]
 
+            self.configuration_context = resp_parsed["configurationNamingContext"]
             target = resp_parsed["dnsHostName"]
             base_dn = resp_parsed["defaultNamingContext"]
             target_domain = sub(
@@ -337,7 +339,9 @@ class ldap(connection):
                 self.host,
                 self.hostname,
                 self.domain,
-                self.server_os
+                self.server_os,
+                self.signing_required,
+                self.cbt_status
             )
         except Exception as e:
             self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
