@@ -59,7 +59,7 @@ class mssql(connection):
     def create_conn_obj(self):
         try:
             self.conn = tds.MSSQL(self.host, self.port, self.remoteName)
-            self.conn.connect()
+            self.conn.connect(self.args.mssql_timeout)
         except Exception as e:
             self.logger.debug(f"Error connecting to MSSQL service on host: {self.host}, reason: {e}")
             with contextlib.suppress(Exception):
