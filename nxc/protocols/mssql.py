@@ -1,9 +1,9 @@
 import os
 import random
-import socket
 import contextlib
+from termcolor import colored
 
-from nxc.config import process_secret
+from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.connection import requires_admin
 from nxc.helpers.misc import gen_random_string
@@ -27,6 +27,8 @@ from impacket.tds import (
     TDS_ENVCHANGE_LANGUAGE,
     TDS_ENVCHANGE_CHARSET,
     TDS_ENVCHANGE_PACKETSIZE,
+    TDS_ENCRYPT_REQ,
+    TDS_ENCRYPT_OFF
 )
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 
@@ -57,16 +59,11 @@ class mssql(connection):
     def create_conn_obj(self):
         try:
             self.conn = tds.MSSQL(self.host, self.port, self.remoteName)
-            # Default has not timeout option in tds.MSSQL.connect() function, let rewrite it.
-            af, socktype, proto, canonname, sa = socket.getaddrinfo(self.host, self.port, 0, socket.SOCK_STREAM)[0]
-            sock = socket.socket(af, socktype, proto)
-            sock.settimeout(self.args.mssql_timeout)
-            sock.connect(sa)
-            self.conn.socket = sock
-            if not self.is_mssql:
-                self.conn.preLogin()
+            self.conn.connect(self.args.mssql_timeout)
         except Exception as e:
             self.logger.debug(f"Error connecting to MSSQL service on host: {self.host}, reason: {e}")
+            with contextlib.suppress(Exception):
+                self.conn.disconnect()
             return False
         else:
             self.is_mssql = True
@@ -94,7 +91,16 @@ class mssql(connection):
     @reconnect_mssql
     def enum_host_info(self):
         challenge = None
+
         try:
+            # If the MSSQL Server responds with a TDS_ENCRYPT_REQ or TDS_ENCRYPT_OFF then we need to setup a TLS context
+            resp = self.conn.preLogin()
+            self.encryption = False
+            if resp["Encryption"] == TDS_ENCRYPT_REQ or resp["Encryption"] == TDS_ENCRYPT_OFF:
+                # We switch to a TLS context handled by tds.py
+                self.conn.set_tls_context()
+                self.encryption = True
+
             login = tds.TDS_LOGIN()
             login["HostName"] = ""
             login["AppName"] = ""
@@ -115,9 +121,14 @@ class mssql(connection):
             # Send the NTLMSSP Negotiate or SQL Auth Packet
             self.conn.sendTDS(tds.TDS_LOGIN7, login.getData())
 
+            # According to the specs, if encryption is TDS_ENCRYPT_OFF, we must encrypt the first Login packet
+            if resp["Encryption"] == TDS_ENCRYPT_OFF:
+                self.encryption = False
+                self.conn.tlsSocket = None
+
             tdsx = self.conn.recvTDS()
             challenge = tdsx["Data"][3:]
-            self.logger.info(f"NTLM challenge: {challenge!s}")
+            self.logger.debug(f"NTLM challenge: {challenge!s}")
         except Exception as e:
             self.logger.info(f"Failed to receive NTLM challenge, reason: {e!s}")
             return False
@@ -142,7 +153,8 @@ class mssql(connection):
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain})")
+        encryption = colored(f"EncryptionReq:{self.encryption}", host_info_colors[0 if self.encryption else 1], attrs=["bold"])
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption})")
 
     @reconnect_mssql
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
@@ -166,7 +178,7 @@ class mssql(connection):
             username = ccache.credentials[0].header["client"].prettyPrint().decode().split("@")[0]
             self.username = username
 
-        used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
+        used_ccache = " from ccache" if useCache else f"{process_secret(kerb_pass)}"
         try:
             res = self.conn.kerberosLogin(
                 None,
@@ -271,7 +283,6 @@ class mssql(connection):
         self.logger.info(f"Query to run: {self.args.query}")
         try:
             raw_output = self.conn.sql_query(self.args.query)
-            self.logger.info("Executed MSSQL query")
             self.logger.debug(f"Raw output: {raw_output}")
             if self.conn.lastError:
                 self.logger.debug(f"Error during query execution: {self.conn.lastError}")
