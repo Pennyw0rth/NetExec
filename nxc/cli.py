@@ -27,18 +27,19 @@ def gen_cli_args():
     CODENAME = "SmoothOperator"
 
     generic_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
-    generic_group = generic_parser.add_argument_group("Generic", "Generic options for nxc across protocols")
+    generic_group = generic_parser.add_argument_group("Generic Options")
     generic_group.add_argument("--version", action="store_true", help="Display nxc version")
     generic_group.add_argument("-t", "--threads", type=int, dest="threads", default=256, help="set how many concurrent threads to use")
     generic_group.add_argument("--timeout", default=None, type=int, help="max timeout in seconds of each thread")
     generic_group.add_argument("--jitter", metavar="INTERVAL", type=str, help="sets a random delay between each authentication")
 
     output_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
-    output_group = output_parser.add_argument_group("Output", "Options to set verbosity levels and control output")
-    output_group.add_argument("--verbose", action="store_true", help="enable verbose output")
-    output_group.add_argument("--debug", action="store_true", help="enable debug level information")
+    output_group = output_parser.add_argument_group("Output Options")
     output_group.add_argument("--no-progress", action="store_true", help="do not displaying progress bar during scan")
     output_group.add_argument("--log", metavar="LOG", help="export result into a custom file")
+    log_level = output_group.add_mutually_exclusive_group()
+    log_level.add_argument("--verbose", action="store_true", help="enable verbose output")
+    log_level.add_argument("--debug", action="store_true", help="enable debug level information")
 
     dns_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     dns_group = dns_parser.add_argument_group("DNS")
@@ -73,7 +74,7 @@ def gen_cli_args():
 
     # we do module arg parsing here so we can reference the module_list attribute below
     module_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
-    mgroup = module_parser.add_argument_group("Modules", "Options for nxc modules")
+    mgroup = module_parser.add_argument_group("Modules")
     mgroup.add_argument("-M", "--module", choices=get_module_names(), action="append", metavar="MODULE", help="module to use")
     mgroup.add_argument("-o", metavar="MODULE_OPTION", nargs="+", default=[], dest="module_options", help="module options")
     mgroup.add_argument("-L", "--list-modules", nargs="?", type=str, const="", help="list available modules")
@@ -83,7 +84,7 @@ def gen_cli_args():
 
     std_parser = argparse.ArgumentParser(add_help=False, parents=[generic_parser, output_parser, dns_parser], formatter_class=DisplayDefaultsNotNone)
     std_parser.add_argument("target", nargs="+" if not (module_parser.parse_known_args()[0].list_modules is not None or module_parser.parse_known_args()[0].show_module_options or generic_parser.parse_known_args()[0].version) else "*", type=str, help="the target IP(s), range(s), CIDR(s), hostname(s), FQDN(s), file(s) containing a list of targets, NMap XML or .Nessus file(s)")
-    credential_group = std_parser.add_argument_group("Authentication", "Options for authenticating")
+    credential_group = std_parser.add_argument_group("Authentication")
     credential_group.add_argument("-u", "--username", metavar="USERNAME", dest="username", nargs="+", default=[], help="username(s) or file(s) containing usernames")
     credential_group.add_argument("-p", "--password", metavar="PASSWORD", dest="password", nargs="+", default=[], help="password(s) or file(s) containing passwords")
     credential_group.add_argument("-id", metavar="CRED_ID", nargs="+", default=[], type=str, dest="cred_id", help="database credential ID(s) to use for authentication")
@@ -94,13 +95,13 @@ def gen_cli_args():
     credential_group.add_argument("--ufail-limit", metavar="LIMIT", type=int, help="max number of failed login attempts per username")
     credential_group.add_argument("--fail-limit", metavar="LIMIT", type=int, help="max number of failed login attempts per host")
 
-    kerberos_group = std_parser.add_argument_group("Kerberos", "Options for Kerberos authentication")
+    kerberos_group = std_parser.add_argument_group("Kerberos Authentication")
     kerberos_group.add_argument("-k", "--kerberos", action="store_true", help="Use Kerberos authentication")
     kerberos_group.add_argument("--use-kcache", action="store_true", help="Use Kerberos authentication from ccache file (KRB5CCNAME)")
     kerberos_group.add_argument("--aesKey", metavar="AESKEY", nargs="+", help="AES key to use for Kerberos Authentication (128 or 256 bits)")
     kerberos_group.add_argument("--kdcHost", metavar="KDCHOST", help="FQDN of the domain controller. If omitted it will use the domain part (FQDN) specified in the target parameter")
 
-    certificate_group = std_parser.add_argument_group("Certificate", "Options for certificate authentication")
+    certificate_group = std_parser.add_argument_group("Certificate Authentication")
     certificate_group.add_argument("--pfx-cert", metavar="PFXCERT", help="Use certificate authentication from pfx file .pfx")
     certificate_group.add_argument("--pfx-base64", metavar="PFXB64", help="Use certificate authentication from pfx file encoded in base64")
     certificate_group.add_argument("--pfx-pass", metavar="PFXPASS", help="Password of the pfx certificate")
