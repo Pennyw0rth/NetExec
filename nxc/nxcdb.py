@@ -484,6 +484,12 @@ class NXCDBMenu(cmd.Cmd):
             subcommand = line.split()[0]
 
         if subcommand == "create":
+            if len(line.split()) < 2:
+                print("[-] not enough arguments")
+                return
+            elif not line.split()[1].strip():
+                print("[-] invalid workspace name")
+                return
             new_workspace = line.split()[1].strip()
             print(f"[*] Creating workspace '{new_workspace}'")
             create_workspace(new_workspace, self.p_loader)
