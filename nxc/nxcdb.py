@@ -510,7 +510,7 @@ class NXCDBMenu(cmd.Cmd):
     @staticmethod
     def help_workspace():
         help_string = """
-        workspace [create <targetName> | workspace list | workspace <targetName>]
+        workspace [workspace create <targetName> | workspace list | workspace <targetName>]
         """
         print_help(help_string)
 
