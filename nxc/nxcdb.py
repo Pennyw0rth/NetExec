@@ -479,6 +479,7 @@ class NXCDBMenu(cmd.Cmd):
         if not line:
             subcommand = ""
             self.help_workspace()
+            return
         else:
             subcommand = line.split()[0]
 
