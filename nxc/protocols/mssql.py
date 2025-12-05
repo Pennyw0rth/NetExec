@@ -128,7 +128,7 @@ class mssql(connection):
 
             tdsx = self.conn.recvTDS()
             challenge = tdsx["Data"][3:]
-            self.logger.info(f"NTLM challenge: {challenge!s}")
+            self.logger.debug(f"NTLM challenge: {challenge!s}")
         except Exception as e:
             self.logger.info(f"Failed to receive NTLM challenge, reason: {e!s}")
             return False
@@ -283,7 +283,6 @@ class mssql(connection):
         self.logger.info(f"Query to run: {self.args.query}")
         try:
             raw_output = self.conn.sql_query(self.args.query)
-            self.logger.info("Executed MSSQL query")
             self.logger.debug(f"Raw output: {raw_output}")
             if self.conn.lastError:
                 self.logger.debug(f"Error during query execution: {self.conn.lastError}")
