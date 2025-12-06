@@ -6,6 +6,7 @@ def proto_args(parser, parents):
     ldap_parser = parser.add_parser("ldap", help="own stuff using LDAP", parents=parents, formatter_class=DisplayDefaultsNotNone)
     ldap_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
     ldap_parser.add_argument("--port", type=int, default=389, action=DefaultTrackingAction, help="LDAP port")
+    ldap_parser.add_argument("--simple-bind", action="store_true", help="Use simple bind authentication (no signing/sealing)")
 
     dgroup = ldap_parser.add_mutually_exclusive_group()
     dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, default=None, help="domain to authenticate to")
