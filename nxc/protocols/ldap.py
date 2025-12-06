@@ -357,6 +357,10 @@ class ldap(connection):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({cbt_status}) {ntlm}")
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
+        if self.auth_choice == "simple":
+            self.logger.fail("Simple bind and Kerberos authentication are mutually exclusive.")
+            return False
+
         self.username = username if not self.args.use_kcache else self.username    # With ccache we get the username from the ticket
         self.password = password
         self.domain = domain
@@ -615,7 +619,7 @@ class ldap(connection):
             ldaps_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
             self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
-            self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=self.auth_choice)
+            self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
             self.check_if_admin()
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.hash}")
             self.db.add_credential("hash", domain, self.username, self.hash)
@@ -632,10 +636,7 @@ class ldap(connection):
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("strongerAuthRequired") >= 0:
                 # This should actually not happen anymore as impacket now supports LDAP signing/sealing via GSSAPI
-                if self.args.simple_bind:
-                    self.logger.fail("StrongerAuthRequired error on login: SIMPLE bind cannot work with signing/sealing enforced. Falling back to LDAPS.")
-                else:
-                    self.logger.error("StrongerAuthRequired error on login: This should not happen anymore, please contact the devs and open an issue on github!")
+                self.logger.error("StrongerAuthRequired error on login: This should not happen anymore, please contact the devs and open an issue on github!")
                 try:
                     # We need to try SSL
                     self.logger.extra["protocol"] = "LDAPS"
@@ -644,7 +645,7 @@ class ldap(connection):
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
                     self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
-                    self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=self.auth_choice)
+                    self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
                     self.check_if_admin()
                     self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.hash}")
                     self.db.add_credential("hash", domain, self.username, self.hash)
