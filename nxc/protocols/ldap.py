@@ -416,7 +416,7 @@ class ldap(connection):
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             self.logger.success(f"{domain}\\{self.username}{used_ccache} {self.mark_pwned()}")
 
-            if not self.args.local_auth and self.username != "":
+            if self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -475,7 +475,7 @@ class ldap(connection):
                     # Prepare success credential text
                     self.logger.success(f"{domain}\\{self.username} {self.mark_pwned()}")
 
-                    if not self.args.local_auth and self.username != "":
+                    if self.username != "":
                         add_user_bh(self.username, self.domain, self.logger, self.config)
                     if self.admin_privs:
                         add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -531,7 +531,7 @@ class ldap(connection):
             # Prepare success credential text
             self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
 
-            if not self.args.local_auth and self.username != "":
+            if self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -560,7 +560,7 @@ class ldap(connection):
                     # Prepare success credential text
                     self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
 
-                    if not self.args.local_auth and self.username != "":
+                    if self.username != "":
                         add_user_bh(self.username, self.domain, self.logger, self.config)
                     if self.admin_privs:
                         add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -628,7 +628,7 @@ class ldap(connection):
             out = f"{domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}"
             self.logger.success(out)
 
-            if not self.args.local_auth and self.username != "":
+            if self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -654,7 +654,7 @@ class ldap(connection):
                     out = f"{domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}"
                     self.logger.success(out)
 
-                    if not self.args.local_auth and self.username != "":
+                    if self.username != "":
                         add_user_bh(self.username, self.domain, self.logger, self.config)
                     if self.admin_privs:
                         add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
