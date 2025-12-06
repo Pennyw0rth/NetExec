@@ -1,4 +1,5 @@
 import datetime
+from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
 
 
@@ -11,6 +12,7 @@ class NXCModule:
     name = "whoami"
     description = "Get details of provided user"
     supported_protocols = ["ldap"]
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """USER  Enumerate information about a different SamAccountName"""

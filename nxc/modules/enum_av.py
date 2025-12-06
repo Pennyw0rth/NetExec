@@ -7,6 +7,7 @@ from impacket.dcerpc.v5 import lsat, lsad, transport
 from impacket.dcerpc.v5.dtypes import NULL, MAXIMUM_ALLOWED, RPC_UNICODE_STRING
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 import pathlib
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -18,6 +19,7 @@ class NXCModule:
     name = "enum_av"
     description = "Gathers information on all endpoint protection solutions installed on the the remote host(s) via LsarLookupNames (no privilege needed)"
     supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -263,6 +265,17 @@ conf = {
             ]
         },
         {
+            "name": "Check Point Endpoint Security",
+            "services": [
+                {"name": "CPDA", "description": "Check Point Endpoint Agent"},
+                {"name": "vsmon", "description": "Check Point Endpoint Security Network Protection"},
+                {"name": "CPFileAnlyz", "description": "Check Point Endpoint Security File Analyzer"},
+                {"name": "EPClientUIService", "description": "Check Point Endpoint Security Client UI"}
+
+            ],
+            "pipes": []
+        },
+        {
             "name": "ESET",
             "services": [
                 {"name": "ekm", "description": "ESET"},
@@ -275,6 +288,24 @@ conf = {
                 {"name": "ehttpsrv", "description": "ESET HTTP Server"},
             ],
             "pipes": [{"name": "nod_scriptmon_pipe", "processes": [""]}],
+        },
+        {
+            "name": "FortiClient",
+            "services": [
+                {"name": "FA_Scheduler", "description": "FortiClient Service Scheduler"},
+                {"name": "FCT_SecSvr", "description": "Forticlient Endpoint Protected Process Service"}
+            ],
+            "pipes": [
+                {"name": "FortiClient_DBLogDaemon", "processes": ["FCDBLog.exe"]},
+                {"name": "FC_*", "processes": ["FortiTray.exe"]}
+            ]
+        },
+        {
+            "name": "FortiEDR",
+            "services": [
+                {"name": "FortiEDR Collector Service", "description": "Host component of the Fortinet Endpoint Detection and Response Platform"}
+            ],
+            "pipes": []
         },
         {
             "name": "G DATA Security Client",
@@ -294,6 +325,17 @@ conf = {
                 {"name": "STDispatch$Shavlik Protect", "description": "Ivanti Security Controls Agent Dispatcher"}
             ],
             "pipes": []
+        },
+        {
+            "name": "Kaseya Agent Endpoint",
+            "services": [
+                {"name": "KAENDKSAASC*", "description": "Virtual System Administrator Endpoint"},
+                {"name": "KAKSAASC*", "description": "Machine.Group ID:*"},
+            ],
+            "pipes": [
+                {"name": "kaseyaUserKSA*", "processes": ["KaUsrTsk.exe"]},
+                {"name": "kaseyaAgentKSA*", "processes": ["AgentMon.exe"]}
+            ]
         },
         {
             "name": "Kaspersky Security for Windows Server",
@@ -416,6 +458,21 @@ conf = {
                 {"name": "WdNisSvc", "description": "Windows Defender Antivirus Network Inspection Service"}
             ],
             "pipes": []
+        },
+        {
+            "name": "WithSecure Elements",
+            "services": [
+                {"name": "fsdevcon", "description": "WithSecure Device Control"},
+                {"name": "fshoster", "description": "WithSecure Hoster"},
+                {"name": "fsnethoster", "description": "WithSecure Hoster (Restricted)"},
+                {"name": "fsulhoster", "description": "WithSecure Ultralight Hoster"},
+                {"name": "fsulnethoster", "description": "WithSecure Ultralight Network Hoster"},
+                {"name": "fsulprothoster", "description": "WithSecure Ultralight Protected Hoster"},
+                {"name": "wsulavprohoster", "description": "WithSecure Ultralight Protected AV Hoster"}
+            ],
+            "pipes": [
+                {"name": "FS_CCFIPC_*", "processes": ["fsatpn.exe", "fsatpl.exe", "fshoster32.exe", "fsulprothoster.exe", "fsulprothoster.exe", "fshoster64.exe", "FsPisces.exe", "fsdevcon.exe"]}
+            ]
         }
     ]
 }

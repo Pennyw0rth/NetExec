@@ -3,6 +3,7 @@
 # Based on the article : https://blog.xpnsec.com/azuread-connect-for-redteam/
 # Fully rewritten by @NeffIsBack
 from base64 import b64encode
+from nxc.helpers.misc import CATEGORY
 from nxc.helpers.powershell import get_ps_script
 
 
@@ -11,6 +12,7 @@ class NXCModule:
     name = "msol"
     description = "Dump MSOL cleartext password and Entra ID credentials from the localDB on the Entra ID Connect Server"
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self):
         self.context = None
