@@ -49,8 +49,8 @@ def proto_args(parser, parents):
     cred_gathering_group.add_argument("--pvk", action="store", help="DPAPI option. File with domain backupkey")
 
     mapping_enum_group = smb_parser.add_argument_group("Mapping/Enumeration")
-    mapping_enum_group.add_argument("--exclude-shares", nargs="+", help="List of shares to exclude from enumeration (e.g., C$ Admin$ IPC$)")
     mapping_enum_group.add_argument("--shares", type=str, nargs="?", const="", help="Enumerate shares and access, filter on specified argument (read ; write ; read,write)")
+    mapping_enum_group.add_argument("--exclude-shares", nargs="+", help="List of shares to exclude from enumeration (e.g., C$ Admin$ IPC$)")
     mapping_enum_group.add_argument("--dir", nargs="?", type=str, const="", help="List the content of a path (default path: '%(const)s')")
     mapping_enum_group.add_argument("--interfaces", action="store_true", help="Enumerate network interfaces")
     mapping_enum_group.add_argument("--no-write-check", action="store_true", help="Skip write check on shares (avoid leaving traces when missing delete permissions)")
