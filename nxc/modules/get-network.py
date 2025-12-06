@@ -2,18 +2,17 @@
 # Credit to https://github.com/dirkjanm/adidnsdump @_dirkjan
 # module by @mpgn_x64
 import re
-from os.path import expanduser
 import codecs
 import socket
 from datetime import datetime
 from struct import unpack
 
-import dns.name
-import dns.resolver
-from impacket.ldap import ldap
 from impacket.structure import Structure
-from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from ldap3 import LEVEL
+from os.path import expanduser
+from nxc.helpers.misc import CATEGORY
+from nxc.paths import NXC_PATH
+from nxc.parsers.ldap_results import parse_result_attributes
 
 
 def get_dns_zones(connection, root, debug=False):
@@ -26,25 +25,8 @@ def get_dns_zones(connection, root, debug=False):
     return zones
 
 
-def get_dns_resolver(server, context):
-    # Create a resolver object
-    dnsresolver = dns.resolver.Resolver()
-    # Is our host an IP? In that case make sure the server IP is used
-    # if not assume lookups are working already
-    try:
-        if server.startswith("ldap://"):
-            server = server[7:]
-        if server.startswith("ldaps://"):
-            server = server[8:]
-        socket.inet_aton(server)
-        dnsresolver.nameservers = [server]
-    except OSError:
-        context.info("Using System DNS to resolve unknown entries. Make sure resolving your target domain works here or specify an IP as target host to use that server for queries")
-    return dnsresolver
-
-
-def ldap2domain(ldap):
-    return re.sub(",DC=", ".", ldap[ldap.lower().find("dc="):], flags=re.I)[3:]
+def ldap2domain(baseDN):
+    return re.sub(r",DC=", ".", baseDN[baseDN.lower().find("dc="):], flags=re.IGNORECASE)[3:]
 
 
 def new_record(rtype, serial):
@@ -65,28 +47,29 @@ RECORD_TYPE_MAPPING = {
     5: "CNAME",
     6: "SOA",
     12: "PTR",
-    # 15: 'MX',
-    # 16: 'TXT',
+    15: "MX",
+    16: "TXT",
     28: "AAAA",
     33: "SRV",
 }
 
-
-def searchResEntry_to_dict(results):
-    data = {}
-    for attr in results["attributes"]:
-        key = str(attr["type"])
-        value = str(attr["vals"][0])
-        data[key] = value
-    return data
+ZERO = 0
+A = 1
+NS = 2
+CNAME = 5
+SOA = 6
+PTR = 12
+MX = 15
+TXT = 16
+AAAA = 28
+SRV = 33
 
 
 class NXCModule:
     name = "get-network"
     description = "Query all DNS records with the corresponding IP from the domain."
     supported_protocols = ["ldap"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """
@@ -95,61 +78,44 @@ class NXCModule:
         """
         self.showall = False
         self.showhosts = False
-        self.showip = True
 
         if module_options and "ALL" in module_options:
             if module_options["ALL"].lower() == "true" or module_options["ALL"] == "1":
                 self.showall = True
             else:
-                print("Could not parse ALL option.")
-        if module_options and "IP" in module_options:
-            if module_options["IP"].lower() == "true" or module_options["IP"] == "1":
-                self.showip = True
-            else:
-                print("Could not parse ONLY_HOSTS option.")
+                context.log.display("Could not parse ALL option.")
         if module_options and "ONLY_HOSTS" in module_options:
             if module_options["ONLY_HOSTS"].lower() == "true" or module_options["ONLY_HOSTS"] == "1":
                 self.showhosts = True
             else:
-                print("Could not parse ONLY_HOSTS option.")
+                context.log.display("Could not parse ONLY_HOSTS option.")
 
     def on_login(self, context, connection):
         zone = ldap2domain(connection.baseDN)
         dns_root = f"CN=MicrosoftDNS,DC=DomainDnsZones,{connection.baseDN}"
         search_target = f"DC={zone},{dns_root}"
         context.log.display("Querying zone for records")
-        sfilter = "(DC=*)"
 
-        try:
-            list_sites = connection.ldap_connection.search(
-                searchBase=search_target,
-                searchFilter=sfilter,
-                attributes=["dnsRecord", "dNSTombstoned", "name"],
-                sizeLimit=100000,
-            )
-        except ldap.LDAPSearchError as e:
-            if e.getErrorString().find("sizeLimitExceeded") >= 0:
-                context.log.debug("sizeLimitExceeded exception caught, giving up and processing the data received")
-                # We reached the sizeLimit, process the answers we have already and that's it. Until we implement
-                # paged queries
-                list_sites = e.getAnswers()
-            else:
-                raise
-        get_dns_resolver(connection.host, context.log)
+        list_sites = connection.search(
+            searchFilter="(DC=*)",
+            attributes=["dnsRecord", "dNSTombstoned", "name"],
+            baseDN=search_target,
+        )
+        list_sites_parsed = parse_result_attributes(list_sites)
 
         outdata = []
-
-        for item in list_sites:
-            if isinstance(item, ldapasn1_impacket.SearchResultEntry) is not True:
-                continue
-            site = searchResEntry_to_dict(item)
+        for site in list_sites_parsed:
             recordname = site["name"]
 
             if "dnsRecord" in site:
-                record = bytes(site["dnsRecord"].encode("latin1"))
-                dr = DNS_RECORD(record)
-                if RECORD_TYPE_MAPPING[dr["Type"]] == "A":
-                    if dr["Type"] == 1:
+                if isinstance(site["dnsRecord"], list):  # noqa: SIM108
+                    records = [bytes(r) for r in site["dnsRecord"]]
+                else:
+                    records = [bytes(site["dnsRecord"])]
+
+                for record in records:
+                    dr = DNS_RECORD(record)
+                    if dr["Type"] == A:
                         address = DNS_RPC_RECORD_A(dr["Data"])
                         if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
                             outdata.append(
@@ -159,17 +125,18 @@ class NXCModule:
                                     "value": address.formatCanonical(),
                                 }
                             )
-                    if dr["Type"] in [a for a in RECORD_TYPE_MAPPING if RECORD_TYPE_MAPPING[a] in ["CNAME", "NS", "PTR"]]:
+                    # Skip without "ALL" and "ONLY_HOSTS" => only IPs
+                    elif dr["Type"] in [CNAME, NS, PTR] and (self.showall or self.showhosts):
                         address = DNS_RPC_RECORD_NODE_NAME(dr["Data"])
                         if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
                             outdata.append(
                                 {
                                     "name": recordname,
                                     "type": RECORD_TYPE_MAPPING[dr["Type"]],
-                                    "value": address[next(iter(address.fields))].toFqdn(),
+                                    "value": address["nameNode"].toFqdn(),
                                 }
                             )
-                    elif dr["Type"] == 28:
+                    elif dr["Type"] == AAAA:
                         address = DNS_RPC_RECORD_AAAA(dr["Data"])
                         if str(recordname) != "DomainDnsZones" and str(recordname) != "ForestDnsZones":
                             outdata.append(
@@ -180,8 +147,13 @@ class NXCModule:
                                 }
                             )
 
+        # Filter duplicate IPs if "ALL"  and "ONLY_HOSTS" are not set
+        if not (self.showall or self.showhosts):
+            seen_ips = set()
+            outdata = [x for x in outdata if not (x["value"] in seen_ips or seen_ips.add(x["value"]))]
+
         context.log.highlight(f"Found {len(outdata)} records")
-        path = expanduser(f"~/.nxc/logs/{connection.domain}_network_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")
+        path = expanduser(f"{NXC_PATH}/logs/{connection.domain}_network_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")
         with codecs.open(path, "w", "utf-8") as outfile:
             for row in outdata:
                 if self.showhosts:

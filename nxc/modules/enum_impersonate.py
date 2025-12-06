@@ -1,3 +1,6 @@
+from nxc.helpers.misc import CATEGORY
+
+
 class NXCModule:
     """
     Enumerate SQL Server users with impersonation rights
@@ -7,8 +10,7 @@ class NXCModule:
     name = "enum_impersonate"
     description = "Enumerate users with impersonation privileges"
     supported_protocols = ["mssql"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     def __init__(self):
         self.mssql_conn = None
@@ -42,5 +44,6 @@ class NXCModule:
         """
         res = self.mssql_conn.sql_query(query)
         return [user["name"] for user in res] if res else []
+
     def options(self, context, module_options):
         pass

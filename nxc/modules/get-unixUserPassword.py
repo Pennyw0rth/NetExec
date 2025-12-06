@@ -1,4 +1,5 @@
 from impacket.ldap import ldap as ldap_impacket
+from nxc.helpers.misc import CATEGORY
 from nxc.logger import nxc_logger
 from nxc.parsers.ldap_results import parse_result_attributes
 
@@ -12,8 +13,7 @@ class NXCModule:
     name = "get-unixUserPassword"
     description = "Get unixUserPassword attribute from all users in ldap"
     supported_protocols = ["ldap"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """

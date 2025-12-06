@@ -1,6 +1,7 @@
 import ntpath
 import os
 from os.path import join, getsize, exists
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 
 
@@ -9,8 +10,7 @@ class NXCModule:
     name = "snipped"
     description = "Downloads screenshots taken by the (new) Snipping Tool."
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self):
         self.context = None
@@ -21,8 +21,6 @@ class NXCModule:
         """USERS: Download only specified user(s); format: -o USERS=user1,user2,user3"""
         self.context = context
         self.users = [user.lower() for user in module_options["USERS"].split(",")] if "USERS" in module_options else None
-
-
 
     def on_admin_login(self, context, connection):
         self.context = context
@@ -110,7 +108,6 @@ class NXCModule:
 
         if total_files_downloaded > 0 and host_output_path:
             context.log.success(f"{total_files_downloaded} file(s) downloaded from host {connection.host} to {host_output_path}.")
-                            
 
     def find_screenshots_folders(self, user_folder_name):
         """
