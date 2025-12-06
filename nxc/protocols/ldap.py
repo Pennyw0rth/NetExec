@@ -536,7 +536,7 @@ class ldap(connection):
             if str(e).find("strongerAuthRequired") >= 0:
                 # This should actually not happen anymore as impacket now supports LDAP signing/sealing via GSSAPI
                 if self.args.simple_bind:
-                    self.logger.error("StrongerAuthRequired error on login: SIMPLE bind cannot work with signing/sealing enforced. Falling back to LDAPS.")
+                    self.logger.fail("StrongerAuthRequired error on login: SIMPLE bind cannot work with signing/sealing enforced. Falling back to LDAPS.")
                 else:
                     self.logger.error("StrongerAuthRequired error on login: This should not happen anymore, please contact the devs and open an issue on github!")
                 # We need to try SSL
@@ -633,7 +633,7 @@ class ldap(connection):
             if str(e).find("strongerAuthRequired") >= 0:
                 # This should actually not happen anymore as impacket now supports LDAP signing/sealing via GSSAPI
                 if self.args.simple_bind:
-                    self.logger.error("StrongerAuthRequired error on login: SIMPLE bind cannot work with signing/sealing enforced. Falling back to LDAPS.")
+                    self.logger.fail("StrongerAuthRequired error on login: SIMPLE bind cannot work with signing/sealing enforced. Falling back to LDAPS.")
                 else:
                     self.logger.error("StrongerAuthRequired error on login: This should not happen anymore, please contact the devs and open an issue on github!")
                 try:
