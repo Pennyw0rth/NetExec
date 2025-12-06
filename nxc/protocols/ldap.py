@@ -521,7 +521,7 @@ class ldap(connection):
             self.logger.extra["port"] = "636" if self.port == 636 else "389"
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.target}"
-            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3] {'(SIMPLE Auth)' if self.no_ntlm else ''}")
+            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3]")
             self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=self.auth_choice != "simple")
             self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=self.auth_choice)
             self.check_if_admin()
@@ -550,7 +550,7 @@ class ldap(connection):
                     self.logger.extra["port"] = "636"
                     self.port = 636
                     ldaps_url = f"ldaps://{self.target}"
-                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [4] {'(SIMPLE Auth)' if self.no_ntlm else ''}")
+                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [4]")
                     self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
                     self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=self.auth_choice)
                     self.check_if_admin()
