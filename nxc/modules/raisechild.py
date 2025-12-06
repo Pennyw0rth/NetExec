@@ -206,21 +206,12 @@ class NXCModule:
             )
             ntds.dump()
 
-            if etype == "aes256":
-                if self.aes256_key:
-                    self.context.log.highlight(f"krbtgt AES256 key: {self.aes256_key}")
-                else:
-                    self.context.log.fail("DCSync completed - krbtgt AES256 key not found!")
-            elif etype == "aes128":
-                if self.aes128_key:
-                    self.context.log.highlight(f"krbtgt AES128 key: {self.aes128_key}")
-                else:
-                    self.context.log.fail("DCSync completed - krbtgt AES128 key not found!")
+            secret = {"rc4": self.krbtgt_hash, "aes128": self.aes128_key, "aes256": self.aes256_key}.get(etype)
+            label = "hash" if etype == "rc4" else f"{etype.upper()} key"
+            if secret:
+                self.context.log.highlight(f"krbtgt {label}: {secret}")
             else:
-                if self.krbtgt_hash:
-                    self.context.log.highlight(f"krbtgt hash from {ldap_conn.domain}: {self.krbtgt_hash}")
-                else:
-                    self.context.log.fail("DCSync completed - krbtgt hash not found!")
+                self.context.log.fail(f"DCSync completed - krbtgt {label} not found!")
         except DCERPCSessionError as e:
             self.context.log.fail(f"RPC DRSUAPI error: {e}")
         except Exception as e:
