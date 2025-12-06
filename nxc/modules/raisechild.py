@@ -49,6 +49,7 @@ class NXCModule:
         self.krbtgt_hash = ""
         self.aes128_key = ""
         self.aes256_key = ""
+        self.etype = None
 
     def options(self, context, module_options):
         """
@@ -68,6 +69,7 @@ class NXCModule:
         """
         self.context = context
         self.module_options = module_options
+        self.etype = module_options.get("ETYPE", "rc4").lower()
 
     def on_admin_login(self, context, connection):
         self.context = context
@@ -167,7 +169,7 @@ class NXCModule:
         return entries[0]["nETBIOSName"]
 
     def _dcsync_krbtgt(self, smb_conn, ldap_conn):
-        etype = self.module_options.get("ETYPE", "rc4").lower()
+        etype = self.etype
         need_kerberos_keys = etype in ("aes128", "aes256")
 
         try:
@@ -234,7 +236,7 @@ class NXCModule:
                 smb_conn.logoff()
 
     def get_krbtgt_hash(self, connection):
-        etype = self.module_options.get("ETYPE", "rc4").lower()
+        etype = self.etype
 
         try:
             smb_conn = self._get_smb_session(connection)
@@ -263,7 +265,7 @@ class NXCModule:
         Forge a golden ticket for the parent domain using the krbtgt key.
         Supports optional USER, RID, USER_ID and ETYPE module options.
         """
-        etype = self.module_options.get("ETYPE", "rc4").lower()
+        etype = self.etype
 
         admin_name = self.module_options.get("USER", "Administrator")
         extra_rid = str(self.module_options.get("RID", "519"))
