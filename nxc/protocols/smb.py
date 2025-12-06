@@ -1381,6 +1381,7 @@ class smb(connection):
             self.logger.fail(f"Error getting user: {error}")
 
         try:
+            self.logger.debug("Attempting to list shares...")
             shares = self.conn.listShares()
             self.logger.info(f"Shares returned: {shares}")
         except SessionError as e:
@@ -1400,6 +1401,12 @@ class smb(connection):
 
         for share in shares:
             share_name = share["shi1_netname"][:-1]
+
+            # Skip excluded shares
+            if self.args.exclude_shares and share_name in self.args.exclude_shares:
+                self.logger.debug(f"Skipping excluded share: {share_name}")
+                continue
+
             share_remark = share["shi1_remark"][:-1]
             share_info = {"name": share_name, "remark": share_remark, "access": []}
             read = False
