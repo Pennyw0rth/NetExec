@@ -149,8 +149,6 @@ class ldap(connection):
         self.targetDomain = ""
         self.remote_ops = None
         self.bootkey = None
-        self.smbv1 = None
-        self.signing = False
         self.signing_required = None
         self.cbt_status = None
         self.admin_privs = False
