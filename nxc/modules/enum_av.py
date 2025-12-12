@@ -350,6 +350,18 @@ conf = {
             ]
         },
         {
+            "name": "Malwarebytes",
+            "services": [
+                {"name": "MBAMService", "description": "Malwarebytes Service"},
+                {"name": "MBEndpointAgent", "description": "Malwarebytes Cloud Endpoint Agent Service"}
+            ],
+            "pipes": [
+                {"name": "MBLG", "processes": ["MBAMService.exe"]},
+                {"name": "MBEA2_R", "processes": ["MBCloudEA.exe"]},
+                {"name": "MBEA2_W", "processes": ["MBCloudEA.exe"]}
+            ]
+        },
+        {
             "name": "Panda Adaptive Defense 360",
             "services": [
                 {"name": "PandaAetherAgent", "description": "Panda Endpoint Agent"},
