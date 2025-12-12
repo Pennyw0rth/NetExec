@@ -69,7 +69,7 @@ class NXCModule:
                         # [MS-DNSP] 2.2.5.2.4.1 - DNS_RPC_ZONE_INFO_W2K - fAllowUpdate
                         if value == 1:
                             if not found:
-                                context.log.success(f"{dns_type.capitalize()} DNS zone(s) allowing unsecure dynamic updates")
+                                context.log.success(f"{dns_type.capitalize()} DNS zone(s) allowing nonsecure dynamic updates")
                                 found = True
                             context.log.highlight(zone)
             if not found:
