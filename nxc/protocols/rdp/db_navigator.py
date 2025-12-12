@@ -5,7 +5,19 @@ import functools
 help_header = functools.partial(colored, color="cyan", attrs=["bold"])
 help_kw = functools.partial(colored, color="green", attrs=["bold"])
 
+
 class navigator(DatabaseNavigator):
+     
+    def help_hosts(self):
+        help_string = """
+        By default prints all hosts
+        Table format:
+        | 'HostID', 'IP', 'Port', 'Hostname', 'Domain', 'OS', 'NLA' |
+        Subcommands:
+            nla - list hosts with NLA disabled
+         """
+        print_help(help_string)
+
     def display_hosts(self, hosts):
         data = [
             [
@@ -97,13 +109,14 @@ class navigator(DatabaseNavigator):
                     )
                 print_table(data, title="Host")
 
-            
-    def help_hosts(self):
+    def do_clear_database(self, line):
+        if input("This will destroy all data in the current database, are you SURE you want to run this? (y/n): ") == "y":
+            self.db.clear_database()
+
+    def help_clear_database(self):
         help_string = """
-        By default prints all hosts
-        Table format:
-        | 'HostID', 'IP', 'Port', 'Hostname', 'Domain', 'OS', 'NLA' |
-        Subcommands:
-            nla - list hosts with NLA disabled
-         """
+        clear_database
+        THIS COMPLETELY DESTROYS ALL DATA IN THE CURRENTLY CONNECTED DATABASE
+        YOU CANNOT UNDO THIS COMMAND
+        """
         print_help(help_string)
