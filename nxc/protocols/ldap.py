@@ -233,7 +233,7 @@ class ldap(connection):
         ldap_url = f"ldaps://{self.target}"
         try:
             ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-            ldap_connection._LDAPConnection__channel_binding_value = None
+            ldap_connection.channel_binding_value = None
             ldap_connection.login(user=" ", domain=self.domain)
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("data 80090346") >= 0:
@@ -242,9 +242,9 @@ class ldap(connection):
             # Login failed (wrong credentials). test if we get an error with an existing, but wrong CBT -> When supported
             elif str(e).find("data 52e") >= 0:
                 ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-                new_cbv = bytearray(ldap_connection._LDAPConnection__channel_binding_value)
+                new_cbv = bytearray(ldap_connection.channel_binding_value)
                 new_cbv[15] = (new_cbv[3] + 1) % 256
-                ldap_connection._LDAPConnection__channel_binding_value = bytes(new_cbv)
+                ldap_connection.channel_binding_value = bytes(new_cbv)
                 try:
                     ldap_connection.login(user=" ", domain=self.domain)
                 except ldap_impacket.LDAPSessionError as e:
@@ -337,7 +337,9 @@ class ldap(connection):
                 self.host,
                 self.hostname,
                 self.domain,
-                self.server_os
+                self.server_os,
+                self.signing_required,
+                self.cbt_status
             )
         except Exception as e:
             self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
@@ -663,34 +665,13 @@ class ldap(connection):
     def get_sid(self):
         self.logger.highlight(f"Domain SID {self.sid_domain}")
 
-    def check_if_admin(self, username=None):
-        r"""
-        Check if a user is a member of privileged groups.
-
-        Args:
-            username: Optional username to check. If None, checks the currently authenticated user.
-                     Can be in format "username" or "DOMAIN\\username".
-
-        Returns:
-            tuple: (is_admin, privileged_groups) where is_admin is bool and privileged_groups is list of group DNs
-        """
-        # Determine which user to check
-        target_username = username
-        if target_username:
-            # Strip domain prefix if present
-            if "\\" in target_username:
-                target_username = target_username.split("\\")[-1]
-        else:
-            target_username = self.username
-
-        # 1. get SID of the domain
+    def check_if_admin(self):
+        # 1. get SID of the domaine
         search_filter = "(userAccountControl:1.2.840.113556.1.4.803:=8192)"
         attributes = ["objectSid"]
         resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
         answers = []
-        privileged_groups = []
-
         if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "" or self.use_kcache) and self.username != "":
             for item in resp_parsed:
                 self.sid_domain = "-".join(item["objectSid"].split("-")[:-1])
@@ -703,64 +684,17 @@ class ldap(connection):
             answers = []
             for item in resp_parsed:
                 answers.append(f"(memberOf:1.2.840.113556.1.4.1941:={item['distinguishedName']})")
-                privileged_groups.append(item["distinguishedName"])
             if len(answers) == 0:
                 self.logger.debug("No groups with default privileged RID were found. Assuming user is not a Domain Administrator.")
-                return False, []
+                return
 
             # 3. get member of these groups
-            search_filter = f"(&(objectCategory=user)(sAMAccountName={target_username})(|{''.join(answers)}))"
+            search_filter = f"(&(objectCategory=user)(sAMAccountName={self.username})(|{''.join(answers)}))"
             resp = self.search(search_filter, attributes=[], sizeLimit=0, baseDN=self.baseDN)
             resp_parsed = parse_result_attributes(resp)
-
-            # If checking current user, set admin_privs attribute
-            if username is None:
-                for item in resp_parsed:
-                    if item:
-                        self.admin_privs = True
-                        return True, privileged_groups
-            else:
-                # For other users, just return the result
-                for item in resp_parsed:
-                    if item:
-                        return True, privileged_groups
-
-        return False, []
-
-    def resolve_sid(self, sid):
-        r"""
-        Resolve a Windows SID to sAMAccountName.
-
-        Args:
-            sid: Windows SID string (e.g., "S-1-5-21-...")
-
-        Returns:
-            tuple: (username, success) where username is "DOMAIN\\username" if successful, else original sid
-        """
-        try:
-            if not sid or not sid.upper().startswith("S-1-5-"):
-                return sid, False
-
-            search_filter = f"(objectSid={sid})"
-            attributes = ["sAMAccountName"]
-            resp = self.search(search_filter, attributes, sizeLimit=1, baseDN=self.baseDN)
-
-            if not resp:
-                return sid, False
-
-            resp_parsed = parse_result_attributes(resp)
-            if resp_parsed and len(resp_parsed) > 0:
-                sam = resp_parsed[0].get("sAMAccountName")
-                if sam:
-                    # Format as DOMAIN\username
-                    domain = self.domain.split(".")[0].upper() if self.domain else ""
-                    return f"{domain}\\{sam}", True
-
-            return sid, False
-
-        except Exception as e:
-            self.logger.debug(f"SID resolution failed for {sid}: {e}")
-            return sid, False
+            for item in resp_parsed:
+                if item:
+                    self.admin_privs = True
 
     def getUnixTime(self, t):
         t -= 116444736000000000
