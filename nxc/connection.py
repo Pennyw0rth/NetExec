@@ -25,7 +25,6 @@ from nxc.paths import NXC_PATH
 from nxc.protocols.ldap.laps import laps_search
 from nxc.helpers.pfx import pfx_auth
 
-from impacket.dcerpc.v5 import transport
 
 sem = BoundedSemaphore(1)
 global_failed_logins = 0
@@ -90,22 +89,33 @@ def get_host_addr_info(target, force_ipv6, dns_server, dns_tcp, dns_timeout):
 
     return result
 
+
 def _setup_socks_proxy(args, logger):
     """
-    Configure a global SOCKS5 proxy using PySocks and enable remote DNS (rdns=True).
+    Configure a global SOCKS proxy using PySocks and enable remote DNS (rdns=True).
+    Supports socks4, socks4a, and socks5 schemes.
     Returns True if a proxy was configured, False otherwise.
     """
+    PROXY_TYPES = {
+        "socks4": socks.SOCKS4,
+        "socks4a": socks.SOCKS4,
+        "socks5": socks.SOCKS5,
+    }
+
     proxy = getattr(args, "proxy", None)
     if not proxy:
         return False
 
     uri = proxy.strip()
+    scheme = "socks5"  # Default scheme
+
     # Accepts "socks5://host:port", "[::1]:1080" or "host:port"
     if "://" in uri:
         scheme, uri = uri.split("://", 1)
         scheme = scheme.lower()
-        if scheme not in ("socks5",):
-            logger.fail(f"Unsupported proxy scheme '{scheme}'. Only socks5 is supported.")
+        if scheme not in PROXY_TYPES:
+            supported = ", ".join(PROXY_TYPES.keys())
+            logger.fail(f"Unsupported proxy scheme '{scheme}'. Supported: {supported}.")
             sys.exit(1)
 
     host = None
@@ -113,10 +123,14 @@ def _setup_socks_proxy(args, logger):
 
     # IPv6 with brackets: [fe80::1]:1080
     if uri.startswith("["):
-        m = re.match(r"^\[(?P<host>.+)\]:(?P<port>\d+)$", uri)
+        m = re.match(r"^\[(?P<host>[^\]]+)\]:(?P<port>\d+)$", uri)
         if m:
             host = m.group("host")
-            port = int(m.group("port"))
+            try:
+                port = int(m.group("port"))
+            except ValueError:
+                logger.fail(f"Invalid port in --proxy value: {m.group('port')}")
+                sys.exit(1)
     else:
         # Split host and port on the last colon to be safe with hostnames/IPv4
         if ":" in uri:
@@ -127,23 +141,32 @@ def _setup_socks_proxy(args, logger):
                 logger.fail(f"Invalid port in --proxy value: {port_str}")
                 sys.exit(1)
 
-    if not host or not port:
-        logger.fail("Invalid --proxy value. Expected format: [socks5://]HOST:PORT (e.g., 127.0.0.1:1080).")
+    if not host or port is None:
+        logger.fail("Invalid --proxy value. Expected format: [scheme://]HOST:PORT (e.g., socks5://127.0.0.1:1080).")
         sys.exit(1)
 
+    if not (1 <= port <= 65535):
+        logger.fail(f"Port must be between 1 and 65535, got: {port}")
+        sys.exit(1)
+
+    proxy_type = PROXY_TYPES[scheme]
+    rdns = scheme != "socks4"  # SOCKS4 doesn't support remote DNS
+
     socks.setdefaultproxy(
-        socks.SOCKS5,
+        proxy_type,
         host,
         port,
-        rdns=True,
+        rdns=rdns,
     )
 
-    # Monkey-patch socket to force usage of the SOCKS5 proxy
+    # Monkey-patch socket to force usage of the SOCKS proxy
     _socket.socket = socks.socksocket
     _socket.create_connection = socks.create_connection
 
-    logger.info(f"SOCKS5 proxy enabled via {host}:{port} (RDNS enabled)")
+    rdns_status = "RDNS enabled" if rdns else "RDNS disabled"
+    logger.info(f"{scheme.upper()} proxy enabled via {host}:{port} ({rdns_status})")
     return True
+
 
 def requires_admin(func):
     def _decorator(self, *args, **kwargs):

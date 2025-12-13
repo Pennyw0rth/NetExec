@@ -1,7 +1,6 @@
 import argparse
 import argcomplete
 import sys
-from typing import Optional
 from argparse import RawTextHelpFormatter
 from os import listdir
 from os.path import dirname
@@ -50,10 +49,8 @@ def gen_cli_args():
     dns_group.add_argument("--dns-timeout", action="store", type=int, default=3, help="DNS query timeout in seconds")
 
     proxy_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
-    proxy_group = proxy_parser.add_argument_group("Proxy", "Route connections through a SOCKS5 proxy")
-    proxy_group.add_argument("--proxy", dest="proxy", metavar="[socks5://]HOST:PORT",
-                             help="Use a SOCKS5 proxy (e.g. 127.0.0.1:1080 or socks5://127.0.0.1:1080). "
-                                  "When set, DNS resolution is performed remotely via the proxy (RDNS).")
+    proxy_group = proxy_parser.add_argument_group("Proxy", "Route connections through a SOCKS proxy")
+    proxy_group.add_argument("--proxy", dest="proxy", metavar="[scheme://]HOST:PORT", help="Use a SOCKS proxy (e.g. 127.0.0.1:1080 or socks5://127.0.0.1:1080). Supported schemes: socks4, socks4a, socks5 (default). RDNS is enabled for socks4a/socks5.")
 
     parser = argparse.ArgumentParser(
         description=rf"""
