@@ -37,7 +37,7 @@ class NXCModule:
             sys.exit(1)
 
     def on_login(self, context, connection):
-        self.logger.fail("[REMOVED] Use the ldap flag '--groups \"Administrators\"' instead of the module group-mem.")
+        context.log.fail("[REMOVED] Use the ldap flag '--groups \"Administrators\"' instead of the module group-mem.")
         return None
 
         # First look up the SID of the group passed in
