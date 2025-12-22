@@ -43,7 +43,7 @@ class NXCModule:
                 for zone in allows_nonsecure_updates:
                     context.log.highlight(zone)
             else:
-                context.log.fail(f"No {dns_type} DNS zones allowing insecure dynamic updates")
+                context.log.fail(f"No {dns_type} DNS zones allowing nonsecure dynamic updates")
 
 
 # [MS-DNSP] - 2.3.2.1 - dnsProperty
