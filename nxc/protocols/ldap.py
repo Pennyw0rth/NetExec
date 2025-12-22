@@ -145,6 +145,7 @@ class ldap(connection):
         self.lmhash = ""
         self.nthash = ""
         self.baseDN = ""
+        self.forestDN = ""
         self.target = ""
         self.targetDomain = ""
         self.remote_ops = None
@@ -268,12 +269,13 @@ class ldap(connection):
         try:
             resp = self.ldap_connection.search(
                 scope=ldapasn1_impacket.Scope("baseObject"),
-                attributes=["dnsHostName", "defaultNamingContext", "configurationNamingContext"],
+                attributes=["dnsHostName", "defaultNamingContext", "configurationNamingContext", "rootDomainNamingContext"],
                 sizeLimit=0,
             )
             resp_parsed = parse_result_attributes(resp)[0]
 
             self.configuration_context = resp_parsed["configurationNamingContext"]
+            self.forestDN = resp_parsed["rootDomainNamingContext"]
             target = resp_parsed["dnsHostName"]
             base_dn = resp_parsed["defaultNamingContext"]
             target_domain = sub(
