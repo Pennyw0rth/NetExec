@@ -7,7 +7,7 @@ help_kw = functools.partial(colored, color="green", attrs=["bold"])
 
 
 class navigator(DatabaseNavigator):
-     
+
     def help_hosts(self):
         help_string = """
         By default prints all hosts
@@ -42,7 +42,7 @@ class navigator(DatabaseNavigator):
                 os = host[5].decode()
             except Exception:
                 os = host[5]
-           
+
             nla = host[6]
 
             data.append(
@@ -93,7 +93,7 @@ class navigator(DatabaseNavigator):
                         os = host[5].decode()
                     except Exception:
                         os = host[5]
-                
+
                     nla = host[6]
 
                     data.append(

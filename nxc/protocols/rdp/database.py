@@ -89,6 +89,7 @@ class database(BaseDB):
     def get_hosts(self, filter_term=None, domain=None):
         """Return hosts from the database."""
         q = select(self.HostsTable)
+
         # if we're returning a single host by ID
         if self.is_host_valid(filter_term):
             q = q.filter(self.HostsTable.c.id == filter_term)
