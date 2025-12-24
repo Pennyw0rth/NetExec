@@ -1,9 +1,8 @@
-import os
 from impacket import tds
 from nxc.helpers.misc import CATEGORY
-from impacket.krb5.ccache import CCache
 
 
+# Module writtent by @Defte_
 class NXCModule:
     name = "mssql_cbt"
     description = "Checks whether Channel Binding is enabled on the MSSQL database"
@@ -13,10 +12,8 @@ class NXCModule:
     def options(self, context, module_options):
         self.logger = context.log
 
-    def _check(self, connect_func):
-        return connect_func(cbt_fake_value=b"")
-
     def on_login(self, context, connection):
+
         if not connection.encryption:
             self.logger.highlight("TLS not required: Channel Binding Token NOT REQUIRED")
             return
@@ -25,12 +22,9 @@ class NXCModule:
             self.logger.highlight("Local auth: CANNOT check Channel Binding Token configuration")
             return
 
-        # Force authentication to fail if CBT is required
-        connection.tls_unique = b""
-
         domain = connection.targetDomain
         host = connection.host
-        remoteName = connection.conn.remoteName
+        remote_name = connection.conn.remoteName
         port = connection.port
         timeout = connection.args.mssql_timeout
         username = connection.username
@@ -42,57 +36,31 @@ class NXCModule:
         kdc_host = connection.kdcHost
         local_auth = connection.args.local_auth
 
-        new_conn = tds.MSSQL(host, port, remoteName)
+        ntlm_hash = f":{nthash}" if nthash else None
+
+        new_conn = tds.MSSQL(host, port, remote_name)
         new_conn.connect(timeout)
 
-        def ok_or_fail(res):
-            if res: 
-                self.logger.highlight("Connection successful:  Channel Binding Token NOT REQUIRED")
-            else: 
-                self.logger.highlight("Connection failed: Channel Binding Token REQUIRED")
+        def log_result(success):
+            self.logger.highlight(
+                "Connection successful: Channel Binding Token NOT REQUIRED"
+                if success else
+                "Connection failed: Channel Binding Token REQUIRED"
+            )
 
-        # Password auth (NTLM or Kerberos)
-        if username and password and not kerberos:
-            self.logger.debug("User/password (NTLM)")
-            ok_or_fail(self._check(lambda **k: new_conn.login(
-                None, username, password, domain, None, not local_auth, **k
-            )))
+        if kerberos:
+            success = new_conn.kerberosLogin(
+                None, username, password, domain,
+                ntlm_hash, aes_key, kdc_host,
+                None, None, use_cache,
+                cbt_fake_value=b""
+            )
+        else:
+            success = new_conn.login(
+                None, username, password, domain,
+                ntlm_hash, not local_auth,
+                cbt_fake_value=b""
+            )
 
-        if username and password and kerberos:
-            self.logger.debug("User/password (Kerberos)")
-            ok_or_fail(self._check(lambda **k: new_conn.kerberosLogin(
-                None, username, password, domain, None, "", kdc_host, None, None, False, **k
-            )))
-
-        # NT hash auth
-        if username and nthash and not kerberos:
-            self.logger.debug("NT hash (NTLM)")
-            ntlm_hash = f":{nthash}"
-            ok_or_fail(self._check(lambda **k: new_conn.login(
-                None, username, None, domain, ntlm_hash, not local_auth, **k
-            )))
-
-        if username and nthash and kerberos:
-            self.logger.debug("NT hash (Kerberos RC4)")
-            ntlm_hash = f":{nthash}"
-            ok_or_fail(self._check(lambda **k: new_conn.kerberosLogin(
-                None, username, None, domain, ntlm_hash, "", kdc_host, None, None, False, **k
-            )))
-
-        # AES key auth
-        if username and aes_key:
-            self.logger.debug("AES key (Kerberos)")
-            ok_or_fail(self._check(lambda **k: new_conn.kerberosLogin(
-                None, username, None, domain, None, aes_key, kdc_host, None, None, False, **k
-            )))
-
-        # Kerberos cache auth
-        if use_cache and kerberos and not any([nthash, password, aes_key]):
-            ccache = CCache.loadFile(os.getenv("KRB5CCNAME"))
-            username = ccache.credentials[0].header["client"].prettyPrint().decode().split("@")[0]
-            self.logger.debug("Kerberos cache")
-            ok_or_fail(self._check(lambda **k: new_conn.kerberosLogin(
-                None, username, None, domain, None, None, kdc_host, None, None, True, **k
-            )))
-
+        log_result(success)
         new_conn.disconnect()
