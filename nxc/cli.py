@@ -24,7 +24,7 @@ def gen_cli_args():
         VERSION = importlib.metadata.version("netexec")
         COMMIT = ""
         DISTANCE = ""
-    CODENAME = "SmoothOperator"
+    CODENAME = "Yippie-Ki-Yay"
 
     generic_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     generic_group = generic_parser.add_argument_group("Generic Options")
