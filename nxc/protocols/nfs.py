@@ -370,8 +370,16 @@ class nfs(connection):
                 res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
 
                 # Check for a bad path
-                if "resfail" in res and res["status"] == NFS3ERR_NOENT:
-                    self.logger.fail(f"Unknown path: {remote_file_path!r}")
+                if res is None or "resfail" in res:
+                    if res is None:
+                        self.logger.fail(f"Invalid response from NFS server when looking up {sub_path}")
+                    elif res["status"] == NFS3ERR_NOENT:
+                        self.logger.fail(f"Unknown path: {remote_file_path!r}")
+                    else:
+                        self.logger.fail(f"Error looking up path {sub_path}: {NFSSTAT3.get(res['status'], 'Unknown error')}")
+                    return
+                if "resok" not in res or res["resok"] is None or res["resok"].get("object") is None:
+                    self.logger.fail(f"Invalid response when looking up {sub_path}")
                     return
 
                 curr_fh = res["resok"]["object"]["data"]
