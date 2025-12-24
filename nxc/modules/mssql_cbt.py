@@ -22,24 +22,10 @@ class NXCModule:
             self.logger.highlight("Local auth: CANNOT check Channel Binding Token configuration")
             return
 
-        domain = connection.targetDomain
-        host = connection.host
-        remote_name = connection.conn.remoteName
-        port = connection.port
-        timeout = connection.args.mssql_timeout
-        username = connection.username
-        password = connection.password
-        nthash = connection.nthash
-        kerberos = connection.kerberos
-        use_cache = connection.use_kcache
-        aes_key = connection.aesKey
-        kdc_host = connection.kdcHost
-        local_auth = connection.args.local_auth
+        ntlm_hash = f":{connection.nthash}" if connection.nthash else None
 
-        ntlm_hash = f":{nthash}" if nthash else None
-
-        new_conn = tds.MSSQL(host, port, remote_name)
-        new_conn.connect(timeout)
+        new_conn = tds.MSSQL(connection.host, connection.port, connection.conn.remoteName)
+        new_conn.connect(connection.args.mssql_timeout)
 
         def log_result(success):
             self.logger.highlight(
@@ -48,17 +34,17 @@ class NXCModule:
                 "Connection failed: Channel Binding Token REQUIRED"
             )
 
-        if kerberos:
+        if connection.kerberos:
             success = new_conn.kerberosLogin(
-                None, username, password, domain,
-                ntlm_hash, aes_key, kdc_host,
-                None, None, use_cache,
+                None, connection.username, connection.password, connection.targetDomain,
+                ntlm_hash, connection.aesKey, connection.kdcHost,
+                None, None, connection.use_kcache,
                 cbt_fake_value=b""
             )
         else:
             success = new_conn.login(
-                None, username, password, domain,
-                ntlm_hash, not local_auth,
+                None, connection.username, connection.password, connection.targetDomain,
+                ntlm_hash, not connection.args.local_auth,
                 cbt_fake_value=b""
             )
 
