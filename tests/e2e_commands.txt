@@ -284,6 +284,7 @@ netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M mssql_
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M nanodump
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M test_connection -o HOST=localhost
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M web_delivery -o URL=localhost/dl_cradle
+netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M mssql_cbt
 ##### RDP
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec {DNS} rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS
