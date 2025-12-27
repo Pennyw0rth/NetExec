@@ -3,7 +3,7 @@ import warnings
 from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, func, select, insert, update, delete
 from sqlalchemy.dialects.sqlite import Insert  # used for upsert
 from sqlalchemy.exc import SAWarning
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 
 from nxc.database import BaseDB, format_host_query
 from nxc.logger import nxc_logger
@@ -61,6 +61,18 @@ class database(BaseDB):
             ForeignKeyConstraint(["pillaged_from_hostid"], ["hosts.id"]),
         )
 
+    class LoggedInRelation(Base):
+        __tablename__ = "loggedin_relations"
+        id = Column(Integer)
+        userid = Column(Integer)
+        hostid = Column(Integer)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            ForeignKeyConstraint(["userid"], ["users.id"]),
+            ForeignKeyConstraint(["hostid"], ["hosts.id"]),
+        )
+
     @staticmethod
     def db_schema(db_conn):
         Base.metadata.create_all(db_conn)
@@ -69,6 +81,7 @@ class database(BaseDB):
         self.HostsTable = self.reflect_table(self.Host)
         self.UsersTable = self.reflect_table(self.User)
         self.AdminRelationsTable = self.reflect_table(self.AdminRelation)
+        self.LoggedinRelationsTable = self.reflect_table(self.LoggedInRelation)
 
     def add_host(self, ip, hostname, domain, os, instances):
         """
@@ -120,8 +133,6 @@ class database(BaseDB):
 
     def add_credential(self, credtype, domain, username, password, pillaged_from=None):
         """Check if this credential has already been added to the database, if not add it in."""
-        user_rowid = None
-
         credential_data = {}
         if credtype is not None:
             credential_data["credtype"] = credtype
@@ -159,7 +170,6 @@ class database(BaseDB):
                     results = self.db_execute(q)  # .first()
 
         nxc_logger.debug(f"add_credential(credtype={credtype}, domain={domain}, username={username}, password={password}, pillaged_from={pillaged_from})")
-        return user_rowid
 
     def remove_credentials(self, creds_id):
         """Removes a credential ID from the database"""
@@ -249,6 +259,16 @@ class database(BaseDB):
 
         return self.db_execute(q).all()
 
+    def get_credential(self, cred_type, domain, username, password):
+        q = select(self.UsersTable).filter(
+            self.UsersTable.c.domain == domain,
+            self.UsersTable.c.username == username,
+            self.UsersTable.c.password == password,
+            self.UsersTable.c.credtype == cred_type,
+        )
+        results = self.db_execute(q).first()
+        return results.id
+
     def is_host_valid(self, host_id):
         """Check if this host ID is valid."""
         q = select(self.HostsTable).filter(self.HostsTable.c.id == host_id)
@@ -275,3 +295,41 @@ class database(BaseDB):
             q = format_host_query(q, filter_term, self.HostsTable)
 
         return self.db_execute(q).all()
+
+    def add_loggedin_relation(self, user_id, host_id):
+        relation_query = select(self.LoggedinRelationsTable).filter(
+            self.LoggedinRelationsTable.c.userid == user_id,
+            self.LoggedinRelationsTable.c.hostid == host_id,
+        )
+        results = self.db_execute(relation_query).all()
+
+        # only add one if one doesn't already exist
+        if not results:
+            relation = {"userid": user_id, "hostid": host_id}
+            try:
+                nxc_logger.debug(f"Inserting loggedin_relations: {relation}")
+                # TODO: find a way to abstract this away to a single Upsert call
+                q = Insert(self.LoggedinRelationsTable)  # .returning(self.LoggedinRelationsTable.c.id)
+
+                self.db_execute(q, [relation])  # .scalar()
+                inserted_id_results = self.get_loggedin_relations(user_id, host_id)
+                nxc_logger.debug(f"Checking if relation was added: {inserted_id_results}")
+                return inserted_id_results[0].id
+            except Exception as e:
+                nxc_logger.debug(f"Error inserting LoggedinRelation: {e}")
+
+    def get_loggedin_relations(self, user_id=None, host_id=None):
+        q = select(self.LoggedinRelationsTable)  # .returning(self.LoggedinRelationsTable.c.id)
+        if user_id:
+            q = q.filter(self.LoggedinRelationsTable.c.userid == user_id)
+        if host_id:
+            q = q.filter(self.LoggedinRelationsTable.c.hostid == host_id)
+        return self.db_execute(q).all()
+
+    def remove_loggedin_relations(self, user_id=None, host_id=None):
+        q = delete(self.LoggedinRelationsTable)
+        if user_id:
+            q = q.filter(self.LoggedinRelationsTable.c.userid == user_id)
+        elif host_id:
+            q = q.filter(self.LoggedinRelationsTable.c.hostid == host_id)
+        self.db_execute(q)

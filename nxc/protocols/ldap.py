@@ -145,18 +145,19 @@ class ldap(connection):
         self.lmhash = ""
         self.nthash = ""
         self.baseDN = ""
+        self.forestDN = ""
         self.target = ""
         self.targetDomain = ""
         self.remote_ops = None
         self.bootkey = None
-        self.smbv1 = None
-        self.signing = False
         self.signing_required = None
         self.cbt_status = None
+        self.auth_choice = "sasl" if not args.simple_bind else "simple"
         self.admin_privs = False
         self.no_ntlm = False
         self.sid_domain = ""
         self.scope = None
+        self.configuration_context = ""
 
         connection.__init__(self, args, db, host)
 
@@ -233,7 +234,7 @@ class ldap(connection):
         ldap_url = f"ldaps://{self.target}"
         try:
             ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-            ldap_connection._LDAPConnection__channel_binding_value = None
+            ldap_connection.channel_binding_value = None
             ldap_connection.login(user=" ", domain=self.domain)
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("data 80090346") >= 0:
@@ -242,9 +243,9 @@ class ldap(connection):
             # Login failed (wrong credentials). test if we get an error with an existing, but wrong CBT -> When supported
             elif str(e).find("data 52e") >= 0:
                 ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-                new_cbv = bytearray(ldap_connection._LDAPConnection__channel_binding_value)
+                new_cbv = bytearray(ldap_connection.channel_binding_value)
                 new_cbv[15] = (new_cbv[3] + 1) % 256
-                ldap_connection._LDAPConnection__channel_binding_value = bytes(new_cbv)
+                ldap_connection.channel_binding_value = bytes(new_cbv)
                 try:
                     ldap_connection.login(user=" ", domain=self.domain)
                 except ldap_impacket.LDAPSessionError as e:
@@ -268,11 +269,13 @@ class ldap(connection):
         try:
             resp = self.ldap_connection.search(
                 scope=ldapasn1_impacket.Scope("baseObject"),
-                attributes=["defaultNamingContext", "dnsHostName"],
+                attributes=["dnsHostName", "defaultNamingContext", "configurationNamingContext", "rootDomainNamingContext"],
                 sizeLimit=0,
             )
             resp_parsed = parse_result_attributes(resp)[0]
 
+            self.configuration_context = resp_parsed["configurationNamingContext"]
+            self.forestDN = resp_parsed["rootDomainNamingContext"]
             target = resp_parsed["dnsHostName"]
             base_dn = resp_parsed["defaultNamingContext"]
             target_domain = sub(
@@ -356,6 +359,10 @@ class ldap(connection):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({cbt_status}) {ntlm}")
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
+        if self.auth_choice == "simple":
+            self.logger.fail("Simple bind and Kerberos authentication are mutually exclusive.")
+            return False
+
         self.username = username if not self.args.use_kcache else self.username    # With ccache we get the username from the ticket
         self.password = password
         self.domain = domain
@@ -411,7 +418,7 @@ class ldap(connection):
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             self.logger.success(f"{domain}\\{self.username}{used_ccache} {self.mark_pwned()}")
 
-            if not self.args.local_auth and self.username != "":
+            if self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -443,6 +450,8 @@ class ldap(connection):
             return False
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("strongerAuthRequired") >= 0:
+                # This should actually not happen anymore as impacket now supports LDAP signing/sealing via GSSAPI
+                self.logger.error("StrongerAuthRequired Error on login: This should not happen anymore, please contact the devs and open an issue on github!")
                 # We need to try SSL
                 try:
                     # Connect to LDAPS
@@ -468,7 +477,7 @@ class ldap(connection):
                     # Prepare success credential text
                     self.logger.success(f"{domain}\\{self.username} {self.mark_pwned()}")
 
-                    if not self.args.local_auth and self.username != "":
+                    if self.username != "":
                         add_user_bh(self.username, self.domain, self.logger, self.config)
                     if self.admin_privs:
                         add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -515,8 +524,8 @@ class ldap(connection):
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3]")
-            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-            self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
+            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=self.auth_choice != "simple")
+            self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=self.auth_choice)
             self.check_if_admin()
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
             self.db.add_credential("plaintext", domain, self.username, self.password)
@@ -524,13 +533,18 @@ class ldap(connection):
             # Prepare success credential text
             self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
 
-            if not self.args.local_auth and self.username != "":
+            if self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("strongerAuthRequired") >= 0:
+                # This should actually not happen anymore as impacket now supports LDAP signing/sealing via GSSAPI
+                if self.args.simple_bind:
+                    self.logger.fail("StrongerAuthRequired error on login: SIMPLE bind cannot work with signing/sealing enforced. Falling back to LDAPS.")
+                else:
+                    self.logger.error("StrongerAuthRequired error on login: This should not happen anymore, please contact the devs and open an issue on github!")
                 # We need to try SSL
                 try:
                     # Connect to LDAPS
@@ -540,7 +554,7 @@ class ldap(connection):
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [4]")
                     self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
-                    self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
+                    self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=self.auth_choice)
                     self.check_if_admin()
                     self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
                     self.db.add_credential("plaintext", domain, self.username, self.password)
@@ -548,7 +562,7 @@ class ldap(connection):
                     # Prepare success credential text
                     self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
 
-                    if not self.args.local_auth and self.username != "":
+                    if self.username != "":
                         add_user_bh(self.username, self.domain, self.logger, self.config)
                     if self.admin_privs:
                         add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -616,13 +630,15 @@ class ldap(connection):
             out = f"{domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}"
             self.logger.success(out)
 
-            if not self.args.local_auth and self.username != "":
+            if self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("strongerAuthRequired") >= 0:
+                # This should actually not happen anymore as impacket now supports LDAP signing/sealing via GSSAPI
+                self.logger.error("StrongerAuthRequired error on login: This should not happen anymore, please contact the devs and open an issue on github!")
                 try:
                     # We need to try SSL
                     self.logger.extra["protocol"] = "LDAPS"
@@ -640,7 +656,7 @@ class ldap(connection):
                     out = f"{domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}"
                     self.logger.success(out)
 
-                    if not self.args.local_auth and self.username != "":
+                    if self.username != "":
                         add_user_bh(self.username, self.domain, self.logger, self.config)
                     if self.admin_privs:
                         add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)

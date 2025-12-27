@@ -1,6 +1,6 @@
 from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, select, func, delete
 from sqlalchemy.dialects.sqlite import Insert
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 
 from nxc.database import BaseDB, format_host_query
 from nxc.logger import nxc_logger
@@ -83,7 +83,6 @@ class database(BaseDB):
         Check if this host has already been added to the database, if not, add it in.
         TODO: return inserted or updated row ids as a list
         """
-        domain = domain.split(".")[0].upper()
         hosts = []
 
         q = select(self.HostsTable).filter(self.HostsTable.c.ip == ip)
