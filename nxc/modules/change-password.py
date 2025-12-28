@@ -33,6 +33,9 @@ class NXCModule:
         If want to change other user's password (with forcechangepassword priv or admin rights)
             netexec smb <DC_IP> -u username -p password -M change-password -o USER='target_user' NEWPASS='target_user_newpass'
             netexec smb <DC_IP> -u username -p password -M change-password -o USER='target_user' NEWNTHASH='target_user_newnthash'
+
+        If you hit STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT (pre-created computer, needs RPC-SAMR over TCP)
+            netexec smb <DC_IP> -u BANKING$ -p banking -M change-password -o NEWPASS='newpass'
         """
         self.newpass = module_options.get("NEWPASS")
         self.newhash = module_options.get("NEWNTHASH")
@@ -127,6 +130,62 @@ class NXCModule:
             context.log.fail(f"SMB-SAMR password change failed: {e}")
         finally:
             self.dce.disconnect()
+
+    def on_login_fail(self, context, connection, error):
+        # Handle STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT pre-auth; attempt RPC-SAMR over TCP with supplied plaintext password
+        try:
+            err = error.getErrorString()
+            if isinstance(err, tuple):
+                err = err[0]
+        except Exception:
+            err = str(error)
+
+        if "STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT" not in err:
+            return
+
+        if not self.newpass:
+            context.log.fail("NEWPASS is required to recover from STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT")
+            return
+
+        username = connection.username
+        domain = connection.domain
+        oldpass = connection.password
+        oldhash = connection.nthash or ""
+
+        if not (username and domain and oldpass):
+            context.log.debug("change-password: missing username/domain/password; cannot attempt SAMR change on failure")
+            return
+
+        context.log.info("change-password: attempting RPC-SAMR over TCP due to STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT")
+
+        dce = None
+        try:
+            dce = self.authenticate(context, connection, protocol="ncacn_ip_tcp", anonymous=False)
+            samr.hSamrUnicodeChangePasswordUser2(
+                dce,
+                "\x00",
+                username,
+                oldpass,
+                self.newpass,
+                "",
+                oldhash,
+            )
+            context.log.success(f"Successfully changed password for {domain}\\{username}")
+            if hasattr(context, "db") and context.db:
+                try:
+                    context.db.add_credential("plaintext", domain, username, self.newpass)
+                except Exception as db_e:
+                    context.log.debug(f"DB add_credential failed: {db_e}")
+        except DCERPCException as e:
+            context.log.fail(f"RPC-SAMR password change failed: {e}")
+        except Exception as e:
+            context.log.fail(f"RPC-SAMR password change failed: {e}")
+        finally:
+            try:
+                if dce:
+                    dce.disconnect()
+            except Exception:
+                pass
 
     def _smb_samr_change(self, context, connection, target_username, target_domain, oldHash, newPassword, newHash):
         # Reset the password for a different user
