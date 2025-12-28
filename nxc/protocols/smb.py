@@ -467,23 +467,49 @@ class smb(connection):
                 with contextlib.suppress(Exception):
                     self.conn.logoff()
             return True
+
         except SessionError as e:
             error, desc = e.getErrorString()
             self.logger.fail(
                 f'{domain}\\{self.username}:{process_secret(self.password)} {error} {f"({desc})" if self.args.verbose else ""}',
                 color="magenta" if error in smb_error_status else "red",
             )
+
+            # Ensure modules are loaded so on_login_fail can fire even on auth failure
+            modules = getattr(self, "modules", None)
+            if modules is None and getattr(self.args, "module", None):
+                try:
+                    self.load_modules()
+                except Exception as me:
+                    self.logger.debug(f"load_modules error: {me}")
+                modules = getattr(self, "modules", None)
+            if modules is None:
+                modules = []
+
+            # Minimal context with .log for modules
+            ctx = type("Ctx", (object,), {"log": self.logger})()
+
+            for module in modules:
+                if hasattr(module, "on_login_fail"):
+                    try:
+                        # change-password expects (context, connection, error)
+                        module.on_login_fail(ctx, self, e)
+                    except Exception as me:
+                        self.logger.debug(f"on_login_fail error: {me}")
+
             if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED"] and self.args.module == ["change-password"]:
                 return True
             if error not in smb_error_status:
                 self.inc_failed_login(username)
                 return False
+
         except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
             self.logger.fail(f"Connection Error: {e}")
             return False
         except BrokenPipeError:
             self.logger.fail("Broken Pipe Error while attempting to login")
             return False
+
 
     def hash_login(self, domain, username, ntlm_hash):
         # Re-connect since we logged off
