@@ -364,15 +364,28 @@ class nfs(connection):
 
             # Iterate over the path until we hit the file
             curr_fh = mount_fh
+            self.update_auth(mount_fh)
+
             for sub_path in remote_file_path.lstrip("/").split("/"):
-                # Update the UID for the next object and get the handle
-                self.update_auth(mount_fh)
                 res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
 
-                # Check for a bad path
-                if "resfail" in res and res["status"] == NFS3ERR_NOENT:
-                    self.logger.fail(f"Unknown path: {remote_file_path!r}")
-                    return
+                if "resfail" in res:
+                    attrs = res["resfail"].get("attributes", {})
+                    parent_gid = attrs.get("gid")
+                    if parent_gid is not None and self.auth.get("gid") != parent_gid:
+                        self.logger.debug(f"Access denied for '{sub_path}' with GID {self.auth.get('gid')}, retrying with parent GID {parent_gid}")
+                        self.auth["gid"] = parent_gid
+                        res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
+                        if "resfail" in res:
+                            self.logger.fail(f"Access denied for '{sub_path}' even with GID {parent_gid}")
+                            return
+                    else:
+                        # Check for a bad path
+                        if res["status"] == NFS3ERR_NOENT:
+                            self.logger.fail(f"Unknown path: {remote_file_path!r}")
+                        else:
+                            self.logger.fail(f"Lookup failed for '{sub_path}': {NFSSTAT3.get(res['status'], res['status'])}")
+                        return
 
                 curr_fh = res["resok"]["object"]["data"]
                 # If response is file then break
