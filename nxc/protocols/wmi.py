@@ -402,7 +402,7 @@ class wmi(connection):
     def list_snapshots(self):
         drive = self.args.list_snapshots
         self.logger.info(f"Retrieveing volume shadow copies of {drive}.")
-        wql = "select ID, DeviceObject, ClientAccessible from win32_shadowcopy"
+        wql = "select ID, DeviceObject, ClientAccessible, InstallDate from win32_shadowcopy"
 
         def callback_func(iEnumWbemClassObject, records):
             while True:
@@ -415,10 +415,10 @@ class wmi(connection):
             self.logger.info("Target volume shadow copies not existed.")
             return
 
-        self.logger.highlight(f"{'Drive':<8}{'Shadow Copy ID':<40}{'ClientAccessible':<18}{'Device Object':<50}")
-        self.logger.highlight(f"{'------':<8}{'--------------':<40}{'----------------':<18}{'-------------':<50}")
+        self.logger.highlight(f"{'Drive':<8}{'Shadow Copy ID':<40}{'ClientAccessible':<18}{'InstallDate':<27}{'Device Object':<50}")
+        self.logger.highlight(f"{'------':<8}{'--------------':<40}{'----------------':<18}{'-----------':<27}{'-------------':<50}")
         for record in snapshots:
-            self.logger.highlight(f"{drive:<8}{record['ID']['value']:<40}{record['ClientAccessible']['value']:<18}{record['DeviceObject']['value']:<50}")
+            self.logger.highlight(f"{drive:<8}{record['ID']['value']:<40}{record['ClientAccessible']['value']:<18}{record['InstallDate']['value']:<27}{record['DeviceObject']['value']:<50}")
 
     @requires_admin
     def execute(self, command=None, get_output=False, use_powershell=False):
