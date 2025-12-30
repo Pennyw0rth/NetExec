@@ -73,7 +73,7 @@ def proto_args(parser, parents):
     mapping_enum_group.add_argument("--taskkill", type=str, help="Kills a specific PID or a proces name's PID's")
 
     wmi_group = smb_parser.add_argument_group("WMI Queries")
-    wmi_group.add_argument("--wmi", metavar="QUERY", dest="wmi_query", type=str, help="Issues the specified WMI query")
+    wmi_group.add_argument("--wmi-query", metavar="QUERY", dest="wmi_query", type=str, help="Issues the specified WMI query")
     wmi_group.add_argument("--wmi-namespace", metavar="NAMESPACE", default="root\\cimv2", help="WMI Namespace (default: %(default)s)")
 
     spidering_group = smb_parser.add_argument_group("Spidering Shares")

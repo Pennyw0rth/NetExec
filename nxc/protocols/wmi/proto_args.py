@@ -13,7 +13,7 @@ def proto_args(parser, parents):
     cred_gathering_group.add_argument("--list-snapshots", nargs="?", dest="list_snapshots", const="ADMIN$", help="Lists the VSS snapshots (default: %(const)s)")
 
     egroup = wmi_parser.add_argument_group("Mapping/Enumeration")
-    egroup.add_argument("--wmi", metavar="QUERY", dest="wmi_query", type=str, help="Issues the specified WMI query")
+    egroup.add_argument("--wmi-query", metavar="QUERY", dest="wmi_query", type=str, help="Issues the specified WMI query")
     egroup.add_argument("--wmi-namespace", metavar="NAMESPACE", type=str, default="root\\cimv2", help="WMI Namespace (default: %(default)s)")
 
     cgroup = wmi_parser.add_argument_group("Command Execution")
