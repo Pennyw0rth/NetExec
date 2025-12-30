@@ -399,7 +399,7 @@ class HostChecker:
         return success, reasons
 
     def check_last_successful_update(self):
-        records = self.connection.wmi(wmi_query="Select TimeGenerated FROM Win32_ReliabilityRecords Where EventIdentifier=19", namespace="root\\cimv2")
+        records = self.connection.wmi_query(wmi_query="Select TimeGenerated FROM Win32_ReliabilityRecords Where EventIdentifier=19", namespace="root\\cimv2")
         if isinstance(records, bool) or len(records) == 0:
             return False, ["No update found"]
         most_recent_update_date = records[0]["TimeGenerated"]["value"]

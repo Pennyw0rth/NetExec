@@ -29,7 +29,7 @@ class NXCModule:
     def on_admin_login(self, context, connection):
         if not self.domains:
             domains = []
-            output = connection.wmi("Select Name FROM MicrosoftDNS_Zone", "root\\microsoftdns")
+            output = connection.wmi_query("Select Name FROM MicrosoftDNS_Zone", "root\\microsoftdns")
             domains = [result["Name"]["value"] for result in output] if output else []
             context.log.success(f"Domains retrieved: {domains}")
         else:
@@ -37,7 +37,7 @@ class NXCModule:
         data = ""
 
         for domain in domains:
-            output = connection.wmi(
+            output = connection.wmi_query(
                 f"Select TextRepresentation FROM MicrosoftDNS_ResourceRecord WHERE DomainName = {domain}",
                 "root\\microsoftdns",
             )

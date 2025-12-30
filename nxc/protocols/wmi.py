@@ -367,10 +367,6 @@ class wmi(connection):
 
     @requires_admin
     def wmi_query(self, wql=None, namespace=None, callback_func=None):
-        """Execute WQL syntax via WMI
-
-        This is done via the --wmi flag
-        """
         records = []
         if not wql:
             wql = self.args.wmi_query.strip("\n")
