@@ -1718,10 +1718,10 @@ class smb(connection):
         return PassPolDump(self).dump()
 
     @requires_admin
-    def wmi_query(self, wmi_query=None, namespace=None, callback_func=None):
+    def wmi_query(self, wql=None, namespace=None, callback_func=None):
         records = []
-        if not wmi_query:
-            wmi_query = self.args.wmi_query.strip("\n")
+        if not wql:
+            wql = self.args.wmi_query.strip("\n")
 
         if not namespace:
             namespace = self.args.wmi_namespace
@@ -1742,31 +1742,29 @@ class smb(connection):
             iWbemLevel1Login = IWbemLevel1Login(iInterface)
             iWbemServices = iWbemLevel1Login.NTLMLogin(namespace, NULL, NULL)
             iWbemLevel1Login.RemRelease()
-            iEnumWbemClassObject = iWbemServices.ExecQuery(wmi_query)
+            iEnumWbemClassObject = iWbemServices.ExecQuery(wql)
         except Exception as e:
             self.logger.fail(f"Execute WQL error: {e}")
             if "iWbemLevel1Login" in locals():
                 dcom.disconnect()
         else:
-            self.logger.info(f"Executing WQL syntax: {wmi_query}")
-            while True:
-                try:
-                    if not callback_func:
+            self.logger.info(f"Executing WQL syntax: {wql}")
+            try:
+                if not callback_func:
+                    while True:
                         wmi_results = iEnumWbemClassObject.Next(0xFFFFFFFF, 1)[0]
                         record = wmi_results.getProperties()
                         records.append(record)
                         for k, v in record.items():
                             if k != "TimeGenerated":  # from the wcc module, but this is a small hack to get it to stop spamming - TODO: add in method to disable output for this function
                                 self.logger.highlight(f"{k} => {v['value']}")
-                    else:
-                        callback_func(iEnumWbemClassObject, records)
-                except Exception as e:
-                    if str(e).find("S_FALSE") < 0:
-                        raise e
-                    else:
-                        break
+                else:
+                    callback_func(iEnumWbemClassObject, records)
+            except Exception as e:
+                if str(e).find("S_FALSE") < 0:
+                    self.logger.debug(e)
             dcom.disconnect()
-        return records if records else False
+        return records
 
     def spider(
         self,
