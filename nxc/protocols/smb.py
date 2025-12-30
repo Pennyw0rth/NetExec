@@ -1718,10 +1718,10 @@ class smb(connection):
         return PassPolDump(self).dump()
 
     @requires_admin
-    def wmi(self, wmi_query=None, namespace=None):
+    def wmi_query(self, wmi_query=None, namespace=None):
         records = []
         if not wmi_query:
-            wmi_query = self.args.wmi.strip("\n")
+            wmi_query = self.args.wmi_query.strip("\n")
 
         if not namespace:
             namespace = self.args.wmi_namespace
@@ -2234,6 +2234,20 @@ class smb(connection):
 
         if self.output_file:
             self.output_file.close()
+
+    @requires_admin
+    def list_snapshots(self):
+        drive = self.args.list_snapshots
+
+        self.logger.info(f"Retrieveing volume shadow copies of {drive}.")
+        snapshots = self.conn.listSnapshots(self.conn.connectTree(drive), "/")
+        if not snapshots:
+            self.logger.info("Target volume shadow copies not existed.")
+            return
+        self.logger.highlight(f"{'Drive':<8}{'Shadow Copies GMT SMB PATH':<26}")
+        self.logger.highlight(f"{'------':<8}{'--------------------------':<26}")
+        for i in snapshots:
+            self.logger.highlight(f"{drive:<8}{i:<26}")
 
     @requires_admin
     def lsa(self):

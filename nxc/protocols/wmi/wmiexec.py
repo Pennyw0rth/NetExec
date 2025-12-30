@@ -23,31 +23,19 @@ from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Lo
 
 
 class WMIEXEC:
-    def __init__(self, target, username, password, domain, lmhash, nthash, doKerberos, kdcHost, remoteHost, aesKey, logger, exec_timeout, codec):
+    def __init__(self, target, iWbemLevel1Login, logger, exec_timeout, codec):
         self.__target = target
-        self.__username = username
-        self.__password = password
-        self.__domain = domain
-        self.__lmhash = lmhash
-        self.__nthash = nthash
-        self.__doKerberos = doKerberos
-        self.__kdcHost = kdcHost
-        self.__remoteHost = remoteHost
-        self.__aesKey = aesKey
+        self.__iWbemLevel1Login = iWbemLevel1Login
         self.logger = logger
         self.__exec_timeout = exec_timeout
         self.__registry_Path = ""
         self.__outputBuffer = ""
-
         self.__shell = "cmd.exe /Q /c "
         self.__pwd = "C:\\"
         self.__codec = codec
 
-        self.__dcom = DCOMConnection(self.__target, self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, oxidResolver=True, doKerberos=self.__doKerberos, kdcHost=self.__kdcHost, aesKey=self.__aesKey, remoteHost=self.__remoteHost)
-        iInterface = self.__dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
-        iWbemLevel1Login = IWbemLevel1Login(iInterface)
-        self.__iWbemServices = iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
-        iWbemLevel1Login.RemRelease()
+        self.__iWbemServices = self.__iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
+        self.__iWbemLevel1Login.RemRelease()
         self.__win32Process, _ = self.__iWbemServices.GetObject("Win32_Process")
 
     def execute(self, command, output=False, use_powershell=False):

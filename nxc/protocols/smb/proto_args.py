@@ -47,6 +47,7 @@ def proto_args(parser, parents):
     cred_gathering_group.add_argument("--sccm", choices={"wmi", "disk"}, nargs="?", const="disk", help="dump SCCM secrets from target systems")
     cred_gathering_group.add_argument("--mkfile", action="store", help="DPAPI option. File with masterkeys in form of {GUID}:SHA1")
     cred_gathering_group.add_argument("--pvk", action="store", help="DPAPI option. File with domain backupkey")
+    cred_gathering_group.add_argument("--list-snapshots", nargs="?", dest="list_snapshots", const="ADMIN$", help="Lists the VSS snapshots (default: %(const)s)")
 
     mapping_enum_group = smb_parser.add_argument_group("Mapping/Enumeration")
     mapping_enum_group.add_argument("--shares", type=str, nargs="?", const="", help="Enumerate shares and access, filter on specified argument (read ; write ; read,write)")
@@ -72,8 +73,8 @@ def proto_args(parser, parents):
     mapping_enum_group.add_argument("--taskkill", type=str, help="Kills a specific PID or a proces name's PID's")
 
     wmi_group = smb_parser.add_argument_group("WMI Queries")
-    wmi_group.add_argument("--wmi", metavar="QUERY", type=str, help="issues the specified WMI query")
-    wmi_group.add_argument("--wmi-namespace", metavar="NAMESPACE", default="root\\cimv2", help="WMI Namespace")
+    wmi_group.add_argument("--wmi", metavar="QUERY", dest="wmi_query", type=str, help="Issues the specified WMI query")
+    wmi_group.add_argument("--wmi-namespace", metavar="NAMESPACE", default="root\\cimv2", help="WMI Namespace (default: %(default)s)")
 
     spidering_group = smb_parser.add_argument_group("Spidering Shares")
     spidering_group.add_argument("--spider", metavar="SHARE", type=str, help="share to spider")
