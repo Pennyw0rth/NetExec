@@ -414,12 +414,15 @@ class wmi(connection):
                 record = dict(wmi_results.getProperties())
                 records.append(record)
 
-        wql_result = self.wmi_query(wql=wql, namespace="root\\cimv2", callback_func=callback_func)
-        if wql_result:
-            self.logger.highlight(f"{'Drive':<8}{'Shadow Copy ID':<40}{'ClientAccessible':<18}{'Device Object':<50}")
-            self.logger.highlight(f"{'------':<8}{'--------------':<40}{'----------------':<18}{'-------------':<50}")
-            for record in wql_result:
-                self.logger.highlight(f"{drive:<8}{record['ID']['value']:<40}{record['ClientAccessible']['value']:<18}{record['DeviceObject']['value']:<50}")
+        snapshots = self.wmi_query(wql=wql, namespace="root\\cimv2", callback_func=callback_func)
+        if not snapshots:
+            self.logger.info("Target volume shadow copies not existed.")
+            return
+
+        self.logger.highlight(f"{'Drive':<8}{'Shadow Copy ID':<40}{'ClientAccessible':<18}{'Device Object':<50}")
+        self.logger.highlight(f"{'------':<8}{'--------------':<40}{'----------------':<18}{'-------------':<50}")
+        for record in snapshots:
+            self.logger.highlight(f"{drive:<8}{record['ID']['value']:<40}{record['ClientAccessible']['value']:<18}{record['DeviceObject']['value']:<50}")
 
     @requires_admin
     def execute(self, command=None, get_output=False, use_powershell=False):
