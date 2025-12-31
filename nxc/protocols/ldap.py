@@ -694,8 +694,8 @@ class ldap(connection):
 
             # 2. get all group cn name
             search_filter = (f"(|(objectSid={self.sid_domain}-512)"
-                             f"(objectSid={self.sid_domain}-544)"
                              f"(objectSid={self.sid_domain}-519)"
+                             f"(objectSid={self.sid_domain}-544)"
                              "(objectSid=S-1-5-32-549)"
                              "(objectSid=S-1-5-32-551))")
             attributes = ["distinguishedName"]
@@ -707,7 +707,7 @@ class ldap(connection):
                 return
 
             # 3. Build a filter to query if the primaryGroupID is one of these groups
-            group_ids = ["512", "544", "519", "549", "551"]
+            group_ids = ["512", "519", "544", "549", "551"]
             primaryGroupID_filters = [f"(primaryGroupID={group_id})" for group_id in group_ids]
             answers.extend(primaryGroupID_filters)
 
