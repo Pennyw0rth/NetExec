@@ -802,68 +802,39 @@ class ldap(connection):
         if self.args.groups:
             self.logger.debug(f"Dumping group: {self.args.groups}")
 
-            # Resolve group DN + RID (objectSid)
-            group_resp = self.search(f"(cn={self.args.groups})", ["distinguishedName", "objectSid"], 0)
+            # Resolve group DN and primaryGroupID (objectSid)
+            group_resp = self.search(f"(cn={self.args.groups})", ["distinguishedName", "objectSid"])
             group_parsed = parse_result_attributes(group_resp)
 
             if not group_parsed:
-                self.logger.fail(f"Group {self.args.groups} not found")
+                self.logger.fail(f"Group '{self.args.groups}' not found")
                 return
+            else:
+                group = group_parsed[0]
 
-            group_dn = group_parsed[0].get("distinguishedName")
-            group_sid = group_parsed[0].get("objectSid")
-
-            if not group_dn:
-                self.logger.fail(f"Group {self.args.groups} DN could not be resolved")
-                return
-            if not group_sid:
-                self.logger.fail(f"Group {self.args.groups} SID could not be resolved")
-                return
-
-            # objectSid -> RID (last component)
-            # group_sid could be list sometimes
-            if isinstance(group_sid, list):
-                group_sid = group_sid[0] if group_sid else None
-            try:
-                group_rid = int(str(group_sid).split("-")[-1])
-            except Exception:
-                self.logger.fail(f"Could not parse RID from group SID: {group_sid}")
-                return
-
-            # Single filter: nested membership OR primary-group membership (dynamic RID)
-            search_filter = f"(|(memberOf={group_dn})(primaryGroupID={group_rid}))"
+            # Search filter: user must have membership OR primaryGroupID
+            search_filter = f"(|(memberOf={group['distinguishedName']})(primaryGroupID={group['objectSid'].split('-')[-1]}))"
             attributes = ["sAMAccountName", "distinguishedName", "cn", "objectClass"]
 
         else:
             search_filter = "(objectCategory=group)"
             attributes = ["cn", "member", "description"]
 
-        resp = self.search(search_filter, attributes, 0)
+        # Query entities from the group
+        resp = self.search(search_filter, attributes)
         resp_parsed = parse_result_attributes(resp)
         self.logger.debug(f"Total of records returned {len(resp_parsed)}")
 
         if self.args.groups:
+            # Display group members
             if not resp_parsed:
-                self.logger.fail(f"Group {self.args.groups} not found")
-            elif not resp_parsed[0]:
-                self.logger.fail(f"Group {self.args.groups} has no members")
+                self.logger.fail(f"Group '{self.args.groups}' has no members")
             else:
-                for user in resp_parsed:
-                    obj_class = user.get("objectClass")
-
-                    # GROUP → CN
-                    if "group" in obj_class:
-                        cn = user.get("cn")
-                        if isinstance(cn, list):
-                            cn = cn[0] if cn else None
-                        self.logger.highlight(cn or user.get("distinguishedName", ""))
-                    else:
-                        sAMAccountName = user["sAMAccountName"]
-                        if isinstance(sAMAccountName, list):
-                            sAMAccountName = sAMAccountName[0] if sAMAccountName else None
-                        self.logger.highlight(sAMAccountName or user["distinguishedName"])
-
+                for item in resp_parsed:
+                    # Display sAMAccountName or CN if sAMAccountName not present (could be a group)
+                    self.logger.highlight(item.get("sAMAccountName", item.get("cn", "")))
         else:
+            # Display all groups
             self.logger.highlight(f"{'-Group-':<40} {'-Members-':<9} {'-Description-':<60}")
             for item in resp_parsed:
                 try:
