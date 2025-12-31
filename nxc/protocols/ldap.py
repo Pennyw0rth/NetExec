@@ -1498,10 +1498,10 @@ class ldap(connection):
         # Let's find out even more details!
         self.logger.info("Attempting to enumerate details...\n")
         resp = self.search(searchFilter="(objectclass=msDS-PasswordSettings)",
-                          attributes=["name", "msds-lockoutthreshold", "msds-psoappliesto", "msds-minimumpasswordlength",
-                                     "msds-passwordhistorylength", "msds-lockoutobservationwindow", "msds-lockoutduration",
-                                     "msds-passwordsettingsprecedence", "msds-passwordcomplexityenabled", "Description",
-                                     "msds-passwordreversibleencryptionenabled", "msds-minimumpasswordage", "msds-maximumpasswordage"])
+                           attributes=["name", "msds-lockoutthreshold", "msds-psoappliesto", "msds-minimumpasswordlength",
+                                       "msds-passwordhistorylength", "msds-lockoutobservationwindow", "msds-lockoutduration",
+                                       "msds-passwordsettingsprecedence", "msds-passwordcomplexityenabled", "Description",
+                                       "msds-passwordreversibleencryptionenabled", "msds-minimumpasswordage", "msds-maximumpasswordage"])
         resp_parsed = parse_result_attributes(resp)
         for attrs in resp_parsed:
             policyName = attrs.get("name", "")
