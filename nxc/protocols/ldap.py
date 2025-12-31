@@ -838,7 +838,7 @@ class ldap(connection):
             else:
                 for item in resp_parsed:
                     # Display sAMAccountName or CN if sAMAccountName not present (could be a group)
-                    self.logger.highlight(item.get("sAMAccountName", item.get("cn", "")))
+                    self.logger.highlight(item["sAMAccountName"] if "group" not in item["objectClass"] else item["cn"])
         else:
             # Display all groups
             self.logger.highlight(f"{'-Group-':<40} {'-Members-':<9} {'-Description-':<60}")
