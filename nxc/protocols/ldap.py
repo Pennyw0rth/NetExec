@@ -827,7 +827,6 @@ class ldap(connection):
             search_filter = "(objectCategory=group)"
             attributes = ["cn", "member", "description"]
 
-        # Query entities from the group
         resp = self.search(search_filter, attributes)
         resp_parsed = parse_result_attributes(resp)
         self.logger.debug(f"Total of records returned {len(resp_parsed)}")
