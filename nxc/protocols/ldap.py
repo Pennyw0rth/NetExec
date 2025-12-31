@@ -835,7 +835,8 @@ class ldap(connection):
                 "(&(objectCategory=person)(objectClass=user)"
                 "(|"
                 f"(memberOf:1.2.840.113556.1.4.1941:={group_dn})"
-                f"(primaryGroupID={group_rid})""))")
+                f"(primaryGroupID={group_rid})"
+                "))")
             attributes = ["sAMAccountName", "distinguishedName"]
 
         else:
