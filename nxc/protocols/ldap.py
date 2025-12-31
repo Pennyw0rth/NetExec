@@ -832,12 +832,15 @@ class ldap(connection):
 
             # Single filter: nested membership OR primary-group membership (dynamic RID)
             search_filter = (
-                "(&(objectCategory=person)(objectClass=user)"
-                "(|"
-                f"(memberOf:1.2.840.113556.1.4.1941:={group_dn})"
-                f"(primaryGroupID={group_rid})"
-                "))")
-            attributes = ["sAMAccountName", "distinguishedName"]
+                            "(|"
+                            # direct user members
+                            f"(&(objectCategory=person)(objectClass=user)(memberOf={group_dn}))"
+                            # primary group users (user side)
+                            f"(&(objectCategory=person)(objectClass=user)(primaryGroupID={group_rid}))"
+                            # direct group members
+                            f"(&(objectCategory=group)(memberOf={group_dn}))"
+                            ")")
+            attributes = ["sAMAccountName", "distinguishedName", "cn", "objectClass"]
 
         else:
             search_filter = "(objectCategory=group)"
@@ -854,10 +857,19 @@ class ldap(connection):
                 self.logger.fail(f"Group {self.args.groups} has no members")
             else:
                 for user in resp_parsed:
-                    sAMAccountName = user["sAMAccountName"]
-                    if isinstance(sAMAccountName, list):
-                        sAMAccountName = sAMAccountName[0] if sAMAccountName else None
-                    self.logger.highlight(sAMAccountName or user["distinguishedName"])
+                    obj_class = user.get("objectClass")
+
+                    # GROUP → CN
+                    if "group" in obj_class:
+                        cn = user.get("cn")
+                        if isinstance(cn, list):
+                            cn = cn[0] if cn else None
+                        self.logger.highlight(cn or user.get("distinguishedName", ""))
+                    else:
+                        sAMAccountName = user["sAMAccountName"]
+                        if isinstance(sAMAccountName, list):
+                            sAMAccountName = sAMAccountName[0] if sAMAccountName else None
+                        self.logger.highlight(sAMAccountName or user["distinguishedName"])
 
         else:
             self.logger.highlight(f"{'-Group-':<40} {'-Members-':<9} {'-Description-':<60}")
