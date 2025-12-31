@@ -831,15 +831,7 @@ class ldap(connection):
                 return
 
             # Single filter: nested membership OR primary-group membership (dynamic RID)
-            search_filter = (
-                            "(|"
-                            # direct user members
-                            f"(&(objectCategory=person)(objectClass=user)(memberOf={group_dn}))"
-                            # primary group users (user side)
-                            f"(&(objectCategory=person)(objectClass=user)(primaryGroupID={group_rid}))"
-                            # direct group members
-                            f"(&(objectCategory=group)(memberOf={group_dn}))"
-                            ")")
+            search_filter = f"(|(memberOf={group_dn})(primaryGroupID={group_rid}))"
             attributes = ["sAMAccountName", "distinguishedName", "cn", "objectClass"]
 
         else:
