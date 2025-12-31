@@ -801,11 +801,47 @@ class ldap(connection):
         # Building the search filter
         if self.args.groups:
             self.logger.debug(f"Dumping group: {self.args.groups}")
-            search_filter = f"(cn={self.args.groups})"
-            attributes = ["member"]
+
+            # Resolve group DN + RID (objectSid)
+            group_resp = self.search(f"(cn={self.args.groups})", ["distinguishedName", "objectSid"], 0)
+            group_parsed = parse_result_attributes(group_resp)
+
+            if not group_parsed:
+                self.logger.fail(f"Group {self.args.groups} not found")
+                return
+
+            group_dn = group_parsed[0].get("distinguishedName")
+            group_sid = group_parsed[0].get("objectSid")
+
+            if not group_dn:
+                self.logger.fail(f"Group {self.args.groups} DN could not be resolved")
+                return
+            if not group_sid:
+                self.logger.fail(f"Group {self.args.groups} SID could not be resolved")
+                return
+
+            # objectSid -> RID (last component)
+            # group_sid could be list sometimes
+            if isinstance(group_sid, list):
+                group_sid = group_sid[0] if group_sid else None
+            try:
+                group_rid = int(str(group_sid).split("-")[-1])
+            except Exception:
+                self.logger.fail(f"Could not parse RID from group SID: {group_sid}")
+                return
+
+            # Single filter: nested membership OR primary-group membership (dynamic RID)
+            search_filter = (
+                "(&(objectCategory=person)(objectClass=user)"
+                "(|"
+                f"(memberOf:1.2.840.113556.1.4.1941:={group_dn})"
+                f"(primaryGroupID={group_rid})""))")
+            attributes = ["sAMAccountName", "distinguishedName"]
+
         else:
             search_filter = "(objectCategory=group)"
             attributes = ["cn", "member", "description"]
+
         resp = self.search(search_filter, attributes, 0)
         resp_parsed = parse_result_attributes(resp)
         self.logger.debug(f"Total of records returned {len(resp_parsed)}")
@@ -816,11 +852,12 @@ class ldap(connection):
             elif not resp_parsed[0]:
                 self.logger.fail(f"Group {self.args.groups} has no members")
             else:
-                # Fix if group has only one member
-                if not isinstance(resp_parsed[0]["member"], list):
-                    resp_parsed[0]["member"] = [resp_parsed[0]["member"]]
-                for user in resp_parsed[0]["member"]:
-                    self.logger.highlight(user.split(",")[0].split("=")[1])
+                for user in resp_parsed:
+                    sAMAccountName = user["sAMAccountName"]
+                    if isinstance(sAMAccountName, list):
+                        sAMAccountName = sAMAccountName[0] if sAMAccountName else None
+                    self.logger.highlight(sAMAccountName or user["distinguishedName"])
+
         else:
             self.logger.highlight(f"{'-Group-':<40} {'-Members-':<9} {'-Description-':<60}")
             for item in resp_parsed:
