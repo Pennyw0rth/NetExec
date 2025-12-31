@@ -685,7 +685,7 @@ class ldap(connection):
         # 1. get SID of the domaine
         search_filter = "(userAccountControl:1.2.840.113556.1.4.803:=8192)"
         attributes = ["objectSid"]
-        resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
+        resp = self.search(search_filter, attributes, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
         answers = []
         if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "" or self.use_kcache) and self.username != "":
@@ -695,7 +695,7 @@ class ldap(connection):
             # 2. get all group cn name
             search_filter = f"(|(objectSid={self.sid_domain}-512)(objectSid={self.sid_domain}-544)(objectSid={self.sid_domain}-519)(objectSid=S-1-5-32-549)(objectSid=S-1-5-32-551))"
             attributes = ["distinguishedName"]
-            resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
+            resp = self.search(search_filter, attributes, baseDN=self.baseDN)
             resp_parsed = parse_result_attributes(resp)
             answers = []
             for item in resp_parsed:
@@ -706,7 +706,7 @@ class ldap(connection):
 
             # 3. get member of these groups
             search_filter = f"(&(objectCategory=user)(sAMAccountName={self.username})(|{''.join(answers)}))"
-            resp = self.search(search_filter, attributes=[], sizeLimit=0, baseDN=self.baseDN)
+            resp = self.search(search_filter, attributes=[], baseDN=self.baseDN)
             resp_parsed = parse_result_attributes(resp)
             for item in resp_parsed:
                 if item:
@@ -1310,7 +1310,7 @@ class ldap(connection):
             "sAMAccountName",
             "userAccountControl",
         ]
-        resp = self.search(searchFilter, attributes, sizeLimit=0, baseDN=self.baseDN)
+        resp = self.search(searchFilter, attributes, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
         self.logger.debug(f"Total of records returned {len(resp_parsed):d}")
 
@@ -1547,7 +1547,7 @@ class ldap(connection):
             "pwdProperties"
         ]
 
-        resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
+        resp = self.search(search_filter, attributes, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
 
         if not resp_parsed:
