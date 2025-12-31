@@ -683,28 +683,35 @@ class ldap(connection):
 
     def check_if_admin(self):
         # 1. get SID of the domaine
-        search_filter = "(userAccountControl:1.2.840.113556.1.4.803:=8192)"
+        search_filter = f"(userAccountControl:1.2.840.113556.1.4.803:={UF_SERVER_TRUST_ACCOUNT})"
         attributes = ["objectSid"]
         resp = self.search(search_filter, attributes, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
-        answers = []
+
         if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "" or self.use_kcache) and self.username != "":
             for item in resp_parsed:
                 self.sid_domain = "-".join(item["objectSid"].split("-")[:-1])
 
             # 2. get all group cn name
-            search_filter = f"(|(objectSid={self.sid_domain}-512)(objectSid={self.sid_domain}-544)(objectSid={self.sid_domain}-519)(objectSid=S-1-5-32-549)(objectSid=S-1-5-32-551))"
+            search_filter = (f"(|(objectSid={self.sid_domain}-512)"
+                             f"(objectSid={self.sid_domain}-544)"
+                             f"(objectSid={self.sid_domain}-519)"
+                             "(objectSid=S-1-5-32-549)"
+                             "(objectSid=S-1-5-32-551))")
             attributes = ["distinguishedName"]
             resp = self.search(search_filter, attributes, baseDN=self.baseDN)
             resp_parsed = parse_result_attributes(resp)
-            answers = []
-            for item in resp_parsed:
-                answers.append(f"(memberOf:1.2.840.113556.1.4.1941:={item['distinguishedName']})")
+            answers = [f"(memberOf:1.2.840.113556.1.4.1941:={item['distinguishedName']})" for item in resp_parsed]
             if len(answers) == 0:
                 self.logger.debug("No groups with default privileged RID were found. Assuming user is not a Domain Administrator.")
                 return
 
-            # 3. get member of these groups
+            # 3. Build a filter to query if the primaryGroupID is one of these groups
+            group_ids = ["512", "544", "519", "549", "551"]
+            primaryGroupID_filters = [f"(primaryGroupID={group_id})" for group_id in group_ids]
+            answers.extend(primaryGroupID_filters)
+
+            # 4. Check if the user is member of one of these groups OR has one of these primaryGroupID
             search_filter = f"(&(objectCategory=user)(sAMAccountName={self.username})(|{''.join(answers)}))"
             resp = self.search(search_filter, attributes=[], baseDN=self.baseDN)
             resp_parsed = parse_result_attributes(resp)
