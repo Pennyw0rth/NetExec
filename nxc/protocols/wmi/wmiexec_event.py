@@ -53,8 +53,6 @@ class WMIEXEC_EVENT:
         self.__retOutput = output
         self.execute_handler(command)
 
-        self.__dcom.disconnect()
-
         return self.__outputBuffer
 
     def execute_remote(self, command):

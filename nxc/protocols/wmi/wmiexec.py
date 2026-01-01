@@ -53,8 +53,6 @@ class WMIEXEC:
             command = self.__shell + command
             self.execute_remote(command)
 
-        self.__dcom.disconnect()
-
         return self.__outputBuffer
 
     def execute_remote(self, command):
