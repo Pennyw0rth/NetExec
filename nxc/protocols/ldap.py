@@ -852,6 +852,46 @@ class ldap(connection):
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
 
+    def ous(self):
+        # Building the search filter
+        if self.args.ous:
+            self.logger.debug(f"Dumping users from OU: {self.args.ous}")
+            search_filter = "(&(objectCategory=person)(objectClass=user))"
+            attributes = ["cn", "sAMAccountName", "distinguishedName"]
+        else:
+            self.logger.debug("Dumping all organizational units")
+            search_filter = "(objectCategory=organizationalUnit)"
+            attributes = ["ou", "distinguishedName"]
+
+        # Perform the search
+        resp = self.search(search_filter, attributes, 0)
+        resp_parsed = parse_result_attributes(resp)
+
+        self.logger.debug(f"Total of records returned: {len(resp_parsed)}")
+
+        # Process results
+        if self.args.ous:
+            found_users = []
+            target_ou = self.args.ous.upper()
+            for user in resp_parsed:
+                dn = user["distinguishedName"].upper()
+                if f"OU={target_ou}" in dn:
+                    username = user.get("sAMAccountName", user.get("cn", "Unknown"))
+                    self.logger.highlight(username)
+                    found_users.append(username)
+
+            if not found_users:
+                self.logger.fail(f"OU {self.args.ous} not found or has no users")
+        else:
+            for item in resp_parsed:
+                try:
+                    ou_name = item.get("ou", "Unknown")
+                    dn = item["distinguishedName"]
+                    self.logger.highlight(f"{ou_name:<40} {dn}")
+                except Exception as e:
+                    self.logger.debug("Exception:", exc_info=True)
+                    self.logger.debug(f"Skipping item, cannot process due to error: {e}")
+
     def computers(self):
         resp = self.search(f"(sAMAccountType={SAM_MACHINE_ACCOUNT})", ["sAMAccountName"])
         resp_parsed = parse_result_attributes(resp)
