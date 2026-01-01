@@ -658,6 +658,9 @@ class nfs(connection):
             if "resfail" in res and res["status"] == NFS3ERR_NOENT:
                 self.logger.fail(f"Unknown path: {self.args.ls!r}")
                 return
+            elif "resfail" in res:
+                self.logger.fail(f"Error on looking up path '{sub_path}': {NFSSTAT3[res['status']]}")
+                return
             # If file then break and only display file
             if res["resok"]["obj_attributes"]["attributes"]["type"] == NF3REG:
                 is_file = True
