@@ -318,3 +318,7 @@ netexec nfs TARGET_HOST -u "" -p "" --shares
 netexec nfs TARGET_HOST -u "" -p "" --enum-shares
 netexec nfs TARGET_HOST -u "" -p "" --get-file /NFStest/test/test.txt ../test.txt
 netexec nfs TARGET_HOST -u "" -p "" --put-file ../test.txt /NFStest/test
+netexec nfs TARGET_HOST -u "" -p "" --spider
+netexec nfs TARGET_HOST -u "" -p "" --spider /home --depth 2
+netexec nfs TARGET_HOST -u "" -p "" --spider --pattern .conf
+netexec nfs TARGET_HOST -u "" -p "" --spider --all-items
