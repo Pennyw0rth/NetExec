@@ -38,7 +38,7 @@ class NXCModule:
 
         for domain in domains:
             output = connection.wmi_query(
-                f"Select TextRepresentation FROM MicrosoftDNS_ResourceRecord WHERE DomainName = {domain}",
+                f"Select TextRepresentation FROM MicrosoftDNS_ResourceRecord WHERE DomainName = '{domain}'",
                 "root\\microsoftdns",
             )
 
