@@ -13,6 +13,9 @@ from termcolor import colored
 from dns import resolver
 from dateutil.relativedelta import relativedelta as rd
 
+from nxc.helpers.opengraph import opengraph
+from nxc.helpers.misc import detect_if_ip
+
 from Cryptodome.Hash import MD4
 from OpenSSL.SSL import SysCallError
 from bloodhound.ad.authentication import ADAuthentication
@@ -346,6 +349,12 @@ class ldap(connection):
             )
         except Exception as e:
             self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
+
+    def opengraph_host_info(self):
+        if detect_if_ip(self.host):
+            opengraph.add_tag(self.hostname, ["Computer"], "IP_Address", self.host)
+        opengraph.add_tag(self.hostname, ["Computer"], "ldapsigning", self.signing_required)
+        opengraph.add_tag(self.hostname, ["Computer"], "ldaps_channel_binding", self.signing_required)
 
     def print_host_info(self):
         self.logger.debug("Printing host info for LDAP")
