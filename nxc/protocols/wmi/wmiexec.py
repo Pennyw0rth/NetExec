@@ -18,8 +18,6 @@ import uuid
 import base64
 from nxc.helpers.misc import gen_random_string
 from impacket.dcerpc.v5.dtypes import NULL
-from impacket.dcerpc.v5.dcomrt import DCOMConnection
-from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login
 
 
 class WMIEXEC:
