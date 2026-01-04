@@ -59,7 +59,7 @@ class wmi(connection):
                 "hostname": self.hostname
             }
         )
-    
+
     # Redefine disconnect function.
     def disconnect(self):
         if self.conn:
@@ -398,7 +398,7 @@ class wmi(connection):
                 if str(e).find("S_FALSE") < 0:
                     self.logger.debug(e)
             return records
-    
+
     def list_snapshots(self):
         drive = self.args.list_snapshots
         self.logger.info(f"Retrieveing volume shadow copies of {drive}.")
