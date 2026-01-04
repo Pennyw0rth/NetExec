@@ -401,7 +401,7 @@ class wmi(connection):
 
     def list_snapshots(self):
         drive = self.args.list_snapshots
-        self.logger.info(f"Retrieveing volume shadow copies of {drive}.")
+        self.logger.info(f"Retrieving volume shadow copies of drive {drive}.")
         wql = "select ID, DeviceObject, ClientAccessible, InstallDate from win32_shadowcopy"
 
         def callback_func(iEnumWbemClassObject, records):
@@ -412,7 +412,7 @@ class wmi(connection):
 
         snapshots = self.wmi_query(wql=wql, namespace="root\\cimv2", callback_func=callback_func)
         if not snapshots:
-            self.logger.info("Target volume shadow copies not existed.")
+            self.logger.info("No volume shadow copies found.")
             return
 
         self.logger.highlight(f"{'Drive':<8}{'Shadow Copy ID':<40}{'ClientAccessible':<18}{'InstallDate':<27}{'Device Object':<50}")

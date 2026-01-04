@@ -2240,10 +2240,10 @@ class smb(connection):
     def list_snapshots(self):
         drive = self.args.list_snapshots
 
-        self.logger.info(f"Retrieveing volume shadow copies of {drive}.")
+        self.logger.info(f"Retrieving volume shadow copies of drive {drive}.")
         snapshots = self.conn.listSnapshots(self.conn.connectTree(drive), "/")
         if not snapshots:
-            self.logger.info("Target volume shadow copies not existed.")
+            self.logger.info("No volume shadow copies found.")
             return
         self.logger.highlight(f"{'Drive':<8}{'Shadow Copies GMT SMB PATH':<26}")
         self.logger.highlight(f"{'------':<8}{'--------------------------':<26}")
