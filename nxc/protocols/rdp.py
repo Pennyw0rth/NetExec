@@ -12,6 +12,11 @@ from nxc.logger import NXCAdapter
 from nxc.config import host_info_colors, process_secret
 from nxc.paths import NXC_PATH
 
+
+from asysocks.unicomm.client import UniClient
+from aardwolf.network.tpkt import TPKTPacketizer
+from aardwolf.network.x224 import X224Network
+
 from aardwolf.connection import RDPConnection
 from aardwolf.commons.queuedata.constants import VIDEO_FORMAT
 from aardwolf.commons.queuedata.keyboard import RDP_KEYBOARD_UNICODE
@@ -32,11 +37,6 @@ class rdp(connection):
         self.iosettings = RDPIOSettings()
         self.iosettings.video_out_format = VIDEO_FORMAT.RAW
         self.iosettings.clipboard_use_pyperclip = False
-        self.protoflags_nla = [
-            SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.RDP,
-            SUPP_PROTOCOLS.SSL,
-            SUPP_PROTOCOLS.RDP,
-        ]
         self.protoflags = [
             SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.RDP,
             SUPP_PROTOCOLS.SSL,
@@ -113,7 +113,7 @@ class rdp(connection):
         self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout)
         self.auth = NTLMCredential(secret="pass", username="user", domain="FAKE", stype=asyauthSecret.PASS)
 
-        self.check_nla()
+        asyncio.run(self.check_nla())
 
         for proto in reversed(self.protoflags):
             try:
@@ -165,22 +165,25 @@ class rdp(connection):
 
         return True
 
-    def check_nla(self):
+    async def check_nla(self):
         self.logger.debug(f"Checking NLA for {self.host}")
-        for proto in self.protoflags_nla:
-            try:
-                self.iosettings.supported_protocols = proto
-                self.conn = RDPConnection(
-                    iosettings=self.iosettings,
-                    target=self.target,
-                    credentials=self.auth,
-                )
-                asyncio.run(self.connect_rdp())
-                if proto.value == SUPP_PROTOCOLS.RDP or proto.value == SUPP_PROTOCOLS.SSL or proto.value == SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.RDP:
-                    self.nla = False
-                    return
-            except Exception:
-                pass
+        try:
+            self.iosettings.supported_protocols = SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.RDP
+            self.conn = RDPConnection(
+                iosettings=self.iosettings,
+                target=self.target,
+                credentials=None,
+            )
+            packetizer = TPKTPacketizer()
+            client = UniClient(self.target, packetizer)
+            self.conn._connection = await asyncio.wait_for(client.connect(), timeout=self.args.rdp_timeout)
+            self.conn._x224net = X224Network(self.conn._connection)
+            _, err = await asyncio.wait_for(self.conn._x224net.client_negotiate(0, SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.RDP), timeout=self.args.rdp_timeout)
+            if err is None or "HYBRID_REQUIRED_BY_SERVER" not in str(err):
+                self.nla = False
+                return
+        except Exception:
+            pass
 
     async def connect_rdp(self):
         _, err = await asyncio.wait_for(self.conn.connect(), timeout=self.args.rdp_timeout)
