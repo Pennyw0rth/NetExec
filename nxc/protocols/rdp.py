@@ -35,6 +35,11 @@ class rdp(connection):
         self.iosettings = RDPIOSettings()
         self.iosettings.video_out_format = VIDEO_FORMAT.RAW
         self.iosettings.clipboard_use_pyperclip = False
+        self.protoflags_nla = [
+            SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.RDP,
+            SUPP_PROTOCOLS.SSL,
+            SUPP_PROTOCOLS.RDP,
+        ]
         self.protoflags = [
             SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.RDP,
             SUPP_PROTOCOLS.SSL,
