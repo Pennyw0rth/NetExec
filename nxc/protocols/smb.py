@@ -473,7 +473,7 @@ class smb(connection):
                 f'{domain}\\{self.username}:{process_secret(self.password)} {error} {f"({desc})" if self.args.verbose else ""}',
                 color="magenta" if error in smb_error_status else "red",
             )
-            if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED"] and self.args.module == ["change-password"]:
+            if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED", "STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT"] and self.args.module == ["change-password"]:
                 return True
             if error not in smb_error_status:
                 self.inc_failed_login(username)
@@ -537,7 +537,7 @@ class smb(connection):
                 f"{domain}\\{self.username}:{process_secret(self.hash)} {error} {f'({desc})' if self.args.verbose else ''}",
                 color="magenta" if error in smb_error_status else "red",
             )
-            if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED"] and self.args.module == ["change-password"]:
+            if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED", "STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT"] and self.args.module == ["change-password"]:
                 return True
             if error not in smb_error_status:
                 self.inc_failed_login(self.username)
@@ -1718,10 +1718,10 @@ class smb(connection):
         return PassPolDump(self).dump()
 
     @requires_admin
-    def wmi(self, wmi_query=None, namespace=None):
+    def wmi_query(self, wql=None, namespace=None, callback_func=None):
         records = []
-        if not wmi_query:
-            wmi_query = self.args.wmi.strip("\n")
+        if not wql:
+            wql = self.args.wmi_query.strip("\n")
 
         if not namespace:
             namespace = self.args.wmi_namespace
@@ -1742,28 +1742,29 @@ class smb(connection):
             iWbemLevel1Login = IWbemLevel1Login(iInterface)
             iWbemServices = iWbemLevel1Login.NTLMLogin(namespace, NULL, NULL)
             iWbemLevel1Login.RemRelease()
-            iEnumWbemClassObject = iWbemServices.ExecQuery(wmi_query)
+            iEnumWbemClassObject = iWbemServices.ExecQuery(wql)
         except Exception as e:
             self.logger.fail(f"Execute WQL error: {e}")
             if "iWbemLevel1Login" in locals():
                 dcom.disconnect()
         else:
-            self.logger.info(f"Executing WQL syntax: {wmi_query}")
-            while True:
-                try:
-                    wmi_results = iEnumWbemClassObject.Next(0xFFFFFFFF, 1)[0]
-                    record = wmi_results.getProperties()
-                    records.append(record)
-                    for k, v in record.items():
-                        if k != "TimeGenerated":  # from the wcc module, but this is a small hack to get it to stop spamming - TODO: add in method to disable output for this function
-                            self.logger.highlight(f"{k} => {v['value']}")
-                except Exception as e:
-                    if str(e).find("S_FALSE") < 0:
-                        raise e
-                    else:
-                        break
+            self.logger.info(f"Executing WQL syntax: {wql}")
+            try:
+                if not callback_func:
+                    while True:
+                        wmi_results = iEnumWbemClassObject.Next(0xFFFFFFFF, 1)[0]
+                        record = wmi_results.getProperties()
+                        records.append(record)
+                        for k, v in record.items():
+                            if k != "TimeGenerated":  # from the wcc module, but this is a small hack to get it to stop spamming - TODO: add in method to disable output for this function
+                                self.logger.highlight(f"{k} => {v['value']}")
+                else:
+                    callback_func(iEnumWbemClassObject, records)
+            except Exception as e:
+                if str(e).find("S_FALSE") < 0:
+                    self.logger.debug(e)
             dcom.disconnect()
-        return records if records else False
+        return records
 
     def spider(
         self,
@@ -2234,6 +2235,20 @@ class smb(connection):
 
         if self.output_file:
             self.output_file.close()
+
+    @requires_admin
+    def list_snapshots(self):
+        drive = self.args.list_snapshots
+
+        self.logger.info(f"Retrieving volume shadow copies of drive {drive}.")
+        snapshots = self.conn.listSnapshots(self.conn.connectTree(drive), "/")
+        if not snapshots:
+            self.logger.info("No volume shadow copies found.")
+            return
+        self.logger.highlight(f"{'Drive':<8}{'Shadow Copies GMT SMB PATH':<26}")
+        self.logger.highlight(f"{'------':<8}{'--------------------------':<26}")
+        for i in snapshots:
+            self.logger.highlight(f"{drive:<8}{i:<26}")
 
     @requires_admin
     def lsa(self):

@@ -685,30 +685,37 @@ class ldap(connection):
 
     def check_if_admin(self):
         # 1. get SID of the domaine
-        search_filter = "(userAccountControl:1.2.840.113556.1.4.803:=8192)"
+        search_filter = f"(userAccountControl:1.2.840.113556.1.4.803:={UF_SERVER_TRUST_ACCOUNT})"
         attributes = ["objectSid"]
-        resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
+        resp = self.search(search_filter, attributes, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
-        answers = []
+
         if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "" or self.use_kcache) and self.username != "":
             for item in resp_parsed:
                 self.sid_domain = "-".join(item["objectSid"].split("-")[:-1])
 
             # 2. get all group cn name
-            search_filter = f"(|(objectSid={self.sid_domain}-512)(objectSid={self.sid_domain}-544)(objectSid={self.sid_domain}-519)(objectSid=S-1-5-32-549)(objectSid=S-1-5-32-551))"
+            search_filter = (f"(|(objectSid={self.sid_domain}-512)"
+                             f"(objectSid={self.sid_domain}-519)"
+                             f"(objectSid={self.sid_domain}-544)"
+                             "(objectSid=S-1-5-32-549)"
+                             "(objectSid=S-1-5-32-551))")
             attributes = ["distinguishedName"]
-            resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
+            resp = self.search(search_filter, attributes, baseDN=self.baseDN)
             resp_parsed = parse_result_attributes(resp)
-            answers = []
-            for item in resp_parsed:
-                answers.append(f"(memberOf:1.2.840.113556.1.4.1941:={item['distinguishedName']})")
+            answers = [f"(memberOf:1.2.840.113556.1.4.1941:={item['distinguishedName']})" for item in resp_parsed]
             if len(answers) == 0:
                 self.logger.debug("No groups with default privileged RID were found. Assuming user is not a Domain Administrator.")
                 return
 
-            # 3. get member of these groups
+            # 3. Build a filter to query if the primaryGroupID is one of these groups
+            group_ids = ["512", "519", "544", "549", "551"]
+            primaryGroupID_filters = [f"(primaryGroupID={group_id})" for group_id in group_ids]
+            answers.extend(primaryGroupID_filters)
+
+            # 4. Check if the user is member of one of these groups OR has one of these primaryGroupID
             search_filter = f"(&(objectCategory=user)(sAMAccountName={self.username})(|{''.join(answers)}))"
-            resp = self.search(search_filter, attributes=[], sizeLimit=0, baseDN=self.baseDN)
+            resp = self.search(search_filter, attributes=[], baseDN=self.baseDN)
             resp_parsed = parse_result_attributes(resp)
             for item in resp_parsed:
                 if item:
@@ -803,27 +810,39 @@ class ldap(connection):
         # Building the search filter
         if self.args.groups:
             self.logger.debug(f"Dumping group: {self.args.groups}")
-            search_filter = f"(cn={self.args.groups})"
-            attributes = ["member"]
+
+            # Resolve group DN and primaryGroupID (objectSid)
+            group_resp = self.search(f"(cn={self.args.groups})", ["distinguishedName", "objectSid"])
+            group_parsed = parse_result_attributes(group_resp)
+
+            if not group_parsed:
+                self.logger.fail(f"Group '{self.args.groups}' not found")
+                return
+            else:
+                group = group_parsed[0]
+
+            # Search filter: user must have membership OR primaryGroupID
+            search_filter = f"(|(memberOf={group['distinguishedName']})(primaryGroupID={group['objectSid'].split('-')[-1]}))"
+            attributes = ["sAMAccountName", "distinguishedName", "cn", "objectClass"]
+
         else:
             search_filter = "(objectCategory=group)"
             attributes = ["cn", "member", "description"]
-        resp = self.search(search_filter, attributes, 0)
+
+        resp = self.search(search_filter, attributes)
         resp_parsed = parse_result_attributes(resp)
         self.logger.debug(f"Total of records returned {len(resp_parsed)}")
 
         if self.args.groups:
+            # Display group members
             if not resp_parsed:
-                self.logger.fail(f"Group {self.args.groups} not found")
-            elif not resp_parsed[0]:
-                self.logger.fail(f"Group {self.args.groups} has no members")
+                self.logger.fail(f"Group '{self.args.groups}' has no members")
             else:
-                # Fix if group has only one member
-                if not isinstance(resp_parsed[0]["member"], list):
-                    resp_parsed[0]["member"] = [resp_parsed[0]["member"]]
-                for user in resp_parsed[0]["member"]:
-                    self.logger.highlight(user.split(",")[0].split("=")[1])
+                for item in resp_parsed:
+                    # Display sAMAccountName or CN if sAMAccountName not present (could be a group)
+                    self.logger.highlight(item["sAMAccountName"] if "group" not in item["objectClass"] else item["cn"])
         else:
+            # Display all groups
             self.logger.highlight(f"{'-Group-':<40} {'-Members-':<9} {'-Description-':<60}")
             for item in resp_parsed:
                 try:
@@ -1299,7 +1318,7 @@ class ldap(connection):
             "sAMAccountName",
             "userAccountControl",
         ]
-        resp = self.search(searchFilter, attributes, sizeLimit=0, baseDN=self.baseDN)
+        resp = self.search(searchFilter, attributes, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
         self.logger.debug(f"Total of records returned {len(resp_parsed):d}")
 
@@ -1480,10 +1499,10 @@ class ldap(connection):
         # Let's find out even more details!
         self.logger.info("Attempting to enumerate details...\n")
         resp = self.search(searchFilter="(objectclass=msDS-PasswordSettings)",
-                          attributes=["name", "msds-lockoutthreshold", "msds-psoappliesto", "msds-minimumpasswordlength",
-                                     "msds-passwordhistorylength", "msds-lockoutobservationwindow", "msds-lockoutduration",
-                                     "msds-passwordsettingsprecedence", "msds-passwordcomplexityenabled", "Description",
-                                     "msds-passwordreversibleencryptionenabled", "msds-minimumpasswordage", "msds-maximumpasswordage"])
+                           attributes=["name", "msds-lockoutthreshold", "msds-psoappliesto", "msds-minimumpasswordlength",
+                                       "msds-passwordhistorylength", "msds-lockoutobservationwindow", "msds-lockoutduration",
+                                       "msds-passwordsettingsprecedence", "msds-passwordcomplexityenabled", "Description",
+                                       "msds-passwordreversibleencryptionenabled", "msds-minimumpasswordage", "msds-maximumpasswordage"])
         resp_parsed = parse_result_attributes(resp)
         for attrs in resp_parsed:
             policyName = attrs.get("name", "")
@@ -1536,7 +1555,7 @@ class ldap(connection):
             "pwdProperties"
         ]
 
-        resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
+        resp = self.search(search_filter, attributes, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
 
         if not resp_parsed:

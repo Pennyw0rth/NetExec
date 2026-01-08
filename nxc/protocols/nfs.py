@@ -645,19 +645,21 @@ class nfs(connection):
             self.logger.fail("No root escape possible, please specify a share")
             return
 
-        # Update UID and GID for the share
-        self.update_auth(mount_fh)
-
         # We got a path to look up
         curr_fh = mount_fh
         is_file = False     # If the last path is a file
 
         # If ls is "" or "/" without filter we would get one item with [""]
         for sub_path in list(filter(None, self.args.ls.split("/"))):
+            # Update UID and GID for the path
+            self.update_auth(curr_fh)
             res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
 
             if "resfail" in res and res["status"] == NFS3ERR_NOENT:
                 self.logger.fail(f"Unknown path: {self.args.ls!r}")
+                return
+            elif "resfail" in res:
+                self.logger.fail(f"Error on looking up path '{sub_path}': {NFSSTAT3[res['status']]}")
                 return
             # If file then break and only display file
             if res["resok"]["obj_attributes"]["attributes"]["type"] == NF3REG:
