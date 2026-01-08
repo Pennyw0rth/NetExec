@@ -12,11 +12,6 @@ from nxc.logger import NXCAdapter
 from nxc.config import host_info_colors, process_secret
 from nxc.paths import NXC_PATH
 
-
-from asysocks.unicomm.client import UniClient
-from aardwolf.network.tpkt import TPKTPacketizer
-from aardwolf.network.x224 import X224Network
-
 from aardwolf.connection import RDPConnection
 from aardwolf.commons.queuedata.constants import VIDEO_FORMAT
 from aardwolf.commons.queuedata.keyboard import RDP_KEYBOARD_UNICODE
@@ -24,10 +19,13 @@ from aardwolf.commons.iosettings import RDPIOSettings
 from aardwolf.commons.target import RDPTarget
 from aardwolf.keyboard.layoutmanager import KeyboardLayoutManager
 from aardwolf.protocol.x224.constants import SUPP_PROTOCOLS
+from aardwolf.network.x224 import X224Network
+from aardwolf.network.tpkt import TPKTPacketizer
 from asyauth.common.credentials.ntlm import NTLMCredential
 from asyauth.common.credentials.kerberos import KerberosCredential
 from asyauth.common.constants import asyauthSecret
 from asysocks.unicomm.common.target import UniTarget, UniProto
+from asysocks.unicomm.client import UniClient
 
 
 class rdp(connection):
