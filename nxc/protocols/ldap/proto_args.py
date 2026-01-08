@@ -43,6 +43,6 @@ def proto_args(parser, parents):
 
     bgroup = ldap_parser.add_argument_group("Bloodhound Scan", "Options to play with Bloodhoud")
     bgroup.add_argument("--bloodhound", action="store_true", help="Perform a Bloodhound scan")
-    bgroup.add_argument("-c", "--collection", default="Default", help="Which information to collect. Supported: Group, LocalAdmin, Session, Trusts, Default, DCOnly, DCOM, RDP, PSRemote, LoggedOn, Container, ObjectProps, ACL, All. You can specify more than one by separating them with a comma")
+    bgroup.add_argument("-c", "--collection", default="Default", help="Which information to collect. Supported: Group, LocalAdmin, Session, Trusts, Default, DCOnly, DCOM, RDP, PSRemote, LoggedOn, Container, ObjectProps, ACL, ADCS, All. You can specify more than one by separating them with a comma. ADCS requires: pip install netexec[adcs]")
 
     return parser
