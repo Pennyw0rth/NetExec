@@ -3,10 +3,12 @@ import errno
 from os.path import abspath, join, split, exists, splitext, getsize, sep
 from os import makedirs, remove, stat
 import time
-from nxc.paths import TMP_PATH
+from nxc.helpers.misc import CATEGORY
+from nxc.paths import NXC_PATH
 from nxc.protocols.smb.remotefile import RemoteFile
 from impacket.smb3structs import FILE_READ_DATA
 from impacket.smbconnection import SessionError
+from impacket.nmb import NetBIOSTimeout
 
 
 CHUNK_SIZE = 4096
@@ -116,18 +118,16 @@ class SMBSpiderPlus:
             filelist = self.smb.conn.listPath(share, subfolder + "*")
 
         except SessionError as e:
-            self.logger.debug(f'Failed listing files on share "{share}" in folder "{subfolder}".')
-            self.logger.debug(str(e))
+            self.logger.debug(f'Failed listing files on share "{share}" in folder "{subfolder}": {e!s}')
 
             if "STATUS_ACCESS_DENIED" in str(e):
                 self.logger.debug(f'Cannot list files in folder "{subfolder}".')
-
             elif "STATUS_OBJECT_PATH_NOT_FOUND" in str(e):
                 self.logger.debug(f"The folder {subfolder} does not exist.")
-
             elif self.reconnect():
                 filelist = self.list_path(share, subfolder)
-
+        except NetBIOSTimeout as e:
+            self.logger.debug(f'Failed listing files on share "{share}" in folder "{subfolder}": {e!s}')
         return filelist
 
     def get_remote_file(self, share, path):
@@ -166,7 +166,7 @@ class SMBSpiderPlus:
 
     def get_file_save_path(self, remote_file):
         r"""Processes the remote file path to extract the filename and the folder path where the file should be saved locally.
-        
+
         It converts forward slashes (/) and backslashes (\) in the remote file path to the appropriate path separator for the local file system.
         The folder path and filename are then obtained separately.
         """
@@ -213,9 +213,9 @@ class SMBSpiderPlus:
                     # Start the spider at the root of the share folder
                     self.results[share_name] = {}
                     self.spider_folder(share_name, "")
-                except SessionError as e:
+                except (SessionError, NetBIOSTimeout) as e:
                     self.logger.exception(e)
-                    self.logger.fail("Got a session error while spidering.")
+                    self.logger.fail(f"Got a session or NetBIOSTimeout error while spidering share: {share_name}")
                     self.reconnect()
 
         except Exception as e:
@@ -286,8 +286,9 @@ class SMBSpiderPlus:
         # Check file extension filter.
         _, file_extension = splitext(file_path)
         if file_extension:
+            file_extension = file_extension.lstrip(".")
             self.stats["file_exts"].add(file_extension.lower())
-            if file_extension.lower() in self.exclude_exts:
+            if file_extension.lower() in [ext.lstrip(".") for ext in self.exclude_exts]:
                 self.logger.info(f'The file "{file_path}" has an excluded extension.')
                 self.stats["num_files_filtered"] += 1
                 return
@@ -373,7 +374,7 @@ class SMBSpiderPlus:
 
     def dump_folder_metadata(self, results):
         """Takes the metadata results as input and writes them to a JSON file in the `self.output_folder`.
-        
+
         The results are formatted with indentation and sorted keys before being written to the file.
         """
         metadata_path = join(self.output_folder, f"{self.host}.json")
@@ -472,8 +473,7 @@ class NXCModule:
     name = "spider_plus"
     description = "List files recursively and save a JSON share-file metadata to the 'OUTPUT_FOLDER'. See module options for finer configuration."
     supported_protocols = ["smb"]
-    opsec_safe = True  # Does the module touch disk?
-    multiple_hosts = True  # Does the module support multiple hosts?
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """
@@ -485,7 +485,7 @@ class NXCModule:
         EXCLUDE_EXTS      Case-insensitive extension filter to exclude (Default: ico,lnk)
         EXCLUDE_FILTER    Case-insensitive filter to exclude folders/files (Default: print$,ipc$)
         MAX_FILE_SIZE     Max file size to download (Default: 51200)
-        OUTPUT_FOLDER     Path of the local folder to save files (Default: /tmp/nxc_spider_plus)
+        OUTPUT_FOLDER     Path of the local folder to save files (Default: NXC_PATH/nxc_spider_plus)
         """
         self.download_flag = False
         if any("DOWNLOAD" in key for key in module_options):
@@ -498,7 +498,7 @@ class NXCModule:
         self.exclude_filter = get_list_from_option(module_options.get("EXCLUDE_FILTER", "print$,ipc$"))
         self.exclude_filter = [d.lower() for d in self.exclude_filter]  # force case-insensitive
         self.max_file_size = int(module_options.get("MAX_FILE_SIZE", 50 * 1024))
-        self.output_folder = module_options.get("OUTPUT_FOLDER", abspath(join(TMP_PATH, "nxc_spider_plus")))
+        self.output_folder = module_options.get("OUTPUT_FOLDER", abspath(join(NXC_PATH, "modules/nxc_spider_plus")))
 
     def on_login(self, context, connection):
         context.log.display("Started module spidering_plus with the following options:")

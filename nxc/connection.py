@@ -1,4 +1,9 @@
+from datetime import datetime
+import os
 import random
+import sys
+import contextlib
+
 from os.path import isfile
 from threading import BoundedSemaphore
 from functools import wraps
@@ -12,11 +17,11 @@ from nxc.helpers.logger import highlight
 from nxc.loaders.moduleloader import ModuleLoader
 from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
+from nxc.paths import NXC_PATH
 from nxc.protocols.ldap.laps import laps_search
+from nxc.helpers.pfx import pfx_auth
 
 from impacket.dcerpc.v5 import transport
-import sys
-import contextlib
 
 sem = BoundedSemaphore(1)
 global_failed_logins = 0
@@ -130,11 +135,17 @@ class connection:
         self.db = db
         self.logger = nxc_logger
         self.conn = None
+        self.output_file_template = None
+        self.output_filename = None
 
         # Authentication info
         self.password = ""
         self.username = ""
-        self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey or (hasattr(self.args, "delegate") and self.args.delegate))
+        self.kerberos = bool(self.args.kerberos or
+                             self.args.use_kcache or
+                             self.args.aesKey or
+                             (hasattr(self.args, "delegate") and self.args.delegate) or
+                             (hasattr(self.args, "no_preauth_targets") and self.args.no_preauth_targets))
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
         self.admin_privs = False
@@ -164,6 +175,8 @@ class connection:
 
         try:
             self.proto_flow()
+        except FileNotFoundError as e:
+            self.logger.error(f"File not found error on target {target}: {e}")
         except Exception as e:
             if "ERROR_DEPENDENT_SERVICES_RUNNING" in str(e):
                 self.logger.error(f"Exception while calling proto_flow() on target {target}: {e}")
@@ -229,7 +242,16 @@ class connection:
         else:
             self.logger.debug("Created connection object")
             self.enum_host_info()
-            if self.print_host_info() and (self.login() or (self.username == "" and self.password == "")):
+
+            # Construct the output file template using os.path.join for OS compatibility
+            base_log_dir = os.path.join(NXC_PATH, "logs")
+            filename_pattern = f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
+            self.output_file_template = os.path.join(base_log_dir, "{output_folder}", filename_pattern)
+            # Default output filename for logs
+            self.output_filename = os.path.join(base_log_dir, filename_pattern)
+
+            self.print_host_info()
+            if self.login() or (self.username == "" and self.password == ""):
                 if hasattr(self.args, "module") and self.args.module:
                     self.load_modules()
                     self.logger.debug("Calling modules")
@@ -272,7 +294,7 @@ class connection:
                 extra={
                     "module_name": module.name.upper(),
                     "host": self.host,
-                    "port": self.args.port,
+                    "port": self.port,
                     "hostname": self.hostname,
                 },
             )
@@ -280,11 +302,6 @@ class connection:
             self.logger.debug(f"Loading context for module {module.name} - {module}")
             context = Context(self.db, module_logger, self.args)
             context.localip = self.local_ip
-
-            if hasattr(module, "on_request") or hasattr(module, "has_response"):
-                self.logger.debug(f"Module {module.name} has on_request or has_response methods")
-                self.server.connection = self
-                self.server.context.localip = self.local_ip
 
             if hasattr(module, "on_login"):
                 self.logger.debug(f"Module {module.name} has on_login method")
@@ -294,13 +311,8 @@ class connection:
                 self.logger.debug(f"Module {module.name} has on_admin_login method")
                 module.on_admin_login(context, self)
 
-            if (not hasattr(module, "on_request") and not hasattr(module, "has_response")) and hasattr(module, "on_shutdown"):
-                self.logger.debug(f"Module {module.name} has on_shutdown method")
-                module.on_shutdown(context, self)
-
     def inc_failed_login(self, username):
-        global global_failed_logins
-        global user_failed_logins
+        global global_failed_logins, user_failed_logins
 
         if username not in user_failed_logins:
             user_failed_logins[username] = 0
@@ -310,8 +322,7 @@ class connection:
         self.failed_logins += 1
 
     def over_fail_limit(self, username):
-        global global_failed_logins
-        global user_failed_logins
+        global global_failed_logins, user_failed_logins
 
         if global_failed_logins == self.args.gfail_limit:
             return True
@@ -319,7 +330,7 @@ class connection:
         if self.failed_logins == self.args.fail_limit:
             return True
 
-        if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:
+        if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:  # noqa: SIM103
             return True
 
         return False
@@ -383,10 +394,10 @@ class connection:
             if isfile(user):
                 with open(user) as user_file:
                     for line in user_file:
-                        if "\\" in line:
+                        if "\\" in line and len(line.split("\\")) == 2:
                             domain_single, username_single = line.split("\\")
                         else:
-                            domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain else self.domain
+                            domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain is not None else self.domain
                             username_single = line
                         domain.append(domain_single)
                         username.append(username_single.strip())
@@ -395,7 +406,7 @@ class connection:
                 if "\\" in user:
                     domain_single, username_single = user.split("\\")
                 else:
-                    domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain else self.domain
+                    domain_single = self.args.domain if hasattr(self.args, "domain") and self.args.domain is not None else self.domain
                     username_single = user
                 domain.append(domain_single)
                 username.append(username_single)
@@ -424,14 +435,14 @@ class connection:
                     with open(ntlm_hash) as ntlm_hash_file:
                         for i, line in enumerate(ntlm_hash_file):
                             line = line.strip()
-                            if len(line) != 32 and len(line) != 65:
+                            if len(line) != 32 and len(line) != 65 and len(line) != 0:
                                 self.logger.fail(f"Invalid NTLM hash length on line {(i + 1)} (len {len(line)}): {line}")
                                 continue
                             else:
                                 secret.append(line)
                                 cred_type.append("hash")
                 else:
-                    if len(ntlm_hash) != 32 and len(ntlm_hash) != 65:
+                    if len(ntlm_hash) != 32 and len(ntlm_hash) != 65 and len(ntlm_hash) != 0:
                         self.logger.fail(f"Invalid NTLM hash length {len(ntlm_hash)}, authentication not sent")
                         exit(1)
                     else:
@@ -546,6 +557,14 @@ class connection:
                 self.kerberos_login(self.domain, username, password, "", "", self.kdcHost, True)
                 self.logger.info("Successfully authenticated using Kerberos cache")
                 return True
+
+        if self.args.pfx_cert or self.args.pfx_base64 or self.args.pem_cert:
+            self.logger.debug("Trying to authenticate using Certificate pfx")
+            if not self.args.username:
+                self.logger.fail("You must specify a username when using certificate authentication")
+                return False
+            with sem:
+                return pfx_auth(self)
 
         if hasattr(self.args, "laps") and self.args.laps:
             self.logger.debug("Trying to authenticate using LAPS")

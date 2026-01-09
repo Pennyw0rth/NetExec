@@ -7,6 +7,7 @@ from impacket.dcerpc.v5 import lsat, lsad, transport
 from impacket.dcerpc.v5.dtypes import NULL, MAXIMUM_ALLOWED, RPC_UNICODE_STRING
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 import pathlib
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -18,8 +19,7 @@ class NXCModule:
     name = "enum_av"
     description = "Gathers information on all endpoint protection solutions installed on the the remote host(s) via LsarLookupNames (no privilege needed)"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -84,10 +84,7 @@ class NXCModule:
                             prod_results = results.setdefault(product["name"], {})
                             prod_results.setdefault("pipes", []).append(pipe)
         except Exception as e:
-            if "STATUS_ACCESS_DENIED" in str(e):
-                context.log.fail("Error STATUS_ACCESS_DENIED while enumerating pipes, probably due to using SMBv1")
-            else:
-                context.log.fail(str(e))
+            context.log.fail(str(e))
 
     def dump_results(self, results, context):
         if not results:
@@ -268,6 +265,17 @@ conf = {
             ]
         },
         {
+            "name": "Check Point Endpoint Security",
+            "services": [
+                {"name": "CPDA", "description": "Check Point Endpoint Agent"},
+                {"name": "vsmon", "description": "Check Point Endpoint Security Network Protection"},
+                {"name": "CPFileAnlyz", "description": "Check Point Endpoint Security File Analyzer"},
+                {"name": "EPClientUIService", "description": "Check Point Endpoint Security Client UI"}
+
+            ],
+            "pipes": []
+        },
+        {
             "name": "ESET",
             "services": [
                 {"name": "ekm", "description": "ESET"},
@@ -282,6 +290,24 @@ conf = {
             "pipes": [{"name": "nod_scriptmon_pipe", "processes": [""]}],
         },
         {
+            "name": "FortiClient",
+            "services": [
+                {"name": "FA_Scheduler", "description": "FortiClient Service Scheduler"},
+                {"name": "FCT_SecSvr", "description": "Forticlient Endpoint Protected Process Service"}
+            ],
+            "pipes": [
+                {"name": "FortiClient_DBLogDaemon", "processes": ["FCDBLog.exe"]},
+                {"name": "FC_*", "processes": ["FortiTray.exe"]}
+            ]
+        },
+        {
+            "name": "FortiEDR",
+            "services": [
+                {"name": "FortiEDR Collector Service", "description": "Host component of the Fortinet Endpoint Detection and Response Platform"}
+            ],
+            "pipes": []
+        },
+        {
             "name": "G DATA Security Client",
             "services": [
                 {"name": "AVKWCtl", "description": "Anti-virus Kit Window Control"},
@@ -290,6 +316,25 @@ conf = {
             ],
             "pipes": [
                 {"name": "exploitProtectionIPC", "processes": ["AVKWCtlx64.exe"]}
+            ]
+        },
+        {
+        "name": "Ivanti Security",
+            "services": [
+                {"name": "STAgent$Shavlik Protect", "description": "Ivanti Security Controls Agent"},
+                {"name": "STDispatch$Shavlik Protect", "description": "Ivanti Security Controls Agent Dispatcher"}
+            ],
+            "pipes": []
+        },
+        {
+            "name": "Kaseya Agent Endpoint",
+            "services": [
+                {"name": "KAENDKSAASC*", "description": "Virtual System Administrator Endpoint"},
+                {"name": "KAKSAASC*", "description": "Machine.Group ID:*"},
+            ],
+            "pipes": [
+                {"name": "kaseyaUserKSA*", "processes": ["KaUsrTsk.exe"]},
+                {"name": "kaseyaAgentKSA*", "processes": ["AgentMon.exe"]}
             ]
         },
         {
@@ -302,6 +347,18 @@ conf = {
             ],
             "pipes": [
                 {"name": "Exploit_Blocker", "processes": ["kavfswh.exe"]}
+            ]
+        },
+        {
+            "name": "Malwarebytes",
+            "services": [
+                {"name": "MBAMService", "description": "Malwarebytes Service"},
+                {"name": "MBEndpointAgent", "description": "Malwarebytes Cloud Endpoint Agent Service"}
+            ],
+            "pipes": [
+                {"name": "MBLG", "processes": ["MBAMService.exe"]},
+                {"name": "MBEA2_R", "processes": ["MBCloudEA.exe"]},
+                {"name": "MBEA2_W", "processes": ["MBCloudEA.exe"]}
             ]
         },
         {
@@ -339,6 +396,11 @@ conf = {
             "pipes": []
         },
         {
+            "name": "Rapid7",
+            "services": [{"name": "ir_agent", "description": "Rapid7 Insight Agent"}],
+            "pipes": []
+        },
+        {
             "name": "Sophos Intercept X",
             "services": [
                 {"name": "SntpService", "description": "Sophos Network Threat Protection"},
@@ -368,7 +430,7 @@ conf = {
                 {"name": "masvc", "description": "Trellix Agent Service"},
                 {"name": "macmnsvc", "description": "Trellix Agent Common Service"},
                 {"name": "mfetp", "description": "Trellix Endpoint Threat Prevention Service"},
-                {"name": "mfewc", "description": "Trellix Endpoint Security Web Control Service"}, 
+                {"name": "mfewc", "description": "Trellix Endpoint Security Web Control Service"},
                 {"name": "mfeaack", "description": "Trellix Anti-Malware Core Service"}
             ],
             "pipes": [
@@ -387,7 +449,10 @@ conf = {
                 {"name": "Trend Micro Web Service Communicator", "description": "Trend Micro Web Service Communicator"},
                 {"name": "TMiACAgentSvc", "description": "Trend Micro Application Control Service (Agent)"},
                 {"name": "CETASvc", "description": "Trend Micro Cloud Endpoint Telemetry Service"},
-                {"name": "iVPAgent", "description": "Trend Micro Vulnerability Protection Service (Agent)"}
+                {"name": "iVPAgent", "description": "Trend Micro Vulnerability Protection Service (Agent)"},
+                {"name": "ds_agent", "description": "Trend Micro Deep Security Agent"},
+                {"name": "ds_monitor", "description": "Trend Micro Deep Security Monitor"},
+                {"name": "ds_notifier", "description": "Trend Micro Deep Security Notifier"}
             ],
             "pipes": [
                 {"name": "IPC_XBC_XBC_AGENT_PIPE_*", "processes": ["EndpointBasecamp.exe"]},
@@ -405,6 +470,21 @@ conf = {
                 {"name": "WdNisSvc", "description": "Windows Defender Antivirus Network Inspection Service"}
             ],
             "pipes": []
+        },
+        {
+            "name": "WithSecure Elements",
+            "services": [
+                {"name": "fsdevcon", "description": "WithSecure Device Control"},
+                {"name": "fshoster", "description": "WithSecure Hoster"},
+                {"name": "fsnethoster", "description": "WithSecure Hoster (Restricted)"},
+                {"name": "fsulhoster", "description": "WithSecure Ultralight Hoster"},
+                {"name": "fsulnethoster", "description": "WithSecure Ultralight Network Hoster"},
+                {"name": "fsulprothoster", "description": "WithSecure Ultralight Protected Hoster"},
+                {"name": "wsulavprohoster", "description": "WithSecure Ultralight Protected AV Hoster"}
+            ],
+            "pipes": [
+                {"name": "FS_CCFIPC_*", "processes": ["fsatpn.exe", "fsatpl.exe", "fshoster32.exe", "fsulprothoster.exe", "fsulprothoster.exe", "fshoster64.exe", "FsPisces.exe", "fsdevcon.exe"]}
+            ]
         }
     ]
 }

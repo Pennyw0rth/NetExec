@@ -1,7 +1,5 @@
 import os
-
 from io import StringIO
-from datetime import datetime
 
 from nxc.helpers.ntlm_parser import parse_challenge
 from nxc.config import process_secret
@@ -47,6 +45,8 @@ class wmi(connection):
             "0000052B": "STATUS_WRONG_PASSWORD",
             "00000721": "RPC_S_SEC_PKG_ERROR"
         }
+        self.iWbemLevel1Login = None
+        self.dcom_conn = None
 
         connection.__init__(self, args, db, host)
 
@@ -59,6 +59,14 @@ class wmi(connection):
                 "hostname": self.hostname
             }
         )
+
+    # Redefine disconnect function.
+    def disconnect(self):
+        if self.conn:
+            self.conn.disconnect()
+        if self.dcom_conn:
+            self.dcom_conn.disconnect()
+        return
 
     def create_conn_obj(self):
         connection_target = fr"ncacn_ip_tcp:{self.remoteName}[{self.port!s}]"
@@ -140,28 +148,22 @@ class wmi(connection):
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
-        self.output_filename = os.path.expanduser(f"~/.nxc/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
-
     def print_host_info(self):
         self.logger.extra["protocol"] = "RPC"
         self.logger.extra["port"] = "135"
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain})")
-        return True
 
     def check_if_admin(self):
         try:
-            dcom = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.host)
-            iInterface = dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
+            self.dcom_conn = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.host)
+            iInterface = self.dcom_conn.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
             flag, self.stringBinding = dcom_FirewallChecker(iInterface, self.host, self.args.rpc_timeout)
         except Exception as e:
             self.logger.debug(f"Received error while checking admin: {e}")
-            if "dcom" in locals():
-                dcom.disconnect()
             if "access_denied" not in str(e).lower():
                 self.logger.fail(str(e))
         else:
             if not flag or not self.stringBinding:
-                dcom.disconnect()
                 error_msg = f'Check admin error: dcom initialization failed with stringbinding: "{self.stringBinding}", please try "--rpc-timeout" option. (probably is admin)'
 
                 if not self.stringBinding:
@@ -170,16 +172,14 @@ class wmi(connection):
                 self.logger.fail(error_msg) if not flag else self.logger.debug(error_msg)
             else:
                 try:
-                    iWbemLevel1Login = IWbemLevel1Login(iInterface)
-                    iWbemServices = iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
+                    self.iWbemLevel1Login = IWbemLevel1Login(iInterface)
+                    _ = self.iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
+                    self.iWbemLevel1Login.RemRelease()
                 except Exception as e:
-                    dcom.disconnect()
-
                     if "access_denied" not in str(e).lower():
                         self.logger.fail(str(e))
                         return False
                 else:
-                    dcom.disconnect()
                     self.logger.extra["protocol"] = "WMI"
                     self.admin_privs = True
 
@@ -208,7 +208,7 @@ class wmi(connection):
             username = ccache.credentials[0].header["client"].prettyPrint().decode().split("@")[0]
             self.username = username
         used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
-        
+
         try:
             self.logger.debug(f"Attempting to connect via WMI to {self.host}")
             self.conn.set_credentials(username=username, password=password, domain=domain, lmhash=lmhash, nthash=nthash, aesKey=self.aesKey)
@@ -365,81 +365,122 @@ class wmi(connection):
                 self.logger.success(out)
                 return True
 
-    # It's very complex to use wmi from rpctansport "convert" to dcom, so let we use dcom directly.
     @requires_admin
-    def wmi(self, wql=None, namespace=None):
-        """Execute WQL syntax via WMI
-        
-        This is done via the --wmi flag
-        """
+    def wmi_query(self, wql=None, namespace=None, callback_func=None):
         records = []
         if not wql:
-            wql = self.args.wmi.strip("\n")
+            wql = self.args.wmi_query.strip("\n")
 
         if not namespace:
             namespace = self.args.wmi_namespace
 
         try:
-            dcom = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.host)
-            iInterface = dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
-            iWbemLevel1Login = IWbemLevel1Login(iInterface)
-            iWbemServices = iWbemLevel1Login.NTLMLogin(namespace, NULL, NULL)
-            iWbemLevel1Login.RemRelease()
+            iWbemServices = self.iWbemLevel1Login.NTLMLogin(namespace, NULL, NULL)
+            self.iWbemLevel1Login.RemRelease()
             iEnumWbemClassObject = iWbemServices.ExecQuery(wql)
         except Exception as e:
-            dcom.disconnect()
             self.logger.debug(str(e))
             self.logger.fail(f"Execute WQL error: {e}")
             return False
         else:
             self.logger.info(f"Executing WQL syntax: {wql}")
             try:
-                while True:
-                    wmi_results = iEnumWbemClassObject.Next(0xFFFFFFFF, 1)[0]
-                    record = wmi_results.getProperties()
-                    records.append(record)
-                    for k, v in record.items():
-                        self.logger.highlight(f"{k} => {v['value']}")
+                if not callback_func:
+                    while True:
+                        wmi_results = iEnumWbemClassObject.Next(0xFFFFFFFF, 1)[0]
+                        record = wmi_results.getProperties()
+                        records.append(record)
+                        for k, v in record.items():
+                            self.logger.highlight(f"{k} => {v['value']}")
+                else:
+                    callback_func(iEnumWbemClassObject, records)
             except Exception as e:
                 if str(e).find("S_FALSE") < 0:
                     self.logger.debug(e)
-
-            dcom.disconnect()
-
             return records
 
-    @requires_admin
-    def execute(self, command=None, get_output=False):
-        output = ""
-        if not command:
-            command = self.args.execute
+    def list_snapshots(self):
+        drive = self.args.list_snapshots
+        self.logger.info(f"Retrieving volume shadow copies of drive {drive}.")
+        wql = "select ID, DeviceObject, ClientAccessible, InstallDate from win32_shadowcopy"
 
-        if not self.args.no_output:
-            get_output = True
+        def callback_func(iEnumWbemClassObject, records):
+            while True:
+                wmi_results = iEnumWbemClassObject.Next(0xFFFFFFFF, 1)[0]
+                record = dict(wmi_results.getProperties())
+                records.append(record)
+
+        snapshots = self.wmi_query(wql=wql, namespace="root\\cimv2", callback_func=callback_func)
+        if not snapshots:
+            self.logger.info("No volume shadow copies found.")
+            return
+
+        self.logger.highlight(f"{'Drive':<8}{'Shadow Copy ID':<40}{'ClientAccessible':<18}{'InstallDate':<27}{'Device Object':<50}")
+        self.logger.highlight(f"{'------':<8}{'--------------':<40}{'----------------':<18}{'-----------':<27}{'-------------':<50}")
+        for record in snapshots:
+            self.logger.highlight(f"{drive:<8}{record['ID']['value']:<40}{record['ClientAccessible']['value']:<18}{record['InstallDate']['value']:<27}{record['DeviceObject']['value']:<50}")
+
+    @requires_admin
+    def execute(self, command=None, get_output=False, use_powershell=False):
+        output = ""
+
+        # Execution via -x
+        if not command and self.args.execute:
+            command = self.args.execute
+            if not self.args.no_output:
+                get_output = True
 
         if "systeminfo" in command and self.args.exec_timeout < 10:
             self.logger.fail("Execute 'systeminfo' must set the interval time higher than 10 seconds")
-            return False
+            return ""
 
         if self.server_os is not None and "NT 5" in self.server_os:
             self.logger.fail("Execute command failed, not support current server os (version < NT 6)")
-            return False
+            return ""
 
         if self.args.exec_method == "wmiexec":
-            exec_method = wmiexec.WMIEXEC(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, self.doKerberos, self.kdcHost, self.host, self.aesKey, self.logger, self.args.exec_timeout, self.args.codec)
-            output = exec_method.execute(command, get_output)
-
+            exec_method = wmiexec.WMIEXEC(
+                self.remoteName,
+                self.iWbemLevel1Login,
+                self.logger,
+                self.args.exec_timeout,
+                self.args.codec
+            )
         elif self.args.exec_method == "wmiexec-event":
-            exec_method = wmiexec_event.WMIEXEC_EVENT(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, self.doKerberos, self.kdcHost, self.host, self.aesKey, self.logger, self.args.exec_timeout, self.args.codec)
-            output = exec_method.execute(command, get_output)
+            exec_method = wmiexec_event.WMIEXEC_EVENT(
+                self.remoteName,
+                self.iWbemLevel1Login,
+                self.logger,
+                self.args.exec_timeout,
+                self.args.codec
+            )
+        output = exec_method.execute(command, get_output, use_powershell=use_powershell)
 
-        self.conn.disconnect()
-        if output == "" and get_output:
-            self.logger.fail("Execute command failed, probabaly got detection by AV.")
-            return False
-        else:
+        if self.args.execute and get_output:
             self.logger.success(f'Executed command: "{command}" via {self.args.exec_method}')
             buf = StringIO(output).readlines()
             for line in buf:
-                self.logger.highlight(line.strip())
+                if line.strip():
+                    self.logger.highlight(line.strip())
+            return output
+        else:
+            return output
+
+    def execute_psh(self, command=None, get_output=False):
+        # Execution via -X
+        if not command and self.args.execute_psh:
+            command = self.args.execute_psh
+            if not self.args.no_output:
+                get_output = True
+
+        output = self.execute(command, get_output, use_powershell=True)
+
+        if self.args.execute_psh and get_output:
+            self.logger.success(f'Executed PowerShell command: "{command}" via {self.args.exec_method}')
+            buf = StringIO(output).readlines()
+            for line in buf:
+                if line.strip():
+                    self.logger.highlight(line.strip())
+            return output
+        else:
             return output

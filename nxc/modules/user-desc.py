@@ -2,6 +2,8 @@ from pathlib import Path
 from datetime import datetime
 from impacket.ldap import ldap, ldapasn1
 from impacket.ldap.ldap import LDAPSearchError
+from nxc.helpers.misc import CATEGORY
+from nxc.paths import NXC_PATH
 
 
 class NXCModule:
@@ -14,8 +16,7 @@ class NXCModule:
     name = "user-desc"
     description = "Get user descriptions stored in Active Directory"
     supported_protocols = ["ldap"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self, context=None, multiple_options=None):
         self.keywords = None
@@ -71,12 +72,12 @@ class NXCModule:
         Users can specify additional LDAP filters that are applied to the query.
         """
         self.context = context
-        self.create_log_file(connection.conn.getRemoteHost(), datetime.now().strftime("%Y%m%d_%H%M%S"))
+        self.create_log_file(connection.target, datetime.now().strftime("%Y%m%d_%H%M%S"))
         context.log.info(f"Starting LDAP search with search filter '{self.search_filter}'")
 
         try:
             sc = ldap.SimplePagedResultsControl()
-            connection.ldapConnection.search(
+            connection.ldap_connection.search(
                 searchFilter=self.search_filter,
                 attributes=["sAMAccountName", "description"],
                 sizeLimit=0,
@@ -91,7 +92,7 @@ class NXCModule:
     def create_log_file(self, host, time):
         """Create a log file for dumping user descriptions."""
         logfile = f"UserDesc-{host}-{time}.log"
-        logfile = Path.home().joinpath(".nxc").joinpath("logs").joinpath(logfile)
+        logfile = Path(NXC_PATH).joinpath(logfile)
 
         self.context.log.info(f"Creating log file '{logfile}'")
         self.log_file = open(logfile, "w")  # noqa: SIM115

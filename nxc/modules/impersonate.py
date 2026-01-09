@@ -6,7 +6,8 @@
 from base64 import b64decode
 from os import path
 import sys
-
+from datetime import datetime
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import DATA_PATH
 
 
@@ -14,8 +15,7 @@ class NXCModule:
     name = "impersonate"
     description = "List and impersonate tokens to run command as locally logged on users"
     supported_protocols = ["smb"]
-    opsec_safe = True  # could be flagged
-    multiple_hosts = True
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context, module_options):
         """
@@ -29,8 +29,13 @@ class NXCModule:
         self.impersonate = "Impersonate.exe"
         self.useembeded = True
         self.token = self.cmd = ""
+
         with open(path.join(DATA_PATH, ("impersonate_module/impersonate.bs64"))) as impersonate_file:
             self.impersonate_embedded = b64decode(impersonate_file.read())
+
+        # Add some random binary data to defeat AVs which check the file hash
+        self.impersonate_embedded += datetime.now().strftime("%Y%m%d%H%M%S").encode()
+
         if "EXEC" in module_options:
             self.cmd = module_options["EXEC"]
 

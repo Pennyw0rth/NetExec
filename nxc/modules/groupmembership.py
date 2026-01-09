@@ -1,6 +1,7 @@
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ldap import ldap as ldap_impacket
 import sys
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -15,8 +16,7 @@ class NXCModule:
     name = "groupmembership"
     description = "Query the groups to which a user belongs."
     supported_protocols = ["ldap"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """USER	Choose a username to query group membership"""
@@ -37,7 +37,7 @@ class NXCModule:
 
         try:
             context.log.debug(f"Search Filter={searchFilter}")
-            resp = connection.ldapConnection.search(
+            resp = connection.ldap_connection.search(
                 searchFilter=searchFilter,
                 attributes=["memberOf", "primaryGroupID"],
                 sizeLimit=0,

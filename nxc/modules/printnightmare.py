@@ -1,11 +1,11 @@
-import sys
 from impacket import system_errors
-from impacket.dcerpc.v5.rpcrt import DCERPCException, RPC_C_AUTHN_GSS_NEGOTIATE
+from impacket.dcerpc.v5.rpcrt import DCERPCException, RPC_C_AUTHN_GSS_NEGOTIATE, rpc_status_codes
 from impacket.structure import Structure
 from impacket.dcerpc.v5 import transport, rprn
 from impacket.dcerpc.v5.ndr import NDRCALL, NDRPOINTER, NDRSTRUCT, NDRUNION, NULL
 from impacket.dcerpc.v5.dtypes import DWORD, LPWSTR, ULONG, WSTR
 from impacket.dcerpc.v5.rprn import checkNullString, STRING_HANDLE, PBYTE_ARRAY
+from nxc.helpers.misc import CATEGORY
 
 KNOWN_PROTOCOLS = {
     135: {"bindstr": r"ncacn_ip_tcp:%s[135]"},
@@ -22,8 +22,7 @@ class NXCModule:
     name = "printnightmare"
     description = "Check if host vulnerable to printnightmare"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -39,7 +38,8 @@ class NXCModule:
 
     def on_login(self, context, connection):
         # Connect and bind to MS-RPRN (https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-rprn/848b8334-134a-4d02-aea4-03b673d6c515)
-        stringbinding = r"ncacn_np:%s[\PIPE\spoolss]" % connection.host
+        target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
+        stringbinding = rf"ncacn_np:{target}[\PIPE\spoolss]"
 
         context.log.info(f"Binding to {stringbinding!r}")
 
@@ -55,7 +55,7 @@ class NXCModule:
         )
 
         rpctransport.set_kerberos(connection.kerberos, kdcHost=connection.kdcHost)
-        rpctransport.setRemoteHost(connection.host)
+        rpctransport.setRemoteHost(target)
         rpctransport.set_dport(self.port)
 
         try:
@@ -68,7 +68,7 @@ class NXCModule:
             dce.bind(rprn.MSRPC_UUID_RPRN)
         except Exception as e:
             context.log.fail(f"Failed to bind: {e}")
-            sys.exit(1)
+            return False
 
         flags = APD_COPY_ALL_FILES | APD_COPY_FROM_DIRECTORY | APD_INSTALL_WARNED_DRIVER
 
@@ -101,7 +101,12 @@ class NXCModule:
             if e.error_code == system_errors.ERROR_INVALID_PARAMETER:
                 context.log.highlight("Vulnerable, next step https://github.com/ly4k/PrintNightmare")
                 return True
-            raise e
+            context.log.fail(f"Unexpected error: {e}")
+        except DCERPCException as e:
+            if rpc_status_codes[e.error_code] == "rpc_s_access_denied":
+                context.log.info("Not vulnerable :'(")
+                return False
+            context.log.fail(f"Unexpected error: {e}")
         context.log.highlight("Vulnerable, next step https://github.com/ly4k/PrintNightmare")
         return True
 

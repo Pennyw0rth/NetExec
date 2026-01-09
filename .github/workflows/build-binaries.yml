@@ -10,7 +10,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macOS-latest, windows-latest]
-        python-version: ["3.11"]
+        python-version: ["3.13"]
         #python-version: ["3.8", "3.9", "3.10", "3.11"] # for binary builds we only need one version
     steps:
     - uses: actions/checkout@v4
@@ -20,18 +20,18 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Build Native Binary
       run: |
-        pip install pyinstaller
+        pip install pyinstaller pillow
         pip install .
         pyinstaller netexec.spec
     - name: Upload Windows Binary
       if: runner.os == 'windows'
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: nxc.exe
+        name: nxc-windows.exe
         path: dist/nxc.exe
     - name: Upload Nix/OSx Binary
       if: runner.os != 'windows'
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: nxc-${{ matrix.os }}
         path: dist/nxc

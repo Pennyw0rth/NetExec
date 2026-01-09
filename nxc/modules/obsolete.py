@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from datetime import datetime, timedelta
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 import socket
 
@@ -13,8 +14,7 @@ class NXCModule:
     name = "obsolete"
     description = "Extract all obsolete operating systems from LDAP"
     supported_protocols = ["ldap"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     def ldap_time_to_datetime(self, ldap_time):
         """Convert an LDAP timestamp to a datetime object."""
@@ -40,7 +40,7 @@ class NXCModule:
 
         try:
             context.log.debug(f"Search Filter={search_filter}")
-            resp = connection.ldapConnection.search(searchFilter=search_filter, attributes=attributes, sizeLimit=0)
+            resp = connection.ldap_connection.search(searchFilter=search_filter, attributes=attributes, sizeLimit=0)
         except Exception:
             context.log.error("LDAP search error:", exc_info=True)
             return False
