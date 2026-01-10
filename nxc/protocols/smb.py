@@ -55,7 +55,7 @@ from nxc.protocols.smb.samruser import UserSamrDump
 from nxc.protocols.smb.samrfunc import SamrFunc
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.helpers.logger import highlight
-from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.bloodhound import add_user_bh, add_session_bh
 from nxc.helpers.powershell import create_ps_command
 from nxc.helpers.misc import detect_if_ip
 from nxc.protocols.ldap.resolution import LDAPResolution
@@ -1342,6 +1342,12 @@ class smb(connection):
                 if item["DomainIndex"] >= 0:
                     sessions[sid]["Username"] = item["Name"]
                     sessions[sid]["Domain"] = resp["ReferencedDomains"]["Domains"][item["DomainIndex"]]["Name"]
+                    sessions[sid]["DomainSid"] = resp["ReferencedDomains"]["Domains"][item["DomainIndex"]]["Sid"].formatCanonical()
+
+        # Add BloodHound HasSession relationships
+        for sid, info in sessions.items():
+            if info["Username"] and not info["Username"].endswith("$") and info.get("DomainSid"):
+                add_session_bh(self.hostname, self.domain, info["Username"], info["DomainSid"], self.logger, self.config)
 
         # Filter for usernames
         if self.args.reg_sessions:
@@ -1711,6 +1717,49 @@ class smb(connection):
                             self.logger.highlight(f"{user_info[0]}\\{user_info[1]:<25} logon_server: {user_info[2]}")
                     else:
                         self.logger.highlight(f"{user_info[0]}\\{user_info[1]:<25} logon_server: {user_info[2]}")
+
+            # Add BloodHound HasSession relationships
+            # First, resolve unique NetBIOS domain names to SIDs via LSARPC
+            unique_domains = list(set(user_info[0] for user_info in logged_on if not user_info[1].endswith("$")))
+            domain_sid_map = {}
+
+            if unique_domains:
+                try:
+                    # Bind to the LSARPC Pipe for domain name resolution
+                    rpctransport_lsa = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\lsarpc", smb_connection=self.conn)
+                    dce_lsa = rpctransport_lsa.get_dce_rpc()
+                    dce_lsa.connect()
+                    dce_lsa.bind(lsat.MSRPC_UUID_LSAT)
+
+                    policy_handle = lsad.hLsarOpenPolicy2(dce_lsa, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES)["PolicyHandle"]
+                    try:
+                        resp = lsat.hLsarLookupNames(dce_lsa, policy_handle, unique_domains)
+                    except DCERPCException as e:
+                        if str(e).find("STATUS_SOME_NOT_MAPPED") >= 0:
+                            resp = e.get_packet()
+                            self.logger.debug(f"Could not resolve some domain names: {e}")
+                        elif str(e).find("STATUS_NONE_MAPPED") >= 0:
+                            resp = None
+                            self.logger.debug(f"Could not resolve any domain names: {e}")
+                        else:
+                            resp = None
+                            self.logger.debug(f"Could not resolve domain names: {e}")
+
+                    if resp:
+                        for domain_name, item in zip(unique_domains, resp["TranslatedSids"]["Sids"], strict=False):
+                            if item["DomainIndex"] >= 0 and resp["ReferencedDomains"]["Domains"]:
+                                domain_sid = resp["ReferencedDomains"]["Domains"][item["DomainIndex"]]["Sid"].formatCanonical()
+                                domain_sid_map[domain_name] = domain_sid
+                                self.logger.debug(f"Resolved domain {domain_name} to SID {domain_sid}")
+
+                    dce_lsa.disconnect()
+                except Exception as e:
+                    self.logger.debug(f"Failed to connect to LSARPC for domain SID resolution: {e}")
+
+            for user_info in logged_on:
+                user_domain, username, _ = user_info
+                if not username.endswith("$") and user_domain in domain_sid_map:
+                    add_session_bh(self.hostname, self.domain, username, domain_sid_map[user_domain], self.logger, self.config)
         except Exception as e:
             self.logger.fail(f"Error enumerating logged on users: {e}")
 
