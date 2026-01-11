@@ -72,6 +72,12 @@ class NXCModule:
             "WHERE n.owned "
             "RETURN p"
         )
+        
+        # LDAP filter covering:
+        # - Unconstrained delegation
+        # - Constrained delegation (with and without protocol transition)
+        # - Resource-Based Constrained Delegation (RBCD)
+        # Disabled accounts are explicitly excluded
 
         search_filter = (
             "(&(|"
@@ -83,6 +89,7 @@ class NXCModule:
             "(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
         )
 
+        # Only attributes required for delegation detection are requested
         attributes = [
             "sAMAccountName",
             "userAccountControl",
@@ -123,9 +130,11 @@ class NXCModule:
                     sam = str(attr["vals"][0])
 
                 elif name == "objectCategory":
+                    # Extract object type (User / Computer) from DN-style value
                     obj_type = str(attr["vals"][0]).split("=")[1].split(",")[0]
 
                 elif name == "userAccountControl":
+                    # Delegation flags are stored as UAC bitmasks
                     uac = int(attr["vals"][0])
 
                     if uac & UF_TRUSTED_FOR_DELEGATION:
@@ -136,12 +145,14 @@ class NXCModule:
                         delegation = "Constrained (Protocol Transition)"
 
                 elif name == "msDS-AllowedToDelegateTo":
+                    # Constrained delegation SPNs
                     if delegation is None:
                         delegation = "Constrained (No Protocol Transition)"
                     for val in attr["vals"]:
                         rights.append(str(val))
 
                 elif name == "msDS-AllowedToActOnBehalfOfOtherIdentity":
+                    # RBCD is stored as a security descriptor containing allowed SIDs
                     sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(attr["vals"][0]))
                     for ace in sd["Dacl"].aces:
                         sid = ace["Ace"]["Sid"].formatCanonical()
@@ -151,6 +162,7 @@ class NXCModule:
                         )
                         found = True
 
+            # Output classic delegation results
             if delegation and sam:
                 for r in rights:
                     context.log.highlight(
