@@ -36,12 +36,10 @@ class rdp(connection):
         self.iosettings.video_out_format = VIDEO_FORMAT.RAW
         self.iosettings.clipboard_use_pyperclip = False
         self.protoflags_nla = [
-            SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.RDP,
             SUPP_PROTOCOLS.SSL,
             SUPP_PROTOCOLS.RDP,
         ]
         self.protoflags = [
-            SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.RDP,
             SUPP_PROTOCOLS.SSL,
             SUPP_PROTOCOLS.RDP,
             SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.HYBRID,
@@ -170,23 +168,26 @@ class rdp(connection):
 
     async def check_nla(self):
         self.logger.debug(f"Checking NLA for {self.host}")
-        try:
-            self.iosettings.supported_protocols = SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.RDP
-            self.conn = RDPConnection(
-                iosettings=self.iosettings,
-                target=self.target,
-                credentials=None,
-            )
-            packetizer = TPKTPacketizer()
-            client = UniClient(self.target, packetizer)
-            self.conn._connection = await asyncio.wait_for(client.connect(), timeout=self.args.rdp_timeout)
-            self.conn._x224net = X224Network(self.conn._connection)
-            _, err = await asyncio.wait_for(self.conn._x224net.client_negotiate(0, SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.RDP), timeout=self.args.rdp_timeout)
-            if err is None or "HYBRID_REQUIRED_BY_SERVER" not in str(err):
-                self.nla = False
-                return
-        except Exception:
-            pass
+        # Test protocols in order:  SSL first, then pure RDP for legacy servers
+        for proto in self.protoflags_nla:
+            try:
+                self.iosettings.supported_protocols = proto
+                self.conn = RDPConnection(
+                    iosettings=self.iosettings,
+                    target=self.target,
+                    credentials=None,
+                )
+                packetizer = TPKTPacketizer()
+                client = UniClient(self.target, packetizer)
+                self.conn._connection = await asyncio.wait_for(client.connect(), timeout=self.args.rdp_timeout)
+                self.conn._x224net = X224Network(self.conn._connection)
+                _, err = await asyncio.wait_for(self.conn._x224net.client_negotiate(0, proto), timeout=self.args.rdp_timeout)
+                # If no error, RDP or SSL is supported so no NLA
+                if err is None:
+                    self.nla = False
+                    return
+            except Exception:
+                pass
 
     async def connect_rdp(self):
         _, err = await asyncio.wait_for(self.conn.connect(), timeout=self.args.rdp_timeout)
