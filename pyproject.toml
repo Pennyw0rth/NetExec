@@ -50,6 +50,9 @@ dependencies = [
     "pynfsclient @ git+https://github.com/Pennyw0rth/NfsClient",
 ]
 
+[project.optional-dependencies]
+adcs = ["certihound>=0.1.0"]
+
 [project.urls]
 homepage = "https://github.com/Pennyw0rth/NetExec"
 repository = "https://github.com/Pennyw0rth/NetExec"
