@@ -8,6 +8,7 @@ from pyNfsClient import (
     Mount,
     NFSv3,
 )
+from nxc.protocols.nfs.nfsspider import NFSSpider
 from pyNfsClient.const import (
     NFS_PROGRAM,
     NFS_V3,
@@ -22,6 +23,7 @@ import re
 import uuid
 import math
 import os
+from time import time
 
 
 class FileID:
@@ -703,6 +705,78 @@ class nfs(connection):
             content = [x for x in content if x["name"].decode() == sub_path]
             path = path.rsplit("/", 1)[0]   # Remove the file from the path
         self.print_directory(content, path)
+
+    def spider(self):
+        start_time = time()
+        mounted_share = False
+        try:
+            nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
+            self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
+            self.nfs3.connect()
+
+            spider_path = self.args.spider.lstrip("/").rstrip("/") if self.args.spider else ""
+
+            if self.args.share:
+                mnt_info = self.mount.mnt(self.args.share, self.auth)
+                if mnt_info["status"] != 0:
+                    self.logger.fail(f"Could not mount share {self.args.share}: {NFSSTAT3[mnt_info['status']]}")
+                    return
+                mount_fh = mnt_info["mountinfo"]["fhandle"]
+                base_path = self.args.share
+                mounted_share = True
+            elif self.root_escape:
+                self.logger.success(f"Using root escape on share: {self.escape_share}")
+                mount_fh = self.escape_fh
+                base_path = "/"
+            else:
+                self.logger.fail("No root escape possible, please specify a share")
+                return
+
+            curr_fh = mount_fh
+            for sub_path in list(filter(None, spider_path.split("/"))):
+                self.update_auth(curr_fh)
+                res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
+
+                if "resfail" in res and res["status"] == NFS3ERR_NOENT:
+                    self.logger.fail(f"Unknown path: {spider_path!r}")
+                    return
+                elif "resfail" in res:
+                    self.logger.fail(f"Error looking up path '{sub_path}': {NFSSTAT3[res['status']]}")
+                    return
+
+                curr_fh = res["resok"]["object"]["data"]
+
+            exclude_dirs = []
+            if self.args.exclude_dirs:
+                exclude_dirs = [d.strip() for d in self.args.exclude_dirs.split(",")]
+
+            spider = NFSSpider(self.nfs3, self.mount, self.auth, self.logger)
+            full_path = f"{base_path.rstrip('/')}/{spider_path}".rstrip("/") or "/"
+
+            results = spider.spider(
+                file_handle=curr_fh,
+                start_path=full_path,
+                pattern=self.args.pattern,
+                regex=self.args.regex,
+                exclude_dirs=exclude_dirs,
+                depth=self.args.depth,
+                only_files=not getattr(self.args, "show_dirs", False),
+                only_readable=not getattr(self.args, "show_all", False),
+            )
+
+            elapsed = time() - start_time
+            self.logger.success(f"Spidering completed: {len(results)} readable items found in {elapsed:.2f}s")
+
+        except Exception as e:
+            self.logger.fail(f"Error during spidering: {e}")
+        finally:
+            if mounted_share:
+                try:
+                    self.mount.umnt(self.auth)
+                except Exception as e:
+                    self.logger.debug(f"Error unmounting share: {e}")
+            if hasattr(self, "nfs3") and self.nfs3:
+                self.nfs3.disconnect()
 
     def print_directory(self, content, path):
         """
