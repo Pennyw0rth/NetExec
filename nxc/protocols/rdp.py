@@ -168,26 +168,24 @@ class rdp(connection):
 
     async def check_nla(self):
         self.logger.debug(f"Checking NLA for {self.host}")
-        # Test protocols in order:  SSL first, then pure RDP for legacy servers
-        for proto in self.protoflags_nla:
-            try:
-                self.iosettings.supported_protocols = proto
-                self.conn = RDPConnection(
-                    iosettings=self.iosettings,
-                    target=self.target,
-                    credentials=None,
-                )
-                packetizer = TPKTPacketizer()
-                client = UniClient(self.target, packetizer)
-                self.conn._connection = await asyncio.wait_for(client.connect(), timeout=self.args.rdp_timeout)
-                self.conn._x224net = X224Network(self.conn._connection)
-                _, err = await asyncio.wait_for(self.conn._x224net.client_negotiate(0, proto), timeout=self.args.rdp_timeout)
-                # If no error, RDP or SSL is supported so no NLA
-                if err is None:
-                    self.nla = False
-                    return
-            except Exception:
-                pass
+        try:
+            self.iosettings.supported_protocols = SUPP_PROTOCOLS.SSL
+            self.conn = RDPConnection(
+                iosettings=self.iosettings,
+                target=self.target,
+                credentials=None,
+            )
+            packetizer = TPKTPacketizer()
+            client = UniClient(self.target, packetizer)
+            self.conn._connection = await asyncio.wait_for(client.connect(), timeout=self.args.rdp_timeout)
+            self.conn._x224net = X224Network(self.conn._connection)
+            _, err = await asyncio.wait_for(self.conn._x224net.client_negotiate(0, SUPP_PROTOCOLS.SSL), timeout=self.args.rdp_timeout)
+            # If no error SSL supported if SSL_NOT_ALLOWED_BY_SERVER error, plain RDP supported
+            if err is None or "SSL_NOT_ALLOWED_BY_SERVER" in str(err):
+                self.nla = False
+                return
+        except Exception:
+            pass
 
     async def connect_rdp(self):
         _, err = await asyncio.wait_for(self.conn.connect(), timeout=self.args.rdp_timeout)
