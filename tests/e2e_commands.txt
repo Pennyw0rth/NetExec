@@ -320,3 +320,50 @@ netexec nfs TARGET_HOST -u "" -p "" --shares
 netexec nfs TARGET_HOST -u "" -p "" --enum-shares
 netexec nfs TARGET_HOST -u "" -p "" --get-file /NFStest/test/test.txt ../test.txt
 netexec nfs TARGET_HOST -u "" -p "" --put-file ../test.txt /NFStest/test
+##### RPC
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
+netexec {DNS} rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
+##### RPC Server/Domain Information
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --server-info
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --enum-domains
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --enum-trusts
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --domain-info
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --pass-pol
+##### RPC User Enumeration
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --users
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --querydispinfo
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --rid-brute
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --rid-brute 5000
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --user LOGIN_USERNAME
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --user 500
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --user-pass-pol LOGIN_USERNAME
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --lookup-names LOGIN_USERNAME
+##### RPC Group Enumeration
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --groups
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --group "Domain Users"
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --local-groups
+##### RPC Share Enumeration
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --shares
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --share C$
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sessions
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --connections
+##### RPC LSA Operations
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --lsa-query
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --lsa-enum-accounts
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --lsa-enum-privileges
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --lsa-query-security
+##### RPC SID/SAM Operations
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sam-lookup domain LOGIN_USERNAME
+netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sam-lookup builtin Administrators
+##### RPC Anonymous Enumeration (may work on misconfigured systems)
+netexec rpc TARGET_HOST -u '' -p '' --rid-brute
+netexec rpc TARGET_HOST --rid-brute
+##### RPC User/Group Management (requires admin - commented out to avoid unintended changes)
+#netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --create-user testuser:P@ssw0rd123
+#netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --delete-user testuser
+#netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --enable-user testuser
+#netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --disable-user testuser
+#netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --create-group testgroup
+#netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --delete-group testgroup
+#netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --add-to-group testuser:testgroup
+#netexec rpc TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --remove-from-group testuser:testgroup
