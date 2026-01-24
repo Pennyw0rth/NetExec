@@ -15,11 +15,7 @@ from impacket.examples.secretsdump import (
     LSASecrets,
     NTDSHashes,
 )
-from impacket.examples.regsecrets import (
-    RemoteOperations as RegSecretsRemoteOperations,
-    SAMHashes as RegSecretsSAMHashes,
-    LSASecrets as RegSecretsLSASecrets
-)
+from impacket.examples.regsecrets import RemoteOperations as RegSecretsRemoteOperations, SAMHashes as RegSecretsSAMHashes, LSASecrets as RegSecretsLSASecrets
 from impacket.nmb import NetBIOSError, NetBIOSTimeout
 from impacket.dcerpc.v5 import transport, lsat, lsad, scmr, rrp, srvs, wkst
 from impacket.dcerpc.v5.rpcrt import DCERPCException
@@ -53,6 +49,7 @@ from nxc.protocols.smb.smbspider import SMBSpider
 from nxc.protocols.smb.passpol import PassPolDump
 from nxc.protocols.smb.samruser import UserSamrDump
 from nxc.protocols.smb.samrfunc import SamrFunc
+from nxc.protocols.smb.rpc_enum import RPCEnumerator
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.helpers.logger import highlight
 from nxc.helpers.bloodhound import add_user_bh
@@ -117,8 +114,8 @@ class smb(connection):
         self.nthash = ""
         self.remote_ops = None
         self.bootkey = None
-        self.smbv1 = None   # Check if SMBv1 is supported
-        self.smbv3 = None   # Check if SMBv3 is supported
+        self.smbv1 = None  # Check if SMBv1 is supported
+        self.smbv3 = None  # Check if SMBv3 is supported
         self.is_timed_out = False
         self.signing = False
         self.smb_share_name = smb_share_name
@@ -194,7 +191,7 @@ class smb(connection):
         if not self.no_ntlm:
             self.hostname = self.conn.getServerName()
             self.targetDomain = self.conn.getServerDNSDomainName()
-            if not self.targetDomain:   # Not sure if that can even happen but now we are safe
+            if not self.targetDomain:  # Not sure if that can even happen but now we are safe
                 self.targetDomain = self.hostname
         else:
             try:
@@ -206,6 +203,7 @@ class smb(connection):
                 else:
                     # Check if the host is a valid IP address, if not we parse the FQDN in the Exception
                     import socket
+
                     socket.inet_aton(self.host)
                     self.logger.debug("NTLM authentication not available! Authentication will fail without a valid hostname and domain name")
                     self.hostname = self.host
@@ -470,7 +468,7 @@ class smb(connection):
         except SessionError as e:
             error, desc = e.getErrorString()
             self.logger.fail(
-                f'{domain}\\{self.username}:{process_secret(self.password)} {error} {f"({desc})" if self.args.verbose else ""}',
+                f"{domain}\\{self.username}:{process_secret(self.password)} {error} {f'({desc})' if self.args.verbose else ''}",
                 color="magenta" if error in smb_error_status else "red",
             )
             if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED", "STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT"] and self.args.module == ["change-password"]:
@@ -685,15 +683,7 @@ class smb(connection):
         userName = Principal(self.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
 
         try:
-            tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(
-                clientName=userName,
-                password=self.password,
-                domain=self.domain.upper(),
-                lmhash=binascii.unhexlify(self.lmhash) if self.lmhash else "",
-                nthash=binascii.unhexlify(self.nthash) if self.nthash else "",
-                aesKey=self.aesKey,
-                kdcHost=self.kdcHost
-            )
+            tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(clientName=userName, password=self.password, domain=self.domain.upper(), lmhash=binascii.unhexlify(self.lmhash) if self.lmhash else "", nthash=binascii.unhexlify(self.nthash) if self.nthash else "", aesKey=self.aesKey, kdcHost=self.kdcHost)
 
             self.logger.debug(f"TGT successfully obtained for {self.username}@{self.domain}")
             self.logger.debug(f"Using cipher: {cipher}")
@@ -711,6 +701,7 @@ class smb(connection):
     def check_dc_ports(self, timeout=1):
         """Check multiple DC-specific ports in case first check fails"""
         import socket
+
         dc_ports = [88, 389, 636, 3268, 9389]  # Kerberos, LDAP, LDAPS, Global Catalog, ADWS
         open_ports = 0
 
@@ -759,6 +750,7 @@ class smb(connection):
     def _is_port_open(self, port, timeout=1):
         """Check if a specific port is open on the target host."""
         import socket
+
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 sock.settimeout(timeout)
@@ -824,23 +816,7 @@ class smb(connection):
             current_method = method
             if method == "wmiexec":
                 try:
-                    exec_method = WMIEXEC(
-                        self.remoteName,
-                        self.smb_share_name,
-                        self.username,
-                        self.password,
-                        self.domain,
-                        self.conn,
-                        self.kerberos,
-                        self.aesKey,
-                        self.kdcHost,
-                        self.host,
-                        self.hash,
-                        self.args.share,
-                        logger=self.logger,
-                        timeout=self.args.dcom_timeout,
-                        tries=self.args.get_output_tries
-                    )
+                    exec_method = WMIEXEC(self.remoteName, self.smb_share_name, self.username, self.password, self.domain, self.conn, self.kerberos, self.aesKey, self.kdcHost, self.host, self.hash, self.args.share, logger=self.logger, timeout=self.args.dcom_timeout, tries=self.args.get_output_tries)
                     self.logger.info("Executed command via wmiexec")
                     break
                 except Exception:
@@ -852,23 +828,7 @@ class smb(connection):
                     # https://github.com/fortra/impacket/issues/1611
                     if self.kerberos:
                         raise Exception("MMCExec current is buggly with kerberos")
-                    exec_method = MMCEXEC(
-                        self.remoteName,
-                        self.smb_share_name,
-                        self.username,
-                        self.password,
-                        self.domain,
-                        self.conn,
-                        self.kerberos,
-                        self.aesKey,
-                        self.kdcHost,
-                        self.host,
-                        self.hash,
-                        self.args.share,
-                        logger=self.logger,
-                        timeout=self.args.dcom_timeout,
-                        tries=self.args.get_output_tries
-                    )
+                    exec_method = MMCEXEC(self.remoteName, self.smb_share_name, self.username, self.password, self.domain, self.conn, self.kerberos, self.aesKey, self.kdcHost, self.host, self.hash, self.args.share, logger=self.logger, timeout=self.args.dcom_timeout, tries=self.args.get_output_tries)
                     self.logger.info("Executed command via mmcexec")
                     break
                 except Exception:
@@ -877,21 +837,7 @@ class smb(connection):
                     continue
             elif method == "atexec":
                 try:
-                    exec_method = TSCH_EXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
-                        self.smb_share_name,
-                        self.username,
-                        self.password,
-                        self.domain,
-                        self.kerberos,
-                        self.aesKey,
-                        self.host,
-                        self.kdcHost,
-                        self.hash,
-                        self.logger,
-                        self.args.get_output_tries,
-                        self.args.share
-                    )
+                    exec_method = TSCH_EXEC(self.host if not self.kerberos else self.hostname + "." + self.domain, self.smb_share_name, self.username, self.password, self.domain, self.kerberos, self.aesKey, self.host, self.kdcHost, self.hash, self.logger, self.args.get_output_tries, self.args.share)
                     self.logger.info("Executed command via atexec")
                     break
                 except Exception:
@@ -900,23 +846,7 @@ class smb(connection):
                     continue
             elif method == "smbexec":
                 try:
-                    exec_method = SMBEXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
-                        self.smb_share_name,
-                        self.conn,
-                        self.username,
-                        self.password,
-                        self.domain,
-                        self.kerberos,
-                        self.aesKey,
-                        self.host,
-                        self.kdcHost,
-                        self.hash,
-                        self.args.share,
-                        self.port,
-                        self.logger,
-                        self.args.get_output_tries
-                    )
+                    exec_method = SMBEXEC(self.host if not self.kerberos else self.hostname + "." + self.domain, self.smb_share_name, self.conn, self.username, self.password, self.domain, self.kerberos, self.aesKey, self.host, self.kdcHost, self.hash, self.args.share, self.port, self.logger, self.args.get_output_tries)
                     self.logger.info("Executed command via smbexec")
                     break
                 except Exception:
@@ -944,7 +874,7 @@ class smb(connection):
                 self.logger.fail("Command execution blocked by AMSI")
                 return ""
 
-            if (self.args.execute or self.args.ps_execute):
+            if self.args.execute or self.args.ps_execute:
                 self.logger.success(f"Executed command via {current_method}")
                 if output:
                     for line in output.split("\n"):
@@ -1005,16 +935,7 @@ class smb(connection):
             for i in rsessions:
                 sess = i["SessionInfo"]["SessionEnum_Level1"]
                 state = TSTS.enum2value(TSTS.WINSTATIONSTATECLASS, sess["State"]).split("_")[-1]
-                sessions[sess["SessionId"]] = {
-                    "state": state,
-                    "SessionName": sess["Name"],
-                    "RemoteIp": "",
-                    "ClientName": "",
-                    "Username": "",
-                    "Domain": "",
-                    "Resolution": "",
-                    "ClientTimeZone": ""
-                }
+                sessions[sess["SessionId"]] = {"state": state, "SessionName": sess["Name"], "RemoteIp": "", "ClientName": "", "Username": "", "Domain": "", "Resolution": "", "ClientTimeZone": ""}
             return sessions
 
     def enumerate_sessions_info(self, sessions):
@@ -1099,14 +1020,7 @@ class smb(connection):
         maxStateLen = max(maxStateLen, len("STATE") + 1)
 
         # Create the template for formatting
-        template = (f"{{SESSIONNAME: <{maxSessionNameLen}}} "
-                    f"{{USERNAME: <{maxUsernameLen}}} "
-                    f"{{ID: <{maxIdLen}}} "
-                    "{IPv4: <16} "
-                    f"{{STATE: <{maxStateLen}}} "
-                    "{DSTATE: <9} "
-                    "{CONNTIME: <20} "
-                    "{DISCTIME: <20} ")
+        template = f"{{SESSIONNAME: <{maxSessionNameLen}}} {{USERNAME: <{maxUsernameLen}}} {{ID: <{maxIdLen}}} {{IPv4: <16}} {{STATE: <{maxStateLen}}} {{DSTATE: <9}} {{CONNTIME: <20}} {{DISCTIME: <20}} "
         header = template.format(
             SESSIONNAME="SESSIONNAME",
             USERNAME="USERNAME",
@@ -1232,7 +1146,7 @@ class smb(connection):
                 maxUsernameLen = max(maxUsernameLen, len("USERNAME") + 1)
 
                 # Create the template for formatting
-                template = (f"{{USERNAME: <{maxUsernameLen}}} {{SID: <{maxSidLen}}}")
+                template = f"{{USERNAME: <{maxUsernameLen}}} {{SID: <{maxSidLen}}}"
 
                 # Create headers
                 header = template.format(USERNAME="USERNAME", SID="SID")
@@ -1265,7 +1179,7 @@ class smb(connection):
                 break
             except SessionError as e:
                 self.logger.debug(f"Could not bind to the Remote Registry on {self.hostname}: {e}")
-                if binding_attempts == 1:   # Last attempt
+                if binding_attempts == 1:  # Last attempt
                     self.logger.info(f"The Remote Registry service seems to be disabled on {self.hostname}.")
                     return
             # STATUS_PIPE_NOT_AVAILABLE : Waiting 1 second for the service to start (if idle and set to 'Automatic' startup type)
@@ -1526,14 +1440,7 @@ class smb(connection):
 
             FSCTL_QUERY_NETWORK_INTERFACE_INFO = 0x001401FC
 
-            response = self.conn._SMBConnection.ioctl(
-                tree_id,
-                fileId=None,
-                ctlCode=FSCTL_QUERY_NETWORK_INTERFACE_INFO,
-                flags=SMB2_0_IOCTL_IS_FSCTL,
-                inputBlob=b"",
-                maxOutputResponse=8192
-            )
+            response = self.conn._SMBConnection.ioctl(tree_id, fileId=None, ctlCode=FSCTL_QUERY_NETWORK_INTERFACE_INFO, flags=SMB2_0_IOCTL_IS_FSCTL, inputBlob=b"", maxOutputResponse=8192)
 
             if response:
                 self.logger.success("Retrieved network interface data")
@@ -1550,20 +1457,20 @@ class smb(connection):
                 while offset < len(response) and offset + 152 <= len(response):
                     try:
                         # Parse NETWORK_INTERFACE_INFO structure
-                        next_offset = struct.unpack("<L", response[offset:offset + 4])[0]
-                        if_index = struct.unpack("<L", response[offset + 4:offset + 8])[0]
-                        capabilities = struct.unpack("<L", response[offset + 8:offset + 12])[0]
-                        link_speed = struct.unpack("<Q", response[offset + 16:offset + 24])[0]
+                        next_offset = struct.unpack("<L", response[offset : offset + 4])[0]
+                        if_index = struct.unpack("<L", response[offset + 4 : offset + 8])[0]
+                        capabilities = struct.unpack("<L", response[offset + 8 : offset + 12])[0]
+                        link_speed = struct.unpack("<Q", response[offset + 16 : offset + 24])[0]
 
                         # Socket address (SockAddr_Storage at offset+24)
-                        family = struct.unpack("<H", response[offset + 24:offset + 26])[0]
+                        family = struct.unpack("<H", response[offset + 24 : offset + 26])[0]
 
                         if family == 0x0002:  # IPv4
-                            ip_bytes = response[offset + 28:offset + 32]
+                            ip_bytes = response[offset + 28 : offset + 32]
                             ip_addr = ipaddress.IPv4Address(ip_bytes)
                             addr_info = f"IPv4: {ip_addr}"
                         elif family == 0x0017:  # IPv6
-                            ip6_bytes = response[offset + 32:offset + 48]
+                            ip6_bytes = response[offset + 32 : offset + 48]
                             ip_addr = ipaddress.IPv6Address(ip6_bytes)
                             addr_info = f"IPv6: {ip_addr}"
                         else:
@@ -1577,11 +1484,7 @@ class smb(connection):
                             if capabilities & 0x02:
                                 caps.append("RDMA")
 
-                            grouped_interfaces[if_index] = {
-                                "capabilities": caps,
-                                "link_speed": link_speed,
-                                "addresses": []
-                            }
+                            grouped_interfaces[if_index] = {"capabilities": caps, "link_speed": link_speed, "addresses": []}
 
                         grouped_interfaces[if_index]["addresses"].append(addr_info)
 
@@ -1766,18 +1669,7 @@ class smb(connection):
             dcom.disconnect()
         return records
 
-    def spider(
-        self,
-        share=None,
-        folder=".",
-        pattern=None,
-        regex=None,
-        exclude_dirs=None,
-        depth=None,
-        content=False,
-        only_files=True,
-        silent=True
-    ):
+    def spider(self, share=None, folder=".", pattern=None, regex=None, exclude_dirs=None, depth=None, content=False, only_files=True, silent=True):
         if exclude_dirs is None:
             exclude_dirs = []
         if regex is None:
@@ -1789,17 +1681,7 @@ class smb(connection):
             self.logger.display("Started spidering")
         start_time = time()
         if not share:
-            spider.spider(
-                self.args.spider,
-                self.args.spider_folder,
-                self.args.pattern,
-                self.args.regex,
-                self.args.exclude_dirs,
-                self.args.depth,
-                self.args.content,
-                self.args.only_files,
-                self.args.silent
-            )
+            spider.spider(self.args.spider, self.args.spider_folder, self.args.pattern, self.args.regex, self.args.exclude_dirs, self.args.depth, self.args.content, self.args.only_files, self.args.silent)
         else:
             spider.spider(share, folder, pattern, regex, exclude_dirs, depth, content, only_files, silent)
         if not silent:
@@ -1818,26 +1700,40 @@ class smb(connection):
             445: {"bindstr": rf"ncacn_np:{self.remoteName}[\pipe\lsarpc]"},
         }
 
-        try:
-            string_binding = KNOWN_PROTOCOLS[self.port]["bindstr"]
-            self.logger.debug(f"StringBinding {string_binding}")
-            rpc_transport = transport.DCERPCTransportFactory(string_binding)
-            rpc_transport.setRemoteHost(self.remoteName)
+        ports_to_try = [self.port]
+        if self.port != 135:
+            ports_to_try.append(135)
 
-            if hasattr(rpc_transport, "set_credentials"):
-                # This method exists only for selected protocol sequences.
-                rpc_transport.set_credentials(self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey)
+        dce = None
+        for port in ports_to_try:
+            if port not in KNOWN_PROTOCOLS:
+                continue
+            try:
+                string_binding = KNOWN_PROTOCOLS[port]["bindstr"]
+                self.logger.debug(f"Trying RID brute on port {port}: {string_binding}")
+                rpc_transport = transport.DCERPCTransportFactory(string_binding)
+                rpc_transport.setRemoteHost(self.remoteName)
 
-            if self.kerberos:
-                rpc_transport.set_kerberos(self.kerberos, self.kdcHost)
+                if hasattr(rpc_transport, "set_credentials"):
+                    rpc_transport.set_credentials(self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey)
 
-            dce = rpc_transport.get_dce_rpc()
-            if self.kerberos:
-                dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+                if self.kerberos:
+                    rpc_transport.set_kerberos(self.kerberos, self.kdcHost)
 
-            dce.connect()
-        except Exception as e:
-            self.logger.fail(f"Error creating DCERPC connection: {e}")
+                dce = rpc_transport.get_dce_rpc()
+                if self.kerberos:
+                    dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+
+                dce.connect()
+                self.logger.debug(f"RID brute connected via port {port}")
+                break
+            except Exception as e:
+                self.logger.debug(f"RID brute port {port} failed: {e}")
+                dce = None
+                continue
+
+        if not dce:
+            self.logger.fail("Error creating DCERPC connection: all transports failed (tried SMB and TCP)")
             return entries
 
         # Want encryption? Uncomment next line
@@ -1892,14 +1788,12 @@ class smb(connection):
                     user = item["Name"]
                     sid_type = SID_NAME_USE.enumItems(item["Use"]).name
                     self.logger.highlight(f"{rid}: {domain}\\{user} ({sid_type})")
-                    entries.append(
-                        {
-                            "rid": rid,
-                            "domain": domain,
-                            "username": user,
-                            "sidtype": sid_type,
-                        }
-                    )
+                    entries.append({
+                        "rid": rid,
+                        "domain": domain,
+                        "username": user,
+                        "sidtype": sid_type,
+                    })
             so_far += simultaneous
         dce.disconnect()
         return entries
@@ -2064,9 +1958,12 @@ class smb(connection):
                     secret.value.decode("latin-1"),
                     "N/A",
                 )
+
         try:
             sccm_triage = SCCMTriage(target=target, conn=conn, masterkeys=masterkeys, per_secret_callback=sccm_callback)
-            sccm_triage.triage_sccm(use_wmi=self.args.sccm == "wmi", )
+            sccm_triage.triage_sccm(
+                use_wmi=self.args.sccm == "wmi",
+            )
         except Exception as e:
             self.logger.debug(f"Error while looting sccm: {e}")
 
@@ -2406,6 +2303,649 @@ class smb(connection):
         except Exception as e:
             self.logger.debug(f"Error calling remote_ops.finish(): {e}")
         NTDS.finish()
+
+    def _get_rpc_enumerator(self):
+        if not hasattr(self, "_rpc_enum") or self._rpc_enum is None:
+            self._rpc_enum = RPCEnumerator(self.conn, self.logger, self.host, self.hostname, self.domain)
+        return self._rpc_enum
+
+    def rpc_users(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            users = rpc.enum_users()
+            self.logger.success(f"Found {len(users)} domain user(s)")
+            for rid, name in users:
+                self.logger.highlight(f"user:[{name}] rid:[0x{rid:x}]")
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"RPC user enumeration failed: {e}")
+            self.logger.info("Try --rid-brute for anonymous enumeration")
+
+    def rpc_dispinfo(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            entries = rpc.query_display_info()
+            self.logger.success(f"Found {len(entries)} entries")
+            for e in entries:
+                self.logger.highlight(f"index: {e['index']} RID: 0x{e['rid']:x} acb: 0x{e['acb']:08x} account: {e['account']} name: {e['fullname']} desc: {e['description']}")
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"Query display info failed: {e}")
+
+    def rpc_groups(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            groups = rpc.enum_groups()
+            self.logger.success(f"Found {len(groups)} domain group(s)")
+            for rid, name in groups:
+                self.logger.highlight(f"group:[{name}] rid:[0x{rid:x}]")
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"RPC group enumeration failed: {e}")
+
+    def rpc_local_groups(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            groups = rpc.enum_local_groups()
+            self.logger.success(f"Found {len(groups)} local/alias group(s)")
+            for rid, name in groups:
+                self.logger.highlight(f"group:[{name}] rid:[0x{rid:x}]")
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"RPC local group enumeration failed: {e}")
+
+    def rpc_user(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            user_input = self.args.rpc_user
+            info, rid = rpc.query_user(user_input)
+
+            uac = info["UserAccountControl"]
+            uac_flags = RPCEnumerator.uac_to_flags(uac)
+
+            self.logger.success(f"User: {info['UserName']}")
+            self.logger.highlight(f"  Full Name: {info['FullName']}")
+            self.logger.highlight(f"  Description: {info['AdminComment']}")
+            self.logger.highlight(f"  Comment: {info['UserComment']}")
+            self.logger.highlight(f"  RID: 0x{rid:x} ({rid})")
+            self.logger.highlight(f"  Primary Group RID: 0x{info['PrimaryGroupId']:x}")
+            self.logger.highlight(f"  Home Directory: {info['HomeDirectory']}")
+            self.logger.highlight(f"  Home Drive: {info['HomeDirectoryDrive']}")
+            self.logger.highlight(f"  Logon Script: {info['ScriptPath']}")
+            self.logger.highlight(f"  Profile Path: {info['ProfilePath']}")
+            self.logger.highlight(f"  Workstations: {info['WorkStations']}")
+
+            pwd_last_set = RPCEnumerator.filetime_to_str(info["PasswordLastSet"]["LowPart"], info["PasswordLastSet"]["HighPart"])
+            last_logon = RPCEnumerator.filetime_to_str(info["LastLogon"]["LowPart"], info["LastLogon"]["HighPart"])
+            last_logoff = RPCEnumerator.filetime_to_str(info["LastLogoff"]["LowPart"], info["LastLogoff"]["HighPart"])
+            pwd_can_change = RPCEnumerator.filetime_to_str(info["PasswordCanChange"]["LowPart"], info["PasswordCanChange"]["HighPart"])
+            pwd_must_change = RPCEnumerator.filetime_to_str(info["PasswordMustChange"]["LowPart"], info["PasswordMustChange"]["HighPart"])
+            acct_expiry = RPCEnumerator.filetime_to_str(info["AccountExpires"]["LowPart"], info["AccountExpires"]["HighPart"])
+
+            self.logger.highlight(f"  Password Last Set: {pwd_last_set}")
+            self.logger.highlight(f"  Password Can Change: {pwd_can_change}")
+            self.logger.highlight(f"  Password Must Change: {pwd_must_change}")
+            self.logger.highlight(f"  Last Logon: {last_logon}")
+            self.logger.highlight(f"  Last Logoff: {last_logoff}")
+            self.logger.highlight(f"  Account Expires: {acct_expiry}")
+            self.logger.highlight(f"  Logon Count: {info['LogonCount']}")
+            self.logger.highlight(f"  Bad Password Count: {info['BadPasswordCount']}")
+            self.logger.highlight(f"  Account Control: 0x{uac:08x} ({', '.join(uac_flags) if uac_flags else 'NONE'})")
+
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"RPC user query failed: {e}")
+
+    def rpc_user_groups(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            user_input = self.args.rpc_user_groups
+            groups = rpc.query_user_groups(user_input)
+
+            self.logger.success(f"Groups for user {user_input}")
+            for g in groups:
+                self.logger.highlight(f"  rid:[0x{g['rid']:x}] attr:[0x{g['attributes']:x}] name:[{g['name']}]")
+
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"RPC user groups query failed: {e}")
+
+    def rpc_group(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            group_input = self.args.rpc_group
+            info, members = rpc.query_group(group_input)
+
+            name = info["Name"] if "Name" in info.fields else str(info)
+            desc = info["AdminComment"] if "AdminComment" in info.fields else ""
+            attrs = info["Attributes"] if "Attributes" in info.fields else 0
+            member_count = info["MemberCount"] if "MemberCount" in info.fields else (len(members) if members else 0)
+
+            self.logger.success(f"Group: {name}")
+            self.logger.highlight(f"  Description: {desc}")
+            self.logger.highlight(f"  Attributes: {attrs}")
+            self.logger.highlight(f"  Member Count: {member_count}")
+
+            if members:
+                self.logger.highlight(f"  Members: {', '.join(members)}")
+
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"RPC group query failed: {e}")
+
+    def rpc_dom_info(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            info, machine = rpc.get_domain_info()
+
+            machine_str = machine.decode() if isinstance(machine, bytes) else str(machine)
+            self.logger.success(f"Domain: {machine_str}")
+            self.logger.highlight(f"  Total Users: {info['UserCount']}")
+            self.logger.highlight(f"  Total Groups: {info['GroupCount']}")
+            self.logger.highlight(f"  Total Aliases: {info['AliasCount']}")
+
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"RPC domain info query failed: {e}")
+
+    def rpc_pass_pol(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            pwd_info, lock_info = rpc.get_password_policy()
+
+            self.logger.success("Password Policy")
+            self.logger.highlight(f"  Min Password Length: {pwd_info['MinPasswordLength']}")
+            self.logger.highlight(f"  Password History Length: {pwd_info['PasswordHistoryLength']}")
+            self.logger.highlight(f"  Password Properties: 0x{pwd_info['PasswordProperties']:08x}")
+            self.logger.highlight(f"  Lockout Threshold: {lock_info['LockoutThreshold']}")
+            self.logger.highlight(f"  Lockout Duration: {lock_info['LockoutDuration']}")
+            self.logger.highlight(f"  Lockout Window: {lock_info['LockoutObservationWindow']}")
+
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"RPC password policy query failed: {e}")
+
+    def rpc_trusts(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            trusts = rpc.enum_trusts()
+
+            if not trusts:
+                self.logger.display("No trusted domains found")
+                return
+
+            self.logger.success(f"Found {len(trusts)} trusted domain(s)")
+            for t in trusts:
+                self.logger.highlight(f"Domain: {t['name']} ({t['flat_name']})")
+                self.logger.highlight(f"  SID: {t['sid']}")
+                self.logger.highlight(f"  Direction: {t['direction']} | Type: {t['type']}")
+                self.logger.highlight(f"  Attributes: {t['attributes']} (0x{t['attributes_raw']:x})")
+
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"RPC trust enumeration failed: {e}")
+
+    def rpc_shares(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            shares = rpc.enum_shares_rpc()
+
+            self.logger.success(f"Found {len(shares)} share(s) via RPC")
+            for s in shares:
+                self.logger.highlight(f"netname: {s['name']} | type: {s['type']} | remark: {s['remark']}")
+
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"RPC share enumeration failed: {e}")
+
+    def rpc_sessions(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            sessions = rpc.enum_sessions()
+
+            self.logger.success(f"Found {len(sessions)} session(s)")
+            for s in sessions:
+                self.logger.highlight(f"client: {s['client']} | user: {s['username']} | time: {s['time']}s | idle: {s['idle_time']}s")
+
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"RPC session enumeration failed: {e}")
+
+    def rpc_connections(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            connections = rpc.enum_connections()
+
+            self.logger.success(f"Found {len(connections)} connection(s)")
+            for c in connections:
+                share_info = f" | share: {c.get('share', c.get('netname', ''))}"
+                self.logger.highlight(f"id: {c['conn_id']} | type: {c['conn_type']} | opens: {c['num_opens']} | users: {c['num_users']} | time: {c['time']}s | user: {c['username']}{share_info}")
+
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"RPC connection enumeration failed: {e}")
+
+    def rpc_share(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            share_name = self.args.rpc_share
+            info = rpc.get_share_info(share_name)
+
+            self.logger.success(f"Share: {info['name']}")
+            self.logger.highlight(f"  Type: {info['type']} (0x{info['type_raw']:x})")
+            self.logger.highlight(f"  Remark: {info.get('remark', '')}")
+            if "path" in info:
+                self.logger.highlight(f"  Path: {info['path']}")
+            if "max_uses" in info:
+                self.logger.highlight(f"  Max Uses: {info['max_uses']}")
+            if "current_uses" in info:
+                self.logger.highlight(f"  Current Uses: {info['current_uses']}")
+
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"RPC share info query failed: {e}")
+
+    def rpc_server_info(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            info = rpc.server_info()
+
+            self.logger.success(f"Server: {info['name']}")
+            self.logger.highlight(f"  Comment: {info['comment']}")
+            self.logger.highlight(f"  Version: {info['version_major']}.{info['version_minor']}")
+            self.logger.highlight(f"  Type: 0x{info['type']:x}")
+
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"RPC server info query failed: {e}")
+
+    def lsa_query(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            domain_name, domain_sid = rpc.lsa_query_policy()
+
+            self.logger.success("LSA Policy Query")
+            self.logger.highlight(f"  Domain Name: {domain_name}")
+            if domain_sid:
+                self.logger.highlight(f"  Domain SID: {domain_sid}")
+
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"LSA query failed: {e}")
+
+    def lsa_sids(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            sids = rpc.lsa_enum_accounts()
+
+            self.logger.success(f"Found {len(sids)} LSA SID(s)")
+            for sid in sids:
+                self.logger.highlight(f"  {sid}")
+
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"LSA SID enumeration failed: {e}")
+
+    def lsa_privs(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            privs = rpc.lsa_enum_privileges()
+
+            self.logger.success(f"Found {len(privs)} LSA privilege(s)")
+            for priv in privs:
+                self.logger.highlight(f"  {priv}")
+
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"LSA privilege enumeration failed: {e}")
+
+    def lsa_lookup_sids(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            sids_str = self.args.lsa_lookup_sids
+            sids = [s.strip() for s in sids_str.split(",")]
+
+            results = rpc.lsa_lookup_sids(sids)
+
+            self.logger.success("SID Lookup Results")
+            for sid, domain, name, use in results:
+                if domain is not None:
+                    self.logger.highlight(f"  {sid} -> {domain}\\{name} (type {use})")
+                else:
+                    self.logger.fail(f"  {sid} -> lookup failed: {use}")
+
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"LSA SID lookup failed: {e}")
+
+    def lsa_rights(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            sid = self.args.lsa_rights
+            rights = rpc.lsa_enum_account_rights(sid)
+
+            if rights:
+                self.logger.success(f"Account rights for {sid}")
+                for right in rights:
+                    self.logger.highlight(f"  {right}")
+            else:
+                self.logger.display(f"No explicit account rights for {sid}")
+
+            rpc.close()
+        except Exception as e:
+            if "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
+                self.logger.display(f"No explicit account rights assigned to {self.args.lsa_rights}")
+            else:
+                self.logger.fail(f"LSA account rights enumeration failed: {e}")
+
+    def lsa_create_account(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            sid = self.args.lsa_create_account
+            rpc.lsa_create_account(sid)
+            self.logger.success(f"Created LSA account for {sid}")
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"LSA create account failed: {e}")
+
+    def lsa_query_security(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            sd_bytes = rpc.lsa_query_security()
+
+            from impacket.ldap.ldaptypes import SR_SECURITY_DESCRIPTOR
+
+            sd = SR_SECURITY_DESCRIPTOR(data=sd_bytes)
+
+            ace_type_names = {
+                0x00: "ACCESS_ALLOWED",
+                0x01: "ACCESS_DENIED",
+                0x02: "SYSTEM_AUDIT",
+                0x03: "SYSTEM_ALARM",
+                0x04: "ACCESS_ALLOWED_COMPOUND",
+                0x05: "ACCESS_ALLOWED_OBJECT",
+                0x06: "ACCESS_DENIED_OBJECT",
+                0x07: "SYSTEM_AUDIT_OBJECT",
+                0x08: "SYSTEM_ALARM_OBJECT",
+                0x09: "ACCESS_ALLOWED_CALLBACK",
+                0x0A: "ACCESS_DENIED_CALLBACK",
+                0x0B: "ACCESS_ALLOWED_CALLBACK_OBJECT",
+                0x0C: "ACCESS_DENIED_CALLBACK_OBJECT",
+                0x0D: "SYSTEM_AUDIT_CALLBACK",
+                0x0E: "SYSTEM_ALARM_CALLBACK",
+                0x0F: "SYSTEM_AUDIT_CALLBACK_OBJECT",
+                0x10: "SYSTEM_ALARM_CALLBACK_OBJECT",
+                0x11: "SYSTEM_MANDATORY_LABEL",
+            }
+
+            lsa_permissions = {
+                0x00000001: "POLICY_VIEW_LOCAL_INFORMATION",
+                0x00000002: "POLICY_VIEW_AUDIT_INFORMATION",
+                0x00000004: "POLICY_GET_PRIVATE_INFORMATION",
+                0x00000008: "POLICY_TRUST_ADMIN",
+                0x00000010: "POLICY_CREATE_ACCOUNT",
+                0x00000020: "POLICY_CREATE_SECRET",
+                0x00000040: "POLICY_CREATE_PRIVILEGE",
+                0x00000080: "POLICY_SET_DEFAULT_QUOTA_LIMITS",
+                0x00000100: "POLICY_SET_AUDIT_REQUIREMENTS",
+                0x00000200: "POLICY_AUDIT_LOG_ADMIN",
+                0x00000400: "POLICY_SERVER_ADMIN",
+                0x00000800: "POLICY_LOOKUP_NAMES",
+                0x00001000: "POLICY_NOTIFICATION",
+                0x00010000: "DELETE",
+                0x00020000: "READ_CONTROL",
+                0x00040000: "WRITE_DAC",
+                0x00080000: "WRITE_OWNER",
+            }
+
+            well_known_sids = {
+                "S-1-0-0": "Nobody",
+                "S-1-1-0": "Everyone",
+                "S-1-2-0": "Local",
+                "S-1-2-1": "Console Logon",
+                "S-1-3-0": "Creator Owner",
+                "S-1-3-1": "Creator Group",
+                "S-1-5-1": "Dialup",
+                "S-1-5-2": "Network",
+                "S-1-5-3": "Batch",
+                "S-1-5-4": "Interactive",
+                "S-1-5-6": "Service",
+                "S-1-5-7": "Anonymous",
+                "S-1-5-9": "Enterprise Domain Controllers",
+                "S-1-5-10": "Principal Self",
+                "S-1-5-11": "Authenticated Users",
+                "S-1-5-12": "Restricted Code",
+                "S-1-5-13": "Terminal Server Users",
+                "S-1-5-14": "Remote Interactive Logon",
+                "S-1-5-17": "IUSR",
+                "S-1-5-18": "Local System",
+                "S-1-5-19": "NT Authority\\Local Service",
+                "S-1-5-20": "NT Authority\\Network Service",
+                "S-1-5-32-544": "BUILTIN\\Administrators",
+                "S-1-5-32-545": "BUILTIN\\Users",
+                "S-1-5-32-546": "BUILTIN\\Guests",
+                "S-1-5-32-547": "BUILTIN\\Power Users",
+                "S-1-5-32-548": "BUILTIN\\Account Operators",
+                "S-1-5-32-549": "BUILTIN\\Server Operators",
+                "S-1-5-32-550": "BUILTIN\\Print Operators",
+                "S-1-5-32-551": "BUILTIN\\Backup Operators",
+                "S-1-5-32-552": "BUILTIN\\Replicators",
+                "S-1-15-2-1": "All App Packages",
+            }
+
+            def get_permissions(mask):
+                perms = []
+                for bit, name in lsa_permissions.items():
+                    if mask & bit:
+                        perms.append(name)
+                return perms
+
+            def get_sid_name(sid_str):
+                return well_known_sids.get(sid_str, sid_str)
+
+            revision = sd["Revision"]
+            if isinstance(revision, bytes):
+                revision = int.from_bytes(revision, "little")
+            self.logger.success("LSA Security Descriptor")
+            self.logger.highlight(f"  Revision: {revision}")
+            self.logger.highlight(f"  Control: 0x{sd['Control']:04x}")
+
+            if sd["OwnerSid"]:
+                owner_sid = sd["OwnerSid"].formatCanonical()
+                self.logger.highlight(f"  Owner: {get_sid_name(owner_sid)} ({owner_sid})")
+            if sd["GroupSid"]:
+                group_sid = sd["GroupSid"].formatCanonical()
+                self.logger.highlight(f"  Group: {get_sid_name(group_sid)} ({group_sid})")
+
+            if sd["Dacl"]:
+                dacl = sd["Dacl"]
+                self.logger.highlight(f"  DACL: {dacl['AceCount']} ACE(s)")
+                for i, ace in enumerate(dacl["Data"]):
+                    ace_type_raw = ace["AceType"]
+                    ace_type_name = ace_type_names.get(ace_type_raw, f"UNKNOWN({ace_type_raw})")
+                    ace_flags = ace["AceFlags"]
+                    ace_sid = ace["Ace"]["Sid"].formatCanonical() if hasattr(ace["Ace"]["Sid"], "formatCanonical") else str(ace["Ace"]["Sid"])
+                    ace_mask = ace["Ace"]["Mask"]["Mask"]
+                    perms = get_permissions(ace_mask)
+
+                    self.logger.highlight(f"    ACE[{i}]: Type: {ace_type_name} (0x{ace_type_raw:02x}) Flags: 0x{ace_flags:02x}")
+                    self.logger.highlight(f"            SID: {get_sid_name(ace_sid)} ({ace_sid})")
+                    self.logger.highlight(f"            Mask: 0x{ace_mask:08x}")
+                    if perms:
+                        self.logger.highlight(f"            Permissions: {', '.join(perms)}")
+
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"LSA query security failed: {e}")
+
+    def lookup_names(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            names_str = self.args.lookup_names
+            names = [n.strip() for n in names_str.split(",")]
+            results = rpc.lookup_names(names)
+
+            self.logger.success("Name Lookup Results")
+            for name, sid, type_name, use in results:
+                self.logger.highlight(f"  {name} -> {sid} ({type_name}: {use})")
+
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"Name lookup failed: {e}")
+
+    def lookup_domain(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            domain_name = self.args.lookup_domain
+            sid = rpc.lookup_domain(domain_name)
+            self.logger.success(f"Domain {domain_name} -> SID {sid}")
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"Domain lookup failed: {e}")
+
+    def sam_lookup(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            domain_type = self.args.sam_lookup[0]
+            names = [n.strip() for n in self.args.sam_lookup[1].split(",")]
+            results = rpc.sam_lookup(domain_type, names)
+
+            self.logger.success(f"SAM Lookup Results ({domain_type})")
+            for name, sid, type_name, use in results:
+                self.logger.highlight(f"  {name} -> {sid} ({type_name}: {use})")
+
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"SAM lookup failed: {e}")
+
+    def create_user(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            user_pass = self.args.create_user
+            if ":" not in user_pass:
+                self.logger.fail("Format: username:password")
+                return
+            username, password = user_pass.split(":", 1)
+            rid = rpc.create_user(username, password)
+            self.logger.success(f"Created user {username} with RID 0x{rid:x}")
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"Create user failed: {e}")
+
+    def delete_user(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            username = self.args.delete_user
+            rpc.delete_user(username)
+            self.logger.success(f"Deleted user {username}")
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"Delete user failed: {e}")
+
+    def enable_user(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            username = self.args.enable_user
+            success, result = rpc.enable_user(username)
+            if success:
+                old_uac, new_uac = result
+                self.logger.success(f"Enabled user {username} (UAC: 0x{old_uac:x} -> 0x{new_uac:x})")
+            else:
+                self.logger.display(f"User {username} is already enabled (UAC: 0x{result:x})")
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"Enable user failed: {e}")
+
+    def disable_user(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            username = self.args.disable_user
+            success, result = rpc.disable_user(username)
+            if success:
+                old_uac, new_uac = result
+                self.logger.success(f"Disabled user {username} (UAC: 0x{old_uac:x} -> 0x{new_uac:x})")
+            else:
+                self.logger.display(f"User {username} is already disabled (UAC: 0x{result:x})")
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"Disable user failed: {e}")
+
+    def change_password(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            change_str = self.args.change_password
+            parts = change_str.split(":", 2)
+            if len(parts) != 3:
+                self.logger.fail("Format: username:oldpass:newpass")
+                return
+            username, old_pass, new_pass = parts
+            rpc.change_password(username, old_pass, new_pass)
+            self.logger.success(f"Changed password for {username}")
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"Change password failed: {e}")
+
+    def reset_password(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            reset_str = self.args.reset_password
+            if ":" not in reset_str:
+                self.logger.fail("Format: username:newpass")
+                return
+            username, new_pass = reset_str.split(":", 1)
+            rpc.reset_password(username, new_pass)
+            self.logger.success(f"Reset password for {username}")
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"Reset password failed: {e}")
+
+    def create_group(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            group_name = self.args.create_group
+            rid = rpc.create_group(group_name)
+            self.logger.success(f"Created group {group_name} with RID 0x{rid:x}")
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"Create group failed: {e}")
+
+    def delete_group(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            group_name = self.args.delete_group
+            rpc.delete_group(group_name)
+            self.logger.success(f"Deleted group {group_name}")
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"Delete group failed: {e}")
+
+    def add_to_group(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            add_str = self.args.add_to_group
+            if ":" not in add_str:
+                self.logger.fail("Format: username:groupname")
+                return
+            username, group_name = add_str.split(":", 1)
+            rpc.add_to_group(username, group_name)
+            self.logger.success(f"Added {username} to {group_name}")
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"Add to group failed: {e}")
+
+    def remove_from_group(self):
+        try:
+            rpc = self._get_rpc_enumerator()
+            remove_str = self.args.remove_from_group
+            if ":" not in remove_str:
+                self.logger.fail("Format: username:groupname")
+                return
+            username, group_name = remove_str.split(":", 1)
+            rpc.remove_from_group(username, group_name)
+            self.logger.success(f"Removed {username} from {group_name}")
+            rpc.close()
+        except Exception as e:
+            self.logger.fail(f"Remove from group failed: {e}")
 
     def mark_guest(self):
         return highlight(f"{highlight('(Guest)')}" if self.is_guest else "")
