@@ -1,4 +1,4 @@
-import re 
+import re
 import ntpath
 
 from io import BytesIO
@@ -6,6 +6,11 @@ from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
 
 from impacket.smbconnection import SMBConnection
+from impacket.dcerpc.v5 import lsat, lsad
+from impacket.dcerpc.v5.rpcrt import DCERPCException, RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_AUTHN_GSS_NEGOTIATE
+from impacket.dcerpc.v5.transport import DCERPCTransportFactory
+from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
+
 
 class NXCModule:
     """
@@ -30,6 +35,7 @@ class NXCModule:
 
     def get_SeMachineAccountPrivilege(self, context, connection):
 
+        # Just handle smb connection
         def connect_smb(connection):
             smb = SMBConnection(
                     remoteName=connection.hostname,
@@ -43,12 +49,11 @@ class NXCModule:
                         password=connection.password,
                         domain=connection.domain,
                         lmhash=connection.lmhash,
-                        nthash=connection.lmhash,
+                        nthash=connection.nthash,
                         aesKey=connection.aesKey,
                         kdcHost=connection.kdcHost,
                         useCache=connection.use_kcache,
                     )
-            
             elif connection.nthash or connection.lmhash:
                 smb.login(connection.username, "", connection.domain, lmhash=connection.lmhash, nthash=connection.nthash)
 
@@ -57,7 +62,7 @@ class NXCModule:
 
             return smb
 
-        context.log.display("Getting the SeMachineAccountPrivilege")
+        # Getting the gPLink applies to Domain Controllers OU
         base = f"OU=Domain Controllers,{connection.baseDN}"
         ldap_response = connection.search(
             searchFilter="(objectClass=*)",
@@ -70,43 +75,82 @@ class NXCModule:
             context.log.fail("No gPLink entries returned.")
             return
 
+        # Extract GUIDS from the output using regex
         guids = re.findall(r"(?i)cn=\{([0-9a-f\-]{36})\}", entries[0]["gPLink"])
         context.log.debug(f"GUID founds: {guids}")
-        
+
         smb = connect_smb(connection)
 
         for guid in guids:
-            path = ntpath.join(
-                    connection.domain,
-                    "Policies",
-                    f"{{{guid.upper()}}}",
-                    "MACHINE",
-                    "Microsoft",
-                    "Windows NT",
-                    "SecEdit",
-                    "GptTmpl.inf",
-                    )
-            
+            # Accessing the GPO in the SYSVOL share to parse GptTmpl.inf
+            path = ntpath.join(connection.domain, "Policies", f"{{{guid}}}", "MACHINE", "Microsoft", "Windows NT", "SecEdit", "GptTmpl.inf",)
             try:
                 buf = BytesIO()
                 smb.getFile("SYSVOL", path, buf.write)
                 buf.seek(0)
                 GptTmpl = buf.read().decode("utf-16le", errors="ignore")
-
             except Exception as e:
-                context.log.debug(f"{guid}: no GptTmpl.inf / not reachable ({e})")
+                context.log.debug(f"({guid}) no GptTmpl.inf or not reachable: {e}")
                 continue
-            
+
+            # Parse the GptTmpl.inf to find SeMachineAccountPrivilege
             for line in GptTmpl.splitlines():
                 if "SeMachineAccountPrivilege" in line:
                     context.log.highlight(f"{line}")
-                    # Ajouter la traduction du/des sid(s)
-                    # ldap_response = connection.search("")
+                    # extract all the sid concerns by the SeMachineAccountPrivilege
+                    sids = re.findall(r"\*?(S-\d+(?:-\d+)+)", line)
+                    break
+
+            if sids != []:
+                sessions = {}
+                for sid in sids:
+                    sessions.setdefault(sid, {"Username": ""})
+
+                try:
+                    # Handle RPC connection
+                    string_binding = rf"ncacn_np:{connection.host}[\pipe\lsarpc]"
+                    rpctransport = DCERPCTransportFactory(string_binding)
+                    rpctransport.set_credentials(connection.username, connection.password, connection.domain, connection.lmhash, connection.nthash,)
+                    rpctransport.set_connect_timeout(15)
+                    dce = rpctransport.get_dce_rpc()
+                    if connection.kerberos:
+                        dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+                    dce.connect()
+                    dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
+                    dce.bind(lsat.MSRPC_UUID_LSAT)
+                except Exception as e:
+                    context.log.debug(f"Error connecting to {string_binding}: {e!s}")
+
+                try:
+                    # Getting the LSA policy
+                    policy_handle = lsad.hLsarOpenPolicy2(dce, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES)["PolicyHandle"]
+                except Exception as e:
+                    context.log.debug(f"Unable to get policy handle: {e!s}")
                     return
 
+                try:
+                    # Sid translation (lookup sid)
+                    resp = lsat.hLsarLookupSids(dce, policy_handle, sessions.keys(), lsat.LSAP_LOOKUP_LEVEL.LsapLookupWksta)
+                except DCERPCException as e:
+                    if str(e).find("STATUS_SOME_NOT_MAPPED") >= 0:
+                        resp = e.get_packet()
+                        context.log.debug(f"Could not resolve some SIDs: {e}")
+                    else:
+                        resp = None
+                        context.log.debug(f"Could not resolve SID(s): {e}")
+                if resp:
+                    for sid, item in zip(sessions.keys(), resp["TranslatedNames"]["Names"], strict=False):
+                        if item["DomainIndex"] >= 0:
+                            context.log.highlight(f"\t({sid}) \"{item['Name']}\"")
+
+                return
+
+            else:
+                context.log.fail("No SID(s) found in SeMachineAccountPrivilege")
+                return
 
     def on_login(self, context, connection):
-        context.log.display("Getting the MachineAccountQuota")
+        context.log.display("Getting the MachineAccountQuota and SeMachineAccountPrivilege")
 
         ldap_response = connection.search("(ms-DS-MachineAccountQuota=*)", ["ms-DS-MachineAccountQuota"])
         entries = parse_result_attributes(ldap_response)
@@ -115,7 +159,6 @@ class NXCModule:
             context.log.fail("No LDAP entries returned.")
             return
 
-        context.log.highlight(f"MachineAccountQuota: {entries[0]['ms-DS-MachineAccountQuota']}\n")
+        context.log.highlight(f"MachineAccountQuota: {entries[0]['ms-DS-MachineAccountQuota']}")
 
         self.get_SeMachineAccountPrivilege(context, connection)
-        
