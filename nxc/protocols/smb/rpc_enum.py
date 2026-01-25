@@ -1,87 +1,122 @@
 """
 RPC Enumeration helper for SMB protocol.
 
-This module provides SAMR, LSA, and SRVS enumeration capabilities
-using the existing SMB connection (via SMBTransport).
-
-This avoids creating a separate RPC protocol and reuses the authenticated
-SMB session, which is the correct approach since ncacn_np (named pipes)
-runs over SMB.
+This module provides SAMR, LSA, and SRVS enumeration capabilities.
+Supports two transport modes:
+1. SMB (ncacn_np) - reuses existing SMB connection (preferred)
+2. TCP (ncacn_ip_tcp) - direct RPC over port 135 (fallback when SMB unavailable)
 """
 
 import contextlib
 from impacket.dcerpc.v5 import transport, samr, lsat, lsad, srvs, wkst
 from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
-from impacket.dcerpc.v5.rpcrt import DCERPCException
+from impacket.dcerpc.v5.rpcrt import DCERPCException, RPC_C_AUTHN_GSS_NEGOTIATE
+from impacket.dcerpc.v5.samr import SID_NAME_USE
 
 
 class RPCEnumerator:
-    """RPC Enumeration helper using an existing SMB connection for rpcclient-like functionality."""
+    """RPC Enumeration helper with SMB and TCP transport support."""
 
-    def __init__(self, smb_connection, logger, host, hostname=None, domain=None):
-        """Initialize with SMB connection, logger, host, hostname, and domain."""
+    def __init__(self, smb_connection, logger, host, hostname=None, domain=None, username=None, password=None, lmhash=None, nthash=None, aesKey=None, kerberos=False, kdcHost=None):
         self.conn = smb_connection
         self.logger = logger
         self.host = host
         self.hostname = hostname or host
         self.domain = domain or ""
 
-        # Cached DCE-RPC connections
+        self.username = username or ""
+        self.password = password or ""
+        self.lmhash = lmhash or ""
+        self.nthash = nthash or ""
+        self.aesKey = aesKey
+        self.kerberos = kerberos
+        self.kdcHost = kdcHost
+
         self._samr_dce = None
         self._lsa_dce = None
         self._srvs_dce = None
         self._wkst_dce = None
 
-        # Cached handles
         self._server_handle = None
         self._domain_handle = None
         self._builtin_handle = None
         self._domain_sid = None
         self._machine_name = None
 
+        self._transport_type = None
+
     def _get_smb_transport(self, pipe):
         """Create SMBTransport that reuses the existing SMB connection."""
         return transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=pipe, smb_connection=self.conn)
 
-    def get_samr_dce(self):
-        """Get or create SAMR DCE-RPC connection."""
-        if not self._samr_dce:
-            rpctransport = self._get_smb_transport(r"\samr")
+    def _get_tcp_transport(self):
+        """Create TCP transport for direct RPC over port 135."""
+        string_binding = rf"ncacn_ip_tcp:{self.host}[135]"
+        rpctransport = transport.DCERPCTransportFactory(string_binding)
+        rpctransport.setRemoteHost(self.host)
+
+        if hasattr(rpctransport, "set_credentials"):
+            rpctransport.set_credentials(self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey)
+
+        if self.kerberos:
+            rpctransport.set_kerberos(self.kerberos, self.kdcHost)
+
+        return rpctransport
+
+    def _get_dce_with_fallback(self, smb_pipe, bind_uuid, cache_attr):
+        """Get DCE connection trying SMB first, then TCP 135 fallback."""
+        cached = getattr(self, cache_attr)
+        if cached:
+            return cached
+
+        dce = None
+
+        if self.conn:
+            try:
+                rpctransport = self._get_smb_transport(smb_pipe)
+                dce = rpctransport.get_dce_rpc()
+                dce.connect()
+                dce.bind(bind_uuid)
+                self._transport_type = "SMB"
+                self.logger.debug(f"RPC connected via SMB pipe {smb_pipe}")
+                setattr(self, cache_attr, dce)
+                return dce
+            except Exception as e:
+                self.logger.debug(f"SMB transport failed for {smb_pipe}: {e}")
+                dce = None
+
+        try:
+            rpctransport = self._get_tcp_transport()
             dce = rpctransport.get_dce_rpc()
+
+            if self.kerberos:
+                dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+
             dce.connect()
-            dce.bind(samr.MSRPC_UUID_SAMR)
-            self._samr_dce = dce
-        return self._samr_dce
+            dce.bind(bind_uuid)
+            self._transport_type = "TCP"
+            self.logger.debug(f"RPC connected via TCP 135 for {smb_pipe}")
+            setattr(self, cache_attr, dce)
+            return dce
+        except Exception as e:
+            self.logger.debug(f"TCP transport failed: {e}")
+            raise DCERPCException(f"All RPC transports failed for {smb_pipe}") from e
+
+    def get_samr_dce(self):
+        return self._get_dce_with_fallback(r"\samr", samr.MSRPC_UUID_SAMR, "_samr_dce")
 
     def get_lsa_dce(self):
-        """Get or create LSA DCE-RPC connection."""
-        if not self._lsa_dce:
-            rpctransport = self._get_smb_transport(r"\lsarpc")
-            dce = rpctransport.get_dce_rpc()
-            dce.connect()
-            dce.bind(lsat.MSRPC_UUID_LSAT)
-            self._lsa_dce = dce
-        return self._lsa_dce
+        return self._get_dce_with_fallback(r"\lsarpc", lsat.MSRPC_UUID_LSAT, "_lsa_dce")
 
     def get_srvs_dce(self):
-        """Get or create SRVS DCE-RPC connection."""
-        if not self._srvs_dce:
-            rpctransport = self._get_smb_transport(r"\srvsvc")
-            dce = rpctransport.get_dce_rpc()
-            dce.connect()
-            dce.bind(srvs.MSRPC_UUID_SRVS)
-            self._srvs_dce = dce
-        return self._srvs_dce
+        return self._get_dce_with_fallback(r"\srvsvc", srvs.MSRPC_UUID_SRVS, "_srvs_dce")
 
     def get_wkst_dce(self):
-        """Get or create WKST DCE-RPC connection."""
-        if not self._wkst_dce:
-            rpctransport = self._get_smb_transport(r"\wkssvc")
-            dce = rpctransport.get_dce_rpc()
-            dce.connect()
-            dce.bind(wkst.MSRPC_UUID_WKST)
-            self._wkst_dce = dce
-        return self._wkst_dce
+        return self._get_dce_with_fallback(r"\wkssvc", wkst.MSRPC_UUID_WKST, "_wkst_dce")
+
+    def _get_samr_dce_np(self):
+        """Get SAMR DCE - alias for compatibility."""
+        return self.get_samr_dce()
 
     def close(self):
         """Close all DCE-RPC connections."""
@@ -163,6 +198,53 @@ class RPCEnumerator:
 
         return users_list
 
+    def enum_users_detailed(self):
+        """Enumerate users with detailed info (SID, password dates, bad pw count, description)."""
+        self._open_samr_domain()
+        dce = self.get_samr_dce()
+
+        users = self.enum_users()
+        detailed_users = []
+
+        for rid, name in users:
+            try:
+                resp = samr.hSamrOpenUser(dce, self._domain_handle, MAXIMUM_ALLOWED, rid)
+                user_handle = resp["UserHandle"]
+
+                resp = samr.hSamrQueryInformationUser(dce, user_handle, samr.USER_INFORMATION_CLASS.UserAllInformation)
+                info = resp["Buffer"]["All"]
+
+                samr.hSamrCloseHandle(dce, user_handle)
+
+                pwd_last_set = self.filetime_to_str(info["PasswordLastSet"]["LowPart"], info["PasswordLastSet"]["HighPart"])
+                pwd_can_change = self.filetime_to_str(info["PasswordCanChange"]["LowPart"], info["PasswordCanChange"]["HighPart"])
+
+                detailed_users.append({
+                    "rid": rid,
+                    "username": str(info["UserName"]),
+                    "fullname": str(info["FullName"]),
+                    "description": str(info["AdminComment"]),
+                    "pwd_last_set": pwd_last_set,
+                    "pwd_can_change": pwd_can_change,
+                    "bad_pwd_count": info["BadPasswordCount"],
+                    "logon_count": info["LogonCount"],
+                    "acb": info["UserAccountControl"],
+                })
+            except DCERPCException:
+                detailed_users.append({
+                    "rid": rid,
+                    "username": name,
+                    "fullname": "",
+                    "description": "",
+                    "pwd_last_set": "N/A",
+                    "pwd_can_change": "N/A",
+                    "bad_pwd_count": 0,
+                    "logon_count": 0,
+                    "acb": 0,
+                })
+
+        return detailed_users
+
     def enum_groups(self):
         """Enumerate domain groups."""
         self._open_samr_domain()
@@ -192,6 +274,77 @@ class RPCEnumerator:
         aliases = resp["Buffer"]["Buffer"]
 
         return [(a["RelativeId"], a["Name"]) for a in aliases]
+
+    def enum_groups_detailed(self):
+        """Enumerate both domain and local groups with details."""
+        dce = self.get_samr_dce()
+        detailed_groups = []
+
+        self._open_samr_domain()
+        try:
+            resp = samr.hSamrEnumerateGroupsInDomain(dce, self._domain_handle)
+            domain_groups = resp["Buffer"]["Buffer"]
+
+            for g in domain_groups:
+                rid = g["RelativeId"]
+                try:
+                    resp = samr.hSamrOpenGroup(dce, self._domain_handle, MAXIMUM_ALLOWED, rid)
+                    group_handle = resp["GroupHandle"]
+                    resp = samr.hSamrQueryInformationGroup(dce, group_handle, samr.GROUP_INFORMATION_CLASS.GroupGeneralInformation)
+                    info = resp["Buffer"]["General"]
+                    samr.hSamrCloseHandle(dce, group_handle)
+
+                    detailed_groups.append({
+                        "rid": rid,
+                        "name": str(info["Name"]),
+                        "member_count": info["MemberCount"],
+                        "description": str(info["AdminComment"]),
+                        "type": "domain",
+                    })
+                except DCERPCException:
+                    detailed_groups.append({
+                        "rid": rid,
+                        "name": str(g["Name"]),
+                        "member_count": 0,
+                        "description": "",
+                        "type": "domain",
+                    })
+        except DCERPCException:
+            pass
+
+        self._open_builtin_domain()
+        try:
+            resp = samr.hSamrEnumerateAliasesInDomain(dce, self._builtin_handle)
+            local_groups = resp["Buffer"]["Buffer"]
+
+            for a in local_groups:
+                rid = a["RelativeId"]
+                try:
+                    resp = samr.hSamrOpenAlias(dce, self._builtin_handle, MAXIMUM_ALLOWED, rid)
+                    alias_handle = resp["AliasHandle"]
+                    resp = samr.hSamrQueryInformationAlias(dce, alias_handle)
+                    info = resp["Buffer"]["General"]
+                    samr.hSamrCloseHandle(dce, alias_handle)
+
+                    detailed_groups.append({
+                        "rid": rid,
+                        "name": str(info["Name"]),
+                        "member_count": info["MemberCount"],
+                        "description": str(info["AdminComment"]),
+                        "type": "local",
+                    })
+                except DCERPCException:
+                    detailed_groups.append({
+                        "rid": rid,
+                        "name": str(a["Name"]),
+                        "member_count": 0,
+                        "description": "",
+                        "type": "local",
+                    })
+        except DCERPCException:
+            pass
+
+        return detailed_groups
 
     def query_user(self, user_input):
         """Query user by RID or name."""
@@ -247,9 +400,26 @@ class RPCEnumerator:
                 members_resp = samr.hSamrGetMembersInAlias(dce, alias_handle)
                 member_sids = members_resp["Members"]["Sids"]
                 samr.hSamrCloseHandle(dce, alias_handle)
-                # Resolve SIDs to names for builtin aliases
                 member_names = self._resolve_sids_to_names(member_sids)
-                return {"Name": info["Name"], "AdminComment": info["AdminComment"], "Attributes": 0, "MemberCount": info["MemberCount"]}, member_names
+                # impacket structures have __str__ that may return bytes
+                raw_name = info["Name"]
+                if hasattr(raw_name, "fields"):
+                    # It's an impacket structure, get the actual value
+                    raw_name = raw_name["Data"]
+                if isinstance(raw_name, bytes):
+                    name = raw_name.decode("utf-8", errors="replace")
+                else:
+                    name = str(raw_name) if raw_name else ""
+
+                raw_comment = info["AdminComment"]
+                if hasattr(raw_comment, "fields"):
+                    raw_comment = raw_comment["Data"]
+                if isinstance(raw_comment, bytes):
+                    comment = raw_comment.decode("utf-8", errors="replace")
+                else:
+                    comment = str(raw_comment) if raw_comment else ""
+
+                return {"Name": name, "AdminComment": comment, "Attributes": 0, "MemberCount": info["MemberCount"]}, member_names
 
         resp = samr.hSamrOpenGroup(dce, self._domain_handle, MAXIMUM_ALLOWED, rid)
         group_handle = resp["GroupHandle"]
@@ -288,17 +458,63 @@ class RPCEnumerator:
                 names = resp["Names"]["Element"]
                 for name in names:
                     if name["Data"]:
-                        member_names.append(str(name["Data"]))
+                        val = name["Data"]
+                        if isinstance(val, bytes):
+                            member_names.append(val.decode("utf-8", errors="replace"))
+                        else:
+                            result = str(val)
+                            if isinstance(result, bytes):
+                                result = result.decode("utf-8", errors="replace")
+                            member_names.append(result)
             except Exception:
-                # Fallback to RIDs if lookup fails
                 member_names = [str(r) for r in rids]
 
         return member_names
 
     def _resolve_sids_to_names(self, sids):
         """Resolve SIDs to names using LSA."""
+
+        def to_str(val):
+            if val is None:
+                return ""
+            if hasattr(val, "fields") and "Data" in val.fields:
+                val = val["Data"]
+            if isinstance(val, bytes):
+                return val.decode("utf-8", errors="replace")
+            try:
+                result = str(val)
+                if isinstance(result, bytes):
+                    return result.decode("utf-8", errors="replace")
+                return result
+            except Exception:
+                return ""
+
         member_names = []
         if not sids:
+            return member_names
+
+        def extract_sid_string(sid):
+            """Extract SID string from various impacket structures."""
+            if hasattr(sid, "formatCanonical"):
+                return sid.formatCanonical()
+            if hasattr(sid, "fields"):
+                if "SidPointer" in sid.fields and sid["SidPointer"]:
+                    return sid["SidPointer"].formatCanonical()
+                if "Data" in sid.fields and sid["Data"]:
+                    inner = sid["Data"]
+                    if hasattr(inner, "formatCanonical"):
+                        return inner.formatCanonical()
+                    if hasattr(inner, "fields") and "SidPointer" in inner.fields and inner["SidPointer"]:
+                        return inner["SidPointer"].formatCanonical()
+            return None
+
+        sid_list = []
+        for sid in sids:
+            sid_str = extract_sid_string(sid)
+            if sid_str:
+                sid_list.append(sid_str)
+
+        if not sid_list:
             return member_names
 
         try:
@@ -306,35 +522,17 @@ class RPCEnumerator:
             resp = lsad.hLsarOpenPolicy(dce, lsad.POLICY_LOOKUP_NAMES)
             policy_handle = resp["PolicyHandle"]
 
-            sid_list = []
-            for sid in sids:
-                if hasattr(sid, "formatCanonical"):
-                    sid_list.append(sid)
-                elif hasattr(sid, "Data"):
-                    sid_list.append(sid["Data"])
+            resp = lsat.hLsarLookupSids(dce, policy_handle, sid_list, lsat.LSAP_LOOKUP_LEVEL.LsapLookupWksta)
+            names = resp["TranslatedNames"]["Names"]
+            domains = resp["ReferencedDomains"]["Domains"]
 
-            if sid_list:
-                resp = lsad.hLsarLookupSids(dce, policy_handle, sid_list, lsad.LSAP_LOOKUP_LEVEL.LsapLookupWksta)
-                names = resp["TranslatedNames"]["Names"]
-                domains = resp["ReferencedDomains"]["Domains"]
-
-                for name in names:
-                    domain_idx = name["DomainIndex"]
-                    account_name = name["Name"]
-                    if domain_idx >= 0 and domain_idx < len(domains):
-                        domain_name = domains[domain_idx]["Name"]
-                        member_names.append(f"{domain_name}\\{account_name}")
-                    else:
-                        member_names.append(str(account_name))
+            for name in names:
+                account_name = to_str(name["Name"])
+                member_names.append(account_name)
 
             lsad.hLsarClose(dce, policy_handle)
         except Exception:
-            # Fallback to SID strings if lookup fails
-            for sid in sids:
-                if hasattr(sid, "formatCanonical"):
-                    member_names.append(sid.formatCanonical())
-                else:
-                    member_names.append(str(sid))
+            member_names = sid_list
 
         return member_names
 
@@ -506,6 +704,66 @@ class RPCEnumerator:
 
         return results
 
+    def rid_brute(self, max_rid=4000):
+        """Brute force RIDs to enumerate users/groups."""
+        entries = []
+        dce = self.get_lsa_dce()
+
+        try:
+            resp = lsad.hLsarOpenPolicy2(dce, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES)
+        except DCERPCException as e:
+            self.logger.debug(f"hLsarOpenPolicy2 failed: {e}")
+            return entries
+
+        policy_handle = resp["PolicyHandle"]
+
+        try:
+            resp = lsad.hLsarQueryInformationPolicy2(dce, policy_handle, lsad.POLICY_INFORMATION_CLASS.PolicyAccountDomainInformation)
+        except DCERPCException as e:
+            if e.error_string == "nca_s_op_rng_error":
+                self.logger.debug("RPC lookup failed: RPC method not implemented")
+            else:
+                self.logger.debug(f"Error querying policy information: {e}")
+            return entries
+
+        domain_sid = resp["PolicyInformation"]["PolicyAccountDomainInfo"]["DomainSid"].formatCanonical()
+
+        so_far = 0
+        simultaneous = 1000
+        for _ in range(max_rid // simultaneous + 1):
+            sids_to_check = (max_rid - so_far) % simultaneous if (max_rid - so_far) // simultaneous == 0 else simultaneous
+
+            if sids_to_check == 0:
+                break
+
+            sids = [f"{domain_sid}-{i:d}" for i in range(so_far, so_far + sids_to_check)]
+            try:
+                resp = lsat.hLsarLookupSids(dce, policy_handle, sids, lsat.LSAP_LOOKUP_LEVEL.LsapLookupWksta)
+            except DCERPCException as e:
+                if str(e).find("STATUS_NONE_MAPPED") >= 0:
+                    so_far += simultaneous
+                    continue
+                elif str(e).find("STATUS_SOME_NOT_MAPPED") >= 0:
+                    resp = e.get_packet()
+                else:
+                    raise
+
+            for n, item in enumerate(resp["TranslatedNames"]["Names"]):
+                if item["Use"] != SID_NAME_USE.SidTypeUnknown:
+                    rid = so_far + n
+                    domain = resp["ReferencedDomains"]["Domains"][item["DomainIndex"]]["Name"]
+                    user = item["Name"]
+                    sid_type = SID_NAME_USE.enumItems(item["Use"]).name
+                    entries.append({
+                        "rid": rid,
+                        "domain": domain,
+                        "username": user,
+                        "sidtype": sid_type,
+                    })
+            so_far += simultaneous
+
+        return entries
+
     def enum_trusts(self):
         """Enumerate trusted domains."""
         dce = self.get_lsa_dce()
@@ -568,6 +826,43 @@ class RPCEnumerator:
         for s in shares:
             stype = s["shi1_type"] & 0xFFFF
             results.append({"name": s["shi1_netname"], "type": type_map.get(stype, "Unknown"), "type_raw": s["shi1_type"], "remark": s["shi1_remark"]})
+
+        return results
+
+    def enum_shares_detailed(self):
+        """Enumerate shares with detailed info (path, max_uses, current_uses)."""
+        dce = self.get_srvs_dce()
+        type_map = {0: "Disk", 1: "Printer", 2: "Device", 3: "IPC"}
+
+        resp = srvs.hNetrShareEnum(dce, 1)
+        shares = resp["InfoStruct"]["ShareInfo"]["Level1"]["Buffer"]
+
+        results = []
+        for s in shares:
+            share_name = s["shi1_netname"]
+            stype = s["shi1_type"] & 0xFFFF
+
+            share_info = {
+                "name": share_name,
+                "type": type_map.get(stype, "Unknown"),
+                "type_raw": s["shi1_type"],
+                "remark": s["shi1_remark"],
+                "path": "",
+                "max_uses": 0,
+                "current_uses": 0,
+            }
+
+            try:
+                query_name = share_name if share_name.endswith("\x00") else share_name + "\x00"
+                resp2 = srvs.hNetrShareGetInfo(dce, query_name, 2)
+                info2 = resp2["InfoStruct"]["ShareInfo2"]
+                share_info["path"] = str(info2["shi2_path"]) if info2["shi2_path"] else ""
+                share_info["max_uses"] = info2["shi2_max_uses"]
+                share_info["current_uses"] = info2["shi2_current_uses"]
+            except Exception:
+                pass
+
+            results.append(share_info)
 
         return results
 

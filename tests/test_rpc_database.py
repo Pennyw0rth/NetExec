@@ -201,3 +201,31 @@ def test_duplicate_group_not_added(db):
     db.add_group("TEST.DEV", "Domain Admins", rid=512, group_type="domain")  # Duplicate
     groups = db.get_groups()
     assert len(groups) == 1
+
+
+def test_add_builtin_group(db):
+    db.add_group("BUILTIN", "Remote Desktop Users", rid=555, group_type="local")
+    groups = db.get_groups()
+    assert len(groups) == 1
+    group = groups[0]
+    assert group.domain == "BUILTIN"
+    assert group.name == "Remote Desktop Users"
+    assert group.rid == 555
+    assert group.group_type == "local"
+
+
+def test_get_groups_by_type(db):
+    db.add_group("TEST.DEV", "Domain Admins", rid=512, group_type="domain")
+    db.add_group("TEST.DEV", "Domain Users", rid=513, group_type="domain")
+    db.add_group("BUILTIN", "Administrators", rid=544, group_type="local")
+    db.add_group("BUILTIN", "Users", rid=545, group_type="local")
+
+    all_groups = db.get_groups()
+    assert len(all_groups) == 4
+
+
+def test_user_with_bad_password_count(db):
+    db.add_user("TEST.DEV", "lockeduser", rid=1002)
+    users = db.get_users("lockeduser")
+    assert len(users) == 1
+    assert users[0].username == "lockeduser"

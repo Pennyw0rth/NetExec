@@ -22,7 +22,6 @@ from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5.transport import DCERPCTransportFactory, SMBTransport
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.dcerpc.v5.epm import MSRPC_UUID_PORTMAP
-from impacket.dcerpc.v5.samr import SID_NAME_USE
 from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
 from impacket.krb5.ccache import CCache
 from impacket.krb5.kerberosv5 import SessionKeyDecryptionError, getKerberosTGT
@@ -1690,113 +1689,27 @@ class smb(connection):
         return spider.results
 
     def rid_brute(self, max_rid=None):
-        entries = []
         if not max_rid:
             max_rid = int(self.args.rid_brute)
 
-        KNOWN_PROTOCOLS = {
-            135: {"bindstr": rf"ncacn_ip_tcp:{self.remoteName}"},
-            139: {"bindstr": rf"ncacn_np:{self.remoteName}[\pipe\lsarpc]"},
-            445: {"bindstr": rf"ncacn_np:{self.remoteName}[\pipe\lsarpc]"},
-        }
-
-        ports_to_try = [self.port]
-        if self.port != 135:
-            ports_to_try.append(135)
-
-        dce = None
-        for port in ports_to_try:
-            if port not in KNOWN_PROTOCOLS:
-                continue
-            try:
-                string_binding = KNOWN_PROTOCOLS[port]["bindstr"]
-                self.logger.debug(f"Trying RID brute on port {port}: {string_binding}")
-                rpc_transport = transport.DCERPCTransportFactory(string_binding)
-                rpc_transport.setRemoteHost(self.remoteName)
-
-                if hasattr(rpc_transport, "set_credentials"):
-                    rpc_transport.set_credentials(self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey)
-
-                if self.kerberos:
-                    rpc_transport.set_kerberos(self.kerberos, self.kdcHost)
-
-                dce = rpc_transport.get_dce_rpc()
-                if self.kerberos:
-                    dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-
-                dce.connect()
-                self.logger.debug(f"RID brute connected via port {port}")
-                break
-            except Exception as e:
-                self.logger.debug(f"RID brute port {port} failed: {e}")
-                dce = None
-                continue
-
-        if not dce:
-            self.logger.fail("Error creating DCERPC connection: all transports failed (tried SMB and TCP)")
-            return entries
-
-        # Want encryption? Uncomment next line
-        # But make simultaneous variable <= 100
-
-        # Want fragmentation? Uncomment next line
-
-        dce.bind(lsat.MSRPC_UUID_LSAT)
         try:
-            resp = lsad.hLsarOpenPolicy2(dce, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES)
-        except lsad.DCERPCSessionError as e:
-            self.logger.fail(f"Error connecting: {e}")
+            rpc = self._get_rpc_enumerator()
+            entries = rpc.rid_brute(max_rid)
+
+            for entry in entries:
+                self.logger.highlight(f"{entry['rid']}: {entry['domain']}\\{entry['username']} ({entry['sidtype']})")
+
+            rpc.close()
             return entries
-
-        policy_handle = resp["PolicyHandle"]
-
-        try:
-            resp = lsad.hLsarQueryInformationPolicy2(dce, policy_handle, lsad.POLICY_INFORMATION_CLASS.PolicyAccountDomainInformation)
-        except lsad.DCERPCException as e:
-            if e.error_string == "nca_s_op_rng_error":
-                self.logger.fail("RPC lookup failed: RPC method not implemented")
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail("Access denied performing RID brute force")
             else:
-                self.logger.fail(f"Error querying policy information: {e}")
-            return entries
-
-        domain_sid = resp["PolicyInformation"]["PolicyAccountDomainInfo"]["DomainSid"].formatCanonical()
-
-        so_far = 0
-        simultaneous = 1000
-        for _j in range(max_rid // simultaneous + 1):
-            sids_to_check = (max_rid - so_far) % simultaneous if (max_rid - so_far) // simultaneous == 0 else simultaneous
-
-            if sids_to_check == 0:
-                break
-
-            sids = [f"{domain_sid}-{i:d}" for i in range(so_far, so_far + sids_to_check)]
-            try:
-                lsat.hLsarLookupSids(dce, policy_handle, sids, lsat.LSAP_LOOKUP_LEVEL.LsapLookupWksta)
-            except DCERPCException as e:
-                if str(e).find("STATUS_NONE_MAPPED") >= 0:
-                    so_far += simultaneous
-                    continue
-                elif str(e).find("STATUS_SOME_NOT_MAPPED") >= 0:
-                    resp = e.get_packet()
-                else:
-                    raise
-
-            for n, item in enumerate(resp["TranslatedNames"]["Names"]):
-                if item["Use"] != SID_NAME_USE.SidTypeUnknown:
-                    rid = so_far + n
-                    domain = resp["ReferencedDomains"]["Domains"][item["DomainIndex"]]["Name"]
-                    user = item["Name"]
-                    sid_type = SID_NAME_USE.enumItems(item["Use"]).name
-                    self.logger.highlight(f"{rid}: {domain}\\{user} ({sid_type})")
-                    entries.append({
-                        "rid": rid,
-                        "domain": domain,
-                        "username": user,
-                        "sidtype": sid_type,
-                    })
-            so_far += simultaneous
-        dce.disconnect()
-        return entries
+                self.logger.fail(f"Failed to perform RID brute force: {e!s}")
+            return []
+        except Exception as e:
+            self.logger.fail(f"Failed to perform RID brute force: {e!s}")
+            return []
 
     def put_file_single(self, src, dst):
         self.logger.display(f"Copying {src} to {dst}")
@@ -2306,53 +2219,75 @@ class smb(connection):
 
     def _get_rpc_enumerator(self):
         if not hasattr(self, "_rpc_enum") or self._rpc_enum is None:
-            self._rpc_enum = RPCEnumerator(self.conn, self.logger, self.host, self.hostname, self.domain)
+            self._rpc_enum = RPCEnumerator(
+                smb_connection=self.conn,
+                logger=self.logger,
+                host=self.host,
+                hostname=self.hostname,
+                domain=self.domain,
+                username=self.username,
+                password=self.password,
+                lmhash=self.lmhash,
+                nthash=self.nthash,
+                aesKey=self.aesKey,
+                kerberos=self.kerberos,
+                kdcHost=self.kdcHost,
+            )
         return self._rpc_enum
 
     def rpc_users(self):
         try:
             rpc = self._get_rpc_enumerator()
-            users = rpc.enum_users()
+            users = rpc.enum_users_detailed()
             self.logger.success(f"Found {len(users)} domain user(s)")
-            for rid, name in users:
-                self.logger.highlight(f"user:[{name}] rid:[0x{rid:x}]")
-            rpc.close()
-        except Exception as e:
-            self.logger.fail(f"RPC user enumeration failed: {e}")
-            self.logger.info("Try --rid-brute for anonymous enumeration")
 
-    def rpc_dispinfo(self):
-        try:
-            rpc = self._get_rpc_enumerator()
-            entries = rpc.query_display_info()
-            self.logger.success(f"Found {len(entries)} entries")
-            for e in entries:
-                self.logger.highlight(f"index: {e['index']} RID: 0x{e['rid']:x} acb: 0x{e['acb']:08x} account: {e['account']} name: {e['fullname']} desc: {e['description']}")
+            self.logger.highlight(f"{'RID':<6} {'Username':<20} {'BadPW':<6} {'PW Last Set':<20} {'PW Can Change':<20} Description")
+            self.logger.highlight("-" * 110)
+
+            for u in users:
+                self.logger.highlight(f"{u['rid']:<6} {u['username']:<20} {u['bad_pwd_count']:<6} {u['pwd_last_set']:<20} {u['pwd_can_change']:<20} {u['description']}")
+
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail("Access denied enumerating users")
+            else:
+                self.logger.fail(f"Failed to enumerate users: {e!s}")
+            self.logger.info("Try --rid-brute for anonymous enumeration")
         except Exception as e:
-            self.logger.fail(f"Query display info failed: {e}")
+            self.logger.fail(f"Failed to enumerate users: {e!s}")
+            self.logger.info("Try --rid-brute for anonymous enumeration")
 
     def rpc_groups(self):
         try:
             rpc = self._get_rpc_enumerator()
-            groups = rpc.enum_groups()
-            self.logger.success(f"Found {len(groups)} domain group(s)")
-            for rid, name in groups:
-                self.logger.highlight(f"group:[{name}] rid:[0x{rid:x}]")
-            rpc.close()
-        except Exception as e:
-            self.logger.fail(f"RPC group enumeration failed: {e}")
+            groups = rpc.enum_groups_detailed()
 
-    def rpc_local_groups(self):
-        try:
-            rpc = self._get_rpc_enumerator()
-            groups = rpc.enum_local_groups()
-            self.logger.success(f"Found {len(groups)} local/alias group(s)")
-            for rid, name in groups:
-                self.logger.highlight(f"group:[{name}] rid:[0x{rid:x}]")
+            domain_groups = [g for g in groups if g["type"] == "domain"]
+            local_groups = [g for g in groups if g["type"] == "local"]
+
+            if domain_groups:
+                self.logger.success(f"Domain Groups ({len(domain_groups)})")
+                self.logger.highlight(f"{'RID':<6} {'Group':<30} {'Members':<8} Description")
+                self.logger.highlight("-" * 90)
+                for g in domain_groups:
+                    self.logger.highlight(f"{g['rid']:<6} {g['name']:<30} {g['member_count']:<8} {g['description']}")
+
+            if local_groups:
+                self.logger.success(f"Builtin/Local Groups ({len(local_groups)})")
+                self.logger.highlight(f"{'RID':<6} {'Group':<30} {'Members':<8} Description")
+                self.logger.highlight("-" * 90)
+                for g in local_groups:
+                    self.logger.highlight(f"{g['rid']:<6} {g['name']:<30} {g['member_count']:<8} {g['description']}")
+
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail("Access denied enumerating groups")
+            else:
+                self.logger.fail(f"Failed to enumerate groups: {e!s}")
         except Exception as e:
-            self.logger.fail(f"RPC local group enumeration failed: {e}")
+            self.logger.fail(f"Failed to enumerate groups: {e!s}")
 
     def rpc_user(self):
         try:
@@ -2393,8 +2328,15 @@ class smb(connection):
             self.logger.highlight(f"  Account Control: 0x{uac:08x} ({', '.join(uac_flags) if uac_flags else 'NONE'})")
 
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_NO_SUCH_USER" in str(e) or "STATUS_NONE_MAPPED" in str(e):
+                self.logger.fail(f"User not found: {self.args.rpc_user}")
+            elif "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail(f"Access denied querying user {self.args.rpc_user}")
+            else:
+                self.logger.fail(f"Failed to query user: {e!s}")
         except Exception as e:
-            self.logger.fail(f"RPC user query failed: {e}")
+            self.logger.fail(f"Failed to query user: {e!s}")
 
     def rpc_user_groups(self):
         try:
@@ -2402,24 +2344,62 @@ class smb(connection):
             user_input = self.args.rpc_user_groups
             groups = rpc.query_user_groups(user_input)
 
-            self.logger.success(f"Groups for user {user_input}")
+            if not groups:
+                self.logger.fail(f"No groups found for user {user_input}")
+                rpc.close()
+                return
+
+            self.logger.success(f"Groups for user {user_input} ({len(groups)} groups)")
+            self.logger.highlight(f"  {'RID':<8} {'ATTR':<6} {'Name':<30}")
+            self.logger.highlight(f"  {'-' * 8} {'-' * 6} {'-' * 30}")
             for g in groups:
-                self.logger.highlight(f"  rid:[0x{g['rid']:x}] attr:[0x{g['attributes']:x}] name:[{g['name']}]")
+                rid = g.get("rid", 0)
+                attr = g.get("attributes", 0)
+                name = g.get("name", "")
+                self.logger.highlight(f"  {rid:<8} {attr:<6} {name:<30}")
 
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_NO_SUCH_USER" in str(e) or "STATUS_NONE_MAPPED" in str(e):
+                self.logger.fail(f"User not found: {self.args.rpc_user_groups}")
+            elif "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail(f"Access denied querying groups for {self.args.rpc_user_groups}")
+            else:
+                self.logger.fail(f"Failed to query user groups: {e!s}")
         except Exception as e:
-            self.logger.fail(f"RPC user groups query failed: {e}")
+            self.logger.fail(f"Failed to query user groups: {e!s}")
 
     def rpc_group(self):
+        def to_str(val):
+            if val is None:
+                return ""
+            if hasattr(val, "fields") and "Data" in val.fields:
+                val = val["Data"]
+            if isinstance(val, bytes):
+                return val.decode("utf-8", errors="replace")
+            try:
+                result = str(val)
+                if isinstance(result, bytes):
+                    return result.decode("utf-8", errors="replace")
+                return result
+            except Exception:
+                return ""
+
         try:
             rpc = self._get_rpc_enumerator()
             group_input = self.args.rpc_group
             info, members = rpc.query_group(group_input)
 
-            name = info["Name"] if "Name" in info.fields else str(info)
-            desc = info["AdminComment"] if "AdminComment" in info.fields else ""
-            attrs = info["Attributes"] if "Attributes" in info.fields else 0
-            member_count = info["MemberCount"] if "MemberCount" in info.fields else (len(members) if members else 0)
+            if hasattr(info, "fields"):
+                name = to_str(info["Name"]) if "Name" in info.fields else ""
+                desc = to_str(info["AdminComment"]) if "AdminComment" in info.fields else ""
+                attrs = info["Attributes"] if "Attributes" in info.fields else 0
+                member_count = info["MemberCount"] if "MemberCount" in info.fields else (len(members) if members else 0)
+            else:
+                name = to_str(info.get("Name", ""))
+                desc = to_str(info.get("AdminComment", ""))
+                attrs = info.get("Attributes", 0)
+                member_count = info.get("MemberCount", len(members) if members else 0)
 
             self.logger.success(f"Group: {name}")
             self.logger.highlight(f"  Description: {desc}")
@@ -2430,8 +2410,16 @@ class smb(connection):
                 self.logger.highlight(f"  Members: {', '.join(members)}")
 
             rpc.close()
+        except DCERPCException as e:
+            err = str(e)
+            if "STATUS_NO_SUCH_GROUP" in err or "STATUS_NO_SUCH_ALIAS" in err or "STATUS_NONE_MAPPED" in err:
+                self.logger.fail(f"Group not found: {self.args.rpc_group}")
+            elif "STATUS_ACCESS_DENIED" in err:
+                self.logger.fail(f"Access denied querying group: {self.args.rpc_group}")
+            else:
+                self.logger.fail(f"Failed to query group: {e!s}")
         except Exception as e:
-            self.logger.fail(f"RPC group query failed: {e}")
+            self.logger.fail(f"Failed to query group: {e!s}")
 
     def rpc_dom_info(self):
         try:
@@ -2445,8 +2433,13 @@ class smb(connection):
             self.logger.highlight(f"  Total Aliases: {info['AliasCount']}")
 
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail("Access denied querying domain info")
+            else:
+                self.logger.fail(f"Failed to query domain info: {e!s}")
         except Exception as e:
-            self.logger.fail(f"RPC domain info query failed: {e}")
+            self.logger.fail(f"Failed to query domain info: {e!s}")
 
     def rpc_pass_pol(self):
         try:
@@ -2462,8 +2455,13 @@ class smb(connection):
             self.logger.highlight(f"  Lockout Window: {lock_info['LockoutObservationWindow']}")
 
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail("Access denied querying password policy")
+            else:
+                self.logger.fail(f"Failed to query password policy: {e!s}")
         except Exception as e:
-            self.logger.fail(f"RPC password policy query failed: {e}")
+            self.logger.fail(f"Failed to query password policy: {e!s}")
 
     def rpc_trusts(self):
         try:
@@ -2482,21 +2480,59 @@ class smb(connection):
                 self.logger.highlight(f"  Attributes: {t['attributes']} (0x{t['attributes_raw']:x})")
 
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail("Access denied enumerating trusts")
+            else:
+                self.logger.fail(f"Failed to enumerate trusts: {e!s}")
         except Exception as e:
-            self.logger.fail(f"RPC trust enumeration failed: {e}")
+            self.logger.fail(f"Failed to enumerate trusts: {e!s}")
 
     def rpc_shares(self):
         try:
             rpc = self._get_rpc_enumerator()
-            shares = rpc.enum_shares_rpc()
+            shares = rpc.enum_shares_detailed()
 
-            self.logger.success(f"Found {len(shares)} share(s) via RPC")
+            self.logger.success(f"Found {len(shares)} share(s)")
+            self.logger.highlight(f"{'Share':<15} {'Type':<10} {'Perms':<12} {'Remark':<30} Path")
+            self.logger.highlight("-" * 100)
+
+            temp_dir = ntpath.normpath("\\" + gen_random_string())
+
             for s in shares:
-                self.logger.highlight(f"netname: {s['name']} | type: {s['type']} | remark: {s['remark']}")
+                share_name = s["name"].rstrip("\x00")
+                perms = []
+
+                try:
+                    self.conn.listPath(share_name, "*")
+                    perms.append("READ")
+                except Exception:
+                    pass
+
+                try:
+                    self.conn.createDirectory(share_name, temp_dir)
+                    perms.append("WRITE")
+                    try:
+                        self.conn.deleteDirectory(share_name, temp_dir)
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+
+                perm_str = ",".join(perms) if perms else ""
+                remark = s["remark"].rstrip("\x00") if s["remark"] else ""
+                path = s["path"].rstrip("\x00") if s["path"] else ""
+
+                self.logger.highlight(f"{share_name:<15} {s['type']:<10} {perm_str:<12} {remark:<30} {path}")
 
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail("Access denied enumerating shares")
+            else:
+                self.logger.fail(f"Failed to enumerate shares: {e!s}")
         except Exception as e:
-            self.logger.fail(f"RPC share enumeration failed: {e}")
+            self.logger.fail(f"Failed to enumerate shares: {e!s}")
 
     def rpc_sessions(self):
         try:
@@ -2508,8 +2544,13 @@ class smb(connection):
                 self.logger.highlight(f"client: {s['client']} | user: {s['username']} | time: {s['time']}s | idle: {s['idle_time']}s")
 
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail("Access denied enumerating sessions")
+            else:
+                self.logger.fail(f"Failed to enumerate sessions: {e!s}")
         except Exception as e:
-            self.logger.fail(f"RPC session enumeration failed: {e}")
+            self.logger.fail(f"Failed to enumerate sessions: {e!s}")
 
     def rpc_connections(self):
         try:
@@ -2522,28 +2563,13 @@ class smb(connection):
                 self.logger.highlight(f"id: {c['conn_id']} | type: {c['conn_type']} | opens: {c['num_opens']} | users: {c['num_users']} | time: {c['time']}s | user: {c['username']}{share_info}")
 
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail("Access denied enumerating connections")
+            else:
+                self.logger.fail(f"Failed to enumerate connections: {e!s}")
         except Exception as e:
-            self.logger.fail(f"RPC connection enumeration failed: {e}")
-
-    def rpc_share(self):
-        try:
-            rpc = self._get_rpc_enumerator()
-            share_name = self.args.rpc_share
-            info = rpc.get_share_info(share_name)
-
-            self.logger.success(f"Share: {info['name']}")
-            self.logger.highlight(f"  Type: {info['type']} (0x{info['type_raw']:x})")
-            self.logger.highlight(f"  Remark: {info.get('remark', '')}")
-            if "path" in info:
-                self.logger.highlight(f"  Path: {info['path']}")
-            if "max_uses" in info:
-                self.logger.highlight(f"  Max Uses: {info['max_uses']}")
-            if "current_uses" in info:
-                self.logger.highlight(f"  Current Uses: {info['current_uses']}")
-
-            rpc.close()
-        except Exception as e:
-            self.logger.fail(f"RPC share info query failed: {e}")
+            self.logger.fail(f"Failed to enumerate connections: {e!s}")
 
     def rpc_server_info(self):
         try:
@@ -2556,8 +2582,13 @@ class smb(connection):
             self.logger.highlight(f"  Type: 0x{info['type']:x}")
 
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail("Access denied querying server info")
+            else:
+                self.logger.fail(f"Failed to query server info: {e!s}")
         except Exception as e:
-            self.logger.fail(f"RPC server info query failed: {e}")
+            self.logger.fail(f"Failed to query server info: {e!s}")
 
     def lsa_query(self):
         try:
@@ -2570,8 +2601,13 @@ class smb(connection):
                 self.logger.highlight(f"  Domain SID: {domain_sid}")
 
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail("Access denied querying LSA policy")
+            else:
+                self.logger.fail(f"Failed to query LSA policy: {e!s}")
         except Exception as e:
-            self.logger.fail(f"LSA query failed: {e}")
+            self.logger.fail(f"Failed to query LSA policy: {e!s}")
 
     def lsa_sids(self):
         try:
@@ -2583,8 +2619,13 @@ class smb(connection):
                 self.logger.highlight(f"  {sid}")
 
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail("Access denied enumerating LSA SIDs")
+            else:
+                self.logger.fail(f"Failed to enumerate LSA SIDs: {e!s}")
         except Exception as e:
-            self.logger.fail(f"LSA SID enumeration failed: {e}")
+            self.logger.fail(f"Failed to enumerate LSA SIDs: {e!s}")
 
     def lsa_privs(self):
         try:
@@ -2596,8 +2637,13 @@ class smb(connection):
                 self.logger.highlight(f"  {priv}")
 
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail("Access denied enumerating LSA privileges")
+            else:
+                self.logger.fail(f"Failed to enumerate LSA privileges: {e!s}")
         except Exception as e:
-            self.logger.fail(f"LSA privilege enumeration failed: {e}")
+            self.logger.fail(f"Failed to enumerate LSA privileges: {e!s}")
 
     def lsa_lookup_sids(self):
         try:
@@ -2615,8 +2661,18 @@ class smb(connection):
                     self.logger.fail(f"  {sid} -> lookup failed: {use}")
 
             rpc.close()
+        except DCERPCException as e:
+            err = str(e)
+            if "STATUS_ACCESS_DENIED" in err:
+                self.logger.fail("Access denied performing LSA SID lookup")
+            elif "STATUS_NONE_MAPPED" in err:
+                self.logger.fail("None of the SIDs could be resolved")
+            elif "STATUS_SOME_NOT_MAPPED" in err:
+                self.logger.fail("Some SIDs could not be resolved")
+            else:
+                self.logger.fail(f"Failed to lookup SIDs: {e!s}")
         except Exception as e:
-            self.logger.fail(f"LSA SID lookup failed: {e}")
+            self.logger.fail(f"Failed to lookup SIDs: {e!s}")
 
     def lsa_rights(self):
         try:
@@ -2632,11 +2688,15 @@ class smb(connection):
                 self.logger.display(f"No explicit account rights for {sid}")
 
             rpc.close()
-        except Exception as e:
+        except DCERPCException as e:
             if "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
                 self.logger.display(f"No explicit account rights assigned to {self.args.lsa_rights}")
+            elif "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail(f"Access denied querying rights for {self.args.lsa_rights}")
             else:
-                self.logger.fail(f"LSA account rights enumeration failed: {e}")
+                self.logger.fail(f"Failed to enumerate account rights: {e!s}")
+        except Exception as e:
+            self.logger.fail(f"Failed to enumerate account rights: {e!s}")
 
     def lsa_create_account(self):
         try:
@@ -2645,8 +2705,15 @@ class smb(connection):
             rpc.lsa_create_account(sid)
             self.logger.success(f"Created LSA account for {sid}")
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail(f"Access denied creating LSA account for {sid}")
+            elif "STATUS_OBJECT_NAME_COLLISION" in str(e):
+                self.logger.fail(f"LSA account already exists for {sid}")
+            else:
+                self.logger.fail(f"Failed to create LSA account: {e!s}")
         except Exception as e:
-            self.logger.fail(f"LSA create account failed: {e}")
+            self.logger.fail(f"Failed to create LSA account: {e!s}")
 
     def lsa_query_security(self):
         try:
@@ -2775,8 +2842,13 @@ class smb(connection):
                         self.logger.highlight(f"            Permissions: {', '.join(perms)}")
 
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail("Access denied querying LSA security descriptor")
+            else:
+                self.logger.fail(f"Failed to query LSA security: {e!s}")
         except Exception as e:
-            self.logger.fail(f"LSA query security failed: {e}")
+            self.logger.fail(f"Failed to query LSA security: {e!s}")
 
     def lookup_names(self):
         try:
@@ -2790,8 +2862,18 @@ class smb(connection):
                 self.logger.highlight(f"  {name} -> {sid} ({type_name}: {use})")
 
             rpc.close()
+        except DCERPCException as e:
+            err = str(e)
+            if "STATUS_ACCESS_DENIED" in err:
+                self.logger.fail("Access denied performing name lookup")
+            elif "STATUS_NONE_MAPPED" in err:
+                self.logger.fail("None of the names could be resolved")
+            elif "STATUS_SOME_NOT_MAPPED" in err:
+                self.logger.fail("Some names could not be resolved")
+            else:
+                self.logger.fail(f"Failed to lookup names: {e!s}")
         except Exception as e:
-            self.logger.fail(f"Name lookup failed: {e}")
+            self.logger.fail(f"Failed to lookup names: {e!s}")
 
     def lookup_domain(self):
         try:
@@ -2800,8 +2882,16 @@ class smb(connection):
             sid = rpc.lookup_domain(domain_name)
             self.logger.success(f"Domain {domain_name} -> SID {sid}")
             rpc.close()
+        except DCERPCException as e:
+            err = str(e)
+            if "STATUS_ACCESS_DENIED" in err:
+                self.logger.fail(f"Access denied looking up domain {domain_name}")
+            elif "STATUS_NO_SUCH_DOMAIN" in err or "STATUS_NONE_MAPPED" in err:
+                self.logger.fail(f"Domain not found: {domain_name}")
+            else:
+                self.logger.fail(f"Failed to lookup domain: {e!s}")
         except Exception as e:
-            self.logger.fail(f"Domain lookup failed: {e}")
+            self.logger.fail(f"Failed to lookup domain: {e!s}")
 
     def sam_lookup(self):
         try:
@@ -2815,8 +2905,18 @@ class smb(connection):
                 self.logger.highlight(f"  {name} -> {sid} ({type_name}: {use})")
 
             rpc.close()
+        except DCERPCException as e:
+            err = str(e)
+            if "STATUS_ACCESS_DENIED" in err:
+                self.logger.fail("Access denied performing SAM lookup")
+            elif "STATUS_NONE_MAPPED" in err:
+                self.logger.fail("None of the names could be resolved")
+            elif "STATUS_SOME_NOT_MAPPED" in err:
+                self.logger.fail("Some names could not be resolved")
+            else:
+                self.logger.fail(f"Failed to perform SAM lookup: {e!s}")
         except Exception as e:
-            self.logger.fail(f"SAM lookup failed: {e}")
+            self.logger.fail(f"Failed to perform SAM lookup: {e!s}")
 
     def create_user(self):
         try:
@@ -2829,8 +2929,15 @@ class smb(connection):
             rid = rpc.create_user(username, password)
             self.logger.success(f"Created user {username} with RID 0x{rid:x}")
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail(f"Access denied creating user {username}")
+            elif "STATUS_USER_EXISTS" in str(e):
+                self.logger.fail(f"User already exists: {username}")
+            else:
+                self.logger.fail(f"Failed to create user: {e!s}")
         except Exception as e:
-            self.logger.fail(f"Create user failed: {e}")
+            self.logger.fail(f"Failed to create user: {e!s}")
 
     def delete_user(self):
         try:
@@ -2839,8 +2946,15 @@ class smb(connection):
             rpc.delete_user(username)
             self.logger.success(f"Deleted user {username}")
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail(f"Access denied deleting user {username}")
+            elif "STATUS_NO_SUCH_USER" in str(e) or "STATUS_NONE_MAPPED" in str(e):
+                self.logger.fail(f"User not found: {username}")
+            else:
+                self.logger.fail(f"Failed to delete user: {e!s}")
         except Exception as e:
-            self.logger.fail(f"Delete user failed: {e}")
+            self.logger.fail(f"Failed to delete user: {e!s}")
 
     def enable_user(self):
         try:
@@ -2853,8 +2967,15 @@ class smb(connection):
             else:
                 self.logger.display(f"User {username} is already enabled (UAC: 0x{result:x})")
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail(f"Access denied enabling user {username}")
+            elif "STATUS_NO_SUCH_USER" in str(e) or "STATUS_NONE_MAPPED" in str(e):
+                self.logger.fail(f"User not found: {username}")
+            else:
+                self.logger.fail(f"Failed to enable user: {e!s}")
         except Exception as e:
-            self.logger.fail(f"Enable user failed: {e}")
+            self.logger.fail(f"Failed to enable user: {e!s}")
 
     def disable_user(self):
         try:
@@ -2867,8 +2988,15 @@ class smb(connection):
             else:
                 self.logger.display(f"User {username} is already disabled (UAC: 0x{result:x})")
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail(f"Access denied disabling user {username}")
+            elif "STATUS_NO_SUCH_USER" in str(e) or "STATUS_NONE_MAPPED" in str(e):
+                self.logger.fail(f"User not found: {username}")
+            else:
+                self.logger.fail(f"Failed to disable user: {e!s}")
         except Exception as e:
-            self.logger.fail(f"Disable user failed: {e}")
+            self.logger.fail(f"Failed to disable user: {e!s}")
 
     def change_password(self):
         try:
@@ -2882,8 +3010,24 @@ class smb(connection):
             rpc.change_password(username, old_pass, new_pass)
             self.logger.success(f"Changed password for {username}")
             rpc.close()
+        except DCERPCException as e:
+            err = str(e)
+            if "STATUS_ACCESS_DENIED" in err:
+                self.logger.fail(f"Access denied changing password for {username}")
+            elif "STATUS_WRONG_PASSWORD" in err:
+                self.logger.fail(f"Wrong old password for {username}")
+            elif "STATUS_NO_SUCH_USER" in err or "STATUS_NONE_MAPPED" in err:
+                self.logger.fail(f"User not found: {username}")
+            elif "STATUS_PASSWORD_RESTRICTION" in err:
+                self.logger.fail("Password does not meet complexity requirements")
+            elif "STATUS_ACCOUNT_LOCKED_OUT" in err:
+                self.logger.fail(f"Account locked out: {username}")
+            elif "STATUS_LM_CROSS_ENCRYPTION_REQUIRED" in err or "STATUS_NT_CROSS_ENCRYPTION_REQUIRED" in err:
+                self.logger.fail("Password change requires different encryption - try with NT hash")
+            else:
+                self.logger.fail(f"Failed to change password: {e!s}")
         except Exception as e:
-            self.logger.fail(f"Change password failed: {e}")
+            self.logger.fail(f"Failed to change password: {e!s}")
 
     def reset_password(self):
         try:
@@ -2896,8 +3040,20 @@ class smb(connection):
             rpc.reset_password(username, new_pass)
             self.logger.success(f"Reset password for {username}")
             rpc.close()
+        except DCERPCException as e:
+            err = str(e)
+            if "STATUS_ACCESS_DENIED" in err:
+                self.logger.fail(f"Access denied resetting password for {username}")
+            elif "STATUS_NO_SUCH_USER" in err or "STATUS_NONE_MAPPED" in err:
+                self.logger.fail(f"User not found: {username}")
+            elif "STATUS_PASSWORD_RESTRICTION" in err:
+                self.logger.fail("Password does not meet complexity requirements")
+            elif "STATUS_ACCOUNT_LOCKED_OUT" in err:
+                self.logger.fail(f"Account locked out: {username}")
+            else:
+                self.logger.fail(f"Failed to reset password: {e!s}")
         except Exception as e:
-            self.logger.fail(f"Reset password failed: {e}")
+            self.logger.fail(f"Failed to reset password: {e!s}")
 
     def create_group(self):
         try:
@@ -2906,8 +3062,15 @@ class smb(connection):
             rid = rpc.create_group(group_name)
             self.logger.success(f"Created group {group_name} with RID 0x{rid:x}")
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail(f"Access denied creating group {group_name}")
+            elif "STATUS_GROUP_EXISTS" in str(e) or "STATUS_ALIAS_EXISTS" in str(e):
+                self.logger.fail(f"Group already exists: {group_name}")
+            else:
+                self.logger.fail(f"Failed to create group: {e!s}")
         except Exception as e:
-            self.logger.fail(f"Create group failed: {e}")
+            self.logger.fail(f"Failed to create group: {e!s}")
 
     def delete_group(self):
         try:
@@ -2916,8 +3079,16 @@ class smb(connection):
             rpc.delete_group(group_name)
             self.logger.success(f"Deleted group {group_name}")
             rpc.close()
+        except DCERPCException as e:
+            err = str(e)
+            if "STATUS_ACCESS_DENIED" in err:
+                self.logger.fail(f"Access denied deleting group {group_name}")
+            elif "STATUS_NO_SUCH_GROUP" in err or "STATUS_NO_SUCH_ALIAS" in err or "STATUS_NONE_MAPPED" in err:
+                self.logger.fail(f"Group not found: {group_name}")
+            else:
+                self.logger.fail(f"Failed to delete group: {e!s}")
         except Exception as e:
-            self.logger.fail(f"Delete group failed: {e}")
+            self.logger.fail(f"Failed to delete group: {e!s}")
 
     def add_to_group(self):
         try:
@@ -2930,8 +3101,19 @@ class smb(connection):
             rpc.add_to_group(username, group_name)
             self.logger.success(f"Added {username} to {group_name}")
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail(f"Access denied adding {username} to {group_name}")
+            elif "STATUS_NO_SUCH_USER" in str(e) or "STATUS_NONE_MAPPED" in str(e):
+                self.logger.fail(f"User not found: {username}")
+            elif "STATUS_NO_SUCH_GROUP" in str(e) or "STATUS_NO_SUCH_ALIAS" in str(e):
+                self.logger.fail(f"Group not found: {group_name}")
+            elif "STATUS_MEMBER_IN_GROUP" in str(e) or "STATUS_MEMBER_IN_ALIAS" in str(e):
+                self.logger.fail(f"User {username} is already a member of {group_name}")
+            else:
+                self.logger.fail(f"Failed to add user to group: {e!s}")
         except Exception as e:
-            self.logger.fail(f"Add to group failed: {e}")
+            self.logger.fail(f"Failed to add user to group: {e!s}")
 
     def remove_from_group(self):
         try:
@@ -2944,8 +3126,19 @@ class smb(connection):
             rpc.remove_from_group(username, group_name)
             self.logger.success(f"Removed {username} from {group_name}")
             rpc.close()
+        except DCERPCException as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.fail(f"Access denied removing {username} from {group_name}")
+            elif "STATUS_NO_SUCH_USER" in str(e) or "STATUS_NONE_MAPPED" in str(e):
+                self.logger.fail(f"User not found: {username}")
+            elif "STATUS_NO_SUCH_GROUP" in str(e) or "STATUS_NO_SUCH_ALIAS" in str(e):
+                self.logger.fail(f"Group not found: {group_name}")
+            elif "STATUS_MEMBER_NOT_IN_GROUP" in str(e) or "STATUS_MEMBER_NOT_IN_ALIAS" in str(e):
+                self.logger.fail(f"User {username} is not a member of {group_name}")
+            else:
+                self.logger.fail(f"Failed to remove user from group: {e!s}")
         except Exception as e:
-            self.logger.fail(f"Remove from group failed: {e}")
+            self.logger.fail(f"Failed to remove user from group: {e!s}")
 
     def mark_guest(self):
         return highlight(f"{highlight('(Guest)')}" if self.is_guest else "")
