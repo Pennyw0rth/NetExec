@@ -1746,12 +1746,7 @@ class ldap(connection):
         Returns:
             List of file paths to include in the BloodHound zip.
         """
-        try:
-            from certihound import ADCSCollector, BloodHoundCEExporter, ImpacketLDAPAdapter
-        except ImportError:
-            self.logger.fail("CertiHound not installed - skipping ADCS collection")
-            self.logger.fail("Install with: pip install netexec[adcs]")
-            return []
+        from certihound import ADCSCollector, BloodHoundCEExporter, ImpacketLDAPAdapter
 
         self.logger.highlight("Collecting ADCS data (CertiHound)...")
 

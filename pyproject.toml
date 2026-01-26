@@ -48,10 +48,8 @@ dependencies = [
     "impacket @ git+https://github.com/fortra/impacket",
     "oscrypto @ git+https://github.com/wbond/oscrypto",
     "pynfsclient @ git+https://github.com/Pennyw0rth/NfsClient",
+    "certihound>=0.1.1",
 ]
-
-[project.optional-dependencies]
-adcs = ["certihound>=0.1.0"]
 
 [project.urls]
 homepage = "https://github.com/Pennyw0rth/NetExec"
