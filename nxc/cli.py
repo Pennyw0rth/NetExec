@@ -40,6 +40,7 @@ def gen_cli_args():
     log_level = output_group.add_mutually_exclusive_group()
     log_level.add_argument("--verbose", action="store_true", help="enable verbose output")
     log_level.add_argument("--debug", action="store_true", help="enable debug level information")
+    output_group.add_argument("--redact", action="store_true", help="redact credentials in output for screenshots/reports")
 
     dns_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
     dns_group = dns_parser.add_argument_group("DNS")
