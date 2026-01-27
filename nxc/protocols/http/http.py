@@ -6,10 +6,10 @@ from requests.auth import HTTPBasicAuth
 from requests.exceptions import SSLError
 from urllib3.exceptions import InsecureRequestWarning
 
+from nxc.config import process_secret
 from nxc.connection import connection
 from nxc.helpers.logger import highlight
 from nxc.logger import NXCAdapter
-from nxc.config import process_secret
 
 
 class http(connection):
@@ -109,9 +109,7 @@ class http(connection):
         ca_file = getattr(self.args, "ca_file", None)
         if ca_file:
             return ca_file
-        if getattr(self.args, "insecure", False):
-            return False
-        return True
+        return not getattr(self.args, "insecure", False)
 
     def _request(self, auth=None):
         return self.session.get(
@@ -124,15 +122,17 @@ class http(connection):
         )
 
     def _show_tls_error(self, e: Exception):
-        """
-        Make TLS verification failures visible in normal (non-debug) output.
-        """
+        """Make TLS verification failures visible in normal (non-debug) output."""
         # keep it short but useful; requests/ssl errors can be very long
         msg = str(e)
         if len(msg) > 220:
             msg = msg[:220] + "..."
         hint = ""
-        if getattr(self.args, "ssl", False) and not getattr(self.args, "insecure", False) and not getattr(self.args, "ca_file", None):
+        if (
+            getattr(self.args, "ssl", False)
+            and not getattr(self.args, "insecure", False)
+            and not getattr(self.args, "ca_file", None)
+        ):
             hint = " (try --insecure or --ca-file)"
         self.logger.fail(f"TLS verify failed{hint}: {msg}")
 
@@ -195,9 +195,8 @@ class http(connection):
             self.logger.display(" ".join(parts))
 
     def plaintext_login(self, username, password):
-        if not self.session or not self.probe_resp:
-            if not self.create_conn_obj():
-                return False
+        if (not self.session or not self.probe_resp) and not self.create_conn_obj():
+            return False
 
         self.enum_host_info()
 
@@ -206,7 +205,9 @@ class http(connection):
         unauth_status = self.probe_resp.status_code
 
         if not (unauth_status == 401 and is_basic):
-            self.logger.info(f"No HTTP Basic challenge on {self._path()} (status={unauth_status})")
+            self.logger.info(
+                f"No HTTP Basic challenge on {self._path()} (status={unauth_status})"
+            )
             return False
 
         try:
@@ -221,7 +222,10 @@ class http(connection):
 
         auth_status = r.status_code
         server = r.headers.get("Server", "") or ""
-        realm = self._parse_basic_realm(r.headers.get("WWW-Authenticate", "") or "") or self.remote_realm
+        realm = (
+            self._parse_basic_realm(r.headers.get("WWW-Authenticate", "") or "")
+            or self.remote_realm
+        )
 
         # Store host metadata
         try:

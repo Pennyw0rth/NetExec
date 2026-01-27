@@ -6,4 +6,4 @@ from nxc.protocols.http.proto_args import proto_args  # function used by cli
 
 protocol_object = http
 
-__all__ = ["protocol_object", "proto_args"]
+__all__ = ["proto_args", "protocol_object"]
