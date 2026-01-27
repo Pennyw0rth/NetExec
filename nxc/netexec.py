@@ -71,6 +71,11 @@ def main():
     first_run_setup(nxc_logger)
     args, version_info = gen_cli_args()
 
+    if hasattr(args, "redact") and args.redact:
+        import nxc.config
+        if not nxc.config.audit_mode:
+            nxc.config.audit_mode = "[REDACTED]"
+
     # if these are the same, it might double log to file (two FileHandlers will be added)
     # but this should never happen by accident
     if config_log:

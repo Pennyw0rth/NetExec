@@ -1,5 +1,9 @@
 ##### Check Generic Help Options
 netexec -h
+##### Check --redact Flag
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --redact
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --redact
+netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --redact
 ##### SMB
 netexec smb TARGET_HOST --generate-hosts-file /tmp/hostsfile
 netexec smb TARGET_HOST --generate-krb5-file /tmp/krb5conf
