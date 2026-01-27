@@ -21,14 +21,14 @@ class NXCModule:
         (6, 1, 7601): 27929,      # Windows Server 2008 R2 SP1
         (6, 2, 9200): 25675,      # Windows Server 2012
         (6, 3, 9600): 22774,      # Windows Server 2012 R2
-	(10, 0, 10240): 21128,      # Windows 10 1507
+		(10, 0, 10240): 21128,      # Windows 10 1507
         (10, 0, 14393): 8422,     # Windows Server 2016
         (10, 0, 17763): 7792,     # Windows Server 2019 / Win10 1809
         (10, 0, 19044): 6332,     # Windows 10 21H2
-	(10, 0, 20348): 4171,     # Windows Server 2022
+		(10, 0, 20348): 4171,     # Windows Server 2022
         (10, 0, 22621): 5909,     # Windows 11 22H2
-	(10, 0, 22631): 5909,     # Windows 11 23H2
-	(10, 0, 26100): 6584,     # Windows Server 2025
+		(10, 0, 22631): 5909,     # Windows 11 23H2
+		(10, 0, 26100): 6584,     # Windows Server 2025
     }
 
     def __init__(self, context=None, module_options=None):
