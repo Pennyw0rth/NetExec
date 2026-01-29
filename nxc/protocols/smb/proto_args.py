@@ -31,8 +31,8 @@ def proto_args(parser, parents):
     delegate_spn_arg.make_required = [delegate_arg]
 
     cred_gathering_group = smb_parser.add_argument_group("Credential Gathering")
-    cred_gathering_group.add_argument("--sam", choices={"regdump", "secdump", "vss"}, nargs="?", const="regdump", help="dump SAM hashes from target systems using the specifed method")
-    cred_gathering_group.add_argument("--lsa", choices={"regdump", "secdump", "vss"}, nargs="?", const="regdump", help="dump LSA secrets from target systems using the specifed method")
+    cred_gathering_group.add_argument("--sam", choices={"regdump", "secdump", "vss"}, nargs="?", const="regdump", help="dump SAM hashes from target systems using the specifed method (default: %(const)s)")
+    cred_gathering_group.add_argument("--lsa", choices={"regdump", "secdump", "vss"}, nargs="?", const="regdump", help="dump LSA secrets from target systems using the specifed method (default: %(const)s)")
     ntds_arg = cred_gathering_group.add_argument("--ntds", choices={"vss", "drsuapi"}, nargs="?", const="drsuapi", help="dump the NTDS.dit from target DCs using the specifed method")
     # NTDS options
     kerb_keys_arg = cred_gathering_group.add_argument("--kerberos-keys", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Also dump Kerberos AES and DES keys from target DC (NTDS.dit)")
