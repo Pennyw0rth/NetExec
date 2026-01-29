@@ -97,7 +97,9 @@ def proto_args(parser, parents):
     cmd_exec_group.add_argument("--exec-method", choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default="wmiexec", help="method to execute the command. Ignored if in MSSQL mode", action=DefaultTrackingAction)
     cmd_exec_group.add_argument("--dcom-timeout", help="DCOM connection timeout", type=int, default=5)
     cmd_exec_group.add_argument("--get-output-tries", help="Number of times atexec/smbexec/mmcexec tries to get results", type=int, default=10)
-    cmd_exec_group.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output. If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
+    cmd_exec_group.add_argument(
+        "--codec", default="utf-8", help="Set encoding used (codec) from the target's output. If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec"
+    )
     cmd_exec_group.add_argument("--no-output", action="store_true", help="do not retrieve command output")
 
     cmd_exec_method_group = cmd_exec_group.add_mutually_exclusive_group()
@@ -110,5 +112,45 @@ def proto_args(parser, parents):
     posh_group.add_argument("--clear-obfscripts", action="store_true", help="Clear all cached obfuscated PowerShell scripts")
     posh_group.add_argument("--force-ps32", action="store_true", help="force PowerShell commands to run in a 32-bit process (may not apply to modules)")
     posh_group.add_argument("--no-encode", action="store_true", default=False, help="Do not encode the PowerShell command ran on target")
+
+    rpc_group = smb_parser.add_argument_group("RPC Enumeration", "RPC enumeration via named pipes")
+    rpc_group.add_argument("--rpc-users", action="store_true", dest="rpc_users", help="Enumerate domain users with details (RID, password info, description)")
+    rpc_group.add_argument("--rpc-groups", action="store_true", dest="rpc_groups", help="Enumerate domain and local groups with details (members, description)")
+    rpc_group.add_argument("--rpc-user", metavar="USER", dest="rpc_user", help="Query specific user by name or RID")
+    rpc_group.add_argument("--rpc-user-groups", metavar="USER", dest="rpc_user_groups", help="Query groups for user by name or RID")
+    rpc_group.add_argument("--rpc-group", metavar="GROUP", dest="rpc_group", help="Query specific group by name or RID")
+    rpc_group.add_argument("--rpc-dom-info", action="store_true", dest="rpc_dom_info", help="Query domain info")
+    rpc_group.add_argument("--rpc-pass-pol", action="store_true", dest="rpc_pass_pol", help="Query password policy via SAMR")
+    rpc_group.add_argument("--rpc-trusts", action="store_true", dest="rpc_trusts", help="Enumerate domain trusts via LSA")
+    rpc_group.add_argument("--rpc-shares", action="store_true", dest="rpc_shares", help="Enumerate shares with details (permissions, path)")
+    rpc_group.add_argument("--rpc-sessions", action="store_true", dest="rpc_sessions", help="Enumerate sessions via SRVS RPC")
+    rpc_group.add_argument("--rpc-connections", action="store_true", dest="rpc_connections", help="Enumerate connections via SRVS RPC")
+    rpc_group.add_argument("--rpc-server-info", action="store_true", dest="rpc_server_info", help="Query server info via SRVS RPC")
+
+    lsa_group = smb_parser.add_argument_group("LSA Operations", "LSA enumeration via named pipes")
+    lsa_group.add_argument("--lsa-query", action="store_true", dest="lsa_query", help="LSA policy query")
+    lsa_group.add_argument("--lsa-sids", action="store_true", dest="lsa_sids", help="Enumerate LSA SIDs")
+    lsa_group.add_argument("--lsa-privs", action="store_true", dest="lsa_privs", help="Enumerate LSA privileges")
+    lsa_group.add_argument("--lsa-lookup-sids", metavar="SIDS", dest="lsa_lookup_sids", help="Lookup SIDs to names, comma-separated")
+    lsa_group.add_argument("--lsa-rights", metavar="SID", dest="lsa_rights", help="Enumerate account rights for SID")
+    lsa_group.add_argument("--lsa-create-account", metavar="SID", dest="lsa_create_account", help="Create LSA account")
+    lsa_group.add_argument("--lsa-query-security", action="store_true", dest="lsa_query_security", help="Query LSA security object")
+
+    lookup_group = smb_parser.add_argument_group("Lookup Operations", "SID/SAM lookup via named pipes")
+    lookup_group.add_argument("--lookup-names", metavar="NAMES", dest="lookup_names", help="Lookup names in domain, comma-separated")
+    lookup_group.add_argument("--lookup-domain", metavar="DOMAIN", dest="lookup_domain", help="Lookup domain SID")
+    lookup_group.add_argument("--sam-lookup", nargs=2, metavar=("TYPE", "NAMES"), dest="sam_lookup", help="SAM lookup: TYPE=domain|builtin, NAMES=comma-separated")
+
+    mgmt_group = smb_parser.add_argument_group("User/Group Management", "User and group management via SAMR (requires admin)")
+    mgmt_group.add_argument("--create-user", metavar="USER:PASS", dest="create_user", help="Create domain user")
+    mgmt_group.add_argument("--delete-user", metavar="USER", dest="delete_user", help="Delete domain user")
+    mgmt_group.add_argument("--enable-user", metavar="USER", dest="enable_user", help="Enable user account")
+    mgmt_group.add_argument("--disable-user", metavar="USER", dest="disable_user", help="Disable user account")
+    mgmt_group.add_argument("--change-password", metavar="USER:OLD:NEW", dest="change_password", help="Change password with old password")
+    mgmt_group.add_argument("--reset-password", metavar="USER:NEWPASS", dest="reset_password", help="Admin reset password")
+    mgmt_group.add_argument("--create-group", metavar="GROUP", dest="create_group", help="Create domain group")
+    mgmt_group.add_argument("--delete-group", metavar="GROUP", dest="delete_group", help="Delete domain group")
+    mgmt_group.add_argument("--add-to-group", metavar="USER:GROUP", dest="add_to_group", help="Add user to group")
+    mgmt_group.add_argument("--remove-from-group", metavar="USER:GROUP", dest="remove_from_group", help="Remove user from group")
 
     return parser
