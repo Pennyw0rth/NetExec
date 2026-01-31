@@ -41,6 +41,6 @@ class NXCModule:
             resp_parsed = parse_result_attributes(resp)
             context.log.success("Found following users: ")
             for user in resp_parsed:
-                context.log.highlight(f"User: {user['sAMAccountName']} unixUserPassword: {user['userPassword']}")
+                context.log.highlight(f"User: {user['sAMAccountName']} userPassword: {user['userPassword']}")
         else:
-            context.log.fail("No unixUserPassword Found")
+            context.log.fail("No userPassword Found")
