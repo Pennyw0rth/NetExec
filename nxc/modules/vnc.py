@@ -130,7 +130,7 @@ class NXCModule:
                     with tempfile.NamedTemporaryFile() as fh:
                         fh.write(ntuser_dat_bytes)
                         fh.seek(0)
-                        reg = winregistry.Registry(fh.name, isRemote=False)
+                        reg = winregistry.saveRegistryParser(fh.name, isRemote=False)
                         parent_key = reg.findKey(registry_path)
                         if parent_key is None:
                             continue
