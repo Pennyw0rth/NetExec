@@ -83,14 +83,14 @@ class NXCModule:
 
         for guid in guids:
             # Accessing the GPO in the SYSVOL share to parse GptTmpl.inf
-            path = ntpath.join(connection.domain, "Policies", f"{{{guid}}}", "MACHINE", "Microsoft", "Windows NT", "SecEdit", "GptTmpl.inf",)
+            path = ntpath.join(connection.targetDomain, "Policies", f"{{{guid}}}", "MACHINE", "Microsoft", "Windows NT", "SecEdit", "GptTmpl.inf",)
             try:
                 buf = BytesIO()
                 smb.getFile("SYSVOL", path, buf.write)
                 buf.seek(0)
                 GptTmpl = buf.read().decode("utf-16le", errors="ignore")
             except Exception as e:
-                context.log.debug(f"({guid}) no GptTmpl.inf or not reachable: {e}")
+                context.log.debug(f'({guid}) no GptTmpl.inf or not reachable: \n gpo_path:"{path}"\nException: {e}')
                 continue
 
             # Parse the GptTmpl.inf to find SeMachineAccountPrivilege
