@@ -94,12 +94,14 @@ class NXCModule:
                 continue
 
             # Parse the GptTmpl.inf to find SeMachineAccountPrivilege
+            sids = []
             for line in GptTmpl.splitlines():
                 if "SeMachineAccountPrivilege" in line:
                     context.log.highlight(f"{line}")
                     # extract all the sid concerns by the SeMachineAccountPrivilege
                     sids = re.findall(r"\*?(S-\d+(?:-\d+)+)", line)
                     break
+
 
             if sids != []:
                 sessions = {}
