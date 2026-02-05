@@ -15,7 +15,7 @@ def proto_args(parser, parents):
     kerberoasting_arg = egroup.add_argument("--kerberoasting", "--kerberoast", help="Output TGS ticket to crack with hashcat to file")
     kerberoast_users_arg = egroup.add_argument("--kerberoast-account", nargs="+", dest="kerberoast_account", action=get_conditional_action(_StoreAction), make_required=[], help="Target specific accounts for kerberoasting (sAMAccountNames or file containing sAMAccountNames)")
     egroup.add_argument("--no-preauth-targets", nargs=1, dest="no_preauth_targets", help="Targeted kerberoastable users")
-    egroup.add_argument("--targetedkerberoast", help="Add temporary SPN to users without one, request TGS, then remove it")
+    egroup.add_argument("--targetedkerberoast", help="Add temporary SPN to users without one, request ST, then remove it")
 
     # Make kerberoast-users require kerberoasting
     kerberoast_users_arg.make_required = [kerberoasting_arg]
