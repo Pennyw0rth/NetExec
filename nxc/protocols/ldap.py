@@ -1162,7 +1162,7 @@ class ldap(connection):
                         self.logger.fail(f"Principal: {downLevelLogonName} - {e}")
                 else:
                     self.logger.fail(f"Error retrieving TGT for {self.domain}\\{self.username} from {self.kdcHost}")
-    
+
     def targetedkerberoast(self):
 
         search_filter = "(&(objectCategory=person)(!(servicePrincipalName=*))(!(objectCategory=computer)))"
