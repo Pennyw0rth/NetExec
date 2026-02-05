@@ -80,7 +80,7 @@ class NXCModule:
             nthash=connection.nthash,
             do_kerberos=connection.kerberos,
             aes=connection.aesKey,
-            dc_ip=connection.kdcHost or connection.host,
+            dc_ip=connection.kdcHost,
             target_ip=connection.host,
             ldap_port=connection.port,
             ldap_scheme="ldaps" if connection.port == 636 else "ldap",
