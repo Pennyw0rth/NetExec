@@ -44,7 +44,7 @@ class NXCModule:
                 hostname = host.group("host")
                 # Try to get the dNSHostName for the host, if not use the NetBIOS name from the description
                 resp = parse_result_attributes(connection.search(f"(sAMAccountName={hostname}$)", ["dNSHostName"]))
-                ip = connection.resolver(resp[0]["dNSHostName"] if resp else hostname)
+                ip = connection.resolver(resp[0]["dNSHostName"] if resp else hostname) or {}
 
                 hosts.append({
                     "hostname": hostname,
