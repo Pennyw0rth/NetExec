@@ -22,12 +22,13 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
     my_tgt = None
     if use_cache:
         domain, ccache_user, tgt, _ = CCache.parseFile(domain)
-        if tgt is not None:
-            my_tgt = decoder.decode(tgt["KDC_REP"], asn1Spec=AS_REP())[0]
-            cipher = tgt["cipher"]
-            session_key = tgt["sessionKey"]
-            if not username and ccache_user:
-                username = ccache_user
+        if tgt is None:
+            raise Exception("No TGT found in ccache file")
+        my_tgt = decoder.decode(tgt["KDC_REP"], asn1Spec=AS_REP())[0]
+        cipher = tgt["cipher"]
+        session_key = tgt["sessionKey"]
+        if not username and ccache_user:
+            username = ccache_user
     if my_tgt is None:
         principal = Principal(username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
         nxc_logger.debug("Getting TGT for user")
