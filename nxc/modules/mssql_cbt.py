@@ -27,13 +27,6 @@ class NXCModule:
         new_conn = tds.MSSQL(connection.host, connection.port, connection.conn.remoteName)
         new_conn.connect(connection.args.mssql_timeout)
 
-        def log_result(success):
-            self.logger.highlight(
-                "Connection successful: Channel Binding Token NOT REQUIRED"
-                if success else
-                "Connection failed: Channel Binding Token REQUIRED"
-            )
-
         if connection.kerberos:
             success = new_conn.kerberosLogin(
                 None, connection.username, connection.password, connection.targetDomain,
@@ -48,5 +41,9 @@ class NXCModule:
                 cbt_fake_value=b""
             )
 
-        log_result(success)
+        self.logger.highlight(
+            "Connection successful: Channel Binding Token NOT REQUIRED"
+            if success else
+            "Connection failed: Channel Binding Token REQUIRED"
+        )
         new_conn.disconnect()
