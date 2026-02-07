@@ -14,7 +14,7 @@ from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
 
 class NXCModule:
     """
-    Module by Shutdown and Podalirius
+    Module by Shutdown, Podalirius and serwiz
     Modified by @azoxlpf to handle null session errors and avoid IndexError when no LDAP results are returned.
 
     Initial module:
@@ -34,6 +34,27 @@ class NXCModule:
     category = CATEGORY.ENUMERATION
 
     def get_SeMachineAccountPrivilege(self, context, connection):
+
+        def resolve_gpo(context, connection, guid):
+            gpo_dn = f"CN={{{guid}}},CN=Policies,CN=System,{connection.baseDN}"
+            
+            try:
+                resp = connection.search(
+                        baseDN=gpo_dn,
+                        searchFilter="(objectClass=groupPolicyContainer)",
+                        attributes=["displayName", "name"]
+                        )
+
+                results = parse_result_attributes(resp)
+                if results:
+                    return results[0].get("displayName") or results[0].get("name")
+                else:
+                    return ""
+            except Exception as e:
+                context.logger.debug(f"Exception raised while looking for groupPolicyContainer: {e}")
+                return ""
+
+
 
         # Just handle smb connection
         def connect_smb(connection):
@@ -63,13 +84,17 @@ class NXCModule:
             return smb
 
         # Getting the gPLink applies to Domain Controllers OU
-        base = f"OU=Domain Controllers,{connection.baseDN}"
-        ldap_response = connection.search(
-            searchFilter="(objectClass=*)",
-            baseDN=base,
-            attributes=["gPLink"]
-        )
-        entries = parse_result_attributes(ldap_response)
+        try:
+            base = f"OU=Domain Controllers,{connection.baseDN}"
+            ldap_response = connection.search(
+                searchFilter="(objectClass=*)",
+                baseDN=base,
+                attributes=["gPLink"]
+            )
+            entries = parse_result_attributes(ldap_response)
+        except Exception as e:
+            context.logger.debug(f"Exception raised while looking for gPLink: {e}")
+            exit(1)
 
         if not entries:
             context.log.fail("No gPLink entries returned.")
@@ -95,12 +120,20 @@ class NXCModule:
 
             # Parse the GptTmpl.inf to find SeMachineAccountPrivilege
             sids = []
+            found = False
             for line in GptTmpl.splitlines():
                 if "SeMachineAccountPrivilege" in line:
+                    found = True
+                    gpo_name = resolve_gpo(context, connection, guid)
+                    context.log.success(f'[GPO] "{gpo_name}"')
                     context.log.highlight(f"{line}")
                     # extract all the sid concerns by the SeMachineAccountPrivilege
                     sids = re.findall(r"\*?(S-\d+(?:-\d+)+)", line)
                     break
+
+            if found == False:
+                context.log.debug(f"SeMachineAccountPrivilege not in {path}")
+                continue
 
 
             if sids != []:
@@ -145,11 +178,12 @@ class NXCModule:
                         if item["DomainIndex"] >= 0:
                             context.log.highlight(f"\t({sid}) \"{item['Name']}\"")
 
-                return
-
             else:
                 context.log.fail("No SID(s) found in SeMachineAccountPrivilege")
-                return
+
+        return
+
+                
 
     def on_login(self, context, connection):
         context.log.display("Getting the MachineAccountQuota and SeMachineAccountPrivilege")
