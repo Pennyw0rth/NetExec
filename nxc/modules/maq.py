@@ -106,6 +106,7 @@ class NXCModule:
 
         smb = connect_smb(connection)
 
+
         for guid in guids:
             # Accessing the GPO in the SYSVOL share to parse GptTmpl.inf
             path = ntpath.join(connection.targetDomain, "Policies", f"{{{guid}}}", "MACHINE", "Microsoft", "Windows NT", "SecEdit", "GptTmpl.inf",)
@@ -125,8 +126,8 @@ class NXCModule:
                 if "SeMachineAccountPrivilege" in line:
                     found = True
                     gpo_name = resolve_gpo(context, connection, guid)
-                    context.log.success(f'[GPO] "{gpo_name}"')
-                    context.log.highlight(f"{line}")
+                    context.log.success(f'(GPO) "{gpo_name}"')
+                    context.log.highlight(f"\t{line}")
                     # extract all the sid concerns by the SeMachineAccountPrivilege
                     sids = re.findall(r"\*?(S-\d+(?:-\d+)+)", line)
                     break
@@ -176,7 +177,7 @@ class NXCModule:
                 if resp:
                     for sid, item in zip(sessions.keys(), resp["TranslatedNames"]["Names"], strict=False):
                         if item["DomainIndex"] >= 0:
-                            context.log.highlight(f"\t({sid}) \"{item['Name']}\"")
+                            context.log.highlight(f'\t\t - "{item["Name"]}" ({sid})')
 
             else:
                 context.log.fail("No SID(s) found in SeMachineAccountPrivilege")
@@ -186,7 +187,7 @@ class NXCModule:
                 
 
     def on_login(self, context, connection):
-        context.log.display("Getting the MachineAccountQuota and SeMachineAccountPrivilege")
+        context.log.display("Getting the MachineAccountQuota")
 
         ldap_response = connection.search("(ms-DS-MachineAccountQuota=*)", ["ms-DS-MachineAccountQuota"])
         entries = parse_result_attributes(ldap_response)
@@ -196,5 +197,7 @@ class NXCModule:
             return
 
         context.log.highlight(f"MachineAccountQuota: {entries[0]['ms-DS-MachineAccountQuota']}")
+
+        context.log.display("Getting SeMachineAccountPrivilege")
 
         self.get_SeMachineAccountPrivilege(context, connection)
