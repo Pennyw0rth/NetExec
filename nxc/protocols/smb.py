@@ -473,7 +473,7 @@ class smb(connection):
                 f'{domain}\\{self.username}:{process_secret(self.password)} {error} {f"({desc})" if self.args.verbose else ""}',
                 color="magenta" if error in smb_error_status else "red",
             )
-            if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED"] and self.args.module == ["change-password"]:
+            if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED", "STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT"] and self.args.module == ["change-password"]:
                 return True
             if error not in smb_error_status:
                 self.inc_failed_login(username)
@@ -537,7 +537,7 @@ class smb(connection):
                 f"{domain}\\{self.username}:{process_secret(self.hash)} {error} {f'({desc})' if self.args.verbose else ''}",
                 color="magenta" if error in smb_error_status else "red",
             )
-            if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED"] and self.args.module == ["change-password"]:
+            if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED", "STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT"] and self.args.module == ["change-password"]:
                 return True
             if error not in smb_error_status:
                 self.inc_failed_login(self.username)
@@ -627,6 +627,8 @@ class smb(connection):
             return self.create_smbv1_conn()
 
     def check_if_admin(self):
+        if self.args.no_admin_check:
+            return
         self.logger.debug(f"Checking if user is admin on {self.host}")
         rpctransport = SMBTransport(self.conn.getRemoteHost(), 445, r"\svcctl", smb_connection=self.conn)
         dce = rpctransport.get_dce_rpc()
@@ -1379,6 +1381,7 @@ class smb(connection):
             self.logger.fail(f"Error getting user: {error}")
 
         try:
+            self.logger.debug("Attempting to list shares...")
             shares = self.conn.listShares()
             self.logger.info(f"Shares returned: {shares}")
         except SessionError as e:
@@ -1398,6 +1401,12 @@ class smb(connection):
 
         for share in shares:
             share_name = share["shi1_netname"][:-1]
+
+            # Skip excluded shares
+            if self.args.exclude_shares and share_name in self.args.exclude_shares:
+                self.logger.debug(f"Skipping excluded share: {share_name}")
+                continue
+
             share_remark = share["shi1_remark"][:-1]
             share_info = {"name": share_name, "remark": share_remark, "access": []}
             read = False
@@ -1709,10 +1718,10 @@ class smb(connection):
         return PassPolDump(self).dump()
 
     @requires_admin
-    def wmi(self, wmi_query=None, namespace=None):
+    def wmi_query(self, wql=None, namespace=None, callback_func=None):
         records = []
-        if not wmi_query:
-            wmi_query = self.args.wmi.strip("\n")
+        if not wql:
+            wql = self.args.wmi_query.strip("\n")
 
         if not namespace:
             namespace = self.args.wmi_namespace
@@ -1733,28 +1742,29 @@ class smb(connection):
             iWbemLevel1Login = IWbemLevel1Login(iInterface)
             iWbemServices = iWbemLevel1Login.NTLMLogin(namespace, NULL, NULL)
             iWbemLevel1Login.RemRelease()
-            iEnumWbemClassObject = iWbemServices.ExecQuery(wmi_query)
+            iEnumWbemClassObject = iWbemServices.ExecQuery(wql)
         except Exception as e:
             self.logger.fail(f"Execute WQL error: {e}")
             if "iWbemLevel1Login" in locals():
                 dcom.disconnect()
         else:
-            self.logger.info(f"Executing WQL syntax: {wmi_query}")
-            while True:
-                try:
-                    wmi_results = iEnumWbemClassObject.Next(0xFFFFFFFF, 1)[0]
-                    record = wmi_results.getProperties()
-                    records.append(record)
-                    for k, v in record.items():
-                        if k != "TimeGenerated":  # from the wcc module, but this is a small hack to get it to stop spamming - TODO: add in method to disable output for this function
-                            self.logger.highlight(f"{k} => {v['value']}")
-                except Exception as e:
-                    if str(e).find("S_FALSE") < 0:
-                        raise e
-                    else:
-                        break
+            self.logger.info(f"Executing WQL syntax: {wql}")
+            try:
+                if not callback_func:
+                    while True:
+                        wmi_results = iEnumWbemClassObject.Next(0xFFFFFFFF, 1)[0]
+                        record = wmi_results.getProperties()
+                        records.append(record)
+                        for k, v in record.items():
+                            if k != "TimeGenerated":  # from the wcc module, but this is a small hack to get it to stop spamming - TODO: add in method to disable output for this function
+                                self.logger.highlight(f"{k} => {v['value']}")
+                else:
+                    callback_func(iEnumWbemClassObject, records)
+            except Exception as e:
+                if str(e).find("S_FALSE") < 0:
+                    self.logger.debug(e)
             dcom.disconnect()
-        return records if records else False
+        return records
 
     def spider(
         self,
@@ -2227,6 +2237,20 @@ class smb(connection):
             self.output_file.close()
 
     @requires_admin
+    def list_snapshots(self):
+        drive = self.args.list_snapshots
+
+        self.logger.info(f"Retrieving volume shadow copies of drive {drive}.")
+        snapshots = self.conn.listSnapshots(self.conn.connectTree(drive), "/")
+        if not snapshots:
+            self.logger.info("No volume shadow copies found.")
+            return
+        self.logger.highlight(f"{'Drive':<8}{'Shadow Copies GMT SMB PATH':<26}")
+        self.logger.highlight(f"{'------':<8}{'--------------------------':<26}")
+        for i in snapshots:
+            self.logger.highlight(f"{drive:<8}{i:<26}")
+
+    @requires_admin
     def lsa(self):
         try:
             self.enable_remoteops(regsecret=(self.args.lsa == "regdump"))
@@ -2263,7 +2287,7 @@ class smb(connection):
                         isRemote=True,
                         perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
                     )
-                self.logger.success("Dumping LSA secrets")
+                self.logger.display("Dumping LSA secrets")
                 self.output_filename = self.output_file_template.format(output_folder="lsa")
                 LSA.dumpCachedHashes()
                 LSA.exportCached(self.output_filename)
@@ -2287,29 +2311,43 @@ class smb(connection):
         use_vss_method = False
         NTDSFileName = None
         host_id = self.db.get_hosts(filter_term=self.host)[0][0]
+        printed_kerb_keys_banner = False
 
-        def add_ntds_hash(ntds_hash, host_id):
-            add_ntds_hash.ntds_hashes += 1
-            if self.args.enabled:
-                if "Enabled" in ntds_hash:
-                    ntds_hash = " ".join(ntds_hash.split(" ")[:-1])
-                    self.logger.highlight(ntds_hash)
+        def add_hash(secret_type, secret, host_id):
+            nonlocal printed_kerb_keys_banner
+            if self.args.kerberos_keys and not printed_kerb_keys_banner and secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
+                self.logger.display("Kerberos keys:")
+                printed_kerb_keys_banner = True
+
+            # Count the type of secrets
+            if secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
+                add_hash.kerb_secrets += 1
             else:
-                ntds_hash = " ".join(ntds_hash.split(" ")[:-1])
-                self.logger.highlight(ntds_hash)
-            if ntds_hash.find("$") == -1:
-                if ntds_hash.find("\\") != -1:
-                    domain, clean_hash = ntds_hash.split("\\")
+                add_hash.nt_lm_secrets += 1
+
+            # Log the secret based on args
+            if self.args.enabled:
+                if "Enabled" in secret:
+                    secret = " ".join(secret.split(" ")[:-1])
+                    self.logger.highlight(secret)
+            else:
+                secret = " ".join(secret.split(" ")[:-1]) if " " in secret else secret
+                self.logger.highlight(secret)
+
+            # Filter out computer accounts, history hashes and kerberos keys for adding to db
+            if secret.find("$") == -1 and secret_type == NTDSHashes.SECRET_TYPE.NTDS and "_history" not in secret:
+                if secret.find("\\") != -1:
+                    domain, clean_hash = secret.split("\\")
                 else:
                     domain = self.domain
-                    clean_hash = ntds_hash
+                    clean_hash = secret
 
                 try:
                     username, _, lmhash, nthash, _, _, _ = clean_hash.split(":")
                     parsed_hash = f"{lmhash}:{nthash}"
                     if validate_ntlm(parsed_hash):
                         self.db.add_credential("hash", domain, username, parsed_hash, pillaged_from=host_id)
-                        add_ntds_hash.added_to_db += 1
+                        add_hash.added_to_db += 1
                         return
                     raise
                 except Exception:
@@ -2317,20 +2355,16 @@ class smb(connection):
             else:
                 self.logger.debug("Dumped hash is a computer account, not adding to db")
 
-        add_ntds_hash.ntds_hashes = 0
-        add_ntds_hash.added_to_db = 0
+        add_hash.nt_lm_secrets = 0
+        add_hash.kerb_secrets = 0
+        add_hash.added_to_db = 0
 
         if self.remote_ops:
             try:
                 if self.args.ntds == "vss":
                     NTDSFileName = self.remote_ops.saveNTDS()
                     use_vss_method = True
-
             except Exception as e:
-                # if str(e).find('ERROR_DS_DRA_BAD_DN') >= 0:
-                # We don't store the resume file if this error happened, since this error is related to lack
-                # of enough privileges to access DRSUAPI.
-                #    if resumeFile is not None:
                 self.logger.fail(e)
 
         self.output_filename = self.output_file_template.format(output_folder="ntds")
@@ -2339,26 +2373,27 @@ class smb(connection):
             NTDSFileName,
             self.bootkey,
             isRemote=True,
-            history=False,
+            history=self.args.history,
             noLMHash=True,
             remoteOps=self.remote_ops,
             useVSSMethod=use_vss_method,
-            justNTLM=True,
+            justNTLM=not self.args.kerberos_keys,
             pwdLastSet=False,
             resumeSession=None,
             outputFileName=self.output_filename,
             justUser=self.args.userntds if self.args.userntds else None,
             printUserStatus=True,
-            perSecretCallback=lambda secret_type, secret: add_ntds_hash(secret, host_id),
+            perSecretCallback=lambda secret_type, secret: add_hash(secret_type, secret, host_id),
         )
 
         try:
             self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
             NTDS.dump()
             ntds_outfile = f"{self.output_filename}.ntds"
-            self.logger.success(f"Dumped {highlight(add_ntds_hash.ntds_hashes)} NTDS hashes to {ntds_outfile} of which {highlight(add_ntds_hash.added_to_db)} were added to the database")
+            self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
+            if self.args.kerberos_keys:
+                self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
             self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
-            self.logger.display(f"cat {ntds_outfile} | grep -iv disabled | cut -d ':' -f1")
             self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
         except Exception as e:
             # if str(e).find('ERROR_DS_DRA_BAD_DN') >= 0:

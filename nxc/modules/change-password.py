@@ -26,7 +26,7 @@ class NXCModule:
 
         Examples
         --------
-        If STATUS_PASSWORD_MUST_CHANGE or STATUS_PASSWORD_EXPIRED (Change password for current user)
+        If STATUS_PASSWORD_MUST_CHANGE, STATUS_PASSWORD_EXPIRED or STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT (Change password for current user)
             netexec smb <DC_IP> -u username -p oldpass -M change-password -o NEWNTHASH='nthash'
             netexec smb <DC_IP> -u username -H oldnthash -M change-password -o NEWPASS='newpass'
 
@@ -95,14 +95,12 @@ class NXCModule:
                 new_nthash = self.newhash
 
         try:
-            self.anonymous = False
-            self.dce = self.authenticate(context, connection, protocol="ncacn_np", anonymous=self.anonymous)
+            self.dce = self.authenticate(context, connection, protocol="ncacn_np", anonymous=False)
         except Exception as e:
             # Handle specific errors like password expiration or must be change
-            if "STATUS_PASSWORD_MUST_CHANGE" in str(e) or "STATUS_PASSWORD_EXPIRED" in str(e):
+            if "STATUS_PASSWORD_MUST_CHANGE" in str(e) or "STATUS_PASSWORD_EXPIRED" in str(e) or "STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT" in str(e):
                 context.log.warning("Password must be changed. Trying with null session.")
-                self.anonymous = True
-                self.dce = self.authenticate(context, connection, protocol="ncacn_ip_tcp", anonymous=self.anonymous)
+                self.dce = self.authenticate(context, connection, protocol="ncacn_ip_tcp", anonymous=True)
             elif "STATUS_LOGON_FAILURE" in str(e):
                 context.log.fail("Authentication failure: wrong credentials.")
                 return False

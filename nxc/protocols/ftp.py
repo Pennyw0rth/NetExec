@@ -121,7 +121,7 @@ class ftp(connection):
         # ftplib's "dir" prints directly to stdout, and "nlst" only returns the folder name, not full details
         files = []
         try:
-            self.conn.retrlines("LIST", callback=files.append)
+            self.conn.retrlines("LIST -a", callback=files.append)
         except error_perm as error_message:
             self.logger.fail(f"Failed to list directory. Response: ({error_message})")
             self.conn.close()

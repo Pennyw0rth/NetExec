@@ -327,6 +327,17 @@ conf = {
             "pipes": []
         },
         {
+            "name": "Kaseya Agent Endpoint",
+            "services": [
+                {"name": "KAENDKSAASC*", "description": "Virtual System Administrator Endpoint"},
+                {"name": "KAKSAASC*", "description": "Machine.Group ID:*"},
+            ],
+            "pipes": [
+                {"name": "kaseyaUserKSA*", "processes": ["KaUsrTsk.exe"]},
+                {"name": "kaseyaAgentKSA*", "processes": ["AgentMon.exe"]}
+            ]
+        },
+        {
             "name": "Kaspersky Security for Windows Server",
             "services": [
                 {"name": "kavfsslp", "description": "Kaspersky Security Exploit Prevention Service"},
@@ -336,6 +347,18 @@ conf = {
             ],
             "pipes": [
                 {"name": "Exploit_Blocker", "processes": ["kavfswh.exe"]}
+            ]
+        },
+        {
+            "name": "Malwarebytes",
+            "services": [
+                {"name": "MBAMService", "description": "Malwarebytes Service"},
+                {"name": "MBEndpointAgent", "description": "Malwarebytes Cloud Endpoint Agent Service"}
+            ],
+            "pipes": [
+                {"name": "MBLG", "processes": ["MBAMService.exe"]},
+                {"name": "MBEA2_R", "processes": ["MBCloudEA.exe"]},
+                {"name": "MBEA2_W", "processes": ["MBCloudEA.exe"]}
             ]
         },
         {
@@ -447,6 +470,21 @@ conf = {
                 {"name": "WdNisSvc", "description": "Windows Defender Antivirus Network Inspection Service"}
             ],
             "pipes": []
+        },
+        {
+            "name": "WithSecure Elements",
+            "services": [
+                {"name": "fsdevcon", "description": "WithSecure Device Control"},
+                {"name": "fshoster", "description": "WithSecure Hoster"},
+                {"name": "fsnethoster", "description": "WithSecure Hoster (Restricted)"},
+                {"name": "fsulhoster", "description": "WithSecure Ultralight Hoster"},
+                {"name": "fsulnethoster", "description": "WithSecure Ultralight Network Hoster"},
+                {"name": "fsulprothoster", "description": "WithSecure Ultralight Protected Hoster"},
+                {"name": "wsulavprohoster", "description": "WithSecure Ultralight Protected AV Hoster"}
+            ],
+            "pipes": [
+                {"name": "FS_CCFIPC_*", "processes": ["fsatpn.exe", "fsatpl.exe", "fshoster32.exe", "fsulprothoster.exe", "fsulprothoster.exe", "fshoster64.exe", "FsPisces.exe", "fsdevcon.exe"]}
+            ]
         }
     ]
 }

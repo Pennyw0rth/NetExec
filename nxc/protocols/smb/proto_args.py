@@ -19,6 +19,7 @@ def proto_args(parser, parents):
     smb_parser.add_argument("--share", metavar="SHARE", default="C$", help="specify a share")
     smb_parser.add_argument("--smb-server-port", default="445", help="specify a server port for SMB", type=int)
     smb_parser.add_argument("--no-smbv1", action="store_true", help="Force to disable SMBv1 in connection")
+    smb_parser.add_argument("--no-admin-check", action="store_true", help="Avoid checking admin which queries the Service Control Manager")
     smb_parser.add_argument("--gen-relay-list", metavar="OUTPUT_FILE", help="outputs all hosts that don't require SMB signing to the specified file")
     smb_parser.add_argument("--smb-timeout", help="SMB connection timeout", type=int, default=2)
     smb_parser.add_argument("--laps", dest="laps", metavar="LAPS", type=str, help="LAPS authentification", nargs="?", const="administrator")
@@ -32,16 +33,25 @@ def proto_args(parser, parents):
     cred_gathering_group = smb_parser.add_argument_group("Credential Gathering")
     cred_gathering_group.add_argument("--sam", choices={"regdump", "secdump"}, nargs="?", const="regdump", help="dump SAM hashes from target systems")
     cred_gathering_group.add_argument("--lsa", choices={"regdump", "secdump"}, nargs="?", const="regdump", help="dump LSA secrets from target systems")
-    cred_gathering_group.add_argument("--ntds", choices={"vss", "drsuapi"}, nargs="?", const="drsuapi", help="dump the NTDS.dit from target DCs using the specifed method")
+    ntds_arg = cred_gathering_group.add_argument("--ntds", choices={"vss", "drsuapi"}, nargs="?", const="drsuapi", help="dump the NTDS.dit from target DCs using the specifed method")
+    # NTDS options
+    kerb_keys_arg = cred_gathering_group.add_argument("--kerberos-keys", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Also dump Kerberos AES and DES keys from target DC (NTDS.dit)")
+    exclusive = cred_gathering_group.add_mutually_exclusive_group()
+    history_arg = exclusive.add_argument("--history", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Also retrieve password history from target DC (NTDS.dit)")
+    enabled_arg = exclusive.add_argument("--enabled", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Only dump enabled targets from DC (NTDS.dit)")
+    kerb_keys_arg.make_required = [ntds_arg]
+    history_arg.make_required = [ntds_arg]
+    enabled_arg.make_required = [ntds_arg]
+    cred_gathering_group.add_argument("--user", dest="userntds", type=str, help="Dump selected user from DC (NTDS.dit)")
     cred_gathering_group.add_argument("--dpapi", choices={"cookies", "nosystem"}, nargs="*", help="dump DPAPI secrets from target systems, can dump cookies if you add 'cookies', will not dump SYSTEM dpapi if you add nosystem")
     cred_gathering_group.add_argument("--sccm", choices={"wmi", "disk"}, nargs="?", const="disk", help="dump SCCM secrets from target systems")
     cred_gathering_group.add_argument("--mkfile", action="store", help="DPAPI option. File with masterkeys in form of {GUID}:SHA1")
     cred_gathering_group.add_argument("--pvk", action="store", help="DPAPI option. File with domain backupkey")
-    cred_gathering_group.add_argument("--enabled", action="store_true", help="Only dump enabled targets from DC")
-    cred_gathering_group.add_argument("--user", dest="userntds", type=str, help="Dump selected user from DC")
+    cred_gathering_group.add_argument("--list-snapshots", nargs="?", dest="list_snapshots", const="ADMIN$", help="Lists the VSS snapshots (default: %(const)s)")
 
     mapping_enum_group = smb_parser.add_argument_group("Mapping/Enumeration")
     mapping_enum_group.add_argument("--shares", type=str, nargs="?", const="", help="Enumerate shares and access, filter on specified argument (read ; write ; read,write)")
+    mapping_enum_group.add_argument("--exclude-shares", nargs="+", help="List of shares to exclude from enumeration (e.g., C$ Admin$ IPC$)")
     mapping_enum_group.add_argument("--dir", nargs="?", type=str, const="", help="List the content of a path (default path: '%(const)s')")
     mapping_enum_group.add_argument("--interfaces", action="store_true", help="Enumerate network interfaces")
     mapping_enum_group.add_argument("--no-write-check", action="store_true", help="Skip write check on shares (avoid leaving traces when missing delete permissions)")
@@ -63,8 +73,8 @@ def proto_args(parser, parents):
     mapping_enum_group.add_argument("--taskkill", type=str, help="Kills a specific PID or a proces name's PID's")
 
     wmi_group = smb_parser.add_argument_group("WMI Queries")
-    wmi_group.add_argument("--wmi", metavar="QUERY", type=str, help="issues the specified WMI query")
-    wmi_group.add_argument("--wmi-namespace", metavar="NAMESPACE", default="root\\cimv2", help="WMI Namespace")
+    wmi_group.add_argument("--wmi-query", metavar="QUERY", dest="wmi_query", type=str, help="Issues the specified WMI query")
+    wmi_group.add_argument("--wmi-namespace", metavar="NAMESPACE", default="root\\cimv2", help="WMI Namespace (default: %(default)s)")
 
     spidering_group = smb_parser.add_argument_group("Spidering Shares")
     spidering_group.add_argument("--spider", metavar="SHARE", type=str, help="share to spider")

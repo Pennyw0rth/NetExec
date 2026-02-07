@@ -993,7 +993,7 @@ all = ["flake8 (>=7.1.1)", "mypy (>=1.11.2)", "pytest (>=8.3.2)", "ruff (>=0.6.2
 
 [[package]]
 name = "impacket"
-version = "0.14.0.dev0+20251114.155318.8925c2ce"
+version = "0.14.0.dev0+20251203.31101.caba5fac"
 description = "Network protocols Constructors and Dissectors"
 optional = false
 python-versions = "*"
@@ -1018,7 +1018,7 @@ six = "*"
 type = "git"
 url = "https://github.com/fortra/impacket"
 reference = "HEAD"
-resolved_reference = "8925c2ce4657a5cecd57c2d0b08acb846d94c236"
+resolved_reference = "caba5facdd3a01b5d0decc6daf5871839f22f792"
 
 [[package]]
 name = "iniconfig"
@@ -1920,7 +1920,7 @@ develop = false
 type = "git"
 url = "https://github.com/Pennyw0rth/NfsClient"
 reference = "HEAD"
-resolved_reference = "a23698ada73b70b01003e4cf0fce101c64610483"
+resolved_reference = "9b61e0a6385743923ccffa6a80f8dbbf0714121d"
 
 [[package]]
 name = "pyopenssl"
