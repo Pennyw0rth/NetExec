@@ -167,8 +167,6 @@ class smb(connection):
 
     def enum_host_info(self):
         self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
-        if self.args.generate_hosts_file or self.args.generate_krb5_file:
-            self.is_host_dc()
 
         try:
             self.conn.login("", "")
@@ -199,8 +197,7 @@ class smb(connection):
                 self.targetDomain = self.hostname
         else:
             try:
-                if not (self.args.generate_hosts_file or self.args.generate_krb5_file):
-                    self.is_host_dc()
+                self.is_host_dc()
                 # If we know the host is a DC we can still get the hostname over LDAP if NTLM is not available
                 if self.isdc and detect_if_ip(self.host):
                     self.hostname, self.domain = LDAPResolution(self.host).get_resolution()
@@ -302,6 +299,9 @@ class smb(connection):
         self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}){ntlm}{null_auth}{guest}")
 
         if self.args.generate_hosts_file or self.args.generate_krb5_file:
+            # don't call is_host_dc if no ntlm since already call in the enum
+            if not self.no_ntlm:
+                self.is_host_dc()
             if self.args.generate_hosts_file:
                 with open(self.args.generate_hosts_file, "a+") as host_file:
                     dc_part = f" {self.targetDomain}" if self.isdc else ""
