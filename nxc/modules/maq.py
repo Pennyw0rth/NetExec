@@ -37,7 +37,7 @@ class NXCModule:
 
         def resolve_gpo(context, connection, guid):
             gpo_dn = f"CN={{{guid}}},CN=Policies,CN=System,{connection.baseDN}"
-            
+
             try:
                 resp = connection.search(
                         baseDN=gpo_dn,
@@ -53,8 +53,6 @@ class NXCModule:
             except Exception as e:
                 context.logger.debug(f"Exception raised while looking for groupPolicyContainer: {e}")
                 return ""
-
-
 
         # Just handle smb connection
         def connect_smb(connection):
@@ -106,7 +104,6 @@ class NXCModule:
 
         smb = connect_smb(connection)
 
-
         for guid in guids:
             # Accessing the GPO in the SYSVOL share to parse GptTmpl.inf
             path = ntpath.join(connection.targetDomain, "Policies", f"{{{guid}}}", "MACHINE", "Microsoft", "Windows NT", "SecEdit", "GptTmpl.inf",)
@@ -132,10 +129,9 @@ class NXCModule:
                     sids = re.findall(r"\*?(S-\d+(?:-\d+)+)", line)
                     break
 
-            if found == False:
+            if not found:
                 context.log.debug(f"SeMachineAccountPrivilege not in {path}")
                 continue
-
 
             if sids != []:
                 sessions = {}
@@ -183,8 +179,6 @@ class NXCModule:
                 context.log.fail("No SID(s) found in SeMachineAccountPrivilege")
 
         return
-
-                
 
     def on_login(self, context, connection):
         context.log.display("Getting the MachineAccountQuota")
