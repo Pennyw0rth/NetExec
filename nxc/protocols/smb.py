@@ -299,7 +299,7 @@ class smb(connection):
         self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}){ntlm}{null_auth}{guest}")
 
         if self.args.generate_hosts_file or self.args.generate_krb5_file:
-            if self.isdc == None:
+            if self.isdc is None:
                 self.is_host_dc()
             if self.args.generate_hosts_file:
                 with open(self.args.generate_hosts_file, "a+") as host_file:
