@@ -128,7 +128,7 @@ class smb(connection):
         self.null_auth = False
         self.protocol = "SMB"
         self.is_guest = None
-        self.isdc = False
+        self.isdc = None
 
         connection.__init__(self, args, db, host)
 
@@ -167,7 +167,6 @@ class smb(connection):
 
     def enum_host_info(self):
         self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
-        self.is_host_dc()
 
         try:
             self.conn.login("", "")
@@ -198,6 +197,7 @@ class smb(connection):
                 self.targetDomain = self.hostname
         else:
             try:
+                self.is_host_dc()
                 # If we know the host is a DC we can still get the hostname over LDAP if NTLM is not available
                 if self.isdc and detect_if_ip(self.host):
                     self.hostname, self.domain = LDAPResolution(self.host).get_resolution()
@@ -299,6 +299,8 @@ class smb(connection):
         self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}){ntlm}{null_auth}{guest}")
 
         if self.args.generate_hosts_file or self.args.generate_krb5_file:
+            if self.isdc is None:
+                self.is_host_dc()
             if self.args.generate_hosts_file:
                 with open(self.args.generate_hosts_file, "a+") as host_file:
                     dc_part = f" {self.targetDomain}" if self.isdc else ""
@@ -759,6 +761,8 @@ class smb(connection):
                 self.logger.debug("Host appears to be a DC (multiple DC ports open)")
                 self.isdc = True
                 return True
+        self.isdc = False
+        return False
 
     def _is_port_open(self, port, timeout=1):
         """Check if a specific port is open on the target host."""
