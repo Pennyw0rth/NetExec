@@ -415,6 +415,12 @@ class smb(connection):
         except (FileNotFoundError, KerberosException) as e:
             self.logger.fail(f"CCache Error: {e}")
             return False
+        except OSError as e:
+            used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
+            if self.args.delegate:
+                used_ccache = f" through S4U with {username}"
+            self.logger.fail(f"{domain}\\{self.username}{used_ccache} {e}")
+            return False
         except SessionError as e:
             error, desc = e.getErrorString()
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
@@ -427,7 +433,7 @@ class smb(connection):
             if error not in smb_error_status:
                 self.inc_failed_login(username)
             return False
-        except (ConnectionResetError, NetBIOSTimeout, NetBIOSError, OSError) as e:
+        except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
             self.logger.fail(f"Connection Error: {e}")
             return False
 
