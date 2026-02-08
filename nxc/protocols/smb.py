@@ -128,7 +128,7 @@ class smb(connection):
         self.null_auth = False
         self.protocol = "SMB"
         self.is_guest = None
-        self.isdc = False
+        self.isdc = None
 
         connection.__init__(self, args, db, host)
 
@@ -299,8 +299,7 @@ class smb(connection):
         self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}){ntlm}{null_auth}{guest}")
 
         if self.args.generate_hosts_file or self.args.generate_krb5_file:
-            # don't call is_host_dc if no ntlm since already call in the enum
-            if not self.no_ntlm:
+            if self.isdc == None:
                 self.is_host_dc()
             if self.args.generate_hosts_file:
                 with open(self.args.generate_hosts_file, "a+") as host_file:
@@ -758,6 +757,8 @@ class smb(connection):
                 self.logger.debug("Host appears to be a DC (multiple DC ports open)")
                 self.isdc = True
                 return True
+        self.isdc = False
+        return False
 
     def _is_port_open(self, port, timeout=1):
         """Check if a specific port is open on the target host."""
