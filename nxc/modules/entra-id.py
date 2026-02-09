@@ -129,8 +129,8 @@ class NXCModule:
         self.context.log.info(f"Found the ADFS object: {adfs_parsed}")
 
         if adfs_parsed:
-            self.context.log.success("Domain federated with Entra ID via ADFS:")
-            # As far as I know the is no reliable way to get info about the ADCS via ldap in newer adfs version
+            self.context.log.success("ADFS:")
+            # Afaik there is no reliable way to get info about the ADCS via ldap
 
             # Searching accounts with adfs in name or description
             adfs1_parsed = parse_result_attributes(self.connection.search(
