@@ -434,7 +434,11 @@ class smb(connection):
                 self.inc_failed_login(username)
             return False
         except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
-            self.logger.fail(f"Connection Error: {e}")
+            used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
+            if self.args.delegate:
+                used_ccache = f" through S4U with {username}"
+            desc = e.getErrorString() if hasattr(e, "getErrorString") else str(e)
+            self.logger.fail(f"{domain}\\{self.username}{used_ccache} {desc}")
             return False
 
     def plaintext_login(self, domain, username, password):
