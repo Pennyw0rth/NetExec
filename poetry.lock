@@ -2432,15 +2432,15 @@ files = [
 tests = ["pytest", "pytest-cov"]
 
 [[package]]
-name = "terminaltables"
-version = "3.1.10"
+name = "terminaltables3"
+version = "4.0.0"
 description = "Generate simple tables in terminals from a nested list of strings."
 optional = false
-python-versions = ">=2.6"
+python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "terminaltables-3.1.10-py2.py3-none-any.whl", hash = "sha256:e4fdc4179c9e4aab5f674d80f09d76fa436b96fdc698a8505e0a36bf0804a874"},
-    {file = "terminaltables-3.1.10.tar.gz", hash = "sha256:ba6eca5cb5ba02bba4c9f4f985af80c54ec3dccf94cfcd190154386255e47543"},
+    {file = "terminaltables3-4.0.0-py3-none-any.whl", hash = "sha256:93b4c722f35400a7869cd630e2bbab616b129d1c47c628765c7f47baab2ca270"},
+    {file = "terminaltables3-4.0.0.tar.gz", hash = "sha256:4e3eefe209aa89005a0a34d1525739424569729ee29b5e64a8dd51c5ebdab77f"},
 ]
 
 [[package]]
