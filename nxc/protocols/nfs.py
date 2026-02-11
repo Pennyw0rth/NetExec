@@ -366,7 +366,7 @@ class nfs(connection):
             curr_fh = mount_fh
             for sub_path in remote_file_path.lstrip("/").split("/"):
                 # Update the UID for the next object and get the handle
-                self.update_auth(mount_fh)
+                self.update_auth(curr_fh)
                 res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
 
                 # Check for a bad path
@@ -448,7 +448,7 @@ class nfs(connection):
             curr_fh = mount_fh
             # If target dir is "" or "/" without filter we would get one item with [""]
             for sub_path in list(filter(None, remote_dir_path.lstrip("/").split("/"))):
-                self.update_auth(mount_fh)
+                self.update_auth(curr_fh)
                 res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
 
                 # If the path does not exist, create it
