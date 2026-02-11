@@ -35,8 +35,9 @@ class SamrFunc:
         if self.password is None:
             self.password = ""
 
-        self.samr_query = SAMRQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.remote_name, remote_host=self.host, lmhash=self.lmhash, nthash=self.nthash, kerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, logger=self.logger)
-        self.lsa_query = LSAQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.remote_name, remote_host=self.host, lmhash=self.lmhash, nthash=self.nthash, kdcHost=self.kdcHost, kerberos=self.doKerberos, aesKey=self.aesKey, logger=self.logger)
+        self.delegated_st = connection.delegated_st
+        self.samr_query = SAMRQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.remote_name, remote_host=self.host, lmhash=self.lmhash, nthash=self.nthash, kerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, logger=self.logger, st=self.delegated_st)
+        self.lsa_query = LSAQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.remote_name, remote_host=self.host, lmhash=self.lmhash, nthash=self.nthash, kdcHost=self.kdcHost, kerberos=self.doKerberos, aesKey=self.aesKey, logger=self.logger, st=self.delegated_st)
 
     def get_builtin_groups(self, group):
         domains = self.samr_query.get_domains()
@@ -85,7 +86,7 @@ class SamrFunc:
 
 
 class SAMRQuery:
-    def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", lmhash="", nthash="", kerberos=None, kdcHost="", aesKey="", logger=None):
+    def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", lmhash="", nthash="", kerberos=None, kdcHost="", aesKey="", logger=None, st=None):
         self.__username = username
         self.__password = password
         self.__domain = domain
@@ -97,6 +98,7 @@ class SAMRQuery:
         self.__remote_host = remote_host
         self.__kerberos = kerberos
         self.__kdcHost = kdcHost
+        self.__st = st
         self.logger = logger
         self.dce = self.get_dce()
         self.server_handle = self.get_server_handle()
@@ -115,6 +117,7 @@ class SAMRQuery:
             self.__lmhash,
             self.__nthash,
             self.__aesKey,
+            TGS=self.__st,
             doKerberos=self.__kerberos,
             kdcHost=self.__kdcHost,
         )
@@ -178,7 +181,7 @@ class SAMRQuery:
 
 
 class LSAQuery:
-    def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", lmhash="", nthash="", kdcHost="", aesKey="", kerberos=None, logger=None):
+    def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", lmhash="", nthash="", kdcHost="", aesKey="", kerberos=None, logger=None, st=None):
         self.__username = username
         self.__password = password
         self.__domain = domain
@@ -190,6 +193,7 @@ class LSAQuery:
         self.__remote_host = remote_host
         self.__kdcHost = kdcHost
         self.__kerberos = kerberos
+        self.__st = st
         self.dce = self.get_dce()
         self.policy_handle = self.get_policy_handle()
         self.logger = logger
@@ -210,6 +214,7 @@ class LSAQuery:
                 self.__lmhash,
                 self.__nthash,
                 self.__aesKey,
+                TGS=self.__st,
             )
         return rpc_transport
 
