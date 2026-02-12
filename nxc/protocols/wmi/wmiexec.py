@@ -16,39 +16,24 @@
 import time
 import uuid
 import base64
-
 from nxc.helpers.misc import gen_random_string
 from impacket.dcerpc.v5.dtypes import NULL
-from impacket.dcerpc.v5.dcomrt import DCOMConnection
-from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login
 
 
 class WMIEXEC:
-    def __init__(self, target, username, password, domain, lmhash, nthash, doKerberos, kdcHost, remoteHost, aesKey, logger, exec_timeout, codec):
+    def __init__(self, target, iWbemLevel1Login, logger, exec_timeout, codec):
         self.__target = target
-        self.__username = username
-        self.__password = password
-        self.__domain = domain
-        self.__lmhash = lmhash
-        self.__nthash = nthash
-        self.__doKerberos = doKerberos
-        self.__kdcHost = kdcHost
-        self.__remoteHost = remoteHost
-        self.__aesKey = aesKey
+        self.__iWbemLevel1Login = iWbemLevel1Login
         self.logger = logger
         self.__exec_timeout = exec_timeout
         self.__registry_Path = ""
         self.__outputBuffer = ""
-
         self.__shell = "cmd.exe /Q /c "
         self.__pwd = "C:\\"
         self.__codec = codec
 
-        self.__dcom = DCOMConnection(self.__target, self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, oxidResolver=True, doKerberos=self.__doKerberos, kdcHost=self.__kdcHost, aesKey=self.__aesKey, remoteHost=self.__remoteHost)
-        iInterface = self.__dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
-        iWbemLevel1Login = IWbemLevel1Login(iInterface)
-        self.__iWbemServices = iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
-        iWbemLevel1Login.RemRelease()
+        self.__iWbemServices = self.__iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
+        self.__iWbemLevel1Login.RemRelease()
         self.__win32Process, _ = self.__iWbemServices.GetObject("Win32_Process")
 
     def execute(self, command, output=False, use_powershell=False):
@@ -66,8 +51,6 @@ class WMIEXEC:
             command = self.__shell + command
             self.execute_remote(command)
 
-        self.__dcom.disconnect()
-
         return self.__outputBuffer
 
     def execute_remote(self, command):
@@ -84,7 +67,7 @@ class WMIEXEC:
         self.__registry_Path = f"Software\\Classes\\{gen_random_string(8)}"
 
         # 1. Run the command and write output to file
-        self.execute_remote(f'{self.__shell} {command} 1> "{result_output}" 2>&1')
+        self.execute_remote(f'{self.__shell} ({command}) 1> "{result_output}" 2>&1')
         self.logger.info(f"Waiting {self.__exec_timeout}s for command to complete.")
         time.sleep(self.__exec_timeout)
 
@@ -126,7 +109,7 @@ class WMIEXEC:
 
         # 1. Run the command and write output to file
         if not command.lower().startswith("powershell"):
-            command = f"powershell -Command {command}"
+            command = f'powershell -Command "& {{{command}}}"'
         self.execute_remote(f'{command} > "{result_output}" 2>&1')
         self.logger.info(f"Waiting {self.__exec_timeout}s for command to complete.")
         time.sleep(self.__exec_timeout)

@@ -6,6 +6,7 @@ from impacket.dcerpc.v5.rpch import RPC_PROXY_INVALID_RPC_PORT_ERR, \
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket import uuid
 import requests
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -23,14 +24,15 @@ class NXCModule:
 
     name = "enum_ca"
     description = "Anonymously uses RPC endpoints to hunt for ADCS CAs"
-    supported_protocols = ["smb"]  # Example: ['smb', 'mssql']
+    supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options
 
     def options(self, context, module_options):
-        pass
+        """No options available"""
 
     def on_login(self, context, connection):
         self.__username = connection.username
@@ -78,7 +80,8 @@ class NXCModule:
                RPC_PROXY_CONN_A1_0X6BA_ERR in error_text:
                 context.log.fail("This usually means the target does not allow "
                                  "to connect to its epmapper using RpcProxy.")
-                return
+            return
+
         for entry in entries:
             tmpUUID = str(entry["tower"]["Floors"][0])
 

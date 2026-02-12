@@ -1,4 +1,5 @@
 from impacket.ldap import ldap as ldap_impacket
+from nxc.helpers.misc import CATEGORY
 from nxc.logger import nxc_logger
 from nxc.parsers.ldap_results import parse_result_attributes
 
@@ -12,6 +13,7 @@ class NXCModule:
     name = "get-userPassword"
     description = "Get userPassword attribute from all users in ldap"
     supported_protocols = ["ldap"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """
@@ -39,6 +41,6 @@ class NXCModule:
             resp_parsed = parse_result_attributes(resp)
             context.log.success("Found following users: ")
             for user in resp_parsed:
-                context.log.highlight(f"User: {user['sAMAccountName']} unixUserPassword: {user['userPassword']}")
+                context.log.highlight(f"User: {user['sAMAccountName']} userPassword: {user['userPassword']}")
         else:
-            context.log.fail("No unixUserPassword Found")
+            context.log.fail("No userPassword Found")
