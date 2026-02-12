@@ -26,10 +26,10 @@ If appropriate include before and after screenshot(s) to show which results are 
 ## Checklist:
 Insert an "x" inside the brackets for completed and relevant items (do not delete options)
 
-- [ ] I have ran Ruff against my changes (via poetry: `poetry run python -m ruff check . --preview`, use `--fix` to automatically fix what it can)
+- [ ] I have ran Ruff against my changes (poetry: `poetry run ruff check .`, use `--fix` to automatically fix what it can)
 - [ ] I have added or updated the `tests/e2e_commands.txt` file if necessary (new modules or features are _required_ to be added to the e2e tests)
-- [ ] New and existing e2e tests pass locally with my changes
 - [ ] If reliant on changes of third party dependencies, such as Impacket, dploot, lsassy, etc, I have linked the relevant PRs in those projects
+- [ ] I have linked relevant sources that describes the added technique (blog posts, documentation, etc)
 - [ ] I have performed a self-review of my own code
 - [ ] I have commented my code, particularly in hard-to-understand areas
 - [ ] I have made corresponding changes to the documentation (PR here: https://github.com/Pennyw0rth/NetExec-Wiki)
