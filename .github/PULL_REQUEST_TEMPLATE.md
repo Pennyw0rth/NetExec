@@ -17,7 +17,10 @@ Insert an "x" inside the brackets for relevant items (do not delete options)
 Please provide guidance on what setup is needed to test the introduced changes, such as your locally running machine Python version & OS, as well as the target(s) you tested against, including software versions.
 In particular:
 - Bug Fix: Please provide a short description on how to trigger the bug, to make the bug reproducable for the reviewer.
-- Added Feature/Enhancement: Please specify what setup is needed in order to test the changes. E.g. is additional software needed? GPO changes required? Specific registry settings that need to be changed?
+- Added Feature/Enhancement: Please specify what setup is needed in order to test the changes, such as:
+  - Is additional software needed?
+  - GPO changes required?
+  - Specific registry settings that need to be changed?
 
 ## Screenshots (if appropriate):
 Screenshots are always nice to have and can give a visual representation of the change.
