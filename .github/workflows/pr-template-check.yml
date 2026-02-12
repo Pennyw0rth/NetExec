@@ -1,0 +1,51 @@
+name: PR Template Check
+
+on:
+  pull_request:
+    types: [opened, edited]
+
+jobs:
+  check-template:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Check PR description for template sections
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || '';
+            const requiredSections = [
+              '## Description',
+              '## Type of change',
+              '## Setup guide for the review',
+              '## Checklist'
+            ];
+
+            const missingSections = requiredSections.filter(
+              section => !body.includes(section)
+            );
+
+            if (missingSections.length === 0) return;
+
+            // Check if we already left a comment to avoid spamming
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number
+            });
+
+            const botComment = comments.data.find(
+              c => c.user.type === 'Bot' && c.body.includes('<!-- pr-template-check -->')
+            );
+
+            if (botComment) return;
+
+            const missing = missingSections.map(s => `- ${s}`).join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: `<!-- pr-template-check -->\nIt looks like the PR template may not have been filled out. The following sections appear to be missing:\n\n${missing}\n\nPlease edit your PR description to include them. The template helps reviewers understand and test your changes. Thanks!`
+            });
