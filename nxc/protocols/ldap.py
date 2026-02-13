@@ -2,6 +2,7 @@
 # https://troopers.de/downloads/troopers19/TROOPERS19_AD_Fun_With_LDAP.pdf
 import hashlib
 import hmac
+import json
 import os
 import socket
 from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
@@ -47,6 +48,7 @@ from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.ntlm_parser import parse_challenge
 from nxc.paths import CONFIG_PATH
+from certihound import ADCSCollector, BloodHoundCEExporter, ImpacketLDAPAdapter
 
 ldap_error_status = {
     "1": "STATUS_NOT_SUPPORTED",
@@ -84,13 +86,14 @@ def resolve_collection_methods(methods):
         "container",
         "adcs",
     ]
-    default_methods = ["group", "localadmin", "session", "trusts"]
-    # Similar to SharpHound, All is not really all, it excludes loggedon
+    default_methods = ["group", "localadmin", "session", "trusts", "adcs"]
+    # Similar to SharpHound, All includes everything including LoggedOn and ADCS
     all_methods = [
         "group",
         "localadmin",
         "session",
         "trusts",
+        "loggedon",
         "objectprops",
         "acl",
         "dcom",
@@ -1631,7 +1634,46 @@ class ldap(connection):
         collect = resolve_collection_methods("Default" if not self.args.collection else self.args.collection)
         if not collect:
             return
-        self.logger.highlight("Resolved collection methods: " + ", ".join(list(collect)))
+        self.logger.highlight("Resolved collection methods: " + ", ".join(sorted(collect)))
+
+        # Display which collection methods were not selected
+        all_collectible = {"group", "localadmin", "session", "trusts", "loggedon", "objectprops", "acl", "dcom", "rdp", "psremote", "container", "adcs"}
+        excluded = sorted(all_collectible - collect)
+        if excluded:
+            self.logger.highlight("Excluded collection methods: " + ", ".join(excluded))
+
+        # Check which BloodHound version is desired
+        use_bhce = self.config.getboolean("BloodHound-CE", "bhce_enabled", fallback=False)
+        package_name, version, is_ce = get_bloodhound_info()
+
+        # ADCS collection is only compatible with BloodHound-CE
+        if "adcs" in collect and not use_bhce:
+            self.logger.fail("ADCS collection is only compatible with the BloodHound-CE collector")
+            return
+
+        if use_bhce and not is_ce:
+            self.logger.fail("Configuration Issue Detected")
+            self.logger.fail(f"Your configuration has BloodHound-CE enabled, but the regular BloodHound package is installed. Modify your {CONFIG_PATH} config file or follow the instructions:")
+            self.logger.fail("Please run the following commands to fix this:")
+            self.logger.fail("poetry remove bloodhound-ce   # poetry falsely recognizes bloodhound-ce as a the old bloodhound package")
+            self.logger.fail("poetry add bloodhound-ce")
+            self.logger.fail("")
+            self.logger.fail("Or if you installed with pipx:")
+            self.logger.fail("pipx runpip netexec uninstall -y bloodhound")
+            self.logger.fail("pipx inject netexec bloodhound-ce --force")
+            return
+
+        elif not use_bhce and is_ce:
+            self.logger.fail("Configuration Issue Detected")
+            self.logger.fail("Your configuration has regular BloodHound enabled, but the BloodHound-CE package is installed.")
+            self.logger.fail("Please run the following commands to fix this:")
+            self.logger.fail("poetry remove bloodhound-ce")
+            self.logger.fail("poetry add bloodhound")
+            self.logger.fail("")
+            self.logger.fail("Or if you installed with pipx:")
+            self.logger.fail("pipx runpip netexec uninstall -y bloodhound-ce")
+            self.logger.fail("pipx inject netexec bloodhound --force")
+            return
 
         # Separate ADCS from bloodhound-python methods
         bh_collect = {m for m in collect if m != "adcs"}
@@ -1642,33 +1684,6 @@ class ldap(connection):
 
         # Run bloodhound-python collection if needed
         if need_bloodhound_python:
-            use_bhce = self.config.getboolean("BloodHound-CE", "bhce_enabled", fallback=False)
-            package_name, version, is_ce = get_bloodhound_info()
-
-            if use_bhce and not is_ce:
-                self.logger.fail("Configuration Issue Detected")
-                self.logger.fail(f"Your configuration has BloodHound-CE enabled, but the regular BloodHound package is installed. Modify your {CONFIG_PATH} config file or follow the instructions:")
-                self.logger.fail("Please run the following commands to fix this:")
-                self.logger.fail("poetry remove bloodhound-ce   # poetry falsely recognizes bloodhound-ce as a the old bloodhound package")
-                self.logger.fail("poetry add bloodhound-ce")
-                self.logger.fail("")
-                self.logger.fail("Or if you installed with pipx:")
-                self.logger.fail("pipx runpip netexec uninstall -y bloodhound")
-                self.logger.fail("pipx inject netexec bloodhound-ce --force")
-                return
-
-            elif not use_bhce and is_ce:
-                self.logger.fail("Configuration Issue Detected")
-                self.logger.fail("Your configuration has regular BloodHound enabled, but the BloodHound-CE package is installed.")
-                self.logger.fail("Please run the following commands to fix this:")
-                self.logger.fail("poetry remove bloodhound-ce")
-                self.logger.fail("poetry add bloodhound")
-                self.logger.fail("")
-                self.logger.fail("Or if you installed with pipx:")
-                self.logger.fail("pipx runpip netexec uninstall -y bloodhound-ce")
-                self.logger.fail("pipx inject netexec bloodhound --force")
-                return
-
             auth = ADAuthentication(
                 username=self.username,
                 password=self.password,
@@ -1746,30 +1761,9 @@ class ldap(connection):
         Returns:
             List of file paths to include in the BloodHound zip.
         """
-        from certihound import ADCSCollector, BloodHoundCEExporter, ImpacketLDAPAdapter
-
         self.logger.highlight("Collecting ADCS data (CertiHound)...")
 
         try:
-            # Get domain SID if not already set
-            if not self.sid_domain:
-                search_filter = "(objectClass=domain)"
-                attributes = ["objectSid"]
-                resp = self.search(search_filter, attributes, sizeLimit=1, baseDN=self.baseDN)
-                if resp:
-                    for item in resp:
-                        if isinstance(item, ldapasn1_impacket.SearchResultEntry):
-                            for attr in item["attributes"]:
-                                if str(attr["type"]) == "objectSid":
-                                    from impacket.ldap.ldaptypes import LDAP_SID
-                                    sid = LDAP_SID(bytes(attr["vals"][0]))
-                                    self.sid_domain = sid.formatCanonical()
-                                    break
-
-            if not self.sid_domain:
-                self.logger.fail("Could not retrieve domain SID for ADCS collection")
-                return []
-
             # Create CertiHound adapter and collector
             adapter = ImpacketLDAPAdapter(
                 search_func=self.search,
@@ -1798,7 +1792,6 @@ class ldap(connection):
             for node_type, content in output.items():
                 filename = f"{timestamp}{node_type}.json"
                 with open(filename, "w") as f:
-                    import json
                     json.dump(content, f)
                 adcs_files.append(filename)
                 self.logger.debug(f"Wrote ADCS file: {filename}")

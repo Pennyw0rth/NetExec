@@ -22,6 +22,7 @@ dependencies = [
     "asyauth>=0.0.20",
     "beautifulsoup4>=4.11,<5",
     "bloodhound-ce>=1.8.0",
+    "certihound>=0.1.1",
     "dploot>=3.1.0",
     "dsinternals>=1.2.4",
     "jwt>=1.3.1",
@@ -48,7 +49,6 @@ dependencies = [
     "impacket @ git+https://github.com/fortra/impacket",
     "oscrypto @ git+https://github.com/wbond/oscrypto",
     "pynfsclient @ git+https://github.com/Pennyw0rth/NfsClient",
-    "certihound>=0.1.1",
 ]
 
 [project.urls]
