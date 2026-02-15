@@ -48,6 +48,13 @@ def gen_cli_args():
     dns_group.add_argument("--dns-tcp", action="store_true", help="Use TCP instead of UDP for DNS queries")
     dns_group.add_argument("--dns-timeout", action="store", type=int, default=3, help="DNS query timeout in seconds")
 
+    opengraph_parser = argparse.ArgumentParser(add_help=False, formatter_class=DisplayDefaultsNotNone)
+    opengraph_group = dns_parser.add_argument_group("OpenGraph")
+    opengraph_group.add_argument("-og", "--opengraph", action="store_true", help="Enable OpenGraph, takes path to bloudhound computer json file as arguments")
+    og_exclusive = opengraph_group.add_mutually_exclusive_group()
+    og_exclusive.add_argument("--og-path", metavar="og_path", help="Path to BloodHound directory or ZIP file for resolving OIDs.")
+    og_exclusive.add_argument("--og-ldap", action="store_true", help="Resolve OIDs via LDAP instead of using BloodHound data.")
+
     parser = argparse.ArgumentParser(
         description=rf"""
      .   .
@@ -82,7 +89,7 @@ def gen_cli_args():
 
     subparsers = parser.add_subparsers(title="Available Protocols", dest="protocol")
 
-    std_parser = argparse.ArgumentParser(add_help=False, parents=[generic_parser, output_parser, dns_parser], formatter_class=DisplayDefaultsNotNone)
+    std_parser = argparse.ArgumentParser(add_help=False, parents=[generic_parser, output_parser, dns_parser, opengraph_parser], formatter_class=DisplayDefaultsNotNone)
     std_parser.add_argument("target", nargs="+" if not (module_parser.parse_known_args()[0].list_modules is not None or module_parser.parse_known_args()[0].show_module_options or generic_parser.parse_known_args()[0].version) else "*", type=str, help="the target IP(s), range(s), CIDR(s), hostname(s), FQDN(s), file(s) containing a list of targets, NMap XML or .Nessus file(s)")
     credential_group = std_parser.add_argument_group("Authentication")
     credential_group.add_argument("-u", "--username", metavar="USERNAME", dest="username", nargs="+", default=[], help="username(s) or file(s) containing usernames")
