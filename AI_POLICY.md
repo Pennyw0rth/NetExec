@@ -10,7 +10,7 @@ The NetExec project has strict rules for AI usage:
   Drive-by pull requests that do not reference an accepted issue will be
   closed. If AI isn't disclosed but a maintainer suspects its use, the
   PR will be closed. If you want to share code for a non-accepted issue,
-  open a discussion or attach it to an existing discussion.
+  open a discussion or attach it to the existing issue.
 
 - **Pull requests created by AI must have been fully verified with
   human use.** AI must not create hypothetically correct code that
@@ -64,6 +64,6 @@ AI as a tool!
 instead due to the number of highly unqualified people using AI. It's the
 people, not the tools, that are the problem.
 
-I include this section to be transparent about the project's usage about
+We include this section to be transparent about the project's usage about
 AI for people who may disagree with it, and to address the misconception
 that this policy is anti-AI in nature.
