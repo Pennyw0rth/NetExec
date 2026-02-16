@@ -1648,11 +1648,11 @@ class ldap(connection):
 
         # ADCS collection is only compatible with BloodHound-CE
         if "adcs" in collect and not use_bhce:
-            self.logger.fail("ADCS collection is only compatible with the BloodHound-CE collector")
+            self.logger.fail("ADCS collection is only compatible with the BloodHound-CE collector, but legacy bloodhound is selected")
             return
 
         if use_bhce and not is_ce:
-            self.logger.fail("Configuration Issue Detected")
+            self.logger.fail("⚠️ Configuration Issue Detected ⚠️")
             self.logger.fail(f"Your configuration has BloodHound-CE enabled, but the regular BloodHound package is installed. Modify your {CONFIG_PATH} config file or follow the instructions:")
             self.logger.fail("Please run the following commands to fix this:")
             self.logger.fail("poetry remove bloodhound-ce   # poetry falsely recognizes bloodhound-ce as a the old bloodhound package")
@@ -1664,7 +1664,7 @@ class ldap(connection):
             return
 
         elif not use_bhce and is_ce:
-            self.logger.fail("Configuration Issue Detected")
+            self.logger.fail("⚠️ Configuration Issue Detected ⚠️")
             self.logger.fail("Your configuration has regular BloodHound enabled, but the BloodHound-CE package is installed.")
             self.logger.fail("Please run the following commands to fix this:")
             self.logger.fail("poetry remove bloodhound-ce")
