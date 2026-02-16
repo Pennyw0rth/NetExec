@@ -1,7 +1,8 @@
 ## Description
-
 Please include a summary of the change and which issue is fixed, or what the enhancement does.
 List any dependencies that are required for this change.
+
+If you have used AI in any form, please state the tool you used (e.g. Claude Code, Cursor, Amp) along with the extent that the work was AI-assisted. See the project's AI policy for more details: https://github.com/Pennyw0rth/NetExec/blob/main/AI_POLICY.md
 
 ## Type of change
 Insert an "x" inside the brackets for relevant items (do not delete options)
