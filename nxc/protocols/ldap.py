@@ -1652,24 +1652,28 @@ class ldap(connection):
             return
 
         if use_bhce and not is_ce:
-            self.logger.fail("⚠️ Configuration Issue Detected ⚠️")
+            self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
             self.logger.fail(f"Your configuration has BloodHound-CE enabled, but the regular BloodHound package is installed. Modify your {CONFIG_PATH} config file or follow the instructions:")
             self.logger.fail("Please run the following commands to fix this:")
             self.logger.fail("poetry remove bloodhound-ce   # poetry falsely recognizes bloodhound-ce as a the old bloodhound package")
             self.logger.fail("poetry add bloodhound-ce")
             self.logger.fail("")
+
+            # If using pipx
             self.logger.fail("Or if you installed with pipx:")
             self.logger.fail("pipx runpip netexec uninstall -y bloodhound")
             self.logger.fail("pipx inject netexec bloodhound-ce --force")
             return
 
         elif not use_bhce and is_ce:
-            self.logger.fail("⚠️ Configuration Issue Detected ⚠️")
+            self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
             self.logger.fail("Your configuration has regular BloodHound enabled, but the BloodHound-CE package is installed.")
             self.logger.fail("Please run the following commands to fix this:")
             self.logger.fail("poetry remove bloodhound-ce")
             self.logger.fail("poetry add bloodhound")
             self.logger.fail("")
+
+            # If using pipx
             self.logger.fail("Or if you installed with pipx:")
             self.logger.fail("pipx runpip netexec uninstall -y bloodhound-ce")
             self.logger.fail("pipx inject netexec bloodhound --force")
