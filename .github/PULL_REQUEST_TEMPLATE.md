@@ -12,6 +12,7 @@ Insert an "x" inside the brackets for relevant items (do not delete options)
 - [ ] Deprecation of feature or functionality
 - [ ] This change requires a documentation update
 - [ ] This requires a third party update (such as Impacket, Dploot, lsassy, etc)
+- [ ] This PR was created with the assistance of AI (list what type of assistance, tool(s)/model(s) in the description)
 
 ## Setup guide for the review
 Please provide guidance on what setup is needed to test the introduced changes, such as your locally running machine Python version & OS, as well as the target(s) you tested against, including software versions.
@@ -24,7 +25,8 @@ In particular:
 
 ## Screenshots (if appropriate):
 Screenshots are always nice to have and can give a visual representation of the change.
-If appropriate include before and after screenshot(s) to show which results are to be expected.
+If appropriate, include before and after screenshot(s) to show which results are to be expected.
+Including the commands ran in any screenshots as a `codeblock` in this section is also helpful.
 
 ## Checklist:
 Insert an "x" inside the brackets for completed and relevant items (do not delete options)
@@ -33,6 +35,6 @@ Insert an "x" inside the brackets for completed and relevant items (do not delet
 - [ ] I have added or updated the `tests/e2e_commands.txt` file if necessary (new modules or features are _required_ to be added to the e2e tests)
 - [ ] If reliant on changes of third party dependencies, such as Impacket, dploot, lsassy, etc, I have linked the relevant PRs in those projects
 - [ ] I have linked relevant sources that describes the added technique (blog posts, documentation, etc)
-- [ ] I have performed a self-review of my own code
-- [ ] I have commented my code, particularly in hard-to-understand areas
+- [ ] I have performed a self-review of my own code (_not_ an AI review)
+- [ ] I have commented my code, particularly in hard-to-understand areas (do not add useless comments)
 - [ ] I have made corresponding changes to the documentation (PR here: https://github.com/Pennyw0rth/NetExec-Wiki)
