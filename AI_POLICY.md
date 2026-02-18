@@ -5,14 +5,14 @@ This policy was adapted from the [ghostty project](https://github.com/ghostty-or
 The NetExec project has strict rules for AI usage:
 
 - **All AI usage in any form must be disclosed.** You must state
-  the tool you used (e.g. Claude Code, Cursor, Amp) along with
-  the extent that the work was AI-assisted.
+  the tool(s) and model(s) you used (e.g. Claude Code, Cursor, Opus 4.6,
+  Codex 5.2, etc) along withthe extent that the work was AI-assisted.
 
 - **Pull requests created in any way by AI can only be for accepted issues.**
-  Drive-by pull requests that do not reference an accepted issue will be
-  closed. If AI isn't disclosed but a maintainer suspects its use, the
-  PR will be closed. If you want to share code for a non-accepted issue,
-  open a discussion or attach it to the existing issue.
+  Drive-by pull requests that do not reference an accepted issue may be
+  rejected and closed. If AI isn't disclosed but a maintainer suspects its use,
+  the PR may be rejected and closed. If you want to share code for a
+  non-accepted issue, open a discussion or attach it to the existing issue.
 
 - **Pull requests created by AI must have been fully verified with
   human use.** AI must not create hypothetically correct code that
@@ -31,14 +31,19 @@ The NetExec project has strict rules for AI usage:
   Text and code are the only acceptable AI-generated content, per the
   other rules in this policy.
 
-- **Bad AI drivers will be banned and ridiculed in public.** You've
-  been warned. We love to help junior developers learn and grow, but
-  if you're interested in that then don't use AI, and we'll help you.
-  I'm sorry that bad AI drivers have ruined this for you.
+- **Bad AI drivers will be banned** You've been warned. We love to help junior
+  developers learn and grow, but if you're interested in that then don't use
+  AI, and we'll help you.
+
+- **Official maintainers have the final say** We always strive to be helpful,
+  but there are limits. If you submit agregiously terrible AI generated code
+  with no review, we may ban you without word. We do not want to waste our
+  time reviewing slop if the contributor can't be bothered to review the work
+  themselves.
 
 These rules apply only to outside contributions to NetExec. Maintainers
-are exempt from these rules and may use AI tools at their discretion;
-they've proven themselves trustworthy to apply good judgment.
+and trusted contributors are exempt from these rules and may use AI tools at
+their discretion; they've proven themselves trustworthy to apply good judgment.
 
 ## There are Humans Here
 
@@ -48,24 +53,24 @@ Every discussion, issue, and pull request is read and reviewed by
 humans (and sometimes machines, too). It is a boundary point at which
 people interact with each other and the work done. It is rude and
 disrespectful to approach this boundary with low-effort, unqualified
-work, since it puts the burden of validation on the maintainer.
+work, since it puts the burden of validation on the maintainers.
 
 In a perfect world, AI would produce high-quality, accurate work
-every time. But today, that reality depends on the driver of the AI.
-And today, most drivers of AI are just not good enough. So, until either
-the people get better, the AI gets better, or both, we have to have
-strict rules to protect maintainers.
+every time, but today that is simply not true. This is compounded by the fact
+that accessibility to AI is high, allowing low skilled individuals to think
+that they are contributing useful code. Even many skilled programmers do not
+understand how to use it effectively. This has opened up a waterfall of low
+quality contributions across the Open Source community, wasting resources.
 
-## AI is Welcome Here
+## AI is Welcome Here, Within Reason
 
-NetExec is written with plenty of AI assistance, and many maintainers embrace
-AI tools as a productive tool in their workflow. As a project, we welcome
-AI as a tool!
-
-**Our reason for the strict AI policy is not due to an anti-AI stance**, but
-instead due to the number of highly unqualified people using AI. It's the
-people, not the tools, that are the problem.
+NetExec maintainers acknowledge AI as a productive tool to some workflows, and
+are open to leveraging this technology to improve NetExec; however, there are
+many useless AI tools whose use results in pure slop being generated. The
+security communinity is not immune from AI psychosis, over-hype, or FOMO.
+As with any new technology, it is important to understand how it works and how
+to best use it, not blindly apply it to every use case with the hope that it
+will fix all your issues.
 
 We include this section to be transparent about the project's usage about
-AI for people who may disagree with it, and to address the misconception
-that this policy is anti-AI in nature.
+AI for people who may disagree with it.
