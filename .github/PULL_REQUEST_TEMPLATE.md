@@ -26,7 +26,6 @@ In particular:
 ## Screenshots (if appropriate):
 Screenshots are always nice to have and can give a visual representation of the change.
 If appropriate, include before and after screenshot(s) to show which results are to be expected.
-Including the commands ran in any screenshots as a `codeblock` in this section is also helpful.
 
 ## Checklist:
 Insert an "x" inside the brackets for completed and relevant items (do not delete options)
@@ -36,5 +35,5 @@ Insert an "x" inside the brackets for completed and relevant items (do not delet
 - [ ] If reliant on changes of third party dependencies, such as Impacket, dploot, lsassy, etc, I have linked the relevant PRs in those projects
 - [ ] I have linked relevant sources that describes the added technique (blog posts, documentation, etc)
 - [ ] I have performed a self-review of my own code (_not_ an AI review)
-- [ ] I have commented my code, particularly in hard-to-understand areas (do not add useless comments)
+- [ ] I have commented my code, particularly in hard-to-understand areas
 - [ ] I have made corresponding changes to the documentation (PR here: https://github.com/Pennyw0rth/NetExec-Wiki)
