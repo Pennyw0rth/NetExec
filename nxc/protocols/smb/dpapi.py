@@ -60,8 +60,10 @@ def collect_masterkeys_from_target(context, target, dploot_connection, user=True
         nthashes = {username: nt.split(":")[1] if ":" in nt else nt for _, _, username, nt, _, _ in context.db.get_credentials(cred_type="hash")}
         if context.password != "":
             plaintexts[context.username] = context.password
+            plaintexts[context.username.lower()] = context.password  # dploot matches user.lower()
         if context.nthash != "":
             nthashes[context.username] = context.nthash
+            nthashes[context.username.lower()] = context.nthash
 
     # Collect User and Machine masterkeys
     try:
