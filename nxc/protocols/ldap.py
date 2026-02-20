@@ -2,6 +2,7 @@
 # https://troopers.de/downloads/troopers19/TROOPERS19_AD_Fun_With_LDAP.pdf
 import hashlib
 import hmac
+import json
 import os
 import socket
 from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
@@ -47,6 +48,7 @@ from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.ntlm_parser import parse_challenge
 from nxc.paths import CONFIG_PATH
+from certihound import ADCSCollector, BloodHoundCEExporter, ImpacketLDAPAdapter
 
 ldap_error_status = {
     "1": "STATUS_NOT_SUPPORTED",
@@ -82,20 +84,23 @@ def resolve_collection_methods(methods):
         "psremote",
         "dconly",
         "container",
+        "adcs",
     ]
-    default_methods = ["group", "localadmin", "session", "trusts"]
-    # Similar to SharpHound, All is not really all, it excludes loggedon
+    default_methods = ["group", "localadmin", "session", "trusts", "adcs"]
+    # Similar to SharpHound, All includes everything including LoggedOn and ADCS
     all_methods = [
         "group",
         "localadmin",
         "session",
         "trusts",
+        "loggedon",
         "objectprops",
         "acl",
         "dcom",
         "rdp",
         "psremote",
         "container",
+        "adcs",
     ]
     # DC only, does not collect to computers
     dconly_methods = ["group", "trusts", "objectprops", "acl", "container"]
@@ -1626,9 +1631,25 @@ class ldap(connection):
             break  # Only process first policy result
 
     def bloodhound(self):
-        # Check which version is desired
+        collect = resolve_collection_methods("Default" if not self.args.collection else self.args.collection)
+        if not collect:
+            return
+        self.logger.highlight("Resolved collection methods: " + ", ".join(sorted(collect)))
+
+        # Display which collection methods were not selected
+        all_collectible = {"group", "localadmin", "session", "trusts", "loggedon", "objectprops", "acl", "dcom", "rdp", "psremote", "container", "adcs"}
+        excluded = sorted(all_collectible - collect)
+        if excluded:
+            self.logger.highlight("Excluded collection methods: " + ", ".join(excluded))
+
+        # Check which BloodHound version is desired
         use_bhce = self.config.getboolean("BloodHound-CE", "bhce_enabled", fallback=False)
         package_name, version, is_ce = get_bloodhound_info()
+
+        # ADCS collection is only compatible with BloodHound-CE
+        if "adcs" in collect and not use_bhce:
+            self.logger.fail("ADCS collection is only compatible with the BloodHound-CE collector, but legacy bloodhound is selected")
+            return
 
         if use_bhce and not is_ce:
             self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
@@ -1658,61 +1679,69 @@ class ldap(connection):
             self.logger.fail("pipx inject netexec bloodhound --force")
             return
 
-        auth = ADAuthentication(
-            username=self.username,
-            password=self.password,
-            domain=self.domain,
-            lm_hash=self.nthash,
-            nt_hash=self.nthash,
-            aeskey=self.aesKey,
-            kdc=self.kdcHost,
-            auth_method="auto",
-        )
-        ad = AD(
-            auth=auth,
-            domain=self.domain,
-            nameserver=self.args.dns_server,
-            dns_tcp=self.args.dns_tcp,
-            dns_timeout=self.args.dns_timeout,
-        )
-        collect = resolve_collection_methods("Default" if not self.args.collection else self.args.collection)
-        if not collect:
-            return
-        self.logger.highlight("Resolved collection methods: " + ", ".join(list(collect)))
-
-        self.logger.debug("Using DNS to retrieve domain information")
-        try:
-            ad.dns_resolve(domain=self.domain)
-        except (resolver.LifetimeTimeout, resolver.NoNameservers):
-            self.logger.fail("Bloodhound-python failed to resolve domain information, try specifying the DNS server.")
-            return
-
-        if self.args.kerberos:
-            self.logger.highlight("Using kerberos auth without ccache, getting TGT")
-            auth.get_tgt()
-        if self.args.use_kcache:
-            self.logger.highlight("Using kerberos auth from ccache")
-            auth.load_ccache()
+        # Separate ADCS from bloodhound-python methods
+        bh_collect = {m for m in collect if m != "adcs"}
+        need_bloodhound_python = len(bh_collect) > 0
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S") + "_"
-        bloodhound = BloodHound(ad, self.hostname, self.host, self.port)
-        bloodhound.connect()
+        adcs_files = []
 
-        try:
-            bloodhound.run(
-                collect=collect,
-                num_workers=10,
-                disable_pooling=False,
-                timestamp=timestamp,
-                fileNamePrefix=self.output_filename.split("/")[-1],
-                computerfile=None,
-                cachefile=None,
-                exclude_dcs=False,
+        # Run bloodhound-python collection if needed
+        if need_bloodhound_python:
+            auth = ADAuthentication(
+                username=self.username,
+                password=self.password,
+                domain=self.domain,
+                lm_hash=self.nthash,
+                nt_hash=self.nthash,
+                aeskey=self.aesKey,
+                kdc=self.kdcHost,
+                auth_method="auto",
             )
-        except Exception as e:
-            self.logger.fail(f"BloodHound collection failed: {e.__class__.__name__} - {e}")
-            self.logger.debug(f"BloodHound collection failed: {e.__class__.__name__} - {e}", exc_info=True)
-            return
+            ad = AD(
+                auth=auth,
+                domain=self.domain,
+                nameserver=self.args.dns_server,
+                dns_tcp=self.args.dns_tcp,
+                dns_timeout=self.args.dns_timeout,
+            )
+
+            self.logger.debug("Using DNS to retrieve domain information")
+            try:
+                ad.dns_resolve(domain=self.domain)
+            except (resolver.LifetimeTimeout, resolver.NoNameservers):
+                self.logger.fail("Bloodhound-python failed to resolve domain information, try specifying the DNS server.")
+                return
+
+            if self.args.kerberos:
+                self.logger.highlight("Using kerberos auth without ccache, getting TGT")
+                auth.get_tgt()
+            if self.args.use_kcache:
+                self.logger.highlight("Using kerberos auth from ccache")
+                auth.load_ccache()
+
+            bloodhound = BloodHound(ad, self.hostname, self.host, self.port)
+            bloodhound.connect()
+
+            try:
+                bloodhound.run(
+                    collect=bh_collect,
+                    num_workers=10,
+                    disable_pooling=False,
+                    timestamp=timestamp,
+                    fileNamePrefix=self.output_filename.split("/")[-1],
+                    computerfile=None,
+                    cachefile=None,
+                    exclude_dcs=False,
+                )
+            except Exception as e:
+                self.logger.fail(f"BloodHound collection failed: {e.__class__.__name__} - {e}")
+                self.logger.debug(f"BloodHound collection failed: {e.__class__.__name__} - {e}", exc_info=True)
+                return
+
+        # Collect ADCS data using CertiHound if requested
+        if "adcs" in collect:
+            adcs_files = self._collect_adcs_for_bloodhound(timestamp)
 
         self.logger.highlight(f"Compressing output into {self.output_filename}_bloodhound.zip")
         list_of_files = os.listdir(os.getcwd())
@@ -1721,3 +1750,59 @@ class ldap(connection):
                 if each_file.startswith(self.output_filename.split("/")[-1]) and each_file.endswith("json"):
                     z.write(each_file)
                     os.remove(each_file)
+            # Add ADCS files to the zip
+            for adcs_file in adcs_files:
+                if os.path.exists(adcs_file):
+                    z.write(adcs_file, os.path.basename(adcs_file))
+                    os.remove(adcs_file)
+
+    def _collect_adcs_for_bloodhound(self, timestamp):
+        """Collect ADCS data using CertiHound for BloodHound CE integration.
+
+        Args:
+            timestamp: Timestamp prefix for output files.
+
+        Returns:
+            List of file paths to include in the BloodHound zip.
+        """
+        self.logger.highlight("Collecting ADCS data (CertiHound)...")
+
+        try:
+            # Create CertiHound adapter and collector
+            adapter = ImpacketLDAPAdapter(
+                search_func=self.search,
+                domain=self.domain,
+                domain_sid=self.sid_domain,
+            )
+
+            collector = ADCSCollector.from_external(
+                ldap_connection=adapter,
+                domain=self.domain,
+                domain_sid=self.sid_domain,
+            )
+            data = collector.collect_all()
+
+            self.logger.highlight(f"Found {len(data.templates)} certificate templates")
+            self.logger.highlight(f"Found {len(data.enterprise_cas)} Enterprise CAs")
+
+            # Export to BloodHound CE format
+            exporter = BloodHoundCEExporter(data.domain, data.domain_sid)
+            result = exporter.export(data)
+
+            # Write individual JSON files
+            adcs_files = []
+            output = result.to_dict()
+
+            for node_type, content in output.items():
+                filename = f"{timestamp}{node_type}.json"
+                with open(filename, "w") as f:
+                    json.dump(content, f)
+                adcs_files.append(filename)
+                self.logger.debug(f"Wrote ADCS file: {filename}")
+
+            return adcs_files
+
+        except Exception as e:
+            self.logger.fail(f"ADCS collection failed: {e}")
+            self.logger.debug(f"ADCS collection error: {e}", exc_info=True)
+            return []
