@@ -6,7 +6,7 @@ The NetExec project has strict rules for AI usage:
 
 - **All AI usage in any form must be disclosed.** You must state
   the tool(s) and model(s) you used (e.g. Claude Code, Cursor, Opus 4.6,
-  Codex 5.2, etc) along withthe extent that the work was AI-assisted.
+  Codex 5.2, etc) along with the extent that the work was AI-assisted.
 
 - **Pull requests created in any way by AI can only be for accepted issues.**
   Drive-by pull requests that do not reference an accepted issue may be
