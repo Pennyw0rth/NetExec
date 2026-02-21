@@ -1,6 +1,7 @@
 # AI Usage Policy
 
-This policy was adapted from the [ghostty project](https://github.com/ghostty-org/ghostty/). The original version can be found [in this PR](https://github.com/ghostty-org/ghostty/pull/10412).
+This policy was adapted from the [ghostty project](https://github.com/ghostty-org/ghostty/).
+The original version can be found [in this PR](https://github.com/ghostty-org/ghostty/pull/10412).
 
 The NetExec project has strict rules for AI usage:
 
