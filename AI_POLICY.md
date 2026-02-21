@@ -67,7 +67,7 @@ quality contributions across the Open Source community, wasting resources.
 
 NetExec maintainers acknowledge AI as a productive tool to some workflows, and
 are open to leveraging this technology to improve NetExec; however, there are
-many useless AI tools whose use results in pure slop being generated. The
+many low quality AI tools whose use results in pure slop being generated. The
 security communinity is not immune from AI psychosis, over-hype, or FOMO.
 As with any new technology, it is important to understand how it works and how
 to best use it, not blindly apply it to every use case with the hope that it
