@@ -1,7 +1,8 @@
 import json
 import errno
-from os.path import abspath, join, split, exists, splitext, getsize, sep
+from os.path import abspath, join, exists, splitext, getsize
 from os import makedirs, remove, stat
+from pathlib import Path, PurePosixPath
 import time
 from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
@@ -167,19 +168,15 @@ class SMBSpiderPlus:
     def get_file_save_path(self, remote_file):
         r"""Processes the remote file path to extract the filename and the folder path where the file should be saved locally.
 
-        It converts forward slashes (/) and backslashes (\) in the remote file path to the appropriate path separator for the local file system.
-        The folder path and filename are then obtained separately.
+        Creates a PurePosixPath and replaces UNC parts, then cleans it of any path traversal (see issue #1120)
         """
-        # Remove the backslash before the remote host part and replace slashes with the appropriate path separator
-        remote_file_path = str(remote_file)[2:].replace("/", sep).replace("\\", sep)
-
-        # Split the path to obtain the folder path and the filename
-        folder, filename = split(remote_file_path)
-
-        # Join the output folder with the folder path to get the final local folder path
-        folder = join(self.output_folder, folder)
-
-        return folder, filename
+        self.logger.debug(f"Remote file: {remote_file}")
+        raw_path = PurePosixPath(remote_file._RemoteFile__share, remote_file._RemoteFile__fileName.replace("\\", "/"))
+        self.logger.debug(f"Raw path: {remote_file}")
+        clean_parts = [p for p in raw_path.parts if p not in ("..", ".")]
+        resolved = Path(self.output_folder).joinpath(self.host, *clean_parts)
+        self.logger.debug(f"Resolved path: {resolved}")
+        return str(resolved.parent), resolved.name
 
     def spider_shares(self):
         """Enumerates all available shares for the SMB connection, spiders through the readable shares, and saves the metadata of the shares to a JSON file"""
