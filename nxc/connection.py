@@ -216,6 +216,9 @@ class connection:
     def print_host_info(self):
         return
 
+    def opengraph_host_info(self):
+        pass
+
     def create_conn_obj(self):
         return
 
@@ -242,6 +245,10 @@ class connection:
         else:
             self.logger.debug("Created connection object")
             self.enum_host_info()
+
+            # adding host info to opengraph file
+            if self.args.opengraph is not None:
+                self.opengraph_host_info()
 
             # Construct the output file template using os.path.join for OS compatibility
             base_log_dir = os.path.join(NXC_PATH, "logs")
