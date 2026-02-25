@@ -129,6 +129,7 @@ class smb(connection):
         self.protocol = "SMB"
         self.is_guest = None
         self.isdc = None
+        self.delegated_st = None
 
         connection.__init__(self, args, db, host)
 
@@ -361,6 +362,7 @@ class smb(connection):
                 self.logger.debug(f"Attempting to do Kerberos Login with useCache: {useCache}")
 
             tgs = None
+            self.delegated_st = None
             if self.args.delegate:
                 kerb_pass = ""
                 self.username = self.args.delegate
@@ -375,6 +377,8 @@ class smb(connection):
 
                 if self.args.generate_st:
                     self.save_st(tgs, sk, spn if self.args.delegate_spn else None)
+
+                self.delegated_st = tgs
 
             self.conn.kerberosLogin(self.username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache=useCache, TGS=tgs)
             if "Unix" not in self.server_os:
@@ -843,7 +847,8 @@ class smb(connection):
                         self.args.share,
                         logger=self.logger,
                         timeout=self.args.dcom_timeout,
-                        tries=self.args.get_output_tries
+                        tries=self.args.get_output_tries,
+                        st=self.delegated_st,
                     )
                     self.logger.info("Executed command via wmiexec")
                     break
@@ -871,7 +876,8 @@ class smb(connection):
                         self.args.share,
                         logger=self.logger,
                         timeout=self.args.dcom_timeout,
-                        tries=self.args.get_output_tries
+                        tries=self.args.get_output_tries,
+                        st=self.delegated_st,
                     )
                     self.logger.info("Executed command via mmcexec")
                     break
@@ -894,7 +900,8 @@ class smb(connection):
                         self.hash,
                         self.logger,
                         self.args.get_output_tries,
-                        self.args.share
+                        self.args.share,
+                        st=self.delegated_st,
                     )
                     self.logger.info("Executed command via atexec")
                     break
@@ -919,7 +926,8 @@ class smb(connection):
                         self.args.share,
                         self.port,
                         self.logger,
-                        self.args.get_output_tries
+                        self.args.get_output_tries,
+                        st=self.delegated_st,
                     )
                     self.logger.info("Executed command via smbexec")
                     break
