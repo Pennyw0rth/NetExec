@@ -1,8 +1,11 @@
 from datetime import datetime
 import os
 import random
+import socket as _socket
+import re
 import sys
 import contextlib
+import socks
 
 from os.path import isfile
 from threading import BoundedSemaphore
@@ -11,6 +14,7 @@ from time import sleep
 from ipaddress import ip_address
 from dns import resolver, rdatatype
 from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
+from impacket.dcerpc.v5 import transport
 
 from nxc.config import pwned_label
 from nxc.helpers.logger import highlight
@@ -21,7 +25,6 @@ from nxc.paths import NXC_PATH
 from nxc.protocols.ldap.laps import laps_search
 from nxc.helpers.pfx import pfx_auth
 
-from impacket.dcerpc.v5 import transport
 
 sem = BoundedSemaphore(1)
 global_failed_logins = 0
@@ -85,6 +88,84 @@ def get_host_addr_info(target, force_ipv6, dns_server, dns_tcp, dns_timeout):
         result["host"] = address_info["AF_INET6"]
 
     return result
+
+
+def _setup_socks_proxy(args, logger):
+    """
+    Configure a global SOCKS proxy using PySocks and enable remote DNS (rdns=True).
+    Supports socks4, socks4a, and socks5 schemes.
+    Returns True if a proxy was configured, False otherwise.
+    """
+    PROXY_TYPES = {
+        "socks4": socks.SOCKS4,
+        "socks4a": socks.SOCKS4,
+        "socks5": socks.SOCKS5,
+    }
+
+    proxy = getattr(args, "proxy", None)
+    if not proxy:
+        return False
+
+    uri = proxy.strip()
+    scheme = "socks5"  # Default scheme
+
+    # Accepts "socks5://host:port", "[::1]:1080" or "host:port"
+    if "://" in uri:
+        scheme, uri = uri.split("://", 1)
+        scheme = scheme.lower()
+        if scheme not in PROXY_TYPES:
+            supported = ", ".join(PROXY_TYPES.keys())
+            logger.fail(f"Unsupported proxy scheme '{scheme}'. Supported: {supported}.")
+            sys.exit(1)
+
+    host = None
+    port = None
+
+    # IPv6 with brackets: [fe80::1]:1080
+    if uri.startswith("["):
+        m = re.match(r"^\[(?P<host>[^\]]+)\]:(?P<port>\d+)$", uri)
+        if m:
+            host = m.group("host")
+            try:
+                port = int(m.group("port"))
+            except ValueError:
+                logger.fail(f"Invalid port in --proxy value: {m.group('port')}")
+                sys.exit(1)
+    else:
+        # Split host and port on the last colon to be safe with hostnames/IPv4
+        if ":" in uri:
+            host, port_str = uri.rsplit(":", 1)
+            try:
+                port = int(port_str)
+            except ValueError:
+                logger.fail(f"Invalid port in --proxy value: {port_str}")
+                sys.exit(1)
+
+    if not host or port is None:
+        logger.fail("Invalid --proxy value. Expected format: [scheme://]HOST:PORT (e.g., socks5://127.0.0.1:1080).")
+        sys.exit(1)
+
+    if not (1 <= port <= 65535):
+        logger.fail(f"Port must be between 1 and 65535, got: {port}")
+        sys.exit(1)
+
+    proxy_type = PROXY_TYPES[scheme]
+    rdns = scheme != "socks4"  # SOCKS4 doesn't support remote DNS
+
+    socks.setdefaultproxy(
+        proxy_type,
+        host,
+        port,
+        rdns=rdns,
+    )
+
+    # Monkey-patch socket to force usage of the SOCKS proxy
+    _socket.socket = socks.socksocket
+    _socket.create_connection = socks.create_connection
+
+    rdns_status = "RDNS enabled" if rdns else "RDNS disabled"
+    logger.info(f"{scheme.upper()} proxy enabled via {host}:{port} ({rdns_status})")
+    return True
 
 
 def requires_admin(func):
@@ -162,6 +243,7 @@ class connection:
         self.dns_server = self.args.dns_server
 
         # DNS resolution
+        self.proxied = _setup_socks_proxy(self.args, self.logger)
         dns_result = self.resolver(target)
         if dns_result:
             self.host, self.is_ipv6, self.is_link_local_ipv6 = dns_result["host"], dns_result["is_ipv6"], dns_result["is_link_local_ipv6"]
@@ -192,6 +274,9 @@ class connection:
 
     def resolver(self, target):
         try:
+            if getattr(self.args, "proxy", None):
+                return {"host": target, "is_ipv6": False, "is_link_local_ipv6": False}
+
             return get_host_addr_info(
                 target=target,
                 force_ipv6=self.args.force_ipv6,
