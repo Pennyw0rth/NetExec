@@ -64,6 +64,7 @@ def proto_args(parser, parents):
     mapping_enum_group.add_argument("--computers", nargs="?", const="", metavar="COMPUTER", help="Enumerate computer users")
     mapping_enum_group.add_argument("--pass-pol", action="store_true", help="dump password policy")
     mapping_enum_group.add_argument("--rid-brute", nargs="?", type=int, const=4000, metavar="MAX_RID", help="Enumerate users by bruteforcing RIDs")
+    mapping_enum_group.add_argument("--rid-users-export", metavar="FILE", help="Enumerate users by RID bruteforce and export usernames to file")
     mapping_enum_group.add_argument("--smb-sessions", action="store_true", help="Enumerate active smb sessions")
     mapping_enum_group.add_argument("--reg-sessions", type=str, nargs="?", const="", help="Enumerate users sessions using the Remote Registry. If a username is given, filter for it. If a file is given, filter for listed usernames. If no value is given, list all.")
     mapping_enum_group.add_argument("--loggedon-users", nargs="?", const="", help="Enumerate logged on users, if a user is specified than a regex filter is applied.")
