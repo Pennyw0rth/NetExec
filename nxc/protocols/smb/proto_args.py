@@ -10,6 +10,7 @@ def proto_args(parser, parents):
     delegate_spn_arg = smb_parser.add_argument("--delegate-spn", action=get_conditional_action(_StoreAction), make_required=[], help="SPN to use for S4U2Proxy, if not specified the SPN used will be cifs/<target>", type=str)
     generate_st = smb_parser.add_argument("--generate-st", type=str, dest="generate_st", action=get_conditional_action(_StoreAction), make_required=[], help="Store the S4U Service Ticket in the specified file")
     self_delegate_arg = smb_parser.add_argument("--self", dest="no_s4u2proxy", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Only do S4U2Self, no S4U2Proxy (use with delegate)")
+    u2u_arg = smb_parser.add_argument("--u2u", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Use User-to-User (U2U) authentication with S4U2Self")
 
     dgroup = smb_parser.add_mutually_exclusive_group()
     dgroup.add_argument("-d", "--domain", metavar="DOMAIN", dest="domain", type=str, help="domain to authenticate to")
@@ -29,6 +30,7 @@ def proto_args(parser, parents):
     self_delegate_arg.make_required = [delegate_arg]
     generate_st.make_required = [delegate_arg]
     delegate_spn_arg.make_required = [delegate_arg]
+    u2u_arg.make_required = [delegate_arg]
 
     cred_gathering_group = smb_parser.add_argument_group("Credential Gathering")
     cred_gathering_group.add_argument("--sam", choices={"regdump", "secdump"}, nargs="?", const="regdump", help="dump SAM hashes from target systems")
