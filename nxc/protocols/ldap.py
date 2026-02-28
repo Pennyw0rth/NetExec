@@ -26,6 +26,7 @@ from impacket.dcerpc.v5.samr import (
     SAM_MACHINE_ACCOUNT,
 )
 from impacket.krb5 import constants
+from impacket.krb5.crypto import string_to_key
 from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError
 from impacket.krb5.ccache import CCache
 from impacket.krb5.types import Principal, KerberosException
@@ -1379,15 +1380,29 @@ class ldap(connection):
 
                 # Get the password
                 passwd = "<no read permissions>"
+                aes256 = aes128 = None
                 if "msDS-ManagedPassword" in acc:
-                    blob = MSDS_MANAGEDPASSWORD_BLOB()
-                    blob.fromString(acc["msDS-ManagedPassword"])
-                    currentPassword = blob["CurrentPassword"][:-2]
-                    ntlm_hash = MD4.new()
-                    ntlm_hash.update(currentPassword)
-                    passwd = hexlify(ntlm_hash.digest()).decode("utf-8")
-                self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} NTLM: {passwd:<36} PrincipalsAllowedToReadPassword: {principal_with_read}")
+                    passwd, aes128, aes256 = self.gmsa_compute_secrets(acc["msDS-ManagedPassword"], acc["sAMAccountName"])
+                    self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} NTLM: {passwd:<36} PrincipalsAllowedToReadPassword: {principal_with_read}")
+                    self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} aes128-cts-hmac-sha1-96: {aes128}")
+                    self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} aes256-cts-hmac-sha1-96: {aes256}")
         return True
+
+    def gmsa_compute_secrets(self, data, sam):
+        # Compute NT Hash
+        blob = MSDS_MANAGEDPASSWORD_BLOB()
+        blob.fromString(data)
+        current_password = blob["CurrentPassword"][:-2]
+        ntlm_hash = MD4.new()
+        ntlm_hash.update(current_password)
+        passwd = hexlify(ntlm_hash.digest()).decode("utf-8")
+        # Compute Kerberos Keys
+        password = current_password.decode("utf-16-le", "replace").encode("utf-8")
+        sam_no_dollar = sam[:-1] if sam.endswith("$") else sam
+        salt = f"{self.domain.upper()}host{sam_no_dollar.lower()}.{self.domain.lower()}"
+        aes256 = hexlify(string_to_key(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value, password, salt).contents).decode()
+        aes128 = hexlify(string_to_key(constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value, password, salt).contents).decode()
+        return passwd, aes128, aes256
 
     def decipher_gmsa_name(self, domain_name=None, account_name=None):
         # https://aadinternals.com/post/gmsa/
@@ -1447,15 +1462,12 @@ class ldap(connection):
                         if self.decipher_gmsa_name(self.domain.split(".")[0], acc["sAMAccountName"][:-1]) == gmsa_id:
                             gmsa_id = acc["sAMAccountName"]
                             break
-                # convert to ntlm
+                # Compute the password and keys
                 data = bytes.fromhex(gmsa_pass)
-                blob = MSDS_MANAGEDPASSWORD_BLOB()
-                blob.fromString(data)
-                currentPassword = blob["CurrentPassword"][:-2]
-                ntlm_hash = MD4.new()
-                ntlm_hash.update(currentPassword)
-                passwd = hexlify(ntlm_hash.digest()).decode("utf-8")
+                passwd, aes128, aes256 = self.gmsa_compute_secrets(data, gmsa_id)
                 self.logger.highlight(f"Account: {gmsa_id:<20} NTLM: {passwd}")
+                self.logger.highlight(f"Account: {gmsa_id:<20} aes256-cts-hmac-sha1-96: {aes256}")
+                self.logger.highlight(f"Account: {gmsa_id:<20} aes128-cts-hmac-sha1-96: {aes128}")
         else:
             self.logger.fail("No string provided :'(")
 
