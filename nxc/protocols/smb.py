@@ -1908,6 +1908,27 @@ class smb(connection):
         dce.disconnect()
         return entries
 
+    def rid_users_export(self):
+        """Enumerate users by RID bruteforce and export only usernames (SidTypeUser) to a file."""
+        export_file = self.args.rid_users_export
+        max_rid = self.args.rid_brute if self.args.rid_brute else 4000
+
+        entries = self.rid_brute(max_rid=max_rid)
+
+        # Filter only SidTypeUser entries and extract unique usernames
+        usernames = sorted({entry["username"] for entry in entries if entry["sidtype"] == "SidTypeUser"})
+
+        if not usernames:
+            self.logger.display("No users found via RID bruteforce")
+            return
+
+        try:
+            with open(export_file, "w") as f:
+                f.writelines(f"{username}\n" for username in usernames)
+            self.logger.success(f"Exported {len(usernames)} users to {export_file}")
+        except OSError as e:
+            self.logger.fail(f"Error writing to {export_file}: {e}")
+
     def put_file_single(self, src, dst):
         self.logger.display(f"Copying {src} to {dst}")
         with open(src, "rb") as file:
