@@ -15,10 +15,11 @@ def proto_args(parser, parents):
     kerberoasting_arg = egroup.add_argument("--kerberoasting", "--kerberoast", help="Output TGS ticket to crack with hashcat to file")
     kerberoast_users_arg = egroup.add_argument("--kerberoast-account", nargs="+", dest="kerberoast_account", action=get_conditional_action(_StoreAction), make_required=[], help="Target specific accounts for kerberoasting (sAMAccountNames or file containing sAMAccountNames)")
     egroup.add_argument("--no-preauth-targets", nargs=1, dest="no_preauth_targets", help="Targeted kerberoastable users")
-    egroup.add_argument("--targetedkerberoast", help="Add temporary SPN to users without one, request ST, then remove it")
+    targeted_kerberoast_arg = egroup.add_argument("--targeted-kerberoast", nargs="+", dest="targeted_kerberoast", action=get_conditional_action(_StoreAction), make_required=[], help="Targeted kerberoasting: add temporary SPN to specified users, request ST, then remove it (sAMAccountNames or file containing sAMAccountNames)")
 
-    # Make kerberoast-users require kerberoasting
+    # Make kerberoast-users and targeted-kerberoast require kerberoasting
     kerberoast_users_arg.make_required = [kerberoasting_arg]
+    targeted_kerberoast_arg.make_required = [kerberoasting_arg]
 
     vgroup = ldap_parser.add_argument_group("Retrieve useful information on the domain")
     vgroup.add_argument("--base-dn", metavar="BASE_DN", dest="base_dn", type=str, default=None, help="base DN for search queries")
