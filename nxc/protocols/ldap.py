@@ -1230,8 +1230,8 @@ class ldap(connection):
             enabled = [x for x in resp_parsed if not int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
             self.logger.display(f"Total of records returned {len(enabled):d}")
 
-            # Perform Kerberos Attack
             for user in enabled:
+                # Perform Kerberos Attack
                 TGT = KerberosAttacks(self).get_tgt_kerberoasting(self.use_kcache)
                 self.logger.debug(f"TGT: {TGT}")
                 if TGT:
