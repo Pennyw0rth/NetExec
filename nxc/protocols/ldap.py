@@ -1196,9 +1196,11 @@ class ldap(connection):
 
             self.logger.info(f"Targeting specific accounts for kerberoasting: {', '.join(target_accounts)}")
 
+            # build search filter for specific users
             user_filter = "".join([f"(sAMAccountName={username})" for username in target_accounts])
             searchFilter = f"(&(servicePrincipalName=*)(|{user_filter}))"
         else:
+            # default to all
             searchFilter = "(&(servicePrincipalName=*)(!(objectCategory=computer)))"
 
         attributes = [
@@ -1219,13 +1221,15 @@ class ldap(connection):
         if not resp_parsed:
             self.logger.highlight("No entries found!")
         else:
+            # Filter disabled accounts
             disabled_accounts = [x for x in resp_parsed if int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
             for account in disabled_accounts:
                 self.logger.display(f"Skipping disabled account: {account['sAMAccountName']}")
-
+            # Get all enabled accounts
             enabled = [x for x in resp_parsed if not int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
             self.logger.display(f"Total of records returned {len(enabled):d}")
 
+            # Perform Kerberos Attack
             for user in enabled:
                 TGT = KerberosAttacks(self).get_tgt_kerberoasting(self.use_kcache)
                 self.logger.debug(f"TGT: {TGT}")
