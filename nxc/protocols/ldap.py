@@ -1225,6 +1225,7 @@ class ldap(connection):
             disabled_accounts = [x for x in resp_parsed if int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
             for account in disabled_accounts:
                 self.logger.display(f"Skipping disabled account: {account['sAMAccountName']}")
+
             # Get all enabled accounts
             enabled = [x for x in resp_parsed if not int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
             self.logger.display(f"Total of records returned {len(enabled):d}")
