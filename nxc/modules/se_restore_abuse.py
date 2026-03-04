@@ -29,7 +29,7 @@ class NXCModule:
         self.exe_name = "SeRestoreAbuse.exe"
 
     def options(self, _, module_options):
-        """
+        r"""
         EXE_PATH    Local path to a custom SeRestoreAbuse.exe (optional, uses embedded copy by default)
         TMP_DIR     Remote directory to upload the exe to (default: C:\Windows\Temp\)
         """
