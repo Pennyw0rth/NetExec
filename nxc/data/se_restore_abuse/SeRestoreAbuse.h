@@ -6,6 +6,10 @@
                NetExec is currently using v1.1.0 of the SeRestoreAbuse
                Github repository found here:
                https://github.com/rhymenaucerous/SeRestoreAbuse
+
+               Compilation is easiest using the Visual Studio solution
+               included in the repository to manage project settings and
+               dependencies.
                
                The original code can be found here, PoC by @xct_de:
                https://github.com/xct/SeRestoreAbuse
