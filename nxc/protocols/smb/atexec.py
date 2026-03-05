@@ -13,7 +13,7 @@ class TSCH_EXEC:
     def __init__(self, target, share_name, username, password, domain, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None,
                  # These options are used by the schtask_as module, except the run_task_as
                  # that defaults to NT AUTHORITY\System user (SID S-1-5-18) if not specified
-                 run_task_as="S-1-5-18", run_cmd=None, output_filename=None, task_name=None, output_file_location=None):
+                 run_task_as="S-1-5-18", run_cmd=None, output_filename=None, task_name=None, output_file_location=None, st=None):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -30,6 +30,7 @@ class TSCH_EXEC:
         self.__tries = tries
         self.__output_filename = None
         self.__share = share
+        self.__st = st
         self.logger = logger
 
         # Optional args for finetuning the task execution, e.g. used in nxc/modules/schtask_as.py
@@ -62,6 +63,7 @@ class TSCH_EXEC:
                 self.__lmhash,
                 self.__nthash,
                 self.__aesKey,
+                TGS=self.__st,
             )
             self.__rpctransport.set_kerberos(self.__doKerberos, self.__kdcHost)
 
