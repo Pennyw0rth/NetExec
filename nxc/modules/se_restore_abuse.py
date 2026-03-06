@@ -111,9 +111,7 @@ class NXCModule:
         # Execute SeRestoreAbuse.exe
         context.log.display(f"Executing {remote_path}")
         try:
-            output = connection.execute(
-                f'& "{remote_path}"', True, shell_type="powershell"
-            )
+            output = connection.execute(f'& "{remote_path}"', True, shell_type="powershell")
             if output:
                 for line in output.splitlines():
                     context.log.highlight(line)
