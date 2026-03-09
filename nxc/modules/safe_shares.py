@@ -16,7 +16,7 @@ class NXCModule:
     Tests READ/WRITE access without writing any files to disk.
     Mirrors SharpShares' ACL-based approach via impacket.
 
-    Module by @enzym3
+    Module by @e-nzym3
     """
 
     name = "safe_shares"
