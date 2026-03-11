@@ -177,9 +177,10 @@ class NXCModule:
                 self.context.db.add_credential("plaintext", self.__domain, self.__computerName, self.__computerPassword)
             except Exception as e:
                 self.context.log.debug(f"samrCreateUser2InDomain failed: {e}")
-                if "doesn't have the right to create a new machine account" in str(e):
+                # See error codes at: https://github.com/fortra/impacket/blob/8c155a5b492e8b0f9d08e5ca82b72c91d76f5c7f/impacket/dcerpc/v5/samr.py#L2591
+                if "Authenticating account doesn't have the right to create a new machine account!" in str(e):
                     self.context.log.fail(f"The following user does not have the right to create a computer account: {self.__username}")
-                elif "machine account quota exceeded!":
+                elif "Authenticating account's machine account quota exceeded!" in str(e):
                     self.context.log.fail(f"The following user exceeded their machine account quota: {self.__username}")
                 return
 
