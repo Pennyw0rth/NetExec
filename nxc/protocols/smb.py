@@ -365,7 +365,7 @@ class smb(connection):
                 kerb_pass = ""
                 self.username = self.args.delegate
                 serverName = Principal(self.args.delegate_spn if self.args.delegate_spn else f"cifs/{self.remoteName}", type=constants.PrincipalNameType.NT_SRV_INST.value)
-                tgs, sk = kerberos_login_with_S4U(domain, self.hostname, username, password, nthash, lmhash, aesKey, kdcHost, self.args.delegate, serverName, useCache, no_s4u2proxy=self.args.no_s4u2proxy)
+                tgs, sk = kerberos_login_with_S4U(domain, self.hostname, username, password, nthash, lmhash, aesKey, kdcHost, self.args.delegate, serverName, useCache, no_s4u2proxy=self.args.no_s4u2proxy, u2u=self.args.u2u)
                 self.logger.debug(f"TGS obtained for {self.args.delegate} for {serverName}")
 
                 spn = f"cifs/{self.remoteName}"
@@ -387,10 +387,14 @@ class smb(connection):
 
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             if self.args.delegate:
-                used_ccache = f" through S4U with {username}"
+                u2u_str = "+U2U" if self.args.u2u else ""
+                auth_user = username if username else "ccache"
+                used_ccache = f" through S4U{u2u_str} with {auth_user}"
 
             if self.args.delegate_spn:
-                used_ccache = f" through S4U with {username} (w/ SPN {self.args.delegate_spn})"
+                u2u_str = "+U2U" if self.args.u2u else ""
+                auth_user = username if username else "ccache"
+                used_ccache = f" through S4U{u2u_str} with {auth_user} (w/ SPN {self.args.delegate_spn})"
 
             out = f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}"
             self.logger.success(out)
