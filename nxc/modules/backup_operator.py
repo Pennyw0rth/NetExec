@@ -1,13 +1,11 @@
 import contextlib
-import random
-import string
 from time import sleep
 
 from impacket.examples.secretsdump import SAMHashes, LSASecrets, LocalOperations
 from impacket.smbconnection import SessionError
 from impacket.dcerpc.v5 import transport, rrp
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
-from nxc.helpers.misc import CATEGORY
+from nxc.helpers.misc import CATEGORY, gen_random_string
 
 
 class NXCModule:
@@ -28,7 +26,8 @@ class NXCModule:
 
     def on_login(self, context, connection):
         connection.args.share = "SYSVOL"
-        rand_suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        rand_suffix = gen_random_string(8)
+
         # enable remote registry
         context.log.display("Triggering RemoteRegistry to start through named pipe...")
         connection.trigger_winreg()
