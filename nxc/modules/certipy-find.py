@@ -75,7 +75,7 @@ class NXCModule:
             username=connection.username,
             password=connection.password,
             remote_name=connection.remoteName,
-            hashes=connection.hash,
+            hashes=f"{connection.lmhash}:{connection.nthash}",
             lmhash=connection.lmhash,
             nthash=connection.nthash,
             do_kerberos=connection.kerberos,
