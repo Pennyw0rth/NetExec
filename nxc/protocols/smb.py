@@ -489,7 +489,8 @@ class smb(connection):
                 self.inc_failed_login(username)
                 return False
         except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
-            self.logger.fail(f"Connection Error: {e}")
+            desc = e.getErrorString() if hasattr(e, "getErrorString") else str(e)
+            self.logger.fail(f"{domain}\\{self.username}:{process_secret(self.password)} {desc}")
             return False
         except BrokenPipeError:
             self.logger.fail("Broken Pipe Error while attempting to login")
@@ -553,7 +554,8 @@ class smb(connection):
                 self.inc_failed_login(self.username)
                 return False
         except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
-            self.logger.fail(f"Connection Error: {e}")
+            desc = e.getErrorString() if hasattr(e, "getErrorString") else str(e)
+            self.logger.fail(f"{domain}\\{self.username}:{process_secret(self.password)} {desc}")
             return False
         except BrokenPipeError:
             self.logger.fail("Broken Pipe Error while attempting to login")
