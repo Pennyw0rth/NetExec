@@ -456,14 +456,14 @@ class smb(connection):
             if "Unix" not in self.server_os:
                 self.check_if_admin()
 
-            self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
-            self.db.add_credential("plaintext", domain, self.username, self.password)
-            user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
-            host_id = self.db.get_hosts(self.host)[0].id
-            self.db.add_loggedin_relation(user_id, host_id)
+            if not self.is_guest and (self.username and self.password):
+                self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
+                self.db.add_credential("plaintext", domain, self.username, self.password)
+                user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
+                host_id = self.db.get_hosts(self.host)[0].id
+                self.db.add_loggedin_relation(user_id, host_id)
 
-            out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_guest()}{self.mark_pwned()}"
-            self.logger.success(out)
+            self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_guest()}{self.mark_pwned()}")
 
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
@@ -523,13 +523,13 @@ class smb(connection):
             if "Unix" not in self.server_os:
                 self.check_if_admin()
 
-            self.db.add_credential("hash", domain, self.username, self.hash)
-            user_id = self.db.get_credential("hash", domain, self.username, self.hash)
-            host_id = self.db.get_hosts(self.host)[0].id
-            self.db.add_loggedin_relation(user_id, host_id)
+            if not self.is_guest and (self.username and self.hash):
+                self.db.add_credential("hash", domain, self.username, self.hash)
+                user_id = self.db.get_credential("hash", domain, self.username, self.hash)
+                host_id = self.db.get_hosts(self.host)[0].id
+                self.db.add_loggedin_relation(user_id, host_id)
 
-            out = f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_guest()}{self.mark_pwned()}"
-            self.logger.success(out)
+            self.logger.success(f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_guest()}{self.mark_pwned()}")
 
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
