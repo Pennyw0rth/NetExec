@@ -456,7 +456,7 @@ class smb(connection):
             if "Unix" not in self.server_os:
                 self.check_if_admin()
 
-            if not self.is_guest and (self.username and self.password):
+            if not self.is_guest and self.username:
                 self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
                 self.db.add_credential("plaintext", domain, self.username, self.password)
                 user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
