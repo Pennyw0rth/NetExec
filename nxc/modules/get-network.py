@@ -2,7 +2,6 @@
 # Credit to https://github.com/dirkjanm/adidnsdump @_dirkjan
 # module by @mpgn_x64
 import re
-import codecs
 import socket
 from datetime import datetime
 from struct import unpack
