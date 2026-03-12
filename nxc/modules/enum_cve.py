@@ -1,5 +1,5 @@
 from impacket.dcerpc.v5 import transport, rrp
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, DCERPCException
 from impacket.smbconnection import SessionError
 from nxc.helpers.misc import CATEGORY
 from impacket.nmb import NetBIOSError
@@ -72,6 +72,9 @@ class NXCModule:
                 return
             else:
                 context.log.debug(f"OS version from registry: {connection.server_os_major}.{connection.server_os_minor}.{connection.server_os_build}.{ubr}")
+        except DCERPCException as e:
+            context.log.fail(f"DCERPC error: {e}")
+            return
         except SessionError as e:
             if "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
                 context.log.info(f"RemoteRegistry is probably deactivated: {e}")
