@@ -154,7 +154,7 @@ class NXCModule:
 
         context.log.highlight(f"Found {len(outdata)} records")
         path = expanduser(f"{NXC_PATH}/logs/{connection.domain}_network_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")
-        with codecs.open(path, "w", "utf-8") as outfile:
+        with open(path, "w") as outfile:
             for row in outdata:
                 if self.showhosts:
                     outfile.write(f"{row['name'] + '.' + zone}\n")
