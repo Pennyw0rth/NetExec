@@ -114,7 +114,7 @@ class NXCModule:
                 (10, 0, 19044): 5965,     # Windows 10 21H2
                 (10, 0, 22621): 5472,     # Windows 11 22H2
             },
-            "message": "can relay SMB to any protocol",
+            "message": "Relay possible from SMB to any protocol",
             "signing_message": "can relay SMB to other protocols except SMB",
         },
         # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-58726
@@ -131,8 +131,8 @@ class NXCModule:
                 (10, 0, 19044): 6456,     # Windows 10 21H2
                 (10, 0, 22621): 6060,     # Windows 11 22H2
             },
-            "message": "can relay SMB using Ghost SPN for Kerberos reflection",
-            "signing_message": "can relay SMB using Ghost SPN (non HOST/CIFS) for Kerberos reflection to other protocols except SMB",
+            "message": "Relay possible from SMB using Ghost SPN for Kerberos reflection",
+            "signing_message": "Relay possible from SMB using Ghost SPN (non HOST/CIFS) for Kerberos reflection to other protocols except SMB",
         },
 
         # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-54918
@@ -152,7 +152,7 @@ class NXCModule:
                 (10, 0, 22631): 5909,     # Windows 11 23H2
                 (10, 0, 26100): 6584,     # Windows Server 2025
             },
-            "message": "can relay SMB to other protocols except SMB",
-            "signing_message": "can relay SMB to any protocol (coercion works only via DCE/RPC over TCP — no named pipes)",
+            "message": "Relay possible from SMB to any protocol",
+            "signing_message": "Relay possible from SMB to other protocols except SMB (coercion works only via DCE/RPC over TCP — no named pipes)",
         }
     }
