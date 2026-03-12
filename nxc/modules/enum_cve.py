@@ -97,7 +97,7 @@ class NXCModule:
                     else:
                         context.log.highlight(f"{cve.upper()} - {self.CVE_PATCHES[cve]['alias']} - {message}")
                 else:
-                    context.log.info(f"Not vulnerable to {self.CVE_PATCHES[cve]['alias']} (UBR >= {self.CVE_PATCHES[cve]['patches'].get((connection.server_os_major, connection.server_os_minor, connection.server_os_build), 'unknown')})")
+                    context.log.info(f"Not vulnerable to {self.CVE_PATCHES[cve]['alias']} (UBR {ubr} >= {self.CVE_PATCHES[cve]['patches'].get((connection.server_os_major, connection.server_os_minor, connection.server_os_build), 'unknown')})")
 
     # patches: key = (major, minor, build), value = minimum patched UBR
     CVE_PATCHES = {
