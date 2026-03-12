@@ -157,9 +157,9 @@ class NXCModule:
         with codecs.open(path, "w", "utf-8") as outfile:
             for row in outdata:
                 if self.showhosts:
-                    outfile.write(f"{row['name'] + '.' + connection.domain}\n")
+                    outfile.write(f"{row['name'] + '.' + zone}\n")
                 elif self.showall:
-                    outfile.write(f"{row['name'] + '.' + connection.domain} \t {row['value']}\n")
+                    outfile.write(f"{row['name'] + '.' + zone} \t {row['value']}\n")
                 else:
                     outfile.write(f"{row['value']}\n")
         context.log.success(f"Dumped {len(outdata)} records to {path}")
