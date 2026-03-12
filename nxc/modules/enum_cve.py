@@ -107,11 +107,14 @@ class NXCModule:
                 (6, 1, 7601): 27769,      # Windows Server 2008 R2 SP1
                 (6, 2, 9200): 25522,      # Windows Server 2012
                 (6, 3, 9600): 22620,      # Windows Server 2012 R2
-                (10, 0, 14393): 8148,     # Windows Server 2016
+                (10, 0, 10240): 21034,    # Windows 10 1507
+                (10, 0, 14393): 8148,     # Windows Server 2016 / Win10 1607
                 (10, 0, 17763): 7434,     # Windows Server 2019 / Win10 1809
-                (10, 0, 20348): 3807,     # Windows Server 2022
                 (10, 0, 19044): 5965,     # Windows 10 21H2
+                (10, 0, 20348): 3807,     # Windows Server 2022
                 (10, 0, 22621): 5472,     # Windows 11 22H2
+                (10, 0, 25398): 1665,     # Windows Server 2022 23H2
+                (10, 0, 26100): 4270,     # Windows Server 2025 / Win11 24H2
             },
             "message": "Relay possible from SMB to any protocol",
             "signing_message": "can relay SMB to other protocols except SMB",
@@ -120,15 +123,19 @@ class NXCModule:
         "CVE-2025-58726": {
             "alias": "Ghost SPN",
             "patches": {
-                (6, 1, 7601): 23571,      # Windows Server 2008 SP2
+                (6, 0, 6003): 23571,      # Windows Server 2008 SP2
                 (6, 1, 7601): 27974,      # Windows Server 2008 R2 SP1
                 (6, 2, 9200): 25722,      # Windows Server 2012
                 (6, 3, 9600): 22824,      # Windows Server 2012 R2
-                (10, 0, 14393): 8519,     # Windows Server 2016
+                (10, 0, 10240): 21161,    # Windows 10 1507
+                (10, 0, 14393): 8519,     # Windows Server 2016 / Win10 1607
                 (10, 0, 17763): 7919,     # Windows Server 2019 / Win10 1809
-                (10, 0, 20348): 4294,     # Windows Server 2022
                 (10, 0, 19044): 6456,     # Windows 10 21H2
+                (10, 0, 20348): 4294,     # Windows Server 2022
                 (10, 0, 22621): 6060,     # Windows 11 22H2
+                (10, 0, 25398): 1913,     # Windows Server 2022 23H2
+                (10, 0, 26100): 6899,     # Windows Server 2025 / Win11 24H2
+                (10, 0, 26200): 6899,     # Windows 11 25H2
             },
             "message": "Relay possible from SMB using Ghost SPN for Kerberos reflection",
             "signing_message": "Relay possible from SMB using Ghost SPN (non HOST/CIFS) for Kerberos reflection to other protocols except SMB",
@@ -142,14 +149,14 @@ class NXCModule:
                 (6, 1, 7601): 27929,      # Windows Server 2008 R2 SP1
                 (6, 2, 9200): 25675,      # Windows Server 2012
                 (6, 3, 9600): 22774,      # Windows Server 2012 R2
-                (10, 0, 10240): 21128,      # Windows 10 1507
+                (10, 0, 10240): 21128,    # Windows 10 1507
                 (10, 0, 14393): 8422,     # Windows Server 2016
                 (10, 0, 17763): 7792,     # Windows Server 2019 / Win10 1809
                 (10, 0, 19044): 6332,     # Windows 10 21H2
                 (10, 0, 20348): 4171,     # Windows Server 2022
                 (10, 0, 22621): 5909,     # Windows 11 22H2
                 (10, 0, 22631): 5909,     # Windows 11 23H2
-                (10, 0, 26100): 6584,     # Windows Server 2025
+                (10, 0, 26100): 6508,     # Windows Server 2025 / Win11 24H2
             },
             "message": "Relay possible from SMB to any protocol",
             "signing_message": "Relay possible from SMB to other protocols except SMB (coercion works only via DCE/RPC over TCP — no named pipes)",
