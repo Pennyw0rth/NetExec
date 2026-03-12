@@ -123,6 +123,7 @@ class NXCModule:
             "signing_message": "can relay SMB to other protocols except SMB",
         },
         # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-58726
+        # https://www.semperis.com/blog/exploiting-ghost-spns-and-kerberos-reflection-for-smb-server-privilege-elevation/
         "CVE-2025-58726": {
             "alias": "Ghost SPN",
             "patches": {
