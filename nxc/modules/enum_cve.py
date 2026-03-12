@@ -47,10 +47,9 @@ class NXCModule:
         return ubr < min_patched_ubr
 
     def on_login(self, context, connection):
-        self.context = context
-        self.connection = connection
-
         connection.trigger_winreg()
+
+        # Connect to RemoteRegistry to read UBR from registry
         rpc = transport.DCERPCTransportFactory(r"ncacn_np:445[\pipe\winreg]")
         rpc.set_smb_connection(connection.conn)
         if connection.kerberos:
@@ -58,6 +57,8 @@ class NXCModule:
         dce = rpc.get_dce_rpc()
         if connection.kerberos:
             dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+
+        # Query the UBR
         try:
             dce.connect()
             dce.bind(rrp.MSRPC_UUID_RRP)
