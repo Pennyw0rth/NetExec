@@ -88,8 +88,7 @@ class NXCModule:
                 message = self.CVE_PATCHES[cve]["message"]
                 signing_message = self.CVE_PATCHES[cve]["signing_message"]
 
-                vuln = self.is_vulnerable(connection.server_os_major, connection.server_os_minor, connection.server_os_build, ubr, self.CVE_PATCHES[cve]["patches"])
-                if vuln:
+                if self.is_vulnerable(connection.server_os_major, connection.server_os_minor, connection.server_os_build, ubr, self.CVE_PATCHES[cve]["patches"]):
                     if connection.conn.isSigningRequired():  # Special conditional message for some CVEs
                         context.log.highlight(f"{cve.upper()} - {self.CVE_PATCHES[cve]['alias']} - {signing_message}")
                     else:
