@@ -6,69 +6,32 @@ from impacket.nmb import NetBIOSError
 
 
 class NXCModule:
-    """Initial module by: Mauriceter"""
+    """
+    Initial module by: Mauriceter
+    Additional authors: azoxlpf, Defte, YOLOP0wn, pol4ir, NeffIsBack
+    """
     name = "enum_cve"
     description = "Enumerate common (useful) CVEs by querying the registry for the OS version and UBR."
     supported_protocols = ["smb"]
     category = CATEGORY.ENUMERATION
 
-
-
-    # Reference table from MSRC report
-    # https://msrc.microsoft.com/update-guide/fr-FRS/vulnerability/CVE-2025-33073
-    # https://www.synacktiv.com/en/publications/ntlm-reflection-is-dead-long-live-ntlm-reflection-an-in-depth-analysis-of-cve-2025
-    MSRC_PATCHES_ntlm_reflection = {    # key = (major, minor, build), value = minimum patched UBR
-        (6, 0, 6003): 23351,      # Windows Server 2008 SP2
-        (6, 1, 7601): 27769,      # Windows Server 2008 R2 SP1
-        (6, 2, 9200): 25522,      # Windows Server 2012
-        (6, 3, 9600): 22620,      # Windows Server 2012 R2
-        (10, 0, 14393): 8148,     # Windows Server 2016
-        (10, 0, 17763): 7434,     # Windows Server 2019 / Win10 1809
-        (10, 0, 20348): 3807,     # Windows Server 2022
-        (10, 0, 19044): 5965,     # Windows 10 21H2
-        (10, 0, 22621): 5472,     # Windows 11 22H2
-    }
-
-    # Reference table from MSRC report
-    # https://msrc.microsoft.com/update-guide/fr-FRS/vulnerability/CVE-2025-58726
-    # Thanks to @YOLOP0wn https://github.com/Pennyw0rth/NetExec/pull/978
-    MSRC_PATCHES_ghostspn = {    # key = (major, minor, build), value = minimum patched UBR
-        (6, 1, 7601): 23571,      # Windows Server 2008 SP2
-        (6, 1, 7601): 27974,      # Windows Server 2008 R2 SP1
-        (6, 2, 9200): 25722,      # Windows Server 2012
-        (6, 3, 9600): 22824,      # Windows Server 2012 R2
-        (10, 0, 14393): 8519,     # Windows Server 2016
-        (10, 0, 17763): 7919,     # Windows Server 2019 / Win10 1809
-        (10, 0, 20348): 4294,     # Windows Server 2022
-        (10, 0, 19044): 6456,     # Windows 10 21H2
-        (10, 0, 22621): 6060,     # Windows 11 22H2
-    }
-
-    # Reference table from MSRC report
-    # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-54918
-    MSRC_PATCHES_ntlm_mic_bypass = {    # key = (major, minor, build), value = minimum patched UBR
-        (6, 0, 6003): 23529,      # Windows Server 2008 SP2
-        (6, 1, 7601): 27929,      # Windows Server 2008 R2 SP1
-        (6, 2, 9200): 25675,      # Windows Server 2012
-        (6, 3, 9600): 22774,      # Windows Server 2012 R2
-        (10, 0, 10240): 21128,      # Windows 10 1507
-        (10, 0, 14393): 8422,     # Windows Server 2016
-        (10, 0, 17763): 7792,     # Windows Server 2019 / Win10 1809
-        (10, 0, 19044): 6332,     # Windows 10 21H2
-        (10, 0, 20348): 4171,     # Windows Server 2022
-        (10, 0, 22621): 5909,     # Windows 11 22H2
-        (10, 0, 22631): 5909,     # Windows 11 23H2
-        (10, 0, 26100): 6584,     # Windows Server 2025
-    }
-
     def __init__(self, context=None, module_options=None):
-        self.context = context
+        context = context
         self.module_options = module_options
         self.cve = "all"
 
     def options(self, context, module_options):
         """
-        CVE         CVE recon (CVE-2025-33073, CVE‑2025‑54918, CVE-2025-58726, All   default: All)
+        Be aware that these checks solely rely on the OS version and UBR reported in the registry,
+        and do not check for the actual presence of the vulnerable components or mitigations.
+        Test the attack yourself to verify the host is actually vulnerable.
+
+        Currently supported CVEs:
+        - CVE-2025-33073 (NTLM Reflection)
+        - CVE-2025-58726 (Ghost SPN)
+        - CVE-2025-54918 (NTLM MIC Bypass)
+
+        CVE       Filter for specific CVE number (default: All)
         """
         self.listener = None
         if "CVE" in module_options:
