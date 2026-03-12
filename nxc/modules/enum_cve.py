@@ -19,6 +19,7 @@ class NXCModule:
         context = context
         self.module_options = module_options
         self.cve = "all"
+        self.exploitation_details = False
 
     def options(self, context, module_options):
         """
@@ -31,11 +32,14 @@ class NXCModule:
         - CVE-2025-58726 (Ghost SPN)
         - CVE-2025-54918 (NTLM MIC Bypass)
 
-        CVE       Filter for specific CVE number (default: All)
+        CVE             Filter for specific CVE number (default: All)
+        EXPLOITATION    Also provide sources for exploitation details (default: False)
         """
         self.listener = None
         if "CVE" in module_options:
             self.cve = module_options["CVE"].lower()
+        if "EXPLOITATION" in module_options:
+            self.exploitation_details = module_options["EXPLOITATION"].lower() in ["true", "1", "yes"]
 
     def is_vulnerable(self, major, minor, build, ubr, msrc):
         key = (major, minor, build)
@@ -88,21 +92,19 @@ class NXCModule:
         # Check each CVE
         for cve in self.CVE_PATCHES:
             if self.cve == "all" or self.cve.lower() == cve.lower():
-                message = self.CVE_PATCHES[cve]["message"]
-                signing_message = self.CVE_PATCHES[cve]["signing_message"]
-
                 if self.is_vulnerable(connection.server_os_major, connection.server_os_minor, connection.server_os_build, ubr, self.CVE_PATCHES[cve]["patches"]):
-                    if connection.conn.isSigningRequired():  # Special conditional message for some CVEs
-                        context.log.highlight(f"{cve.upper()} - {self.CVE_PATCHES[cve]['alias']} - {signing_message}")
+                    if connection.conn.isSigningRequired() and "signing_message" in self.CVE_PATCHES[cve]:  # Special conditional message for some CVEs
+                        context.log.highlight(f"{cve.upper()} - {self.CVE_PATCHES[cve]['alias']} - {self.CVE_PATCHES[cve]['signing_message']}")
                     else:
-                        context.log.highlight(f"{cve.upper()} - {self.CVE_PATCHES[cve]['alias']} - {message}")
+                        context.log.highlight(f"{cve.upper()} - {self.CVE_PATCHES[cve]['alias']} - {self.CVE_PATCHES[cve]['message']}")
+                    if self.exploitation_details:
+                        context.log.highlight(f"Exploitation details: {self.CVE_PATCHES[cve]['exploitation']}")
                 else:
                     context.log.info(f"Not vulnerable to {self.CVE_PATCHES[cve]['alias']} (UBR {ubr} >= {self.CVE_PATCHES[cve]['patches'].get((connection.server_os_major, connection.server_os_minor, connection.server_os_build), 'unknown')})")
 
     # patches: key = (major, minor, build), value = minimum patched UBR
     CVE_PATCHES = {
         # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-33073
-        # https://www.synacktiv.com/en/publications/ntlm-reflection-is-dead-long-live-ntlm-reflection-an-in-depth-analysis-of-cve-2025
         "CVE-2025-33073": {
             "alias": "NTLM reflection",
             "patches": {
@@ -121,9 +123,9 @@ class NXCModule:
             },
             "message": "Relay possible from SMB to any protocol",
             "signing_message": "can relay SMB to other protocols except SMB",
+            "exploitation": "https://www.synacktiv.com/en/publications/ntlm-reflection-is-dead-long-live-ntlm-reflection-an-in-depth-analysis-of-cve-2025",
         },
         # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-58726
-        # https://www.semperis.com/blog/exploiting-ghost-spns-and-kerberos-reflection-for-smb-server-privilege-elevation/
         "CVE-2025-58726": {
             "alias": "Ghost SPN",
             "patches": {
@@ -143,9 +145,11 @@ class NXCModule:
             },
             "message": "Relay possible from SMB using Ghost SPN for Kerberos reflection",
             "signing_message": "Relay possible from SMB using Ghost SPN (non HOST/CIFS) for Kerberos reflection to other protocols except SMB",
+            "exploitation": "https://www.semperis.com/blog/exploiting-ghost-spns-and-kerberos-reflection-for-smb-server-privilege-elevation/",
         },
 
         # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-54918
+        # https://decoder.cloud/2025/11/24/reflecting-your-authentication-when-windows-ends-up-talking-to-itself/
         "CVE-2025-54918": {
             "alias": "NTLM MIC Bypass",
             "patches": {
@@ -162,7 +166,7 @@ class NXCModule:
                 (10, 0, 22631): 5909,     # Windows 11 23H2
                 (10, 0, 26100): 6508,     # Windows Server 2025 / Win11 24H2
             },
-            "message": "Relay possible from SMB to any protocol",
-            "signing_message": "Relay possible from SMB to other protocols except SMB (coercion works only via DCE/RPC over TCP — no named pipes)",
+            "message": "Note that without CVE-2025-33073 only Windows Server 2025 is exploitable",
+            "exploitation": "https://yousofnahya.medium.com/hands-on-exploitation-of-cve-2025-54918-cf376ebb40e1",
         }
     }
