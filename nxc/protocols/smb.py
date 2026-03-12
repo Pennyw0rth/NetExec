@@ -120,7 +120,7 @@ class smb(connection):
         self.bootkey = None
         self.smbv1 = None   # Check if SMBv1 is supported
         self.smbv3 = None   # Check if SMBv3 is supported
-        self.is_timedouted = False
+        self.is_timeouted = False
         self.signing = False
         self.smb_share_name = smb_share_name
         self.pvkbytes = None
