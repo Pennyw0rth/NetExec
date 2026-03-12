@@ -128,7 +128,7 @@ class smb(connection):
         self.null_auth = False
         self.protocol = "SMB"
         self.is_guest = None
-        self.isdc = False
+        self.isdc = None
 
         connection.__init__(self, args, db, host)
 
@@ -167,7 +167,6 @@ class smb(connection):
 
     def enum_host_info(self):
         self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
-        self.is_host_dc()
 
         try:
             self.conn.login("", "")
@@ -198,6 +197,7 @@ class smb(connection):
                 self.targetDomain = self.hostname
         else:
             try:
+                self.is_host_dc()
                 # If we know the host is a DC we can still get the hostname over LDAP if NTLM is not available
                 if self.isdc and detect_if_ip(self.host):
                     self.hostname, self.domain = LDAPResolution(self.host).get_resolution()
@@ -299,6 +299,8 @@ class smb(connection):
         self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}){ntlm}{null_auth}{guest}")
 
         if self.args.generate_hosts_file or self.args.generate_krb5_file:
+            if self.isdc is None:
+                self.is_host_dc()
             if self.args.generate_hosts_file:
                 with open(self.args.generate_hosts_file, "a+") as host_file:
                     dc_part = f" {self.targetDomain}" if self.isdc else ""
@@ -418,7 +420,8 @@ class smb(connection):
             if self.args.delegate:
                 used_ccache = f" through S4U with {username}"
             self.logger.fail(f"{domain}\\{self.username}{used_ccache} {e}")
-        except (SessionError, Exception) as e:
+            return False
+        except SessionError as e:
             error, desc = e.getErrorString()
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             if self.args.delegate:
@@ -429,6 +432,13 @@ class smb(connection):
             )
             if error not in smb_error_status:
                 self.inc_failed_login(username)
+            return False
+        except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
+            used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
+            if self.args.delegate:
+                used_ccache = f" through S4U with {username}"
+            desc = e.getErrorString() if hasattr(e, "getErrorString") else str(e)
+            self.logger.fail(f"{domain}\\{self.username}{used_ccache} {desc}")
             return False
 
     def plaintext_login(self, domain, username, password):
@@ -446,14 +456,14 @@ class smb(connection):
             if "Unix" not in self.server_os:
                 self.check_if_admin()
 
-            self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
-            self.db.add_credential("plaintext", domain, self.username, self.password)
-            user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
-            host_id = self.db.get_hosts(self.host)[0].id
-            self.db.add_loggedin_relation(user_id, host_id)
+            if not self.is_guest and (self.username and self.password):
+                self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
+                self.db.add_credential("plaintext", domain, self.username, self.password)
+                user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
+                host_id = self.db.get_hosts(self.host)[0].id
+                self.db.add_loggedin_relation(user_id, host_id)
 
-            out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_guest()}{self.mark_pwned()}"
-            self.logger.success(out)
+            self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_guest()}{self.mark_pwned()}")
 
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
@@ -479,7 +489,8 @@ class smb(connection):
                 self.inc_failed_login(username)
                 return False
         except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
-            self.logger.fail(f"Connection Error: {e}")
+            desc = e.getErrorString() if hasattr(e, "getErrorString") else str(e)
+            self.logger.fail(f"{domain}\\{self.username}:{process_secret(self.password)} {desc}")
             return False
         except BrokenPipeError:
             self.logger.fail("Broken Pipe Error while attempting to login")
@@ -512,13 +523,13 @@ class smb(connection):
             if "Unix" not in self.server_os:
                 self.check_if_admin()
 
-            self.db.add_credential("hash", domain, self.username, self.hash)
-            user_id = self.db.get_credential("hash", domain, self.username, self.hash)
-            host_id = self.db.get_hosts(self.host)[0].id
-            self.db.add_loggedin_relation(user_id, host_id)
+            if not self.is_guest and (self.username and self.hash):
+                self.db.add_credential("hash", domain, self.username, self.hash)
+                user_id = self.db.get_credential("hash", domain, self.username, self.hash)
+                host_id = self.db.get_hosts(self.host)[0].id
+                self.db.add_loggedin_relation(user_id, host_id)
 
-            out = f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_guest()}{self.mark_pwned()}"
-            self.logger.success(out)
+            self.logger.success(f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_guest()}{self.mark_pwned()}")
 
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
@@ -543,7 +554,8 @@ class smb(connection):
                 self.inc_failed_login(self.username)
                 return False
         except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
-            self.logger.fail(f"Connection Error: {e}")
+            desc = e.getErrorString() if hasattr(e, "getErrorString") else str(e)
+            self.logger.fail(f"{domain}\\{self.username}:{process_secret(self.password)} {desc}")
             return False
         except BrokenPipeError:
             self.logger.fail("Broken Pipe Error while attempting to login")
@@ -755,6 +767,8 @@ class smb(connection):
                 self.logger.debug("Host appears to be a DC (multiple DC ports open)")
                 self.isdc = True
                 return True
+        self.isdc = False
+        return False
 
     def _is_port_open(self, port, timeout=1):
         """Check if a specific port is open on the target host."""
@@ -1372,7 +1386,7 @@ class smb(connection):
             self.logger.debug(f"domain: {self.domain}")
             user_id = self.db.get_user(self.domain.upper(), self.username)[0][0]
         except IndexError as e:
-            if self.kerberos or self.username == "":
+            if self.kerberos or self.username == "" or self.is_guest:
                 pass
             else:
                 self.logger.fail(f"IndexError: {e!s}")
