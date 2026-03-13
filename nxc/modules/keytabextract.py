@@ -10,7 +10,7 @@ from contextlib import redirect_stdout
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from nxc.helpers.misc import CATEGORY
 
@@ -26,7 +26,7 @@ KEYTYPE_SIZE: int = 4
 KEYLEN_SIZE: int = 4
 NAMETYPE_SIZE: int = 8
 
-SUPPORTED_VERSIONS: List[str] = ["0501", "0502"]
+SUPPORTED_VERSIONS: list[str] = ["0501", "0502"]
 
 HAS_COLOURS = False
 
@@ -74,7 +74,7 @@ class EncryptionInfo:
 
 
 # Encryption type definitions
-ENCRYPTION_TYPES: Dict[str, EncryptionInfo] = {
+ENCRYPTION_TYPES: dict[str, EncryptionInfo] = {
     EncryptionType.RC4_HMAC.value: EncryptionInfo(
         name="RC4-HMAC", display="NTLM", hash_length=32, pattern_suffix="0010"
     ),
@@ -114,7 +114,7 @@ class ServicePrincipal:
 
     name: str
     realm: str
-    keys: List[KeyEntry] = field(default_factory=list)
+    keys: list[KeyEntry] = field(default_factory=list)
 
     def add_key(self, key: KeyEntry) -> None:
         """Add a key entry to this service principal.
@@ -132,7 +132,7 @@ class KeytabData:
 
     version: str
     file_path: str
-    principals: Dict[str, ServicePrincipal] = field(default_factory=dict)
+    principals: dict[str, ServicePrincipal] = field(default_factory=dict)
 
     def add_entry(self, realm: str, principal_name: str, key: KeyEntry) -> None:
         """Add a key entry to the appropriate service principal.
@@ -156,13 +156,12 @@ class KeyTabParser(ABC):
     @abstractmethod
     def extract_entry(
         self, hex_data: str, pointer: int
-    ) -> Tuple[Optional[Tuple[str, str, KeyEntry]], int]:
+    ) -> tuple[tuple[str, str, KeyEntry] | None, int]:
         """Extract a single entry from the keytab.
 
         Returns:
             Tuple containing (realm, principal, key_entry) and new pointer position
         """
-        pass
 
 
 class KeyTabParserV0501(KeyTabParser):
@@ -170,7 +169,7 @@ class KeyTabParserV0501(KeyTabParser):
 
     def extract_entry(
         self, hex_data: str, pointer: int
-    ) -> Tuple[Optional[Tuple[str, str, KeyEntry]], int]:
+    ) -> tuple[tuple[str, str, KeyEntry] | None, int]:
         """Extract entry using v0501 format (without entry size fields)."""
         try:
             num_components = int(hex_data[pointer : pointer + COMPONENT_COUNT_SIZE], 16)
@@ -225,7 +224,7 @@ class KeyTabParserV0501(KeyTabParser):
             return (realm, service_principal, key), pointer
 
         except Exception as e:
-            logger.debug(f"Error parsing v0501 entry at position {pointer}: {str(e)}")
+            logger.debug(f"Error parsing v0501 entry at position {pointer}: {e!s}")
             return None, pointer + 8
 
 
@@ -234,7 +233,7 @@ class KeyTabParserV0502(KeyTabParser):
 
     def extract_entry(
         self, hex_data: str, pointer: int
-    ) -> Tuple[Optional[Tuple[str, str, KeyEntry]], int]:
+    ) -> tuple[tuple[str, str, KeyEntry] | None, int]:
         """Extract entry using v0502 format."""
         try:
             num_components = int(hex_data[pointer : pointer + COMPONENT_COUNT_SIZE], 16)
@@ -291,7 +290,7 @@ class KeyTabParserV0502(KeyTabParser):
             return (realm, service_principal, key), pointer
 
         except Exception as e:
-            logger.debug(f"Error parsing entry at position {pointer}: {str(e)}")
+            logger.debug(f"Error parsing entry at position {pointer}: {e!s}")
             return None, pointer + 8
 
     def _skip_padding(self, hex_data: str, pointer: int) -> int:
@@ -428,12 +427,12 @@ class KeyTabExtractor:
         """
         self.keytab_path: str = keytab_path
         self.hex_encoded: str = ""
-        self.keytab_data: Optional[KeytabData] = None
+        self.keytab_data: KeytabData | None = None
         self.verbose: bool = verbose
         self.use_colour: bool = HAS_COLOURS and not no_colour
         self.hash_format: HashFormat = hash_format
         self.dry_run: bool = dry_run
-        self.parser: Optional[KeyTabParser] = None
+        self.parser: KeyTabParser | None = None
 
     def colour_text(self, text: str, colour: Any) -> str:
         """Apply colour to text if colours are enabled.
@@ -542,16 +541,16 @@ class KeyTabExtractor:
             self.log_error(f"Permission denied when accessing '{self.keytab_path}'.")
             return False
         except Exception as e:
-            self.log_error(f"Error loading keytab file: {str(e)}")
+            self.log_error(f"Error loading keytab file: {e!s}")
             return False
 
-    def analyse_keytab(self) -> Dict[str, Any]:
+    def analyse_keytab(self) -> dict[str, Any]:
         """Analyse the keytab file structure without extracting hashes.
 
         Returns:
             Dictionary with analysis results
         """
-        analysis: Dict[str, Any] = {
+        analysis: dict[str, Any] = {
             "version": self.keytab_data.version if self.keytab_data else "unknown",
             "file_size": len(self.hex_encoded) // 2 if self.hex_encoded else 0,
             "encryption_types": [],
@@ -565,18 +564,18 @@ class KeyTabExtractor:
                 analysis["encryption_types"].append(enc_info.name)
 
         analysis["entry_count"] = sum(
-            self.hex_encoded.count(enc_type) for enc_type in ENCRYPTION_TYPES.keys()
+            self.hex_encoded.count(enc_type) for enc_type in ENCRYPTION_TYPES
         )
 
         return analysis
 
-    def detect_encryption_types(self) -> Dict[str, bool]:
+    def detect_encryption_types(self) -> dict[str, bool]:
         """Detect supported encryption types in the keytab.
 
         Returns:
             Dict mapping encryption type IDs to boolean indicating presence
         """
-        found_types: Dict[str, bool] = {}
+        found_types: dict[str, bool] = {}
 
         for enc_id, enc_info in ENCRYPTION_TYPES.items():
             enc_pattern = f"{enc_id}{enc_info.pattern_suffix}"
@@ -675,10 +674,10 @@ class KeyTabExtractor:
             return entry_count > 0
 
         except Exception as e:
-            self.log_error(f"Error during extraction: {str(e)}")
+            self.log_error(f"Error during extraction: {e!s}")
             return False
 
-    def format_output(self, output_file: Optional[str] = None) -> bool:
+    def format_output(self, output_file: str | None = None) -> bool:
         """Format and display the extracted data.
 
         Args:
@@ -694,7 +693,7 @@ class KeyTabExtractor:
             self.log_error("No valid entries found in keytab file.")
             return False
 
-        output_lines: List[str] = []
+        output_lines: list[str] = []
 
         def add_line(line: str) -> None:
             output_lines.append(line)
@@ -749,12 +748,12 @@ class KeyTabExtractor:
                 return True
 
             except Exception as e:
-                self.log_error(f"Error saving to file: {str(e)}")
+                self.log_error(f"Error saving to file: {e!s}")
                 return False
 
         return True
 
-    def run(self, output_file: Optional[str] = None) -> int:
+    def run(self, output_file: str | None = None) -> int:
         """Main execution flow.
 
         Args:
@@ -870,7 +869,7 @@ class NXCModule:
                 context.log.fail("Parsed the file, but no entries were found.")
 
         except Exception as e:
-            context.log.fail(f"Module logic error: {str(e)}")
+            context.log.fail(f"Module logic error: {e!s}")
 
         finally:
             if os.path.exists(local_path):
