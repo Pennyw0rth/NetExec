@@ -31,6 +31,7 @@ class NXCModule:
         - CVE-2025-33073 (NTLM Reflection)
         - CVE-2025-58726 (Ghost SPN)
         - CVE-2025-54918 (NTLM MIC Bypass)
+        - CVE-2025-53779 (BadSuccessor)
 
         CVE             Filter for specific CVE number (default: All)
         EXPLOITATION    Also provide sources for exploitation details (default: False)
@@ -92,6 +93,9 @@ class NXCModule:
         # Check each CVE
         for cve in self.CVE_PATCHES:
             if self.cve == "all" or self.cve.lower() == cve.lower():
+                if self.CVE_PATCHES[cve].get("dc_only") and not connection.isdc:
+                    context.log.info(f"Skipping {self.CVE_PATCHES[cve]['alias']} - only applicable to Domain Controllers")
+                    continue
                 if self.is_vulnerable(connection.server_os_major, connection.server_os_minor, connection.server_os_build, ubr, self.CVE_PATCHES[cve]["patches"]):
                     if connection.conn.isSigningRequired() and "signing_message" in self.CVE_PATCHES[cve]:  # Special conditional message for some CVEs
                         context.log.highlight(f"{cve.upper()} - {self.CVE_PATCHES[cve]['alias']} - {self.CVE_PATCHES[cve]['signing_message']}")
@@ -168,5 +172,15 @@ class NXCModule:
             },
             "message": "Note that without CVE-2025-33073 only Windows Server 2025 is exploitable",
             "exploitation": "https://yousofnahya.medium.com/hands-on-exploitation-of-cve-2025-54918-cf376ebb40e1",
+        },
+        # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-53779
+        "CVE-2025-53779": {
+            "alias": "BadSuccessor",
+            "dc_only": True,
+            "patches": {
+                (10, 0, 26100): 4851,     # Windows Server 2025 / Win11 24H2
+            },
+            "message": "Escalation to Domain Admin possible via dMSA Kerberos abuse",
+            "exploitation": "https://www.akamai.com/blog/security-research/abusing-dmsa-for-privilege-escalation-in-active-directory",
         }
     }
