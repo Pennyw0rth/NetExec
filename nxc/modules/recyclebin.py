@@ -7,13 +7,14 @@ import struct
 import re
 from io import BytesIO
 
-# TODO handle reconstructing the original path better when there is no associated metadata file (we are in a subdirectory)
-# TODO handle the struture of downloaded directories better
-
 
 class NXCModule:
-    # Module by @Defte_ & @leDryPotato
-    # Find (and download) files from Recycle Bins
+    """
+    Module by @Defte_ & @leDryPotato
+    Find (and download) files from Recycle Bins
+    """
+    # TODO handle reconstructing the original path better when there is no associated metadata file (we are in a subdirectory)
+    # TODO handle the struture of downloaded directories better
 
     name = "recyclebin"
     description = "Lists (and downloads) files in the Recycle Bin."
