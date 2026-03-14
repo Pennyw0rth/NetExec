@@ -741,6 +741,9 @@ class smb(connection):
         return open_ports >= 3
 
     def is_host_dc(self):
+        if self.isdc is not None:
+            return self.isdc
+
         from impacket.dcerpc.v5 import nrpc, epm
 
         self.logger.debug("Performing authentication attempts...")

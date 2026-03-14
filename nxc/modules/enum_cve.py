@@ -93,7 +93,7 @@ class NXCModule:
         # Check each CVE
         for cve in self.CVE_PATCHES:
             if self.cve == "all" or self.cve.lower() == cve.lower():
-                if self.CVE_PATCHES[cve].get("dc_only") and not connection.isdc:
+                if self.CVE_PATCHES[cve].get("dc_only") and not connection.is_host_dc():
                     context.log.info(f"Skipping {self.CVE_PATCHES[cve]['alias']} - only applicable to Domain Controllers")
                     continue
                 if self.is_vulnerable(connection.server_os_major, connection.server_os_minor, connection.server_os_build, ubr, self.CVE_PATCHES[cve]["patches"]):
@@ -156,6 +156,7 @@ class NXCModule:
         # https://decoder.cloud/2025/11/24/reflecting-your-authentication-when-windows-ends-up-talking-to-itself/
         "CVE-2025-54918": {
             "alias": "NTLM MIC Bypass",
+            "dc_only": True,
             "patches": {
                 (6, 0, 6003): 23529,      # Windows Server 2008 SP2
                 (6, 1, 7601): 27929,      # Windows Server 2008 R2 SP1
