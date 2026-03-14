@@ -142,9 +142,9 @@ class ssh(connection):
     def check_shell(self, cred_id):
         host_id = self.db.get_hosts(self.host)[0].id
 
+        # Check Linux
         try:
             # Some IOT devices will not raise exception in self.conn._transport.auth_password / self.conn._transport.auth_publickey
-            # Check Linux
             stdout = self.conn.exec_command("id")[1].read().decode(self.args.codec, errors="ignore")
             if stdout:
                 self.server_os_platform = "Linux"
@@ -159,8 +159,11 @@ class ssh(connection):
                     else:
                         self.db.add_admin_user("plaintext", self.username, self.password, host_id=host_id, cred_id=cred_id)
                 return
+        except Exception as e:
+            self.logger.debug(f"Non-SSH error during Linux shell check: {e}")
 
-            # Check Windows
+        # Check Windows
+        try:
             stdout = self.conn.exec_command("whoami /priv")[1].read().decode(self.args.codec, errors="ignore")
             if stdout:
                 self.server_os_platform = "Windows"
@@ -175,8 +178,8 @@ class ssh(connection):
                     else:
                         self.db.add_admin_user("plaintext", self.username, self.password, host_id=host_id, cred_id=cred_id)
                 return
-        except SSHException as e:
-            self.logger.debug(f"SSH channel closed during shell check: {e}")
+        except Exception as e:
+            self.logger.debug(f"Error during Windows shell check: {e}")
 
         # No shell access
         self.shell_access = False
