@@ -43,6 +43,7 @@ class mssql(connection):
         self.os_arch = None
         self.nthash = ""
         self.is_mssql = False
+        self.impersonation_applied = False
 
         connection.__init__(self, args, db, host)
 
@@ -155,6 +156,21 @@ class mssql(connection):
     def print_host_info(self):
         encryption = colored(f"EncryptionReq:{self.encryption}", host_info_colors[0 if self.encryption else 1], attrs=["bold"])
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption})")
+
+    def call_cmd_args(self):
+        if getattr(self.args, "impersonate", None) and not self.impersonation_applied and not self.impersonate():
+            return
+        for attr, value in vars(self.args).items():
+            if attr == "impersonate":
+                continue
+            if hasattr(self, attr) and callable(getattr(self, attr)) and value is not False and value is not None:
+                self.logger.debug(f"Calling {attr}()")
+                getattr(self, attr)()
+
+    def call_modules(self):
+        if getattr(self.args, "impersonate", None) and not self.impersonation_applied and not self.impersonate():
+            return
+        super().call_modules()
 
     @reconnect_mssql
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
@@ -274,6 +290,43 @@ class mssql(connection):
             error_msg = self.handle_mssql_reply()
             self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {error_msg if error_msg else ''}")
             return False
+
+    def impersonate(self):
+        target = self.args.impersonate
+        if not target:
+            self.logger.error("No impersonation target specified")
+            return False
+
+        mode = "LOGIN"
+        raw_target = str(target)
+        lowered = raw_target.lower()
+        if lowered.startswith("login:"):
+            raw_target = raw_target.split(":", 1)[1]
+            mode = "LOGIN"
+        elif lowered.startswith("user:"):
+            raw_target = raw_target.split(":", 1)[1]
+            mode = "USER"
+
+        raw_target = raw_target.strip()
+        if not raw_target:
+            self.logger.error("Impersonation target is empty")
+            return False
+
+        safe_target = raw_target.replace("'", "''")
+        try:
+            self.conn.sql_query(f"EXECUTE AS {mode} = N'{safe_target}';")
+            if self.conn.lastError:
+                self.logger.fail(self.conn.lastError)
+                return False
+            self.logger.success(f"Impersonation set: {mode}={raw_target}")
+            self.impersonation_applied = True
+            if self.args.debug:
+                res = self.conn.sql_query("SELECT SYSTEM_USER, SUSER_SNAME();")
+                self.logger.debug(f"Impersonated context: {res}")
+        except Exception as e:
+            self.logger.fail(f"Failed to impersonate {mode} {raw_target}: {e}")
+            return False
+        return True
 
     def query(self):
         if self.conn.lastError:
