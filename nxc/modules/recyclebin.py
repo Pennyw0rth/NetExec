@@ -19,14 +19,8 @@ class NXCModule:
     name = "recyclebin"
     description = "Lists (and downloads) files in the Recycle Bin."
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
-    false_positive = [".", "..", "desktop.ini", "S-1-5-18",]
     category = CATEGORY.CREDENTIAL_DUMPING
-
-    def __init__(self, context=None, module_options=None):
-        self.context = context
-        self.module_options = module_options
+    false_positive = [".", "..", "desktop.ini", "S-1-5-18",]
 
     def options(self, context, module_options):
         """
