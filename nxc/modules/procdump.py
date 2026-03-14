@@ -67,7 +67,7 @@ class NXCModule:
         context.log.display("Getting lsass PID")
         p = connection.execute('tasklist /v /fo csv | findstr /i "lsass"', True)
         if not p:
-            context.log.fail("Error getting lsass.exe PID")
+            context.log.fail("Failed getting lsass.exe PID")
             self.delete_procdump_binary(connection, context)
             return
         pid = p.split(",")[1][1:-1]
