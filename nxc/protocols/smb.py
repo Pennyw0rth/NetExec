@@ -457,21 +457,22 @@ class smb(connection):
             if "Unix" not in self.server_os:
                 self.check_if_admin()
 
-            if not self.is_guest and self.username:
+            # Only do database/bloodhound stuff if we don't have guest/null auth
+            valid_auth = not self.is_guest and self.username
+            if valid_auth:
                 self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
                 self.db.add_credential("plaintext", domain, self.username, self.password)
                 user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
                 host_id = self.db.get_hosts(self.host)[0].id
                 self.db.add_loggedin_relation(user_id, host_id)
-
-            self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_guest()}{self.mark_pwned()}")
-
-            if not self.args.local_auth and self.username != "":
-                add_user_bh(self.username, self.domain, self.logger, self.config)
-            if self.admin_privs:
+            if self.admin_privs and valid_auth:
                 self.logger.debug(f"Adding admin user: {self.domain}/{self.username}:{self.password}@{self.host}")
                 self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
+            if not self.args.local_auth and valid_auth:
+                add_user_bh(self.username, self.domain, self.logger, self.config)
+
+            self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_guest()}{self.mark_pwned()}")
 
             # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
             if self.args.continue_on_success and self.signing:
@@ -524,19 +525,20 @@ class smb(connection):
             if "Unix" not in self.server_os:
                 self.check_if_admin()
 
-            if not self.is_guest and (self.username and self.hash):
+            # Only do database/bloodhound stuff if we don't have guest
+            valid_auth = not self.is_guest and self.username and self.hash
+            if valid_auth:
                 self.db.add_credential("hash", domain, self.username, self.hash)
                 user_id = self.db.get_credential("hash", domain, self.username, self.hash)
                 host_id = self.db.get_hosts(self.host)[0].id
                 self.db.add_loggedin_relation(user_id, host_id)
-
-            self.logger.success(f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_guest()}{self.mark_pwned()}")
-
-            if not self.args.local_auth and self.username != "":
-                add_user_bh(self.username, self.domain, self.logger, self.config)
-            if self.admin_privs:
+            if self.admin_privs and valid_auth:
                 self.db.add_admin_user("hash", domain, self.username, nthash, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
+            if not self.args.local_auth and valid_auth:
+                add_user_bh(self.username, self.domain, self.logger, self.config)
+
+            self.logger.success(f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_guest()}{self.mark_pwned()}")
 
             # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
             if self.args.continue_on_success and self.signing:
