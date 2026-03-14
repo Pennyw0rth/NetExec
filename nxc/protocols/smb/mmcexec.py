@@ -59,7 +59,7 @@ from impacket.dcerpc.v5.dtypes import NULL
 
 
 class MMCEXEC:
-    def __init__(self, target, share_name, username, password, domain, smbconnection, doKerberos=False, aesKey=None, kdcHost=None, remoteHost=None, hashes=None, share=None, logger=None, timeout=None, tries=None):
+    def __init__(self, target, share_name, username, password, domain, smbconnection, doKerberos=False, aesKey=None, kdcHost=None, remoteHost=None, hashes=None, share=None, logger=None, timeout=None, tries=None, st=None):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -101,6 +101,7 @@ class MMCEXEC:
             doKerberos=self.__doKerberos,
             kdcHost=self.__kdcHost,
             remoteHost=self.__remoteHost,
+            TGS=st,
         )
         try:
             iInterface = self.__dcom.CoCreateInstanceEx(string_to_bin("49B2791A-B1AE-4C90-9B8E-E860BA07F889"), IID_IDispatch)
