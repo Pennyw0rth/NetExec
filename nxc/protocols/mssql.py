@@ -420,6 +420,21 @@ class mssql(connection):
                         _type = f"{key['Type']:d}"
                     return f"(ENVCHANGE({_type}): Old Value: {record['OldValue'].decode('utf-16le')}, New Value: {record['NewValue'].decode('utf-16le')})"
 
+    def get_sid(self):
+        try:
+            query_output = self.conn.sql_query("SELECT DEFAULT_DOMAIN()")
+            self.logger.debug(f"get_sid: DEFAULT_DOMAIN() result: {query_output}")
+            domain = query_output[0][""]
+
+            raw_sid = self.conn.sql_query(f"SELECT SUSER_SID('{domain}\\Domain Admins')")[0][""]
+            self.logger.debug(f"get_sid: raw SID bytes: {raw_sid}")
+            domain_sid = SID(bytes.fromhex(raw_sid.decode())).formatCanonical()
+            domain_sid = "-".join(domain_sid.split("-")[:-1])
+            self.logger.highlight(f"Domain SID {domain_sid}")
+        except Exception as e:
+            self.logger.fail(f"Failed to get domain SID: {e}")
+            self.logger.debug("get_sid error", exc_info=True)
+
     def rid_brute(self, max_rid=None):
         entries = []
         if not max_rid:
