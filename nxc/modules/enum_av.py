@@ -485,6 +485,19 @@ conf = {
             "pipes": [
                 {"name": "FS_CCFIPC_*", "processes": ["fsatpn.exe", "fsatpl.exe", "fshoster32.exe", "fsulprothoster.exe", "fsulprothoster.exe", "fshoster64.exe", "FsPisces.exe", "fsdevcon.exe"]}
             ]
+        },
+        {
+            "name": "Avast / AVG",
+            "services": [
+                {"name": "AvastWscReporter", "description": "Avast WSC Reporter Service"},
+                {"name": "aswbIDSAgent", "description": "Avast IDS Agent Service"},
+                {"name": "AVGWscReporter", "description": "AVG WSC Reporter Service"},
+                {"name": "avgbIDSAgent", "description": "AVG IDS Agent Service"}
+            ],
+            "pipes": [
+                {"name": "aswCallbackPipe*", "processes": ["AvastSvc.exe", "aswEngSrv.exe"]},
+                {"name": "avgCallbackPipe*", "processes": ["AVGSvc.exe", "aswEngSrv.exe"]}
+            ]
         }
     ]
 }
