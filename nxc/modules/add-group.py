@@ -209,23 +209,9 @@ class NXCModule:
         try:
             context.log.info("Started adding user to group via LDAP")
 
-            # Search for the target user
+            # Search for the target user and group
             target_user_dn = self._find_object_dn(connection, self.target_user)
-            if not target_user_dn:
-                context.log.fail(f"User {self.target_user} not found")
-                return
-
-            # Search for the target group
             group_dn = self._find_object_dn(connection, self.group)
-            if not group_dn:
-                context.log.fail(f"Group {self.group} not found")
-                return
-
-            context.log.info("Checking if the target user is already in target group.")
-            # Check if user is already in target group
-            if self._is_user_in_group(context, connection, target_user_dn, group_dn):
-                context.log.display(f"User {self.target_user} is already a member of group {self.group}")
-                return
 
             # Create LDAP connection
             context.log.info("Creating LDAPS connection for modify.")
@@ -239,30 +225,22 @@ class NXCModule:
             context.log.success(f"Successfully added {self.target_user} to group {self.group}")
 
         except Exception as e:
-            context.log.fail(f"Failed to add user to group via LDAP: {e}")
+            error = str(e)
+            if "LDAP_ENTRY_ALREADY_EXISTS" in error or "entryAlreadyExists" in error:
+                context.log.display(f"User {self.target_user} is already a member of group {self.group}")
+            elif "index out of range" in error:
+                context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
+            else:
+                context.log.fail(f"Failed to add user to group via LDAP: {e}")
 
     def _remove_user_from_group_ldap(self, context, connection):
         """Remove user from group using LDAP protocol"""
         try:
             context.log.info("Started removing user from group via LDAP")
 
-            # Search for the target user
+            # Search for the target user and group
             target_user_dn = self._find_object_dn(connection, self.target_user)
-            if not target_user_dn:
-                context.log.fail(f"User {self.target_user} not found")
-                return
-
-            # Search for the target group
             group_dn = self._find_object_dn(connection, self.group)
-            if not group_dn:
-                context.log.fail(f"Group {self.group} not found")
-                return
-
-            context.log.info("Checking if the target user is in target group.")
-            # Check if user is already in target group
-            if not self._is_user_in_group(context, connection, target_user_dn, group_dn):
-                context.log.display(f"User {self.target_user} is not a member of group {self.group}")
-                return
 
             # Create LDAP connection
             context.log.info("Creating LDAPS connection for modify.")
@@ -276,7 +254,13 @@ class NXCModule:
             context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
 
         except Exception as e:
-            context.log.fail(f"Failed to remove user from group via LDAP: {e}")
+            error = str(e)
+            if "unwillingToPerform" in error or "WILL_NOT_PERFORM" in error:
+                context.log.display(f"User {self.target_user} is not a member of group {self.group}")
+            elif "index out of range" in error:
+                context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
+            else:
+                context.log.fail(f"Failed to add user to group via LDAP: {e}")
 
     def _modify_group_member(self, ldaps_conn, group_dn, target_user_dn, operation):
         """
@@ -325,13 +309,9 @@ class NXCModule:
 
     def _find_object_dn(self, connection, value):
         """Find the distinguished name (DN) of an object by sAMAccountName"""
-        try:
-            resp = connection.ldap_connection.search(
-                searchFilter=f"(sAMAccountName={value})",
-                attributes=["distinguishedName"]
-            )
-            resp_parsed = parse_result_attributes(resp)
-            return resp_parsed[0]["distinguishedName"]
-        except ldap.LDAPSearchError as e:
-            self.context.log.fail(f"LDAP search error: {e}")
-            return None
+        resp = connection.ldap_connection.search(
+            searchFilter=f"(sAMAccountName={value})",
+            attributes=["distinguishedName"]
+        )
+        resp_parsed = parse_result_attributes(resp)
+        return resp_parsed[0]["distinguishedName"]
