@@ -10,9 +10,10 @@ class NXCModule:
     category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
-        self.logger = context.log
+        """No options available"""
 
     def on_login(self, context, connection):
+        self.logger = context.log
 
         if not connection.encryption:
             self.logger.highlight("TLS not required: Channel Binding Token NOT REQUIRED")
