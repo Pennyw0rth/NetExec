@@ -1599,15 +1599,14 @@ class ldap(connection):
             self.logger.fail("pipx inject netexec bloodhound --force")
             return
 
-        # Separate ADCS from bloodhound-python methods
-        bh_collect = {m for m in collect if m != "adcs"}
-        need_bloodhound_python = len(bh_collect) > 0
-
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S") + "_"
         adcs_files = []
 
+        # Separate ADCS from bloodhound-python methods
+        bh_collect = {m for m in collect if m != "adcs"}
+
         # Run bloodhound-python collection if needed
-        if need_bloodhound_python:
+        if len(bh_collect) > 0:
             auth = ADAuthentication(
                 username=self.username,
                 password=self.password,
@@ -1711,9 +1710,7 @@ class ldap(connection):
 
             # Write individual JSON files
             adcs_files = []
-            output = result.to_dict()
-
-            for node_type, content in output.items():
+            for node_type, content in result.to_dict().items():
                 filename = f"{timestamp}{node_type}.json"
                 with open(filename, "w") as f:
                     json.dump(content, f)
