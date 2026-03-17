@@ -128,15 +128,13 @@ class NXCModule:
             try:
                 user_rid = samr.hSamrLookupNamesInDomain(dce, domain_handle, (self.target_user,))["RelativeIds"]["Element"][0]
             except Exception as e:
-                context.log.fail(f"User {self.target_user} not found in domain {connection.domain}")
-                context.log.debug(f"Fail user rid smb: {e}")
+                context.log.fail(f"User {self.target_user} not found in domain {connection.domain}: {e}")
                 return
 
             try:
                 group_rid = samr.hSamrLookupNamesInDomain(dce, domain_handle, (self.group,))["RelativeIds"]["Element"][0]
             except Exception as e:
-                context.log.fail(f"Group {self.group} not found in domain {connection.domain}")
-                context.log.debug(f"Fail group rid smb: {e}")
+                context.log.fail(f"Group {self.group} not found in domain {connection.domain}: {e}")
                 return
 
             # Open the group
@@ -177,15 +175,13 @@ class NXCModule:
             try:
                 user_rid = samr.hSamrLookupNamesInDomain(dce, domain_handle, (self.target_user,))["RelativeIds"]["Element"][0]
             except Exception as e:
-                context.log.fail(f"User {self.target_user} not found in domain {connection.domain}")
-                context.log.debug(f"Fail user rid smb: {e}")
+                context.log.fail(f"User {self.target_user} not found in domain {connection.domain}: {e}")
                 return
 
             try:
                 group_rid = samr.hSamrLookupNamesInDomain(dce, domain_handle, (self.group,))["RelativeIds"]["Element"][0]
             except Exception as e:
-                context.log.fail(f"Group {self.group} not found in domain {connection.domain}")
-                context.log.debug(f"Fail group rid smb: {e}")
+                context.log.fail(f"Group {self.group} not found in domain {connection.domain}: {e}")
                 return
 
             # Open the group
