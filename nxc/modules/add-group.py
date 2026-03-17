@@ -53,7 +53,7 @@ class NXCModule:
         """
         self.context = context
         self.group = module_options.get("GROUP")
-        self.ou = module_options.get("OU")
+        # self.ou = module_options.get(\"OU\")
         self.target_user = module_options.get("USER")
         self.remove = module_options.get("REMOVE", "False").lower() == "true"
 
