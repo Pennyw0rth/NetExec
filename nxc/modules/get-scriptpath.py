@@ -36,30 +36,20 @@ class NXCModule:
         )
 
         context.log.debug(f"Total of records returned {len(resp)}")
-        resp_parsed = parse_result_attributes(resp)
-        answers = [[x["sAMAccountName"], x["scriptPath"]] for x in resp_parsed]
+        answers = parse_result_attributes(resp)
+        context.log.debug(f"Filtering for scriptPath containing: {self.filter}")
+        filtered_answers = list(filter(lambda x: self.filter in x["scriptPath"], answers))
 
-        answers = self.filter_answer(context, answers)
-
-        if answers:
+        if filtered_answers:
             context.log.success("Found the following attributes: ")
-            for answer in answers:
-                context.log.highlight(f"User: {answer[0]:<20} ScriptPath: {answer[1]}")
+            for answer in filtered_answers:
+                context.log.highlight(f"User: {answer['sAMAccountName']:<20} ScriptPath: {answer['scriptPath']}")
 
             # Save the results to a file
             if self.outputfile:
-                self.save_to_file(context, answers)
+                self.save_to_file(context, filtered_answers)
         else:
-            context.log.warning("No results found after filtering.")
-
-    def filter_answer(self, context, answers):
-        # No filter
-        if not self.filter:
-            context.log.debug("No filter option enabled")
-            return answers
-        # Filter
-        context.log.debug(f"Filter info field with: {self.filter}")
-        return [answer for answer in answers if self.filter in answer[0]]
+            context.log.fail("No results found after filtering.")
 
     def save_to_file(self, context, answers):
         """Save the results to a JSON file."""
