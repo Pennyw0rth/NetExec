@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: NetExec Wiki
+    url: https://www.netexec.wiki/
+    about: Check the wiki for usage guides and documentation before opening an issue.
+  - name: NetExec Discord
+    url: https://discord.com/invite/pjwUTQzg8R
+    about: Join the Discord for general questions and community support.
