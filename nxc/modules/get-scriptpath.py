@@ -55,7 +55,7 @@ class NXCModule:
         """Save the results to a JSON file."""
         try:
             # Format answers as a list of dictionaries for JSON output
-            json_data = [{"sAMAccountName": answer[0], "scriptPath": answer[1]} for answer in answers]
+            json_data = [{"sAMAccountName": answer["sAMAccountName"], "scriptPath": answer["scriptPath"]} for answer in answers]
 
             # Save the JSON data to the specified file
             with open(self.outputfile, "w") as f:
