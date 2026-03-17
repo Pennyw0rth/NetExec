@@ -50,9 +50,8 @@ class NXCModule:
                 cbt_fake_value=b""
             )
 
-        self.logger.highlight(
-            "Connection successful: Channel Binding Token NOT REQUIRED"
-            if success else
-            "Connection failed: Channel Binding Token REQUIRED"
-        )
+        if success:
+            self.logger.highlight("Connection successful: Channel Binding Token NOT REQUIRED")
+        else:
+            self.logger.highlight("Connection failed: Channel Binding Token REQUIRED")
         new_conn.disconnect()
