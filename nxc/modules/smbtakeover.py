@@ -65,7 +65,7 @@ class SmbTakeoverWmi:
 
         try:
             self.__dcom = DCOMConnection(
-                target=connection.host,
+                target=connection.remoteName,
                 username=connection.username,
                 password=connection.password,
                 domain=connection.domain,
