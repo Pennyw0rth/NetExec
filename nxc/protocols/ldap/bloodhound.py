@@ -148,37 +148,19 @@ def resolve_collection_methods(methods, logger):
     ]
     # DC only, does not collect to computers
     dconly_methods = ["group", "trusts", "objectprops", "acl", "container"]
-    if "," in methods:
-        method_list = [method.lower() for method in methods.split(",")]
-        validated_methods = []
-        for method in method_list:
-            if method not in valid_methods:
-                logger.error("Invalid collection method specified: %s", method)
-                return False
 
-            if method == "default":
-                validated_methods += default_methods
-            elif method == "all":
-                validated_methods += all_methods
-            elif method == "dconly":
-                validated_methods += dconly_methods
-            else:
-                validated_methods.append(method)
-        return set(validated_methods)
-    else:
-        validated_methods = []
-        # It is only one
-        method = methods.lower()
-        if method in valid_methods:
-            if method == "default":
-                validated_methods += default_methods
-            elif method == "all":
-                validated_methods += all_methods
-            elif method == "dconly":
-                validated_methods += dconly_methods
-            else:
-                validated_methods.append(method)
-            return set(validated_methods)
-        else:
+    validated_methods = []
+    for method in [method.lower() for method in methods.split(",")]:
+        if method not in valid_methods:
             logger.error("Invalid collection method specified: %s", method)
-            return False
+            return [], []
+
+        if method == "default":
+            validated_methods += default_methods
+        elif method == "all":
+            validated_methods += all_methods
+        elif method == "dconly":
+            validated_methods += dconly_methods
+        else:
+            validated_methods.append(method)
+    return set(validated_methods), []
