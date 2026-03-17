@@ -200,7 +200,7 @@ class NXCModule:
                 context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
             except Exception as e:
                 if "STATUS_MEMBER_NOT_IN_GROUP" in str(e):
-                    context.log.display(f"User {self.target_user} is not already a member of group {self.group}")
+                    context.log.display(f"User {self.target_user} is not a member of group {self.group}")
                 else:
                     raise
 
