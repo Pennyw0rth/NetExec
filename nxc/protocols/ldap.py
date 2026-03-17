@@ -42,8 +42,8 @@ from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.misc import get_bloodhound_info, convert, d2b
-from nxc.logger import NXCAdapter, nxc_logger
-from nxc.protocols.ldap.bloodhound import BloodHound
+from nxc.logger import NXCAdapter
+from nxc.protocols.ldap.bloodhound import BloodHound, resolve_collection_methods
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
@@ -64,80 +64,6 @@ ldap_error_status = {
     "KDC_ERR_CLIENT_REVOKED": "KDC_ERR_CLIENT_REVOKED",
     "KDC_ERR_PREAUTH_FAILED": "KDC_ERR_PREAUTH_FAILED",
 }
-
-
-def resolve_collection_methods(methods):
-    """Convert methods (string) to list of validated methods to resolve"""
-    valid_methods = [
-        "group",
-        "localadmin",
-        "session",
-        "trusts",
-        "default",
-        "all",
-        "loggedon",
-        "objectprops",
-        "experimental",
-        "acl",
-        "dcom",
-        "rdp",
-        "psremote",
-        "dconly",
-        "container",
-        "adcs",
-    ]
-    default_methods = ["group", "localadmin", "session", "trusts", "adcs"]
-    # Similar to SharpHound, All includes everything including LoggedOn and ADCS
-    all_methods = [
-        "group",
-        "localadmin",
-        "session",
-        "trusts",
-        "loggedon",
-        "objectprops",
-        "acl",
-        "dcom",
-        "rdp",
-        "psremote",
-        "container",
-        "adcs",
-    ]
-    # DC only, does not collect to computers
-    dconly_methods = ["group", "trusts", "objectprops", "acl", "container"]
-    if "," in methods:
-        method_list = [method.lower() for method in methods.split(",")]
-        validated_methods = []
-        for method in method_list:
-            if method not in valid_methods:
-                nxc_logger.error("Invalid collection method specified: %s", method)
-                return False
-
-            if method == "default":
-                validated_methods += default_methods
-            elif method == "all":
-                validated_methods += all_methods
-            elif method == "dconly":
-                validated_methods += dconly_methods
-            else:
-                validated_methods.append(method)
-        return set(validated_methods)
-    else:
-        validated_methods = []
-        # It is only one
-        method = methods.lower()
-        if method in valid_methods:
-            if method == "default":
-                validated_methods += default_methods
-            elif method == "all":
-                validated_methods += all_methods
-            elif method == "dconly":
-                validated_methods += dconly_methods
-            else:
-                validated_methods.append(method)
-            return set(validated_methods)
-        else:
-            nxc_logger.error("Invalid collection method specified: %s", method)
-            return False
 
 
 class ldap(connection):
@@ -1630,7 +1556,7 @@ class ldap(connection):
             break  # Only process first policy result
 
     def bloodhound(self):
-        collect = resolve_collection_methods("Default" if not self.args.collection else self.args.collection)
+        collect = resolve_collection_methods("Default" if not self.args.collection else self.args.collection, self.logger)
         if not collect:
             return
         self.logger.highlight("Resolved collection methods: " + ", ".join(sorted(collect)))
