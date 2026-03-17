@@ -22,22 +22,31 @@ class NXCModule:
             self.logger.highlight("Local auth: CANNOT check Channel Binding Token configuration")
             return
 
-        ntlm_hash = f":{connection.nthash}" if connection.nthash else None
-
         new_conn = tds.MSSQL(connection.host, connection.port, connection.conn.remoteName)
         new_conn.connect(connection.args.mssql_timeout)
 
-        if connection.kerberos:
+        if connection.kerberos:  # noqa: SIM108
             success = new_conn.kerberosLogin(
-                None, connection.username, connection.password, connection.targetDomain,
-                ntlm_hash, connection.aesKey, connection.kdcHost,
-                None, None, connection.use_kcache,
+                None,
+                connection.username,
+                connection.password,
+                connection.targetDomain,
+                f"{connection.lmhash}:{connection.nthash}",
+                connection.aesKey,
+                connection.kdcHost,
+                None,
+                None,
+                connection.use_kcache,
                 cbt_fake_value=b""
             )
         else:
             success = new_conn.login(
-                None, connection.username, connection.password, connection.targetDomain,
-                ntlm_hash, not connection.args.local_auth,
+                None,
+                connection.username,
+                connection.password,
+                connection.targetDomain,
+                f"{connection.lmhash}:{connection.nthash}",
+                not connection.args.local_auth,
                 cbt_fake_value=b""
             )
 
