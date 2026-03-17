@@ -40,6 +40,16 @@ class NXCModule:
         Removing a user from a group:
             netexec smb <DC_IP> -u adminuser -p password -M add-group -o USER='targetuser' GROUP='Domain Admins' REMOVE=True
             netexec ldap <DC_IP> -u adminuser -p password -M add-group -o USER='targetuser' GROUP='Enterprise Admins' REMOVE=True
+
+        For Using SMB, Need to Know
+        SMB/SAMR KNOWN LIMITATIONS:
+            - SAMR only supports modification of Global security groups.
+            Domain Local and Universal groups require the LDAP protocol.
+            - Cross-domain groups (e.g. Enterprise Admins) cannot be modified via SAMR.
+            Use LDAP instead.
+            - The authenticating user must have sufficient SAMR privileges
+            (e.g. Account Operators, Domain Admins).
+
         """
         self.context = context
         self.group = module_options.get("GROUP")
@@ -140,10 +150,8 @@ class NXCModule:
             context.log.success(f"Successfully added {self.target_user} to group {self.group}")
 
         except Exception as e:
-            if connection:
-                context.log.fail("Failed to add user to group via SMB. Please try it with LDAP.")
-            else:
-                context.log.fail(f"Failed to add user to group via SMB: {e}")
+            context.log.fail(f"Failed to add user to group via SMB: {e}")
+            context.log.info("If the group is domain-local or universal, try with LDAP instead.")
         finally:
             if "dce" in locals():
                 dce.disconnect()
@@ -185,10 +193,8 @@ class NXCModule:
             context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
 
         except Exception as e:
-            if connection:
-                context.log.fail("Failed to remove user from group via SMB. Please try it with LDAP.")
-            else:
-                context.log.fail(f"Failed to remove user from group via SMB: {e}")
+            context.log.fail(f"Failed to remove user from group via SMB: {e}")
+            context.log.info("If the group is domain-local or universal, try with LDAP instead.")
         finally:
             if "dce" in locals():
                 dce.disconnect()
