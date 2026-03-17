@@ -1685,7 +1685,7 @@ class smb(connection):
     def users(self):
         if self.args.users:
             self.logger.debug(f"Dumping users: {', '.join(self.args.users)}")
-        return UserSamrDump(self).dump(requested_users=self.args.users, dump_path=self.args.users_export)
+        return UserSamrDump(self).dump(requested_users=self.args.users, dump_path=self.args.users_export or self.args.export)
 
     def users_export(self):
         self.users()
@@ -1906,6 +1906,14 @@ class smb(connection):
                     )
             so_far += simultaneous
         dce.disconnect()
+        if self.args.export:
+            usernames = sorted({entry["username"] for entry in entries if entry["sidtype"] == "SidTypeUser" and not entry["username"].endswith("$")})
+            try:
+                with open(self.args.export, "w") as f:
+                    f.writelines(f"{username}\n" for username in usernames)
+                self.logger.success(f"Exported {len(usernames)} users to {self.args.export}")
+            except OSError as e:
+                self.logger.fail(f"Export failed: {e}")
         return entries
 
     def rid_users_export(self):
