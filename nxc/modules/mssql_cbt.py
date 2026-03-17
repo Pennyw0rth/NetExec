@@ -2,8 +2,8 @@ from impacket import tds
 from nxc.helpers.misc import CATEGORY
 
 
-# Module writtent by @Defte_
 class NXCModule:
+    """Module written by @Defte_"""
     name = "mssql_cbt"
     description = "Checks whether Channel Binding is enabled on the MSSQL database"
     supported_protocols = ["mssql"]
