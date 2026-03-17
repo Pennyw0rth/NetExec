@@ -47,6 +47,8 @@ class NXCModule:
         return ubr < min_patched_ubr
 
     def on_login(self, context, connection):
+        context.log.fail("[REMOVED] This module has been integrated into the enum_cve module.")
+        return
         self.context = context
         self.connection = connection
         connection.trigger_winreg()

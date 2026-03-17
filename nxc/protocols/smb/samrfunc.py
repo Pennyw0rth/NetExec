@@ -13,13 +13,14 @@ class SamrFunc:
     def __init__(self, connection):
         self.logger = connection.logger
         self.addr = connection.host
+        self.remote_name = connection.remoteName
         self.protocol = connection.args.port
         self.username = connection.username
         self.password = connection.password
         self.domain = connection.domain
         self.hash = connection.hash
-        self.lmhash = ""
-        self.nthash = ""
+        self.lmhash = connection.lmhash
+        self.nthash = connection.nthash
         self.aesKey = connection.aesKey
         self.doKerberos = connection.kerberos
         self.kdcHost = connection.kdcHost
@@ -34,8 +35,8 @@ class SamrFunc:
         if self.password is None:
             self.password = ""
 
-        self.samr_query = SAMRQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.addr, remote_host=self.host, kerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, logger=self.logger)
-        self.lsa_query = LSAQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.addr, remote_host=self.host, kdcHost=self.kdcHost, kerberos=self.doKerberos, aesKey=self.aesKey, logger=self.logger)
+        self.samr_query = SAMRQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.remote_name, remote_host=self.host, lmhash=self.lmhash, nthash=self.nthash, kerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, logger=self.logger)
+        self.lsa_query = LSAQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.remote_name, remote_host=self.host, lmhash=self.lmhash, nthash=self.nthash, kdcHost=self.kdcHost, kerberos=self.doKerberos, aesKey=self.aesKey, logger=self.logger)
 
     def get_builtin_groups(self, group):
         domains = self.samr_query.get_domains()
@@ -84,12 +85,12 @@ class SamrFunc:
 
 
 class SAMRQuery:
-    def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", kerberos=None, kdcHost="", aesKey="", logger=None,):
+    def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", lmhash="", nthash="", kerberos=None, kdcHost="", aesKey="", logger=None):
         self.__username = username
         self.__password = password
         self.__domain = domain
-        self.__lmhash = ""
-        self.__nthash = ""
+        self.__lmhash = lmhash
+        self.__nthash = nthash
         self.__aesKey = aesKey
         self.__port = port
         self.__remote_name = remote_name
@@ -177,12 +178,12 @@ class SAMRQuery:
 
 
 class LSAQuery:
-    def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", kdcHost="", aesKey="", kerberos=None, logger=None):
+    def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", lmhash="", nthash="", kdcHost="", aesKey="", kerberos=None, logger=None):
         self.__username = username
         self.__password = password
         self.__domain = domain
-        self.__lmhash = ""
-        self.__nthash = ""
+        self.__lmhash = lmhash
+        self.__nthash = nthash
         self.__aesKey = aesKey
         self.__port = port
         self.__remote_name = remote_name

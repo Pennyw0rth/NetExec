@@ -8,7 +8,7 @@ from os.path import exists
 from os.path import join as path_join
 from textwrap import dedent
 from requests import get, post, ConnectionError
-from terminaltables import AsciiTable
+from terminaltables3 import AsciiTable
 from termcolor import colored
 
 from nxc.loaders.protocolloader import ProtocolLoader
@@ -479,10 +479,17 @@ class NXCDBMenu(cmd.Cmd):
         if not line:
             subcommand = ""
             self.help_workspace()
+            return
         else:
             subcommand = line.split()[0]
 
         if subcommand == "create":
+            if len(line.split()) < 2:
+                print("[-] not enough arguments")
+                return
+            elif not line.split()[1].strip():
+                print("[-] invalid workspace name")
+                return
             new_workspace = line.split()[1].strip()
             print(f"[*] Creating workspace '{new_workspace}'")
             create_workspace(new_workspace, self.p_loader)
@@ -503,7 +510,7 @@ class NXCDBMenu(cmd.Cmd):
     @staticmethod
     def help_workspace():
         help_string = """
-        workspace [create <targetName> | workspace list | workspace <targetName>]
+        workspace [workspace create <targetName> | workspace list | workspace <targetName>]
         """
         print_help(help_string)
 

@@ -9,11 +9,14 @@ def proto_args(parser, parents):
     dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", default=None, type=str, help="Domain to authenticate to")
     dgroup.add_argument("--local-auth", action="store_true", help="Authenticate locally to each target")
 
-    egroup = wmi_parser.add_argument_group("Mapping/Enumeration", "Options for Mapping/Enumerating")
-    egroup.add_argument("--wmi", metavar="QUERY", dest="wmi", type=str, help="Issues the specified WMI query")
-    egroup.add_argument("--wmi-namespace", metavar="NAMESPACE", type=str, default="root\\cimv2", help="WMI Namespace (default: root\\cimv2)")
+    cred_gathering_group = wmi_parser.add_argument_group("Credential Gathering")
+    cred_gathering_group.add_argument("--list-snapshots", nargs="?", dest="list_snapshots", const="ADMIN$", help="Lists the VSS snapshots (default: %(const)s)")
 
-    cgroup = wmi_parser.add_argument_group("Command Execution", "Options for executing commands")
+    egroup = wmi_parser.add_argument_group("Mapping/Enumeration")
+    egroup.add_argument("--wmi-query", metavar="QUERY", dest="wmi_query", type=str, help="Issues the specified WMI query")
+    egroup.add_argument("--wmi-namespace", metavar="NAMESPACE", type=str, default="root\\cimv2", help="WMI Namespace (default: %(default)s)")
+
+    cgroup = wmi_parser.add_argument_group("Command Execution")
     cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
     cgroup.add_argument("-x", metavar="COMMAND", dest="execute", type=str, help="Creates a new cmd process and executes the specified command with output")
     cgroup.add_argument("-X", metavar="COMMAND", dest="execute_psh", type=str, help="Creates a new PowerShell process and executes the specified command with output")

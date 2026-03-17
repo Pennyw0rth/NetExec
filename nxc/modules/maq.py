@@ -26,7 +26,7 @@ class NXCModule:
     def on_login(self, context, connection):
         context.log.display("Getting the MachineAccountQuota")
 
-        ldap_response = connection.search("(objectClass=*)", ["ms-DS-MachineAccountQuota"])
+        ldap_response = connection.search("(ms-DS-MachineAccountQuota=*)", ["ms-DS-MachineAccountQuota"])
         entries = parse_result_attributes(ldap_response)
 
         if not entries:

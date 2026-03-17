@@ -19,10 +19,13 @@ from aardwolf.commons.iosettings import RDPIOSettings
 from aardwolf.commons.target import RDPTarget
 from aardwolf.keyboard.layoutmanager import KeyboardLayoutManager
 from aardwolf.protocol.x224.constants import SUPP_PROTOCOLS
+from aardwolf.network.x224 import X224Network
+from aardwolf.network.tpkt import TPKTPacketizer
 from asyauth.common.credentials.ntlm import NTLMCredential
 from asyauth.common.credentials.kerberos import KerberosCredential
 from asyauth.common.constants import asyauthSecret
 from asysocks.unicomm.common.target import UniTarget, UniProto
+from asysocks.unicomm.client import UniClient
 
 
 class rdp(connection):
@@ -33,12 +36,10 @@ class rdp(connection):
         self.iosettings.video_out_format = VIDEO_FORMAT.RAW
         self.iosettings.clipboard_use_pyperclip = False
         self.protoflags_nla = [
-            SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.RDP,
             SUPP_PROTOCOLS.SSL,
             SUPP_PROTOCOLS.RDP,
         ]
         self.protoflags = [
-            SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.RDP,
             SUPP_PROTOCOLS.SSL,
             SUPP_PROTOCOLS.RDP,
             SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.HYBRID,
@@ -54,7 +55,6 @@ class rdp(connection):
         self.iosettings.video_bpp_max = 32
         # PIL produces incorrect picture for some reason?! TODO: check bug
         self.iosettings.video_out_format = VIDEO_FORMAT.PNG  #
-        self.output_filename = None
         self.domain = None
         self.server_os = None
         self.url = None
@@ -108,12 +108,13 @@ class rdp(connection):
             self.logger.display(f"Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
         else:
             self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({nla})")
+            self.db.add_host(self.host, self.port, self.hostname, self.domain, self.server_os, self.nla)
 
     def create_conn_obj(self):
         self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout)
         self.auth = NTLMCredential(secret="pass", username="user", domain="FAKE", stype=asyauthSecret.PASS)
 
-        self.check_nla()
+        asyncio.run(self.check_nla())
 
         for proto in reversed(self.protoflags):
             try:
@@ -140,7 +141,6 @@ class rdp(connection):
                         self.hostname = info_domain["computername"]
                         self.server_os = info_domain["os_guess"] + " Build " + str(info_domain["os_build"])
                         self.logger.extra["hostname"] = self.hostname
-                        self.output_filename = os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
                     break
 
         if self.args.domain:
@@ -166,22 +166,26 @@ class rdp(connection):
 
         return True
 
-    def check_nla(self):
+    async def check_nla(self):
         self.logger.debug(f"Checking NLA for {self.host}")
-        for proto in self.protoflags_nla:
-            try:
-                self.iosettings.supported_protocols = proto
-                self.conn = RDPConnection(
-                    iosettings=self.iosettings,
-                    target=self.target,
-                    credentials=self.auth,
-                )
-                asyncio.run(self.connect_rdp())
-                if proto.value == SUPP_PROTOCOLS.RDP or proto.value == SUPP_PROTOCOLS.SSL or proto.value == SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.RDP:
-                    self.nla = False
-                    return
-            except Exception:
-                pass
+        try:
+            self.iosettings.supported_protocols = SUPP_PROTOCOLS.SSL
+            self.conn = RDPConnection(
+                iosettings=self.iosettings,
+                target=self.target,
+                credentials=None,
+            )
+            packetizer = TPKTPacketizer()
+            client = UniClient(self.target, packetizer)
+            self.conn._connection = await asyncio.wait_for(client.connect(), timeout=self.args.rdp_timeout)
+            self.conn._x224net = X224Network(self.conn._connection)
+            _, err = await asyncio.wait_for(self.conn._x224net.client_negotiate(0, SUPP_PROTOCOLS.SSL), timeout=self.args.rdp_timeout)
+            # If no error SSL supported if SSL_NOT_ALLOWED_BY_SERVER error, plain RDP supported
+            if err is None or "SSL_NOT_ALLOWED_BY_SERVER" in str(err):
+                self.nla = False
+                return
+        except Exception:
+            pass
 
     async def connect_rdp(self):
         _, err = await asyncio.wait_for(self.conn.connect(), timeout=self.args.rdp_timeout)
@@ -450,11 +454,9 @@ class rdp(connection):
                         self.logger.fail("Warning: Clipboard may not be fully initialized, no output can be retrieved")
                         return ""
 
-            if not clipboard_ready and get_output:
-                self.logger.fail("Clipboard cannot be initialized, no output can be retrieved")
-                return ""
-            else:
-                self.logger.success("Clipboard is ready, proceeding with command execution")
+                if not clipboard_ready:
+                    self.logger.fail("Clipboard cannot be initialized, no output can be retrieved")
+                    return ""
 
             # Wait for desktop to be available
             await asyncio.sleep(self.args.cmd_delay)
@@ -496,6 +498,8 @@ class rdp(connection):
                     else:
                         self.logger.fail("Clipboard is empty or contains non-text data")
                     return clipboard_text
+                else:
+                    self.logger.success("Executed command without retrieving output")
 
                 self.logger.debug("Command execution completed")
                 return None
