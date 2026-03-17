@@ -16,17 +16,17 @@ class NXCModule:
 
     def options(self, context, module_options):
         """
-        FILTER    Apply the FILTER (grep-like) (default: '')
+        FILTER        Apply the FILTER (grep-like) (default: '')
         OUTPUTFILE    Path to a file to save the results (default: None)
         """
-        self.FILTER = ""
-        self.OUTPUTFILE = None
+        self.filter = ""
+        self.outputfile = None
 
         if "FILTER" in module_options:
-            self.FILTER = module_options["FILTER"]
+            self.filter = module_options["FILTER"]
 
         if "OUTPUTFILE" in module_options:
-            self.OUTPUTFILE = module_options["OUTPUTFILE"]
+            self.outputfile = module_options["OUTPUTFILE"]
 
     def on_login(self, context, connection):
         # Building the search filter
@@ -47,19 +47,19 @@ class NXCModule:
                 context.log.highlight(f"User: {answer[0]:<20} ScriptPath: {answer[1]}")
 
             # Save the results to a file
-            if self.OUTPUTFILE:
+            if self.outputfile:
                 self.save_to_file(context, answers)
         else:
             context.log.warning("No results found after filtering.")
 
     def filter_answer(self, context, answers):
         # No filter
-        if not self.FILTER:
+        if not self.filter:
             context.log.debug("No filter option enabled")
             return answers
         # Filter
-        context.log.debug(f"Filter info field with: {self.FILTER}")
-        return [answer for answer in answers if self.FILTER in answer[0]]
+        context.log.debug(f"Filter info field with: {self.filter}")
+        return [answer for answer in answers if self.filter in answer[0]]
 
     def save_to_file(self, context, answers):
         """Save the results to a JSON file."""
@@ -68,9 +68,9 @@ class NXCModule:
             json_data = [{"sAMAccountName": answer[0], "scriptPath": answer[1]} for answer in answers]
 
             # Save the JSON data to the specified file
-            with open(self.OUTPUTFILE, "w") as f:
+            with open(self.outputfile, "w") as f:
                 json.dump(json_data, f, indent=4)
-            context.log.success(f"Results successfully saved to {self.OUTPUTFILE}")
+            context.log.success(f"Results successfully saved to {self.outputfile}")
 
         except Exception as e:
             context.log.error(f"Failed to save results to file: {e}")
