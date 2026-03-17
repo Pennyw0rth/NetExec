@@ -1556,16 +1556,11 @@ class ldap(connection):
             break  # Only process first policy result
 
     def bloodhound(self):
-        collect = resolve_collection_methods("Default" if not self.args.collection else self.args.collection, self.logger)
+        collect, excluded = resolve_collection_methods("Default" if not self.args.collection else self.args.collection, self.logger)
         if not collect:
             return
         self.logger.highlight("Resolved collection methods: " + ", ".join(sorted(collect)))
-
-        # Display which collection methods were not selected
-        all_collectible = {"group", "localadmin", "session", "trusts", "loggedon", "objectprops", "acl", "dcom", "rdp", "psremote", "container", "adcs"}
-        excluded = sorted(all_collectible - collect)
-        if excluded:
-            self.logger.highlight("Excluded collection methods: " + ", ".join(excluded))
+        self.logger.highlight("Excluded collection methods: " + ", ".join(sorted(excluded)))
 
         # Check which BloodHound version is desired
         use_bhce = self.config.getboolean("BloodHound-CE", "bhce_enabled", fallback=False)

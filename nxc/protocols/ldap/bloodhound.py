@@ -163,4 +163,4 @@ def resolve_collection_methods(methods, logger):
             validated_methods += dconly_methods
         else:
             validated_methods.append(method)
-    return set(validated_methods), []
+    return set(validated_methods), set(all_methods) - set(validated_methods)
