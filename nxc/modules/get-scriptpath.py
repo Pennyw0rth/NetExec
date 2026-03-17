@@ -14,7 +14,6 @@ class NXCModule:
     supported_protocols = ["ldap"]
     category = CATEGORY.ENUMERATION
 
-
     def options(self, context, module_options):
         """
         FILTER    Apply the FILTER (grep-like) (default: '')
@@ -22,10 +21,10 @@ class NXCModule:
         """
         self.FILTER = ""
         self.OUTPUTFILE = None
-        
+
         if "FILTER" in module_options:
             self.FILTER = module_options["FILTER"]
-        
+
         if "OUTPUTFILE" in module_options:
             self.OUTPUTFILE = module_options["OUTPUTFILE"]
 
@@ -54,13 +53,13 @@ class NXCModule:
             context.log.warning("No results found after filtering.")
 
     def filter_answer(self, context, answers):
-       # No filter
+        # No filter
         if not self.FILTER:
             context.log.debug("No filter option enabled")
             return answers
         # Filter
         context.log.debug(f"Filter info field with: {self.FILTER}")
-        return [answer for answer in answers if self.FILTER in answer[0]] 
+        return [answer for answer in answers if self.FILTER in answer[0]]
 
     def save_to_file(self, context, answers):
         """Save the results to a JSON file."""
@@ -72,6 +71,6 @@ class NXCModule:
             with open(self.OUTPUTFILE, "w") as f:
                 json.dump(json_data, f, indent=4)
             context.log.success(f"Results successfully saved to {self.OUTPUTFILE}")
-        
+
         except Exception as e:
             context.log.error(f"Failed to save results to file: {e}")
