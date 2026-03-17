@@ -84,7 +84,7 @@ class nfs(connection):
             "gid": 0,
             "aux_gid": [],
         }
-        self.root_escape = False
+        self.root_escape = None
         # If root escape is possible, the escape_share and escape_fh will be populated
         self.escape_share = None
         self.escape_fh = b""
@@ -137,7 +137,10 @@ class nfs(connection):
         self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
         self.nfs3.connect()
         # Check if root escape is possible
-        self.root_escape = self.try_root_escape()
+        if NFS_V3 in self.nfs_versions:
+            self.root_escape = self.try_root_escape()
+        else:
+            self.logger.debug("NFSv3 not supported, skipping root escape check")
         self.nfs3.disconnect()
 
     def print_host_info(self):
@@ -366,7 +369,7 @@ class nfs(connection):
             curr_fh = mount_fh
             for sub_path in remote_file_path.lstrip("/").split("/"):
                 # Update the UID for the next object and get the handle
-                self.update_auth(mount_fh)
+                self.update_auth(curr_fh)
                 res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
 
                 # Check for a bad path
@@ -448,7 +451,7 @@ class nfs(connection):
             curr_fh = mount_fh
             # If target dir is "" or "/" without filter we would get one item with [""]
             for sub_path in list(filter(None, remote_dir_path.lstrip("/").split("/"))):
-                self.update_auth(mount_fh)
+                self.update_auth(curr_fh)
                 res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
 
                 # If the path does not exist, create it
@@ -645,19 +648,21 @@ class nfs(connection):
             self.logger.fail("No root escape possible, please specify a share")
             return
 
-        # Update UID and GID for the share
-        self.update_auth(mount_fh)
-
         # We got a path to look up
         curr_fh = mount_fh
         is_file = False     # If the last path is a file
 
         # If ls is "" or "/" without filter we would get one item with [""]
         for sub_path in list(filter(None, self.args.ls.split("/"))):
+            # Update UID and GID for the path
+            self.update_auth(curr_fh)
             res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
 
             if "resfail" in res and res["status"] == NFS3ERR_NOENT:
                 self.logger.fail(f"Unknown path: {self.args.ls!r}")
+                return
+            elif "resfail" in res:
+                self.logger.fail(f"Error on looking up path '{sub_path}': {NFSSTAT3[res['status']]}")
                 return
             # If file then break and only display file
             if res["resok"]["obj_attributes"]["attributes"]["type"] == NF3REG:

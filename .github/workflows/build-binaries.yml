@@ -27,7 +27,7 @@ jobs:
       if: runner.os == 'windows'
       uses: actions/upload-artifact@v4
       with:
-        name: nxc.exe
+        name: nxc-windows.exe
         path: dist/nxc.exe
     - name: Upload Nix/OSx Binary
       if: runner.os != 'windows'
