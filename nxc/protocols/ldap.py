@@ -324,7 +324,6 @@ class ldap(connection):
             self.domain = self.args.domain
         elif self.args.use_kcache:  # Fixing domain trust, just pull the auth domain out of the ticket
             self.domain = CCache.parseFile()[0]
-            self.username = CCache.parseFile()[1]
         else:
             self.domain = self.targetDomain
 
@@ -368,7 +367,7 @@ class ldap(connection):
             self.logger.fail("Simple bind and Kerberos authentication are mutually exclusive.")
             return False
 
-        self.username = username if not self.args.use_kcache else self.username    # With ccache we get the username from the ticket
+        self.username = username
         self.password = password
         self.domain = domain
         self.kdcHost = kdcHost

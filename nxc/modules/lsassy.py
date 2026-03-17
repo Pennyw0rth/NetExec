@@ -187,7 +187,7 @@ class NXCModule:
                     context.log.fail(f"Error writing ticket {filename}: {e}")
 
         if ticket_count > 0:
-            context.log.highlight(f"Saved {ticket_count} Kerberos ticket(s) to {self.save_dir}")
+            context.log.success(f"Saved {ticket_count} Kerberos ticket(s) to {self.save_dir}")
         else:
             context.log.display("No tickets were saved")
 
