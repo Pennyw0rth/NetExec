@@ -145,9 +145,15 @@ class NXCModule:
             # Open the group
             group_handle = samr.hSamrOpenGroup(dce, domain_handle, groupId=group_rid)["GroupHandle"]
 
-            # Add member to the group
-            samr.hSamrAddMemberToGroup(dce, group_handle, user_rid, 0x7)
-            context.log.success(f"Successfully added {self.target_user} to group {self.group}")
+            try:
+                # Add member to the group
+                samr.hSamrAddMemberToGroup(dce, group_handle, user_rid, 0x7)
+                context.log.success(f"Successfully added {self.target_user} to group {self.group}")
+            except Exception as e:
+                if "STATUS_MEMBER_IN_GROUP" in str(e):
+                    context.log.display(f"User {self.target_user} is already a member of group {self.group}")
+                else:
+                    raise
 
         except Exception as e:
             context.log.fail(f"Failed to add user to group via SMB: {e}")
@@ -188,9 +194,15 @@ class NXCModule:
             # Open the group
             group_handle = samr.hSamrOpenGroup(dce, domain_handle, groupId=group_rid)["GroupHandle"]
 
-            # Remove member from the group
-            samr.hSamrRemoveMemberFromGroup(dce, group_handle, user_rid)
-            context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
+            try:
+                # Remove member from the group
+                samr.hSamrRemoveMemberFromGroup(dce, group_handle, user_rid)
+                context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
+            except Exception as e:
+                if "STATUS_MEMBER_NOT_IN_GROUP" in str(e):
+                    context.log.display(f"User {self.target_user} is not already a member of group {self.group}")
+                else:
+                    raise
 
         except Exception as e:
             context.log.fail(f"Failed to remove user from group via SMB: {e}")
