@@ -53,7 +53,6 @@ class NXCModule:
         """
         self.context = context
         self.group = module_options.get("GROUP")
-        # self.ou = module_options.get(\"OU\")
         self.target_user = module_options.get("USER")
         self.remove = module_options.get("REMOVE", "False").lower() == "true"
 
@@ -82,8 +81,6 @@ class NXCModule:
                     self._remove_user_from_group_ldap(context, connection)
                 else:
                     self._add_user_to_group_ldap(context, connection)
-            if self.ou:
-                self._move_user_to_ou_ldap(context, connection)
 
     def _authenticate_dce(self, context, connection, protocol="ncacn_np", interface=samr.MSRPC_UUID_SAMR):
         """Authenticate to the target using DCE/RPC"""
@@ -215,16 +212,15 @@ class NXCModule:
         """Add user to group using LDAP protocol"""
         try:
             context.log.info("Started adding user to group via LDAP")
-            ldap_conn = self._get_ldap_connection(connection)
 
             # Search for the target user
-            target_user_dn = self._find_object_dn(ldap_conn, connection.domain, "sAMAccountName", self.target_user)
+            target_user_dn = self._find_object_dn(connection, self.target_user)
             if not target_user_dn:
                 context.log.fail(f"User {self.target_user} not found")
                 return
 
             # Search for the target group
-            group_dn = self._find_object_dn(ldap_conn, connection.domain, "sAMAccountName", self.group)
+            group_dn = self._find_object_dn(connection, self.group)
             if not group_dn:
                 context.log.fail(f"Group {self.group} not found")
                 return
@@ -237,11 +233,13 @@ class NXCModule:
 
             # Create LDAP connection
             context.log.info("Creating LDAPS connection for modify.")
-            ldaps_conn = self._get_ldaps_connection(connection)
+            ldaps_url = f"ldaps://{connection.host}"
+            ldap_conn = ldap.LDAPConnection(ldaps_url)
+            ldap_conn.login(connection.username, connection.password, connection.domain, connection.lmhash, connection.nthash)
             context.log.info("LDAPS connection established.")
 
             # Add user to group by modifying the group's "member" attribute
-            self._modify_group_member(ldaps_conn, group_dn, target_user_dn, operation="add")
+            ldap_conn.modify(group_dn, {"member": [(0, [target_user_dn])]})  # 0 means Add
             context.log.success(f"Successfully added {self.target_user} to group {self.group}")
 
         except Exception as e:
@@ -251,16 +249,15 @@ class NXCModule:
         """Remove user from group using LDAP protocol"""
         try:
             context.log.info("Started removing user from group via LDAP")
-            ldap_conn = self._get_ldap_connection(connection)
 
             # Search for the target user
-            target_user_dn = self._find_object_dn(ldap_conn, connection.domain, "sAMAccountName", self.target_user)
+            target_user_dn = self._find_object_dn(connection, self.target_user)
             if not target_user_dn:
                 context.log.fail(f"User {self.target_user} not found")
                 return
 
             # Search for the target group
-            group_dn = self._find_object_dn(ldap_conn, connection.domain, "sAMAccountName", self.group)
+            group_dn = self._find_object_dn(connection, self.group)
             if not group_dn:
                 context.log.fail(f"Group {self.group} not found")
                 return
@@ -273,11 +270,13 @@ class NXCModule:
 
             # Create LDAP connection
             context.log.info("Creating LDAPS connection for modify.")
-            ldaps_conn = self._get_ldaps_connection(connection)
+            ldaps_url = f"ldaps://{connection.host}"
+            ldap_conn = ldap.LDAPConnection(ldaps_url)
+            ldap_conn.login(connection.username, connection.password, connection.domain, connection.lmhash, connection.nthash)
             context.log.info("LDAPS connection established.")
 
             # Remove user from group by modifying the group's "member" attribute
-            self._modify_group_member(ldaps_conn, group_dn, target_user_dn, operation="delete")
+            ldap_conn.modify(group_dn, {"member": [(1, [target_user_dn])]})  # 1 means Delete
             context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
 
         except Exception as e:
@@ -328,44 +327,11 @@ class NXCModule:
             context.log.debug(f"Error checking group membership: {e}")
             return False
 
-    def _get_ldap_connection(self, connection):
-        """Create and return an authenticated LDAP connection"""
-        ldap_server = f"ldap://{connection.host}"
-
-        ldap_connection = ldap.LDAPConnection(ldap_server, connection.domain)
-        ldap_connection.login(
-            connection.username,
-            connection.password,
-            connection.domain,
-            connection.lmhash,
-            connection.nthash
-        )
-        return ldap_connection
-
-    def _get_ldaps_connection(self, connection):
-        """Create and return an authenticated LDAPS connection (SSL, for writes)"""
-        ldaps_server = f"ldaps://{connection.host}"
-
-        ldaps_connection = ldap.LDAPConnection(ldaps_server, connection.domain)
-        ldaps_connection.login(
-            connection.username,
-            connection.password,
-            connection.domain,
-            connection.lmhash,
-            connection.nthash
-        )
-        return ldaps_connection
-
-    def _find_object_dn(self, ldap_connection, domain, attribute, value):
-        """Find the distinguished name (DN) of an object by attribute"""
-        domain_parts = domain.split(".")
-        base_dn = ",".join([f"DC={part}" for part in domain_parts])
-        search_filter = f"({attribute}={value})"
-
+    def _find_object_dn(self, connection, value):
+        """Find the distinguished name (DN) of an object by sAMAccountName"""
         try:
-            resp = ldap_connection.search(
-                searchBase=base_dn,
-                searchFilter=search_filter,
+            resp = connection.ldap_connection.search(
+                searchFilter=f"(sAMAccountName={value})",
                 attributes=["distinguishedName"]
             )
             resp_parsed = parse_result_attributes(resp)
