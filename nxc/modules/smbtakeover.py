@@ -1,4 +1,3 @@
-import contextlib
 from sys import exit
 
 from impacket.dcerpc.v5.dcom import wmi
@@ -18,7 +17,7 @@ class NXCModule:
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options
-        self.action = None
+        self.action = "check"
 
     def options(self, context, module_options):
         """
@@ -27,31 +26,26 @@ class NXCModule:
                         - stop: Unbinds 445/tcp (Stops LanmanServer, srv2, srvnet)
                         - start: Rebinds 445/tcp (Restores services)
         """
-        if "ACTION" not in module_options:
-            self.action = "check"
-        else:
+        if "ACTION" in module_options:
             self.action = module_options["ACTION"].lower()
 
-        if self.action not in ["check", "stop", "start"]:
+        if self.action not in ("check", "stop", "start"):
             context.log.fail("Invalid ACTION. Supported choices are: check, stop, start")
             exit(1)
 
     def on_admin_login(self, context, connection):
-        context.log.display(f"Executing smbtakeover {self.action} via WMI (ncacn_ip_tcp)...")
+        context.log.display(f"Executing smbtakeover '{self.action}' via WMI (ncacn_ip_tcp)...")
         smbtakeover_wmi = SmbTakeoverWmi(context, connection)
 
         if smbtakeover_wmi.is_initialized:
             try:
                 if self.action == "check":
                     smbtakeover_wmi.check()
-                elif self.action == "stop":
-                    smbtakeover_wmi.stop()
-                elif self.action == "start":
-                    smbtakeover_wmi.start()
+                else:
+                    smbtakeover_wmi.process(action=self.action)
             except Exception as e:
                 context.log.fail(f"Execution error: {e!s}")
-
-            if context.protocol != "wmi":
+            finally:
                 smbtakeover_wmi.disconnect()
 
 
@@ -60,8 +54,9 @@ class SmbTakeoverWmi:
 
     def __init__(self, context, connection):
         self.logger = context.log
-
+        self.__context_protocol = context.protocol
         self.__is_initialized = False
+        self._i_wbem_services = None
 
         try:
             self.__dcom = DCOMConnection(
@@ -90,28 +85,42 @@ class SmbTakeoverWmi:
         return self.__is_initialized
 
     def disconnect(self):
-        with contextlib.suppress(Exception):
-            if hasattr(self, f"_{self.__class__.__name__}__dcom"):
+        if self._i_wbem_services:
+            try:
+                self._i_wbem_services.RemRelease()
+            except Exception as e:
+                self.logger.debug(f"IWbemServices RemRelease error: {e!s}")
+            finally:
+                self._i_wbem_services = None
+
+        # Don't disconnect on 'nxc wmi' because NetExec disconnects in the end automatically
+        # Disconnect only on 'nxc smb' to keep the WMI connection from hanging
+        if hasattr(self, f"_{self.__class__.__name__}__dcom") and self.__dcom and self.__context_protocol != "wmi":
+            try:
                 self.__dcom.disconnect()
+            except Exception as e:
+                self.logger.debug(f"DCOM disconnect error: {e!s}")
+            finally:
+                self.__dcom = None
 
-    def connect_cimv2(self):
-        i_wbem_services = self.__iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
-        i_wbem_services.get_dce_rpc().set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
-        return i_wbem_services
+    @property
+    def i_wbem_services(self):
+        if self._i_wbem_services is None:
+            self._i_wbem_services = self.__iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
+            self._i_wbem_services.get_dce_rpc().set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
+            self.__iWbemLevel1Login.RemRelease()
+        return self._i_wbem_services
 
-    def get_service_or_driver(self, i_wbem_services, name):
-        if name in ["srv2", "srvnet"]:
+    def get_service_or_driver(self, name):
+        if name in ("srv2", "srvnet"):
             table = "Win32_SystemDriver"
         elif name == "LanmanServer":
             table = "Win32_Service"
-        else:
-            self.logger.fail(f"Unknown service or driver name: {name}")
-            return None
 
         try:
             query = f"SELECT * FROM {table} WHERE Name='{name}'"
-            objects = i_wbem_services.ExecQuery(query).Next(0xFFFFFFFF, 1)
-            if objects and len(objects) > 0:
+            objects = self.i_wbem_services.ExecQuery(query).Next(0xFFFFFFFF, 1)
+            if objects:
                 return objects[0]
         except Exception as e:
             if "code: 0x1 - WBEM_S_FALSE" in str(e):
@@ -138,7 +147,7 @@ class SmbTakeoverWmi:
         if ret == 0:
             self.logger.success(f"[{service_name}] StartMode changed to {mode}")
         else:
-            self.logger.fail(f"[{service_name}] Failed to set StartMode to {mode} (Ret: {ret})")
+            self.logger.fail(f"[{service_name}] Failed to set StartMode (Ret: {ret})")
 
     def stop_service(self, service_obj, service_name):
         ret = self.call_wmi_method(service_obj, "StopService")
@@ -158,69 +167,47 @@ class SmbTakeoverWmi:
         else:
             self.logger.fail(f"[{service_name}] Failed to start (Ret: {ret})")
 
-    def check_service(self, i_wbem_services, service_name):
-        svc_obj = self.get_service_or_driver(i_wbem_services, service_name)
+    def check_service(self, service_name):
+        svc_obj = self.get_service_or_driver(service_name)
         if svc_obj:
             props = dict(svc_obj.getProperties())
             state = props.get("State", {}).get("value", "Unknown")
             start_mode = props.get("StartMode", {}).get("value", "Unknown")
-            return svc_obj, state, start_mode
+            return (svc_obj, state, start_mode)
         else:
-            self.logger.fail(f"[{service_name}] Service/Driver not found!")
-        return None
+            self.logger.fail(f"[{service_name}] Not found!")
+        return (None, None, None)
 
     def check(self):
-        i_wbem_services = self.connect_cimv2()
-        services_to_check = ["LanmanServer", "srv2", "srvnet"]
-        for service_name in services_to_check:
-            _, state, start_mode = self.check_service(i_wbem_services, service_name)
-            self.logger.highlight(f"[{service_name}] State: {state} | StartMode: {start_mode}")
-        self.__iWbemLevel1Login.RemRelease()
+        for svc_name in ("LanmanServer", "srv2", "srvnet"):
+            _, state, start_mode = self.check_service(svc_name)
+            self.logger.highlight(f"[{svc_name}] State: {state} | StartMode: {start_mode}")
 
-    def stop(self):
-        i_wbem_services = self.connect_cimv2()
+    def process(self, action: str):
+        """
+        Unified SMB control logic via WMI.
+        'stop'  sequence: LanmanServer -> srv2 -> srvnet
+        'start' sequence: srvnet -> srv2 -> LanmanServer
+        """
+        is_start = action == "start"
+        services = ["LanmanServer", "srv2", "srvnet"]
+        if is_start:
+            services.reverse()
 
-        lanmanserver, lanmanserver_state, lanmanserver_start_mode = self.check_service(i_wbem_services, "LanmanServer")
-        if lanmanserver:
-            if lanmanserver_start_mode != "Disabled":
-                self.change_start_mode(lanmanserver, "Disabled", "LanmanServer")
+        target_state = "Running" if is_start else "Stopped"
+        lanman_mode = "Automatic" if is_start else "Disabled"
+        lanman_check = "Auto" if is_start else "Disabled"
 
-            if lanmanserver_state != "Stopped":
-                self.stop_service(lanmanserver, "LanmanServer")
+        for svc_name in services:
+            svc_obj, state, start_mode = self.check_service(svc_name)
+            if svc_obj:
+                if svc_name == "LanmanServer" and start_mode != lanman_check:
+                    self.change_start_mode(svc_obj, lanman_mode, svc_name)
 
-        srv2, srv2_state, _ = self.check_service(i_wbem_services, "srv2")
-        if srv2 and srv2_state != "Stopped":
-            self.stop_service(srv2, "srv2")
-
-        srvnet, srvnet_state, _ = self.check_service(i_wbem_services, "srvnet")
-        if srvnet and srvnet_state != "Stopped":
-            self.stop_service(srvnet, "srvnet")
-
-        self.check()
-
-        self.logger.success("SMB unbind sequence completed via WMI. Port 445 is free.")
-        self.__iWbemLevel1Login.RemRelease()
-
-    def start(self):
-        i_wbem_services = self.connect_cimv2()
-
-        srvnet, srvnet_state, _ = self.check_service(i_wbem_services, "srvnet")
-        if srvnet and srvnet_state != "Running":
-            self.start_service(srvnet, "srvnet")
-
-        srv2, srv2_state, _ = self.check_service(i_wbem_services, "srv2")
-        if srv2 and srv2_state != "Running":
-            self.start_service(srv2, "srv2")
-
-        lanmanserver, lanmanserver_state, lanmanserver_start_mode = self.check_service(i_wbem_services, "LanmanServer")
-        if lanmanserver:
-            if lanmanserver_start_mode != "Auto":
-                self.change_start_mode(lanmanserver, "Automatic", "LanmanServer")
-
-            if lanmanserver_state != "Running":
-                self.start_service(lanmanserver, "LanmanServer")
+                if state != target_state:
+                    self.start_service(svc_obj, svc_name) if is_start else self.stop_service(svc_obj, svc_name)
 
         self.check()
-
-        self.logger.success("SMB rebind sequence completed via WMI. Port 445 restored.")
-        self.__iWbemLevel1Login.RemRelease()
+        msg = "rebind" if is_start else "unbind"
+        status = "restored" if is_start else "free"
+        self.logger.success(f"SMB {msg} sequence completed. Port 445/tcp {status}.")
