@@ -81,7 +81,7 @@ class winrm(connection):
 
         if not self.kdcHost and self.domain and self.domain == self.targetDomain:
             result = self.resolver(self.domain)
-            self.kdcHost = result["host"] if result else self.host
+            self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
