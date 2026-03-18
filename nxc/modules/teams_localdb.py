@@ -1,4 +1,5 @@
 import sqlite3
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import TMP_PATH
 from os.path import abspath, join
 
@@ -7,11 +8,10 @@ class NXCModule:
     name = "teams_localdb"
     description = "Retrieves the cleartext ssoauthcookie from the local Microsoft Teams database, if teams is open we kill all Teams process"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = False
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
-        """ """
+        """No options available"""
 
     def on_admin_login(self, context, connection):
         context.log.display("Killing all Teams process to open the cookie file")

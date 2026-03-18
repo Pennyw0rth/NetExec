@@ -107,4 +107,4 @@ class BloodHound:
             computer_enum.enumerate_computers(self.ad.computers, num_workers=num_workers, timestamp=timestamp, fileNamePrefix=fileNamePrefix)
         end_time = time.time()
         minutes, seconds = divmod(int(end_time - start_time), 60)
-        self.logger.highlight("Done in %02dM %02dS" % (minutes, seconds))
+        self.logger.highlight(f"Done in {minutes}M {seconds}S")

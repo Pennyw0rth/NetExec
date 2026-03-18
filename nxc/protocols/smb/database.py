@@ -1,21 +1,22 @@
 import base64
-import sys
+import threading
 import warnings
 from datetime import datetime
 
-from sqlalchemy import func, Table, select, delete
+from sqlalchemy import Boolean, Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, UniqueConstraint, func, select, delete
 from sqlalchemy.dialects.sqlite import Insert  # used for upsert
 from sqlalchemy.exc import (
-    NoInspectionAvailable,
-    NoSuchTableError,
+    SAWarning
 )
-from sqlalchemy.exc import SAWarning
+from sqlalchemy.orm import declarative_base
 
 from nxc.database import BaseDB, format_host_query
 from nxc.logger import nxc_logger
 
 # if there is an issue with SQLAlchemy and a connection cannot be cleaned up properly it spews out annoying warnings
 warnings.filterwarnings("ignore", category=SAWarning)
+
+BaseTable = declarative_base()
 
 
 class database(BaseDB):
@@ -29,173 +30,180 @@ class database(BaseDB):
         self.LoggedinRelationsTable = None
         self.ConfChecksTable = None
         self.ConfChecksResultsTable = None
-        self.DpapiBackupkey = None
-        self.DpapiSecrets = None
+        self.DpapiBackupkeyTable = None
+        self.DpapiSecretsTable = None
+
+        self._lock = threading.Lock()
 
         super().__init__(db_engine)
 
+    # Table declaration
+
+    class Host(BaseTable):
+        __tablename__ = "hosts"
+        id = Column(Integer)
+        ip = Column(String)
+        hostname = Column(String)
+        domain = Column(String)
+        os = Column(String)
+        dc = Column(Boolean)
+        smbv1 = Column(Boolean)
+        signing = Column(Boolean)
+        spooler = Column(Boolean)
+        zerologon = Column(Boolean)
+        petitpotam = Column(Boolean)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            UniqueConstraint("ip"),
+        )
+
+    class ConfCheck(BaseTable):
+        __tablename__ = "conf_checks"
+        id = Column(Integer)
+        name = Column(String)
+        description = Column(String)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+        )
+
+    class ConfCheckResult(BaseTable):
+        __tablename__ = "conf_checks_results"
+        id = Column(Integer)
+        host_id = Column(Integer)
+        check_id = Column(Integer)
+        secure = Column(Boolean)
+        reasons = Column(String)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            ForeignKeyConstraint(["host_id"], ["hosts.id"]),
+            ForeignKeyConstraint(["check_id"], ["conf_checks.id"]),
+        )
+
+    class User(BaseTable):
+        __tablename__ = "users"
+        id = Column(Integer)
+        domain = Column(String)
+        username = Column(String)
+        password = Column(String)
+        credtype = Column(String)
+        pillaged_from_hostid = Column(Integer)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            ForeignKeyConstraint(["pillaged_from_hostid"], ["hosts.id"]),
+        )
+
+    class Group(BaseTable):
+        __tablename__ = "groups"
+        id = Column(Integer)
+        domain = Column(String)
+        name = Column(String)
+        rid = Column(String)
+        member_count_ad = Column(Integer)
+        last_query_time = Column(String)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+        )
+
+    class AdminRelation(BaseTable):
+        __tablename__ = "admin_relations"
+        id = Column(Integer)
+        userid = Column(Integer)
+        hostid = Column(Integer)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            ForeignKeyConstraint(["userid"], ["users.id"]),
+            ForeignKeyConstraint(["hostid"], ["hosts.id"]),
+        )
+
+    class GroupRelation(BaseTable):
+        __tablename__ = "group_relations"
+        id = Column(Integer)
+        userid = Column(Integer)
+        groupid = Column(Integer)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            ForeignKeyConstraint(["userid"], ["users.id"]),
+            ForeignKeyConstraint(["groupid"], ["groups.id"]),
+        )
+
+    class Share(BaseTable):
+        __tablename__ = "shares"
+        id = Column(Integer)
+        hostid = Column(Integer)
+        userid = Column(Integer)
+        name = Column(String)
+        remark = Column(String)
+        read = Column(Boolean)
+        write = Column(Boolean)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            ForeignKeyConstraint(["hostid"], ["hosts.id"]),
+            ForeignKeyConstraint(["userid"], ["users.id"]),
+            UniqueConstraint("hostid", "userid", "name"),
+        )
+
+    class LoggedInRelation(BaseTable):
+        __tablename__ = "loggedin_relations"
+        id = Column(Integer)
+        userid = Column(Integer)
+        hostid = Column(Integer)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            ForeignKeyConstraint(["userid"], ["users.id"]),
+            ForeignKeyConstraint(["hostid"], ["hosts.id"]),
+        )
+
+    class DpapiSecret(BaseTable):
+        __tablename__ = "dpapi_secrets"
+        id = Column(Integer)
+        host = Column(String)
+        dpapi_type = Column(String)
+        windows_user = Column(String)
+        username = Column(String)
+        password = Column(String)
+        url = Column(String)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            UniqueConstraint("host", "dpapi_type", "windows_user", "username", "password", "url"),
+        )
+
+    class DpapiBackupKey(BaseTable):
+        __tablename__ = "dpapi_backupkey"
+        id = Column(Integer)
+        domain = Column(String)
+        pvk = Column(String)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            UniqueConstraint("domain"),
+        )
+
     @staticmethod
     def db_schema(db_conn):
-        db_conn.execute(
-            """CREATE TABLE "hosts" (
-            "id" integer PRIMARY KEY,
-            "ip" text UNIQUE,
-            "hostname" text,
-            "domain" text,
-            "os" text,
-            "dc" boolean,
-            "smbv1" boolean,
-            "signing" boolean,
-            "spooler" boolean,
-            "zerologon" boolean,
-            "petitpotam" boolean
-            )"""
-        )
-        db_conn.execute(
-            """CREATE TABLE "conf_checks" (
-            "id" integer PRIMARY KEY,
-            "name" text,
-            "description" text
-            )"""
-        )
-
-        db_conn.execute(
-            """CREATE TABLE "conf_checks_results" (
-            "id" integer PRIMARY KEY,
-            "host_id" integer,
-            "check_id" integer,
-            "secure" boolean,
-            "reasons" text,
-            FOREIGN KEY(host_id) REFERENCES hosts(id),
-            FOREIGN KEY(check_id) REFERENCES conf_checks(id)
-            )
-            """
-        )
-
-        db_conn.execute(
-            """CREATE TABLE "users" (
-            "id" integer PRIMARY KEY,
-            "domain" text,
-            "username" text,
-            "password" text,
-            "credtype" text,
-            "pillaged_from_hostid" integer,
-            FOREIGN KEY(pillaged_from_hostid) REFERENCES hosts(id)
-            )"""
-        )
-        db_conn.execute(
-            """CREATE TABLE "groups" (
-            "id" integer PRIMARY KEY,
-            "domain" text,
-            "name" text,
-            "rid" text,
-            "member_count_ad" integer,
-            "last_query_time" text
-            )"""
-        )
-        # This table keeps track of which credential has admin access over which machine and vice-versa
-        db_conn.execute(
-            """CREATE TABLE "admin_relations" (
-            "id" integer PRIMARY KEY,
-            "userid" integer,
-            "hostid" integer,
-            FOREIGN KEY(userid) REFERENCES users(id),
-            FOREIGN KEY(hostid) REFERENCES hosts(id)
-            )"""
-        )
-        db_conn.execute(
-            """CREATE TABLE "group_relations" (
-            "id" integer PRIMARY KEY,
-            "userid" integer,
-            "groupid" integer,
-            FOREIGN KEY(userid) REFERENCES users(id),
-            FOREIGN KEY(groupid) REFERENCES groups(id)
-            )"""
-        )
-        db_conn.execute(
-            """CREATE TABLE "shares" (
-            "id" integer PRIMARY KEY,
-            "hostid" text,
-            "userid" integer,
-            "name" text,
-            "remark" text,
-            "read" boolean,
-            "write" boolean,
-            FOREIGN KEY(userid) REFERENCES users(id)
-            UNIQUE(hostid, userid, name)
-        )"""
-        )
-        db_conn.execute(
-            """CREATE TABLE "loggedin_relations" (
-            "id" integer PRIMARY KEY,
-            "userid" integer,
-            "hostid" integer,
-            FOREIGN KEY(userid) REFERENCES users(id),
-            FOREIGN KEY(hostid) REFERENCES hosts(id)
-        )"""
-        )
-        db_conn.execute(
-            """CREATE TABLE "dpapi_secrets" (
-            "id" integer PRIMARY KEY,
-            "host" text,
-            "dpapi_type" text,
-            "windows_user" text,
-            "username" text,
-            "password" text,
-            "url" text,
-            UNIQUE(host, dpapi_type, windows_user, username, password, url)
-        )"""
-        )
-        db_conn.execute(
-            """CREATE TABLE "dpapi_backupkey" (
-            "id" integer PRIMARY KEY,
-            "domain" text,
-            "pvk" text,
-            UNIQUE(domain)
-        )"""
-        )
-        # db_conn.execute('''CREATE TABLE "ntds_dumps" (
-        #    "id" integer PRIMARY KEY,
-        #    "hostid", integer,
-        #    "domain" text,
-        #    "username" text,
-        #    "hash" text,
-        #    FOREIGN KEY(hostid) REFERENCES hosts(id)
-        #    )''')
+        BaseTable.metadata.create_all(db_conn)
 
     def reflect_tables(self):
-        with self.db_engine.connect():
-            try:
-                self.HostsTable = Table("hosts", self.metadata, autoload_with=self.db_engine)
-                self.UsersTable = Table("users", self.metadata, autoload_with=self.db_engine)
-                self.GroupsTable = Table("groups", self.metadata, autoload_with=self.db_engine)
-                self.SharesTable = Table("shares", self.metadata, autoload_with=self.db_engine)
-                self.AdminRelationsTable = Table("admin_relations", self.metadata, autoload_with=self.db_engine)
-                self.GroupRelationsTable = Table("group_relations", self.metadata, autoload_with=self.db_engine)
-                self.LoggedinRelationsTable = Table("loggedin_relations", self.metadata, autoload_with=self.db_engine)
-                self.DpapiSecrets = Table("dpapi_secrets", self.metadata, autoload_with=self.db_engine)
-                self.DpapiBackupkey = Table("dpapi_backupkey", self.metadata, autoload_with=self.db_engine)
-                self.ConfChecksTable = Table("conf_checks", self.metadata, autoload_with=self.db_engine)
-                self.ConfChecksResultsTable = Table("conf_checks_results", self.metadata, autoload_with=self.db_engine)
-
-                # Check if Database Schema is correct, due to hanging issues reported on discord introduced by https://github.com/Pennyw0rth/NetExec/pull/658
-                from sqlalchemy.schema import UniqueConstraint
-                ip_is_unique = False
-                for constraint in self.HostsTable.constraints:
-                    if isinstance(constraint, UniqueConstraint) and constraint.columns[0].name == "ip":
-                        ip_is_unique = True
-                        break
-                if not ip_is_unique:
-                    raise NoSuchTableError("ip is not unique in hosts table")
-            except (NoInspectionAvailable, NoSuchTableError):
-                print(
-                    f"""
-                    [-] Error reflecting tables for the {self.protocol} protocol - this means there is a DB schema mismatch
-                    [-] This is probably because a newer version of nxc is being run on an old DB schema
-                    [-] Optionally save the old DB data (`cp {self.db_path} ~/nxc_{self.protocol.lower()}.bak`)
-                    [-] Then remove the {self.protocol} DB (`rm -f {self.db_path}`) and run nxc to initialize the new DB"""
-                )
-                sys.exit()
+        self.HostsTable = self.reflect_table(self.Host)
+        self.UsersTable = self.reflect_table(self.User)
+        self.GroupsTable = self.reflect_table(self.Group)
+        self.SharesTable = self.reflect_table(self.Share)
+        self.AdminRelationsTable = self.reflect_table(self.AdminRelation)
+        self.GroupRelationsTable = self.reflect_table(self.GroupRelation)
+        self.LoggedinRelationsTable = self.reflect_table(self.LoggedInRelation)
+        self.DpapiSecretsTable = self.reflect_table(self.DpapiSecret)
+        self.DpapiBackupkeyTable = self.reflect_table(self.DpapiBackupKey)
+        self.ConfChecksTable = self.reflect_table(self.ConfCheck)
+        self.ConfChecksResultsTable = self.reflect_table(self.ConfCheckResult)
 
     # pull/545
     def add_host(
@@ -340,11 +348,7 @@ class database(BaseDB):
 
     def remove_credentials(self, creds_id):
         """Removes a credential ID from the database"""
-        del_hosts = []
-        for cred_id in creds_id:
-            q = delete(self.UsersTable).filter(self.UsersTable.c.id == cred_id)
-            del_hosts.append(q)
-        self.db_execute(q)
+        self.db_execute(delete(self.UsersTable).where(self.UsersTable.c.id.in_(creds_id)))
 
     def add_admin_user(self, credtype, domain, username, password, host, user_id=None):
         add_links = []
@@ -461,18 +465,18 @@ class database(BaseDB):
             return [results]
         # if we're filtering by domain controllers
         elif filter_term == "dc":
-            q = q.filter(self.HostsTable.c.dc is True)
+            q = q.filter(self.HostsTable.c.dc == True)  # noqa: E712
             if domain:
                 q = q.filter(func.lower(self.HostsTable.c.domain) == func.lower(domain))
         elif filter_term == "signing":
             # generally we want hosts that are vulnerable, so signing disabled
-            q = q.filter(self.HostsTable.c.signing is False)
+            q = q.filter(self.HostsTable.c.signing == False)  # noqa: E712
         elif filter_term == "spooler":
-            q = q.filter(self.HostsTable.c.spooler is True)
+            q = q.filter(self.HostsTable.c.spooler == True)  # noqa: E712
         elif filter_term == "zerologon":
-            q = q.filter(self.HostsTable.c.zerologon is True)
+            q = q.filter(self.HostsTable.c.zerologon == True)  # noqa: E712
         elif filter_term == "petitpotam":
-            q = q.filter(self.HostsTable.c.petitpotam is True)
+            q = q.filter(self.HostsTable.c.petitpotam == True)  # noqa: E712
         elif filter_term is not None and filter_term.startswith("domain"):
             domain = filter_term.split()[1]
             like_term = func.lower(f"%{domain}%")
@@ -688,7 +692,7 @@ class database(BaseDB):
         :domain is the domain fqdn
         :pvk is the domain backupkey
         """
-        q = select(self.DpapiBackupkey).filter(func.lower(self.DpapiBackupkey.c.domain) == func.lower(domain))
+        q = select(self.DpapiBackupkeyTable).filter(func.lower(self.DpapiBackupkeyTable.c.domain) == func.lower(domain))
         results = self.db_execute(q).all()
 
         if not len(results):
@@ -696,7 +700,7 @@ class database(BaseDB):
             backup_key = {"domain": domain, "pvk": pvk_encoded}
             try:
                 # TODO: find a way to abstract this away to a single Upsert call
-                q = Insert(self.DpapiBackupkey)  # .returning(self.DpapiBackupkey.c.id)
+                q = Insert(self.DpapiBackupkeyTable)  # .returning(self.DpapiBackupkeyTable.c.id)
 
                 self.db_execute(q, [backup_key])  # .scalar()
                 nxc_logger.debug(f"add_domain_backupkey(domain={domain}, pvk={pvk_encoded})")
@@ -708,9 +712,9 @@ class database(BaseDB):
         Get domain backupkey
         :domain is the domain fqdn
         """
-        q = select(self.DpapiBackupkey)
+        q = select(self.DpapiBackupkeyTable)
         if domain is not None:
-            q = q.filter(func.lower(self.DpapiBackupkey.c.domain) == func.lower(domain))
+            q = q.filter(func.lower(self.DpapiBackupkeyTable.c.domain) == func.lower(domain))
         results = self.db_execute(q).all()
 
         nxc_logger.debug(f"get_domain_backupkey(domain={domain}) => {results}")
@@ -724,7 +728,7 @@ class database(BaseDB):
         Check if this group ID is valid.
         :dpapi_secret_id is a primary id
         """
-        q = select(self.DpapiSecrets).filter(func.lower(self.DpapiSecrets.c.id) == dpapi_secret_id)
+        q = select(self.DpapiSecretsTable).filter(func.lower(self.DpapiSecretsTable.c.id) == dpapi_secret_id)
         results = self.db_execute(q).first()
         valid = results is not None
         nxc_logger.debug(f"is_dpapi_secret_valid(groupID={dpapi_secret_id}) => {valid}")
@@ -748,7 +752,7 @@ class database(BaseDB):
             "password": password,
             "url": url,
         }
-        q = Insert(self.DpapiSecrets).on_conflict_do_nothing()  # .returning(self.DpapiSecrets.c.id)
+        q = Insert(self.DpapiSecretsTable).on_conflict_do_nothing()  # .returning(self.DpapiSecretsTable.c.id)
 
         self.db_execute(q, [secret])  # .scalar()
 
@@ -765,28 +769,28 @@ class database(BaseDB):
         url: str | None = None,
     ):
         """Get dpapi secrets from nxcdb"""
-        q = select(self.DpapiSecrets)
+        q = select(self.DpapiSecretsTable)
 
         if self.is_dpapi_secret_valid(filter_term):
-            q = q.filter(self.DpapiSecrets.c.id == filter_term)
+            q = q.filter(self.DpapiSecretsTable.c.id == filter_term)
             results = self.db_execute(q).first()
             # all() returns a list, so we keep the return format the same so consumers don't have to guess
             return [results]
         elif host:
-            q = q.filter(self.DpapiSecrets.c.host == host)
+            q = q.filter(self.DpapiSecretsTable.c.host == host)
             results = self.db_execute(q).first()
             # all() returns a list, so we keep the return format the same so consumers don't have to guess
             return [results]
         elif dpapi_type:
-            q = q.filter(func.lower(self.DpapiSecrets.c.dpapi_type) == func.lower(dpapi_type))
+            q = q.filter(func.lower(self.DpapiSecretsTable.c.dpapi_type) == func.lower(dpapi_type))
         elif windows_user:
             like_term = func.lower(f"%{windows_user}%")
-            q = q.filter(func.lower(self.DpapiSecrets.c.windows_user).like(like_term))
+            q = q.filter(func.lower(self.DpapiSecretsTable.c.windows_user).like(like_term))
         elif username:
             like_term = func.lower(f"%{username}%")
-            q = q.filter(func.lower(self.DpapiSecrets.c.windows_user).like(like_term))
+            q = q.filter(func.lower(self.DpapiSecretsTable.c.windows_user).like(like_term))
         elif url:
-            q = q.filter(func.lower(self.DpapiSecrets.c.url) == func.lower(url))
+            q = q.filter(func.lower(self.DpapiSecretsTable.c.url) == func.lower(url))
         results = self.db_execute(q).all()
 
         nxc_logger.debug(f"get_dpapi_secrets(filter_term={filter_term}, host={host}, dpapi_type={dpapi_type}, windows_user={windows_user}, username={username}, url={url}) => {results}")

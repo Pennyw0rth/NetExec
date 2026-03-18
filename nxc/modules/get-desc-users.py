@@ -1,5 +1,6 @@
 from impacket.ldap import ldap as ldap_impacket
 import re
+from nxc.helpers.misc import CATEGORY
 from nxc.logger import nxc_logger
 from nxc.parsers.ldap_results import parse_result_attributes
 
@@ -11,10 +12,9 @@ class NXCModule:
     """
 
     name = "get-desc-users"
-    description = "Get description of the users. May contained password"
+    description = "Get description of the users. May contain password"
     supported_protocols = ["ldap"]
-    opsec_safe = True  # Does the module touch disk?
-    multiple_hosts = True  # Does it make sense to run this module on multiple hosts at a time?
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """

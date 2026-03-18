@@ -12,6 +12,7 @@ import random
 
 obfuscate_ps_scripts = False
 
+
 def replace_singles(s):
     """Replaces single quotes with a double quote
     We do this because quoting is very important in PowerShell, and we are doing multiple layers:
@@ -26,6 +27,7 @@ def replace_singles(s):
         str: Original string with single quotes replaced with double.
     """
     return s.replace("'", r"\"")
+
 
 def get_ps_script(path):
     """Generates a full path to a PowerShell script given a relative path.
@@ -56,19 +58,6 @@ def encode_ps_command(command):
     return b64encode(command.encode("UTF-16LE")).decode()
 
 
-def is_powershell_installed():
-    """
-    Check if PowerShell is installed.
-
-    Returns
-    -------
-        bool: True if PowerShell is installed, False otherwise.
-    """
-    if which("powershell"):
-        return True
-    return False
-
-
 def obfs_ps_script(path_to_script):
     """
     Obfuscates a PowerShell script.
@@ -90,7 +79,7 @@ def obfs_ps_script(path_to_script):
     obfs_script_dir = os.path.join(NXC_PATH, "obfuscated_scripts")
     obfs_ps_script = os.path.join(obfs_script_dir, ps_script)
 
-    if is_powershell_installed() and obfuscate_ps_scripts:
+    if bool(which("powershell")) and obfuscate_ps_scripts:
         if os.path.exists(obfs_ps_script):
             nxc_logger.display("Using cached obfuscated Powershell script")
             with open(obfs_ps_script) as script:
@@ -116,10 +105,9 @@ def obfs_ps_script(path_to_script):
             and debug statements from a PowerShell source file.
             """
             # strip block comments
-            stripped_code = re.sub(re.compile("<#.*?#>", re.DOTALL), "", script.read())
+            stripped_code = re.sub(re.compile(r"<#.*?#>", re.DOTALL), "", script.read())
             # strip blank lines, lines starting with #, and verbose/debug statements
             return "\n".join([line for line in stripped_code.split("\n") if ((line.strip() != "") and (not line.strip().startswith("#")) and (not line.strip().lower().startswith("write-verbose ")) and (not line.strip().lower().startswith("write-debug ")))])
-
 
 
 def create_ps_command(ps_command, force_ps32=False, obfs=False, custom_amsi=None, encode=True):
@@ -139,7 +127,7 @@ def create_ps_command(ps_command, force_ps32=False, obfs=False, custom_amsi=None
         str: The generated PowerShell command.
     """
     nxc_logger.debug(f"Creating PS command parameters: {ps_command=}, {force_ps32=}, {obfs=}, {custom_amsi=}, {encode=}")
-    
+
     if custom_amsi:
         nxc_logger.debug(f"Using custom AMSI bypass script: {custom_amsi}")
         with open(custom_amsi) as file_in:
@@ -154,7 +142,7 @@ def create_ps_command(ps_command, force_ps32=False, obfs=False, custom_amsi=None
         command = amsi_bypass + f"$functions = {{function Command-ToExecute{{{amsi_bypass + ps_command}}}}}; if ($Env:PROCESSOR_ARCHITECTURE -eq 'AMD64'){{$job = Start-Job -InitializationScript $functions -ScriptBlock {{Command-ToExecute}} -RunAs32; $job | Wait-Job | Receive-Job }} else {{IEX '$functions'; Command-ToExecute}}"
     else:
         command = f"{amsi_bypass} {ps_command}"
-    
+
     nxc_logger.debug(f"Generated PS command:\n {command}\n")
 
     if obfs:
@@ -163,7 +151,7 @@ def create_ps_command(ps_command, force_ps32=False, obfs=False, custom_amsi=None
         while True:
             nxc_logger.debug(f"Obfuscation attempt: {obfs_attempts + 1}")
             obfs_command = invoke_obfuscation(command)
-            
+
             command = f'powershell.exe -exec bypass -noni -nop -w 1 -C "{replace_singles(obfs_command)}"'
             if len(command) <= 8191:
                 break
@@ -176,11 +164,11 @@ def create_ps_command(ps_command, force_ps32=False, obfs=False, custom_amsi=None
         # if we arent encoding or obfuscating anything, we quote the entire powershell in double quotes, otherwise the final powershell command will syntax error
         command = f"-enc {encode_ps_command(command)}" if encode else f'"{command}"'
         command = f"powershell.exe -noni -nop -w 1 {command}"
-        
+
         if len(command) > 8191:
             nxc_logger.error(f"Command exceeds maximum length of 8191 chars (was {len(command)}). exiting.")
             exit(1)
-            
+
     nxc_logger.debug(f"Final command: {command}")
     return command
 
@@ -429,4 +417,3 @@ def invoke_obfuscation(script_string):
     obfuscated_script = choice(invoke_options)
     nxc_logger.debug(f"Script after obfuscation: {obfuscated_script}")
     return obfuscated_script
-

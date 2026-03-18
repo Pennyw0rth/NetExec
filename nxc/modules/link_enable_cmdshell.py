@@ -1,3 +1,6 @@
+from nxc.helpers.misc import CATEGORY
+
+
 class NXCModule:
     """
     Enable or disable xp_cmdshell on a linked MSSQL server
@@ -7,8 +10,7 @@ class NXCModule:
     name = "link_enable_cmdshell"
     description = "Enable or disable xp_cmdshell on a linked MSSQL server"
     supported_protocols = ["mssql"]
-    opsec_safe = False
-    multiple_hosts = False
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self):
         self.action = None
@@ -98,6 +100,4 @@ class NXCModule:
         result = self.mssql_conn.sql_query(query)
         # Assuming the query returns a list of dictionaries with 'config_value' as the key
         self.context.log.debug(f"{option} check result: {result}")
-        if result and result[0]["config_value"] == 1:
-            return True
-        return False
+        return bool(result and result[0]["config_value"] == 1)

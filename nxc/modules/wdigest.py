@@ -3,14 +3,14 @@ from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 from sys import exit
 import contextlib
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
     name = "wdigest"
     description = "Creates/Deletes the 'UseLogonCredential' registry key enabling WDigest cred dumping on Windows >= 8.1"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """ACTION  Create/Delete the registry key (choices: enable, disable, check)"""

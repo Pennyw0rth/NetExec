@@ -13,6 +13,7 @@ from asyauth.common.credentials.kerberos import KerberosCredential
 
 from asysocks.unicomm.common.target import UniTarget, UniProto
 import contextlib
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -23,10 +24,9 @@ class NXCModule:
     Original work thankfully taken from @zyn3rgy's Ldap Relay Scan project: https://github.com/zyn3rgy/LdapRelayScan
     """
     name = "ldap-checker"
-    description = "Checks whether LDAP signing and channel binding are required and / or enforced"
+    description = "[REMOVED] Checks whether LDAP signing and channel binding are required and / or enforced"
     supported_protocols = ["ldap"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """No options available."""
@@ -81,10 +81,10 @@ class NXCModule:
                 ssl_context = ssl.create_default_context()
                 ssl_context.check_hostname = False
                 ssl_context.verify_mode = ssl.CERT_NONE
-                
+
                 with socket.create_connection((connection.host, 636)) as sock, ssl_context.wrap_socket(sock, server_hostname=connection.host) as ssl_sock:
                     cert = ssl_sock.getpeercert(binary_form=True)
-                
+
                 if cert:
                     cert_hash = hashlib.sha256(cert).digest()
                     context.log.debug(f"Original certificate hash: {cert_hash.hex()}")
@@ -111,8 +111,7 @@ class NXCModule:
         except Exception as e:
             context.log.fail(f"Exception in run_ldaps_withEPA: {e}")
             return None
-            
-    
+
     # Domain Controllers do not have a certificate setup for
     # LDAPS on port 636 by default. If this has not been setup,
     # the TLS handshake will hang and you will not be able to
@@ -141,7 +140,7 @@ class NXCModule:
                 return False
         finally:
             ssl_sock.close()
-    
+
     # Conduct an LDAP bind and determine if server signing
     # requirements are enforced based on potential errors
     # during the bind attempt.
@@ -170,10 +169,12 @@ class NXCModule:
         except Exception as e:
             context.log.debug(f"Exception during LDAP bind: {e}")
             return None
-    
+
     # Determine authentication context and proceed to
-    # enumerate LDAP signing and channel binding settings    
+    # enumerate LDAP signing and channel binding settings
     def on_login(self, context, connection):
+        context.log.fail("[REMOVED] Now natively supported in the host banner")
+        return
         stype = asyauthSecret.PASS
         secret = connection.password
         if connection.nthash:

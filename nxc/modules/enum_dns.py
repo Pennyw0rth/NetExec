@@ -1,5 +1,7 @@
 from datetime import datetime
 from nxc.helpers.logger import write_log
+from nxc.helpers.misc import CATEGORY
+from nxc.paths import NXC_PATH
 
 
 class NXCModule:
@@ -11,8 +13,7 @@ class NXCModule:
     name = "enum_dns"
     description = "Uses WMI to dump DNS from an AD DNS Server"
     supported_protocols = ["smb", "wmi"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -28,16 +29,16 @@ class NXCModule:
     def on_admin_login(self, context, connection):
         if not self.domains:
             domains = []
-            output = connection.wmi("Select Name FROM MicrosoftDNS_Zone", "root\\microsoftdns")
+            output = connection.wmi_query("Select Name FROM MicrosoftDNS_Zone", "root\\microsoftdns")
             domains = [result["Name"]["value"] for result in output] if output else []
             context.log.success(f"Domains retrieved: {domains}")
         else:
             domains = [self.domains]
         data = ""
-        
+
         for domain in domains:
-            output = connection.wmi(
-                f"Select TextRepresentation FROM MicrosoftDNS_ResourceRecord WHERE DomainName = {domain}",
+            output = connection.wmi_query(
+                f"Select TextRepresentation FROM MicrosoftDNS_ResourceRecord WHERE DomainName = '{domain}'",
                 "root\\microsoftdns",
             )
 
@@ -50,7 +51,7 @@ class NXCModule:
                     rname = text.split(" ")[0]
                     rtype = text.split(" ")[2]
                     rvalue = " ".join(text.split(" ")[3:])
-                    if domain_data.get(rtype, False):
+                    if domain_data.get(rtype):
                         domain_data[rtype].append(f"{rname}: {rvalue}")
                     else:
                         domain_data[rtype] = [f"{rname}: {rvalue}"]
@@ -64,4 +65,4 @@ class NXCModule:
 
         log_name = f"DNS-Enum-{connection.host}-{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log"
         write_log(data, log_name)
-        context.log.display(f"Saved raw output to ~/.nxc/logs/{log_name}")
+        context.log.display(f"Saved raw output to {NXC_PATH}/logs/{log_name}")

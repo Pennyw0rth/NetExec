@@ -8,6 +8,7 @@ from lsassy.dumper import Dumper
 from lsassy.parser import Parser
 from lsassy.session import Session
 from lsassy.impacketfile import ImpacketFile
+from nxc.helpers.misc import CATEGORY
 
 credentials_data = []
 found_users = []
@@ -130,8 +131,7 @@ class NXCModule:
     name = "hash_spider"
     description = "Dump lsass recursively from a given hash using BH to find local admins"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

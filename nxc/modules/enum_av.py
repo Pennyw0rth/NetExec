@@ -7,6 +7,7 @@ from impacket.dcerpc.v5 import lsat, lsad, transport
 from impacket.dcerpc.v5.dtypes import NULL, MAXIMUM_ALLOWED, RPC_UNICODE_STRING
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 import pathlib
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -18,8 +19,7 @@ class NXCModule:
     name = "enum_av"
     description = "Gathers information on all endpoint protection solutions installed on the the remote host(s) via LsarLookupNames (no privilege needed)"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -211,6 +211,19 @@ conf = {
             "pipes": []
         },
         {
+            "name": "Avast / AVG",
+            "services": [
+                {"name": "AvastWscReporter", "description": "Avast WSC Reporter Service"},
+                {"name": "aswbIDSAgent", "description": "Avast IDS Agent Service"},
+                {"name": "AVGWscReporter", "description": "AVG WSC Reporter Service"},
+                {"name": "avgbIDSAgent", "description": "AVG IDS Agent Service"}
+            ],
+            "pipes": [
+                {"name": "aswCallbackPipe*", "processes": ["AvastSvc.exe", "aswEngSrv.exe"]},
+                {"name": "avgCallbackPipe*", "processes": ["AVGSvc.exe", "aswEngSrv.exe"]}
+            ]
+        },
+        {
             "name": "Bitdefender",
             "services": [
                 {"name": "bdredline_agent", "description": "Bitdefender Agent RedLine Service"},
@@ -240,9 +253,15 @@ conf = {
             "pipes": []
         },
         {
-            "name": "CrowdStrike",
-            "services": [{"name": "CSFalconService", "description": "CrowdStrike Falcon Sensor Service"}],
-            "pipes": [{"name": "CrowdStrike\\{*", "processes": ["CSFalconContainer.exe", "CSFalconService.exe"]}]
+            "name": "Check Point Endpoint Security",
+            "services": [
+                {"name": "CPDA", "description": "Check Point Endpoint Agent"},
+                {"name": "vsmon", "description": "Check Point Endpoint Security Network Protection"},
+                {"name": "CPFileAnlyz", "description": "Check Point Endpoint Security File Analyzer"},
+                {"name": "EPClientUIService", "description": "Check Point Endpoint Security Client UI"}
+
+            ],
+            "pipes": []
         },
         {
             "name": "Cortex",
@@ -251,6 +270,11 @@ conf = {
                 {"name": "cyserver", "description": " Cortex XDR"}
             ],
             "pipes": []
+        },
+        {
+            "name": "CrowdStrike",
+            "services": [{"name": "CSFalconService", "description": "CrowdStrike Falcon Sensor Service"}],
+            "pipes": [{"name": "CrowdStrike\\{*", "processes": ["CSFalconContainer.exe", "CSFalconService.exe"]}]
         },
         {
             "name": "Cybereason",
@@ -262,6 +286,17 @@ conf = {
             "pipes": [
                 {"name": "CybereasonAPConsoleMinionHostIpc_*", "processes": ["minionhost.exe"]},
                 {"name": "CybereasonAPServerProxyIpc_*", "processes": ["minionhost.exe"]}
+            ]
+        },
+        {
+            "name": "Elastic EDR",
+            "services": [
+                {"name": "Elastic Agent", "description": "Elastic Agent Service"},
+                {"name": "ElasticEndpoint", "description": "Elastic Endpoint Security Service"}
+            ],
+            "pipes": [
+                {"name": "ElasticEndpointServiceComms-*", "processes": ["elastic-endpoint.exe"]},
+                {"name": "elastic-agent-system", "processes": ["elastic-agent.exe"]}
             ]
         },
         {
@@ -279,6 +314,24 @@ conf = {
             "pipes": [{"name": "nod_scriptmon_pipe", "processes": [""]}],
         },
         {
+            "name": "FortiClient",
+            "services": [
+                {"name": "FA_Scheduler", "description": "FortiClient Service Scheduler"},
+                {"name": "FCT_SecSvr", "description": "Forticlient Endpoint Protected Process Service"}
+            ],
+            "pipes": [
+                {"name": "FortiClient_DBLogDaemon", "processes": ["FCDBLog.exe"]},
+                {"name": "FC_*", "processes": ["FortiTray.exe"]}
+            ]
+        },
+        {
+            "name": "FortiEDR",
+            "services": [
+                {"name": "FortiEDR Collector Service", "description": "Host component of the Fortinet Endpoint Detection and Response Platform"}
+            ],
+            "pipes": []
+        },
+        {
             "name": "G DATA Security Client",
             "services": [
                 {"name": "AVKWCtl", "description": "Anti-virus Kit Window Control"},
@@ -290,12 +343,23 @@ conf = {
             ]
         },
         {
-        "name": "Ivanti Security",
+            "name": "Ivanti Security",
             "services": [
                 {"name": "STAgent$Shavlik Protect", "description": "Ivanti Security Controls Agent"},
                 {"name": "STDispatch$Shavlik Protect", "description": "Ivanti Security Controls Agent Dispatcher"}
             ],
             "pipes": []
+        },
+        {
+            "name": "Kaseya Agent Endpoint",
+            "services": [
+                {"name": "KAENDKSAASC*", "description": "Virtual System Administrator Endpoint"},
+                {"name": "KAKSAASC*", "description": "Machine.Group ID:*"},
+            ],
+            "pipes": [
+                {"name": "kaseyaUserKSA*", "processes": ["KaUsrTsk.exe"]},
+                {"name": "kaseyaAgentKSA*", "processes": ["AgentMon.exe"]}
+            ]
         },
         {
             "name": "Kaspersky Security for Windows Server",
@@ -307,6 +371,18 @@ conf = {
             ],
             "pipes": [
                 {"name": "Exploit_Blocker", "processes": ["kavfswh.exe"]}
+            ]
+        },
+        {
+            "name": "Malwarebytes",
+            "services": [
+                {"name": "MBAMService", "description": "Malwarebytes Service"},
+                {"name": "MBEndpointAgent", "description": "Malwarebytes Cloud Endpoint Agent Service"}
+            ],
+            "pipes": [
+                {"name": "MBLG", "processes": ["MBAMService.exe"]},
+                {"name": "MBEA2_R", "processes": ["MBCloudEA.exe"]},
+                {"name": "MBEA2_W", "processes": ["MBCloudEA.exe"]}
             ]
         },
         {
@@ -322,6 +398,11 @@ conf = {
             ]
         },
         {
+            "name": "Rapid7",
+            "services": [{"name": "ir_agent", "description": "Rapid7 Insight Agent"}],
+            "pipes": []
+        },
+        {
             "name": "SentinelOne",
             "services": [
                 {"name": "SentinelAgent", "description": "SentinelOne Endpoint Protection Agent"},
@@ -333,20 +414,6 @@ conf = {
                 {"name": "DFIScanner.Etw.*", "processes": ["SentinelStaticEngine.exe"]},
                 {"name": "DFIScanner.Inline.*", "processes": ["SentinelAgent.exe"]}
             ]
-        },
-        {
-            "name": "Symantec Endpoint Protection",
-            "services": [
-                {"name": "SepMasterService", "description": "Symantec Endpoint Protection"},
-                {"name": "SepScanService", "description": "Symantec Endpoint Protection Scan Services"},
-                {"name": "SNAC", "description": "Symantec Network Access Control"}
-            ],
-            "pipes": []
-        },
-        {
-            "name": "Rapid7",
-            "services": [{"name": "ir_agent", "description": "Rapid7 Insight Agent"}],
-            "pipes": []
         },
         {
             "name": "Sophos Intercept X",
@@ -369,6 +436,15 @@ conf = {
             ]
         },
         {
+            "name": "Symantec Endpoint Protection",
+            "services": [
+                {"name": "SepMasterService", "description": "Symantec Endpoint Protection"},
+                {"name": "SepScanService", "description": "Symantec Endpoint Protection Scan Services"},
+                {"name": "SNAC", "description": "Symantec Network Access Control"}
+            ],
+            "pipes": []
+        },
+        {
             "name": "Trellix Endpoint Detection and Response (EDR)",
             "services": [
                 {"name": "McAfee Endpoint Security Platform Service", "description": "Trellix Core Service"},
@@ -378,7 +454,7 @@ conf = {
                 {"name": "masvc", "description": "Trellix Agent Service"},
                 {"name": "macmnsvc", "description": "Trellix Agent Common Service"},
                 {"name": "mfetp", "description": "Trellix Endpoint Threat Prevention Service"},
-                {"name": "mfewc", "description": "Trellix Endpoint Security Web Control Service"}, 
+                {"name": "mfewc", "description": "Trellix Endpoint Security Web Control Service"},
                 {"name": "mfeaack", "description": "Trellix Anti-Malware Core Service"}
             ],
             "pipes": [
@@ -418,6 +494,21 @@ conf = {
                 {"name": "WdNisSvc", "description": "Windows Defender Antivirus Network Inspection Service"}
             ],
             "pipes": []
+        },
+        {
+            "name": "WithSecure Elements",
+            "services": [
+                {"name": "fsdevcon", "description": "WithSecure Device Control"},
+                {"name": "fshoster", "description": "WithSecure Hoster"},
+                {"name": "fsnethoster", "description": "WithSecure Hoster (Restricted)"},
+                {"name": "fsulhoster", "description": "WithSecure Ultralight Hoster"},
+                {"name": "fsulnethoster", "description": "WithSecure Ultralight Network Hoster"},
+                {"name": "fsulprothoster", "description": "WithSecure Ultralight Protected Hoster"},
+                {"name": "wsulavprohoster", "description": "WithSecure Ultralight Protected AV Hoster"}
+            ],
+            "pipes": [
+                {"name": "FS_CCFIPC_*", "processes": ["fsatpn.exe", "fsatpl.exe", "fshoster32.exe", "fsulprothoster.exe", "fsulprothoster.exe", "fshoster64.exe", "FsPisces.exe", "fsdevcon.exe"]}
+            ]
         }
     ]
 }
