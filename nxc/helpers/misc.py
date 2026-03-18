@@ -8,6 +8,7 @@ from termcolor import colored
 from ipaddress import ip_address
 from nxc.logger import nxc_logger
 from time import strftime, gmtime
+from datetime import datetime, timedelta
 
 
 def identify_target_file(target_file):
@@ -224,6 +225,18 @@ def convert(low, high, lockout=False):
     elif minutes == 1:
         time += f"{minutes} minute "
     return time
+
+
+def convert_filetime_to_datetime(self, filetime):
+    """Convert Windows FILETIME to a readable timestamp rounded to the closest minute."""
+    try:
+        WINDOWS_EPOCH = datetime(1601, 1, 1)  # Windows FILETIME epoch
+
+        timestamp = filetime / 10_000_000  # Convert 100-ns intervals to seconds
+        dt = WINDOWS_EPOCH + timedelta(seconds=timestamp)
+        return dt.replace(microsecond=0)
+    except Exception:
+        return "Conversion Error"
 
 
 def display_modules(args, modules):
