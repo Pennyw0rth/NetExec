@@ -185,7 +185,13 @@ class NXCModule:
                 return None
 
         try:
-            return samr.hSamrCreateUser2InDomain(dce, domain_handle, self.computer_name, samr.USER_WORKSTATION_TRUST_ACCOUNT, samr.USER_FORCE_PASSWORD_CHANGE)["UserHandle"]
+            # Doing this call manually because of weird exception handling in https://github.com/fortra/impacket/blob/084aff60df7e8a5784bee3fb6ac74ed9d1362af8/impacket/dcerpc/v5/samr.py#L2591-L2599
+            request = samr.SamrCreateUser2InDomain()
+            request["DomainHandle"] = domain_handle
+            request["Name"] = self.computer_name
+            request["AccountType"] = samr.USER_WORKSTATION_TRUST_ACCOUNT
+            request["DesiredAccess"] = samr.USER_FORCE_PASSWORD_CHANGE
+            return dce.request(request)
         except samr.DCERPCSessionError as e:
             if "STATUS_USER_EXISTS" in str(e):
                 self.context.log.fail(f"Computer '{self.computer_name}' already exists")
