@@ -36,13 +36,13 @@ class NXCModule:
             nxc smb  $DC-IP -u Username -p Password -M add-computer -o NAME="BADPC" PASSWORD="Password2" CHANGEPW=True
         """
         self.delete = "DELETE" in module_options
-        self.no_add = False
+        self.change_pw = False
 
         if "CHANGEPW" in module_options:
             if "NAME" not in module_options or "PASSWORD" not in module_options:
                 context.log.error("NAME and PASSWORD options are required for CHANGEPW!")
                 sys.exit(1)
-            self.no_add = True
+            self.change_pw = True
 
         if "NAME" not in module_options:
             context.log.error("NAME option is required!")
@@ -116,7 +116,7 @@ class NXCModule:
         domain_handle = samr.hSamrOpenDomain(dce, serv_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_CREATE_USER, domain_sid)["DomainHandle"]
 
         try:
-            if self.delete and self.no_add:  # noqa: SIM108
+            if self.delete or self.change_pw:  # noqa: SIM108
                 user_handle = self._samr_open_existing(dce, domain_handle, selected, self.connection.username)
             else:
                 user_handle = self._samr_create(dce, domain_handle, self.connection.username)
@@ -131,7 +131,7 @@ class NXCModule:
                 self._db_remove_credential()
             else:
                 samr.hSamrSetPasswordInternal4New(dce, user_handle, self.computer_password)
-                if self.no_add:
+                if self.change_pw:
                     self.context.log.highlight(f"Successfully changed password for '{self.computer_name}'")
                 else:
                     user_handle = self._samr_set_workstation_trust(dce, domain_handle, user_handle)
@@ -203,7 +203,7 @@ class NXCModule:
 
         if self.delete:
             self._ldap_delete(self.connection.ldap_connection, computer_dn)
-        elif self.no_add:
+        elif self.change_pw:
             self._ldap_change_password(self.connection.ldap_connection, computer_dn)
         else:
             self._ldap_add(self.connection.ldap_connection, computer_dn, name)
