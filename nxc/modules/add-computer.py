@@ -72,8 +72,7 @@ class NXCModule:
             db = self.context.db
             domain = self.connection.domain
             rows = db.get_user(domain, self.computer_name) if hasattr(db, "get_user") else db.get_credentials(filter_term=self.computer_name)
-            if rows:
-                db.remove_credentials([row[0] for row in rows])
+            db.remove_credentials([row[0] for row in rows])
         except Exception as e:
             self.context.log.debug(f"Could not remove credentials from DB: {e}")
 
