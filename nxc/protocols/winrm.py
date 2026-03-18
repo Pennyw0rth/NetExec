@@ -79,6 +79,11 @@ class winrm(connection):
         if self.args.local_auth:
             self.domain = self.hostname
 
+        if not self.kdcHost and self.domain and self.domain == self.targetDomain:
+            result = self.resolver(self.domain)
+            self.kdcHost = result["host"] if result else self.host
+            self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
+
     def print_host_info(self):
         self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
         self.logger.extra["port"] = self.port
