@@ -257,7 +257,7 @@ class NXCModule:
             elif "insufficientAccessRights" in err:
                 self.context.log.fail(f'Insufficient rights to change password for "{self.computer_name}"')
             elif "unwillingToPerform" in err:
-                self.context.log.fail(f'Server unwilling to change password for "{self.computer_name}". Verify LDAPS.')
+                self.context.log.fail(f'Server unwilling to change password for "{self.computer_name}"')
             else:
                 self.context.log.fail(f'Failed to change password for "{self.computer_name}": {e}')
 
@@ -292,7 +292,7 @@ class NXCModule:
             elif "insufficientAccessRights" in err:
                 self.context.log.fail(f"Insufficient rights to add '{self.computer_name}'")
             elif "unwillingToPerform" in err:
-                self.context.log.fail("Server unwilling to perform. Verify LDAPS is active.")
+                self.context.log.fail("Server unwilling to perform")
             elif "constraintViolation" in err:
                 self.context.log.fail(f"Constraint violation for '{self.computer_name}'. Quota exceeded or password policy.")
             else:
