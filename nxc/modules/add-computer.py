@@ -163,12 +163,12 @@ class NXCModule:
                 self.context.log.fail(f"Error looking up {self.computer_name}: {e}")
             return None
 
-        access = samr.DELETE if self.delete else samr.USER_FORCE_PASSWORD_CHANGE
-        action = "delete" if self.delete else "change password for"
         try:
+            access = samr.DELETE if self.delete else samr.USER_FORCE_PASSWORD_CHANGE
             return samr.hSamrOpenUser(dce, domain_handle, access, user_rid)["UserHandle"]
         except samr.DCERPCSessionError as e:
             if "STATUS_ACCESS_DENIED" in str(e):
+                action = "delete" if self.delete else "change password for"
                 self.context.log.fail(f"{username} does not have the right to {action} '{self.computer_name}'")
             else:
                 self.context.log.fail(f"Error opening {self.computer_name}: {e}")
