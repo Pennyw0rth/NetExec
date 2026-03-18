@@ -497,6 +497,17 @@ conf = {
             "pipes": [
                 {"name": "aswCallbackPipe*", "processes": ["AvastSvc.exe", "aswEngSrv.exe"]},
                 {"name": "avgCallbackPipe*", "processes": ["AVGSvc.exe", "aswEngSrv.exe"]}
+             ]
+        },
+        {
+            "name": "Elastic EDR",
+            "services": [
+                {"name": "Elastic Agent", "description": "Elastic Agent Service"},
+                {"name": "ElasticEndpoint", "description": "Elastic Endpoint Security Service"}
+            ],
+            "pipes": [
+                {"name": "ElasticEndpointServiceComms-*", "processes": ["elastic-endpoint.exe"]},
+                {"name": "elastic-agent-system", "processes": ["elastic-agent.exe"]}
             ]
         }
     ]
