@@ -1,5 +1,4 @@
 import sys
-from impacket.ldap import ldap, ldapasn1
 from impacket.dcerpc.v5 import samr, epm, transport
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from nxc.parsers.ldap_results import parse_result_attributes
@@ -125,34 +124,25 @@ class NXCModule:
             domain_handle = samr.hSamrOpenDomain(dce, server_handle, domainId=domain_sid)["DomainHandle"]
 
             # Find the user and group RIDs
-            try:
-                user_rid = samr.hSamrLookupNamesInDomain(dce, domain_handle, (self.target_user,))["RelativeIds"]["Element"][0]
-            except Exception as e:
-                context.log.fail(f"User {self.target_user} not found in domain {connection.domain}: {e}")
-                return
-
-            try:
-                group_rid = samr.hSamrLookupNamesInDomain(dce, domain_handle, (self.group,))["RelativeIds"]["Element"][0]
-            except Exception as e:
-                context.log.fail(f"Group {self.group} not found in domain {connection.domain}: {e}")
-                return
+            user_rid = samr.hSamrLookupNamesInDomain(dce, domain_handle, (self.target_user,))["RelativeIds"]["Element"][0]
+            group_rid = samr.hSamrLookupNamesInDomain(dce, domain_handle, (self.group,))["RelativeIds"]["Element"][0]
 
             # Open the group
             group_handle = samr.hSamrOpenGroup(dce, domain_handle, groupId=group_rid)["GroupHandle"]
 
-            try:
-                # Add member to the group
-                samr.hSamrAddMemberToGroup(dce, group_handle, user_rid, 0x7)
-                context.log.success(f"Successfully added {self.target_user} to group {self.group}")
-            except Exception as e:
-                if "STATUS_MEMBER_IN_GROUP" in str(e):
-                    context.log.display(f"User {self.target_user} is already a member of group {self.group}")
-                else:
-                    raise
+            # Add member to the group
+            samr.hSamrAddMemberToGroup(dce, group_handle, user_rid, 0x7)
+            context.log.success(f"Successfully added {self.target_user} to group {self.group}")
 
         except Exception as e:
-            context.log.fail(f"Failed to add user to group via SMB: {e}")
-            context.log.info("If the group is domain-local or universal, try with LDAP instead.")
+            if "STATUS_MEMBER_IN_GROUP" in str(e):
+                context.log.display(f"User {self.target_user} is already a member of group {self.group}")
+            elif "STATUS_ACCESS_DENIED" in str(e):
+                context.log.fail(f"Failed to add user to group via SMB. Try with LDAP: {e}")
+            elif "STATUS_NONE_MAPPED" in str(e):
+                context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
+            else:
+                context.log.fail(f"Failed to add user to group via SMB: {e}")
         finally:
             if "dce" in locals():
                 dce.disconnect()
@@ -172,34 +162,25 @@ class NXCModule:
             domain_handle = samr.hSamrOpenDomain(dce, server_handle, domainId=domain_sid)["DomainHandle"]
 
             # Find the user and group RIDs
-            try:
-                user_rid = samr.hSamrLookupNamesInDomain(dce, domain_handle, (self.target_user,))["RelativeIds"]["Element"][0]
-            except Exception as e:
-                context.log.fail(f"User {self.target_user} not found in domain {connection.domain}: {e}")
-                return
-
-            try:
-                group_rid = samr.hSamrLookupNamesInDomain(dce, domain_handle, (self.group,))["RelativeIds"]["Element"][0]
-            except Exception as e:
-                context.log.fail(f"Group {self.group} not found in domain {connection.domain}: {e}")
-                return
+            user_rid = samr.hSamrLookupNamesInDomain(dce, domain_handle, (self.target_user,))["RelativeIds"]["Element"][0]
+            group_rid = samr.hSamrLookupNamesInDomain(dce, domain_handle, (self.group,))["RelativeIds"]["Element"][0]
 
             # Open the group
             group_handle = samr.hSamrOpenGroup(dce, domain_handle, groupId=group_rid)["GroupHandle"]
 
-            try:
-                # Remove member from the group
-                samr.hSamrRemoveMemberFromGroup(dce, group_handle, user_rid)
-                context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
-            except Exception as e:
-                if "STATUS_MEMBER_NOT_IN_GROUP" in str(e):
-                    context.log.display(f"User {self.target_user} is not a member of group {self.group}")
-                else:
-                    raise
+            # Remove member from the group
+            samr.hSamrRemoveMemberFromGroup(dce, group_handle, user_rid)
+            context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
 
         except Exception as e:
-            context.log.fail(f"Failed to remove user from group via SMB: {e}")
-            context.log.info("If the group is domain-local or universal, try with LDAP instead.")
+            if "STATUS_MEMBER_NOT_IN_GROUP" in str(e):
+                context.log.display(f"User {self.target_user} is not a member of group {self.group}")
+            elif "STATUS_ACCESS_DENIED" in str(e):
+                context.log.fail(f"Failed to remove user to group via SMB. Try with LDAP: {e}")
+            elif "STATUS_NONE_MAPPED" in str(e):
+                context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
+            else:
+                context.log.fail(f"Failed to remove user to group via SMB: {e}")
         finally:
             if "dce" in locals():
                 dce.disconnect()
@@ -213,20 +194,13 @@ class NXCModule:
             target_user_dn = self._find_object_dn(connection, self.target_user)
             group_dn = self._find_object_dn(connection, self.group)
 
-            # Create LDAP connection
-            context.log.info("Creating LDAPS connection for modify.")
-            ldaps_url = f"ldaps://{connection.host}"
-            ldap_conn = ldap.LDAPConnection(ldaps_url)
-            ldap_conn.login(connection.username, connection.password, connection.domain, connection.lmhash, connection.nthash)
-            context.log.info("LDAPS connection established.")
-
             # Add user to group by modifying the group's "member" attribute
-            ldap_conn.modify(group_dn, {"member": [(0, [target_user_dn])]})  # 0 means Add
+            connection.ldap_connection.modify(group_dn, {"member": [(0, [target_user_dn])]})  # 0 means Add
             context.log.success(f"Successfully added {self.target_user} to group {self.group}")
 
         except Exception as e:
             error = str(e)
-            if "LDAP_ENTRY_ALREADY_EXISTS" in error or "entryAlreadyExists" in error:
+            if "entryAlreadyExists" in error:
                 context.log.display(f"User {self.target_user} is already a member of group {self.group}")
             elif "index out of range" in error:
                 context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
@@ -242,70 +216,18 @@ class NXCModule:
             target_user_dn = self._find_object_dn(connection, self.target_user)
             group_dn = self._find_object_dn(connection, self.group)
 
-            # Create LDAP connection
-            context.log.info("Creating LDAPS connection for modify.")
-            ldaps_url = f"ldaps://{connection.host}"
-            ldap_conn = ldap.LDAPConnection(ldaps_url)
-            ldap_conn.login(connection.username, connection.password, connection.domain, connection.lmhash, connection.nthash)
-            context.log.info("LDAPS connection established.")
-
             # Remove user from group by modifying the group's "member" attribute
-            ldap_conn.modify(group_dn, {"member": [(1, [target_user_dn])]})  # 1 means Delete
+            connection.ldap_connection.modify(group_dn, {"member": [(1, [target_user_dn])]})  # 1 means Delete
             context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
 
         except Exception as e:
             error = str(e)
-            if "unwillingToPerform" in error or "WILL_NOT_PERFORM" in error:
+            if "WILL_NOT_PERFORM" in error:
                 context.log.display(f"User {self.target_user} is not a member of group {self.group}")
             elif "index out of range" in error:
                 context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
             else:
                 context.log.fail(f"Failed to add user to group via LDAP: {e}")
-
-    def _modify_group_member(self, ldaps_conn, group_dn, target_user_dn, operation):
-        """
-        Modify group membership by building a raw ldapasn1.ModifyRequest
-        and sending it via LDAPConnection.sendReceive().
-
-        operation: "add" to add a member, "delete" to remove a member.
-
-        Note: pyasn1 auto-populates the nested Change structure when you
-        index into request["changes"][n] — no separate Change class needed.
-        Operation takes the string name ("add", "delete", "replace").
-        """
-        request = ldapasn1.ModifyRequest()
-        request["object"] = group_dn
-        request["changes"][0]["operation"] = ldapasn1.Operation(operation)
-        request["changes"][0]["modification"]["type"] = "member"
-        request["changes"][0]["modification"]["vals"][0] = target_user_dn
-
-        # Send over the already-authenticated LDAPS connection
-        resp = ldaps_conn.sendReceive(request)
-
-        # Check every returned message for a non-success result code
-        for message in resp:
-            component = message["protocolOp"].getComponent()
-            result_code = int(component["resultCode"])
-            if result_code != 0:
-                diagnostic = str(component.get("diagnosticMessage", ""))
-                raise Exception(f"LDAP modify failed (resultCode={result_code}): {diagnostic}")
-
-    def _is_user_in_group(self, context, connection, target_user_dn, group_dn):
-        """Check if the given user DN is already a member of the target group DN."""
-        try:
-            search_filter = f"(cn={self.group})"
-            attributes = ["member"]
-            # LDAP connection
-            resp = connection.ldap_connection.search(searchFilter=search_filter, attributes=attributes, sizeLimit=0)
-            resp_parsed = parse_result_attributes(resp)
-
-            for dn in resp_parsed:
-                if target_user_dn in dn["member"]:
-                    return target_user_dn
-
-        except Exception as e:
-            context.log.debug(f"Error checking group membership: {e}")
-            return False
 
     def _find_object_dn(self, connection, value):
         """Find the distinguished name (DN) of an object by sAMAccountName"""
