@@ -1,6 +1,7 @@
 import sys
 import requests
 from requests import ConnectionError
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -12,6 +13,7 @@ class NXCModule:
     name = "empire_exec"
     description = "Uses Empire's RESTful API to generate a launcher for the specified listener and executes it"
     supported_protocols = ["smb", "mssql"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context, module_options):
         """

@@ -1,4 +1,3 @@
-import sys
 from impacket import system_errors
 from impacket.dcerpc.v5.rpcrt import DCERPCException, RPC_C_AUTHN_GSS_NEGOTIATE, rpc_status_codes
 from impacket.structure import Structure
@@ -6,6 +5,7 @@ from impacket.dcerpc.v5 import transport, rprn
 from impacket.dcerpc.v5.ndr import NDRCALL, NDRPOINTER, NDRSTRUCT, NDRUNION, NULL
 from impacket.dcerpc.v5.dtypes import DWORD, LPWSTR, ULONG, WSTR
 from impacket.dcerpc.v5.rprn import checkNullString, STRING_HANDLE, PBYTE_ARRAY
+from nxc.helpers.misc import CATEGORY
 
 KNOWN_PROTOCOLS = {
     135: {"bindstr": r"ncacn_ip_tcp:%s[135]"},
@@ -22,6 +22,7 @@ class NXCModule:
     name = "printnightmare"
     description = "Check if host vulnerable to printnightmare"
     supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -67,7 +68,7 @@ class NXCModule:
             dce.bind(rprn.MSRPC_UUID_RPRN)
         except Exception as e:
             context.log.fail(f"Failed to bind: {e}")
-            sys.exit(1)
+            return False
 
         flags = APD_COPY_ALL_FILES | APD_COPY_FROM_DIRECTORY | APD_INSTALL_WARNED_DRIVER
 

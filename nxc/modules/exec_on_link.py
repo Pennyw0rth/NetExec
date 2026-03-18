@@ -1,3 +1,6 @@
+from nxc.helpers.misc import CATEGORY
+
+
 class NXCModule:
     """
     Execute commands on linked servers
@@ -7,6 +10,7 @@ class NXCModule:
     name = "exec_on_link"
     description = "Execute commands on a SQL Server linked server"
     supported_protocols = ["mssql"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self):
         self.mssql_conn = None

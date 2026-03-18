@@ -2,6 +2,7 @@ from dploot.triage.mobaxterm import MobaXtermTriage, MobaXtermCredential, MobaXt
 from dploot.lib.target import Target
 
 from nxc.helpers.logger import highlight
+from nxc.helpers.misc import CATEGORY
 from nxc.protocols.smb.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection
 
 
@@ -9,9 +10,10 @@ class NXCModule:
     name = "mobaxterm"
     description = "Remotely dump MobaXterm credentials via RemoteRegistry or NTUSER.dat export"
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
-        """ """
+        """No options available"""
 
     def on_admin_login(self, context, connection):
         username = connection.username
@@ -32,7 +34,7 @@ class NXCModule:
             no_pass=True,
             use_kcache=getattr(connection, "use_kcache", False),
         )
-        
+
         conn = upgrade_to_dploot_connection(connection=connection.conn, target=target)
         if conn is None:
             context.log.debug("Could not upgrade connection")

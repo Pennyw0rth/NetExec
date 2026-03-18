@@ -1,4 +1,5 @@
 from dploot.lib.target import Target
+from nxc.helpers.misc import CATEGORY
 from nxc.protocols.smb.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
 
 
@@ -12,6 +13,7 @@ class NXCModule:
     name = "firefox"
     description = "[REMOVED] Dump credentials from Firefox"
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """

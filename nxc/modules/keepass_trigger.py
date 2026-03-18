@@ -5,6 +5,7 @@ from csv import reader
 from base64 import b64encode
 from io import BytesIO, StringIO
 from xml.etree import ElementTree as ET
+from nxc.helpers.misc import CATEGORY
 from nxc.helpers.powershell import get_ps_script
 from nxc.paths import TMP_PATH
 
@@ -21,6 +22,7 @@ class NXCModule:
     name = "keepass_trigger"
     description = "Set up a malicious KeePass trigger to export the database in cleartext."
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
     # while the module only executes legit powershell commands on the target (search and edit files)
     # some EDR like Trend Micro flag base64-encoded powershell as malicious
     # the option PSH_EXEC_METHOD can be used to avoid such execution, and will drop scripts on the target

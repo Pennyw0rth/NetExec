@@ -1,6 +1,7 @@
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ldap.ldap import LDAPSearchError
 import sys
+from nxc.helpers.misc import CATEGORY
 
 
 def search_res_entry_to_dict(results):
@@ -19,6 +20,10 @@ class NXCModule:
     Authors:
       Podalirius: @podalirius_
     """
+    name = "subnets"
+    description = "Retrieves the different Sites and Subnets of an Active Directory"
+    supported_protocols = ["ldap"]
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """SHOWSERVERS    Toggle printing of servers (default: true)"""
@@ -32,10 +37,6 @@ class NXCModule:
             else:
                 context.log.fail("Could not parse showservers option for 'SHOWSERVERS'. Please use 'true' or 'false'.")
                 exit(1)
-
-    name = "subnets"
-    description = "Retrieves the different Sites and Subnets of an Active Directory"
-    supported_protocols = ["ldap"]
 
     def on_login(self, context, connection):
         dn = connection.args.base_dn if connection.args.base_dn else connection.ldap_connection._baseDN

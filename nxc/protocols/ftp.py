@@ -121,7 +121,7 @@ class ftp(connection):
         # ftplib's "dir" prints directly to stdout, and "nlst" only returns the folder name, not full details
         files = []
         try:
-            self.conn.retrlines("LIST", callback=files.append)
+            self.conn.retrlines("LIST -a", callback=files.append)
         except error_perm as error_message:
             self.logger.fail(f"Failed to list directory. Response: ({error_message})")
             self.conn.close()
@@ -136,7 +136,7 @@ class ftp(connection):
             if self.conn.encoding == "utf-8":
                 # Switch the connection to binary
                 self.conn.sendcmd("TYPE I")
-            # Check if the file exists 
+            # Check if the file exists
             self.conn.size(filename)
             # Attempt to download the file
             self.conn.retrbinary(f"RETR {filename}", open(downloaded_file, "wb").write)  # noqa: SIM115

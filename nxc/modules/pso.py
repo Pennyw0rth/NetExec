@@ -1,3 +1,5 @@
+from nxc.helpers.misc import CATEGORY
+
 
 class NXCModule:
     """
@@ -8,6 +10,7 @@ class NXCModule:
     name = "pso"
     description = "Module to get the Fine Grained Password Policy/PSOs"
     supported_protocols = ["ldap"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

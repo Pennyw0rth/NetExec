@@ -1,12 +1,14 @@
 from impacket.dcerpc.v5 import rrp
 from impacket.dcerpc.v5 import scmr
 from impacket.examples.secretsdump import RemoteOperations
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
     name = "install_elevated"
     description = "Checks for AlwaysInstallElevated"
     supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """ """

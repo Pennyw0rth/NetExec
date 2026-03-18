@@ -1,3 +1,6 @@
+from nxc.helpers.misc import CATEGORY
+
+
 class NXCModule:
     """
     Enumerate SQL Server logins (SQL, Domain, Local users)
@@ -7,6 +10,7 @@ class NXCModule:
     name = "enum_logins"
     description = "Enumerate SQL Server logins (SQL, Domain, Local users)"
     supported_protocols = ["mssql"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self):
         self.mssql_conn = None
@@ -42,14 +46,14 @@ class NXCModule:
         domain_prefix = f"{domain_name}\\" if domain_name else ""
 
         query = f"""
-        SELECT 
+        SELECT
             name,
             type,
             type_desc,
-            CASE type_desc 
+            CASE type_desc
                 WHEN 'SQL_LOGIN' THEN 'SQL User'
-                WHEN 'WINDOWS_LOGIN' THEN 
-                    CASE 
+                WHEN 'WINDOWS_LOGIN' THEN
+                    CASE
                         WHEN name LIKE '{domain_prefix}%' THEN 'Domain User'
                         WHEN name LIKE '%\\%' THEN 'Local User'
                         ELSE 'Local User'
@@ -61,7 +65,7 @@ class NXCModule:
             END as login_type,
             is_disabled,
             create_date
-        FROM sys.server_principals 
+        FROM sys.server_principals
         WHERE type IN ('S', 'U', 'G', 'C', 'K')
         AND name NOT LIKE '##%'
         ORDER BY login_type, name;

@@ -6,17 +6,23 @@ from binascii import unhexlify
 from impacket.krb5.kerberosv5 import getKerberosTGT
 from impacket.krb5 import constants
 from impacket.krb5.types import Principal
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
     name = "nopac"
     description = "Check if the DC is vulnerable to CVE-2021-42278 and CVE-2021-42287 to impersonate DA from standard domain user"
     supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
-        """ """
+        """No options available"""
 
     def on_login(self, context, connection):
+        if not connection.username:
+            context.log.fail("Module requires a username to request TGTs")
+            return
+
         user_name = Principal(connection.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
         try:
             tgt_with_pac, cipher, old_session_key, session_key = getKerberosTGT(

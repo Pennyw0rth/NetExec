@@ -3,7 +3,7 @@ def proto_args(parser, parents):
     nfs_parser.add_argument("--port", type=int, default=111, help="NFS portmapper port (default: %(default)s)")
     nfs_parser.add_argument("--nfs-timeout", type=int, default=5, help="NFS connection timeout (default: %(default)ss)")
 
-    dgroup = nfs_parser.add_argument_group("NFS Mapping/Enumeration", "Options for Mapping/Enumerating NFS")
+    dgroup = nfs_parser.add_argument_group("NFS Mapping/Enumeration")
     dgroup.add_argument("--share", help="Specify a share, e.g. for --ls, --get-file, --put-file")
     dgroup.add_argument("--shares", action="store_true", help="List NFS shares")
     dgroup.add_argument("--enum-shares", nargs="?", type=int, const=3, help="Authenticate and enumerate exposed shares recursively (default depth: %(const)s)")

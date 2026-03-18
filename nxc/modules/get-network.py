@@ -2,7 +2,6 @@
 # Credit to https://github.com/dirkjanm/adidnsdump @_dirkjan
 # module by @mpgn_x64
 import re
-import codecs
 import socket
 from datetime import datetime
 from struct import unpack
@@ -10,6 +9,7 @@ from struct import unpack
 from impacket.structure import Structure
 from ldap3 import LEVEL
 from os.path import expanduser
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 from nxc.parsers.ldap_results import parse_result_attributes
 
@@ -68,6 +68,7 @@ class NXCModule:
     name = "get-network"
     description = "Query all DNS records with the corresponding IP from the domain."
     supported_protocols = ["ldap"]
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """
@@ -81,12 +82,12 @@ class NXCModule:
             if module_options["ALL"].lower() == "true" or module_options["ALL"] == "1":
                 self.showall = True
             else:
-                print("Could not parse ALL option.")
+                context.log.display("Could not parse ALL option.")
         if module_options and "ONLY_HOSTS" in module_options:
             if module_options["ONLY_HOSTS"].lower() == "true" or module_options["ONLY_HOSTS"] == "1":
                 self.showhosts = True
             else:
-                print("Could not parse ONLY_HOSTS option.")
+                context.log.display("Could not parse ONLY_HOSTS option.")
 
     def on_login(self, context, connection):
         zone = ldap2domain(connection.baseDN)
@@ -152,12 +153,12 @@ class NXCModule:
 
         context.log.highlight(f"Found {len(outdata)} records")
         path = expanduser(f"{NXC_PATH}/logs/{connection.domain}_network_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")
-        with codecs.open(path, "w", "utf-8") as outfile:
+        with open(path, "w") as outfile:
             for row in outdata:
                 if self.showhosts:
-                    outfile.write(f"{row['name'] + '.' + connection.domain}\n")
+                    outfile.write(f"{row['name'] + '.' + zone}\n")
                 elif self.showall:
-                    outfile.write(f"{row['name'] + '.' + connection.domain} \t {row['value']}\n")
+                    outfile.write(f"{row['name'] + '.' + zone} \t {row['value']}\n")
                 else:
                     outfile.write(f"{row['value']}\n")
         context.log.success(f"Dumped {len(outdata)} records to {path}")
