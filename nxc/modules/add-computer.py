@@ -30,13 +30,10 @@ class NXCModule:
         DELETE      Set to delete the computer account.
         CHANGEPW    Set to change an existing computer's password.
 
-        Usage:
+        Usage (same syntax for ldap):
             nxc smb  $DC-IP -u Username -p Password -M add-computer -o NAME="BADPC" PASSWORD="Password1"
-            nxc ldap $DC-IP -u Username -p Password --port 636 -M add-computer -o NAME="BADPC" PASSWORD="Password1"
             nxc smb  $DC-IP -u Username -p Password -M add-computer -o NAME="BADPC" DELETE=True
-            nxc ldap $DC-IP -u Username -p Password --port 636 -M add-computer -o NAME="BADPC" DELETE=True
             nxc smb  $DC-IP -u Username -p Password -M add-computer -o NAME="BADPC" PASSWORD="Password2" CHANGEPW=True
-            nxc ldap $DC-IP -u Username -p Password --port 636 -M add-computer -o NAME="BADPC" PASSWORD="Password2" CHANGEPW=True
         """
         self.delete = "DELETE" in module_options
         self.no_add = False
