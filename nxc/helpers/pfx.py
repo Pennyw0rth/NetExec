@@ -496,7 +496,7 @@ def pfx_auth(self):
     self.logger.info("Requesting TGT")
 
     if not self.kdcHost:
-        self.logger.fail("Could not resolve KDC host for domain %s. Use --kdcHost to specify the domain controller IP" % self.domain)
+        self.logger.fail(f"Could not resolve KDC host for domain {self.domain}. Use --kdcHost to specify the domain controller IP")
         return False
 
     sock = KerberosClientSocket(KerberosTarget(self.kdcHost))
