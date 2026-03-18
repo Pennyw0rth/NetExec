@@ -81,12 +81,7 @@ class NXCModule:
 
     def _do_samr(self):
         conn = self.connection
-        rpc_transport = transport.SMBTransport(
-            conn.conn.getRemoteHost(),
-            445,
-            r"\samr",
-            smb_connection=conn.conn,
-        )
+        rpc_transport = transport.SMBTransport(conn.conn.getRemoteHost(), 445, r"\samr", smb_connection=conn.conn)
 
         try:
             dce = rpc_transport.get_dce_rpc()
@@ -105,12 +100,7 @@ class NXCModule:
         domain = self.connection.domain
         username = self.connection.username
 
-        serv_handle = samr.hSamrConnect5(
-            dce,
-            f"\\\\{target_name}\x00",
-            samr.SAM_SERVER_ENUMERATE_DOMAINS | samr.SAM_SERVER_LOOKUP_DOMAIN,
-        )["ServerHandle"]
-
+        serv_handle = samr.hSamrConnect5(dce, f"\\\\{target_name}\x00", samr.SAM_SERVER_ENUMERATE_DOMAINS | samr.SAM_SERVER_LOOKUP_DOMAIN)["ServerHandle"]
         domains = samr.hSamrEnumerateDomainsInSamServer(dce, serv_handle)["Buffer"]["Buffer"]
         non_builtin = [d for d in domains if d["Name"].lower() != "builtin"]
 
@@ -124,11 +114,7 @@ class NXCModule:
             selected = non_builtin[0]["Name"]
 
         domain_sid = samr.hSamrLookupDomainInSamServer(dce, serv_handle, selected)["DomainId"]
-        domain_handle = samr.hSamrOpenDomain(
-            dce, serv_handle,
-            samr.DOMAIN_LOOKUP | samr.DOMAIN_CREATE_USER,
-            domain_sid,
-        )["DomainHandle"]
+        domain_handle = samr.hSamrOpenDomain(dce, serv_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_CREATE_USER, domain_sid)["DomainHandle"]
 
         user_handle = None
         try:
@@ -198,11 +184,7 @@ class NXCModule:
                 return None
 
         try:
-            return samr.hSamrCreateUser2InDomain(
-                dce, domain_handle, self.computer_name,
-                samr.USER_WORKSTATION_TRUST_ACCOUNT,
-                samr.USER_FORCE_PASSWORD_CHANGE,
-            )["UserHandle"]
+            return samr.hSamrCreateUser2InDomain(dce, domain_handle, self.computer_name, samr.USER_WORKSTATION_TRUST_ACCOUNT, samr.USER_FORCE_PASSWORD_CHANGE)["UserHandle"]
         except samr.DCERPCSessionError as e:
             if "STATUS_USER_EXISTS" in str(e):
                 self.context.log.fail(f"Computer '{self.computer_name}' already exists")
@@ -215,18 +197,15 @@ class NXCModule:
             return None
 
     def _do_ldap(self):
-        conn = self.connection
-        ldap_connection = conn.ldap_connection
-
         name = self.computer_name.rstrip("$")
-        computer_dn = f"CN={name},CN=Computers,{conn.baseDN}"
+        computer_dn = f"CN={name},CN=Computers,{self.connection.baseDN}"
 
         if self.delete:
-            self._ldap_delete(ldap_connection, computer_dn)
+            self._ldap_delete(self.connection.ldap_connection, computer_dn)
         elif self.no_add:
-            self._ldap_change_password(ldap_connection, computer_dn)
+            self._ldap_change_password(self.connection.ldap_connection, computer_dn)
         else:
-            self._ldap_add(ldap_connection, computer_dn, name)
+            self._ldap_add(self.connection.ldap_connection, computer_dn, name)
 
     def _ldap_delete(self, ldap_conn, dn):
         try:
