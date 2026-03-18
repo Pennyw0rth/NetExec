@@ -98,7 +98,6 @@ class NXCModule:
 
     def _samr_execute(self, dce, target_name):
         domain = self.connection.domain
-        username = self.connection.username
 
         serv_handle = samr.hSamrConnect5(dce, f"\\\\{target_name}\x00", samr.SAM_SERVER_ENUMERATE_DOMAINS | samr.SAM_SERVER_LOOKUP_DOMAIN)["ServerHandle"]
         domains = samr.hSamrEnumerateDomainsInSamServer(dce, serv_handle)["Buffer"]["Buffer"]
@@ -116,9 +115,11 @@ class NXCModule:
         domain_sid = samr.hSamrLookupDomainInSamServer(dce, serv_handle, selected)["DomainId"]
         domain_handle = samr.hSamrOpenDomain(dce, serv_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_CREATE_USER, domain_sid)["DomainHandle"]
 
-        user_handle = None
         try:
-            user_handle = self._samr_open_existing(dce, domain_handle, selected, username) if self.no_add or self.delete else self._samr_create(dce, domain_handle, username)
+            if self.delete and self.no_add:  # noqa: SIM108
+                user_handle = self._samr_open_existing(dce, domain_handle, selected, self.connection.username)
+            else:
+                user_handle = self._samr_create(dce, domain_handle, self.connection.username)
 
             if user_handle is None:
                 return
