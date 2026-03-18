@@ -220,14 +220,6 @@ class NXCModule:
         conn = self.connection
         ldap_connection = conn.ldap_connection
 
-        if not ldap_connection:
-            self.context.log.fail("No LDAP connection available")
-            return
-
-        if conn.port != 636:
-            self.context.log.fail("LDAP module requires LDAPS. Use --port 636.")
-            return
-
         name = self.computer_name.rstrip("$")
         computer_dn = f"CN={name},CN=Computers,{conn.baseDN}"
 
