@@ -202,6 +202,7 @@ class LsaLookupNames:
         request["LookupLevel"] = lsat.LSAP_LOOKUP_LEVEL.LsapLookupWksta
         return dce.request(request)
 
+
 conf = {
     "products": [
         {
