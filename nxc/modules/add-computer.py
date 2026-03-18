@@ -205,12 +205,11 @@ class NXCModule:
                 samr.USER_FORCE_PASSWORD_CHANGE,
             )["UserHandle"]
         except samr.DCERPCSessionError as e:
-            err = str(e)
-            if "STATUS_USER_EXISTS" in err:
+            if "STATUS_USER_EXISTS" in str(e):
                 self.context.log.fail(f"Computer '{self.computer_name}' already exists")
-            elif "STATUS_ACCESS_DENIED" in err:
+            elif "STATUS_ACCESS_DENIED" in str(e):
                 self.context.log.fail(f"{username} does not have the right to create a computer account")
-            elif "STATUS_DS_MACHINE_ACCOUNT_QUOTA_EXCEEDED" in err:
+            elif "STATUS_DS_MACHINE_ACCOUNT_QUOTA_EXCEEDED" in str(e):
                 self.context.log.fail(f"{username} exceeded the machine account quota")
             else:
                 self.context.log.fail(f"Error creating computer: {e}")
@@ -236,10 +235,9 @@ class NXCModule:
             self.context.log.highlight(f'Successfully deleted the "{self.computer_name}" Computer account')
             self._db_remove_credential()
         except LDAPSessionError as e:
-            err = str(e)
-            if "noSuchObject" in err:
+            if "noSuchObject" in str(e):
                 self.context.log.fail(f'Computer "{self.computer_name}" was not found')
-            elif "insufficientAccessRights" in err:
+            elif "insufficientAccessRights" in str(e):
                 self.context.log.fail(f'Insufficient rights to delete "{self.computer_name}"')
             else:
                 self.context.log.fail(f'Failed to delete "{self.computer_name}": {e}')
@@ -251,19 +249,17 @@ class NXCModule:
             self.context.log.highlight(f"Successfully changed password for '{self.computer_name}'")
             self._db_add_credential()
         except LDAPSessionError as e:
-            err = str(e)
-            if "noSuchObject" in err:
+            if "noSuchObject" in str(e):
                 self.context.log.fail(f'Computer "{self.computer_name}" was not found')
-            elif "insufficientAccessRights" in err:
+            elif "insufficientAccessRights" in str(e):
                 self.context.log.fail(f'Insufficient rights to change password for "{self.computer_name}"')
-            elif "unwillingToPerform" in err:
+            elif "unwillingToPerform" in str(e):
                 self.context.log.fail(f'Server unwilling to change password for "{self.computer_name}"')
             else:
                 self.context.log.fail(f'Failed to change password for "{self.computer_name}": {e}')
 
     def _ldap_add(self, ldap_conn, dn, name):
-        domain = self.connection.domain
-        fqdn = f"{name}.{domain}"
+        fqdn = f"{name}.{self.connection.domain}"
         spns = [
             f"HOST/{name}",
             f"HOST/{fqdn}",
@@ -286,14 +282,13 @@ class NXCModule:
             self.context.log.highlight(f'Successfully added "{self.computer_name}" with password "{self.computer_password}"')
             self._db_add_credential()
         except LDAPSessionError as e:
-            err = str(e)
-            if "entryAlreadyExists" in err:
+            if "entryAlreadyExists" in str(e):
                 self.context.log.fail(f"Computer '{self.computer_name}' already exists")
-            elif "insufficientAccessRights" in err:
+            elif "insufficientAccessRights" in str(e):
                 self.context.log.fail(f"Insufficient rights to add '{self.computer_name}'")
-            elif "unwillingToPerform" in err:
+            elif "unwillingToPerform" in str(e):
                 self.context.log.fail("Server unwilling to perform")
-            elif "constraintViolation" in err:
+            elif "constraintViolation" in str(e):
                 self.context.log.fail(f"Constraint violation for '{self.computer_name}'. Quota exceeded or password policy.")
             else:
                 self.context.log.fail(f"Failed to add '{self.computer_name}': {e}")
