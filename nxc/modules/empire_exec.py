@@ -52,6 +52,7 @@ class NXCModule:
                 f"{base_url}/token",
                 data=empire_creds,
                 verify=False,
+                timeout=10.0,
             )
         except ConnectionError as e:
             context.log.fail(f"Unable to login to Empire's RESTful API: {e}")
@@ -90,6 +91,7 @@ class NXCModule:
                 json=data,
                 headers=headers,
                 verify=False,
+                timeout=10.0,
             )
         except ConnectionError:
             context.log.fail("Unable to request stager from Empire's RESTful API")
