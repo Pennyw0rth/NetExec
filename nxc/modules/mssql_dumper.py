@@ -88,6 +88,7 @@ class NXCModule:
                             if self.show_data:
                                 context.log.highlight(f"{db_name}.{table_name} => " + ", ".join(f"{k}: {v}" for k, v in decoded_data.items()))
                             all_results.append({
+                                "type": "column_match",
                                 "database": db_name,
                                 "table": table_name,
                                 "row": {k: v.strip() for k, v in decoded_data.items()}
