@@ -1,6 +1,7 @@
 import json
 import datetime
 import re
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -8,17 +9,16 @@ class NXCModule:
     name = "mssql_dumper"
     description = "Search for Sensitive Data across all the databases"
     supported_protocols = ["mssql"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """
-        SEARCH       Semicolon-separated regex(es) to search for in **Cell Values**
+        REGEX        Semicolon-separated regex(es) to search for in **Cell Values**
         LIKE_SEARCH  Comma-separated list of column names to specifically look for
         SAVE         Save the output to sqlite database (default True)
         """
-        regex_input = module_options.get("REGEX", "")
         self.regex_patterns = []
+        regex_input = module_options.get("REGEX", "")
         for pattern in regex_input.split(";"):
             pattern = pattern.strip()
             if pattern:
