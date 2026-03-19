@@ -117,7 +117,8 @@ class NXCModule:
 
                             if matched_cells:
                                 match_str = ", ".join(f"{k}: {v}" for k, v in matched_cells.items())
-                                context.log.highlight(f"{db_name}.{table_name} => Regex Match => {match_str}")
+                                if self.show_data:
+                                    context.log.highlight(f"{db_name}.{table_name} => Regex Match => {match_str}")
                                 all_results.append({
                                     "type": "regex_match",
                                     "database": db_name,
