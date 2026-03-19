@@ -54,74 +54,75 @@ class NXCModule:
                 "zip", "zipcode"]
 
     def on_login(self, context, connection):
-        try:
-            all_results = []
-            databases = connection.conn.sql_query("SELECT name FROM master.dbo.sysdatabases")
-            for db in databases:
-                db_name = db.get("name") or db.get("", "")
-                if db_name.lower() in ("master", "model", "msdb", "tempdb"):
-                    continue  # skip system DBs
+        all_results = []
+        databases = connection.conn.sql_query("SELECT name FROM master.dbo.sysdatabases")
+        if connection.conn.lastError:
+            context.log.fail(f"Failed to retrieve databases: {connection.conn.lastError}")
+            return
 
-                context.log.display(f"Searching database: {db_name}")
-                connection.conn.sql_query(f"USE [{db_name}]")
+        for db in databases:
+            db_name = db.get("name") or db.get("", "")
+            if db_name.lower() in ("master", "model", "msdb", "tempdb"):
+                continue  # skip system DBs
 
-                # get all tables in this DB
-                tables = connection.conn.sql_query("SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE'")
+            context.log.display(f"Searching database: {db_name}")
+            connection.conn.sql_query(f"USE [{db_name}]")
 
-                for table in tables:
-                    table_name = table.get("table_name", "")
+            # get all tables in this DB
+            tables = connection.conn.sql_query("SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE'")
+
+            for table in tables:
+                table_name = table.get("table_name", "")
+                try:
+                    columns = connection.conn.sql_query(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}'")
+
+                    # find matching columns
+                    search_keys = self.pii() + self.like_search
+                    matched = [col for col in columns if any(key in col["column_name"].lower() for key in search_keys)]
+                    if matched:
+                        column_str = ", ".join(f"[{c['column_name']}]" for c in matched)
+                        context.log.success(f"Match in {db_name}.{table_name} => Columns: {column_str}")
+                        data = connection.conn.sql_query(f"SELECT {column_str} FROM [{table_name}]")
+                        for row in data:
+                            parsed_data = {k: (v.decode("utf-8", "replace").strip() if isinstance(v, bytes) else str(v).strip()) for k, v in row.items()}
+                            if self.show_data:
+                                context.log.highlight(f"{db_name}.{table_name} => " + ", ".join(f"{k}: {v}" for k, v in parsed_data.items()))
+                            all_results.append({
+                                "database": db_name,
+                                "table": table_name,
+                                "row": {k: v.strip() for k, v in parsed_data.items()}
+                            })
+
+                except Exception as e:
+                    context.log.fail(f"Failed to inspect table {table_name} in {db_name}: {e}")
+
+                # If regex patterns are provided, scan all cell values in the table for matches
+                if self.regex_patterns:
                     try:
-                        columns = connection.conn.sql_query(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}'")
-
-                        # find matching columns
-                        search_keys = self.pii() + self.like_search
-                        matched = [col for col in columns if any(key in col["column_name"].lower() for key in search_keys)]
-                        if matched:
-                            column_str = ", ".join(f"[{c['column_name']}]" for c in matched)
-                            context.log.success(f"Match in {db_name}.{table_name} => Columns: {column_str}")
-                            data = connection.conn.sql_query(f"SELECT {column_str} FROM [{table_name}]")
-                            for row in data:
-                                parsed_data = {k: (v.decode("utf-8", "replace").strip() if isinstance(v, bytes) else str(v).strip()) for k, v in row.items()}
-                                if self.show_data:
-                                    context.log.highlight(f"{db_name}.{table_name} => " + ", ".join(f"{k}: {v}" for k, v in parsed_data.items()))
+                        full_data = connection.conn.sql_query(f"SELECT * FROM [{table_name}]")
+                        for row in full_data:
+                            matched_cells = {}
+                            for col, val in row.items():
+                                try:
+                                    val_str = val.decode("utf-8", "replace") if isinstance(val, bytes) else str(val)
+                                except:
+                                    val_str = str(val)
+                                for pattern in self.regex_patterns:
+                                    if pattern.search(val_str):
+                                        matched_cells[col] = val_str
+                                        break
+                            if matched_cells:
+                                match_str = ", ".join(f"{k}: {v}" for k, v in matched_cells.items())
+                                context.log.highlight(f"{db_name}.{table_name} => Regex Match => {match_str}")
                                 all_results.append({
+                                    "type": "regex_match",
                                     "database": db_name,
                                     "table": table_name,
-                                    "row": {k: v.strip() for k, v in parsed_data.items()}
+                                    "matched_cells": matched_cells
                                 })
-
                     except Exception as e:
-                        context.log.fail(f"Failed to inspect table {table_name} in {db_name}: {e}")
+                        context.log.fail(f"Regex scan failed for {db_name}.{table_name}: {e}")
 
-                    # If regex patterns are provided, scan all cell values in the table for matches
-                    if self.regex_patterns:
-                        try:
-                            full_data = connection.conn.sql_query(f"SELECT * FROM [{table_name}]")
-                            for row in full_data:
-                                matched_cells = {}
-                                for col, val in row.items():
-                                    try:
-                                        val_str = val.decode("utf-8", "replace") if isinstance(val, bytes) else str(val)
-                                    except:
-                                        val_str = str(val)
-                                    for pattern in self.regex_patterns:
-                                        if pattern.search(val_str):
-                                            matched_cells[col] = val_str
-                                            break
-                                if matched_cells:
-                                    match_str = ", ".join(f"{k}: {v}" for k, v in matched_cells.items())
-                                    context.log.highlight(f"{db_name}.{table_name} => Regex Match => {match_str}")
-                                    all_results.append({
-                                        "type": "regex_match",
-                                        "database": db_name,
-                                        "table": table_name,
-                                        "matched_cells": matched_cells
-                                    })
-                        except Exception as e:
-                            context.log.fail(f"Regex scan failed for {db_name}.{table_name}: {e}")
-
-        except Exception as e:
-            context.log.fail(f"Query failed: {e}")
         if self.save and all_results:
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             hostname = connection.hostname or connection.host
