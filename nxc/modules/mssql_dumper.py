@@ -1,7 +1,10 @@
 import json
 import datetime
+import os
+from pathlib import Path
 import re
 from nxc.helpers.misc import CATEGORY
+from nxc.paths import NXC_PATH
 
 
 class NXCModule:
@@ -125,22 +128,9 @@ class NXCModule:
                         context.log.fail(f"Regex scan failed for {db_name}.{table_name}: {e}")
 
         if self.save and all_results:
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            hostname = connection.hostname or connection.host
-            filename = f"/tmp/{timestamp}-{hostname}.json"
-            try:
-                def sanitize(obj):
-                    if isinstance(obj, dict):
-                        return {k: sanitize(v) for k, v in obj.items()}
-                    elif isinstance(obj, list):
-                        return [sanitize(i) for i in obj]
-                    elif isinstance(obj, bytes):
-                        return obj.decode("utf-8", "replace")
-                    else:
-                        return obj
-                cleaned = sanitize(all_results)
-                with open(filename, "w") as f:
-                    json.dump(cleaned, f, indent=2)
-                    context.log.success(f"Data saved to {filename}")
-            except Exception as e:
-                context.log.fail(f"Failed to save results to file: {e}")
+            filename = f"{connection.hostname}_{connection.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}.json"
+            file_path = Path(f"{NXC_PATH}/modules/mssql-dumper/{filename}").resolve()
+            os.makedirs(file_path.parent, exist_ok=True)
+            with open(file_path, "w") as f:
+                json.dump(all_results, f, indent=2)
+                context.log.success(f"Data saved to {file_path}")
