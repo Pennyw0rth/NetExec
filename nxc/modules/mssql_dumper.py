@@ -7,7 +7,7 @@ from nxc.helpers.misc import CATEGORY
 class NXCModule:
     """MSSQL Dumper v1 - Created by LTJAX"""
     name = "mssql_dumper"
-    description = "Search for Sensitive Data across all the databases"
+    description = "Search for Sensitive Data across all databases"
     supported_protocols = ["mssql"]
     category = CATEGORY.CREDENTIAL_DUMPING
 
@@ -65,7 +65,7 @@ class NXCModule:
                 context.log.display(f"Searching database: {db_name}")
                 connection.conn.sql_query(f"USE [{db_name}]")
 
-                # get all user tables in this DB
+                # get all tables in this DB
                 tables = connection.conn.sql_query("SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE'")
 
                 for table in tables:
@@ -79,23 +79,21 @@ class NXCModule:
                         if matched:
                             column_str = ", ".join(f"[{c['column_name']}]" for c in matched)
                             context.log.success(f"Match in {db_name}.{table_name} => Columns: {column_str}")
-
-                            try:
-                                data = connection.conn.sql_query(f"SELECT {column_str} FROM [{table_name}]")
-                                for row in data:
-                                    parsed_data = {k: (v.decode("utf-8", "replace").strip() if isinstance(v, bytes) else str(v).strip()) for k, v in row.items()}
-                                    if self.show_data:
-                                        context.log.highlight(f"{db_name}.{table_name} => " + ", ".join(f"{k}: {v}" for k, v in parsed_data.items()))
-                                    all_results.append({
-                                        "database": db_name,
-                                        "table": table_name,
-                                        "row": {k: v.strip() for k, v in parsed_data.items()}
-                                    })
-                            except Exception as e:
-                                context.log.fail(f"Failed to extract from {db_name}.{table_name}: {e}")
+                            data = connection.conn.sql_query(f"SELECT {column_str} FROM [{table_name}]")
+                            for row in data:
+                                parsed_data = {k: (v.decode("utf-8", "replace").strip() if isinstance(v, bytes) else str(v).strip()) for k, v in row.items()}
+                                if self.show_data:
+                                    context.log.highlight(f"{db_name}.{table_name} => " + ", ".join(f"{k}: {v}" for k, v in parsed_data.items()))
+                                all_results.append({
+                                    "database": db_name,
+                                    "table": table_name,
+                                    "row": {k: v.strip() for k, v in parsed_data.items()}
+                                })
 
                     except Exception as e:
                         context.log.fail(f"Failed to inspect table {table_name} in {db_name}: {e}")
+
+                    # If regex patterns are provided, scan all cell values in the table for matches
                     if self.regex_patterns:
                         try:
                             full_data = connection.conn.sql_query(f"SELECT * FROM [{table_name}]")
