@@ -84,13 +84,13 @@ class NXCModule:
                         context.log.success(f"Match in {db_name}.{table_name} => Columns: {column_str}")
                         data = connection.conn.sql_query(f"SELECT {column_str} FROM [{table_name}]")
                         for row in data:
-                            parsed_data = {k: (v.decode("utf-8", "replace").strip() if isinstance(v, bytes) else str(v).strip()) for k, v in row.items()}
+                            decoded_data = {k: (v.decode("utf-8", "replace").strip() if isinstance(v, bytes) else str(v).strip()) for k, v in row.items()}
                             if self.show_data:
-                                context.log.highlight(f"{db_name}.{table_name} => " + ", ".join(f"{k}: {v}" for k, v in parsed_data.items()))
+                                context.log.highlight(f"{db_name}.{table_name} => " + ", ".join(f"{k}: {v}" for k, v in decoded_data.items()))
                             all_results.append({
                                 "database": db_name,
                                 "table": table_name,
-                                "row": {k: v.strip() for k, v in parsed_data.items()}
+                                "row": {k: v.strip() for k, v in decoded_data.items()}
                             })
 
                 except Exception as e:
@@ -103,14 +103,14 @@ class NXCModule:
                         for row in full_data:
                             matched_cells = {}
                             for col, val in row.items():
-                                try:
-                                    val_str = val.decode("utf-8", "replace") if isinstance(val, bytes) else str(val)
-                                except:
-                                    val_str = str(val)
+                                val_str = val.decode("utf-8", "replace").strip() if isinstance(val, bytes) else str(val).strip()
+
+                                # Check if any of the cells in the row match any of the regex patterns
                                 for pattern in self.regex_patterns:
                                     if pattern.search(val_str):
                                         matched_cells[col] = val_str
                                         break
+
                             if matched_cells:
                                 match_str = ", ".join(f"{k}: {v}" for k, v in matched_cells.items())
                                 context.log.highlight(f"{db_name}.{table_name} => Regex Match => {match_str}")
