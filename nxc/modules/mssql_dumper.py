@@ -13,11 +13,13 @@ class NXCModule:
 
     def options(self, context, module_options):
         """
+        SHOW_DATA    Display the actual row data values of the matched columns (default: True)
         REGEX        Semicolon-separated regex(es) to search for in **Cell Values**
         LIKE_SEARCH  Comma-separated list of column names to specifically look for
-        SAVE         Save the output to sqlite database (default True)
+        SAVE         Save the output to sqlite database (default: True)
         """
         self.regex_patterns = []
+        self.show_data = module_options.get("SHOW_DATA", "true").lower() in ["true", "1", "yes"]
         regex_input = module_options.get("REGEX", "")
         for pattern in regex_input.split(";"):
             pattern = pattern.strip()
@@ -28,7 +30,7 @@ class NXCModule:
                     context.log.fail(f"[!] Invalid regex pattern '{pattern}': {e}")
         like_input = module_options.get("LIKE_SEARCH", "")
         self.like_search = [s.strip().lower() for s in like_input.split(",") if s.strip()]
-        self.save = module_options.get("SAVE", "true").lower() == "true"
+        self.save = module_options.get("SAVE", "true").lower() in ["true", "1", "yes"]
 
     def pii(self):
         """Common personally identifiable information (PII) keywords to search for in column names"""
@@ -73,7 +75,7 @@ class NXCModule:
 
                         # find matching columns
                         search_keys = self.pii() + self.like_search
-                        matched = [col for col in column_names if any(key in col.lower() for key in search_keys)]
+                        matched = [col for col in columns if any(key in col["column_name"].lower() for key in search_keys)]
                         if matched:
                             column_str = ", ".join(f"[{c['column_name']}]" for c in matched)
                             context.log.success(f"Match in {db_name}.{table_name} => Columns: {column_str}")
@@ -81,22 +83,13 @@ class NXCModule:
                             try:
                                 data = connection.conn.sql_query(f"SELECT {column_str} FROM [{table_name}]")
                                 for row in data:
-                                    formatted = []
-                                    for k, v in row.items():
-                                        if isinstance(v, bytes):
-                                            try:
-                                                v = v.decode("utf-8", errors="replace")
-                                            except Exception as e:
-                                                context.log.fail(f"Failed to decode bytes for {db_name}.{table_name}.{k}: {e}")
-                                                v = str(v)
-                                        else:
-                                            v = str(v)
-                                        formatted.append(f"{k}: {v}")
-                                        context.log.highlight(f"{db_name}.{table_name} => " + ", ".join(formatted))
+                                    parsed_data = {k: (v.decode("utf-8", "replace").strip() if isinstance(v, bytes) else str(v).strip()) for k, v in row.items()}
+                                    if self.show_data:
+                                        context.log.highlight(f"{db_name}.{table_name} => " + ", ".join(f"{k}: {v}" for k, v in parsed_data.items()))
                                     all_results.append({
                                         "database": db_name,
                                         "table": table_name,
-                                        "row": {k: v for k, v in row.items()}
+                                        "row": {k: v.strip() for k, v in parsed_data.items()}
                                     })
                             except Exception as e:
                                 context.log.fail(f"Failed to extract from {db_name}.{table_name}: {e}")
