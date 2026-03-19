@@ -54,7 +54,6 @@ class NXCModule:
     def on_login(self, context, connection):
         try:
             all_results = []
-            hostname = connection.hostname or connection.host
             databases = connection.conn.sql_query("SELECT name FROM master.dbo.sysdatabases")
             for db in databases:
                 db_name = db.get("name") or db.get("", "")
@@ -65,36 +64,30 @@ class NXCModule:
                 connection.conn.sql_query(f"USE [{db_name}]")
 
                 # get all user tables in this DB
-                tables = connection.conn.sql_query(
-                    "SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE'"
-                )
+                tables = connection.conn.sql_query("SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE'")
 
                 for table in tables:
-                    table_name = table.get("table_name") or table.get("", "")
+                    table_name = table.get("table_name", "")
                     try:
-                        columns = connection.conn.sql_query(
-                            f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}'"
-                        )
-                        column_names = [c.get("column_name") or c.get("", "") for c in columns]
+                        columns = connection.conn.sql_query(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}'")
 
                         # find matching columns
                         search_keys = self.pii() + self.like_search
                         matched = [col for col in column_names if any(key in col.lower() for key in search_keys)]
                         if matched:
-                            column_str = ", ".join(f"[{c}]" for c in matched)
+                            column_str = ", ".join(f"[{c['column_name']}]" for c in matched)
                             context.log.success(f"Match in {db_name}.{table_name} => Columns: {column_str}")
 
                             try:
-                                data = connection.conn.sql_query(
-                                    f"SELECT {column_str} FROM [{table_name}]"
-                                )
+                                data = connection.conn.sql_query(f"SELECT {column_str} FROM [{table_name}]")
                                 for row in data:
                                     formatted = []
                                     for k, v in row.items():
                                         if isinstance(v, bytes):
                                             try:
                                                 v = v.decode("utf-8", errors="replace")
-                                            except:
+                                            except Exception as e:
+                                                context.log.fail(f"Failed to decode bytes for {db_name}.{table_name}.{k}: {e}")
                                                 v = str(v)
                                         else:
                                             v = str(v)
@@ -140,6 +133,7 @@ class NXCModule:
             context.log.fail(f"Query failed: {e}")
         if self.save and all_results:
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            hostname = connection.hostname or connection.host
             filename = f"/tmp/{timestamp}-{hostname}.json"
             try:
                 def sanitize(obj):
