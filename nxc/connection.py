@@ -22,6 +22,7 @@ from nxc.protocols.ldap.laps import laps_search
 from nxc.helpers.pfx import pfx_auth
 
 from impacket.dcerpc.v5 import transport
+from impacket.krb5.ccache import CCache
 
 sem = BoundedSemaphore(1)
 global_failed_logins = 0
@@ -552,7 +553,7 @@ class connection:
         if self.args.use_kcache:
             self.logger.debug("Trying to authenticate using Kerberos cache")
             with sem:
-                username = self.args.username[0] if len(self.args.username) else ""
+                username = self.args.username[0] if len(self.args.username) else CCache.parseFile()[1]
                 password = self.args.password[0] if len(self.args.password) else ""
                 self.kerberos_login(self.domain, username, password, "", "", self.kdcHost, True)
                 self.logger.info("Successfully authenticated using Kerberos cache")
