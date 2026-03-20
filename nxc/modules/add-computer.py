@@ -116,7 +116,7 @@ class NXCModule:
         domain_handle = samr.hSamrOpenDomain(dce, serv_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_CREATE_USER, domain_sid)["DomainHandle"]
 
         try:
-            if self.delete or self.change_pw:  # noqa: SIM108
+            if self.delete or self.change_pw:
                 user_handle = self._samr_open_existing(dce, domain_handle, selected, self.connection.username)
             else:
                 user_handle = self._samr_create(dce, domain_handle, self.connection.username)
