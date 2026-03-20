@@ -11,8 +11,8 @@ class NXCModule:
     Module by @termanix
     """
 
-    name = "add-group"
-    description = "Add or remove users from groups"
+    name = "modify-group"
+    description = "Modify Acitve Directory Objects (e.g. Users, groups, computers etc."
     supported_protocols = ["smb", "ldap"]
     category = CATEGORY.PRIVILEGE_ESCALATION
     opsec_safe = True
@@ -22,9 +22,6 @@ class NXCModule:
         """
         Required (at least one of):
         GROUP       Name of the group to add/remove the user to/from
-        OU          TO DO --> Distinguished name of the OU to move the user to
-
-        Required:
         USER        Username of the account to modify
 
         Optional:
@@ -33,12 +30,12 @@ class NXCModule:
         Examples
         --------
         Adding a user to a group:
-            netexec smb <DC_IP> -u adminuser -p password -M add-group -o USER='targetuser' GROUP='Domain Admins'
-            netexec ldap <DC_IP> -u adminuser -p password -M add-group -o USER='targetuser' GROUP='Enterprise Admins'
+            netexec smb <DC_IP> -u adminuser -p password -M modify-group -o USER='targetuser' GROUP='Domain Admins'
+            netexec ldap <DC_IP> -u adminuser -p password -M modify-group -o USER='targetuser' GROUP='Enterprise Admins'
 
         Removing a user from a group:
-            netexec smb <DC_IP> -u adminuser -p password -M add-group -o USER='targetuser' GROUP='Domain Admins' REMOVE=True
-            netexec ldap <DC_IP> -u adminuser -p password -M add-group -o USER='targetuser' GROUP='Enterprise Admins' REMOVE=True
+            netexec smb <DC_IP> -u adminuser -p password -M modify-group -o USER='targetuser' GROUP='Domain Admins' REMOVE=True
+            netexec ldap <DC_IP> -u adminuser -p password -M modify-group -o USER='targetuser' GROUP='Enterprise Admins' REMOVE=True
 
         For Using SMB, Need to Know
         SMB/SAMR KNOWN LIMITATIONS:
@@ -56,14 +53,8 @@ class NXCModule:
         self.remove = module_options.get("REMOVE", "False").lower() == "true"
 
         if not (self.target_user and self.group):
-            context.log.fail("USER and GROUP parameter is required!")
+            context.log.fail("USER and GROUP parameters are required!")
             sys.exit(1)
-
-        """
-        To do
-        if not self.group and not self.ou:
-            context.log.fail("Either GROUP or OU parameter is required!")
-            sys.exit(1)"""
 
     def on_login(self, context, connection):
         if context.protocol == "smb":
@@ -72,14 +63,11 @@ class NXCModule:
                     self._remove_user_from_group_smb(context, connection)
                 else:
                     self._add_user_to_group_smb(context, connection)
-            if self.ou:
-                context.log.fail("OU operations are only supported with LDAP protocol")
-        elif context.protocol == "ldap":
-            if self.group:
-                if self.remove:
-                    self._remove_user_from_group_ldap(context, connection)
-                else:
-                    self._add_user_to_group_ldap(context, connection)
+        elif context.protocol == "ldap" and self.group:
+            if self.remove:
+                self._remove_user_from_group_ldap(context, connection)
+            else:
+                self._add_user_to_group_ldap(context, connection)
 
     def _authenticate_dce(self, context, connection, protocol="ncacn_np", interface=samr.MSRPC_UUID_SAMR):
         """Authenticate to the target using DCE/RPC"""
