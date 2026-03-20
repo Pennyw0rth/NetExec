@@ -1,11 +1,14 @@
 import ntpath
 import binascii
 import os
+import json
 import re
 import struct
 import ipaddress
+import threading
 from Cryptodome.Hash import MD4
 from textwrap import dedent
+from datetime import datetime
 
 from impacket.smbconnection import SMBConnection, SessionError
 from impacket.smb import SMB_DIALECT
@@ -53,6 +56,7 @@ from nxc.protocols.smb.smbspider import SMBSpider
 from nxc.protocols.smb.passpol import PassPolDump
 from nxc.protocols.smb.samruser import UserSamrDump
 from nxc.protocols.smb.samrfunc import SamrFunc
+from nxc.protocols.smb.share_report import build_report_payload, render_markdown_report, render_html_report
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.helpers.logger import highlight
 from nxc.helpers.bloodhound import add_user_bh
@@ -106,6 +110,10 @@ def get_error_string(exception):
 
 
 class smb(connection):
+    _shares_report_lock = threading.Lock()
+    _shares_report_state = {}
+    _shares_report_default_path = None
+
     def __init__(self, args, db, host):
         self.domain = None
         self.server_os = None
@@ -130,6 +138,8 @@ class smb(connection):
         self.protocol = "SMB"
         self.is_guest = None
         self.isdc = None
+        self._shares_permissions_cache = None
+        self._shares_table_rendered = False
 
         connection.__init__(self, args, db, host)
 
@@ -1382,11 +1392,16 @@ class smb(connection):
         else:
             output(sessions)
 
-    def shares(self):
+    def _collect_share_permissions(self):
+        if self._shares_permissions_cache is not None:
+            return self._shares_permissions_cache
+
         temp_dir = ntpath.normpath("\\" + gen_random_string())
         temp_file = ntpath.normpath("\\" + gen_random_string() + ".txt")
         permissions = []
         write_check = bool(not self.args.no_write_check)
+        user_id = None
+        host_db_id = None
 
         try:
             self.logger.debug(f"domain: {self.domain}")
@@ -1399,6 +1414,14 @@ class smb(connection):
         except Exception as e:
             error = get_error_string(e)
             self.logger.fail(f"Error getting user: {error}")
+
+        try:
+            host_row = self.db.get_hosts(filter_term=self.host)
+            if host_row:
+                host_db_id = host_row[0][0]
+        except Exception as e:
+            error = get_error_string(e)
+            self.logger.debug(f"Error resolving host id for share storage: {error}")
 
         try:
             self.logger.debug("Attempting to list shares...")
@@ -1492,11 +1515,16 @@ class smb(connection):
             if share_name != "IPC$":
                 try:
                     # TODO: check if this already exists in DB before adding
-                    self.db.add_share(self.hostname, user_id, share_name, share_remark, read, write)
+                    if user_id and host_db_id:
+                        self.db.add_share(host_db_id, user_id, share_name, share_remark, read, write)
                 except Exception as e:
                     error = get_error_string(e)
                     self.logger.debug(f"Error adding share: {error}")
 
+        self._shares_permissions_cache = permissions
+        return permissions
+
+    def _display_share_permissions(self, permissions):
         if self.args.filter_shares:
             self.logger.display("[REMOVED] Use the --shares read,write options instead.")
 
@@ -1511,6 +1539,77 @@ class smb(connection):
             if self.args.shares and self.args.shares.lower() not in perms.lower():
                 continue
             self.logger.highlight(f"{name:<15} {perms:<15} {remark}")
+
+        self._shares_table_rendered = True
+
+    def _get_shares_output_path(self):
+        if self.args.shares_output and self.args.shares_output.strip():
+            return os.path.abspath(self.args.shares_output)
+
+        with smb._shares_report_lock:
+            if smb._shares_report_default_path is None:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                smb._shares_report_default_path = os.path.abspath(f"nxc_smb_shares_report_{timestamp}.md")
+            return smb._shares_report_default_path
+
+    def _update_shares_output(self, permissions):
+        output_path = self._get_shares_output_path()
+        report_format = self.args.shares_output_format
+        if report_format == "markdown" and not output_path.lower().endswith(".md"):
+            output_path = f"{output_path}.md"
+        elif report_format == "json" and not output_path.lower().endswith(".json"):
+            output_path = f"{output_path}.json"
+        elif report_format == "html" and not output_path.lower().endswith(".html"):
+            output_path = f"{output_path}.html"
+
+        high_risk_names = self.args.shares_output_high_risk or ["c$", "admin$", "wwwroot", "inetpub"]
+        display_target = self.host if int(self.port) == 445 else f"{self.host}:{self.port}"
+        host_key = f"{self.host}:{self.port}"
+        host_entry = {
+            "target": display_target,
+            "hostname": self.hostname,
+            "domain": self.targetDomain,
+            "shares": permissions,
+        }
+
+        with smb._shares_report_lock:
+            state = smb._shares_report_state.setdefault(
+                output_path,
+                {
+                    "started_at": datetime.now().isoformat(timespec="seconds"),
+                    "hosts": {},
+                },
+            )
+            state["hosts"][host_key] = host_entry
+            payload = build_report_payload(list(state["hosts"].values()), high_risk_names)
+            payload["meta"] = {
+                "started_at": state["started_at"],
+                "updated_at": datetime.now().isoformat(timespec="seconds"),
+                "report_path": output_path,
+                "report_format": report_format,
+            }
+
+            os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+            if report_format == "json":
+                with open(output_path, "w", encoding="utf-8") as report_file:
+                    json.dump(payload, report_file, indent=2)
+                    report_file.write("\n")
+            elif report_format == "html":
+                report_body = render_html_report(payload)
+                with open(output_path, "w", encoding="utf-8") as report_file:
+                    report_file.write(report_body)
+            else:
+                report_body = render_markdown_report(payload)
+                with open(output_path, "w", encoding="utf-8") as report_file:
+                    report_file.write(report_body)
+
+        self.logger.success(f"Share report updated: {output_path}")
+
+    def shares(self):
+        permissions = self._collect_share_permissions()
+        self._display_share_permissions(permissions)
+        if self.args.shares_output is not None:
+            self._update_shares_output(permissions)
         return permissions
 
     def dir(self):

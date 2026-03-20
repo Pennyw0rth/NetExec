@@ -50,7 +50,13 @@ def proto_args(parser, parents):
     cred_gathering_group.add_argument("--list-snapshots", nargs="?", dest="list_snapshots", const="ADMIN$", help="Lists the VSS snapshots (default: %(const)s)")
 
     mapping_enum_group = smb_parser.add_argument_group("Mapping/Enumeration")
-    mapping_enum_group.add_argument("--shares", type=str, nargs="?", const="", help="Enumerate shares and access, filter on specified argument (read ; write ; read,write)")
+    shares_arg = mapping_enum_group.add_argument("--shares", type=str, nargs="?", const="", help="Enumerate shares and access, filter on specified argument (read ; write ; read,write)")
+    shares_output_arg = mapping_enum_group.add_argument("--shares-output", action=get_conditional_action(_StoreAction), make_required=[], type=str, nargs="?", const="", help="When running --shares, generate an aggregated share report (optionally set output file path)")
+    shares_output_format_arg = mapping_enum_group.add_argument("--shares-output-format", action=get_conditional_action(_StoreAction), make_required=[], choices={"markdown", "json", "html"}, default="markdown", help="Output format for --shares-output")
+    shares_output_high_risk_arg = mapping_enum_group.add_argument("--shares-output-high-risk", action=get_conditional_action(_StoreAction), make_required=[], nargs="+", default=["c$", "admin$", "wwwroot", "inetpub"], help="Share names to treat as high risk in --shares-output")
+    shares_output_arg.make_required = [shares_arg]
+    shares_output_format_arg.make_required = [shares_arg]
+    shares_output_high_risk_arg.make_required = [shares_arg]
     mapping_enum_group.add_argument("--exclude-shares", nargs="+", help="List of shares to exclude from enumeration (e.g., C$ Admin$ IPC$)")
     mapping_enum_group.add_argument("--dir", nargs="?", type=str, const="", help="List the content of a path (default path: '%(const)s')")
     mapping_enum_group.add_argument("--interfaces", action="store_true", help="Enumerate network interfaces")
