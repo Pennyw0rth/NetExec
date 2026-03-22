@@ -18,7 +18,8 @@ class NXCModule:
         """
         SHOW_DATA    Display the actual row data values of the matched columns (default: True)
         REGEX        Semicolon-separated regex(es) to search for in **Cell Values**
-        LIKE_SEARCH  Comma-separated list of column names to specifically look for
+        LIKE_SEARCH  Comma-separated list or filename of column names to specifically look for
+        USE_PRESET   Use a predefined set of regex patterns for common PII (default: True)
         SAVE         Save the output to sqlite database (default: True)
         """
         self.regex_patterns = []
@@ -32,7 +33,12 @@ class NXCModule:
                 except re.error as e:
                     context.log.fail(f"[!] Invalid regex pattern '{pattern}': {e}")
         like_input = module_options.get("LIKE_SEARCH", "")
-        self.like_search = [s.strip().lower() for s in like_input.split(",") if s.strip()]
+        if os.path.isfile(like_input):
+            with open(like_input) as f:
+                self.like_search = [line.strip().lower() for line in f if line.strip()]
+        else:
+            self.like_search = [s.strip().lower() for s in like_input.split(",") if s.strip()]
+        self.use_preset = module_options.get("USE_PRESET", "true").lower() in ["true", "1", "yes"]
         self.save = module_options.get("SAVE", "true").lower() in ["true", "1", "yes"]
 
     def pii(self):
@@ -80,7 +86,11 @@ class NXCModule:
                     columns = connection.conn.sql_query(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}'")
 
                     # find matching columns
-                    search_keys = self.pii() + self.like_search
+                    search_keys = []
+                    if self.use_preset:
+                        search_keys += self.pii()
+                    if self.like_search:
+                        search_keys += self.like_search
                     matched = [col for col in columns if any(key in col["column_name"].lower() for key in search_keys)]
                     if matched:
                         column_str = ", ".join(f"[{c['column_name']}]" for c in matched)
