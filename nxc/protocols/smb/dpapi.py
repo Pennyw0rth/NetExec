@@ -6,6 +6,15 @@ from dploot.triage.masterkeys import MasterkeysTriage, parse_masterkey_file
 
 def get_domain_backup_key(context):
     pvkbytes = None
+    if getattr(context.args, "pvk", None):
+        context.logger.display(f"Using provided PVK file: {context.args.pvk}")
+        try:
+            with open(context.args.pvk, "rb") as f:
+                context.logger.success("Loading domain backupkey from file...")
+                return f.read()
+        except Exception as e:
+            context.logger.fail(f"Failed to read PVK file ({context.args.pvk}): {e}")
+            return False
     try:
         results = context.db.get_domain_backupkey(context.domain)
     except Exception:
