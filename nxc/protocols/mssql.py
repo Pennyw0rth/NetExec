@@ -160,7 +160,7 @@ class mssql(connection):
 
     def call_cmd_args(self):
         if getattr(self.args, "impersonate", None) and not self.impersonation_applied and not self.impersonate():
-            return
+            raise SystemExit
         for attr, value in vars(self.args).items():
             if attr == "impersonate":
                 continue
@@ -170,7 +170,7 @@ class mssql(connection):
 
     def call_modules(self):
         if getattr(self.args, "impersonate", None) and not self.impersonation_applied and not self.impersonate():
-            return
+            raise SystemExit
         super().call_modules()
 
     @reconnect_mssql
