@@ -26,6 +26,7 @@ class PassPolDump:
         self.doKerberos = connection.kerberos
         self.host = connection.host
         self.kdcHost = connection.kdcHost
+        self.delegated_st = connection.delegated_st
         self.protocols = PassPolDump.KNOWN_PROTOCOLS.keys()
         self.pass_pol = {}
 
@@ -57,6 +58,7 @@ class PassPolDump:
                 self.lmhash,
                 self.nthash,
                 self.aesKey,
+                TGS=self.delegated_st,
                 doKerberos=self.doKerberos,
                 kdcHost=self.kdcHost,
                 remote_host=self.host,

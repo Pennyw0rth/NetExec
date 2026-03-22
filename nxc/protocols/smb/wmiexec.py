@@ -10,7 +10,7 @@ from impacket.dcerpc.v5.dtypes import NULL
 
 
 class WMIEXEC:
-    def __init__(self, target, share_name, username, password, domain, smbconnection, doKerberos=False, aesKey=None, kdcHost=None, remoteHost=None, hashes=None, share=None, logger=None, timeout=None, tries=None):
+    def __init__(self, target, share_name, username, password, domain, smbconnection, doKerberos=False, aesKey=None, kdcHost=None, remoteHost=None, hashes=None, share=None, logger=None, timeout=None, tries=None, st=None):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -55,6 +55,7 @@ class WMIEXEC:
             doKerberos=self.__doKerberos,
             kdcHost=self.__kdcHost,
             remoteHost=self.__remoteHost,
+            TGS=st,
         )
         iInterface = self.__dcom.CoCreateInstanceEx(wmi.CLSID_WbemLevel1Login, wmi.IID_IWbemLevel1Login)
         flag, self.__stringBinding = dcom_FirewallChecker(iInterface, self.__remoteHost, self.__timeout)
