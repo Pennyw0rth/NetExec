@@ -1659,6 +1659,7 @@ class ldap(connection):
                 return
 
         # Collect ADCS data using CertiHound if requested
+        # Uses its own ldap3 connection for Kerberos to avoid impacket GSSAPI issues
         if "adcs" in collect:
             adcs_files = self._collect_adcs_for_bloodhound(timestamp)
 
@@ -1675,6 +1676,62 @@ class ldap(connection):
                     z.write(adcs_file, os.path.basename(adcs_file))
                     os.remove(adcs_file)
 
+    def _collect_adcs_via_kerberos(self):
+        """Collect ADCS using an ldap3 Kerberos connection.
+
+        Impacket's LDAP GSSAPI wrapping has issues with the large
+        responses from ADCS Configuration NC queries, so we create
+        a fresh ldap3 connection using the same approach as BloodHound-CE.
+        """
+        auth = ADAuthentication(
+            username=self.username,
+            password=self.password,
+            domain=self.domain,
+            lm_hash=self.nthash,
+            nt_hash=self.nthash,
+            aeskey=self.aesKey,
+            kdc=self.kdcHost,
+            auth_method="kerberos",
+        )
+
+        if self.args.use_kcache:
+            auth.load_ccache()
+        else:
+            auth.get_tgt()
+
+        protocol = "ldaps" if self.port == 636 else "ldap"
+        ldap3_conn = auth.getLDAPConnection(
+            hostname=self.hostname,
+            ip=self.host,
+            baseDN=self.baseDN,
+            protocol=protocol,
+        )
+
+        try:
+            collector = ADCSCollector.from_external(
+                ldap_connection=ldap3_conn,
+                domain=self.domain,
+                domain_sid=self.sid_domain,
+            )
+            return collector.collect_all()
+        finally:
+            ldap3_conn.unbind()
+
+    def _collect_adcs_via_impacket(self):
+        """Collect ADCS using the existing impacket LDAP connection."""
+        adapter = ImpacketLDAPAdapter(
+            search_func=self.search,
+            domain=self.domain,
+            domain_sid=self.sid_domain,
+        )
+
+        collector = ADCSCollector.from_external(
+            ldap_connection=adapter,
+            domain=self.domain,
+            domain_sid=self.sid_domain,
+        )
+        return collector.collect_all()
+
     def _collect_adcs_for_bloodhound(self, timestamp):
         """Collect ADCS data using CertiHound for BloodHound CE integration.
 
@@ -1687,19 +1744,14 @@ class ldap(connection):
         self.logger.highlight("Collecting ADCS data (CertiHound)...")
 
         try:
-            # Create CertiHound adapter and collector
-            adapter = ImpacketLDAPAdapter(
-                search_func=self.search,
-                domain=self.domain,
-                domain_sid=self.sid_domain,
-            )
-
-            collector = ADCSCollector.from_external(
-                ldap_connection=adapter,
-                domain=self.domain,
-                domain_sid=self.sid_domain,
-            )
-            data = collector.collect_all()
+            if self.args.kerberos or self.args.use_kcache:
+                # Use a fresh ldap3 Kerberos connection for ADCS collection.
+                # Impacket's LDAP GSSAPI wrapping has issues with the large
+                # responses from ADCS Configuration NC queries.
+                self.logger.debug("Using ldap3 Kerberos connection for ADCS collection")
+                data = self._collect_adcs_via_kerberos()
+            else:
+                data = self._collect_adcs_via_impacket()
 
             self.logger.highlight(f"Found {len(data.templates)} certificate templates")
             self.logger.highlight(f"Found {len(data.enterprise_cas)} Enterprise CAs")
