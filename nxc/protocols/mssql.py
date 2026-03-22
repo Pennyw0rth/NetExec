@@ -312,9 +312,8 @@ class mssql(connection):
                 return False
             self.logger.success(f"Impersonation set: {mode}={target}")
             self.impersonation_applied = True
-            if self.args.debug:
-                res = self.conn.sql_query("SELECT SYSTEM_USER, SUSER_SNAME();")
-                self.logger.debug(f"Impersonated context: {res}")
+            res = self.conn.sql_query("SELECT SYSTEM_USER, SUSER_SNAME();")
+            self.logger.debug(f"Impersonated context: {res}")
         except Exception as e:
             self.logger.fail(f"Failed to impersonate {mode} {target}: {e}")
             return False
