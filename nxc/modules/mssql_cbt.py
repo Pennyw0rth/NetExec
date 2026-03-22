@@ -32,7 +32,7 @@ class NXCModule:
                 connection.username,
                 connection.password,
                 connection.targetDomain,
-                f"{connection.lmhash}:{connection.nthash}",
+                f"{connection.lmhash}:{connection.nthash}" if connection.lmhash and connection.nthash else None,
                 connection.aesKey,
                 connection.kdcHost,
                 None,
@@ -46,7 +46,7 @@ class NXCModule:
                 connection.username,
                 connection.password,
                 connection.targetDomain,
-                f"{connection.lmhash}:{connection.nthash}",
+                f"{connection.lmhash}:{connection.nthash}" if connection.lmhash and connection.nthash else None,
                 not connection.args.local_auth,
                 cbt_fake_value=b""
             )
