@@ -169,8 +169,6 @@ class mssql(connection):
                 getattr(self, attr)()
 
     def call_modules(self):
-        if getattr(self.args, "impersonate", None) and not self.impersonation_applied and not self.impersonate():
-            raise SystemExit
         super().call_modules()
 
     @reconnect_mssql
