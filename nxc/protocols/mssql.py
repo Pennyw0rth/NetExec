@@ -41,6 +41,7 @@ class mssql(connection):
         self.server_os = None
         self.hash = None
         self.os_arch = None
+        self.lmhash = ""
         self.nthash = ""
         self.is_mssql = False
 
