@@ -26,7 +26,7 @@ class NXCModule:
         new_conn = tds.MSSQL(connection.host, connection.port, connection.conn.remoteName)
         new_conn.connect(connection.args.mssql_timeout)
 
-        if connection.kerberos:  # noqa: SIM108
+        if connection.kerberos:
             success = new_conn.kerberosLogin(
                 None,
                 connection.username,

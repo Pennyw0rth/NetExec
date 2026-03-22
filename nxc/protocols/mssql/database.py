@@ -1,6 +1,6 @@
 import warnings
 
-from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, func, select, insert, update, delete
+from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, func, select, insert, delete
 from sqlalchemy.dialects.sqlite import Insert  # used for upsert
 from sqlalchemy.exc import SAWarning
 from sqlalchemy.orm import declarative_base
