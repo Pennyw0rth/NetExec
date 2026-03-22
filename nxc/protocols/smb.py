@@ -1701,7 +1701,9 @@ class smb(connection):
     def users(self):
         if self.args.users:
             self.logger.debug(f"Dumping users: {', '.join(self.args.users)}")
-        return UserSamrDump(self).dump(requested_users=self.args.users, dump_path=self.args.users_export)
+        if self.args.users_export:
+            self.logger.display("[!] --users-export is deprecated, use --users --export instead")
+        return UserSamrDump(self).dump(requested_users=self.args.users, dump_path=self.args.users_export or self.args.export)
 
     def users_export(self):
         self.users()
@@ -1922,7 +1924,36 @@ class smb(connection):
                     )
             so_far += simultaneous
         dce.disconnect()
+        if self.args.export:
+            usernames = sorted({entry["username"] for entry in entries if entry["sidtype"] == "SidTypeUser" and not entry["username"].endswith("$")})
+            try:
+                with open(self.args.export, "w") as f:
+                    f.writelines(f"{username}\n" for username in usernames)
+                self.logger.success(f"Exported {len(usernames)} users to {self.args.export}")
+            except OSError as e:
+                self.logger.fail(f"Export failed: {e}")
         return entries
+
+    def rid_users_export(self):
+        """Enumerate users by RID bruteforce and export only usernames (SidTypeUser) to a file."""
+        export_file = self.args.rid_users_export
+        max_rid = self.args.rid_brute if self.args.rid_brute else 4000
+
+        entries = self.rid_brute(max_rid=max_rid)
+
+        # Filter only SidTypeUser entries and extract unique usernames
+        usernames = sorted({entry["username"] for entry in entries if entry["sidtype"] == "SidTypeUser"})
+
+        if not usernames:
+            self.logger.display("No users found via RID bruteforce")
+            return
+
+        try:
+            with open(export_file, "w") as f:
+                f.writelines(f"{username}\n" for username in usernames)
+            self.logger.success(f"Exported {len(usernames)} users to {export_file}")
+        except OSError as e:
+            self.logger.fail(f"Error writing to {export_file}: {e}")
 
     def put_file_single(self, src, dst):
         self.logger.display(f"Copying {src} to {dst}")
