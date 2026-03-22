@@ -291,39 +291,32 @@ class mssql(connection):
             return False
 
     def impersonate(self):
-        target = self.args.impersonate
-        if not target:
-            self.logger.error("No impersonation target specified")
-            return False
-
         mode = "LOGIN"
-        raw_target = str(target)
-        lowered = raw_target.lower()
-        if lowered.startswith("login:"):
-            raw_target = raw_target.split(":", 1)[1]
+        target = self.args.impersonate.strip()
+        if target.lower().startswith("login:"):
+            target = target.split(":", 1)[1].strip()
             mode = "LOGIN"
-        elif lowered.startswith("user:"):
-            raw_target = raw_target.split(":", 1)[1]
+        elif target.lower().startswith("user:"):
+            target = target.split(":", 1)[1].strip()
             mode = "USER"
 
-        raw_target = raw_target.strip()
-        if not raw_target:
+        if not target:
             self.logger.error("Impersonation target is empty")
             return False
 
-        safe_target = raw_target.replace("'", "''")
+        safe_target = target.replace("'", "''")
         try:
             self.conn.sql_query(f"EXECUTE AS {mode} = N'{safe_target}';")
             if self.conn.lastError:
                 self.logger.fail(self.conn.lastError)
                 return False
-            self.logger.success(f"Impersonation set: {mode}={raw_target}")
+            self.logger.success(f"Impersonation set: {mode}={target}")
             self.impersonation_applied = True
             if self.args.debug:
                 res = self.conn.sql_query("SELECT SYSTEM_USER, SUSER_SNAME();")
                 self.logger.debug(f"Impersonated context: {res}")
         except Exception as e:
-            self.logger.fail(f"Failed to impersonate {mode} {raw_target}: {e}")
+            self.logger.fail(f"Failed to impersonate {mode} {target}: {e}")
             return False
         return True
 
