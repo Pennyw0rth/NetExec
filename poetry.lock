@@ -1124,7 +1124,7 @@ all = ["flake8 (>=7.1.1)", "mypy (>=1.11.2)", "pytest (>=8.3.2)", "ruff (>=0.6.2
 
 [[package]]
 name = "impacket"
-version = "0.14.0.dev0+20260318.215953.2c77435e"
+version = "0.14.0.dev0+20260317.95020.1049826e"
 description = "Network protocols Constructors and Dissectors"
 optional = false
 python-versions = "*"
@@ -1148,7 +1148,7 @@ six = "*"
 type = "git"
 url = "https://github.com/Pennyw0rth/impacket"
 reference = "HEAD"
-resolved_reference = "2c77435e4fe3f11fb07e13daf182e82aa83b149e"
+resolved_reference = "1049826efbc556221cca17f94e9fd0b944b8c600"
 
 [[package]]
 name = "iniconfig"
