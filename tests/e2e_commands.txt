@@ -1,4 +1,4 @@
-##### Check Generic Help Options
+# Check Generic Help Options
 netexec -h
 ##### SMB
 netexec smb TARGET_HOST --generate-hosts-file /tmp/hostsfile
@@ -184,6 +184,63 @@ netexec smb TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE
 ##### SMB Hash File
 netexec smb TARGET_HOST -u LOGIN_USERNAME -H tests/data/test_hashes.txt
 netexec smb TARGET_HOST -u TEST_USER_FILE -H tests/data/test_hashes.txt
+
+##### RPC operations via SMB protocol
+##### Basic usage with authentication
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
+netexec {DNS} smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
+
+##### Server/Domain Information
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --rpc-server-info
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --rpc-dom-info
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --rpc-trusts
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --rpc-pass-pol
+
+##### User Enumeration
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --rpc-users
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --rid-brute
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --rid-brute 5000
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --rpc-user LOGIN_USERNAME
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --rpc-user 500
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --rpc-user-groups LOGIN_USERNAME
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --lookup-names LOGIN_USERNAME
+
+##### Group Enumeration
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --rpc-groups
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --rpc-group "Domain Users"
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --rpc-group "Administrators"
+
+##### Share Enumeration
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --rpc-shares
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --rpc-sessions
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --rpc-connections
+
+##### LSA Operations
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --lsa-query
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --lsa-sids
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --lsa-privs
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --lsa-query-security
+
+##### SID/SAM Operations
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sam-lookup domain LOGIN_USERNAME
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sam-lookup builtin Administrators
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --lookup-domain RESOURCED
+
+##### Anonymous Enumeration (may work on misconfigured systems)
+netexec smb TARGET_HOST -u '' -p '' --rid-brute
+netexec smb TARGET_HOST --rid-brute
+
+##### User/Group Management (requires admin - commented out to avoid unintended changes)
+#netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --create-user testuser:P@ssw0rd123
+#netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --delete-user testuser
+#netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --enable-user testuser
+#netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --disable-user testuser
+#netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --reset-password testuser:NewP@ss123
+#netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --create-group testgroup
+#netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --delete-group testgroup
+#netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --add-to-group testuser:testgroup
+#netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --remove-from-group testuser:testgroup
+
 ##### WMI
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --list-snapshots
