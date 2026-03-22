@@ -36,4 +36,5 @@ def proto_args(parser, parents):
 
     mapping_enum_group = mssql_parser.add_argument_group("Mapping/Enumeration")
     mapping_enum_group.add_argument("--rid-brute", nargs="?", type=int, const=4000, metavar="MAX_RID", help="enumerate users by bruteforcing RIDs")
+    mapping_enum_group.add_argument("--get-sid", action="store_true", help="Get domain sid")
     return parser
