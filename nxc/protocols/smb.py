@@ -1390,10 +1390,8 @@ class smb(connection):
             output(sessions)
 
     def shares(self):
-        temp_dir = ntpath.normpath("\\" + gen_random_string())
-        temp_file = ntpath.normpath("\\" + gen_random_string() + ".txt")
         permissions = []
-        write_check = bool(not self.args.no_write_check)
+        file_write_check = bool(getattr(self.args, "file_write_check", False))
 
         try:
             self.logger.debug(f"domain: {self.domain}")
@@ -1438,8 +1436,6 @@ class smb(connection):
             share_info = {"name": share_name, "remark": share_remark, "access": []}
             read = False
             write = False
-            write_dir = False
-            write_file = False
             try:
                 self.conn.listPath(share_name, "*")
                 read = True
@@ -1448,13 +1444,21 @@ class smb(connection):
                 error = get_error_string(e)
                 self.logger.debug(f"Error checking READ access on share {share_name}: {error}")
             except (NetBIOSError, UnicodeEncodeError) as e:
-                write_check = False
                 share_info["access"].append("UNKNOWN (try '--no-smbv1')")
                 error = get_error_string(e)
                 self.logger.debug(f"Error checking READ access on share {share_name}: {error}. This exception always caused by special character in share name with SMBv1")
                 self.logger.info(f"Skipping WRITE permission check on share {share_name}")
+                permissions.append(share_info)
+                continue
 
-            if write_check:
+            if file_write_check:
+                # Empirical write check — creates and deletes a temp file/dir.
+                # Use --file-write-check to enable. Catches post-ACL blocking (AV/EDR/quota)
+                # but leaves a brief artifact window if delete permissions are missing.
+                temp_dir = ntpath.normpath("\\" + gen_random_string())
+                temp_file = ntpath.normpath("\\" + gen_random_string() + ".txt")
+                write_dir = False
+                write_file = False
                 try:
                     self.conn.createDirectory(share_name, temp_dir)
                     write_dir = True
@@ -1463,9 +1467,7 @@ class smb(connection):
                         self.conn.deleteDirectory(share_name, temp_dir)
                     except SessionError as e:
                         error = get_error_string(e)
-                        if error == "STATUS_OBJECT_NAME_NOT_FOUND":
-                            pass
-                        else:
+                        if error != "STATUS_OBJECT_NAME_NOT_FOUND":
                             self.logger.debug(f"Error DELETING created temp dir {temp_dir} on share {share_name}: {error}")
                 except SessionError as e:
                     error = get_error_string(e)
@@ -1481,18 +1483,62 @@ class smb(connection):
                         self.conn.deleteFile(share_name, temp_file)
                     except SessionError as e:
                         error = get_error_string(e)
-                        if error == "STATUS_OBJECT_NAME_NOT_FOUND":
-                            pass
-                        else:
+                        if error != "STATUS_OBJECT_NAME_NOT_FOUND":
                             self.logger.debug(f"Error DELETING created temp file {temp_file} on share {share_name}")
                 except SessionError as e:
                     error = get_error_string(e)
                     self.logger.debug(f"Error checking WRITE access with FILE creation on share {share_name}: {error}")
 
-                # If we either can create a file or a directory we add the write privs to the output. Agreed on in https://github.com/Pennyw0rth/NetExec/pull/404
+                # Agreed on in https://github.com/Pennyw0rth/NetExec/pull/404
                 if write_dir or write_file:
                     write = True
                     share_info["access"].append("WRITE")
+            else:
+                # ACL-based write check (default) — opens share root with FILE_OPEN +
+                # various access masks. No files created on disk. May not detect writes
+                # blocked post-ACL by AV/EDR or disk quota. Detects WRITE_DAC/WRITE_OWNER
+                # escalation paths that the empirical check misses.
+                seen_labels = set()
+                write_labels = []
+                for mask, label in _SMB_WRITE_CHECKS:
+                    if label in seen_labels:
+                        continue
+                    tid = None
+                    try:
+                        tid = self.conn.connectTree(share_name)
+                        fid = self.conn.openFile(
+                            tid,
+                            "\\",
+                            desiredAccess=mask,
+                            shareMode=FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                            creationDisposition=_SMB_FILE_OPEN,
+                            fileAttributes=0,
+                            creationOption=FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+                        )
+                        self.conn.closeFile(tid, fid)
+                        write_labels.append(label)
+                        seen_labels.add(label)
+                        self.logger.debug(f"{label} confirmed on {share_name} (mask=0x{mask:08x})")
+                    except SessionError as e:
+                        error = get_error_string(e)
+                        self.logger.debug(f"No {label} on {share_name}: {error}")
+                    except Exception as e:
+                        self.logger.debug(f"{label} check error on {share_name}: {e}")
+                    finally:
+                        if tid:
+                            try:
+                                self.conn.disconnectTree(tid)
+                            except Exception:
+                                pass
+
+                # If direct WRITE is achievable, suppress more granular labels
+                if "WRITE" in write_labels:
+                    write_labels = ["WRITE"]
+
+                for lbl in write_labels:
+                    share_info["access"].append(lbl)
+                    if not write:
+                        write = True
 
             permissions.append(share_info)
 
@@ -1507,17 +1553,24 @@ class smb(connection):
         if self.args.filter_shares:
             self.logger.display("[REMOVED] Use the --shares read,write options instead.")
 
-        self.logger.display("Enumerated shares")
-        self.logger.highlight(f"{'Share':<15} {'Permissions':<15} {'Remark'}")
-        self.logger.highlight(f"{'-----':<15} {'-----------':<15} {'------'}")
-
+        # Build filtered list first so column widths reflect only displayed rows
+        display_rows = []
         for share in permissions:
             name = share["name"]
             remark = share["remark"]
             perms = ",".join(share["access"])
             if self.args.shares and self.args.shares.lower() not in perms.lower():
                 continue
-            self.logger.highlight(f"{name:<15} {perms:<15} {remark}")
+            display_rows.append((name, perms, remark))
+
+        c_name  = max((len(r[0]) for r in display_rows), default=5) + 2
+        c_perms = max((len(r[1]) for r in display_rows), default=11) + 2
+
+        self.logger.display("Enumerated shares")
+        self.logger.highlight(f"{'Share':<{c_name}} {'Permissions':<{c_perms}} {'Remark'}")
+        self.logger.highlight(f"{'-----':<{c_name}} {'-----------':<{c_perms}} {'------'}")
+        for name, perms, remark in display_rows:
+            self.logger.highlight(f"{name:<{c_name}} {perms:<{c_perms}} {remark}")
         return permissions
 
     def dir(self):
