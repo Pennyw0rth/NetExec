@@ -1256,14 +1256,14 @@ ldap3 = ">2.5.0,<2.5.2 || >2.5.2,<2.6 || >2.6"
 
 [[package]]
 name = "lsassy"
-version = "3.1.15"
+version = "3.1.16"
 description = "Python library to extract credentials from lsass remotely"
 optional = false
 python-versions = ">=3.6"
 groups = ["main"]
 files = [
-    {file = "lsassy-3.1.15-py3-none-any.whl", hash = "sha256:a94ad00686fdd438214e4dabb931fbbb3a3b3703e1329f89eaffe4daa974c724"},
-    {file = "lsassy-3.1.15.tar.gz", hash = "sha256:3b548ced043fa8f74e1ebbca65927de24da39e1e8c306a326aa3c5f58bc51fce"},
+    {file = "lsassy-3.1.16-py3-none-any.whl", hash = "sha256:e2672e193815db96ddb3078c6bda1c3e96d425a1072690bf8b8fc17b417c8c2e"},
+    {file = "lsassy-3.1.16.tar.gz", hash = "sha256:6948360f396c4c704643faadeff5fa5d18336ccc446806ad24e7937e531c57a3"},
 ]
 
 [package.dependencies]
