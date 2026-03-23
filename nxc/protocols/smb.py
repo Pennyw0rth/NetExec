@@ -1390,8 +1390,8 @@ class smb(connection):
             output(sessions)
 
     def file_write_check(self):
-        if not self.args.shares:
-            self.logger.warning("--file-write-check has no effect without --shares")
+        if self.args.shares is None:
+            self.logger.fail("--file-write-check requires --shares")
 
     def shares(self):
         permissions = []
