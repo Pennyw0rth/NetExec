@@ -2093,16 +2093,8 @@ class smb(connection):
     @requires_admin
     def dpapi(self):
         dump_system = "nosystem" not in self.args.dpapi
-
-        if self.args.pvk is not None:
-            try:
-                self.pvkbytes = open(self.args.pvk, "rb").read()  # noqa: SIM115
-                self.logger.success(f"Loading domain backupkey from {self.args.pvk}")
-            except Exception as e:
-                self.logger.fail(str(e))
-
-        if self.pvkbytes is None:
-            self.pvkbytes = get_domain_backup_key(self)
+        
+        self.pvkbytes = get_domain_backup_key(self)
 
         target = Target.create(
             domain=self.domain,
