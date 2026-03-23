@@ -35,7 +35,30 @@ from impacket.krb5 import constants
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login
-from impacket.smb3structs import FILE_SHARE_WRITE, FILE_SHARE_DELETE, SMB2_0_IOCTL_IS_FSCTL
+from impacket.smb3structs import (
+    FILE_SHARE_READ,
+    FILE_SHARE_WRITE,
+    FILE_SHARE_DELETE,
+    GENERIC_WRITE,
+    FILE_DIRECTORY_FILE,
+    FILE_SYNCHRONOUS_IO_NONALERT,
+    SMB2_0_IOCTL_IS_FSCTL,
+)
+
+# ACL-based write check constants (used by shares())
+_SMB_FILE_OPEN             = 0x00000001  # Open existing object only — never creates
+_SMB_FILE_ADD_FILE         = 0x00000002  # Create files in a directory
+_SMB_FILE_ADD_SUBDIRECTORY = 0x00000004  # Create subdirectories in a directory
+_SMB_WRITE_DAC             = 0x00040000  # Modify DACL (ACL escalation path)
+_SMB_WRITE_OWNER           = 0x00080000  # Change owner (ACL escalation path)
+_SMB_WRITE_CHECKS = [
+    (GENERIC_WRITE,              "WRITE"),
+    (_SMB_FILE_ADD_FILE,         "WRITE"),
+    (_SMB_FILE_ADD_SUBDIRECTORY, "WRITE (SUBDIR)"),
+    (_SMB_WRITE_DAC,             "WRITE (ACL)"),
+    (_SMB_WRITE_OWNER,           "WRITE (ACL)"),
+]
+
 from impacket.dcerpc.v5 import tsts as TSTS
 
 from nxc.config import process_secret, host_info_colors, check_guest_account
