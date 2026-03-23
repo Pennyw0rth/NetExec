@@ -1436,6 +1436,11 @@ class smb(connection):
                 self.logger.debug(f"Skipping excluded share: {share_name}")
                 continue
 
+            # shi1_type base type (strip STYPE_SPECIAL 0x80000000):
+            #   0 = STYPE_DISKTREE (real filesystem) — write checks apply
+            #   1 = STYPE_PRINTQ   (print spooler)   — skip; spool semantics, not file creation
+            #   3 = STYPE_IPC      (named pipes)      — skip; pipe write ≠ file creation
+            share_type = share["shi1_type"] & 0x3
             share_remark = share["shi1_remark"][:-1]
             share_info = {"name": share_name, "remark": share_remark, "access": []}
             read = False
@@ -1452,6 +1457,12 @@ class smb(connection):
                 error = get_error_string(e)
                 self.logger.debug(f"Error checking READ access on share {share_name}: {error}. This exception always caused by special character in share name with SMBv1")
                 self.logger.info(f"Skipping WRITE permission check on share {share_name}")
+                permissions.append(share_info)
+                continue
+
+            if share_type != 0:
+                # Non-filesystem share (IPC, print queue, etc.) — write checks produce
+                # false positives due to non-file semantics; skip and report access as-is
                 permissions.append(share_info)
                 continue
 
