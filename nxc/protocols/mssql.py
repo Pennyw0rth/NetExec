@@ -279,7 +279,7 @@ class mssql(connection):
 
     def impersonate(self):
         mode = "LOGIN"
-        target = self.args.impersonate.strip()
+        target = self.args.impersonate[0].strip()
         if target.lower().startswith("login:"):
             target = target.split(":", 1)[1].strip()
             mode = "LOGIN"
