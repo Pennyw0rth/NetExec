@@ -158,19 +158,6 @@ class mssql(connection):
         encryption = colored(f"EncryptionReq:{self.encryption}", host_info_colors[0 if self.encryption else 1], attrs=["bold"])
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption})")
 
-    def call_cmd_args(self):
-        if getattr(self.args, "impersonate", None) and not self.impersonation_applied and not self.impersonate():
-            raise SystemExit
-        for attr, value in vars(self.args).items():
-            if attr == "impersonate":
-                continue
-            if hasattr(self, attr) and callable(getattr(self, attr)) and value is not False and value is not None:
-                self.logger.debug(f"Calling {attr}()")
-                getattr(self, attr)()
-
-    def call_modules(self):
-        super().call_modules()
-
     @reconnect_mssql
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.username = username
