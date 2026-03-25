@@ -1990,13 +1990,12 @@ class smb(connection):
             add_sam_hash.sam_hashes = 0
 
             if self.remote_ops and self.bootkey:
-                history = getattr(self.args, "history", False)
                 if self.args.sam == "regdump":
                     SAM = RegSecretsSAMHashes(
                         self.bootkey,
                         remoteOps=self.remote_ops,
                         perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
-                        history=history,
+                        history=self.args.history,
                     )
                 else:
                     SAM_file_name = self.remote_ops.saveSAM()
@@ -2004,7 +2003,7 @@ class smb(connection):
                         SAM_file_name,
                         self.bootkey,
                         isRemote=True,
-                        history=history,
+                        history=self.args.history,
                         perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
                     )
 
