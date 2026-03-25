@@ -267,7 +267,7 @@ conf = {
             "name": "Cortex",
             "services": [
                 {"name": "xdrhealth", "description": "Cortex XDR Health Helper"},
-                {"name": "cyserver", "description": " Cortex XDR"}
+                {"name": "cyserver", "description": "Cortex XDR"}
             ],
             "pipes": []
         },
