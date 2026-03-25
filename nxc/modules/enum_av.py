@@ -343,6 +343,21 @@ conf = {
             ]
         },
         {
+            "name": "HarfangLab EDR",
+            "services": [
+                {"name": "hurukai", "description": "HarfangLab Hurukai Agent"},
+                {"name": "Hurukai agent", "description": "HarfangLab Hurukai Agent Service"},
+                {"name": "HarfangLab Hurukai agent", "description": "HarfangLab Hurukai Agent Program"},
+                {"name": "hurukai-av", "description": "HarfangLab Hurukai Antivirus"},
+                {"name": "hurukai-ui", "description": "HarfangLab Hurukai UI"}
+            ],
+            "pipes": [
+                {"name": "hurukai-control", "processes": ["hurukai.exe"]},
+                {"name": "hurukai-servicing", "processes": ["hurukai.exe"]},
+                {"name": "hurukai-amsi", "processes": ["hurukai.exe"]}
+            ]
+        },
+        {
             "name": "Ivanti Security",
             "services": [
                 {"name": "STAgent$Shavlik Protect", "description": "Ivanti Security Controls Agent"},
