@@ -259,7 +259,6 @@ conf = {
                 {"name": "vsmon", "description": "Check Point Endpoint Security Network Protection"},
                 {"name": "CPFileAnlyz", "description": "Check Point Endpoint Security File Analyzer"},
                 {"name": "EPClientUIService", "description": "Check Point Endpoint Security Client UI"}
-
             ],
             "pipes": []
         },
@@ -267,7 +266,7 @@ conf = {
             "name": "Cortex",
             "services": [
                 {"name": "xdrhealth", "description": "Cortex XDR Health Helper"},
-                {"name": "cyserver", "description": " Cortex XDR"}
+                {"name": "cyserver", "description": "Cortex XDR"}
             ],
             "pipes": []
         },
@@ -340,6 +339,21 @@ conf = {
             ],
             "pipes": [
                 {"name": "exploitProtectionIPC", "processes": ["AVKWCtlx64.exe"]}
+            ]
+        },
+        {
+            "name": "HarfangLab EDR",
+            "services": [
+                {"name": "hurukai", "description": "HarfangLab Hurukai Agent"},
+                {"name": "Hurukai agent", "description": "HarfangLab Hurukai Agent Service"},
+                {"name": "HarfangLab Hurukai agent", "description": "HarfangLab Hurukai Agent Program"},
+                {"name": "hurukai-av", "description": "HarfangLab Hurukai Antivirus"},
+                {"name": "hurukai-ui", "description": "HarfangLab Hurukai UI"}
+            ],
+            "pipes": [
+                {"name": "hurukai-control", "processes": ["hurukai.exe"]},
+                {"name": "hurukai-servicing", "processes": ["hurukai.exe"]},
+                {"name": "hurukai-amsi", "processes": ["hurukai.exe"]}
             ]
         },
         {
