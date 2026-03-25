@@ -259,7 +259,6 @@ conf = {
                 {"name": "vsmon", "description": "Check Point Endpoint Security Network Protection"},
                 {"name": "CPFileAnlyz", "description": "Check Point Endpoint Security File Analyzer"},
                 {"name": "EPClientUIService", "description": "Check Point Endpoint Security Client UI"}
-
             ],
             "pipes": []
         },
