@@ -1,16 +1,17 @@
 import binascii
-import codecs
 import json
-import re
 import datetime
 from enum import Enum
 from impacket.ldap import ldaptypes
 from impacket.uuid import bin_to_string
+from nxc.helpers.misc import CATEGORY
 from nxc.helpers.msada_guids import SCHEMA_OBJECTS, EXTENDED_RIGHTS
-from ldap3.protocol.formatters.formatters import format_sid
+from nxc.parsers.ldap_results import parse_result_attributes
 from ldap3.utils.conv import escape_filter_chars
 from ldap3.protocol.microsoft import security_descriptor_control
 import sys
+import traceback
+from os.path import isfile
 
 OBJECT_TYPES_GUID = {}
 OBJECT_TYPES_GUID.update(SCHEMA_OBJECTS)
@@ -188,6 +189,12 @@ class ALLOWED_OBJECT_ACE_MASK_FLAGS(Enum):
     Self = ldaptypes.ACCESS_ALLOWED_OBJECT_ACE.ADS_RIGHT_DS_SELF
 
 
+SEARCH_FILTERS = {
+    "TARGET": lambda target: f"(sAMAccountName={escape_filter_chars(target)})",
+    "TARGET_DN": lambda target: f"(distinguishedName={escape_filter_chars(target)})"
+}
+
+
 class NXCModule:
     """Module to read and backup the Discretionary Access Control List of one or multiple objects.
 
@@ -199,16 +206,23 @@ class NXCModule:
     name = "daclread"
     description = "Read and backup the Discretionary Access Control List of objects. Be careful, this module cannot read the DACLS recursively, see more explanation in the options."
     supported_protocols = ["ldap"]
-    opsec_safe = True
-    multiple_hosts = False
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options
 
+        # Initialize module variables
+        self.principal_sAMAccountName = None
+        self.principal_sid = None
+        self.action = "read"
+        self.ace_type = "allowed"
+        self.rights = None
+        self.rights_guid = None
+
     def options(self, context, module_options):
         """
-        Be careful, this module cannot read the DACLS recursively. 
+        Be careful, this module cannot read the DACLS recursively.
         For example, if an object has particular rights because it belongs to a group, the module will not be able to see it directly, you have to check the group rights manually.
 
         TARGET          The objects that we want to read or backup the DACLs, specified by its SamAccountName
@@ -227,210 +241,133 @@ class NXCModule:
             context.log.fail("Select an option, example: -M daclread -o TARGET=Administrator ACTION=read")
             sys.exit(1)
 
-        if module_options and "TARGET" in module_options:
-            context.log.debug("There is a target specified!")
-            if re.search(r"^(.+)\/([^\/]+)$", module_options["TARGET"]) is not None:
-                try:
-                    self.target_file = open(module_options["TARGET"])  # noqa: SIM115
-                    self.target_sAMAccountName = None
-                except Exception:
-                    context.log.fail("The file doesn't exist or cannot be openned.")
-            else:
-                context.log.debug(f"Setting target_sAMAccountName to {module_options['TARGET']}")
-                self.target_sAMAccountName = module_options["TARGET"]
-                self.target_file = None
-            self.target_DN = None
+        self.targets = []
         self.target_SID = None
-        if module_options and "TARGET_DN" in module_options:
-            self.target_DN = module_options["TARGET_DN"]
-            self.target_sAMAccountName = None
-            self.target_file = None
 
-        if module_options and "PRINCIPAL" in module_options:
+        for option in "TARGET", "TARGET_DN":
+            if option in module_options:
+                context.log.debug("There is a target specified!")
+                if isfile(module_options[option]):
+                    try:
+                        target_file = open(module_options[option])  # noqa: SIM115
+                        for line in target_file:
+                            context.log.debug(f"Adding target from file: {line}")
+                            self.targets.append((line.strip(), SEARCH_FILTERS[option]))
+                    except Exception:
+                        context.log.fail("The file doesn't exist or cannot be opened.")
+                else:
+                    context.log.debug(f"Adding target: {module_options[option]}")
+                    self.targets.append((module_options[option].strip(), SEARCH_FILTERS[option]))
+
+        if not self.targets:
+            context.log.fail("No target specified, please specify at least one target with the TARGET or TARGET_DN options.")
+            sys.exit(1)
+
+        if "PRINCIPAL" in module_options:
             self.principal_sAMAccountName = module_options["PRINCIPAL"]
-        else:
-            self.principal_sAMAccountName = None
-        self.principal_sid = None
 
-        if module_options and "ACTION" in module_options:
+        if "ACTION" in module_options:
             self.action = module_options["ACTION"]
-        else:
-            self.action = "read"
-        if module_options and "ACE_TYPE" in module_options:
+
+        if "ACE_TYPE" in module_options:
             self.ace_type = module_options["ACE_TYPE"]
-        else:
-            self.ace_type = "allowed"
-        if module_options and "RIGHTS" in module_options:
+
+        if "RIGHTS" in module_options:
             self.rights = module_options["RIGHTS"]
-        else:
-            self.rights = None
-        if module_options and "RIGHTS_GUID" in module_options:
+
+        if "RIGHTS_GUID" in module_options:
             self.rights_guid = module_options["RIGHTS_GUID"]
-        else:
-            self.rights_guid = None
-        self.filename = None
 
     def on_login(self, context, connection):
-        self.context = context
         """On a successful LDAP login we perform a search for the targets' SID, their Security Descriptors and the principal's SID if there is one specified"""
         context.log.highlight("Be careful, this module cannot read the DACLS recursively.")
-        self.baseDN = connection.ldap_connection._baseDN
-        self.ldap_session = connection.ldap_connection
+        self.context = context
+        self.connection = connection
 
         # Searching for the principal SID
         if self.principal_sAMAccountName is not None:
-            _lookedup_principal = self.principal_sAMAccountName
             try:
-                self.principal_sid = format_sid(
-                    self.ldap_session.search(
-                        searchBase=self.baseDN,
-                        searchFilter=f"(sAMAccountName={escape_filter_chars(_lookedup_principal)})",
-                        attributes=["objectSid"],
-                    )[0][1][0][1][0]
+                resp = connection.search(
+                    searchFilter=f"(sAMAccountName={escape_filter_chars(self.principal_sAMAccountName)})",
+                    attributes=["objectSid"],
                 )
+                resp_parsed = parse_result_attributes(resp)[0]
+                self.principal_sid = resp_parsed["objectSid"]
                 context.log.highlight(f"Found principal SID to filter on: {self.principal_sid}")
-            except Exception:
-                context.log.fail(f"Principal SID not found in LDAP ({_lookedup_principal})")
-                sys.exit(1)
+            except Exception as e:
+                context.log.fail(f"Principal SID not found in LDAP ({self.principal_sAMAccountName})")
+                context.log.debug(f"Exception: {e}, {traceback.format_exc()}")
+                return
 
         # Searching for the targets SID and their Security Descriptors
-        # If there is only one target
-        if (self.target_sAMAccountName or self.target_DN) and self.target_file is None:
-            # Searching for target account with its security descriptor
+        for target, search_filter in self.targets:
             try:
-                self.search_target_principal_security_descriptor(context, connection)
+                # Searching for target account with its security descriptor
+                resp = connection.search(
+                    searchFilter=search_filter(target),
+                    attributes=["distinguishedName", "nTSecurityDescriptor"],
+                    searchControls=security_descriptor_control(sdflags=0x04),
+                )
+                resp_parsed = parse_result_attributes(resp)[0]
+
                 # Extract security descriptor data
-                self.target_principal_dn = self.target_principal[0]
-                self.principal_raw_security_descriptor = str(self.target_principal[1][0][1][0]).encode("latin-1")
-                self.principal_security_descriptor = ldaptypes.SR_SECURITY_DESCRIPTOR(data=self.principal_raw_security_descriptor)
-                context.log.highlight(f"Target principal found in LDAP ({self.target_principal[0]})")
-            except Exception:
-                context.log.fail(f"Target SID not found in LDAP ({self.target_sAMAccountName})")
-                sys.exit(1)
+                target_principal_dn = resp_parsed["distinguishedName"]
+                principal_raw_security_descriptor = resp_parsed["nTSecurityDescriptor"]
+                principal_security_descriptor = ldaptypes.SR_SECURITY_DESCRIPTOR(data=principal_raw_security_descriptor)
+                context.log.highlight(f"Target principal found in LDAP ({target_principal_dn})")
+            except Exception as e:
+                context.log.fail(f"Target SID not found in LDAP ({target})")
+                context.log.debug(f"Exception: {e}, {traceback.format_exc()}")
+                continue
 
             if self.action == "read":
-                self.read(context)
+                self.read(principal_security_descriptor)
             if self.action == "backup":
-                self.backup(context)
-
-        # If there are multiple targets
-        else:
-            targets = self.target_file.readlines()
-            for target in targets:
-                try:
-                    self.target_sAMAccountName = target.strip()
-                    # Searching for target account with its security descriptor
-                    self.search_target_principal_security_descriptor(context, connection)
-                    # Extract security descriptor data
-                    self.target_principal_dn = self.target_principal[0]
-                    self.principal_raw_security_descriptor = str(self.target_principal[1][0][1][0]).encode("latin-1")
-                    self.principal_security_descriptor = ldaptypes.SR_SECURITY_DESCRIPTOR(data=self.principal_raw_security_descriptor)
-                    context.log.highlight(f"Target principal found in LDAP ({self.target_sAMAccountName})")
-                except Exception:
-                    context.log.fail(f"Target SID not found in LDAP ({self.target_sAMAccountName})")
-                    continue
-
-                if self.action == "read":
-                    self.read(context)
-                if self.action == "backup":
-                    self.backup(context)
+                self.backup(target, target_principal_dn, principal_raw_security_descriptor)
 
     # Main read funtion
     # Prints the parsed DACL
-    def read(self, context):
-        parsed_dacl = self.parse_dacl(context, self.principal_security_descriptor["Dacl"])
-        self.print_parsed_dacl(context, parsed_dacl)
+    def read(self, principal_security_descriptor):
+        parsed_dacl = self.parse_dacl(principal_security_descriptor["Dacl"])
+        self.print_parsed_dacl(parsed_dacl)
 
     # Permits to export the DACL of the targets
     # This function is called before any writing action (write, remove or restore)
-    def backup(self, context):
+    def backup(self, target, target_principal_dn, principal_raw_security_descriptor):
         backup = {}
-        backup["sd"] = binascii.hexlify(self.principal_raw_security_descriptor).decode("latin-1")
-        backup["dn"] = str(self.target_principal_dn)
-        if not self.filename:
-            self.filename = "dacledit-{}-{}.bak".format(
-                datetime.datetime.now().strftime("%Y%m%d-%H%M%S"),
-                self.target_sAMAccountName,
-            )
-        with codecs.open(self.filename, "w", "latin-1") as outfile:
+        backup["sd"] = binascii.hexlify(principal_raw_security_descriptor).decode("latin-1")
+        backup["dn"] = str(target_principal_dn)
+
+        timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        filename = f"dacledit-{timestamp}-{target}.bak"
+        with open(filename, "w", encoding="latin-1") as outfile:
             json.dump(backup, outfile)
-        context.log.highlight("DACL backed up to %s", self.filename)
-        self.filename = None
+        self.context.log.highlight(f"DACL backed up to {filename}")
 
-    # Attempts to retrieve the DACL in the Security Descriptor of the specified target
-    def search_target_principal_security_descriptor(self, context, connection):
-        _lookedup_principal = ""
-        # Set SD flags to only query for DACL
-        controls = security_descriptor_control(sdflags=0x04)
-        if self.target_sAMAccountName is not None:
-            _lookedup_principal = self.target_sAMAccountName
-            target = self.ldap_session.search(
-                searchBase=self.baseDN,
-                searchFilter=f"(sAMAccountName={escape_filter_chars(_lookedup_principal)})",
-                attributes=["nTSecurityDescriptor"],
-                searchControls=controls,
-            )
-        if self.target_DN is not None:
-            _lookedup_principal = self.target_DN
-            target = self.ldap_session.search(
-                searchBase=_lookedup_principal,
-                searchFilter=f"(distinguishedName={_lookedup_principal})",
-                attributes=["nTSecurityDescriptor"],
-                searchControls=controls,
-            )
-        try:
-            self.target_principal = target[0]
-        except Exception:
-            context.log.fail(f"Principal not found in LDAP ({_lookedup_principal}), probably an LDAP session issue.")
-            sys.exit(0)
-
-    # Attempts to retrieve the SID and Distinguisehd Name from the sAMAccountName
-    # Not used for the moment
-    #   - samname : a sAMAccountName
-    def get_user_info(self, context, samname):
-        self.ldap_session.search(
-            searchBase=self.baseDN,
-            searchFilter=f"(sAMAccountName={escape_filter_chars(samname)})",
-            attributes=["objectSid"],
-        )
-        try:
-            dn = self.ldap_session.entries[0].entry_dn
-            sid = format_sid(self.ldap_session.entries[0]["objectSid"].raw_values[0])
-            return dn, sid
-        except Exception:
-            context.log.fail(f"User not found in LDAP: {samname}")
-            return False
-
-    # Attempts to resolve a SID and return the corresponding samaccountname
-    #   - sid : the SID to resolve
-    def resolveSID(self, context, sid):
+    def resolveSID(self, sid):
+        """Resolves a SID to its corresponding sAMAccountName."""
         # Tries to resolve the SID from the well known SIDs
         if sid in WELL_KNOWN_SIDS:
             return WELL_KNOWN_SIDS[sid]
+
         # Tries to resolve the SID from the LDAP domain dump
-        else:
-            try:
-                self.ldap_session.search(
-                    searchBase=self.baseDN,
-                    searchFilter=f"(objectSid={sid})",
-                    attributes=["sAMAccountName"],
-                )[0][0]
-                return self.ldap_session.search(
-                    searchBase=self.baseDN,
-                    searchFilter=f"(objectSid={sid})",
-                    attributes=["sAMAccountName"],
-                )[0][1][0][1][0]
-            except Exception:
-                context.log.debug(f"SID not found in LDAP: {sid}")
-                return ""
+        try:
+            resp = self.connection.search(
+                searchFilter=f"(objectSid={sid})",
+                attributes=["sAMAccountName"],
+            )
+            return parse_result_attributes(resp)[0]["sAMAccountName"]
+        except Exception:
+            self.context.log.debug(f"SID not found in LDAP: {sid}")
+            return ""
 
     # Parses a full DACL
     #   - dacl : the DACL to parse, submitted in a Security Desciptor format
-    def parse_dacl(self, context, dacl):
+    def parse_dacl(self, dacl):
         parsed_dacl = []
-        context.log.debug("Parsing DACL")
+        self.context.log.debug("Parsing DACL")
         for ace in dacl["Data"]:
-            parsed_ace = self.parse_ace(context, ace)
+            parsed_ace = self.parse_ace(ace)
             parsed_dacl.append(parsed_ace)
         return parsed_dacl
 
@@ -445,7 +382,7 @@ class NXCModule:
 
     # Parses a specified ACE and extract the different values (Flags, Access Mask, Trustee, ObjectType, InheritedObjectType)
     #   - ace : the ACE to parse
-    def parse_ace(self, context, ace):
+    def parse_ace(self, ace):
         # For the moment, only the Allowed and Denied Access ACE are supported
         if ace["TypeName"] in [
             "ACCESS_ALLOWED_ACE",
@@ -460,7 +397,7 @@ class NXCModule:
             # Extracts the access mask (by parsing the simple permissions) and the principal's SID
             if ace["TypeName"] in ["ACCESS_ALLOWED_ACE", "ACCESS_DENIED_ACE"]:
                 access_mask = f"{', '.join(self.parse_perms(ace['Ace']['Mask']['Mask']))} (0x{ace['Ace']['Mask']['Mask']:x})"
-                trustee_sid = f"{self.resolveSID(context, ace['Ace']['Sid'].formatCanonical()) or 'UNKNOWN'} ({ace['Ace']['Sid'].formatCanonical()})"
+                trustee_sid = f"{self.resolveSID(ace['Ace']['Sid'].formatCanonical()) or 'UNKNOWN'} ({ace['Ace']['Sid'].formatCanonical()})"
                 parsed_ace = {
                     "Access mask": access_mask,
                     "Trustee (SID)": trustee_sid
@@ -487,12 +424,9 @@ class NXCModule:
                     except KeyError:
                         parsed_ace["Inherited type (GUID)"] = f"UNKNOWN ({inh_obj_type})"
                 # Extract the Trustee SID (the object that has the right over the DACL bearer)
-                parsed_ace["Trustee (SID)"] = "{} ({})".format(
-                    self.resolveSID(context, ace["Ace"]["Sid"].formatCanonical()) or "UNKNOWN",
-                    ace["Ace"]["Sid"].formatCanonical(),
-                )
+                parsed_ace["Trustee (SID)"] = f"{self.resolveSID(ace['Ace']['Sid'].formatCanonical()) or 'UNKNOWN'} ({ace['Ace']['Sid'].formatCanonical()})"
         else:  # if the ACE is not an access allowed
-            context.log.debug(f"ACE Type ({ace['TypeName']}) unsupported for parsing yet, feel free to contribute")
+            self.context.log.debug(f"ACE Type ({ace['TypeName']}) unsupported for parsing yet, feel free to contribute")
             _ace_flags = [FLAG.name for FLAG in ACE_FLAGS if ace.hasFlag(FLAG.value)]
             parsed_ace = {
                 "ACE type": ace["TypeName"],
@@ -501,18 +435,18 @@ class NXCModule:
             }
         return parsed_ace
 
-    def print_parsed_dacl(self, context, parsed_dacl):
+    def print_parsed_dacl(self, parsed_dacl):
         """Prints a full DACL by printing each parsed ACE
-        
+
         parsed_dacl : a parsed DACL from parse_dacl()
         """
-        context.log.debug("Printing parsed DACL")
+        self.context.log.debug("Printing parsed DACL")
         # If a specific right or a specific GUID has been specified, only the ACE with this right will be printed
         # If an ACE type has been specified, only the ACE with this type will be specified
         # If a principal has been specified, only the ACE where he is the trustee will be printed
         for i, parsed_ace in enumerate(parsed_dacl):
             print_ace = True
-            context.log.debug(f"{parsed_ace=}, {self.rights=}, {self.rights_guid=}, {self.ace_type=}, {self.principal_sid=}")
+            self.context.log.debug(f"{parsed_ace=}, {self.rights=}, {self.rights_guid=}, {self.ace_type=}, {self.principal_sid=}")
 
             # Filter on specific rights
             if self.rights is not None:
@@ -526,7 +460,7 @@ class NXCModule:
                     if (self.rights == "ResetPassword") and (("Object type (GUID)" not in parsed_ace) or (RIGHTS_GUID.ResetPassword.value not in parsed_ace["Object type (GUID)"])):
                         print_ace = False
                 except Exception as e:
-                    context.log.debug(f"Error filtering with {parsed_ace=} and {self.rights=}, probably because of ACE type unsupported for parsing yet ({e})")
+                    self.context.log.debug(f"Error filtering with {parsed_ace=} and {self.rights=}, probably because of ACE type unsupported for parsing yet ({e})")
 
             # Filter on specific right GUID
             if self.rights_guid is not None:
@@ -534,7 +468,7 @@ class NXCModule:
                     if ("Object type (GUID)" not in parsed_ace) or (self.rights_guid not in parsed_ace["Object type (GUID)"]):
                         print_ace = False
                 except Exception as e:
-                    context.log.debug(f"Error filtering with {parsed_ace=} and {self.rights_guid=}, probably because of ACE type unsupported for parsing yet ({e})")
+                    self.context.log.debug(f"Error filtering with {parsed_ace=} and {self.rights_guid=}, probably because of ACE type unsupported for parsing yet ({e})")
 
             # Filter on ACE type
             if self.ace_type == "allowed":
@@ -542,13 +476,13 @@ class NXCModule:
                     if ("ACCESS_ALLOWED_OBJECT_ACE" not in parsed_ace["ACE Type"]) and ("ACCESS_ALLOWED_ACE" not in parsed_ace["ACE Type"]):
                         print_ace = False
                 except Exception as e:
-                    context.log.debug(f"Error filtering with {parsed_ace=} and {self.ace_type=}, probably because of ACE type unsupported for parsing yet ({e})")
+                    self.context.log.debug(f"Error filtering with {parsed_ace=} and {self.ace_type=}, probably because of ACE type unsupported for parsing yet ({e})")
             else:
                 try:
                     if ("ACCESS_DENIED_OBJECT_ACE" not in parsed_ace["ACE Type"]) and ("ACCESS_DENIED_ACE" not in parsed_ace["ACE Type"]):
                         print_ace = False
                 except Exception as e:
-                    context.log.debug(f"Error filtering with {parsed_ace=} and {self.ace_type=}, probably because of ACE type unsupported for parsing yet ({e})")
+                    self.context.log.debug(f"Error filtering with {parsed_ace=} and {self.ace_type=}, probably because of ACE type unsupported for parsing yet ({e})")
 
             # Filter on trusted principal
             if self.principal_sid is not None:
@@ -556,7 +490,7 @@ class NXCModule:
                     if self.principal_sid not in parsed_ace["Trustee (SID)"]:
                         print_ace = False
                 except Exception as e:
-                    context.log.debug(f"Error filtering with {parsed_ace=} and {self.principal_sid=}, probably because of ACE type unsupported for parsing yet ({e})")
+                    self.context.log.debug(f"Error filtering with {parsed_ace=} and {self.principal_sid=}, probably because of ACE type unsupported for parsing yet ({e})")
             if print_ace:
                 self.context.log.highlight(f"ACE[{i}] info")
                 self.print_parsed_ace(parsed_ace)

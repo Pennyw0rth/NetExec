@@ -36,9 +36,8 @@ pwned_label = nxc_config.get("nxc", "pwn3d_label", fallback="Pwn3d!")
 audit_mode = nxc_config.get("nxc", "audit_mode", fallback=False)
 reveal_chars_of_pwd = int(nxc_config.get("nxc", "reveal_chars_of_pwd", fallback=0))
 config_log = nxc_config.getboolean("nxc", "log_mode", fallback=False)
-ignore_opsec = nxc_config.getboolean("nxc", "ignore_opsec", fallback=False)
 host_info_colors = literal_eval(nxc_config.get("nxc", "host_info_colors", fallback=["green", "red", "yellow", "cyan"]))
-
+check_guest_account = nxc_config.getboolean("nxc", "check_guest_account", fallback=False)
 try:
     exclude_hosts = literal_eval(nxc_config.get("nxc", "exclude_hosts", fallback="[]"))
     if not isinstance(exclude_hosts, list):

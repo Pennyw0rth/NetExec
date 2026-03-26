@@ -10,7 +10,9 @@ class navigator(DatabaseNavigator):
                 "IP",
                 "Hostname",
                 "Domain",
-                "OS"
+                "OS",
+                "LDAP signing required",
+                "LDAPS channel binding"
             ]
         ]
 
@@ -25,13 +27,18 @@ class navigator(DatabaseNavigator):
             except Exception:
                 os = host[4]
 
+            signing_required = host[5]
+            channel_binding = host[6]
+
             data.append(
                 [
                     host_id,
                     ip,
                     hostname,
                     domain,
-                    os
+                    os,
+                    signing_required,
+                    channel_binding
                 ]
             )
         print_table(data, title="Hosts")
@@ -54,7 +61,9 @@ class navigator(DatabaseNavigator):
                         "IP",
                         "Hostname",
                         "Domain",
-                        "OS"
+                        "OS",
+                        "LDAP signing required",
+                        "LDAPS channel binding"
                     ]
                 ]
                 host_id_list = []
@@ -71,13 +80,18 @@ class navigator(DatabaseNavigator):
                     except Exception:
                         os = host[4]
 
+                    signing_required = host[5]
+                    channel_binding = host[6]
+
                     data.append(
                         [
                             host_id,
                             ip,
                             hostname,
                             domain,
-                            os
+                            os,
+                            signing_required,
+                            channel_binding
                         ]
                     )
                 print_table(data, title="Host")

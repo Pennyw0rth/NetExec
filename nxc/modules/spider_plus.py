@@ -1,8 +1,10 @@
 import json
 import errno
-from os.path import abspath, join, split, exists, splitext, getsize, sep
+from os.path import abspath, join, exists, splitext, getsize
 from os import makedirs, remove, stat
+from pathlib import Path, PurePosixPath
 import time
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 from nxc.protocols.smb.remotefile import RemoteFile
 from impacket.smb3structs import FILE_READ_DATA
@@ -123,6 +125,8 @@ class SMBSpiderPlus:
                 self.logger.debug(f'Cannot list files in folder "{subfolder}".')
             elif "STATUS_OBJECT_PATH_NOT_FOUND" in str(e):
                 self.logger.debug(f"The folder {subfolder} does not exist.")
+            elif "STATUS_STOPPED_ON_SYMLINK" in str(e):
+                self.logger.debug(f"The folder {subfolder} is a symlink that cannot be followed. Skipping.")
             elif self.reconnect():
                 filelist = self.list_path(share, subfolder)
         except NetBIOSTimeout as e:
@@ -166,19 +170,15 @@ class SMBSpiderPlus:
     def get_file_save_path(self, remote_file):
         r"""Processes the remote file path to extract the filename and the folder path where the file should be saved locally.
 
-        It converts forward slashes (/) and backslashes (\) in the remote file path to the appropriate path separator for the local file system.
-        The folder path and filename are then obtained separately.
+        Creates a PurePosixPath and replaces UNC parts, then cleans it of any path traversal (see issue #1120)
         """
-        # Remove the backslash before the remote host part and replace slashes with the appropriate path separator
-        remote_file_path = str(remote_file)[2:].replace("/", sep).replace("\\", sep)
-
-        # Split the path to obtain the folder path and the filename
-        folder, filename = split(remote_file_path)
-
-        # Join the output folder with the folder path to get the final local folder path
-        folder = join(self.output_folder, folder)
-
-        return folder, filename
+        self.logger.debug(f"Remote file: {remote_file}")
+        raw_path = PurePosixPath(remote_file._RemoteFile__share, remote_file._RemoteFile__fileName.replace("\\", "/"))
+        self.logger.debug(f"Raw path: {remote_file}")
+        clean_parts = [p for p in raw_path.parts if p not in ("..", ".")]
+        resolved = Path(self.output_folder).joinpath(self.host, *clean_parts)
+        self.logger.debug(f"Resolved path: {resolved}")
+        return str(resolved.parent), resolved.name
 
     def spider_shares(self):
         """Enumerates all available shares for the SMB connection, spiders through the readable shares, and saves the metadata of the shares to a JSON file"""
@@ -472,8 +472,7 @@ class NXCModule:
     name = "spider_plus"
     description = "List files recursively and save a JSON share-file metadata to the 'OUTPUT_FOLDER'. See module options for finer configuration."
     supported_protocols = ["smb"]
-    opsec_safe = True  # Does the module touch disk?
-    multiple_hosts = True  # Does the module support multiple hosts?
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """
