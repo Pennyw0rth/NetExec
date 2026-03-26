@@ -105,7 +105,7 @@ class PSEXEC:
         s = self.rpctransport.get_smb_connection()
         s.setTimeout(100000)
 
-        psexesvc_path = Path(f"{DATA_PATH}/psexec/binary/psexecsvc.exe")
+        psexesvc_path = Path(f"{DATA_PATH}/psexec/binary/PSEXESVC.exe")
         if psexesvc_path.is_file():
             with open(psexesvc_path, "rb") as handle:
                 self.psexesvc_buffer = handle.read()
