@@ -484,8 +484,6 @@ class connection:
             - NTLM-hash (/kerberos)
             - AES-key
         """
-        if self.over_fail_limit(username):
-            return False
         if self.args.continue_on_success and owned:
             return False
 
