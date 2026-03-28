@@ -2,6 +2,7 @@ from impacket.ldap.ldapasn1 import SDFlagsControl
 from impacket.ldap import ldaptypes
 from impacket.ldap.ldapasn1 import SearchResultEntry
 from nxc.helpers.misc import CATEGORY
+from nxc.parsers.ldap_results import parse_result_attributes
 import json
 import uuid
 
@@ -13,7 +14,6 @@ INTERESTING_RIGHTS = {
     0x000F01FF: "GenericAll",
     0x00080000: "WriteOwner",
     0x00000020: "WriteProperty",
-    # 0x00000100: "ExtendedRight",
 }
 
 EXTENDED_RIGHTS = {
@@ -29,15 +29,15 @@ PROPERTY_GUIDS = {
 }
 
 ATTACK_SUGGESTIONS = {
-    "GenericAll": "Full object control — reset password, add to group, write SPN, set shadow credentials",
-    "WriteDACL": "Modify DACL to grant yourself GenericAll, then escalate",
-    "WriteOwner": "Take ownership of object, then modify DACL",
-    "ForceChangePassword": "Reset target password without knowing current: net rpc password <user>",
-    "WriteProperty (member)": "Add yourself or another principal to this group",
-    "WriteProperty (servicePrincipalName)": "Set SPN then Kerberoast the account",
+    "GenericAll":                             "Full object control — reset password, add to group, write SPN, set shadow credentials",
+    "WriteDACL":                              "Modify DACL to grant yourself GenericAll, then escalate",
+    "WriteOwner":                             "Take ownership of object, then modify DACL",
+    "ForceChangePassword":                    "Reset target password without knowing current: net rpc password <user>",
+    "WriteProperty (member)":                 "Add yourself or another principal to this group",
+    "WriteProperty (servicePrincipalName)":   "Set SPN then Kerberoast the account",
     "WriteProperty (msDS-KeyCredentialLink)": "Shadow credentials attack — obtain TGT + NTLM hash via PKINIT",
-    "DS-Replication-Get-Changes-All": "DCSync attack — dump all domain hashes with secretsdump",
-    "DS-Replication-Get-Changes": "Partial replication rights — pair with Get-Changes-All for DCSync",
+    "DS-Replication-Get-Changes-All":         "DCSync attack — dump all domain hashes with secretsdump",
+    "DS-Replication-Get-Changes":             "Partial replication rights — pair with Get-Changes-All for DCSync",
 }
 
 
@@ -104,34 +104,33 @@ class NXCModule:
 
         self.context.log.display(f"Resolving SIDs for: {username}")
 
-        user_entries = self.conn.search(
+        user_resp = self.conn.search(
             searchFilter=f"(&(objectClass=user)(sAMAccountName={username}))",
             attributes=["objectSid", "memberOf", "distinguishedName", "sAMAccountName"],
         )
+        user_entries = parse_result_attributes(user_resp)
         if not user_entries:
             self.context.log.fail(f"User '{username}' not found in directory")
             return sids
 
-        user_attrs = self._parse_attributes(user_entries[0])
-        user_sid = self._decode_sid(user_attrs.get("objectSid"))
+        user_attrs = user_entries[0]
+        user_sid = user_attrs.get("objectSid")
         if user_sid:
             sids.add(user_sid)
             self.context.log.display(f"User SID: {user_sid}")
 
         member_of = user_attrs.get("memberOf", [])
-        if isinstance(member_of, (str, bytes)):
+        if isinstance(member_of, str):
             member_of = [member_of]
 
         for group_dn in member_of:
-            if isinstance(group_dn, bytes):
-                group_dn = group_dn.decode()
-            group_entries = self.conn.search(
+            group_resp = self.conn.search(
                 searchFilter=f"(distinguishedName={group_dn})",
                 attributes=["objectSid", "sAMAccountName"],
             )
+            group_entries = parse_result_attributes(group_resp)
             if group_entries:
-                group_attrs = self._parse_attributes(group_entries[0])
-                group_sid = self._decode_sid(group_attrs.get("objectSid"))
+                group_sid = group_entries[0].get("objectSid")
                 if group_sid:
                     sids.add(group_sid)
 
@@ -140,50 +139,41 @@ class NXCModule:
 
     def _get_ad_objects(self):
         sd_control = [SDFlagsControl(criticality=True, flags=0x04)]
-        return self._ldap_search(
-            "(|(objectClass=user)(objectClass=group)(objectClass=computer)(objectClass=domain))",
-            [
-                "distinguishedName",
-                "sAMAccountName",
-                "objectClass",
-                "objectSid",
-                "nTSecurityDescriptor",
-                "adminCount",
-            ],
-            controls=sd_control,
+        resp = self.conn.search(
+            searchFilter="(|(objectClass=user)(objectClass=group)(objectClass=computer)(objectClass=domain))",
+            attributes=["distinguishedName", "sAMAccountName", "objectClass", "objectSid", "nTSecurityDescriptor", "adminCount"],
+            searchControls=sd_control,
         )
+        # Return raw entries — we need nTSecurityDescriptor as bytes not decoded string
+        return [e for e in resp if isinstance(e, SearchResultEntry)]
 
     def _parse_object_aces(self, obj, principal_sids):
-        attrs = self._parse_attributes(obj)
+        # Use parse_result_attributes for normal fields
+        parsed = parse_result_attributes([obj])
+        if not parsed:
+            return
+        attrs = parsed[0]
 
-        raw_sd = attrs.get("nTSecurityDescriptor")
+        # Get raw nTSecurityDescriptor bytes directly from entry
+        raw_sd = None
+        for attr in obj["attributes"]:
+            if str(attr["type"]) == "nTSecurityDescriptor":
+                try:
+                    raw_sd = attr["vals"][0].__bytes__()
+                except Exception:
+                    return
+                break
+
         if not raw_sd:
             return
 
-        obj_name = attrs.get("sAMAccountName") or attrs.get(
-            "distinguishedName", "unknown"
-        )
+        obj_name = attrs.get("sAMAccountName") or attrs.get("distinguishedName", "unknown")
         obj_dn = attrs.get("distinguishedName", "")
         obj_classes = attrs.get("objectClass", [])
         is_privileged = bool(attrs.get("adminCount"))
 
-        if isinstance(obj_name, bytes):
-            obj_name = obj_name.decode(errors="replace")
-        if isinstance(obj_dn, bytes):
-            obj_dn = obj_dn.decode(errors="replace")
-        if isinstance(obj_classes, bytes):
-            obj_classes = [obj_classes.decode(errors="replace")]
-        elif isinstance(obj_classes, list):
-            obj_classes = [
-                c.decode(errors="replace") if isinstance(c, bytes) else c
-                for c in obj_classes
-            ]
-
-        if not isinstance(raw_sd, bytes):
-            try:
-                raw_sd = bytes(raw_sd)
-            except Exception:
-                return
+        if isinstance(obj_classes, str):
+            obj_classes = [obj_classes]
 
         try:
             sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=raw_sd)
@@ -208,66 +198,28 @@ class NXCModule:
             for right_mask, right_name in INTERESTING_RIGHTS.items():
                 if mask & right_mask != right_mask:
                     continue
-                if (
-                    right_name == "WriteProperty"
-                    and ace_type == ACCESS_ALLOWED_OBJECT_ACE
-                ):
-                    object_type = self._guid_str(
-                        ace["Ace"]["ObjectType"]
-                        if "ObjectType" in ace["Ace"].fields
-                        else b""
-                    )
+                if right_name == "WriteProperty" and ace_type == ACCESS_ALLOWED_OBJECT_ACE:
+                    object_type = self._guid_str(ace["Ace"]["ObjectType"] if "ObjectType" in ace["Ace"].fields else b"")
                     prop_name = PROPERTY_GUIDS.get(object_type)
                     if prop_name:
-                        self._add_finding(
-                            obj_name,
-                            obj_dn,
-                            obj_classes,
-                            f"WriteProperty ({prop_name})",
-                            is_privileged,
-                        )
+                        self._add_finding(obj_name, obj_dn, obj_classes, f"WriteProperty ({prop_name})", is_privileged)
                     elif self.show_all:
-                        self._add_finding(
-                            obj_name,
-                            obj_dn,
-                            obj_classes,
-                            "WriteProperty (generic)",
-                            is_privileged,
-                        )
+                        self._add_finding(obj_name, obj_dn, obj_classes, "WriteProperty (generic)", is_privileged)
                 elif right_name != "WriteProperty":
-                    self._add_finding(
-                        obj_name, obj_dn, obj_classes, right_name, is_privileged
-                    )
+                    self._add_finding(obj_name, obj_dn, obj_classes, right_name, is_privileged)
 
             if ace_type == ACCESS_ALLOWED_OBJECT_ACE:
-                object_type = self._guid_str(
-                    ace["Ace"]["ObjectType"]
-                    if "ObjectType" in ace["Ace"].fields
-                    else b""
-                )
-                # Skip if already handled as a named WriteProperty above
-                if object_type in PROPERTY_GUIDS:
-                    pass
-                else:
+                object_type = self._guid_str(ace["Ace"]["ObjectType"] if "ObjectType" in ace["Ace"].fields else b"")
+                if object_type not in PROPERTY_GUIDS:
                     ext_name = EXTENDED_RIGHTS.get(object_type)
                     if ext_name:
-                        self._add_finding(
-                            obj_name, obj_dn, obj_classes, ext_name, is_privileged
-                        )
+                        self._add_finding(obj_name, obj_dn, obj_classes, ext_name, is_privileged)
                     elif object_type and self.show_all:
-                        self._add_finding(
-                            obj_name,
-                            obj_dn,
-                            obj_classes,
-                            f"ExtendedRight ({object_type})",
-                            is_privileged,
-                        )
+                        self._add_finding(obj_name, obj_dn, obj_classes, f"ExtendedRight ({object_type})", is_privileged)
 
     def _add_finding(self, obj_name, obj_dn, obj_classes, right, is_privileged):
         is_critical = is_privileged or right in (
-            "GenericAll",
-            "WriteDACL",
-            "WriteOwner",
+            "GenericAll", "WriteDACL", "WriteOwner",
             "DS-Replication-Get-Changes-All",
             "WriteProperty (msDS-KeyCredentialLink)",
         )
@@ -286,9 +238,6 @@ class NXCModule:
         self.findings.append(finding)
 
         if is_privileged or self.show_all or is_critical:
-            msg = f"[{severity}] {right} on {obj_name}"
-            if suggestion:
-                msg += f"         -> {suggestion}"
             if is_critical:
                 self.context.log.highlight(f"{right} on {obj_name} -> {suggestion}")
             else:
@@ -313,53 +262,7 @@ class NXCModule:
         for right, targets in sorted(by_right.items()):
             preview = ", ".join(targets[:3])
             overflow = f" (+{len(targets) - 3} more)" if len(targets) > 3 else ""
-            self.context.log.highlight(f"  {right:<5} -> {preview}{overflow}")
-
-    def _ldap_search(self, filter_str, attributes, controls=None):
-        try:
-            response = self.conn.search(
-                searchFilter=filter_str,
-                attributes=attributes,
-                searchControls=controls,
-            )
-            if not response:
-                return []
-            return [e for e in response if isinstance(e, SearchResultEntry)]
-        except Exception as e:
-            self.context.log.debug(f"LDAP search failed ({filter_str}): {e}")
-            return []
-
-    def _parse_attributes(self, entry):
-        attrs = {}
-        try:
-            for attr in entry["attributes"]:
-                name = str(attr["type"])
-                vals = attr["vals"]
-                parsed_vals = []
-                for v in vals:
-                    try:
-                        parsed_vals.append(bytes(v))
-                    except Exception:
-                        parsed_vals.append(str(v))
-                if len(parsed_vals) == 1:
-                    attrs[name] = parsed_vals[0]
-                else:
-                    attrs[name] = parsed_vals
-        except Exception as e:
-            self.context.log.debug(f"Failed to parse entry attributes: {e}")
-        return attrs
-
-    @staticmethod
-    def _decode_sid(raw_sid):
-        if not raw_sid:
-            return ""
-        if isinstance(raw_sid, str):
-            return raw_sid
-        try:
-            sid = ldaptypes.LDAP_SID(data=bytes(raw_sid))
-            return sid.formatCanonical()
-        except Exception:
-            return ""
+            self.context.log.highlight(f"  {right} -> {preview}{overflow}")
 
     @staticmethod
     def _ace_sid_str(ace):
