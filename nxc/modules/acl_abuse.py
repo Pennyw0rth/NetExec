@@ -69,14 +69,10 @@ class NXCModule:
 
         principal_sids = self._resolve_principal_sids()
         if not principal_sids:
-            context.log.fail(
-                "Could not resolve target principal — check TARGET_USER or auth credentials"
-            )
+            context.log.fail("Could not resolve target principal — check TARGET_USER or auth credentials")
             return
 
-        context.log.display(
-            f"Resolved {len(principal_sids)} principal SID(s), enumerating ACEs..."
-        )
+        context.log.display(f"Resolved {len(principal_sids)} principal SID(s), enumerating ACEs...")
 
         objects = self._get_ad_objects()
         if not objects:
@@ -103,9 +99,7 @@ class NXCModule:
 
         username = self.target_user if self.target_user else self.conn.username
         if not username:
-            self.context.log.fail(
-                "Could not determine current username — use TARGET_USER option"
-            )
+            self.context.log.fail("Could not determine current username — use TARGET_USER option")
             return sids
 
         self.context.log.display(f"Resolving SIDs for: {username}")
@@ -311,9 +305,7 @@ class NXCModule:
             self.context.log.display("No abusable ACEs found for the target principal")
             return
 
-        self.context.log.success(
-            f"Found {total} abusable ACE(s) — {critical} CRITICAL, {high} HIGH"
-        )
+        self.context.log.success(f"Found {total} abusable ACE(s) — {critical} CRITICAL, {high} HIGH")
         self.context.log.display("Summary by right:")
 
         by_right = {}
