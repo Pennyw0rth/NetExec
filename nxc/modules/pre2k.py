@@ -22,8 +22,8 @@ class NXCModule:
         """No options available"""
 
     def on_login(self, context, connection):
-        # Define the search filter for pre-created computer accounts
-        search_filter = "(&(objectClass=computer)(userAccountControl=4128))"
+        # Define the search filter for computer accounts
+        search_filter = "(&(objectClass=computer)(userAccountControl=4096))"
         attributes = ["sAMAccountName", "userAccountControl", "dNSHostName"]
 
         context.log.info(f"Using search filter: {search_filter}")
@@ -39,8 +39,8 @@ class NXCModule:
 
             for computer in results:
                 context.log.debug(f"Processing computer: {computer['sAMAccountName']}, UAC: {computer['userAccountControl']}")
-                # Check if the account is a pre-created computer account
-                if int(computer["userAccountControl"]) == 4128:  # 4096 | 32
+                # Check if the account is a computer account (WORKSTATION_TRUST_ACCOUNT)
+                if int(computer["userAccountControl"]) == 4096:
                     computers.append(computer["sAMAccountName"])
                     context.log.debug(f"Added computer: {computer['sAMAccountName']}")
 
