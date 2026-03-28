@@ -104,9 +104,9 @@ class NXCModule:
 
         self.context.log.display(f"Resolving SIDs for: {username}")
 
-        user_entries = self._ldap_search(
-            f"(&(objectClass=user)(sAMAccountName={username}))",
-            ["objectSid", "memberOf", "distinguishedName", "sAMAccountName"],
+        user_entries = self.conn.search(
+            searchFilter=f"(&(objectClass=user)(sAMAccountName={username}))",
+            attributes=["objectSid", "memberOf", "distinguishedName", "sAMAccountName"],
         )
         if not user_entries:
             self.context.log.fail(f"User '{username}' not found in directory")
@@ -125,9 +125,9 @@ class NXCModule:
         for group_dn in member_of:
             if isinstance(group_dn, bytes):
                 group_dn = group_dn.decode()
-            group_entries = self._ldap_search(
-                f"(distinguishedName={group_dn})",
-                ["objectSid", "sAMAccountName"],
+            group_entries = self.conn.search(
+                searchFilter=f"(distinguishedName={group_dn})",
+                attributes=["objectSid", "sAMAccountName"],
             )
             if group_entries:
                 group_attrs = self._parse_attributes(group_entries[0])
