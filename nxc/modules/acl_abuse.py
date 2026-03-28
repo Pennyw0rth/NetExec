@@ -1,4 +1,4 @@
-from ldap3.protocol.microsoft import security_descriptor_control
+from impacket.ldap.ldapasn1 import SDFlagsControl
 from impacket.ldap import ldaptypes
 from impacket.ldap.ldapasn1 import SearchResultEntry
 from nxc.helpers.misc import CATEGORY
@@ -145,7 +145,7 @@ class NXCModule:
         return sids
 
     def _get_ad_objects(self):
-        sd_control = security_descriptor_control(sdflags=0x04)
+        sd_control = [SDFlagsControl(criticality=True, flags=0x04)]
         return self._ldap_search(
             "(|(objectClass=user)(objectClass=group)(objectClass=computer)(objectClass=domain))",
             [
