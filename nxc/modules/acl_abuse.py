@@ -364,9 +364,7 @@ class NXCModule:
     @staticmethod
     def _ace_sid_str(ace):
         try:
-            return ldaptypes.LDAP_SID(
-                data=ace["Ace"]["Sid"].getData()
-            ).formatCanonical()
+            return ldaptypes.LDAP_SID(data=ace["Ace"]["Sid"].getData()).formatCanonical()
         except Exception:
             return ""
 
