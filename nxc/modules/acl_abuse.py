@@ -278,9 +278,7 @@ class NXCModule:
             "object": obj_name,
             "dn": obj_dn,
             "right": right,
-            "object_classes": obj_classes
-            if isinstance(obj_classes, list)
-            else [obj_classes],
+            "object_classes": obj_classes if isinstance(obj_classes, list) else [obj_classes],
             "is_privileged_target": bool(is_privileged),
             "severity": severity,
             "suggestion": suggestion,
