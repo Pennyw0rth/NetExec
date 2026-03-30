@@ -128,25 +128,31 @@ class NXCModule:
 
     def _smb_samr_change(self, context, connection, target_username, target_domain, oldHash, newPassword, newHash):
         # Reset the password for a different user
-        if target_username != connection.username:
-            user_handle = self._hSamrOpenUser(connection, target_username)
-            if not user_handle:
-                return False
-            samr.hSamrSetNTInternal1(self.dce, user_handle, newPassword, newHash)
-            context.log.success(f"Successfully changed password for {target_username}")
-        else:
-            # Change password for the current user
-            if newPassword:
-                # Change the password with new password
-                samr.hSamrUnicodeChangePasswordUser2(self.dce, "\x00", target_username, self.oldpass, newPassword, "", oldHash)
-            else:
-                # Change the password with new hash
+        try:
+            if target_username != connection.username:
                 user_handle = self._hSamrOpenUser(connection, target_username)
                 if not user_handle:
                     return False
-                samr.hSamrChangePasswordUser(self.dce, user_handle, self.oldpass, "", oldHash, "aad3b435b51404eeaad3b435b51404ee", newHash)
-                context.log.highlight("Note: Target user must change password at next logon.")
-            context.log.success(f"Successfully changed password for {target_username}")
+                samr.hSamrSetNTInternal1(self.dce, user_handle, newPassword, newHash)
+                context.log.success(f"Successfully changed password for {target_username}")
+            else:
+                # Change password for the current user
+                if newPassword:
+                    # Change the password with new password
+                    samr.hSamrUnicodeChangePasswordUser2(self.dce, "\x00", target_username, self.oldpass, newPassword, "", oldHash)
+                else:
+                    # Change the password with new hash
+                    user_handle = self._hSamrOpenUser(connection, target_username)
+                    if not user_handle:
+                        return False
+                    samr.hSamrChangePasswordUser(self.dce, user_handle, self.oldpass, "", oldHash, "aad3b435b51404eeaad3b435b51404ee", newHash)
+                    context.log.highlight("Note: Target user must change password at next logon.")
+                context.log.success(f"Successfully changed password for {target_username}")
+        except Exception as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.context.log.fail(f"Access denied while changing password for '{target_username}'")
+            else:
+                self.context.log.fail(f"Failed to change user password: {e}")
 
     def _hSamrOpenUser(self, connection, username):
         """Get handle to the user object"""
@@ -158,4 +164,7 @@ class NXCModule:
             user_rid = samr.hSamrLookupNamesInDomain(self.dce, domain_handle, (username,))["RelativeIds"]["Element"][0]
             return samr.hSamrOpenUser(self.dce, domain_handle, userId=user_rid)["UserHandle"]
         except Exception as e:
-            self.context.log.fail(f"Failed to open user: {e}")
+            if "STATUS_NONE_MAPPED" in str(e):
+                self.context.log.fail(f"User '{username}' not found or not resolvable")
+            else:
+                self.context.log.fail(f"Failed to open user: {e}")
