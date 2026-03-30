@@ -5,7 +5,7 @@ import sys
 import contextlib
 
 from os.path import isfile
-from threading import BoundedSemaphore
+from threading import BoundedSemaphore, Lock
 from functools import wraps
 from time import sleep
 from ipaddress import ip_address
@@ -25,6 +25,7 @@ from impacket.dcerpc.v5 import transport
 from impacket.krb5.ccache import CCache
 
 sem = BoundedSemaphore(1)
+fail_lock = Lock()
 global_failed_logins = 0
 user_failed_logins = {}
 
@@ -315,26 +316,28 @@ class connection:
     def inc_failed_login(self, username):
         global global_failed_logins, user_failed_logins
 
-        if username not in user_failed_logins:
-            user_failed_logins[username] = 0
+        with fail_lock:
+            if username not in user_failed_logins:
+                user_failed_logins[username] = 0
 
-        user_failed_logins[username] += 1
-        global_failed_logins += 1
-        self.failed_logins += 1
+            user_failed_logins[username] += 1
+            global_failed_logins += 1
+            self.failed_logins += 1
 
     def over_fail_limit(self, username):
         global global_failed_logins, user_failed_logins
 
-        if global_failed_logins == self.args.gfail_limit:
-            return True
+        with fail_lock:
+            if global_failed_logins == self.args.gfail_limit:
+                return True
 
-        if self.failed_logins == self.args.fail_limit:
-            return True
+            if self.failed_logins == self.args.fail_limit:
+                return True
 
-        if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:  # noqa: SIM103
-            return True
+            if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:  # noqa: SIM103
+                return True
 
-        return False
+            return False
 
     def query_db_creds(self):
         """Queries the database for credentials to be used for authentication.
@@ -481,8 +484,6 @@ class connection:
             - NTLM-hash (/kerberos)
             - AES-key
         """
-        if self.over_fail_limit(username):
-            return False
         if self.args.continue_on_success and owned:
             return False
 
@@ -498,6 +499,8 @@ class connection:
             sleep(value)
 
         with sem:
+            if self.over_fail_limit(username):
+                return False
             if cred_type == "plaintext":
                 if self.kerberos:
                     self.logger.debug("Trying to authenticate using Kerberos")
