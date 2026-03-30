@@ -129,7 +129,7 @@ class NXCModule:
     def _smb_samr_change(self, context, connection, target_username, target_domain, oldHash, newPassword, newHash):
         # Reset the password for a different user
         if target_username != connection.username:
-            user_handle = self._hSamrOpenUser(connection, target_username)
+            if not (user_handle := self._hSamrOpenUser(connection, target_username)): return False
             samr.hSamrSetNTInternal1(self.dce, user_handle, newPassword, newHash)
             context.log.success(f"Successfully changed password for {target_username}")
         else:
@@ -139,7 +139,7 @@ class NXCModule:
                 samr.hSamrUnicodeChangePasswordUser2(self.dce, "\x00", target_username, self.oldpass, newPassword, "", oldHash)
             else:
                 # Change the password with new hash
-                user_handle = self._hSamrOpenUser(connection, target_username)
+                if not (user_handle := self._hSamrOpenUser(connection, target_username)): return False
                 samr.hSamrChangePasswordUser(self.dce, user_handle, self.oldpass, "", oldHash, "aad3b435b51404eeaad3b435b51404ee", newHash)
                 context.log.highlight("Note: Target user must change password at next logon.")
             context.log.success(f"Successfully changed password for {target_username}")
