@@ -122,37 +122,34 @@ class NXCModule:
             else:
                 self.context.db.add_credential("plaintext", target_domain, target_username, self.newpass)
         except Exception as e:
-            context.log.fail(f"SMB-SAMR password change failed: {e}")
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.context.log.fail(f"Access denied while changing password for '{target_username}'")
+            else:
+                context.log.fail(f"SMB-SAMR password change failed: {e}")
         finally:
             self.dce.disconnect()
 
     def _smb_samr_change(self, context, connection, target_username, target_domain, oldHash, newPassword, newHash):
         # Reset the password for a different user
-        try:
-            if target_username != connection.username:
+        if target_username != connection.username:
+            user_handle = self._hSamrOpenUser(connection, target_username)
+            if not user_handle:
+                return False
+            samr.hSamrSetNTInternal1(self.dce, user_handle, newPassword, newHash)
+            context.log.success(f"Successfully changed password for {target_username}")
+        else:
+            # Change password for the current user
+            if newPassword:
+                # Change the password with new password
+                samr.hSamrUnicodeChangePasswordUser2(self.dce, "\x00", target_username, self.oldpass, newPassword, "", oldHash)
+            else:
+                # Change the password with new hash
                 user_handle = self._hSamrOpenUser(connection, target_username)
                 if not user_handle:
                     return False
-                samr.hSamrSetNTInternal1(self.dce, user_handle, newPassword, newHash)
-                context.log.success(f"Successfully changed password for {target_username}")
-            else:
-                # Change password for the current user
-                if newPassword:
-                    # Change the password with new password
-                    samr.hSamrUnicodeChangePasswordUser2(self.dce, "\x00", target_username, self.oldpass, newPassword, "", oldHash)
-                else:
-                    # Change the password with new hash
-                    user_handle = self._hSamrOpenUser(connection, target_username)
-                    if not user_handle:
-                        return False
-                    samr.hSamrChangePasswordUser(self.dce, user_handle, self.oldpass, "", oldHash, "aad3b435b51404eeaad3b435b51404ee", newHash)
-                    context.log.highlight("Note: Target user must change password at next logon.")
-                context.log.success(f"Successfully changed password for {target_username}")
-        except Exception as e:
-            if "STATUS_ACCESS_DENIED" in str(e):
-                self.context.log.fail(f"Access denied while changing password for '{target_username}'")
-            else:
-                self.context.log.fail(f"Failed to change user password: {e}")
+                samr.hSamrChangePasswordUser(self.dce, user_handle, self.oldpass, "", oldHash, "aad3b435b51404eeaad3b435b51404ee", newHash)
+                context.log.highlight("Note: Target user must change password at next logon.")
+            context.log.success(f"Successfully changed password for {target_username}")
 
     def _hSamrOpenUser(self, connection, username):
         """Get handle to the user object"""
