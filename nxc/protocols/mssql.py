@@ -438,6 +438,7 @@ class mssql(connection):
             domain_sid = SID(bytes.fromhex(raw_domain_sid.decode())).formatCanonical()[:-4]
         except Exception as e:
             self.logger.fail(f"Error parsing SID. Not domain joined?: {e}")
+            return entries
 
         so_far = 0
         simultaneous = 1000
