@@ -134,12 +134,24 @@ class mssql(connection):
             self.logger.info(f"Failed to receive NTLM challenge, reason: {e!s}")
             return False
         else:
-            ntlm_info = parse_challenge(challenge)
-            self.targetDomain = self.domain = ntlm_info["domain"]
-            self.hostname = ntlm_info["hostname"]
-            self.server_os = ntlm_info["os_version"]
-            self.logger.extra["hostname"] = self.hostname
-            self.db.add_host(self.host, self.hostname, self.targetDomain, self.server_os, len(self.mssql_instances),)
+            if not challenge.startswith(b"NTLMSSP\x00"):
+                try:
+                    text = challenge.decode("utf-16le", errors="ignore")
+                    clean = "".join(c for c in text if c.isascii() and (c.isprintable() or c == " "))
+                    start = next((i for i, c in enumerate(clean) if c.isupper()), 0)
+                    end = clean.rfind(".")
+                    error_msg = clean[start:end + 1].strip() if 0 <= start < end else clean.strip()
+                except Exception:
+                    error_msg = ""
+                self.logger.fail(f"Server does not support Integrated Windows Authentication{f': {error_msg}' if error_msg else ''}")
+            else:
+                ntlm_info = parse_challenge(challenge)
+                self.targetDomain = self.domain = ntlm_info["domain"]
+                self.hostname = ntlm_info["hostname"]
+                self.server_os = ntlm_info["os_version"]
+                self.logger.extra["hostname"] = self.hostname
+
+        self.db.add_host(self.host, self.hostname, self.domain, self.server_os, len(self.mssql_instances))
 
         if self.args.domain:
             self.domain = self.args.domain
