@@ -3,23 +3,23 @@ from impacket.dcerpc.v5.dcom import wmi
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
     name = "bitlocker"
     description = "Enumerating BitLocker Status on target(s) If it is enabled or disabled."
     supported_protocols = ["smb", "wmi"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options
 
     def options(self, context, module_options):
-        """ 
+        """
         USAGE:
-        
+
         NetExec smb <IP> -u <username> -p <password> -M bitlocker
         NetExec wmi <IP> -u <username> -p <password> -M bitlocker (Better option to use on real life.)
         """
@@ -45,7 +45,7 @@ class BitLockerSMB:
         try:
             # Executing the PowerShell command to get BitLocker volumes status.
             check_bitlocker_command_str_output = self.connection.execute(check_bitlocker_command_str, True)
-            
+
             if "'Get-BitLockerVolume' is not recognized" in check_bitlocker_command_str_output:
                 self.context.log.fail("BitLockerVolume not found on target.")
                 return
@@ -53,10 +53,10 @@ class BitLockerSMB:
             # Splitting the output into lines.
             lines = str(check_bitlocker_command_str_output).splitlines()
             data_lines = [line for line in lines if re.match(r"\w:", line)]
-            
+
             for line in data_lines:
                 # Checking every line for starting with drive
-                if line[1] == ":": 
+                if line[1] == ":":
                     parts = line.split()
                     MountPoint, EncryptionMethod, protection_status = parts[0], parts[1], parts[2]
 
@@ -87,7 +87,7 @@ class BitLockerWMI:
                 oxidResolver=True,
                 doKerberos=self.connection.kerberos,
                 kdcHost=self.connection.kdcHost)
-                
+
             try:
                 # CoCreateInstanceEx for WMI login
                 i_interface = dcom_conn.CoCreateInstanceEx(wmi.CLSID_WbemLevel1Login, wmi.IID_IWbemLevel1Login)
@@ -95,7 +95,7 @@ class BitLockerWMI:
 
                 # Specify the namespace for BitLocker
                 bitlockerNamespace = "root\\CIMv2\\Security\\MicrosoftVolumeEncryption"
-                
+
                 # NTLM login for WMI
                 iWbemServices = iWbemLevel1Login.NTLMLogin(bitlockerNamespace, NULL, NULL)
 
@@ -105,8 +105,17 @@ class BitLockerWMI:
                 # Query to get BitLocker status
                 classQuery = "SELECT DriveLetter, ProtectionStatus, EncryptionMethod FROM Win32_EncryptableVolume"
                 iEnumWbemClassObject = iWbemServices.ExecQuery(classQuery)
-                encryptionTypeMapping = {0: "None", 1: "AES_256_WITH_DIFFUSER", 2: "AES_256_WITH_DIFFUSER", 3: "AES_128", 4: "AES_256", 5: "HARDWARE_ENCRYPTION", 6: "XTS_AES_128", 7: "XTS_AES_256"}
-                
+                encryptionTypeMapping = {
+                    0: "None",
+                    1: "AES_128_WITH_DIFFUSER",
+                    2: "AES_256_WITH_DIFFUSER",
+                    3: "AES_128",
+                    4: "AES_256",
+                    5: "HARDWARE_ENCRYPTION",
+                    6: "XTS_AES_128",
+                    7: "XTS_AES_256_WITH_DIFFUSER"
+                }
+
                 try:
                     while True:
                         iWbemClassObject = iEnumWbemClassObject.Next(0xffffffff, 1)

@@ -1,7 +1,7 @@
 # PYTHON_ARGCOMPLETE_OK
 import sys
 from nxc.helpers.logger import highlight
-from nxc.helpers.misc import identify_target_file
+from nxc.helpers.misc import identify_target_file, display_modules
 from nxc.parsers.ip import parse_targets
 from nxc.parsers.nmap import parse_nmap_xml
 from nxc.parsers.nessus import parse_nessus_file
@@ -9,10 +9,10 @@ from nxc.cli import gen_cli_args
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.loaders.moduleloader import ModuleLoader
 from nxc.first_run import first_run_setup
-from nxc.paths import CONFIG_PATH, NXC_PATH, WORKSPACE_DIR
+from nxc.paths import NXC_PATH, WORKSPACE_DIR
 from nxc.console import nxc_console
 from nxc.logger import nxc_logger
-from nxc.config import nxc_config, nxc_workspace, config_log, ignore_opsec
+from nxc.config import nxc_config, nxc_workspace, config_log
 from nxc.database import create_db_engine
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
@@ -112,18 +112,21 @@ def main():
 
     if hasattr(args, "target") and args.target:
         for target in args.target:
-            if exists(target) and os.path.isfile(target):
-                target_file_type = identify_target_file(target)
-                if target_file_type == "nmap":
-                    targets.extend(parse_nmap_xml(target, args.protocol))
-                elif target_file_type == "nessus":
-                    targets.extend(parse_nessus_file(target, args.protocol))
+            try:
+                if exists(target) and os.path.isfile(target):
+                    target_file_type = identify_target_file(target)
+                    if target_file_type == "nmap":
+                        targets.extend(parse_nmap_xml(target, args.protocol))
+                    elif target_file_type == "nessus":
+                        targets.extend(parse_nessus_file(target, args.protocol))
+                    else:
+                        with open(target) as target_file:
+                            for target_entry in target_file:
+                                targets.extend(parse_targets(target_entry.strip()))
                 else:
-                    with open(target) as target_file:
-                        for target_entry in target_file:
-                            targets.extend(parse_targets(target_entry.strip()))
-            else:
-                targets.extend(parse_targets(target))
+                    targets.extend(parse_targets(target))
+            except Exception as e:
+                nxc_logger.fail(f"Failed to parse target '{target}': {e}")
 
     # The following is a quick hack for the powershell obfuscation functionality, I know this is yucky
     if hasattr(args, "clear_obfscripts") and args.clear_obfscripts:
@@ -157,19 +160,21 @@ def main():
     # with the new nxc/config.py this can be eventually removed, as it can be imported anywhere
     protocol_object.config = nxc_config
 
-    if args.module or args.list_modules:
+    if args.module or args.list_modules is not None:
         loader = ModuleLoader(args, db, nxc_logger)
         modules = loader.list_modules()
 
-    if args.list_modules:
+    if args.list_modules is not None:
+        low_privilege_modules = {m: props for m, props in modules.items() if args.protocol in props["supported_protocols"] and not props["requires_admin"]}
+        high_privilege_modules = {m: props for m, props in modules.items() if args.protocol in props["supported_protocols"] and props["requires_admin"]}
+
+        # List low privilege modules
         nxc_logger.highlight("LOW PRIVILEGE MODULES")
-        for name, props in sorted(modules.items()):
-            if args.protocol in props["supported_protocols"] and not props["requires_admin"]:
-                nxc_logger.display(f"{name:<25} {props['description']}")
+        display_modules(args, low_privilege_modules)
+
+        # List high privilege modules
         nxc_logger.highlight("\nHIGH PRIVILEGE MODULES (requires admin privs)")
-        for name, props in sorted(modules.items()):
-            if args.protocol in props["supported_protocols"] and props["requires_admin"]:
-                nxc_logger.display(f"{name:<25} {props['description']}")
+        display_modules(args, high_privilege_modules)
         exit(0)
     elif args.module and args.show_module_options:
         for module in args.module:
@@ -190,26 +195,12 @@ def main():
             nxc_logger.debug(f"Loading module for sanity check {m} at path {modules[m]['path']}")
             module = loader.init_module(modules[m]["path"])
 
-            if not module.opsec_safe:
-                if ignore_opsec:
-                    nxc_logger.debug("ignore_opsec is set in the configuration, skipping prompt")
-                    nxc_logger.display("Ignore OPSEC in configuration is set and OPSEC unsafe module loaded")
-                else:
-                    ans = input(highlight(f"[!] Module is not opsec safe, are you sure you want to run this? [Y/n] For global configuration, change ignore_opsec value to True on {CONFIG_PATH}", "red"))
-                    if ans.lower() not in ["y", "yes", ""]:
-                        exit(1)
-
-            if not module.multiple_hosts and len(targets) > 1:
-                ans = input(highlight("[!] Running this module on multiple hosts doesn't really make any sense, are you sure you want to continue? [Y/n] ", "red"))
-                if ans.lower() not in ["y", "yes", ""]:
-                    exit(1)
-
             # Add modules paths to the protocol object so it can load them itself
             proto_module_paths.append(modules[m]["path"])
         protocol_object.module_paths = proto_module_paths
 
-    if hasattr(args, "ntds") and args.ntds and not args.userntds:
-        ans = input(highlight("[!] Dumping the ntds can crash the DC on Windows Server 2019. Use the option --user <user> to dump a specific user safely or the module -M ntdsutil [Y/n] ", "red"))
+    if args.protocol == "rdp" and args.execute:
+        ans = input(highlight("[!] Executing remote command via RDP will disconnect the Windows session (not log off) if the targeted user is connected via RDP, do you want to continue ? [Y/n] ", "red"))
         if ans.lower() not in ["y", "yes", ""]:
             exit(1)
 

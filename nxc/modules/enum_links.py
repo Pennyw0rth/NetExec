@@ -1,3 +1,6 @@
+from nxc.helpers.misc import CATEGORY
+
+
 class NXCModule:
     """
     Enumerate SQL Server linked servers
@@ -7,8 +10,7 @@ class NXCModule:
     name = "enum_links"
     description = "Enumerate linked SQL Servers and their login configurations."
     supported_protocols = ["mssql"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     def __init__(self):
         self.mssql_conn = None
@@ -28,17 +30,17 @@ class NXCModule:
         else:
             self.context.log.fail("No linked servers found.")
 
-    def on_admin_login(self, context, connection):
-        res = self.mssql_conn.sql_query("EXEC sp_helplinkedsrvlogin")
-        srvs = [srv for srv in res if srv["Local Login"] != "NULL"]
-        if not srvs:
-            self.context.log.fail("No linked servers found.")
-            return
-        self.context.log.success("Linked servers found:")
-        for srv in srvs:
-            self.context.log.display(f"Linked server: {srv['Linked Server']}")
-            self.context.log.display(f"  - Local login: {srv['Local Login']}")
-            self.context.log.display(f"  - Remote login: {srv['Remote Login']}")
+        if connection.admin_privs:
+            res = self.mssql_conn.sql_query("EXEC sp_helplinkedsrvlogin")
+            srvs = [srv for srv in res if srv["Local Login"] != "NULL"]
+            if not srvs:
+                self.context.log.fail("No linked servers found.")
+                return
+            self.context.log.success("Linked servers found:")
+            for srv in srvs:
+                self.context.log.display(f"Linked server: {srv['Linked Server']}")
+                self.context.log.display(f"  - Local login: {srv['Local Login']}")
+                self.context.log.display(f"  - Remote login: {srv['Remote Login']}")
 
     def get_linked_servers(self) -> list:
         """

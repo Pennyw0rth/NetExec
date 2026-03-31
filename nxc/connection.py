@@ -1,9 +1,11 @@
+from datetime import datetime
+import os
 import random
 import sys
 import contextlib
 
 from os.path import isfile
-from threading import BoundedSemaphore
+from threading import BoundedSemaphore, Lock
 from functools import wraps
 from time import sleep
 from ipaddress import ip_address
@@ -15,12 +17,15 @@ from nxc.helpers.logger import highlight
 from nxc.loaders.moduleloader import ModuleLoader
 from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
+from nxc.paths import NXC_PATH
 from nxc.protocols.ldap.laps import laps_search
 from nxc.helpers.pfx import pfx_auth
 
 from impacket.dcerpc.v5 import transport
+from impacket.krb5.ccache import CCache
 
 sem = BoundedSemaphore(1)
+fail_lock = Lock()
 global_failed_logins = 0
 user_failed_logins = {}
 
@@ -132,11 +137,17 @@ class connection:
         self.db = db
         self.logger = nxc_logger
         self.conn = None
+        self.output_file_template = None
+        self.output_filename = None
 
         # Authentication info
         self.password = ""
         self.username = ""
-        self.kerberos = bool(self.args.kerberos or self.args.use_kcache or self.args.aesKey or (hasattr(self.args, "delegate") and self.args.delegate))
+        self.kerberos = bool(self.args.kerberos or
+                             self.args.use_kcache or
+                             self.args.aesKey or
+                             (hasattr(self.args, "delegate") and self.args.delegate) or
+                             (hasattr(self.args, "no_preauth_targets") and self.args.no_preauth_targets))
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
         self.admin_privs = False
@@ -166,6 +177,8 @@ class connection:
 
         try:
             self.proto_flow()
+        except FileNotFoundError as e:
+            self.logger.error(f"File not found error on target {target}: {e}")
         except Exception as e:
             if "ERROR_DEPENDENT_SERVICES_RUNNING" in str(e):
                 self.logger.error(f"Exception while calling proto_flow() on target {target}: {e}")
@@ -231,6 +244,14 @@ class connection:
         else:
             self.logger.debug("Created connection object")
             self.enum_host_info()
+
+            # Construct the output file template using os.path.join for OS compatibility
+            base_log_dir = os.path.join(NXC_PATH, "logs")
+            filename_pattern = f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
+            self.output_file_template = os.path.join(base_log_dir, "{output_folder}", filename_pattern)
+            # Default output filename for logs
+            self.output_filename = os.path.join(base_log_dir, filename_pattern)
+
             self.print_host_info()
             if self.login() or (self.username == "" and self.password == ""):
                 if hasattr(self.args, "module") and self.args.module:
@@ -295,26 +316,28 @@ class connection:
     def inc_failed_login(self, username):
         global global_failed_logins, user_failed_logins
 
-        if username not in user_failed_logins:
-            user_failed_logins[username] = 0
+        with fail_lock:
+            if username not in user_failed_logins:
+                user_failed_logins[username] = 0
 
-        user_failed_logins[username] += 1
-        global_failed_logins += 1
-        self.failed_logins += 1
+            user_failed_logins[username] += 1
+            global_failed_logins += 1
+            self.failed_logins += 1
 
     def over_fail_limit(self, username):
         global global_failed_logins, user_failed_logins
 
-        if global_failed_logins == self.args.gfail_limit:
-            return True
+        with fail_lock:
+            if global_failed_logins == self.args.gfail_limit:
+                return True
 
-        if self.failed_logins == self.args.fail_limit:
-            return True
+            if self.failed_logins == self.args.fail_limit:
+                return True
 
-        if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:  # noqa: SIM103
-            return True
+            if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:  # noqa: SIM103
+                return True
 
-        return False
+            return False
 
     def query_db_creds(self):
         """Queries the database for credentials to be used for authentication.
@@ -461,8 +484,6 @@ class connection:
             - NTLM-hash (/kerberos)
             - AES-key
         """
-        if self.over_fail_limit(username):
-            return False
         if self.args.continue_on_success and owned:
             return False
 
@@ -478,6 +499,8 @@ class connection:
             sleep(value)
 
         with sem:
+            if self.over_fail_limit(username):
+                return False
             if cred_type == "plaintext":
                 if self.kerberos:
                     self.logger.debug("Trying to authenticate using Kerberos")
@@ -533,7 +556,7 @@ class connection:
         if self.args.use_kcache:
             self.logger.debug("Trying to authenticate using Kerberos cache")
             with sem:
-                username = self.args.username[0] if len(self.args.username) else ""
+                username = self.args.username[0] if len(self.args.username) else CCache.parseFile()[1]
                 password = self.args.password[0] if len(self.args.password) else ""
                 self.kerberos_login(self.domain, username, password, "", "", self.kdcHost, True)
                 self.logger.info("Successfully authenticated using Kerberos cache")

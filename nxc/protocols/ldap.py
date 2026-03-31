@@ -2,7 +2,9 @@
 # https://troopers.de/downloads/troopers19/TROOPERS19_AD_Fun_With_LDAP.pdf
 import hashlib
 import hmac
+import json
 import os
+import socket
 from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
 from binascii import hexlify
 from datetime import datetime
@@ -10,11 +12,13 @@ from re import sub, IGNORECASE
 from zipfile import ZipFile
 from termcolor import colored
 from dns import resolver
+from dateutil.relativedelta import relativedelta as rd
 
 from Cryptodome.Hash import MD4
 from OpenSSL.SSL import SysCallError
 from bloodhound.ad.authentication import ADAuthentication
 from bloodhound.ad.domain import AD
+from certihound import ADCSCollector, BloodHoundCEExporter, ImpacketLDAPAdapter
 from impacket.dcerpc.v5.samr import (
     UF_ACCOUNTDISABLE,
     UF_DONT_REQUIRE_PREAUTH,
@@ -37,14 +41,14 @@ from impacket.ntlm import getNTLMSSPType1
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
-from nxc.logger import NXCAdapter, nxc_logger
-from nxc.protocols.ldap.bloodhound import BloodHound
+from nxc.helpers.misc import get_bloodhound_info, convert, d2b
+from nxc.logger import NXCAdapter
+from nxc.protocols.ldap.bloodhound import BloodHound, resolve_collection_methods
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.ntlm_parser import parse_challenge
-from nxc.helpers.misc import get_bloodhound_info
-from nxc.paths import CONFIG_PATH, NXC_PATH
+from nxc.paths import CONFIG_PATH
 
 ldap_error_status = {
     "1": "STATUS_NOT_SUPPORTED",
@@ -62,77 +66,6 @@ ldap_error_status = {
 }
 
 
-def resolve_collection_methods(methods):
-    """Convert methods (string) to list of validated methods to resolve"""
-    valid_methods = [
-        "group",
-        "localadmin",
-        "session",
-        "trusts",
-        "default",
-        "all",
-        "loggedon",
-        "objectprops",
-        "experimental",
-        "acl",
-        "dcom",
-        "rdp",
-        "psremote",
-        "dconly",
-        "container",
-    ]
-    default_methods = ["group", "localadmin", "session", "trusts"]
-    # Similar to SharpHound, All is not really all, it excludes loggedon
-    all_methods = [
-        "group",
-        "localadmin",
-        "session",
-        "trusts",
-        "objectprops",
-        "acl",
-        "dcom",
-        "rdp",
-        "psremote",
-        "container",
-    ]
-    # DC only, does not collect to computers
-    dconly_methods = ["group", "trusts", "objectprops", "acl", "container"]
-    if "," in methods:
-        method_list = [method.lower() for method in methods.split(",")]
-        validated_methods = []
-        for method in method_list:
-            if method not in valid_methods:
-                nxc_logger.error("Invalid collection method specified: %s", method)
-                return False
-
-            if method == "default":
-                validated_methods += default_methods
-            elif method == "all":
-                validated_methods += all_methods
-            elif method == "dconly":
-                validated_methods += dconly_methods
-            else:
-                validated_methods.append(method)
-        return set(validated_methods)
-    else:
-        validated_methods = []
-        # It is only one
-        method = methods.lower()
-        if method in valid_methods:
-            if method == "default":
-                validated_methods += default_methods
-            elif method == "all":
-                validated_methods += all_methods
-            elif method == "dconly":
-                validated_methods += dconly_methods
-            else:
-                validated_methods.append(method)
-            return set(validated_methods)
-        else:
-            nxc_logger.error("Invalid collection method specified: %s", method)
-            return False
-
-
 class ldap(connection):
     def __init__(self, args, db, host):
         self.domain = None
@@ -143,19 +76,19 @@ class ldap(connection):
         self.lmhash = ""
         self.nthash = ""
         self.baseDN = ""
+        self.forestDN = ""
         self.target = ""
         self.targetDomain = ""
         self.remote_ops = None
         self.bootkey = None
-        self.output_filename = None
-        self.smbv1 = None
-        self.signing = False
         self.signing_required = None
         self.cbt_status = None
+        self.auth_choice = "sasl" if not args.simple_bind else "simple"
         self.admin_privs = False
         self.no_ntlm = False
         self.sid_domain = ""
         self.scope = None
+        self.configuration_context = ""
 
         connection.__init__(self, args, db, host)
 
@@ -170,55 +103,33 @@ class ldap(connection):
         )
 
     def create_conn_obj(self):
-        target = ""
-        target_domain = ""
-        base_dn = ""
         try:
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.host}"
             self.logger.info(f"Connecting to {ldap_url} with no baseDN")
-            try:
-                self.ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.host)
-                if self.ldap_connection:
-                    self.logger.debug(f"ldap_connection: {self.ldap_connection}")
-            except SysCallError as e:
-                if proto == "ldaps":
-                    self.logger.fail(f"LDAPs connection to {ldap_url} failed - {e}")
-                    # https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/enable-ldap-over-ssl-3rd-certification-authority
-                    self.logger.fail("Even if the port is open, LDAPS may not be configured")
-                else:
-                    self.logger.fail(f"LDAP connection to {ldap_url} failed: {e}")
-                return False
 
-            resp = self.ldap_connection.search(
-                scope=ldapasn1_impacket.Scope("baseObject"),
-                attributes=["defaultNamingContext", "dnsHostName"],
-                sizeLimit=0,
-            )
-            resp_parsed = parse_result_attributes(resp)[0]
-
-            target = resp_parsed["dnsHostName"]
-            base_dn = resp_parsed["defaultNamingContext"]
-            target_domain = sub(
-                r",DC=",
-                ".",
-                base_dn[base_dn.lower().find("dc="):],
-                flags=IGNORECASE,
-            )[3:]
+            self.ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.host)
+            if self.ldap_connection:
+                self.logger.debug(f"ldap_connection: {self.ldap_connection}")
+        except SysCallError as e:
+            if proto == "ldaps":
+                self.logger.fail(f"LDAPs connection to {ldap_url} failed - {e}")
+                # https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/enable-ldap-over-ssl-3rd-certification-authority
+                self.logger.fail("Even if the port is open, LDAPS may not be configured")
+            else:
+                self.logger.fail(f"LDAP connection to {ldap_url} failed: {e}")
+            return False
         except ConnectionRefusedError as e:
             self.logger.debug(f"{e} on host {self.host}")
             return False
         except OSError as e:
             if e.errno in (EHOSTUNREACH, ENETUNREACH, ETIMEDOUT):
-                self.logger.info(f"Error connecting to {self.host} - {e}")
+                self.logger.info(f"Error connecting to {self.host}: {e}")
                 return False
             else:
-                self.logger.error(f"Error getting ldap info {e}")
+                self.logger.error(f"Error connecting to {self.host}: {e}")
+                return False
 
-        self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
-        self.target = target
-        self.targetDomain = target_domain
-        self.baseDN = base_dn
         return True
 
     def get_ldap_username(self):
@@ -254,7 +165,7 @@ class ldap(connection):
         ldap_url = f"ldaps://{self.target}"
         try:
             ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-            ldap_connection._LDAPConnection__channel_binding_value = None
+            ldap_connection.channel_binding_value = None
             ldap_connection.login(user=" ", domain=self.domain)
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("data 80090346") >= 0:
@@ -263,9 +174,9 @@ class ldap(connection):
             # Login failed (wrong credentials). test if we get an error with an existing, but wrong CBT -> When supported
             elif str(e).find("data 52e") >= 0:
                 ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-                new_cbv = bytearray(ldap_connection._LDAPConnection__channel_binding_value)
+                new_cbv = bytearray(ldap_connection.channel_binding_value)
                 new_cbv[15] = (new_cbv[3] + 1) % 256
-                ldap_connection._LDAPConnection__channel_binding_value = bytes(new_cbv)
+                ldap_connection.channel_binding_value = bytes(new_cbv)
                 try:
                     ldap_connection.login(user=" ", domain=self.domain)
                 except ldap_impacket.LDAPSessionError as e:
@@ -276,15 +187,47 @@ class ldap(connection):
                 self.logger.debug(f"LDAPSessionError while checking for channel binding requirements (likely NTLM disabled): {e!s}")
         except SysCallError as e:
             self.logger.debug(f"Received SysCallError when trying to enumerate channel binding support: {e!s}")
-            if e.args[1] == "ECONNRESET":
+            if e.args[1] in ["ECONNRESET", "WSAECONNRESET", "Unexpected EOF"]:
                 self.cbt_status = "No TLS cert"
             else:
                 raise
 
     def enum_host_info(self):
+        # Enumerate LDAP info
+        target = ""
+        target_domain = ""
+        base_dn = ""
+        try:
+            resp = self.ldap_connection.search(
+                scope=ldapasn1_impacket.Scope("baseObject"),
+                attributes=["dnsHostName", "defaultNamingContext", "configurationNamingContext", "rootDomainNamingContext"],
+                sizeLimit=0,
+            )
+            resp_parsed = parse_result_attributes(resp)[0]
+
+            self.configuration_context = resp_parsed["configurationNamingContext"]
+            self.forestDN = resp_parsed["rootDomainNamingContext"]
+            target = resp_parsed["dnsHostName"]
+            base_dn = resp_parsed["defaultNamingContext"]
+            target_domain = sub(
+                r",DC=",
+                ".",
+                base_dn[base_dn.lower().find("dc="):],
+                flags=IGNORECASE,
+            )[3:]
+        except Exception as e:
+            self.logger.fail(f"Failed to enumerate host info for {self.host}, error: {e!s}")
+
+        self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
+        self.target = target
+        self.targetDomain = target_domain
+        self.baseDN = base_dn
+
+        # Parse hostname and remoteName
         self.hostname = self.target.split(".")[0].upper() if "." in self.target else self.target
         self.remoteName = self.target
 
+        # Parse NTLM challenge
         ntlm_challenge = None
         bindRequest = ldapasn1_impacket.BindRequest()
         bindRequest["version"] = 3
@@ -307,12 +250,14 @@ class ldap(connection):
             self.domain = self.args.domain
         elif self.args.use_kcache:  # Fixing domain trust, just pull the auth domain out of the ticket
             self.domain = CCache.parseFile()[0]
-            self.username = CCache.parseFile()[1]
         else:
             self.domain = self.targetDomain
 
         self.check_ldap_signing()
-        self.check_ldaps_cbt()
+        if getattr(self.args, "port_explicitly_set", False) and self.port == 389:
+            self.cbt_status = "Unknown"
+        else:
+            self.check_ldaps_cbt()
 
         # using kdcHost is buggy on impacket when using trust relation between ad so we kdcHost must stay to none if targetdomain is not equal to domain
         if not self.kdcHost and self.domain and self.domain == self.targetDomain:
@@ -320,14 +265,14 @@ class ldap(connection):
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
-        self.output_filename = os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}".replace(":", "-"))
-
         try:
             self.db.add_host(
                 self.host,
                 self.hostname,
                 self.domain,
-                self.server_os
+                self.server_os,
+                self.signing_required,
+                self.cbt_status
             )
         except Exception as e:
             self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
@@ -344,7 +289,11 @@ class ldap(connection):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({cbt_status}) {ntlm}")
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
-        self.username = username if not self.username else self.username    # With ccache we get the username from the ticket
+        if self.auth_choice == "simple":
+            self.logger.fail("Simple bind and Kerberos authentication are mutually exclusive.")
+            return False
+
+        self.username = username
         self.password = password
         self.domain = domain
         self.kdcHost = kdcHost
@@ -399,7 +348,7 @@ class ldap(connection):
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             self.logger.success(f"{domain}\\{self.username}{used_ccache} {self.mark_pwned()}")
 
-            if not self.args.local_auth and self.username != "":
+            if self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -410,7 +359,11 @@ class ldap(connection):
                 f"{domain}\\{self.username}{' account vulnerable to asreproast attack'} {''}",
                 color="yellow",
             )
-            return False
+            # If no preauth is set, we want to be able to execute commands such as --kerberoasting
+            if self.args.no_preauth_targets:  # noqa: SIM103
+                return True
+            else:
+                return False
         except SessionError as e:
             error, desc = e.getErrorString()
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
@@ -427,6 +380,8 @@ class ldap(connection):
             return False
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("strongerAuthRequired") >= 0:
+                # This should actually not happen anymore as impacket now supports LDAP signing/sealing via GSSAPI
+                self.logger.error("StrongerAuthRequired Error on login: This should not happen anymore, please contact the devs and open an issue on github!")
                 # We need to try SSL
                 try:
                     # Connect to LDAPS
@@ -452,7 +407,7 @@ class ldap(connection):
                     # Prepare success credential text
                     self.logger.success(f"{domain}\\{self.username} {self.mark_pwned()}")
 
-                    if not self.args.local_auth and self.username != "":
+                    if self.username != "":
                         add_user_bh(self.username, self.domain, self.logger, self.config)
                     if self.admin_privs:
                         add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -499,8 +454,8 @@ class ldap(connection):
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3]")
-            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
-            self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
+            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=self.auth_choice != "simple")
+            self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=self.auth_choice)
             self.check_if_admin()
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
             self.db.add_credential("plaintext", domain, self.username, self.password)
@@ -508,13 +463,18 @@ class ldap(connection):
             # Prepare success credential text
             self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
 
-            if not self.args.local_auth and self.username != "":
+            if self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("strongerAuthRequired") >= 0:
+                # This should actually not happen anymore as impacket now supports LDAP signing/sealing via GSSAPI
+                if self.args.simple_bind:
+                    self.logger.fail("StrongerAuthRequired error on login: SIMPLE bind cannot work with signing/sealing enforced. Falling back to LDAPS.")
+                else:
+                    self.logger.error("StrongerAuthRequired error on login: This should not happen anymore, please contact the devs and open an issue on github!")
                 # We need to try SSL
                 try:
                     # Connect to LDAPS
@@ -524,7 +484,7 @@ class ldap(connection):
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [4]")
                     self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
-                    self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
+                    self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=self.auth_choice)
                     self.check_if_admin()
                     self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
                     self.db.add_credential("plaintext", domain, self.username, self.password)
@@ -532,7 +492,7 @@ class ldap(connection):
                     # Prepare success credential text
                     self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
 
-                    if not self.args.local_auth and self.username != "":
+                    if self.username != "":
                         add_user_bh(self.username, self.domain, self.logger, self.config)
                     if self.admin_privs:
                         add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -600,13 +560,15 @@ class ldap(connection):
             out = f"{domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}"
             self.logger.success(out)
 
-            if not self.args.local_auth and self.username != "":
+            if self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("strongerAuthRequired") >= 0:
+                # This should actually not happen anymore as impacket now supports LDAP signing/sealing via GSSAPI
+                self.logger.error("StrongerAuthRequired error on login: This should not happen anymore, please contact the devs and open an issue on github!")
                 try:
                     # We need to try SSL
                     self.logger.extra["protocol"] = "LDAPS"
@@ -624,7 +586,7 @@ class ldap(connection):
                     out = f"{domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}"
                     self.logger.success(out)
 
-                    if not self.args.local_auth and self.username != "":
+                    if self.username != "":
                         add_user_bh(self.username, self.domain, self.logger, self.config)
                     if self.admin_privs:
                         add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
@@ -651,30 +613,37 @@ class ldap(connection):
 
     def check_if_admin(self):
         # 1. get SID of the domaine
-        search_filter = "(userAccountControl:1.2.840.113556.1.4.803:=8192)"
+        search_filter = f"(userAccountControl:1.2.840.113556.1.4.803:={UF_SERVER_TRUST_ACCOUNT})"
         attributes = ["objectSid"]
-        resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
+        resp = self.search(search_filter, attributes, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
-        answers = []
-        if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "") and self.username != "":
+
+        if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "" or self.use_kcache) and self.username != "":
             for item in resp_parsed:
                 self.sid_domain = "-".join(item["objectSid"].split("-")[:-1])
 
             # 2. get all group cn name
-            search_filter = f"(|(objectSid={self.sid_domain}-512)(objectSid={self.sid_domain}-544)(objectSid={self.sid_domain}-519)(objectSid=S-1-5-32-549)(objectSid=S-1-5-32-551))"
+            search_filter = (f"(|(objectSid={self.sid_domain}-512)"
+                             f"(objectSid={self.sid_domain}-519)"
+                             f"(objectSid={self.sid_domain}-544)"
+                             "(objectSid=S-1-5-32-549)"
+                             "(objectSid=S-1-5-32-551))")
             attributes = ["distinguishedName"]
-            resp = self.search(search_filter, attributes, sizeLimit=0, baseDN=self.baseDN)
+            resp = self.search(search_filter, attributes, baseDN=self.baseDN)
             resp_parsed = parse_result_attributes(resp)
-            answers = []
-            for item in resp_parsed:
-                answers.append(f"(memberOf:1.2.840.113556.1.4.1941:={item['distinguishedName']})")
+            answers = [f"(memberOf:1.2.840.113556.1.4.1941:={item['distinguishedName']})" for item in resp_parsed]
             if len(answers) == 0:
                 self.logger.debug("No groups with default privileged RID were found. Assuming user is not a Domain Administrator.")
                 return
 
-            # 3. get member of these groups
+            # 3. Build a filter to query if the primaryGroupID is one of these groups
+            group_ids = ["512", "519", "544", "549", "551"]
+            primaryGroupID_filters = [f"(primaryGroupID={group_id})" for group_id in group_ids]
+            answers.extend(primaryGroupID_filters)
+
+            # 4. Check if the user is member of one of these groups OR has one of these primaryGroupID
             search_filter = f"(&(objectCategory=user)(sAMAccountName={self.username})(|{''.join(answers)}))"
-            resp = self.search(search_filter, attributes=[], sizeLimit=0, baseDN=self.baseDN)
+            resp = self.search(search_filter, attributes=[], baseDN=self.baseDN)
             resp_parsed = parse_result_attributes(resp)
             for item in resp_parsed:
                 if item:
@@ -685,7 +654,7 @@ class ldap(connection):
         t /= 10000000
         return t
 
-    def search(self, searchFilter, attributes, sizeLimit=0, baseDN=None) -> list:
+    def search(self, searchFilter, attributes, sizeLimit=0, baseDN=None, searchControls=None) -> list:
         if baseDN is None and self.args.base_dn is not None:
             baseDN = self.args.base_dn
         elif baseDN is None:
@@ -703,7 +672,7 @@ class ldap(connection):
                     searchFilter=searchFilter,
                     attributes=attributes,
                     sizeLimit=sizeLimit,
-                    searchControls=paged_search_control,
+                    searchControls=searchControls if searchControls else paged_search_control,
                 )
         except ldap_impacket.LDAPSearchError as e:
             if "sizeLimitExceeded" in str(e):
@@ -769,56 +738,67 @@ class ldap(connection):
         # Building the search filter
         if self.args.groups:
             self.logger.debug(f"Dumping group: {self.args.groups}")
-            search_filter = f"(cn={self.args.groups})"
-            attributes = ["member"]
+
+            # Resolve group DN and primaryGroupID (objectSid)
+            group_resp = self.search(f"(cn={self.args.groups})", ["distinguishedName", "objectSid"])
+            group_parsed = parse_result_attributes(group_resp)
+
+            if not group_parsed:
+                self.logger.fail(f"Group '{self.args.groups}' not found")
+                return
+            else:
+                group = group_parsed[0]
+
+            # Search filter: user must have membership OR primaryGroupID
+            search_filter = f"(|(memberOf={group['distinguishedName']})(primaryGroupID={group['objectSid'].split('-')[-1]}))"
+            attributes = ["sAMAccountName", "distinguishedName", "cn", "objectClass"]
+
         else:
             search_filter = "(objectCategory=group)"
-            attributes = ["cn", "member"]
-        resp = self.search(search_filter, attributes, 0)
+            attributes = ["cn", "member", "description"]
+
+        resp = self.search(search_filter, attributes)
         resp_parsed = parse_result_attributes(resp)
         self.logger.debug(f"Total of records returned {len(resp_parsed)}")
 
         if self.args.groups:
+            # Display group members
             if not resp_parsed:
-                self.logger.fail(f"Group {self.args.groups} not found")
-            elif not resp_parsed[0]:
-                self.logger.fail(f"Group {self.args.groups} has no members")
+                self.logger.fail(f"Group '{self.args.groups}' has no members")
             else:
-                # Fix if group has only one member
-                if not isinstance(resp_parsed[0]["member"], list):
-                    resp_parsed[0]["member"] = [resp_parsed[0]["member"]]
-                for user in resp_parsed[0]["member"]:
-                    self.logger.highlight(user.split(",")[0].split("=")[1])
+                for item in resp_parsed:
+                    # Display sAMAccountName or CN if sAMAccountName not present (could be a group)
+                    self.logger.highlight(item["sAMAccountName"] if "group" not in item["objectClass"] else item["cn"])
         else:
+            # Display all groups
+            self.logger.highlight(f"{'-Group-':<40} {'-Members-':<9} {'-Description-':<60}")
             for item in resp_parsed:
                 try:
                     # Fix if group has only one member
                     if not isinstance(item.get("member", []), list):
                         item["member"] = [item["member"]]
-                    self.logger.highlight(f"{item['cn']:<40} membercount: {len(item.get('member', []))}")
+                    self.logger.highlight(f"{item['cn']:<40} {len(item.get('member', [])):<9} {item.get('description', '')}")
                 except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
 
     def computers(self):
-        resp = self.search(f"(sAMAccountType={SAM_MACHINE_ACCOUNT})", ["name"], 0)
+        resp = self.search(f"(sAMAccountType={SAM_MACHINE_ACCOUNT})", ["sAMAccountName"])
         resp_parsed = parse_result_attributes(resp)
 
         if resp:
             self.logger.display(f"Total records returned: {len(resp_parsed)}")
             for item in resp_parsed:
-                self.logger.highlight(item["name"] + "$")
+                self.logger.highlight(item["sAMAccountName"])
 
     def dc_list(self):
-        # Building the search filter
-        resolv = resolver.Resolver()
-        if self.args.dns_server:
-            resolv.nameservers = [self.args.dns_server]
-        else:
-            resolv.nameservers = [self.host]
+        # bypass host resolver configuration via configure=False (default pulls from /etc/resolv.conf or registry on Windows)
+        resolv = resolver.Resolver(configure=False)
+        ns = self.args.dns_server or self.host
+        resolv.nameservers = [socket.gethostbyname(ns)]
+        self.logger.debug(f"DNS Server option: {self.args.dns_server}, using DNS server: {resolv.nameservers}")
         resolv.timeout = self.args.dns_timeout
 
-        # Function to resolve and display hostnames
         def resolve_and_display_hostname(name, domain_name=None):
             prefix = f"[{domain_name}] " if domain_name else ""
             try:
@@ -841,13 +821,15 @@ class ldap(connection):
                                 self.logger.highlight(f"{prefix}{name} NS = {colored(rdata.to_text(), host_info_colors[0])}")
                                 return
                     except resolver.NXDOMAIN:
-                        self.logger.fail(f"{prefix}{name} = Host not found (NXDOMAIN)")
+                        self.logger.fail(f"{prefix}{name} ({record_type}) = Host not found (NXDOMAIN)")
                     except resolver.Timeout:
-                        self.logger.fail(f"{prefix}{name} = Connection timed out")
+                        self.logger.fail(f"{prefix}{name} ({record_type}) = Connection timed out")
                     except resolver.NoAnswer:
-                        self.logger.fail(f"{prefix}{name} = DNS server did not respond")
+                        self.logger.fail(f"{prefix}{name} ({record_type}) = DNS server did not respond")
+                    except resolver.NoNameservers:
+                        self.logger.fail(f"{prefix}{name} ({record_type}) = No nameservers available")
                     except Exception as e:
-                        self.logger.fail(f"{prefix}{name} encountered an unexpected error: {e}")
+                        self.logger.fail(f"{prefix}{name} ({record_type}) encountered an unexpected error: {e}")
             except Exception as e:
                 self.logger.fail(f"Skipping item(dNSHostName) {prefix}{name}, error: {e}")
 
@@ -982,8 +964,67 @@ class ldap(connection):
                         hash_asreproast.write(f"{hash_TGT}\n")
 
     def kerberoasting(self):
-        # Building the search filter
-        searchFilter = "(&(servicePrincipalName=*)(!(objectCategory=computer)))"
+        if self.args.no_preauth_targets:
+            usernames = []
+            for item in self.args.no_preauth_targets:
+                if os.path.isfile(item):
+                    with open(item, encoding="utf-8") as f:
+                        usernames.extend(line.strip() for line in f if line.strip())
+                else:
+                    usernames.append(item.strip())
+
+            skipped = []
+            hashes = []
+
+            for spn in usernames:
+                base_name = spn.split("/", 1)[0].split("@", 1)[0].rstrip()
+
+                if base_name.lower() == "krbtgt" or base_name.endswith("$"):
+                    skipped.append(base_name)
+                    continue
+
+                if not self.username:
+                    self.logger.fail("Likely executed without password flag. Please run the command with -p ''")
+                    return
+                hashline = KerberosAttacks(self).get_tgs_no_preauth(self.username, spn)
+                if hashline:
+                    hashes.append(hashline)
+
+            if skipped:
+                self.logger.display(f"Skipping account: {', '.join(skipped)}")
+            if hashes:
+                self.logger.display(f"Total of records returned {len(hashes)}")
+            else:
+                self.logger.highlight("No entries found!")
+
+            for line in hashes:
+                self.logger.highlight(line)
+                if self.args.kerberoasting:
+                    with open(self.args.kerberoasting, "a+", encoding="utf-8") as f:
+                        f.write(line + "\n")
+            return
+
+        if self.args.kerberoast_account:
+            target_accounts = []
+            for item in self.args.kerberoast_account:
+                if os.path.isfile(item):
+                    try:
+                        with open(item, encoding="utf-8") as f:
+                            target_accounts.extend(line.strip() for line in f if line.strip())
+                    except Exception as e:
+                        self.logger.fail(f"Failed to read file '{item}': {e}")
+                else:
+                    target_accounts.append(item.strip())
+
+            self.logger.info(f"Targeting specific accounts for kerberoasting: {', '.join(target_accounts)}")
+
+            # build search filter for specific users
+            user_filter = "".join([f"(sAMAccountName={username})" for username in target_accounts])
+            searchFilter = f"(&(servicePrincipalName=*)(|{user_filter}))"
+        else:
+            # default to all
+            searchFilter = "(&(servicePrincipalName=*)(!(objectCategory=computer)))"
+
         attributes = [
             "sAMAccountName",
             "userAccountControl",
@@ -991,6 +1032,7 @@ class ldap(connection):
             "MemberOf",
             "pwdLastSet",
             "lastLogon",
+            "objectClass",
         ]
         resp = self.search(searchFilter, attributes, 0)
         resp_parsed = parse_result_attributes(resp)
@@ -1035,6 +1077,7 @@ class ldap(connection):
                             sessionKey,
                             user["sAMAccountName"],
                             downLevelLogonName,
+                            is_computer="computer" in user.get("objectClass", [])
                         )
 
                         pwdLastSet = "<never>" if str(user.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(user["pwdLastSet"]))))
@@ -1203,7 +1246,7 @@ class ldap(connection):
             "sAMAccountName",
             "userAccountControl",
         ]
-        resp = self.search(searchFilter, attributes, sizeLimit=0, baseDN=self.baseDN)
+        resp = self.search(searchFilter, attributes, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
         self.logger.debug(f"Total of records returned {len(resp_parsed):d}")
 
@@ -1229,15 +1272,13 @@ class ldap(connection):
     def gmsa(self):
         self.logger.display("Getting GMSA Passwords")
         search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
-        gmsa_accounts = self.ldap_connection.search(
-            searchBase=self.baseDN,
+        gmsa_accounts = self.search(
             searchFilter=search_filter,
             attributes=[
                 "sAMAccountName",
                 "msDS-ManagedPassword",
                 "msDS-GroupMSAMembership",
             ],
-            sizeLimit=0,
         )
         gmsa_accounts_parsed = parse_result_attributes(gmsa_accounts)
         if gmsa_accounts_parsed:
@@ -1348,10 +1389,187 @@ class ldap(connection):
         else:
             self.logger.fail("No string provided :'(")
 
+    def pso(self):
+        """
+        Get the Fine Grained Password Policy/PSOs
+        Initial FGPP/PSO script written by @n00py: https://github.com/n00py/GetFGPP
+        """
+        # Convert LDAP time to human readable format
+        def pso_days(ldap_time):
+            return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).days} days"
+
+        def pso_mins(ldap_time):
+            return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).minutes} minutes"
+
+        # Are there even any FGPPs?
+        self.logger.info("Attempting to enumerate policies...")
+        resp = self.search(searchFilter="(objectclass=*)", baseDN=f"CN=Password Settings Container,CN=System,{self.baseDN}", attributes=[])
+        if len(resp) > 1:
+            self.logger.highlight(f"{len(resp) - 1} PSO Objects found!")
+            self.logger.highlight("")
+            self.logger.success("Attempting to enumerate objects with an applied policy...")
+
+        # Who do they apply to?
+        resp = self.search(searchFilter="(objectclass=*)", attributes=["DistinguishedName", "msDS-PSOApplied"])
+        resp_parsed = parse_result_attributes(resp)
+        for attrs in resp_parsed:
+            if "msDS-PSOApplied" in attrs:
+                # Get the distinguished name from the original response for objectName
+                for orig_resp in resp:
+                    if isinstance(orig_resp, ldapasn1_impacket.SearchResultEntry):
+                        self.logger.highlight(f"Object: {orig_resp['objectName']}")
+                        break
+                self.logger.highlight("Applied Policy: ")
+                pso_applied = attrs["msDS-PSOApplied"]
+                self.logger.highlight(f"\t{pso_applied}")
+                self.logger.highlight("")
+
+        # Let's find out even more details!
+        self.logger.info("Attempting to enumerate details...\n")
+        resp = self.search(searchFilter="(objectclass=msDS-PasswordSettings)",
+                           attributes=["name", "msds-lockoutthreshold", "msds-psoappliesto", "msds-minimumpasswordlength",
+                                       "msds-passwordhistorylength", "msds-lockoutobservationwindow", "msds-lockoutduration",
+                                       "msds-passwordsettingsprecedence", "msds-passwordcomplexityenabled", "Description",
+                                       "msds-passwordreversibleencryptionenabled", "msds-minimumpasswordage", "msds-maximumpasswordage"])
+        resp_parsed = parse_result_attributes(resp)
+        for attrs in resp_parsed:
+            policyName = attrs.get("name", "")
+            description = attrs.get("description", "")
+            passwordLength = attrs.get("msDS-MinimumPasswordLength", "")
+            passwordhistorylength = attrs.get("msDS-PasswordHistoryLength", "")
+            lockoutThreshold = attrs.get("msDS-LockoutThreshold", "")
+            observationWindow = attrs.get("msDS-LockoutObservationWindow", "")
+            lockoutDuration = attrs.get("msDS-LockoutDuration", "")
+            complexity = attrs.get("msDS-PasswordComplexityEnabled", "")
+            minPassAge = attrs.get("msDS-MinimumPasswordAge", "")
+            maxPassAge = attrs.get("msDS-MaximumPasswordAge", "")
+            reverseibleEncryption = attrs.get("msDS-PasswordReversibleEncryptionEnabled", "")
+            precedence = attrs.get("msDS-PasswordSettingsPrecedence", "")
+            policyApplies = attrs.get("msDS-PSOAppliesTo", "")
+
+            self.logger.highlight(f"Policy Name: {policyName}")
+            if description:
+                self.logger.highlight(f"Description: {description}")
+            self.logger.highlight(f"Minimum Password Length: {passwordLength}")
+            self.logger.highlight(f"Minimum Password History Length: {passwordhistorylength}")
+            self.logger.highlight(f"Lockout Threshold: {lockoutThreshold}")
+            self.logger.highlight(f"Observation Window: {pso_mins(observationWindow)}")
+            self.logger.highlight(f"Lockout Duration: {pso_mins(lockoutDuration)}")
+            self.logger.highlight(f"Complexity Enabled: {complexity}")
+            self.logger.highlight(f"Minimum Password Age: {pso_days(minPassAge)}")
+            self.logger.highlight(f"Maximum Password Age: {pso_days(maxPassAge)}")
+            self.logger.highlight(f"Reversible Encryption: {reverseibleEncryption}")
+            self.logger.highlight(f"Precedence: {precedence} (Lower is Higher Priority)")
+            self.logger.highlight("Policy Applies to:")
+            if isinstance(policyApplies, list):
+                for value in policyApplies:
+                    if value:
+                        self.logger.highlight(f"\t{value}")
+            elif policyApplies:
+                self.logger.highlight(f"\t{policyApplies}")
+            self.logger.highlight("")
+
+    def pass_pol(self):
+        search_filter = "(objectClass=domainDNS)"
+        attributes = [
+            "minPwdLength",
+            "pwdHistoryLength",
+            "maxPwdAge",
+            "minPwdAge",
+            "lockoutThreshold",
+            "lockoutDuration",
+            "lockOutObservationWindow",
+            "forceLogoff",
+            "pwdProperties"
+        ]
+
+        resp = self.search(search_filter, attributes, baseDN=self.baseDN)
+        resp_parsed = parse_result_attributes(resp)
+
+        if not resp_parsed:
+            self.logger.fail("No domain password policy found!")
+            return
+
+        for policy in resp_parsed:
+            def ldap_to_filetime(ldap_time):
+                """Convert LDAP time to FILETIME format for convert function"""
+                if not ldap_time or ldap_time == "0":
+                    return 0, 0
+
+                time_int = int(ldap_time)
+                if time_int < 0:
+                    time_int = abs(time_int)
+
+                low = time_int & 0xFFFFFFFF
+                high = (time_int >> 32) & 0xFFFFFFFF
+                if ldap_time.startswith("-") or int(ldap_time) < 0:
+                    high = -high
+
+                return low, high
+
+            min_pass_len = policy.get("minPwdLength", "None")
+            pass_hist_len = policy.get("pwdHistoryLength", "None")
+            max_pwd_age_low, max_pwd_age_high = ldap_to_filetime(policy.get("maxPwdAge", "0"))
+            max_pass_age = convert(max_pwd_age_low, max_pwd_age_high)
+            min_pwd_age_low, min_pwd_age_high = ldap_to_filetime(policy.get("minPwdAge", "0"))
+            min_pass_age = convert(min_pwd_age_low, min_pwd_age_high)
+            accnt_lock_thres = policy.get("lockoutThreshold", "None")
+            lockout_duration_val = policy.get("lockoutDuration", "0")
+            lock_accnt_dur = convert(0, int(lockout_duration_val) if lockout_duration_val != "0" else 0, lockout=True)
+            lockout_obs_val = policy.get("lockOutObservationWindow", "0")
+            rst_accnt_lock_counter = convert(0, int(lockout_obs_val) if lockout_obs_val != "0" else 0, lockout=True)
+            force_logoff_low, force_logoff_high = ldap_to_filetime(policy.get("forceLogoff", "0"))
+            force_logoff_time = convert(force_logoff_low, force_logoff_high)
+
+            # Convert password properties using existing d2b function
+            pwd_properties = policy.get("pwdProperties", "0")
+            pass_prop = d2b(int(pwd_properties)) if pwd_properties != "0" else "000000"
+
+            # Use the same formatting and constants as SMB passpol
+            PASSCOMPLEX = {
+                5: "Domain Password Complex:",
+                4: "Domain Password No Anon Change:",
+                3: "Domain Password No Clear Change:",
+                2: "Domain Password Lockout Admins:",
+                1: "Domain Password Store Cleartext:",
+                0: "Domain Refuse Password Change:",
+            }
+
+            # Pretty print using same format as SMB
+            self.logger.success(f"Dumping password info for domain: {self.domain}")
+            self.logger.highlight(f"Minimum password length: {min_pass_len}")
+            self.logger.highlight(f"Password history length: {pass_hist_len}")
+            self.logger.highlight(f"Maximum password age: {max_pass_age}")
+            self.logger.highlight("")
+            self.logger.highlight(f"Password Complexity Flags: {pass_prop or 'None'}")
+
+            for i, a in enumerate(pass_prop):
+                self.logger.highlight(f"\t{PASSCOMPLEX[i]} {a!s}")
+
+            self.logger.highlight("")
+            self.logger.highlight(f"Minimum password age: {min_pass_age}")
+            self.logger.highlight(f"Reset Account Lockout Counter: {rst_accnt_lock_counter}")
+            self.logger.highlight(f"Locked Account Duration: {lock_accnt_dur}")
+            self.logger.highlight(f"Account Lockout Threshold: {accnt_lock_thres}")
+            self.logger.highlight(f"Forced Log off Time: {force_logoff_time}")
+
+            break  # Only process first policy result
+
     def bloodhound(self):
-        # Check which version is desired
+        collect, excluded = resolve_collection_methods("Default" if not self.args.collection else self.args.collection, self.logger)
+        if not collect:
+            return
+        self.logger.highlight("Resolved collection methods: " + ", ".join(sorted(collect)))
+        self.logger.highlight("Excluded collection methods: " + ", ".join(sorted(excluded)))
+
+        # Check which BloodHound version is desired
         use_bhce = self.config.getboolean("BloodHound-CE", "bhce_enabled", fallback=False)
         package_name, version, is_ce = get_bloodhound_info()
+
+        # ADCS collection is only compatible with BloodHound-CE
+        if "adcs" in collect and not use_bhce:
+            self.logger.fail("ADCS collection is only compatible with the BloodHound-CE collector, but legacy bloodhound is selected")
+            return
 
         if use_bhce and not is_ce:
             self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
@@ -1365,7 +1583,7 @@ class ldap(connection):
             self.logger.fail("Or if you installed with pipx:")
             self.logger.fail("pipx runpip netexec uninstall -y bloodhound")
             self.logger.fail("pipx inject netexec bloodhound-ce --force")
-            return False
+            return
 
         elif not use_bhce and is_ce:
             self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
@@ -1379,61 +1597,129 @@ class ldap(connection):
             self.logger.fail("Or if you installed with pipx:")
             self.logger.fail("pipx runpip netexec uninstall -y bloodhound-ce")
             self.logger.fail("pipx inject netexec bloodhound --force")
-            return False
-
-        auth = ADAuthentication(
-            username=self.username,
-            password=self.password,
-            domain=self.domain,
-            lm_hash=self.nthash,
-            nt_hash=self.nthash,
-            aeskey=self.aesKey,
-            kdc=self.kdcHost,
-            auth_method="auto",
-        )
-        ad = AD(
-            auth=auth,
-            domain=self.domain,
-            nameserver=self.args.dns_server,
-            dns_tcp=self.args.dns_tcp,
-            dns_timeout=self.args.dns_timeout,
-        )
-        collect = resolve_collection_methods("Default" if not self.args.collection else self.args.collection)
-        if not collect:
-            return None
-        self.logger.highlight("Resolved collection methods: " + ", ".join(list(collect)))
-
-        self.logger.debug("Using DNS to retrieve domain information")
-        ad.dns_resolve(domain=self.domain)
-
-        if self.args.kerberos:
-            self.logger.highlight("Using kerberos auth without ccache, getting TGT")
-            auth.get_tgt()
-        if self.args.use_kcache:
-            self.logger.highlight("Using kerberos auth from ccache")
-            auth.load_ccache()
+            return
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S") + "_"
-        bloodhound = BloodHound(ad, self.hostname, self.host, self.port)
-        bloodhound.connect()
+        adcs_files = []
 
-        bloodhound.run(
-            collect=collect,
-            num_workers=10,
-            disable_pooling=False,
-            timestamp=timestamp,
-            fileNamePrefix=self.output_filename.split("/")[-1],
-            computerfile=None,
-            cachefile=None,
-            exclude_dcs=False,
-        )
+        # Separate ADCS from bloodhound-python methods
+        bh_collect = {m for m in collect if m != "adcs"}
 
-        self.output_filename += f"_{timestamp}"
+        # Run bloodhound-python collection if needed
+        if len(bh_collect) > 0:
+            auth = ADAuthentication(
+                username=self.username,
+                password=self.password,
+                domain=self.domain,
+                lm_hash=self.nthash,
+                nt_hash=self.nthash,
+                aeskey=self.aesKey,
+                kdc=self.kdcHost,
+                auth_method="auto",
+            )
+            ad = AD(
+                auth=auth,
+                domain=self.domain,
+                nameserver=self.args.dns_server,
+                dns_tcp=self.args.dns_tcp,
+                dns_timeout=self.args.dns_timeout,
+            )
 
-        self.logger.highlight(f"Compressing output into {self.output_filename}bloodhound.zip")
+            self.logger.debug("Using DNS to retrieve domain information")
+            try:
+                ad.dns_resolve(domain=self.domain)
+            except (resolver.LifetimeTimeout, resolver.NoNameservers):
+                self.logger.fail("Bloodhound-python failed to resolve domain information, try specifying the DNS server.")
+                return
+
+            if self.args.kerberos:
+                self.logger.highlight("Using kerberos auth without ccache, getting TGT")
+                auth.get_tgt()
+            if self.args.use_kcache:
+                self.logger.highlight("Using kerberos auth from ccache")
+                auth.load_ccache()
+
+            bloodhound = BloodHound(ad, self.hostname, self.host, self.port)
+            bloodhound.connect()
+
+            try:
+                bloodhound.run(
+                    collect=bh_collect,
+                    num_workers=10,
+                    disable_pooling=False,
+                    timestamp=timestamp,
+                    fileNamePrefix=self.output_filename.split("/")[-1],
+                    computerfile=None,
+                    cachefile=None,
+                    exclude_dcs=False,
+                )
+            except Exception as e:
+                self.logger.fail(f"BloodHound collection failed: {e.__class__.__name__} - {e}")
+                self.logger.debug(f"BloodHound collection failed: {e.__class__.__name__} - {e}", exc_info=True)
+                return
+
+        # Collect ADCS data using CertiHound if requested
+        if "adcs" in collect:
+            adcs_files = self._collect_adcs_for_bloodhound(timestamp)
+
+        self.logger.highlight(f"Compressing output into {self.output_filename}_bloodhound.zip")
         list_of_files = os.listdir(os.getcwd())
-        with ZipFile(self.output_filename + "bloodhound.zip", "w") as z:
+        with ZipFile(f"{self.output_filename}_bloodhound.zip", "w") as z:
             for each_file in list_of_files:
                 if each_file.startswith(self.output_filename.split("/")[-1]) and each_file.endswith("json"):
                     z.write(each_file)
                     os.remove(each_file)
+            # Add ADCS files to the zip
+            for adcs_file in adcs_files:
+                if os.path.exists(adcs_file):
+                    z.write(adcs_file, os.path.basename(adcs_file))
+                    os.remove(adcs_file)
+
+    def _collect_adcs_for_bloodhound(self, timestamp):
+        """Collect ADCS data using CertiHound for BloodHound CE integration.
+
+        Args:
+            timestamp: Timestamp prefix for output files.
+
+        Returns:
+            List of file paths to include in the BloodHound zip.
+        """
+        self.logger.highlight("Collecting ADCS data (CertiHound)...")
+
+        try:
+            # Create CertiHound adapter and collector
+            adapter = ImpacketLDAPAdapter(
+                search_func=self.search,
+                domain=self.domain,
+                domain_sid=self.sid_domain,
+            )
+
+            collector = ADCSCollector.from_external(
+                ldap_connection=adapter,
+                domain=self.domain,
+                domain_sid=self.sid_domain,
+            )
+            data = collector.collect_all()
+
+            self.logger.highlight(f"Found {len(data.templates)} certificate templates")
+            self.logger.highlight(f"Found {len(data.enterprise_cas)} Enterprise CAs")
+
+            # Export to BloodHound CE format
+            exporter = BloodHoundCEExporter(data.domain, data.domain_sid)
+            result = exporter.export(data)
+
+            # Write individual JSON files
+            adcs_files = []
+            for node_type, content in result.to_dict().items():
+                filename = f"{timestamp}{node_type}.json"
+                with open(filename, "w") as f:
+                    json.dump(content, f)
+                adcs_files.append(filename)
+                self.logger.debug(f"Wrote ADCS file: {filename}")
+
+            return adcs_files
+
+        except Exception as e:
+            self.logger.fail(f"ADCS collection failed: {e}")
+            self.logger.debug(f"ADCS collection error: {e}", exc_info=True)
+            return []

@@ -1,3 +1,5 @@
+from nxc.helpers.misc import CATEGORY
+
 
 class NXCModule:
     """
@@ -9,8 +11,7 @@ class NXCModule:
     name = "example module"
     description = "I do something"
     supported_protocols = []  # Example: ['smb', 'mssql']
-    opsec_safe = True  # Does the module touch disk?
-    multiple_hosts = True  # Does it make sense to run this module on multiple hosts at a time?
+    category = CATEGORY.ENUMERATION  # Must be one of "Enumeration", "Privilege Escalation" or "Credential Dumping". Use what fits best.
 
     def __init__(self):
         self.context = None
@@ -20,6 +21,7 @@ class NXCModule:
         """Required.
         Module options get parsed here. Additionally, put the modules usage here as well
         """
+        # Put "No options available" in the docstring if there are no options for the module
 
     def on_login(self, context, connection):
         """Concurrent.

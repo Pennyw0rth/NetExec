@@ -7,6 +7,7 @@ import re
 import sys
 from datetime import datetime
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.misc import CATEGORY
 from pypykatz.pypykatz import pypykatz
 
 
@@ -14,8 +15,7 @@ class NXCModule:
     name = "handlekatz"
     description = "Get lsass dump using handlekatz64 and parse the result with pypykatz"
     supported_protocols = ["smb"]
-    opsec_safe = False
-    multiple_hosts = True
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         r"""
