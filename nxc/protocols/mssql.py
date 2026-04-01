@@ -323,7 +323,7 @@ class mssql(connection):
                 self.logger.fail(f"Error during command execution: {self.conn.lastError}")
             else:
                 self.logger.success("Executed command via mssqlexec")
-                for line in (output or "").splitlines():
+                for line in output.splitlines():
                     self.logger.highlight(line.strip())
         return output
 
