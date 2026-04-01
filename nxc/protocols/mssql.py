@@ -78,6 +78,31 @@ class mssql(connection):
             return func(self, *args, **kwargs)
         return wrapper
 
+    @staticmethod
+    def decode_tds_info_error_msgtext(data, offset):
+        remaining = len(data) - offset
+        if remaining < 3 or data[offset] not in (TDS_ERROR_TOKEN, TDS_INFO_TOKEN):
+            return None
+        payload_len = int.from_bytes(data[offset + 1 : offset + 3], "little")
+        if payload_len < 8 or remaining < 3 + payload_len:
+            return None
+        try:
+            token = tds.TDS_INFO_ERROR(data[offset:])
+            text = token["MsgText"].decode("utf-16le").strip()
+        except Exception:
+            return None
+        return text or None
+
+    @staticmethod
+    def login7_integrated_auth_error_message(packet_data, data_after_login_header):
+        token_markers = (TDS_ERROR_TOKEN, TDS_INFO_TOKEN)
+        for buf in filter(None, (packet_data, data_after_login_header)):
+            for offset in (i for i in range(len(buf)) if buf[i] in token_markers):
+                msg = mssql.decode_tds_info_error_msgtext(buf, offset)
+                if msg:
+                    return msg
+        return None
+
     def check_if_admin(self):
         self.admin_privs = False
         try:
@@ -128,22 +153,18 @@ class mssql(connection):
                 self.conn.tlsSocket = None
 
             tdsx = self.conn.recvTDS()
-            challenge = tdsx["Data"][3:]
-            self.logger.debug(f"NTLM challenge: {challenge!s}")
+            login_response = tdsx["Data"]
+            # Impacket historically slices 3 bytes before treating payload as NTLMSSP (LOGIN7 response).
+            challenge = login_response[3:]
+            self.logger.debug(f"LOGIN7 response SSPI slice: {challenge!s}")
         except Exception as e:
             self.logger.info(f"Failed to receive NTLM challenge, reason: {e!s}")
             return False
         else:
             if not challenge.startswith(b"NTLMSSP\x00"):
-                try:
-                    text = challenge.decode("utf-16le", errors="ignore")
-                    clean = "".join(c for c in text if c.isascii() and (c.isprintable() or c == " "))
-                    start = next((i for i, c in enumerate(clean) if c.isupper()), 0)
-                    end = clean.rfind(".")
-                    error_msg = clean[start:end + 1].strip() if 0 <= start < end else clean.strip()
-                except Exception:
-                    error_msg = ""
-                self.logger.fail(f"Server does not support Integrated Windows Authentication{f': {error_msg}' if error_msg else ''}")
+                error_msg = self.login7_integrated_auth_error_message(login_response, challenge)
+                detail = f": {error_msg}" if error_msg else ""
+                self.logger.fail(f"Server does not support Integrated Windows Authentication{detail}")
             else:
                 ntlm_info = parse_challenge(challenge)
                 self.targetDomain = self.domain = ntlm_info["domain"]
