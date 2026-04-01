@@ -44,8 +44,12 @@ class mssql(connection):
         self.lmhash = ""
         self.nthash = ""
         self.is_mssql = False
+        self.sqlbrowser_enabled = False
 
         connection.__init__(self, args, db, host)
+        
+        if self.args.instance is not None:
+            self.instance_connect(self.args.instance)
 
     def proto_logger(self):
         self.logger = NXCAdapter(
@@ -57,66 +61,41 @@ class mssql(connection):
             }
         )
 
-    def enum_sqlbrowser(self):
-        # SQL Browser enumeration
-
-        self.mssql_instances = self.conn.getInstances()
-
-        if len(self.mssql_instances) > 0:
-
-            sqlbrowser_logger = NXCAdapter(
-                extra={
-                    "protocol": "SQLBROWSER",
-                    "host": self.host,
-                    "port": "1434",
-                    "hostname": self.mssql_instances[0].get("ServerName")
-                }
-            )
-
-            sqlbrowser_logger.debug(self.mssql_instances)
-            
-            # Find the first np or tcp instance
-            valid_instance = None
-            for index, instance in enumerate(self.mssql_instances):
-                sqlbrowser_logger.success(f"#{index} {instance.get('InstanceName')} (port:{instance.get('tcp', 'None')}) (np:{instance.get('np', 'None')}) (version:{instance.get('Version')})")
-                if not valid_instance and instance.get("tcp"):
-                    valid_instance = instance
-            
-            if not valid_instance:
-                sqlbrowser_logger.fail(f"SQL Browser detected {len(self.mssql_instances)} instances but none of them is exposed to TCP.")
-                return
-            
-            # Only fallback when TCP is detected, until an implementation for np is done
-            port = valid_instance.get("tcp")
-            sqlbrowser_logger.success(f"Falling back to instance #{self.mssql_instances.index(valid_instance)} on port {port}")
-            self.port = port
-            # Reset proto_logger to update the port
-            self.proto_logger()
-            self.conn = tds.MSSQL(self.host, self.port, self.remoteName)
-
     def create_conn_obj(self):
         try:
+            # Connects to default port or --port 
             self.conn = tds.MSSQL(self.host, self.port, self.remoteName)
+            self.conn.connect(self.args.mssql_timeout)
 
-            if not self.args.no_sqlbrowser and not self.is_mssql:
-                self.enum_sqlbrowser()
-
-            # Default has not timeout option in tds.MSSQL.connect() function, let rewrite it.
-            af, socktype, proto, canonname, sa = socket.getaddrinfo(self.host, self.port, 0, socket.SOCK_STREAM)[0]
-            sock = socket.socket(af, socktype, proto)
-            sock.settimeout(self.args.mssql_timeout)
-            sock.connect(sa)
-            self.conn.socket = sock
-            if not self.is_mssql:
-                self.conn.preLogin()
         except Exception as e:
             self.logger.debug(f"Error connecting to MSSQL service on host: {self.host}, reason: {e}")
+            
+            if self.enum_sqlbrowser():
+                self.list_instances()
+
             with contextlib.suppress(Exception):
                 self.conn.disconnect()
             return False
         else:
             self.is_mssql = True
             return True
+
+    def enum_sqlbrowser(self):
+        self.logger.debug("Trying to enumerate SQL browser")
+        # Ignore broadcast targets (UDP)
+        if self.host.endswith(".255"):
+            self.logger.debug("Target is a broadcast address, skipping SQL browser enumeration")
+            self.sqlbrowser_enabled = False
+            return False
+        else:
+            self.mssql_instances = self.conn.getInstances(2)
+            if len(self.mssql_instances) > 0:
+                self.sqlbrowser_enabled = True
+                self.logger.display("SQL browser is enabled.")
+                return True
+            else:
+                self.sqlbrowser_enabled = False
+                return False
 
     def reconnect_mssql(func):
         def wrapper(self, *args, **kwargs):
@@ -166,6 +145,8 @@ class mssql(connection):
 
             # Get number of mssql instance
             self.mssql_instances = self.conn.getInstances()
+            if len(self.conn.getInstances(2)) > 0:
+                self.sqlbrowser_enabled = True
 
             # Send the NTLMSSP Negotiate or SQL Auth Packet
             self.conn.sendTDS(tds.TDS_LOGIN7, login.getData())
@@ -203,7 +184,8 @@ class mssql(connection):
 
     def print_host_info(self):
         encryption = colored(f"EncryptionReq:{self.encryption}", host_info_colors[0 if self.encryption else 1], attrs=["bold"])
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption})")
+        sql_browser = colored(f"SQLBrowser:{'True' if self.sqlbrowser_enabled else 'False'}", host_info_colors[0 if self.sqlbrowser_enabled else 1], attrs=["bold"])
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption}) ({sql_browser})")
 
     @reconnect_mssql
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
@@ -653,3 +635,53 @@ class mssql(connection):
             )
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
+
+    def list_instances(self, enumerate_index=None):
+        if self.sqlbrowser_enabled is False:
+            self.logger.fail("MSSQL browser is not enabled, cannot enumerate...")
+            return
+        
+        self.logger.debug("Enumerating MSSQL browser")
+        if len(self.mssql_instances) > 0:
+            # Get information about instances
+            for index, instance in enumerate(self.mssql_instances):
+                if enumerate_index is not None and index != enumerate_index:
+                    continue
+                if self.args.list_instances:
+                    self.log_instance(index, instance)
+                elif self.args.instance is None or self.args.instance == enumerate_index:
+                    self.instance_connect(index)
+        else:
+            self.logger.fail("No instance to enumerate")
+
+    def log_instance(self, index, instance):
+        instance_name = instance.get("InstanceName")
+        instance_port = instance.get("tcp", None)
+        instance_np = instance.get("np", None)
+        instance_version = instance.get("Version", None)
+        self.logger.success(f"#{index} {instance_name} (port:{instance_port}) (np:{instance_np}) (version:{instance_version})")
+
+    def instance_connect(self, instance_index):
+        if not self.mssql_instances:
+            return
+        if 0 <= instance_index < len(self.mssql_instances):
+            instance = self.mssql_instances[instance_index]
+            self.logger.debug(f'Connecting to instance index: {instance_index} with details: {instance}')
+            instance_name = instance.get("InstanceName", None)
+            instance_port = instance.get("tcp", None)
+            instance_np = instance.get("np", None)
+            instance_arguments = self.args
+            # Drop instances and list-instances arguments
+            instance_arguments.instance = None
+            instance_arguments.list_instances = False
+            # Case #1, instance is listening on a port
+            if instance_port:
+                instance_arguments.port = instance_port
+                new_connection = self.__init__(instance_arguments, self.db, self.host)
+            # Case #2, instance is listening on a named pipe
+            elif instance_np:
+                self.logger.fail(f"Named pipe connections are not supported yet, cannot connect to {instance_np}")
+                pass
+                
+        else:
+            self.logger.fail(f"Invalid instance index. Please choose an index between 0 and {len(self.mssql_instances) - 1}")
