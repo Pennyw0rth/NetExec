@@ -1,4 +1,4 @@
-from nxc.nxcdb import DatabaseNavigator, print_help, print_table
+from nxc.nxcdb import DatabaseNavigator, print_help, print_table, write_csv
 
 
 class navigator(DatabaseNavigator):
@@ -26,9 +26,9 @@ class navigator(DatabaseNavigator):
             escape = bool(host[3])
 
             data.append([host_id, ip, version, escape])
-            
+
         print_table(data, title="Hosts")
-    
+
     def do_hosts(self, line):
         filter_term = line.strip()
 
@@ -79,7 +79,6 @@ class navigator(DatabaseNavigator):
                 sid, host, r, w, x,
                 storage_str, share_path, access_str
             ) = row
-            # boolean format
             data.append([
                 sid, host,
                 "True" if r else "False",
@@ -92,10 +91,6 @@ class navigator(DatabaseNavigator):
         print_table(data, title="Shares")
 
     def do_shares(self, line):
-        """
-        Shares [host_filter]
-        List shares, optionally filtreli olarak.
-        """
         host_filter = line.strip()
         if host_filter:
             q = self.db.SharesTable.select().where(
@@ -105,7 +100,7 @@ class navigator(DatabaseNavigator):
         else:
             q = self.db.SharesTable.select()
             shares = self.db.db_execute(q).all()
-        
+
         if shares:
             self.display_shares(shares)
         else:
@@ -117,5 +112,57 @@ class navigator(DatabaseNavigator):
         Lists all shares. Optionally filters by host substring.
         Columns:
          ID, Host, Read (True/False), Write, Execute, Storage ("used / total"), Share path, Access list
+        """
+        print_help(help_string)
+
+    def do_export(self, line):
+        if not line:
+            print("[-] not enough arguments")
+            return
+        line = line.split()
+        command = line[0].lower()
+
+        if command == "shares":
+            if len(line) < 3:
+                print("[-] invalid arguments, export shares <simple|detailed> <filename>")
+                return
+
+            filename = line[2]
+            mode = line[1].lower()
+            shares = self.db.get_shares()
+
+            if mode == "simple":
+                csv_header = ("id", "host", "read", "write", "exec", "storage", "share", "access")
+                write_csv(filename, csv_header, shares)
+                print("[+] NFS shares exported")
+            elif mode == "detailed":
+                csv_header = ("id", "host", "version", "read", "write", "exec", "storage", "share", "access")
+                formatted = []
+                for row in shares:
+                    host_row = self.db.get_hosts(row[1])
+                    entry = (
+                        row[0],  # id
+                        row[1],  # host
+                        host_row[0][2] if host_row else "",  # version
+                        row[2],  # read
+                        row[3],  # write
+                        row[4],  # exec
+                        row[5],  # storage
+                        row[6],  # share
+                        row[7],  # access
+                    )
+                    formatted.append(entry)
+                write_csv(filename, csv_header, formatted)
+                print("[+] NFS shares exported")
+            else:
+                print(f"[-] No such export option: {line[1]}")
+        else:
+            super().do_export(" ".join(line))
+
+    def help_export(self):
+        help_string = """
+        export shares <simple|detailed> <filename>
+            simple   - exports: id, host, read, write, exec, storage, share, access
+            detailed - exports: id, host, version, read, write, exec, storage, share, access
         """
         print_help(help_string)
