@@ -53,8 +53,7 @@ class mssql(connection):
                 "hostname": "None",
             }
         )
-
-         # --browser
+        # --browser
         if args.browser:
             args.port = 0  # Override port number with dummy one
             connection.__init__(self, args, db, host)
@@ -674,7 +673,6 @@ class mssql(connection):
     @reconnect_sqlbrowser
     def instance_connect(self, instance):
         self.sqlbrowser_logger.debug(f"instance_connect to {instance}")
-        instance_name = instance.get("InstanceName", None)
         instance_port = instance.get("tcp", None)
         instance_np = instance.get("np", None)
         instance_arguments = self.args
@@ -684,7 +682,7 @@ class mssql(connection):
         # Case #1, instance is listening on a port
         if instance_port:
             instance_arguments.port = instance_port
-            new_connection = self.__init__(instance_arguments, self.db, self.host)
+            self.__init__(instance_arguments, self.db, self.host)
         # Case #2, instance is listening on a named pipe
         elif instance_np:
             self.sqlbrowser_logger.fail(f"Named pipe connections are not supported yet, cannot connect to {instance_np}")
