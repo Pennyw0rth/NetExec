@@ -49,6 +49,7 @@ from nxc.protocols.smb.wmiexec import WMIEXEC
 from nxc.protocols.smb.atexec import TSCH_EXEC
 from nxc.protocols.smb.smbexec import SMBEXEC
 from nxc.protocols.smb.mmcexec import MMCEXEC
+from nxc.protocols.smb.scshell import SCSHELL
 from nxc.protocols.smb.smbspider import SMBSpider
 from nxc.protocols.smb.passpol import PassPolDump
 from nxc.protocols.smb.samruser import UserSamrDump
@@ -941,6 +942,28 @@ class smb(connection):
                     break
                 except Exception:
                     self.logger.debug("Error executing command via smbexec, traceback:")
+                    self.logger.debug(format_exc())
+                    continue
+            elif method == "scshell":
+                try:
+                    exec_method = SCSHELL(
+                        self.host if not self.kerberos else self.hostname + "." + self.domain,
+                        self.username,
+                        self.password,
+                        self.domain,
+                        self.kerberos,
+                        self.aesKey,
+                        self.host,
+                        self.kdcHost,
+                        self.hash,
+                        self.logger,
+                        self.args.sc_service_name,
+                        self.args.sc_no_cmd,
+                    )
+                    self.logger.info("Executed command via scshell")
+                    break
+                except Exception:
+                    self.logger.debug("Error executing command via scshell, traceback:")
                     self.logger.debug(format_exc())
                     continue
 
