@@ -45,11 +45,34 @@ class mssql(connection):
         self.nthash = ""
         self.is_mssql = False
         self.sqlbrowser_enabled = False
+        self.sqlbrowser_logger = NXCAdapter(
+            extra={
+                "protocol": "SQLBROWSER",
+                "host": host,
+                "port": "1434",
+                "hostname": "None",
+            }
+        )
 
-        connection.__init__(self, args, db, host)
-        
-        if self.args.instance is not None:
-            self.instance_connect(self.args.instance)
+         # --browser
+        if args.browser:
+            args.port = 0 # Override port number with dummy one
+            connection.__init__(self, args, db, host)
+            self.discover_sqlbrowser()
+
+            if args.browser == "all":
+                for instance in self.mssql_instances:
+                    self.instance_connect(instance)
+            else:
+                try:
+                    index = int(args.browser)
+                    instance = self.mssql_instances[index]
+                    self.instance_connect(instance)
+                except ValueError:
+                    self.sqlbrowser_logger.fail("Instance argument must be an integer index or 'all'")
+                    return       
+        else:
+            connection.__init__(self, args, db, host)
 
     def proto_logger(self):
         self.logger = NXCAdapter(
@@ -63,45 +86,31 @@ class mssql(connection):
 
     def create_conn_obj(self):
         try:
-            # Connects to default port or --port 
+            # TODO: handle named pipes once supported by impacket
             self.conn = tds.MSSQL(self.host, self.port, self.remoteName)
             self.conn.connect(self.args.mssql_timeout)
-
         except Exception as e:
             self.logger.debug(f"Error connecting to MSSQL service on host: {self.host}, reason: {e}")
-            
-            if self.enum_sqlbrowser():
-                self.list_instances()
-
             with contextlib.suppress(Exception):
                 self.conn.disconnect()
             return False
         else:
             self.is_mssql = True
             return True
-
-    def enum_sqlbrowser(self):
-        self.logger.debug("Trying to enumerate SQL browser")
-        # Ignore broadcast targets (UDP)
-        if self.host.endswith(".255"):
-            self.logger.debug("Target is a broadcast address, skipping SQL browser enumeration")
-            self.sqlbrowser_enabled = False
-            return False
-        else:
-            self.mssql_instances = self.conn.getInstances(2)
-            if len(self.mssql_instances) > 0:
-                self.sqlbrowser_enabled = True
-                self.logger.display("SQL browser is enabled.")
-                return True
-            else:
-                self.sqlbrowser_enabled = False
-                return False
-
+            
     def reconnect_mssql(func):
+
         def wrapper(self, *args, **kwargs):
             with contextlib.suppress(Exception):
                 self.conn.disconnect()
             self.create_conn_obj()
+            return func(self, *args, **kwargs)
+        return wrapper
+
+    def reconnect_sqlbrowser(func):
+        def wrapper(self, *args, **kwargs):
+            with contextlib.suppress(Exception):
+                self.sqlbrowser_conn.disconnect()
             return func(self, *args, **kwargs)
         return wrapper
 
@@ -143,11 +152,6 @@ class mssql(connection):
             login["SSPI"] = auth.getData()
             login["Length"] = len(login.getData())
 
-            # Get number of mssql instance
-            self.mssql_instances = self.conn.getInstances()
-            if len(self.conn.getInstances(2)) > 0:
-                self.sqlbrowser_enabled = True
-
             # Send the NTLMSSP Negotiate or SQL Auth Packet
             self.conn.sendTDS(tds.TDS_LOGIN7, login.getData())
 
@@ -168,7 +172,8 @@ class mssql(connection):
             self.hostname = ntlm_info["hostname"]
             self.server_os = ntlm_info["os_version"]
             self.logger.extra["hostname"] = self.hostname
-            self.db.add_host(self.host, self.hostname, self.targetDomain, self.server_os, len(self.mssql_instances),)
+
+            self.db.add_host(self.host, self.hostname, self.targetDomain, self.server_os, ",".join(str(instance for instance in self.mssql_instances)))
 
         if self.args.domain:
             self.domain = self.args.domain
@@ -184,8 +189,7 @@ class mssql(connection):
 
     def print_host_info(self):
         encryption = colored(f"EncryptionReq:{self.encryption}", host_info_colors[0 if self.encryption else 1], attrs=["bold"])
-        sql_browser = colored(f"SQLBrowser:{'True' if self.sqlbrowser_enabled else 'False'}", host_info_colors[0 if self.sqlbrowser_enabled else 1], attrs=["bold"])
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption}) ({sql_browser})")
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption})")
 
     @reconnect_mssql
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
@@ -636,52 +640,52 @@ class mssql(connection):
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
 
-    def list_instances(self, enumerate_index=None):
-        if self.sqlbrowser_enabled is False:
-            self.logger.fail("MSSQL browser is not enabled, cannot enumerate...")
-            return
-        
-        self.logger.debug("Enumerating MSSQL browser")
-        if len(self.mssql_instances) > 0:
-            # Get information about instances
-            for index, instance in enumerate(self.mssql_instances):
-                if enumerate_index is not None and index != enumerate_index:
-                    continue
-                if self.args.list_instances:
-                    self.log_instance(index, instance)
-                elif self.args.instance is None or self.args.instance == enumerate_index:
-                    self.instance_connect(index)
-        else:
-            self.logger.fail("No instance to enumerate")
-
     def log_instance(self, index, instance):
         instance_name = instance.get("InstanceName")
         instance_port = instance.get("tcp", None)
         instance_np = instance.get("np", None)
         instance_version = instance.get("Version", None)
-        self.logger.success(f"#{index} {instance_name} (port:{instance_port}) (np:{instance_np}) (version:{instance_version})")
+        self.sqlbrowser_logger.success(f"#{index} {instance_name} (port:{instance_port}) (np:{instance_np}) (version:{instance_version})")
 
-    def instance_connect(self, instance_index):
-        if not self.mssql_instances:
-            return
-        if 0 <= instance_index < len(self.mssql_instances):
-            instance = self.mssql_instances[instance_index]
-            self.logger.debug(f'Connecting to instance index: {instance_index} with details: {instance}')
-            instance_name = instance.get("InstanceName", None)
-            instance_port = instance.get("tcp", None)
-            instance_np = instance.get("np", None)
-            instance_arguments = self.args
-            # Drop instances and list-instances arguments
-            instance_arguments.instance = None
-            instance_arguments.list_instances = False
-            # Case #1, instance is listening on a port
-            if instance_port:
-                instance_arguments.port = instance_port
-                new_connection = self.__init__(instance_arguments, self.db, self.host)
-            # Case #2, instance is listening on a named pipe
-            elif instance_np:
-                self.logger.fail(f"Named pipe connections are not supported yet, cannot connect to {instance_np}")
-                pass
-                
+    def discover_sqlbrowser(self):
+        self.sqlbrowser_conn = tds.MSSQL(self.host, 0, self.remoteName)
+        # No need to start the connection, we just need the tds object
+        
+        # Ignore broadcast targets (UDP)
+        if self.host.endswith(".255"):
+            self.sqlbrowser_logger.debug("Target is a broadcast address, skipping SQL browser enumeration")
+            self.sqlbrowser_enabled = False
         else:
-            self.logger.fail(f"Invalid instance index. Please choose an index between 0 and {len(self.mssql_instances) - 1}")
+            self.sqlbrowser_logger.debug('Listing SQL browser instances')
+            self.mssql_instances = self.sqlbrowser_conn.getInstances(2)
+            if len(self.mssql_instances) > 0:
+                self.sqlbrowser_enabled = True
+                self.sqlbrowser_logger.success("SQL browser is enabled.")
+                for index, instance in enumerate(self.mssql_instances):
+                    if self.args.browser == "all" or self.args.browser.isdigit() and int(self.args.browser) == index:
+                        self.log_instance(index, instance)
+            else:
+                self.sqlbrowser_enabled = False
+        
+        self.sqlbrowser_conn.disconnect()
+
+        return self.sqlbrowser_enabled
+
+    @reconnect_sqlbrowser
+    def instance_connect(self, instance):
+        self.sqlbrowser_logger.debug(f'instance_connect to {instance}')
+        instance_name = instance.get("InstanceName", None)
+        instance_port = instance.get("tcp", None)
+        instance_np = instance.get("np", None)
+        instance_arguments = self.args
+        # Drop instances and list-instances arguments
+        instance_arguments.instance = None
+        instance_arguments.browser = False
+        # Case #1, instance is listening on a port
+        if instance_port:
+            instance_arguments.port = instance_port
+            new_connection = self.__init__(instance_arguments, self.db, self.host)
+        # Case #2, instance is listening on a named pipe
+        elif instance_np:
+            self.sqlbrowser_logger.fail(f"Named pipe connections are not supported yet, cannot connect to {instance_np}")
+            pass
