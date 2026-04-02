@@ -36,5 +36,5 @@ def proto_args(parser, parents):
 
     mapping_enum_group = mssql_parser.add_argument_group("Mapping/Enumeration")
     mapping_enum_group.add_argument("--rid-brute", nargs="?", type=int, const=4000, metavar="MAX_RID", help="enumerate users by bruteforcing RIDs")
-    mapping_enum_group.add_argument("--browser", type=str, nargs='?', const="all", help="Enumerate or connect to MSSQL instances via SQL Browser. Use --browser <index> to connect to a specific instance, or --browser all (default) to connect to all instances")
+    mapping_enum_group.add_argument("--browser", type=str, nargs="?", const="all", help="Enumerate or connect to MSSQL instances via SQL Browser. Use --browser <index> to connect to a specific instance, or --browser all (default) to connect to all instances")
     return parser

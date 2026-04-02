@@ -56,7 +56,7 @@ class mssql(connection):
 
          # --browser
         if args.browser:
-            args.port = 0 # Override port number with dummy one
+            args.port = 0  # Override port number with dummy one
             connection.__init__(self, args, db, host)
             self.discover_sqlbrowser()
 
@@ -70,7 +70,7 @@ class mssql(connection):
                     self.instance_connect(instance)
                 except ValueError:
                     self.sqlbrowser_logger.fail("Instance argument must be an integer index or 'all'")
-                    return       
+                    return
         else:
             connection.__init__(self, args, db, host)
 
@@ -97,7 +97,7 @@ class mssql(connection):
         else:
             self.is_mssql = True
             return True
-            
+
     def reconnect_mssql(func):
 
         def wrapper(self, *args, **kwargs):
@@ -650,30 +650,30 @@ class mssql(connection):
     def discover_sqlbrowser(self):
         self.sqlbrowser_conn = tds.MSSQL(self.host, 0, self.remoteName)
         # No need to start the connection, we just need the tds object
-        
+
         # Ignore broadcast targets (UDP)
         if self.host.endswith(".255"):
             self.sqlbrowser_logger.debug("Target is a broadcast address, skipping SQL browser enumeration")
             self.sqlbrowser_enabled = False
         else:
-            self.sqlbrowser_logger.debug('Listing SQL browser instances')
+            self.sqlbrowser_logger.debug("Listing SQL browser instances")
             self.mssql_instances = self.sqlbrowser_conn.getInstances(2)
             if len(self.mssql_instances) > 0:
                 self.sqlbrowser_enabled = True
                 self.sqlbrowser_logger.success("SQL browser is enabled.")
                 for index, instance in enumerate(self.mssql_instances):
-                    if self.args.browser == "all" or self.args.browser.isdigit() and int(self.args.browser) == index:
+                    if self.args.browser == "all" or (self.args.browser.isdigit() and int(self.args.browser) == index):
                         self.log_instance(index, instance)
             else:
                 self.sqlbrowser_enabled = False
-        
+
         self.sqlbrowser_conn.disconnect()
 
         return self.sqlbrowser_enabled
 
     @reconnect_sqlbrowser
     def instance_connect(self, instance):
-        self.sqlbrowser_logger.debug(f'instance_connect to {instance}')
+        self.sqlbrowser_logger.debug(f"instance_connect to {instance}")
         instance_name = instance.get("InstanceName", None)
         instance_port = instance.get("tcp", None)
         instance_np = instance.get("np", None)
@@ -688,4 +688,3 @@ class mssql(connection):
         # Case #2, instance is listening on a named pipe
         elif instance_np:
             self.sqlbrowser_logger.fail(f"Named pipe connections are not supported yet, cannot connect to {instance_np}")
-            pass
