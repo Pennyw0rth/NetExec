@@ -58,7 +58,6 @@ def proto_args(parser, parents):
     mapping_enum_group.add_argument("--filter-shares", nargs="+", help="Filter share by access, option 'READ' 'WRITE' or 'READ,WRITE'")
     mapping_enum_group.add_argument("--disks", action="store_true", help="Enumerate disks")
     mapping_enum_group.add_argument("--users", nargs="*", metavar="USER", help="Enumerate domain users, if a user is specified than only its information is queried.")
-    mapping_enum_group.add_argument("--users-export", help="[DEPRECATED: use --users --export instead] Enumerate domain users and export them to the specified file")
     mapping_enum_group.add_argument("--groups", nargs="?", const="", metavar="GROUP", help="Enumerate domain groups, if a group is specified than its members are Enumerated")
     mapping_enum_group.add_argument("--local-groups", nargs="?", const="", metavar="GROUP", help="Enumerate local groups, if a group is specified then its members are Enumerated")
     mapping_enum_group.add_argument("--computers", nargs="?", const="", metavar="COMPUTER", help="Enumerate computer users")
