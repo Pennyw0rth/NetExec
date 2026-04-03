@@ -30,7 +30,7 @@ class NXCModule:
 
     def on_login(self, context, connection):
         # Define the search filter
-        if (self.all_option):
+        if self.all_option:
             search_filter = "(&(objectClass=computer))"
         else:
             search_filter = "(&(objectClass=computer)(userAccountControl=4128))"  # 4128 = 4096 (WORKSTATION_TRUST_ACCOUNT) | 32 (WORKSTATION_TRUST_ACCOUNT)
@@ -55,24 +55,37 @@ class NXCModule:
 
             # Save computers to file
             domain_dir = os.path.join(f"{NXC_PATH}/modules/pre2k", connection.domain)
-            output_file = os.path.join(domain_dir, "precreated_computers.txt")
+            output_file_pre2k = os.path.join(domain_dir, "precreated_computers.txt")
+            output_file_non_pre2k = os.path.join(domain_dir, "computers.txt")
 
             # Create directories if they do not exist
             os.makedirs(domain_dir, exist_ok=True)
 
-            with open(output_file, "w") as file:
-                for computer in computers:
-                    file.write(f"{computer}\n")
+            with open(output_file_pre2k, "w") as pre2k_file, open(output_file_non_pre2k, "w") as non_pre2k_file:
+                for computer, uac in computers.items():
+                    if int(uac) == 4128:
+                        pre2k_file.write(f"{computer}\n")
+                    else:
+                        non_pre2k_file.write(f"{computer}\n")
 
             # Print discovered (pre-created) computer accounts
             if computers:
                 for computer, uac in computers.items():
-                    if (int(uac)) == 4128:
+                    if int(uac) == 4128:
                         context.log.highlight(f"Pre-created computer account: {computer}")
-                        context.log.success(f"Found {len(computers)} pre-created computer accounts. Saved to {output_file}")
                     else:
-                        context.log.highlight(f"Computer account: {computer}")
-                        context.log.success(f"Found {len(computers)} computer accounts. Saved to {output_file}")
+                        context.log.debug(f"Computer account: {computer}")
+
+                counter_pre2k = len([v for v in computers.values() if int(v) == 4128])
+                counter_non_pre2k = len([v for v in computers.values() if int(v) != 4128])
+
+                context.log.success(f"Found {counter_pre2k} pre-created computer accounts. Saved to {output_file_pre2k}")
+
+                if counter_non_pre2k == 0:
+                    context.log.fail(f"Found {counter_non_pre2k} computer accounts.")
+                    context.log.display("Consider using the option -o ALL=true to query all computers in the domain")
+                else:
+                    context.log.success(f"Found {counter_non_pre2k} computer accounts. Saved to {output_file_non_pre2k}")
             else:
                 context.log.info("No pre-created computer accounts found.")
 
@@ -114,7 +127,7 @@ class NXCModule:
             context.log.success(f"Successfully obtained TGT for {username}@{domain}")
             return True
         except Exception as e:
-            context.log.fail(f"Failed to get TGT for {username}@{domain}: {e}")
+            context.log.debug(f"Failed to get TGT for {username}@{domain}: {e}")
             return False
 
     def save_ticket(self, context, username, ticket, sessionKey, ccache_base_dir):
