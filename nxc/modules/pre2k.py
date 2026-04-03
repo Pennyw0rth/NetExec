@@ -56,7 +56,7 @@ class NXCModule:
             # Save computers to file
             domain_dir = os.path.join(f"{NXC_PATH}/modules/pre2k", connection.domain)
             output_file_pre2k = os.path.join(domain_dir, "precreated_computers.txt")
-            output_file_non_pre2k = os.path.join(domain_dir, "computers.txt")
+            output_file_non_pre2k = os.path.join(domain_dir, "non_precreated_computers.txt")
 
             # Create directories if they do not exist
             os.makedirs(domain_dir, exist_ok=True)
@@ -79,13 +79,10 @@ class NXCModule:
                 counter_pre2k = len([v for v in computers.values() if int(v) == 4128])
                 counter_non_pre2k = len([v for v in computers.values() if int(v) != 4128])
 
-                context.log.success(f"Found {counter_pre2k} pre-created computer accounts. Saved to {output_file_pre2k}")
-
-                if counter_non_pre2k == 0:
-                    context.log.fail(f"Found {counter_non_pre2k} computer accounts.")
-                    context.log.display("Consider using the option -o ALL=true to query all computers in the domain")
-                else:
-                    context.log.success(f"Found {counter_non_pre2k} computer accounts. Saved to {output_file_non_pre2k}")
+                if counter_pre2k != 0:
+                    context.log.success(f"Found {counter_pre2k} pre-created computer accounts. Saved to {output_file_pre2k}")
+                if counter_non_pre2k != 0:
+                    context.log.success(f"Found {counter_non_pre2k} normal computer accounts. Saved to {output_file_non_pre2k}")
             else:
                 context.log.info("No pre-created computer accounts found.")
 
