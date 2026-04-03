@@ -19,17 +19,28 @@ class NXCModule:
     category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context, module_options):
-        """No options available"""
+        """
+        ALL     Attempt to authenticate for every computer object in the domain (userAccountControl=4096) (default: False)
+
+        Examples:
+        nxc ldap $IP -u $USER -p $PASSWORD -M pre2k
+        nxc ldap $IP -u $USER -p $PASSWORD -M pre2k -o ALL=True
+        """
+        self.all_option = bool(module_options.get("ALL", False))
 
     def on_login(self, context, connection):
-        # Define the search filter for computer accounts
-        search_filter = "(&(objectClass=computer)(userAccountControl=4096))"
+        # Define the search filter
+        if (self.all_option):
+            search_filter = "(&(objectClass=computer))"
+        else:
+            search_filter = "(&(objectClass=computer)(userAccountControl=4128))"  # 4128 = 4096 (WORKSTATION_TRUST_ACCOUNT) | 32 (WORKSTATION_TRUST_ACCOUNT)
+
         attributes = ["sAMAccountName", "userAccountControl", "dNSHostName"]
 
         context.log.info(f"Using search filter: {search_filter}")
         context.log.info(f"Attributes to retrieve: {attributes}")
 
-        computers = []
+        computers = {}
 
         try:
             # Use paged search to retrieve all computer accounts with specific flags
@@ -39,10 +50,8 @@ class NXCModule:
 
             for computer in results:
                 context.log.debug(f"Processing computer: {computer['sAMAccountName']}, UAC: {computer['userAccountControl']}")
-                # Check if the account is a computer account (WORKSTATION_TRUST_ACCOUNT)
-                if int(computer["userAccountControl"]) == 4096:
-                    computers.append(computer["sAMAccountName"])
-                    context.log.debug(f"Added computer: {computer['sAMAccountName']}")
+                computers[computer["sAMAccountName"]] = computer["userAccountControl"]
+                context.log.debug(f"Added computer: {computer['sAMAccountName']}")
 
             # Save computers to file
             domain_dir = os.path.join(f"{NXC_PATH}/modules/pre2k", connection.domain)
@@ -55,11 +64,15 @@ class NXCModule:
                 for computer in computers:
                     file.write(f"{computer}\n")
 
-            # Print discovered pre-created computer accounts
+            # Print discovered (pre-created) computer accounts
             if computers:
-                for computer in computers:
-                    context.log.highlight(f"Pre-created computer account: {computer}")
-                context.log.success(f"Found {len(computers)} pre-created computer accounts. Saved to {output_file}")
+                for computer, uac in computers.items():
+                    if (int(uac)) == 4128:
+                        context.log.highlight(f"Pre-created computer account: {computer}")
+                        context.log.success(f"Found {len(computers)} pre-created computer accounts. Saved to {output_file}")
+                    else:
+                        context.log.highlight(f"Computer account: {computer}")
+                        context.log.success(f"Found {len(computers)} computer accounts. Saved to {output_file}")
             else:
                 context.log.info("No pre-created computer accounts found.")
 
@@ -76,7 +89,7 @@ class NXCModule:
 
             # Summary of TGT results
             if successful_tgts > 0:
-                context.log.success(f"Successfully obtained TGT for {successful_tgts} pre-created computer accounts. Saved to {ccache_base_dir}")
+                context.log.success(f"Successfully obtained TGT for {successful_tgts} (pre-created) computer accounts. Saved to {ccache_base_dir}")
         except Exception as e:
             context.log.fail(f"Error occurred during search: {e}")
 
