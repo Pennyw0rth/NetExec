@@ -20,7 +20,7 @@ class NXCModule:
 
     def options(self, context, module_options):
         """
-        ALL     Attempt to authenticate for every computer object in the domain (userAccountControl=4096) (default: False)
+        ALL     Attempt to authenticate for every computer object in the domain (default: False)
 
         Examples:
         nxc ldap $IP -u $USER -p $PASSWORD -M pre2k
