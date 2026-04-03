@@ -26,7 +26,7 @@ class NXCModule:
         nxc ldap $IP -u $USER -p $PASSWORD -M pre2k
         nxc ldap $IP -u $USER -p $PASSWORD -M pre2k -o ALL=True
         """
-        self.all_option = bool(module_options.get("ALL", False))
+        self.all_option = module_options.get("ALL", "").lower() in ["true", "1", "yes"]
 
     def on_login(self, context, connection):
         # Define the search filter
