@@ -124,7 +124,13 @@ class NXCModule:
             context.log.success(f"Successfully obtained TGT for {username}@{domain}")
             return True
         except Exception as e:
-            context.log.debug(f"Failed to get TGT for {username}@{domain}: {e}")
+            if "KDC_ERR_PREAUTH_FAILED" in str(e):
+                if self.all_option:
+                    context.log.debug(f"Failed to get TGT for {username}@{domain}: KDC_ERR_PREAUTH_FAILED")
+                else:
+                    context.log.fail(f"Failed to get TGT for {username}@{domain}: KDC_ERR_PREAUTH_FAILED")
+            else:
+                context.log.fail(f"Error obtaining TGT for {username}@{domain}: {e}")
             return False
 
     def save_ticket(self, context, username, ticket, sessionKey, ccache_base_dir):
