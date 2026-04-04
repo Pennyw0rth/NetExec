@@ -107,7 +107,7 @@ class NXCModule:
             recordname = site["name"]
 
             if "dnsRecord" in site:
-                if isinstance(site["dnsRecord"], list):  # noqa: SIM108
+                if isinstance(site["dnsRecord"], list):
                     records = [bytes(r) for r in site["dnsRecord"]]
                 else:
                     records = [bytes(site["dnsRecord"])]

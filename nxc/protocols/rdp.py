@@ -1,7 +1,7 @@
 import asyncio
-import os
 from datetime import datetime
 from os import getenv
+from anyio import Path
 from termcolor import colored
 
 from impacket.krb5.ccache import CCache
@@ -572,7 +572,7 @@ class rdp(connection):
         await asyncio.sleep(5)
         if self.conn is not None and self.conn.desktop_buffer_has_data is True:
             buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-            filename = os.path.expanduser(f"{NXC_PATH}/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
+            filename = await Path(f"{NXC_PATH}/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png").expanduser()
             buffer.save(filename, "png")
             self.logger.highlight(f"Screenshot saved {filename}")
 
@@ -595,7 +595,7 @@ class rdp(connection):
             await asyncio.sleep(int(self.args.screentime))
             if self.conn is not None and self.conn.desktop_buffer_has_data is True:
                 buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-                filename = os.path.expanduser(f"{NXC_PATH}/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")
+                filename = await Path(f"{NXC_PATH}/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png").expanduser()
                 buffer.save(filename, "png")
                 self.logger.highlight(f"NLA Screenshot saved {filename}")
                 return

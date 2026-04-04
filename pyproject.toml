@@ -46,7 +46,7 @@ dependencies = [
     "xmltodict>=0.13.0",
     # Git Dependencies
     "certipy-ad @ git+https://github.com/Pennyw0rth/Certipy",
-    "impacket @ git+https://github.com/fortra/impacket",
+    "impacket @ git+https://github.com/Pennyw0rth/impacket",
     "oscrypto @ git+https://github.com/wbond/oscrypto",
     "pynfsclient @ git+https://github.com/Pennyw0rth/NfsClient",
 ]
@@ -96,7 +96,6 @@ exclude = [
     ".nox", ".pants.d", ".pytype", ".ruff_cache", ".svn", ".tox", ".venv",
     "__pypackages__", "_build", "buck-out", "build", "dist", "node_modules", "venv"
 ]
-line-length = 65000
 preview = true
 
 [tool.ruff.lint]

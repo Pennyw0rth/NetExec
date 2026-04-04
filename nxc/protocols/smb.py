@@ -1974,8 +1974,9 @@ class smb(connection):
             host_id = self.db.get_hosts(filter_term=self.host)[0][0]
 
             def add_sam_hash(sam_hash, host_id):
-                add_sam_hash.sam_hashes += 1
                 self.logger.highlight(sam_hash)
+                if "_history" in sam_hash:
+                    return
                 username, _, lmhash, nthash, _, _, _ = sam_hash.split(":")
                 self.db.add_credential(
                     "hash",
@@ -1984,6 +1985,7 @@ class smb(connection):
                     f"{lmhash}:{nthash}",
                     pillaged_from=host_id,
                 )
+                add_sam_hash.sam_hashes += 1
 
             add_sam_hash.sam_hashes = 0
 
@@ -1993,6 +1995,7 @@ class smb(connection):
                         self.bootkey,
                         remoteOps=self.remote_ops,
                         perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
+                        history=self.args.history,
                     )
                 else:
                     SAM_file_name = self.remote_ops.saveSAM()
@@ -2000,6 +2003,7 @@ class smb(connection):
                         SAM_file_name,
                         self.bootkey,
                         isRemote=True,
+                        history=self.args.history,
                         perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
                     )
 
