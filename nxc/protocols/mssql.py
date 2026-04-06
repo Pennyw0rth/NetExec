@@ -135,7 +135,6 @@ class mssql(connection):
             self.logger.info(f"Failed to receive NTLM challenge, reason: {e!s}")
             return False
         else:
-            print(challenge)
             if challenge.startswith(b"NTLMSSP\x00"):
                 ntlm_info = parse_challenge(challenge)
                 self.targetDomain = self.domain = ntlm_info["domain"]
