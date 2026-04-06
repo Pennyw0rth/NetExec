@@ -34,13 +34,12 @@ def proto_args(parser, parents):
     cred_gathering_group.add_argument("--sam", choices={"regdump", "secdump"}, nargs="?", const="regdump", help="dump SAM hashes from target systems")
     cred_gathering_group.add_argument("--lsa", choices={"regdump", "secdump"}, nargs="?", const="regdump", help="dump LSA secrets from target systems")
     ntds_arg = cred_gathering_group.add_argument("--ntds", choices={"vss", "drsuapi"}, nargs="?", const="drsuapi", help="dump the NTDS.dit from target DCs using the specifed method")
+    cred_gathering_group.add_argument("--history", action="store_true", help="Also retrieve password history (NTDS.dit or SAM)")
     # NTDS options
     kerb_keys_arg = cred_gathering_group.add_argument("--kerberos-keys", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Also dump Kerberos AES and DES keys from target DC (NTDS.dit)")
     exclusive = cred_gathering_group.add_mutually_exclusive_group()
-    history_arg = exclusive.add_argument("--history", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Also retrieve password history from target DC (NTDS.dit)")
     enabled_arg = exclusive.add_argument("--enabled", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Only dump enabled targets from DC (NTDS.dit)")
     kerb_keys_arg.make_required = [ntds_arg]
-    history_arg.make_required = [ntds_arg]
     enabled_arg.make_required = [ntds_arg]
     cred_gathering_group.add_argument("--user", dest="userntds", type=str, help="Dump selected user from DC (NTDS.dit)")
     cred_gathering_group.add_argument("--dpapi", choices={"cookies", "nosystem"}, nargs="*", help="dump DPAPI secrets from target systems, can dump cookies if you add 'cookies', will not dump SYSTEM dpapi if you add nosystem")
