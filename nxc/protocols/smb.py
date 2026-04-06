@@ -4,6 +4,9 @@ import os
 import re
 import struct
 import ipaddress
+from pathlib import Path
+
+from nxc.helpers.path import sanitize_filename
 from Cryptodome.Hash import MD4
 from textwrap import dedent
 
@@ -2012,7 +2015,10 @@ class smb(connection):
             self.logger.display(f"Created empty directory '{local_folder_path}'")
 
         for item in filtered_items:
-            item_name = item.get_longname()
+            item_name = sanitize_filename(item.get_longname())
+            if not item_name:
+                self.logger.fail(f"Path traversal detected in '{item.get_longname()}', skipping")
+                continue
             dir_path = ntpath.normpath(ntpath.join(normalized_folder, item_name))
             self.logger.debug(f"Parsing item: {item_name}, {dir_path}")
 
@@ -2022,6 +2028,11 @@ class smb(connection):
             elif not item.is_directory():
                 remote_file_path = ntpath.join(folder, item_name)
                 local_file_path = os.path.join(local_folder_path, item_name)
+                # Defense-in-depth: verify path stays under destination
+                resolved = Path(local_file_path).resolve()
+                if not str(resolved).startswith(str(Path(dest).resolve()) + os.sep):
+                    self.logger.fail(f"Path traversal detected in '{item_name}', skipping")
+                    continue
                 self.logger.debug(f"{dest=} {remote_file_path=} {relative_path=} {local_folder_path=} {local_file_path=}")
 
                 try:
