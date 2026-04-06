@@ -1,3 +1,4 @@
+import contextlib
 import ntpath
 import time
 
@@ -17,7 +18,9 @@ def human_size(nbytes):
 
 class NXCModule:
     name = "shares-plus"
-    description = "Recursively enumerate shares with per-directory permissions and file listing"
+    description = (
+        "Recursively enumerate shares with per-directory permissions and file listing"
+    )
     supported_protocols = ["smb"]
     category = CATEGORY.ENUMERATION
     opsec_safe = True
@@ -32,18 +35,44 @@ class NXCModule:
         FILES       Show files in each directory (default: True)
         """
         self.depth = int(module_options.get("DEPTH", 3))
-        self.exclude = [s.lower() for s in module_options.get("EXCLUDE", "print$,ipc$").split(",") if s]
-        self.delta = module_options.get("DELTA", "True").lower() not in ("false", "0", "no")
-        self.write_check = module_options.get("WRITE_CHECK", "True").lower() not in ("false", "0", "no")
-        self.show_files = module_options.get("FILES", "True").lower() not in ("false", "0", "no")
+        self.exclude = [
+            s.lower()
+            for s in module_options.get("EXCLUDE", "print$,ipc$").split(",")
+            if s
+        ]
+        self.delta = module_options.get("DELTA", "True").lower() not in (
+            "false",
+            "0",
+            "no",
+        )
+        self.write_check = module_options.get("WRITE_CHECK", "True").lower() not in (
+            "false",
+            "0",
+            "no",
+        )
+        self.show_files = module_options.get("FILES", "True").lower() not in (
+            "false",
+            "0",
+            "no",
+        )
 
     def on_login(self, context, connection):
-        crawler = ShareCrawler(connection, context.log, self.depth, self.exclude, self.delta, self.write_check, self.show_files)
+        crawler = ShareCrawler(
+            connection,
+            context.log,
+            self.depth,
+            self.exclude,
+            self.delta,
+            self.write_check,
+            self.show_files,
+        )
         crawler.run()
 
 
 class ShareCrawler:
-    def __init__(self, smb, logger, max_depth, exclude, delta_only, write_check, show_files):
+    def __init__(
+        self, smb, logger, max_depth, exclude, delta_only, write_check, show_files
+    ):
         self.smb = smb
         self.logger = logger
         self.max_depth = max_depth
@@ -55,7 +84,7 @@ class ShareCrawler:
         self.results = {}
 
     def reconnect(self):
-        for i in range(self.max_reconnect):
+        for _i in range(self.max_reconnect):
             try:
                 time.sleep(2)
                 self.smb.create_conn_obj()
@@ -71,7 +100,14 @@ class ShareCrawler:
             entries = self.smb.conn.listPath(share, path + "*")
         except SessionError as e:
             err = str(e)
-            if any(s in err for s in ("STATUS_ACCESS_DENIED", "STATUS_OBJECT_PATH_NOT_FOUND", "STATUS_STOPPED_ON_SYMLINK")):
+            if any(
+                s in err
+                for s in (
+                    "STATUS_ACCESS_DENIED",
+                    "STATUS_OBJECT_PATH_NOT_FOUND",
+                    "STATUS_STOPPED_ON_SYMLINK",
+                )
+            ):
                 return None
             if self.reconnect():
                 try:
@@ -101,10 +137,8 @@ class ShareCrawler:
         temp_name = ntpath.normpath(path + "\\" + gen_random_string(8))
         try:
             self.smb.conn.createDirectory(share, temp_name)
-            try:
+            with contextlib.suppress(Exception):
                 self.smb.conn.deleteDirectory(share, temp_name)
-            except Exception:
-                pass
             return True
         except (SessionError, NetBIOSTimeout, Exception):
             return False
@@ -185,7 +219,6 @@ class ShareCrawler:
         share_list.sort(key=lambda s: s[0].lower() in deferred)
 
         for share_name, share_remark in share_list:
-
             # Single listPath for root
             result = self.list_path(share_name, "")
             read = result is not None
