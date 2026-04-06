@@ -43,7 +43,7 @@ class mssql(connection):
         self.os_arch = None
         self.lmhash = ""
         self.nthash = ""
-        self.is_mssql = False
+        self.no_ntlm = False
 
         connection.__init__(self, args, db, host)
 
@@ -67,7 +67,6 @@ class mssql(connection):
                 self.conn.disconnect()
             return False
         else:
-            self.is_mssql = True
             return True
 
     def reconnect_mssql(func):
@@ -146,7 +145,8 @@ class mssql(connection):
             else:
                 error_msg = login7_integrated_auth_error_message(login_response, challenge)
                 detail = f": {error_msg}" if error_msg else ""
-                self.logger.fail(f"Server does not support Integrated Windows Authentication{detail}")
+                self.logger.debug(f"Server does not support NTLM{detail}")
+                self.no_ntlm = True
 
         self.db.add_host(self.host, self.hostname, self.domain, self.server_os, len(self.mssql_instances))
 
