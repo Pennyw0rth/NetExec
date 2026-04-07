@@ -7,8 +7,10 @@ from impacket.dcerpc.v5.rpch import (
     RPC_PROXY_CONN_A1_404_ERR,
     RPC_PROXY_RPC_OUT_DATA_404_ERR,
 )
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from nxc.helpers.misc import CATEGORY
 from nxc.helpers.rpc import NXCRPCConnection
+
 
 class NXCModule:
     """
@@ -40,9 +42,13 @@ class NXCModule:
         try:
             rpc = NXCRPCConnection(connection, force_tcp=use_tcp)
             if use_tcp:
-                dce = rpc.connect(None, epm.MSRPC_UUID_PORTMAP)
+                rpc.rpc_transport = rpc.create_tcp_transport(target_ip=connection.host)
             else:
-                dce = rpc.connect(r"\epmapper", epm.MSRPC_UUID_PORTMAP)
+                rpc.rpc_transport = rpc.create_smb_transport(r"\epmapper")
+            dce = rpc.rpc_transport.get_dce_rpc()
+            if connection.kerberos:
+                dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+            dce.connect()
             entries = list(epm.hept_lookup(None, dce=dce))
             dce.disconnect()
         except Exception as e:
@@ -101,4 +107,3 @@ class NXCModule:
                 context.log.debug(f"[Spooler] Received {num} endpoints")
         else:
             context.log.debug("[Spooler] No endpoints found")
-
