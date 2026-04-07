@@ -184,13 +184,14 @@ class TSCH_EXEC:
                 dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
             dce.set_credentials(*self.__rpctransport.get_credentials())
             dce.connect()
-            dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
-            dce.bind(tsch.MSRPC_UUID_TSCHS)
 
         xml = self.gen_xml(command)
         self.logger.debug(f"Task XML: {xml}")
         self.logger.info(f"Creating task \\{self.task_name}")
         try:
+            if not self.__connection:
+                dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
+                dce.bind(tsch.MSRPC_UUID_TSCHS)
             tsch.hSchRpcRegisterTask(dce, f"\\{self.task_name}", xml, tsch.TASK_CREATE, NULL, tsch.TASK_LOGON_NONE)
         except Exception as e:
             if e.error_code and hex(e.error_code) == "0x80070005":
