@@ -55,11 +55,9 @@ class NXCModule:
     def on_login(self, context, connection):
         connection.trigger_winreg()
 
-        # Connect to RemoteRegistry to read UBR from registry
-        dce = NXCRPCConnection(connection).connect(r"\winreg", rrp.MSRPC_UUID_RRP)
-
-        # Query the UBR
         try:
+            # Connect to RemoteRegistry to read UBR from registry
+            dce = NXCRPCConnection(connection).connect(r"\winreg", rrp.MSRPC_UUID_RRP)
             # Reading UBR from registry
             hRootKey = rrp.hOpenLocalMachine(dce)["phKey"]
             hKey = rrp.hBaseRegOpenKey(dce, hRootKey, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion")["phkResult"]
