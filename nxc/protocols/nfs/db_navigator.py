@@ -16,10 +16,7 @@ class navigator(DatabaseNavigator):
 
     def display_hosts(self, hosts):
         data = [["HostID", "Host", "Version", "Escape"]]
-
-        for host in hosts:
-            data.append([host[0], host[1], host[2], bool(host[3])])
-
+        data.extend([host[0], host[1], host[2], bool(host[3])] for host in hosts)
         print_table(data, title="Hosts")
 
     def do_hosts(self, line):
@@ -34,8 +31,7 @@ class navigator(DatabaseNavigator):
                 self.display_hosts(hosts)
             elif len(hosts) == 1:
                 data = [["HostID", "Host", "Version", "Escape"]]
-                for host in hosts:
-                    data.append([host[0], host[1], host[2], bool(host[3])])
+                data.extend([host[0], host[1], host[2], bool(host[3])] for host in hosts)
                 print_table(data, title="Host")
 
     def help_hosts(self):
