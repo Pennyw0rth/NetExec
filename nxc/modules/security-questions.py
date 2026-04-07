@@ -126,5 +126,5 @@ class NXCModule:
                     if server_handle is not None:
                         samr.hSamrCloseHandle(dce, server_handle)
                     dce.disconnect()
-                except Exception:
-                    pass
+                except Exception as e:
+                    context.log.debug(f"Error during SAMR cleanup: {e}")
