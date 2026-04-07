@@ -16,16 +16,9 @@ class navigator(DatabaseNavigator):
 
     def display_hosts(self, hosts):
         data = [["HostID", "Host", "Version", "Escape"]]
-        host_id_list = []
 
         for host in hosts:
-            host_id = host[0]
-            host_id_list.append(host_id)
-            ip = host[1]
-            version = host[2]
-            escape = bool(host[3])
-
-            data.append([host_id, ip, version, escape])
+            data.append([host[0], host[1], host[2], bool(host[3])])
 
         print_table(data, title="Hosts")
 
@@ -37,21 +30,12 @@ class navigator(DatabaseNavigator):
             self.display_hosts(hosts)
         else:
             hosts = self.db.get_hosts(filter_term=filter_term)
-            print(hosts)
             if len(hosts) > 1:
                 self.display_hosts(hosts)
             elif len(hosts) == 1:
                 data = [["HostID", "Host", "Version", "Escape"]]
-                host_id_list = []
-
                 for host in hosts:
-                    host_id = host[0]
-                    host_id_list.append(host_id)
-                    ip = host[1]
-                    version = host[2]
-                    escape = bool(host[3])
-
-                    data.append([host_id, ip, version, escape])
+                    data.append([host[0], host[1], host[2], bool(host[3])])
                 print_table(data, title="Host")
 
     def help_hosts(self):
@@ -91,15 +75,8 @@ class navigator(DatabaseNavigator):
         print_table(data, title="Shares")
 
     def do_shares(self, line):
-        host_filter = line.strip()
-        if host_filter:
-            q = self.db.SharesTable.select().where(
-                self.db.SharesTable.c.host.like(f"%{host_filter}%")
-            )
-            shares = self.db.db_execute(q).all()
-        else:
-            q = self.db.SharesTable.select()
-            shares = self.db.db_execute(q).all()
+        filter_term = line.strip() or None
+        shares = self.db.get_shares(filter_term=filter_term)
 
         if shares:
             self.display_shares(shares)
@@ -157,7 +134,7 @@ class navigator(DatabaseNavigator):
             else:
                 print(f"[-] No such export option: {line[1]}")
         else:
-            super().do_export(" ".join(line))
+            print(f"[-] Export command '{command}' is not supported for NFS. Supported: shares")
 
     def help_export(self):
         help_string = """

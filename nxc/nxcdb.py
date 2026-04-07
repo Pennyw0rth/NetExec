@@ -240,7 +240,6 @@ class DatabaseNavigator(cmd.Cmd):
             else:
                 print(f"[-] No such export option: {line[1]}")
                 return
-
         # Local Admin
         elif command == "local_admins":
             if len(line) < 3:
@@ -469,7 +468,7 @@ class NXCDBMenu(cmd.Cmd):
     @staticmethod
     def help_proto():
         help_string = """
-        proto [smb|mssql|winrm|nfs]
+        proto [smb|mssql|winrm]
             *unimplemented protocols: ftp, rdp, ldap, ssh
         Changes nxcdb to the specified protocol
         """
