@@ -49,7 +49,7 @@ a = Analysis(
         'nxc.helpers.bloodhound',
         'nxc.helpers.even6_parser',
         'nxc.helpers.msada_guids',
-        'nxc.helpers.ntlm_parser',
+        'nxc.helpers.negotiate_parser',
         'paramiko',
         'pefile',
         'pypsrp.client',

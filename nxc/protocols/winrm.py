@@ -22,7 +22,7 @@ from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import gen_random_string
-from nxc.helpers.ntlm_parser import parse_challenge
+from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.logger import NXCAdapter
 from nxc.paths import TMP_PATH
 
@@ -78,6 +78,11 @@ class winrm(connection):
             self.domain = self.args.domain
         if self.args.local_auth:
             self.domain = self.hostname
+
+        if not self.kdcHost and self.domain and self.domain == self.targetDomain:
+            result = self.resolver(self.domain)
+            self.kdcHost = result["host"] if result else None
+            self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
         self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
