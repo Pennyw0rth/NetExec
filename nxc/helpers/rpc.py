@@ -74,7 +74,7 @@ class NXCRPCConnection:
         conn = self.connection
 
         if conn.conn is not None:
-            return transport.SMBTransport(conn.conn.getRemoteName(), conn.conn.getRemoteHost(), filename=named_pipe, smb_connection=conn.conn)
+            return transport.SMBTransport(conn.conn.getRemoteHost(), filename=named_pipe, smb_connection=conn.conn,)
         result = transport.SMBTransport(conn.remoteName, conn.port, named_pipe, conn.username, conn.password if conn.password else "", conn.domain, conn.lmhash, conn.nthash, conn.aesKey, doKerberos=conn.kerberos, kdcHost=conn.kdcHost)
         if target_ip or conn.host:
             result.setRemoteHost(target_ip or conn.host)
