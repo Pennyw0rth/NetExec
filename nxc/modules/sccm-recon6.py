@@ -1,9 +1,9 @@
 
 import contextlib
-from impacket.dcerpc.v5 import transport, rrp
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
+from impacket.dcerpc.v5 import rrp
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.rpc import NXCRPCConnection
 from impacket.smbconnection import SMBConnection
 
 
@@ -24,18 +24,9 @@ class NXCModule:
 
         connection.trigger_winreg()
 
-        rpc = transport.DCERPCTransportFactory(r"ncacn_np:445[\pipe\winreg]")
-        rpc.set_smb_connection(connection.conn)
-
-        if connection.kerberos:
-            rpc.set_kerberos(connection.kerberos, kdcHost=connection.kdcHost)
-        dce = rpc.get_dce_rpc()
-        if connection.kerberos:
-            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-
+        dce = None
         try:
-            dce.connect()
-            dce.bind(rrp.MSRPC_UUID_RRP)
+            dce = NXCRPCConnection(connection).connect(r"\winreg", rrp.MSRPC_UUID_RRP)
 
             # Open HKEY_LOCAL_MACHINE
             ans = rrp.hOpenLocalMachine(dce)
@@ -54,8 +45,9 @@ class NXCModule:
         except Exception as e:
             self.context.log.fail(f"Unexpected error: {e}")
         finally:
-            with contextlib.suppress(Exception):
-                dce.disconnect()
+            if dce is not None:
+                with contextlib.suppress(Exception):
+                    dce.disconnect()
 
     def EnumerateSS(self, dce, hRootKey):
         # Open the target registry key

@@ -7,6 +7,7 @@ from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket import uuid
 import requests
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.rpc import NXCRPCConnection
 
 
 class NXCModule:
@@ -68,8 +69,13 @@ class NXCModule:
         else:
             rpctransport.setRemoteHost(connection.host)
 
+        dce = None
         try:
-            entries = self.__fetchList(connection.kerberos, rpctransport)
+            if int(self.__port) == 135:
+                dce = NXCRPCConnection(connection, force_tcp=True).connect(None, epm.MSRPC_UUID_PORTMAP)
+                entries = list(epm.hept_lookup(None, dce=dce))
+            else:
+                entries = self.__fetchList(connection.kerberos, rpctransport)
         except Exception as e:
             error_text = f"Protocol failed: {e}"
             context.log.fail(error_text)
@@ -81,6 +87,12 @@ class NXCModule:
                 context.log.fail("This usually means the target does not allow "
                                  "to connect to its epmapper using RpcProxy.")
             return
+        finally:
+            if dce is not None:
+                try:
+                    dce.disconnect()
+                except Exception:
+                    pass
 
         for entry in entries:
             tmpUUID = str(entry["tower"]["Floors"][0])

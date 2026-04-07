@@ -1,20 +1,14 @@
 # https://raw.githubusercontent.com/SecureAuthCorp/impacket/master/examples/rpcdump.py
 from impacket import uuid
-from impacket.dcerpc.v5 import transport, epm
+from impacket.dcerpc.v5 import epm
 from impacket.dcerpc.v5.rpch import (
     RPC_PROXY_INVALID_RPC_PORT_ERR,
     RPC_PROXY_CONN_A1_0X6BA_ERR,
     RPC_PROXY_CONN_A1_404_ERR,
     RPC_PROXY_RPC_OUT_DATA_404_ERR,
 )
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from nxc.helpers.misc import CATEGORY
-
-KNOWN_PROTOCOLS = {
-    135: {"bindstr": r"ncacn_ip_tcp:%s[135]"},
-    445: {"bindstr": r"ncacn_np:%s[\pipe\epmapper]"},
-}
-
+from nxc.helpers.rpc import NXCRPCConnection
 
 class NXCModule:
     """
@@ -41,21 +35,16 @@ class NXCModule:
 
     def on_login(self, context, connection):
         entries = []
-        lmhash = getattr(connection, "lmhash", "")
-        nthash = getattr(connection, "nthash", "")
 
-        self.__stringbinding = KNOWN_PROTOCOLS[self.port]["bindstr"] % connection.host
-        context.log.debug(f"StringBinding {self.__stringbinding}")
-        rpctransport = transport.DCERPCTransportFactory(self.__stringbinding)
-        rpctransport.set_credentials(connection.username, connection.password, connection.domain, lmhash, nthash)
-        rpctransport.setRemoteHost(connection.host)
-        rpctransport.set_dport(self.port)
-
-        if connection.kerberos:
-            rpctransport.set_kerberos(connection.kerberos, connection.kdcHost)
-
+        use_tcp = self.port == 135
         try:
-            entries = self.__fetch_list(connection.kerberos, rpctransport)
+            rpc = NXCRPCConnection(connection, force_tcp=use_tcp)
+            if use_tcp:
+                dce = rpc.connect(None, epm.MSRPC_UUID_PORTMAP)
+            else:
+                dce = rpc.connect(r"\epmapper", epm.MSRPC_UUID_PORTMAP)
+            entries = list(epm.hept_lookup(None, dce=dce))
+            dce.disconnect()
         except Exception as e:
             error_text = f"Protocol failed: {e}"
             context.log.critical(error_text)
@@ -113,11 +102,3 @@ class NXCModule:
         else:
             context.log.debug("[Spooler] No endpoints found")
 
-    def __fetch_list(self, doKerberos, rpctransport):
-        dce = rpctransport.get_dce_rpc()
-        if doKerberos:
-            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-        dce.connect()
-        resp = epm.hept_lookup(None, dce=dce)
-        dce.disconnect()
-        return resp

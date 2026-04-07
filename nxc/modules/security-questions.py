@@ -1,9 +1,10 @@
-from impacket.dcerpc.v5 import samr, transport
+from impacket.dcerpc.v5 import samr
 from impacket.nt_errors import STATUS_MORE_ENTRIES
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from json import loads
 from traceback import format_exc as traceback_format_exc
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.rpc import NXCRPCConnection
 
 
 class NXCModule:
@@ -46,24 +47,14 @@ class NXCModule:
             self.__nthash = context.hash[0]
             self.__lmhash = "00000000000000000000000000000000"
 
-        self.getSAMRResetInfo(context)
+        self.getSAMRResetInfo(context, connection)
 
-    def getSAMRResetInfo(self, context):
-        string_binding = f"ncacn_np:{self.__targetIp}[\\pipe\\samr]"
-        rpc_transport = transport.DCERPCTransportFactory(string_binding)
-        rpc_transport.set_dport(445)
-        rpc_transport.setRemoteHost(self.__targetIp)
-
-        if hasattr(rpc_transport, "set_credentials"):
-            # This method exists only for selected protocol sequences.
-            rpc_transport.set_credentials(self.__username, self.__password, self.__domain, self.__lmhash,
-                                         self.__nthash, self.__aesKey)
-        rpc_transport.set_kerberos(self.__doKerberos, self.__kdcHost)
-
+    def getSAMRResetInfo(self, context, connection):
+        dce = None
+        server_handle = None
+        domain_handle = None
         try:
-            dce = rpc_transport.get_dce_rpc()
-            dce.connect()
-            dce.bind(samr.MSRPC_UUID_SAMR)
+            dce = NXCRPCConnection(connection).connect(r"\samr", samr.MSRPC_UUID_SAMR)
 
             # obtain server handle for samr connection
             resp = samr.hSamrConnect(dce)
@@ -128,8 +119,12 @@ class NXCModule:
             context.log.debug(traceback_format_exc())
 
         finally:
-            if domain_handle is not None:
-                samr.hSamrCloseHandle(dce, domain_handle)
-            if server_handle is not None:
-                samr.hSamrCloseHandle(dce, server_handle)
-            dce.disconnect()
+            if dce is not None:
+                try:
+                    if domain_handle is not None:
+                        samr.hSamrCloseHandle(dce, domain_handle)
+                    if server_handle is not None:
+                        samr.hSamrCloseHandle(dce, server_handle)
+                    dce.disconnect()
+                except Exception:
+                    pass

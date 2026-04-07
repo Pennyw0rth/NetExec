@@ -3,11 +3,11 @@
 # Module by @mpgn_x64
 # https://twitter.com/mpgn_x64
 
-from impacket.dcerpc.v5 import lsat, lsad, transport
+from impacket.dcerpc.v5 import lsat, lsad
 from impacket.dcerpc.v5.dtypes import NULL, MAXIMUM_ALLOWED, RPC_UNICODE_STRING
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 import pathlib
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.rpc import NXCRPCConnection
 
 
 class NXCModule:
@@ -45,20 +45,9 @@ class NXCModule:
         results = {}
 
         try:
-            lsa = LsaLookupNames(
-                domain=connection.domain,
-                username=connection.username,
-                password=connection.password,
-                remote_name=target,
-                do_kerberos=connection.kerberos,
-                remoteHost=connection.host,
-                kdcHost=connection.kdcHost,
-                lmhash=connection.lmhash,
-                nthash=connection.nthash,
-                aesKey=connection.aesKey
-            )
+            lsa = LsaLookupNames(connection=connection)
 
-            dce, _ = lsa.connect()
+            dce = lsa.connect()
             policyHandle = lsa.open_policy(dce)
             for product in conf["products"]:
                 for service in product["services"]:
@@ -103,82 +92,11 @@ class NXCModule:
 
 
 class LsaLookupNames:
-    timeout = None
-    authn_level = None
-    protocol = None
-    transfer_syntax = None
-    machine_account = False
+    def __init__(self, connection=None):
+        self.connection = connection
 
-    iface_uuid = lsat.MSRPC_UUID_LSAT
-    authn = True
-
-    def __init__(
-        self,
-        domain="",
-        username="",
-        password="",
-        remote_name="",
-        do_kerberos=False,
-        remoteHost="",
-        kdcHost="",
-        lmhash="",
-        nthash="",
-        aesKey="",
-    ):
-        self.domain = domain
-        self.username = username
-        self.password = password
-        self.remoteName = remote_name
-        self.string_binding = rf"ncacn_np:{remote_name}[\PIPE\lsarpc]"
-        self.doKerberos = do_kerberos
-        self.lmhash = lmhash
-        self.nthash = nthash
-        self.aesKey = aesKey
-        self.kdcHost = kdcHost
-        self.remoteHost = remoteHost
-
-    def connect(self, string_binding=None, iface_uuid=None):
-        """Obtains a RPC Transport and a DCE interface according to the bindings and
-        transfer syntax specified.
-        :return: tuple of DCE/RPC and RPC Transport objects
-        :rtype: (DCERPC_v5, DCERPCTransport)
-        """
-        string_binding = string_binding or self.string_binding
-        if not string_binding:
-            raise NotImplementedError("String binding must be defined")
-
-        rpc_transport = transport.DCERPCTransportFactory(string_binding)
-        rpc_transport.setRemoteHost(self.remoteHost)
-
-        # Set timeout if defined
-        if self.timeout:
-            rpc_transport.set_connect_timeout(self.timeout)
-
-        # Authenticate if specified
-        if self.authn and hasattr(rpc_transport, "set_credentials"):
-            # This method exists only for selected protocol sequences.
-            rpc_transport.set_credentials(self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey)
-
-        if self.doKerberos:
-            rpc_transport.set_kerberos(self.doKerberos, kdcHost=self.kdcHost)
-
-        # Gets the DCE RPC object
-        dce = rpc_transport.get_dce_rpc()
-
-        if self.doKerberos:
-            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-
-        # Connect
-        dce.connect()
-
-        # Bind if specified
-        iface_uuid = iface_uuid or self.iface_uuid
-        if iface_uuid and self.transfer_syntax:
-            dce.bind(iface_uuid, transfer_syntax=self.transfer_syntax)
-        elif iface_uuid:
-            dce.bind(iface_uuid)
-
-        return dce, rpc_transport
+    def connect(self):
+        return NXCRPCConnection(self.connection).connect(r"\lsarpc", lsat.MSRPC_UUID_LSAT)
 
     def open_policy(self, dce):
         request = lsad.LsarOpenPolicy2()

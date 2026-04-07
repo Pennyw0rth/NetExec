@@ -21,9 +21,9 @@ from impacket.examples.regsecrets import (
     LSASecrets as RegSecretsLSASecrets
 )
 from impacket.nmb import NetBIOSError, NetBIOSTimeout
-from impacket.dcerpc.v5 import transport, lsat, lsad, scmr, rrp, srvs, wkst
+from impacket.dcerpc.v5 import lsat, lsad, scmr, rrp, srvs, wkst
 from impacket.dcerpc.v5.rpcrt import DCERPCException
-from impacket.dcerpc.v5.transport import DCERPCTransportFactory, SMBTransport
+from impacket.dcerpc.v5.transport import DCERPCTransportFactory
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.dcerpc.v5.epm import MSRPC_UUID_PORTMAP
 from impacket.dcerpc.v5.samr import SID_NAME_USE
@@ -56,6 +56,7 @@ from nxc.protocols.smb.samrfunc import SamrFunc
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.helpers.logger import highlight
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.rpc import NXCRPCConnection
 from nxc.helpers.powershell import create_ps_command
 from nxc.helpers.misc import detect_if_ip
 from nxc.protocols.ldap.resolution import LDAPResolution
@@ -645,27 +646,23 @@ class smb(connection):
         if self.args.no_admin_check:
             return
         self.logger.debug(f"Checking if user is admin on {self.host}")
-        rpctransport = SMBTransport(self.conn.getRemoteHost(), 445, r"\svcctl", smb_connection=self.conn)
-        dce = rpctransport.get_dce_rpc()
         try:
-            dce.connect()
+            dce = NXCRPCConnection(self).connect(r"\svcctl", scmr.MSRPC_UUID_SCMR)
         except Exception:
             self.admin_privs = False
-        else:
-            with contextlib.suppress(Exception):
-                dce.bind(scmr.MSRPC_UUID_SCMR)
-            try:
-                # 0xF003F - SC_MANAGER_ALL_ACCESS
-                # http://msdn.microsoft.com/en-us/library/windows/desktop/ms685981(v=vs.85).aspx
-                scmrobj = scmr.hROpenSCManagerW(dce, f"{self.host}\x00", "ServicesActive\x00", 0xF003F)
-                scmr.hREnumServicesStatusW(dce, scmrobj["lpScHandle"])
-                self.logger.debug(f"User is admin on {self.host}!")
-                self.admin_privs = True
-            except scmr.DCERPCException:
-                self.admin_privs = False
-            except Exception as e:
-                self.logger.fail(f"Error checking if user is admin on {self.host}: {e}")
-                self.admin_privs = False
+            return
+        try:
+            # 0xF003F - SC_MANAGER_ALL_ACCESS
+            # http://msdn.microsoft.com/en-us/library/windows/desktop/ms685981(v=vs.85).aspx
+            scmrobj = scmr.hROpenSCManagerW(dce, f"{self.host}\x00", "ServicesActive\x00", 0xF003F)
+            scmr.hREnumServicesStatusW(dce, scmrobj["lpScHandle"])
+            self.logger.debug(f"User is admin on {self.host}!")
+            self.admin_privs = True
+        except scmr.DCERPCException:
+            self.admin_privs = False
+        except Exception as e:
+            self.logger.fail(f"Error checking if user is admin on {self.host}: {e}")
+            self.admin_privs = False
 
     def gen_relay_list(self):
         if self.server_os.lower().find("windows") != -1 and self.signing is False:
@@ -910,7 +907,8 @@ class smb(connection):
                         self.hash,
                         self.logger,
                         self.args.get_output_tries,
-                        self.args.share
+                        self.args.share,
+                        connection=self,
                     )
                     self.logger.info("Executed command via atexec")
                     break
@@ -935,7 +933,8 @@ class smb(connection):
                         self.args.share,
                         self.port,
                         self.logger,
-                        self.args.get_output_tries
+                        self.args.get_output_tries,
+                        connection=self,
                     )
                     self.logger.info("Executed command via smbexec")
                     break
@@ -1276,12 +1275,10 @@ class smb(connection):
                 self.logger.info(f"No active session found for specified user(s) using the Remote Registry service on {self.hostname}.")
 
         # Bind to the Remote Registry Pipe
-        rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\winreg", smb_connection=self.conn)
+        rpc = NXCRPCConnection(self)
         for binding_attempts in range(2, 0, -1):
-            dce = rpctransport.get_dce_rpc()
             try:
-                dce.connect()
-                dce.bind(rrp.MSRPC_UUID_RRP)
+                dce = rpc.connect(r"\winreg", rrp.MSRPC_UUID_RRP)
                 break
             except SessionError as e:
                 self.logger.debug(f"Could not bind to the Remote Registry on {self.hostname}: {e}")
@@ -1335,11 +1332,8 @@ class smb(connection):
             return
 
         # Bind to the LSARPC Pipe for SID resolution
-        rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\lsarpc", smb_connection=self.conn)
-        dce = rpctransport.get_dce_rpc()
         try:
-            dce.connect()
-            dce.bind(lsat.MSRPC_UUID_LSAT)
+            dce = NXCRPCConnection(self).connect(r"\lsarpc", lsat.MSRPC_UUID_LSAT)
         except Exception as e:
             self.logger.debug(f"Failed to connect to LSARPC for SID resolution on {self.hostname}: {e}")
             output(sessions)
@@ -1657,10 +1651,7 @@ class smb(connection):
 
     def disks(self):
         try:
-            rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\srvsvc", smb_connection=self.conn)
-            dce = rpctransport.get_dce_rpc()
-            dce.connect()
-            dce.bind(srvs.MSRPC_UUID_SRVS)
+            dce = NXCRPCConnection(self).connect(r"\srvsvc", srvs.MSRPC_UUID_SRVS)
 
             response = srvs.hNetrServerDiskEnum(dce, 0)
             # Process the response
@@ -1716,10 +1707,7 @@ class smb(connection):
 
         logged_on = set()
         try:
-            rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\wkssvc", smb_connection=self.conn)
-            dce = rpctransport.get_dce_rpc()
-            dce.connect()
-            dce.bind(wkst.MSRPC_UUID_WKST)
+            dce = NXCRPCConnection(self).connect(r"\wkssvc", wkst.MSRPC_UUID_WKST)
 
             response = wkst.hNetrWkstaUserEnum(dce, 1)
             for user in response["UserInfo"]["WkstaUserInfo"]["Level1"]["Buffer"]:
@@ -1832,40 +1820,12 @@ class smb(connection):
         if not max_rid:
             max_rid = int(self.args.rid_brute)
 
-        KNOWN_PROTOCOLS = {
-            135: {"bindstr": rf"ncacn_ip_tcp:{self.remoteName}"},
-            139: {"bindstr": rf"ncacn_np:{self.remoteName}[\pipe\lsarpc]"},
-            445: {"bindstr": rf"ncacn_np:{self.remoteName}[\pipe\lsarpc]"},
-        }
-
         try:
-            string_binding = KNOWN_PROTOCOLS[self.port]["bindstr"]
-            self.logger.debug(f"StringBinding {string_binding}")
-            rpc_transport = transport.DCERPCTransportFactory(string_binding)
-            rpc_transport.setRemoteHost(self.remoteName)
-
-            if hasattr(rpc_transport, "set_credentials"):
-                # This method exists only for selected protocol sequences.
-                rpc_transport.set_credentials(self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey)
-
-            if self.kerberos:
-                rpc_transport.set_kerberos(self.kerberos, self.kdcHost)
-
-            dce = rpc_transport.get_dce_rpc()
-            if self.kerberos:
-                dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-
-            dce.connect()
+            use_tcp = self.port == 135
+            dce = NXCRPCConnection(self, force_tcp=use_tcp).connect(r"\lsarpc", lsat.MSRPC_UUID_LSAT)
         except Exception as e:
             self.logger.fail(f"Error creating DCERPC connection: {e}")
             return entries
-
-        # Want encryption? Uncomment next line
-        # But make simultaneous variable <= 100
-
-        # Want fragmentation? Uncomment next line
-
-        dce.bind(lsat.MSRPC_UUID_LSAT)
         try:
             resp = lsad.hLsarOpenPolicy2(dce, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES)
         except lsad.DCERPCSessionError as e:

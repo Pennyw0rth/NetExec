@@ -1,8 +1,9 @@
 import sys
 
-from impacket.dcerpc.v5 import samr, transport
+from impacket.dcerpc.v5 import samr
 from impacket.ldap.ldap import LDAPSessionError, MODIFY_REPLACE
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.rpc import NXCRPCConnection
 
 
 class NXCModule:
@@ -81,12 +82,9 @@ class NXCModule:
 
     def _do_samr(self):
         conn = self.connection
-        rpc_transport = transport.SMBTransport(conn.conn.getRemoteHost(), 445, r"\samr", smb_connection=conn.conn)
 
         try:
-            dce = rpc_transport.get_dce_rpc()
-            dce.connect()
-            dce.bind(samr.MSRPC_UUID_SAMR)
+            dce = NXCRPCConnection(conn).connect(r"\samr", samr.MSRPC_UUID_SAMR)
         except Exception as e:
             self.context.log.fail(f"Failed to connect to SAMR: {e}")
             return
