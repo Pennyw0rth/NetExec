@@ -1,3 +1,5 @@
+# DCE/RPC over SMB/TCP using the NXC connection's creds; reuse SMB when already
+# logged in so Kerberos delegation (e.g. S4U2Proxy ST) applies to pipe RPC too.
 import contextlib
 
 from impacket.dcerpc.v5 import transport
@@ -5,12 +7,6 @@ from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 
 
 class NXCRPCConnection:
-    """Centralised DCE/RPC connection factory for NetExec.
-
-    Reuses the existing SMB session when available so that delegated
-    Service Tickets (S4U2Proxy) are automatically inherited.
-    """
-
     def __init__(self, connection, force_tcp=False):
         self.connection = connection
         self.force_tcp = force_tcp
