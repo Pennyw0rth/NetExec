@@ -190,6 +190,7 @@ class TSCH_EXEC:
         self.logger.info(f"Creating task \\{self.task_name}")
         try:
             if not self.__connection:
+                # Windows server 2003 has no MSRPC_UUID_TSCHS, if it bind, it will return abstract_syntax_not_supported
                 dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
                 dce.bind(tsch.MSRPC_UUID_TSCHS)
             tsch.hSchRpcRegisterTask(dce, f"\\{self.task_name}", xml, tsch.TASK_CREATE, NULL, tsch.TASK_LOGON_NONE)
