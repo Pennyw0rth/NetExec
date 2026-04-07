@@ -785,37 +785,49 @@ class ldap(connection):
     def ous(self):
         # Building the search filter
         if self.args.ous:
+            # Find the OU's distinguished name first
             self.logger.debug(f"Dumping users from OU: {self.args.ous}")
-            search_filter = "(&(objectCategory=person)(objectClass=user))"
-            attributes = ["cn", "sAMAccountName", "distinguishedName"]
-        else:
-            self.logger.debug("Dumping all organizational units")
-            search_filter = "(objectCategory=organizationalUnit)"
-            attributes = ["ou", "distinguishedName"]
+            ou_resp = self.search(
+                f"(&(objectCategory=organizationalUnit)(ou={self.args.ous}))",
+                ["distinguishedName"],
+                0,
+            )
+            ou_parsed = parse_result_attributes(ou_resp)
 
-        # Perform the search
-        resp = self.search(search_filter, attributes, 0)
-        resp_parsed = parse_result_attributes(resp)
+            if not ou_parsed:
+                self.logger.fail(f"OU '{self.args.ous}' not found")
+                return
 
-        self.logger.debug(f"Total of records returned: {len(resp_parsed)}")
+            ou_dn = ou_parsed[0]["distinguishedName"]
+            self.logger.debug(f"Found OU DN: {ou_dn}")
 
-        # Process results
-        if self.args.ous:
-            found_users = []
-            target_ou = self.args.ous.upper()
+            # Search for users scoped to that OU
+            resp = self.search(
+                "(&(objectCategory=person)(objectClass=user))",
+                ["sAMAccountName", "cn"],
+                0,
+                baseDN=ou_dn,
+            )
+            resp_parsed = parse_result_attributes(resp)
+            self.logger.debug(f"Total of records returned: {len(resp_parsed)}")
+
+            if not resp_parsed:
+                self.logger.fail(f"OU '{self.args.ous}' has no users")
+                return
+
             for user in resp_parsed:
-                dn = user["distinguishedName"].upper()
-                if f"OU={target_ou}" in dn:
-                    username = user.get("sAMAccountName", user.get("cn", "Unknown"))
-                    self.logger.highlight(username)
-                    found_users.append(username)
-
-            if not found_users:
-                self.logger.fail(f"OU {self.args.ous} not found or has no users")
+                self.logger.highlight(user.get("sAMAccountName", user.get("cn", "Unknown")))
         else:
+            # List all OUs
+            self.logger.debug("Dumping all organizational units")
+            resp = self.search("(objectCategory=organizationalUnit)", ["ou", "distinguishedName"], 0)
+            resp_parsed = parse_result_attributes(resp)
+            self.logger.debug(f"Total of records returned: {len(resp_parsed)}")
+
+            self.logger.highlight(f"{'-OU-':<40} {'-Distinguished Name-'}")
             for item in resp_parsed:
                 try:
-                    ou_name = item.get("ou", "Unknown")
+                    ou_name = item["ou"]
                     dn = item["distinguishedName"]
                     self.logger.highlight(f"{ou_name:<40} {dn}")
                 except Exception as e:
