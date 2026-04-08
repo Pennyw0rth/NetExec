@@ -50,6 +50,12 @@ from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.paths import CONFIG_PATH
 
+try:
+    import ldapx
+    HAS_LDAPX = True
+except ImportError:
+    HAS_LDAPX = False
+
 ldap_error_status = {
     "1": "STATUS_NOT_SUPPORTED",
     "533": "STATUS_ACCOUNT_DISABLED",
@@ -89,6 +95,10 @@ class ldap(connection):
         self.sid_domain = ""
         self.scope = None
         self.configuration_context = ""
+        self.obfuscate = False
+        self.obfuscate_filter_chain = ""
+        self.obfuscate_basedn_chain = None
+        self.obfuscate_attrs_chain = None
 
         connection.__init__(self, args, db, host)
 
@@ -103,6 +113,19 @@ class ldap(connection):
         )
 
     def create_conn_obj(self):
+        if getattr(self.args, "obfuscate", False):
+            if not HAS_LDAPX:
+                self.logger.fail("--obfuscate requires ldapx. Install with: pip install ldapx")
+                return False
+            self.obfuscate = True
+            self.obfuscate_filter_chain = getattr(self.args, "obfuscate_filter", "CSG")
+            self.obfuscate_basedn_chain = getattr(self.args, "obfuscate_basedn", None)
+            self.obfuscate_attrs_chain = getattr(self.args, "obfuscate_attrs", None)
+            if self.obfuscate_filter_chain and "O" in self.obfuscate_filter_chain:
+                self.logger.fail("Filter chain code 'O' (OID) is incompatible with impacket's LDAP parser. Remove it from --obfuscate-filter.")
+                return False
+            self.logger.info(f"LDAP obfuscation enabled: filter={self.obfuscate_filter_chain}, baseDN={self.obfuscate_basedn_chain or 'disabled'}, attrs={self.obfuscate_attrs_chain or 'disabled'}")
+
         try:
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.host}"
@@ -660,6 +683,11 @@ class ldap(connection):
         elif baseDN is None:
             baseDN = self.baseDN
 
+        if self.obfuscate:
+            searchFilter = self._obfuscate_filter(searchFilter)
+            baseDN = self._obfuscate_basedn(baseDN)
+            attributes = self._obfuscate_attrs(attributes)
+
         try:
             if self.ldap_connection:
                 self.logger.debug(f"Search Filter={searchFilter}")
@@ -687,6 +715,39 @@ class ldap(connection):
                 self.logger.fail(e)
                 return []
         return []
+
+    def _obfuscate_filter(self, search_filter):
+        if not self.obfuscate_filter_chain or not search_filter:
+            return search_filter
+        try:
+            obfuscated = ldapx.obfuscate_filter(search_filter, self.obfuscate_filter_chain)
+            self.logger.debug(f"Obfuscated filter: {obfuscated}")
+            return obfuscated
+        except Exception as e:
+            self.logger.debug(f"ldapx filter obfuscation failed, using original: {e}")
+            return search_filter
+
+    def _obfuscate_basedn(self, base_dn):
+        if not self.obfuscate_basedn_chain or not base_dn:
+            return base_dn
+        try:
+            obfuscated = ldapx.obfuscate_basedn(base_dn, self.obfuscate_basedn_chain)
+            self.logger.debug(f"Obfuscated baseDN: {obfuscated}")
+            return obfuscated
+        except Exception as e:
+            self.logger.debug(f"ldapx baseDN obfuscation failed, using original: {e}")
+            return base_dn
+
+    def _obfuscate_attrs(self, attributes):
+        if not self.obfuscate_attrs_chain or not attributes:
+            return attributes
+        try:
+            obfuscated = ldapx.obfuscate_attrlist(attributes, self.obfuscate_attrs_chain)
+            self.logger.debug(f"Obfuscated attributes: {obfuscated}")
+            return obfuscated
+        except Exception as e:
+            self.logger.debug(f"ldapx attribute obfuscation failed, using original: {e}")
+            return attributes
 
     def users(self):
         """
@@ -1295,12 +1356,7 @@ class ldap(connection):
                     sids = [ace["Ace"]["Sid"].formatCanonical() for ace in dacl["Dacl"]["Data"] if ace["AceType"] == 0x00]
                     self.logger.debug(f"msDS-GroupMSAMembership: {sids}")
                     search_filter = "(|" + "".join([f"(objectSid={sid})" for sid in sids]) + ")"
-                    resp = self.ldap_connection.search(
-                        searchBase=self.baseDN,
-                        searchFilter=search_filter,
-                        attributes=["sAMAccountName"],
-                        sizeLimit=0,
-                    )
+                    resp = self.search(search_filter, ["sAMAccountName"])
                     resp_parsed = parse_result_attributes(resp)
                     if len(resp_parsed) > 1:
                         principal_with_read = [f"{item['sAMAccountName']}" for item in resp_parsed]
@@ -1340,12 +1396,7 @@ class ldap(connection):
             else:
                 # getting the gmsa account
                 search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
-                gmsa_accounts = self.ldap_connection.search(
-                    searchBase=self.baseDN,
-                    searchFilter=search_filter,
-                    attributes=["sAMAccountName"],
-                    sizeLimit=0,
-                )
+                gmsa_accounts = self.search(search_filter, ["sAMAccountName"])
                 gmsa_accounts_parsed = parse_result_attributes(gmsa_accounts)
                 if gmsa_accounts_parsed:
                     self.logger.debug(f"Total of records returned {len(gmsa_accounts_parsed):d}")
@@ -1363,12 +1414,7 @@ class ldap(connection):
                 gmsa_id, gmsa_pass = self.args.gmsa_decrypt_lsa.split("_")[4].split(":")
                 # getting the gmsa account
                 search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
-                gmsa_accounts = self.ldap_connection.search(
-                    searchBase=self.baseDN,
-                    searchFilter=search_filter,
-                    attributes=["sAMAccountName"],
-                    sizeLimit=0,
-                )
+                gmsa_accounts = self.search(search_filter, ["sAMAccountName"])
                 gmsa_accounts_parsed = parse_result_attributes(gmsa_accounts)
                 if gmsa_accounts_parsed:
                     self.logger.debug(f"Total of records returned {len(gmsa_accounts):d}")
