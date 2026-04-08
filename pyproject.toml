@@ -22,7 +22,8 @@ dependencies = [
     "asyauth>=0.0.20",
     "beautifulsoup4>=4.11,<5",
     "bloodhound-ce @ git+https://github.com/blacklanternsecurity/BloodHound.py.git@bloodhound-ce",
-    "dploot>=3.1.0",
+    "certihound>=0.1.1",
+    "dploot>=3.2.2",
     "dsinternals>=1.2.4",
     "jwt>=1.3.1",
     "lsassy>=3.1.11",
@@ -41,7 +42,7 @@ dependencies = [
     "rich>=13.3.5",
     "sqlalchemy>=2.0.4",
     "termcolor>=2.4.0",
-    "terminaltables>=3.1.0",
+    "terminaltables3>=4.0.0",
     "xmltodict>=0.13.0",
     # Git Dependencies
     "impacket @ git+https://github.com/blacklanternsecurity/impacket",
@@ -95,7 +96,7 @@ exclude = [
     ".nox", ".pants.d", ".pytype", ".ruff_cache", ".svn", ".tox", ".venv",
     "__pypackages__", "_build", "buck-out", "build", "dist", "node_modules", "venv"
 ]
-line-length = 320
+
 preview = true
 
 [tool.ruff.lint]

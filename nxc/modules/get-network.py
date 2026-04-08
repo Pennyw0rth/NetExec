@@ -2,7 +2,6 @@
 # Credit to https://github.com/dirkjanm/adidnsdump @_dirkjan
 # module by @mpgn_x64
 import re
-import codecs
 import socket
 from datetime import datetime
 from struct import unpack
@@ -108,7 +107,7 @@ class NXCModule:
             recordname = site["name"]
 
             if "dnsRecord" in site:
-                if isinstance(site["dnsRecord"], list):  # noqa: SIM108
+                if isinstance(site["dnsRecord"], list):
                     records = [bytes(r) for r in site["dnsRecord"]]
                 else:
                     records = [bytes(site["dnsRecord"])]
@@ -154,12 +153,12 @@ class NXCModule:
 
         context.log.highlight(f"Found {len(outdata)} records")
         path = expanduser(f"{NXC_PATH}/logs/{connection.domain}_network_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")
-        with codecs.open(path, "w", "utf-8") as outfile:
+        with open(path, "w") as outfile:
             for row in outdata:
                 if self.showhosts:
-                    outfile.write(f"{row['name'] + '.' + connection.domain}\n")
+                    outfile.write(f"{row['name'] + '.' + zone}\n")
                 elif self.showall:
-                    outfile.write(f"{row['name'] + '.' + connection.domain} \t {row['value']}\n")
+                    outfile.write(f"{row['name'] + '.' + zone} \t {row['value']}\n")
                 else:
                     outfile.write(f"{row['value']}\n")
         context.log.success(f"Dumped {len(outdata)} records to {path}")

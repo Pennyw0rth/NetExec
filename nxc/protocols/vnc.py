@@ -1,7 +1,7 @@
 import asyncio
-import os
 from datetime import datetime
 from termcolor import colored
+import os
 import socket
 import struct
 from nxc.config import host_info_colors

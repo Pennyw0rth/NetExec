@@ -1,6 +1,6 @@
 import asyncio
-import os
 from datetime import datetime
+import os
 from os import getenv
 from termcolor import colored
 
