@@ -325,9 +325,8 @@ class SMBSpiderPlus:
             self.save_file(remote_file, share_name)
             remote_file.close()
             download_success = True
-        except SessionError as e:
-            if "STATUS_SHARING_VIOLATION" in str(e):
-                pass
+        except SessionError:
+            pass
         except Exception as e:
             self.logger.fail(f'Failed to download file "{file_path}". Error: {e!s}')
 

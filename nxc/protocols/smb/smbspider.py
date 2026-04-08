@@ -214,9 +214,8 @@ class SMBSpider:
             rfile.close()
             return
 
-        except SessionError as e:
-            if "STATUS_SHARING_VIOLATION" in str(e):
-                pass
+        except SessionError:
+            pass
 
         except Exception:
             traceback.print_exc()
