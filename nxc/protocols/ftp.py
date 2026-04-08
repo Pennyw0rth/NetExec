@@ -165,7 +165,7 @@ class ftp(connection):
             self.logger.fail(f"Failed to upload file. {local_file} does not exist locally.")
             return False
         # Check if the file was uploaded
-        if self.conn.size(remote_file) > 0:
+        if self.conn.size(remote_file) is not None:
             self.logger.success(f"Uploaded: {local_file} to {remote_file}")
         else:
             self.logger.fail(f"Failed to upload: {local_file} to {remote_file}")
