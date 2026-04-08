@@ -45,4 +45,10 @@ def proto_args(parser, parents):
     bgroup.add_argument("--bloodhound", action="store_true", help="Perform a Bloodhound scan")
     bgroup.add_argument("-c", "--collection", default="Default", help="Which information to collect. Supported: Group, LocalAdmin, Session, Trusts, Default, DCOnly, DCOM, RDP, PSRemote, LoggedOn, Container, ObjectProps, ACL, ADCS, All. You can specify more than one by separating them with a comma.")
 
+    ogroup = ldap_parser.add_argument_group("LDAP Obfuscation", "Options for LDAP query obfuscation via ldapx")
+    ogroup.add_argument("--obfuscate", action="store_true", help="Enable LDAP query obfuscation")
+    ogroup.add_argument("--obfuscate-filter", type=str, default="CSG", help="ldapx chain codes for filter obfuscation (default: CSG)")
+    ogroup.add_argument("--obfuscate-basedn", type=str, default=None, help="ldapx chain codes for baseDN obfuscation (disabled by default)")
+    ogroup.add_argument("--obfuscate-attrs", type=str, default=None, help="ldapx chain codes for attribute list obfuscation (disabled by default)")
+
     return parser
