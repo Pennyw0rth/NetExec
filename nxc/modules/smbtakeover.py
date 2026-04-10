@@ -57,6 +57,7 @@ class SmbTakeoverWmi:
         self.__context_protocol = context.protocol
         self.__is_initialized = False
         self._i_wbem_services = None
+        self.__dcom = None
 
         try:
             self.__dcom = DCOMConnection(
@@ -95,7 +96,7 @@ class SmbTakeoverWmi:
 
         # Don't disconnect on 'nxc wmi' because NetExec disconnects in the end automatically
         # Disconnect only on 'nxc smb' to keep the WMI connection from hanging
-        if hasattr(self, f"_{self.__class__.__name__}__dcom") and self.__dcom and self.__context_protocol != "wmi":
+        if self.__dcom and self.__context_protocol != "wmi":
             try:
                 self.__dcom.disconnect()
             except Exception as e:
@@ -112,21 +113,18 @@ class SmbTakeoverWmi:
         return self._i_wbem_services
 
     def get_service_or_driver(self, name):
-        if name in ("srv2", "srvnet"):
-            table = "Win32_SystemDriver"
-        elif name == "LanmanServer":
-            table = "Win32_Service"
+        svc_name_to_table = {"srv2": "Win32_SystemDriver", "srvnet": "Win32_SystemDriver", "LanmanServer": "Win32_Service"}
 
         try:
-            query = f"SELECT * FROM {table} WHERE Name='{name}'"
+            query = f"SELECT * FROM {svc_name_to_table[name]} WHERE Name='{name}'"
             objects = self.i_wbem_services.ExecQuery(query).Next(0xFFFFFFFF, 1)
             if objects:
                 return objects[0]
         except Exception as e:
             if "code: 0x1 - WBEM_S_FALSE" in str(e):
-                self.logger.debug(f"Object '{name}' not found in {table} (WBEM_S_FALSE)")
+                self.logger.debug(f"Object '{name}' not found in {svc_name_to_table[name]} (WBEM_S_FALSE)")
             else:
-                self.logger.fail(f"Unexpected WMI error checking {table}: {e!s}")
+                self.logger.fail(f"Unexpected WMI error checking {svc_name_to_table[name]}: {e!s}")
         return None
 
     def call_wmi_method(self, obj, method_name, *args):
@@ -178,10 +176,13 @@ class SmbTakeoverWmi:
             self.logger.fail(f"[{service_name}] Not found!")
         return (None, None, None)
 
-    def check(self):
+    def check(self) -> dict:
+        statuses = {}
         for svc_name in ("LanmanServer", "srv2", "srvnet"):
             _, state, start_mode = self.check_service(svc_name)
+            statuses[svc_name] = {"state": state, "start_mode": start_mode}
             self.logger.highlight(f"[{svc_name}] State: {state} | StartMode: {start_mode}")
+        return statuses
 
     def process(self, action: str):
         """
@@ -207,7 +208,21 @@ class SmbTakeoverWmi:
                 if state != target_state:
                     self.start_service(svc_obj, svc_name) if is_start else self.stop_service(svc_obj, svc_name)
 
-        self.check()
+        failed = False
+        statuses = self.check()
+        self.logger.info(statuses)
+        if statuses["LanmanServer"]["start_mode"] != lanman_check:
+            failed = True
+        else:
+            for svc_name in statuses:
+                if statuses[svc_name]["state"] != target_state:
+                    failed = True
+                    break
+
         msg = "rebind" if is_start else "unbind"
-        status = "restored" if is_start else "free"
-        self.logger.success(f"SMB {msg} sequence completed. Port 445/tcp {status}.")
+
+        if failed:
+            self.logger.fail(f"SMB {msg} sequence failed.")
+        else:
+            status = "restored" if is_start else "free"
+            self.logger.success(f"SMB {msg} sequence completed. Port 445/tcp {status}.")
