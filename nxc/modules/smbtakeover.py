@@ -210,7 +210,7 @@ class SmbTakeoverWmi:
 
         failed = False
         statuses = self.check()
-        self.logger.info(statuses)
+
         if statuses["LanmanServer"]["start_mode"] != lanman_check:
             failed = True
         else:
