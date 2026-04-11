@@ -50,11 +50,7 @@ from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.paths import CONFIG_PATH
 
-try:
-    import ldapx
-    HAS_LDAPX = True
-except ImportError:
-    HAS_LDAPX = False
+import ldapx
 
 ldap_error_status = {
     "1": "STATUS_NOT_SUPPORTED",
@@ -95,10 +91,10 @@ class ldap(connection):
         self.sid_domain = ""
         self.scope = None
         self.configuration_context = ""
-        self.obfuscate = False
-        self.obfuscate_filter_chain = ""
-        self.obfuscate_basedn_chain = None
-        self.obfuscate_attrs_chain = None
+        self.obfuscate = args.obfuscate
+        self.obfuscate_filter_chain = args.obfuscate_filter if args.obfuscate else ""
+        self.obfuscate_basedn_chain = args.obfuscate_basedn if args.obfuscate else None
+        self.obfuscate_attrs_chain = args.obfuscate_attrs if args.obfuscate else None
 
         connection.__init__(self, args, db, host)
 
@@ -113,14 +109,7 @@ class ldap(connection):
         )
 
     def create_conn_obj(self):
-        if getattr(self.args, "obfuscate", False):
-            if not HAS_LDAPX:
-                self.logger.fail("--obfuscate requires ldapx. Install with: pip install ldapx")
-                return False
-            self.obfuscate = True
-            self.obfuscate_filter_chain = getattr(self.args, "obfuscate_filter", "CSG")
-            self.obfuscate_basedn_chain = getattr(self.args, "obfuscate_basedn", None)
-            self.obfuscate_attrs_chain = getattr(self.args, "obfuscate_attrs", None)
+        if self.obfuscate:
             if self.obfuscate_filter_chain and "O" in self.obfuscate_filter_chain:
                 self.logger.fail("Filter chain code 'O' (OID) is incompatible with impacket's LDAP parser. Remove it from --obfuscate-filter.")
                 return False
