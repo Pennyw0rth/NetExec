@@ -12,7 +12,7 @@ class NXCModule:
     """
 
     name = "modify-group"
-    description = "Modify Acitve Directory Objects (e.g. Users, groups, computers etc."
+    description = "Modify the group membership of users and computers"
     supported_protocols = ["smb", "ldap"]
     category = CATEGORY.PRIVILEGE_ESCALATION
     opsec_safe = True
