@@ -50,62 +50,65 @@ class NXCModule:
         self.remove = module_options.get("REMOVE", "False").lower() == "true"
 
         if not (self.target_user and self.group):
-            context.log.fail("USER and GROUP parameters are required!")
+            self.context.log.fail("USER and GROUP parameters are required!")
             sys.exit(1)
 
     def on_login(self, context, connection):
+        self.context = context
+        self.connection = connection
+
         if context.protocol == "smb":
             if self.group:
                 if self.remove:
-                    self._remove_user_from_group_smb(context, connection)
+                    self._remove_user_from_group_smb()
                 else:
-                    self._add_user_to_group_smb(context, connection)
+                    self._add_user_to_group_smb()
         elif context.protocol == "ldap" and self.group:
             if self.remove:
-                self._remove_user_from_group_ldap(context, connection)
+                self._remove_user_from_group_ldap()
             else:
-                self._add_user_to_group_ldap(context, connection)
+                self._add_user_to_group_ldap()
 
-    def _authenticate_dce(self, context, connection, protocol="ncacn_np", interface=samr.MSRPC_UUID_SAMR):
+    def _authenticate_dce(self, protocol="ncacn_np", interface=samr.MSRPC_UUID_SAMR):
         """Authenticate to the target using DCE/RPC"""
         try:
             # Map to the endpoint on the target
-            string_binding = epm.hept_map(connection.host, interface, protocol=protocol)
+            string_binding = epm.hept_map(self.connection.host, interface, protocol=protocol)
             rpctransport = transport.DCERPCTransportFactory(string_binding)
-            rpctransport.setRemoteHost(connection.host)
+            rpctransport.setRemoteHost(self.connection.host)
             rpctransport.set_credentials(
-                connection.username,
-                connection.password,
-                connection.domain,
-                connection.lmhash,
-                connection.nthash,
-                aesKey=connection.aesKey,
+                self.connection.username,
+                self.connection.password,
+                self.connection.domain,
+                self.connection.lmhash,
+                self.connection.nthash,
+                aesKey=self.connection.aesKey,
             )
-            context.log.info(f"Connecting as {connection.domain}\\{connection.username}")
+            self.context.log.info(f"Connecting as {self.connection.domain}\\{self.connection.username}")
 
             # Connect to the DCE/RPC endpoint and bind to the service
             dce = rpctransport.get_dce_rpc()
             dce.connect()
-            context.log.info("[+] Successfully connected to DCE/RPC")
+            self.context.log.info("[+] Successfully connected to DCE/RPC")
             dce.bind(interface)
-            context.log.info(f"[+] Successfully bound to {interface}")
+            self.context.log.info(f"[+] Successfully bound to {interface}")
             return dce
         except DCERPCException as e:
-            context.log.fail(f"DCE/RPC Exception: {e!s}")
+            self.context.log.fail(f"DCE/RPC Exception: {e!s}")
             raise
 
-    def _add_user_to_group_smb(self, context, connection):
+    def _add_user_to_group_smb(self):
         """Add user to group using SMB/SAMR protocol"""
         try:
-            context.log.info("Started adding user to group via SMB")
+            self.context.log.info("Started adding user to group via SMB")
             # Connect to SAMR service
-            dce = self._authenticate_dce(context, connection)
+            dce = self._authenticate_dce()
 
             # Open server connection
-            server_handle = samr.hSamrConnect(dce, connection.host + "\x00")["ServerHandle"]
+            server_handle = samr.hSamrConnect(dce, self.connection.host + "\x00")["ServerHandle"]
 
             # Get domain SID and open domain
-            domain_sid = samr.hSamrLookupDomainInSamServer(dce, server_handle, connection.domain)["DomainId"]
+            domain_sid = samr.hSamrLookupDomainInSamServer(dce, server_handle, self.connection.domain)["DomainId"]
             domain_handle = samr.hSamrOpenDomain(dce, server_handle, domainId=domain_sid)["DomainHandle"]
 
             # Find the user and group RIDs
@@ -117,33 +120,33 @@ class NXCModule:
 
             # Add member to the group
             samr.hSamrAddMemberToGroup(dce, group_handle, user_rid, 0x7)
-            context.log.success(f"Successfully added {self.target_user} to group {self.group}")
+            self.context.log.success(f"Successfully added {self.target_user} to group {self.group}")
 
         except Exception as e:
             if "STATUS_MEMBER_IN_GROUP" in str(e):
-                context.log.display(f"User {self.target_user} is already a member of group {self.group}")
+                self.context.log.display(f"User {self.target_user} is already a member of group {self.group}")
             elif "STATUS_ACCESS_DENIED" in str(e):
-                context.log.fail(f"Failed to add user to group via SMB. Try with LDAP: {e}")
+                self.context.log.fail(f"Failed to add user to group via SMB. Try with LDAP: {e}")
             elif "STATUS_NONE_MAPPED" in str(e):
-                context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
+                self.context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
             else:
-                context.log.fail(f"Failed to add user to group via SMB: {e}")
+                self.context.log.fail(f"Failed to add user to group via SMB: {e}")
         finally:
             if "dce" in locals():
                 dce.disconnect()
 
-    def _remove_user_from_group_smb(self, context, connection):
+    def _remove_user_from_group_smb(self):
         """Remove user from group using SMB/SAMR protocol"""
         try:
-            context.log.info("Started removing user from group via SMB")
+            self.context.log.info("Started removing user from group via SMB")
             # Connect to SAMR service
-            dce = self._authenticate_dce(context, connection)
+            dce = self._authenticate_dce()
 
             # Open server connection
-            server_handle = samr.hSamrConnect(dce, connection.host + "\x00")["ServerHandle"]
+            server_handle = samr.hSamrConnect(dce, self.connection.host + "\x00")["ServerHandle"]
 
             # Get domain SID and open domain
-            domain_sid = samr.hSamrLookupDomainInSamServer(dce, server_handle, connection.domain)["DomainId"]
+            domain_sid = samr.hSamrLookupDomainInSamServer(dce, server_handle, self.connection.domain)["DomainId"]
             domain_handle = samr.hSamrOpenDomain(dce, server_handle, domainId=domain_sid)["DomainHandle"]
 
             # Find the user and group RIDs
@@ -155,66 +158,66 @@ class NXCModule:
 
             # Remove member from the group
             samr.hSamrRemoveMemberFromGroup(dce, group_handle, user_rid)
-            context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
+            self.context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
 
         except Exception as e:
             if "STATUS_MEMBER_NOT_IN_GROUP" in str(e):
-                context.log.display(f"User {self.target_user} is not a member of group {self.group}")
+                self.context.log.display(f"User {self.target_user} is not a member of group {self.group}")
             elif "STATUS_ACCESS_DENIED" in str(e):
-                context.log.fail(f"Failed to remove user to group via SMB. Try with LDAP: {e}")
+                self.context.log.fail(f"Failed to remove user to group via SMB. Try with LDAP: {e}")
             elif "STATUS_NONE_MAPPED" in str(e):
-                context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
+                self.context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
             else:
-                context.log.fail(f"Failed to remove user to group via SMB: {e}")
+                self.context.log.fail(f"Failed to remove user to group via SMB: {e}")
         finally:
             if "dce" in locals():
                 dce.disconnect()
 
-    def _add_user_to_group_ldap(self, context, connection):
+    def _add_user_to_group_ldap(self):
         """Add user to group using LDAP protocol"""
-        context.log.info("Started adding user to group via LDAP")
+        self.context.log.info("Started adding user to group via LDAP")
 
         try:
             # Search for the target user and group
-            target_user_dn = self._find_object_dn(connection, self.target_user)
-            group_dn = self._find_object_dn(connection, self.group)
+            target_user_dn = self._find_object_dn(self.target_user)
+            group_dn = self._find_object_dn(self.group)
 
             # Add user to group by modifying the group's "member" attribute
-            connection.ldap_connection.modify(group_dn, {"member": [(0, [target_user_dn])]})  # 0 means Add
-            context.log.success(f"Successfully added {self.target_user} to group {self.group}")
+            self.connection.ldap_connection.modify(group_dn, {"member": [(0, [target_user_dn])]})  # 0 means Add
+            self.context.log.success(f"Successfully added {self.target_user} to group {self.group}")
 
         except Exception as e:
             if "entryAlreadyExists" in str(e):
-                context.log.display(f"User {self.target_user} is already a member of group {self.group}")
+                self.context.log.display(f"User {self.target_user} is already a member of group {self.group}")
             elif "index out of range" in str(e):
-                context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
+                self.context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
             else:
-                context.log.fail(f"Failed to add user to group via LDAP: {e!s}")
+                self.context.log.fail(f"Failed to add user to group via LDAP: {e!s}")
 
-    def _remove_user_from_group_ldap(self, context, connection):
+    def _remove_user_from_group_ldap(self):
         """Remove user from group using LDAP protocol"""
-        context.log.info("Started removing user from group via LDAP")
+        self.context.log.info("Started removing user from group via LDAP")
 
         try:
             # Search for the target user and group
-            target_user_dn = self._find_object_dn(connection, self.target_user)
-            group_dn = self._find_object_dn(connection, self.group)
+            target_user_dn = self._find_object_dn(self.target_user)
+            group_dn = self._find_object_dn(self.group)
 
             # Remove user from group by modifying the group's "member" attribute
-            connection.ldap_connection.modify(group_dn, {"member": [(1, [target_user_dn])]})  # 1 means Delete
-            context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
+            self.connection.ldap_connection.modify(group_dn, {"member": [(1, [target_user_dn])]})  # 1 means Delete
+            self.context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
 
         except Exception as e:
             if "WILL_NOT_PERFORM" in str(e):
-                context.log.display(f"User {self.target_user} is not a member of group {self.group}")
+                self.context.log.display(f"User {self.target_user} is not a member of group {self.group}")
             elif "index out of range" in str(e):
-                context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
+                self.context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
             else:
-                context.log.fail(f"Failed to add user to group via LDAP: {e!s}")
+                self.context.log.fail(f"Failed to add user to group via LDAP: {e!s}")
 
-    def _find_object_dn(self, connection, value):
+    def _find_object_dn(self, value):
         """Find the distinguished name (DN) of an object by sAMAccountName"""
-        resp = connection.ldap_connection.search(
+        resp = self.connection.ldap_connection.search(
             searchFilter=f"(sAMAccountName={value})",
             attributes=["distinguishedName"]
         )
