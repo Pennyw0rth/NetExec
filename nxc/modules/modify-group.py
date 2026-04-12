@@ -15,8 +15,6 @@ class NXCModule:
     description = "Modify the group membership of users and computers"
     supported_protocols = ["smb", "ldap"]
     category = CATEGORY.PRIVILEGE_ESCALATION
-    opsec_safe = True
-    multiple_hosts = False
 
     def options(self, context, module_options):
         """
@@ -47,7 +45,6 @@ class NXCModule:
             (e.g. Account Operators, Domain Admins).
 
         """
-        self.context = context
         self.group = module_options.get("GROUP")
         self.target_user = module_options.get("USER")
         self.remove = module_options.get("REMOVE", "False").lower() == "true"
@@ -175,9 +172,9 @@ class NXCModule:
 
     def _add_user_to_group_ldap(self, context, connection):
         """Add user to group using LDAP protocol"""
-        try:
-            context.log.info("Started adding user to group via LDAP")
+        context.log.info("Started adding user to group via LDAP")
 
+        try:
             # Search for the target user and group
             target_user_dn = self._find_object_dn(connection, self.target_user)
             group_dn = self._find_object_dn(connection, self.group)
@@ -187,19 +184,18 @@ class NXCModule:
             context.log.success(f"Successfully added {self.target_user} to group {self.group}")
 
         except Exception as e:
-            error = str(e)
-            if "entryAlreadyExists" in error:
+            if "entryAlreadyExists" in str(e):
                 context.log.display(f"User {self.target_user} is already a member of group {self.group}")
-            elif "index out of range" in error:
+            elif "index out of range" in str(e):
                 context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
             else:
-                context.log.fail(f"Failed to add user to group via LDAP: {e}")
+                context.log.fail(f"Failed to add user to group via LDAP: {e!s}")
 
     def _remove_user_from_group_ldap(self, context, connection):
         """Remove user from group using LDAP protocol"""
-        try:
-            context.log.info("Started removing user from group via LDAP")
+        context.log.info("Started removing user from group via LDAP")
 
+        try:
             # Search for the target user and group
             target_user_dn = self._find_object_dn(connection, self.target_user)
             group_dn = self._find_object_dn(connection, self.group)
@@ -209,13 +205,12 @@ class NXCModule:
             context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
 
         except Exception as e:
-            error = str(e)
-            if "WILL_NOT_PERFORM" in error:
+            if "WILL_NOT_PERFORM" in str(e):
                 context.log.display(f"User {self.target_user} is not a member of group {self.group}")
-            elif "index out of range" in error:
+            elif "index out of range" in str(e):
                 context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
             else:
-                context.log.fail(f"Failed to add user to group via LDAP: {e}")
+                context.log.fail(f"Failed to add user to group via LDAP: {e!s}")
 
     def _find_object_dn(self, connection, value):
         """Find the distinguished name (DN) of an object by sAMAccountName"""
