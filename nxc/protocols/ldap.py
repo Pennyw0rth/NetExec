@@ -999,9 +999,8 @@ class ldap(connection):
 
             for line in hashes:
                 self.logger.highlight(line)
-                if self.args.kerberoasting:
-                    with open(self.args.kerberoasting, "a+", encoding="utf-8") as f:
-                        f.write(line + "\n")
+                with open(self.args.kerberoasting, "a+", encoding="utf-8") as f:
+                    f.write(line + "\n")
             return
 
         if self.args.targeted_kerberoast:
