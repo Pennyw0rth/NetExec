@@ -211,6 +211,19 @@ conf = {
             "pipes": []
         },
         {
+            "name": "Avast / AVG",
+            "services": [
+                {"name": "AvastWscReporter", "description": "Avast WSC Reporter Service"},
+                {"name": "aswbIDSAgent", "description": "Avast IDS Agent Service"},
+                {"name": "AVGWscReporter", "description": "AVG WSC Reporter Service"},
+                {"name": "avgbIDSAgent", "description": "AVG IDS Agent Service"}
+            ],
+            "pipes": [
+                {"name": "aswCallbackPipe*", "processes": ["AvastSvc.exe", "aswEngSrv.exe"]},
+                {"name": "avgCallbackPipe*", "processes": ["AVGSvc.exe", "aswEngSrv.exe"]}
+            ]
+        },
+        {
             "name": "Bitdefender",
             "services": [
                 {"name": "bdredline_agent", "description": "Bitdefender Agent RedLine Service"},
@@ -240,17 +253,27 @@ conf = {
             "pipes": []
         },
         {
-            "name": "CrowdStrike",
-            "services": [{"name": "CSFalconService", "description": "CrowdStrike Falcon Sensor Service"}],
-            "pipes": [{"name": "CrowdStrike\\{*", "processes": ["CSFalconContainer.exe", "CSFalconService.exe"]}]
+            "name": "Check Point Endpoint Security",
+            "services": [
+                {"name": "CPDA", "description": "Check Point Endpoint Agent"},
+                {"name": "vsmon", "description": "Check Point Endpoint Security Network Protection"},
+                {"name": "CPFileAnlyz", "description": "Check Point Endpoint Security File Analyzer"},
+                {"name": "EPClientUIService", "description": "Check Point Endpoint Security Client UI"}
+            ],
+            "pipes": []
         },
         {
             "name": "Cortex",
             "services": [
                 {"name": "xdrhealth", "description": "Cortex XDR Health Helper"},
-                {"name": "cyserver", "description": " Cortex XDR"}
+                {"name": "cyserver", "description": "Cortex XDR"}
             ],
             "pipes": []
+        },
+        {
+            "name": "CrowdStrike",
+            "services": [{"name": "CSFalconService", "description": "CrowdStrike Falcon Sensor Service"}],
+            "pipes": [{"name": "CrowdStrike\\{*", "processes": ["CSFalconContainer.exe", "CSFalconService.exe"]}]
         },
         {
             "name": "Cybereason",
@@ -265,15 +288,15 @@ conf = {
             ]
         },
         {
-            "name": "Check Point Endpoint Security",
+            "name": "Elastic EDR",
             "services": [
-                {"name": "CPDA", "description": "Check Point Endpoint Agent"},
-                {"name": "vsmon", "description": "Check Point Endpoint Security Network Protection"},
-                {"name": "CPFileAnlyz", "description": "Check Point Endpoint Security File Analyzer"},
-                {"name": "EPClientUIService", "description": "Check Point Endpoint Security Client UI"}
-
+                {"name": "Elastic Agent", "description": "Elastic Agent Service"},
+                {"name": "ElasticEndpoint", "description": "Elastic Endpoint Security Service"}
             ],
-            "pipes": []
+            "pipes": [
+                {"name": "ElasticEndpointServiceComms-*", "processes": ["elastic-endpoint.exe"]},
+                {"name": "elastic-agent-system", "processes": ["elastic-agent.exe"]}
+            ]
         },
         {
             "name": "ESET",
@@ -319,7 +342,22 @@ conf = {
             ]
         },
         {
-        "name": "Ivanti Security",
+            "name": "HarfangLab EDR",
+            "services": [
+                {"name": "hurukai", "description": "HarfangLab Hurukai Agent"},
+                {"name": "Hurukai agent", "description": "HarfangLab Hurukai Agent Service"},
+                {"name": "HarfangLab Hurukai agent", "description": "HarfangLab Hurukai Agent Program"},
+                {"name": "hurukai-av", "description": "HarfangLab Hurukai Antivirus"},
+                {"name": "hurukai-ui", "description": "HarfangLab Hurukai UI"}
+            ],
+            "pipes": [
+                {"name": "hurukai-control", "processes": ["hurukai.exe"]},
+                {"name": "hurukai-servicing", "processes": ["hurukai.exe"]},
+                {"name": "hurukai-amsi", "processes": ["hurukai.exe"]}
+            ]
+        },
+        {
+            "name": "Ivanti Security",
             "services": [
                 {"name": "STAgent$Shavlik Protect", "description": "Ivanti Security Controls Agent"},
                 {"name": "STDispatch$Shavlik Protect", "description": "Ivanti Security Controls Agent Dispatcher"}
@@ -374,6 +412,11 @@ conf = {
             ]
         },
         {
+            "name": "Rapid7",
+            "services": [{"name": "ir_agent", "description": "Rapid7 Insight Agent"}],
+            "pipes": []
+        },
+        {
             "name": "SentinelOne",
             "services": [
                 {"name": "SentinelAgent", "description": "SentinelOne Endpoint Protection Agent"},
@@ -385,20 +428,6 @@ conf = {
                 {"name": "DFIScanner.Etw.*", "processes": ["SentinelStaticEngine.exe"]},
                 {"name": "DFIScanner.Inline.*", "processes": ["SentinelAgent.exe"]}
             ]
-        },
-        {
-            "name": "Symantec Endpoint Protection",
-            "services": [
-                {"name": "SepMasterService", "description": "Symantec Endpoint Protection"},
-                {"name": "SepScanService", "description": "Symantec Endpoint Protection Scan Services"},
-                {"name": "SNAC", "description": "Symantec Network Access Control"}
-            ],
-            "pipes": []
-        },
-        {
-            "name": "Rapid7",
-            "services": [{"name": "ir_agent", "description": "Rapid7 Insight Agent"}],
-            "pipes": []
         },
         {
             "name": "Sophos Intercept X",
@@ -419,6 +448,15 @@ conf = {
                 {"name": "sophos_deviceencryption", "processes": [""]},
                 {"name": "sophoslivequery_*", "processes": [""]}
             ]
+        },
+        {
+            "name": "Symantec Endpoint Protection",
+            "services": [
+                {"name": "SepMasterService", "description": "Symantec Endpoint Protection"},
+                {"name": "SepScanService", "description": "Symantec Endpoint Protection Scan Services"},
+                {"name": "SNAC", "description": "Symantec Network Access Control"}
+            ],
+            "pipes": []
         },
         {
             "name": "Trellix Endpoint Detection and Response (EDR)",
