@@ -1,3 +1,4 @@
+import contextlib
 import sys
 from impacket.dcerpc.v5 import samr, epm, transport
 from impacket.dcerpc.v5.rpcrt import DCERPCException
@@ -89,20 +90,20 @@ class NXCModule:
             # Connect to the DCE/RPC endpoint and bind to the service
             dce = rpctransport.get_dce_rpc()
             dce.connect()
-            self.context.log.info("[+] Successfully connected to DCE/RPC")
+            self.context.log.info("Successfully connected to DCE/RPC")
             dce.bind(interface)
-            self.context.log.info(f"[+] Successfully bound to {interface}")
+            self.context.log.info(f"Successfully bound to {interface}")
             return dce
         except DCERPCException as e:
             self.context.log.fail(f"DCE/RPC Exception: {e!s}")
 
     def _add_user_to_group_smb(self):
         """Add user to group using SMB/SAMR protocol"""
-        try:
-            self.context.log.info("Started adding user to group via SMB")
-            # Connect to SAMR service
-            dce = self._authenticate_dce()
+        self.context.log.info("Started adding user to group via SMB")
 
+        # Connect to SAMR service
+        dce = self._authenticate_dce()
+        try:
             # Open server connection
             server_handle = samr.hSamrConnect(dce, self.connection.host + "\x00")["ServerHandle"]
 
@@ -120,7 +121,6 @@ class NXCModule:
             # Add member to the group
             samr.hSamrAddMemberToGroup(dce, group_handle, user_rid, 0x7)
             self.context.log.success(f"Successfully added {self.target_user} to group {self.group}")
-
         except Exception as e:
             if "STATUS_MEMBER_IN_GROUP" in str(e):
                 self.context.log.display(f"User {self.target_user} is already a member of group {self.group}")
@@ -130,17 +130,16 @@ class NXCModule:
                 self.context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
             else:
                 self.context.log.fail(f"Failed to add user to group via SMB: {e}")
-        finally:
-            if "dce" in locals():
-                dce.disconnect()
+        with contextlib.suppress(Exception):
+            dce.disconnect()
 
     def _remove_user_from_group_smb(self):
         """Remove user from group using SMB/SAMR protocol"""
-        try:
-            self.context.log.info("Started removing user from group via SMB")
-            # Connect to SAMR service
-            dce = self._authenticate_dce()
+        self.context.log.info("Started removing user from group via SMB")
 
+        # Connect to SAMR service
+        dce = self._authenticate_dce()
+        try:
             # Open server connection
             server_handle = samr.hSamrConnect(dce, self.connection.host + "\x00")["ServerHandle"]
 
@@ -158,19 +157,17 @@ class NXCModule:
             # Remove member from the group
             samr.hSamrRemoveMemberFromGroup(dce, group_handle, user_rid)
             self.context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
-
         except Exception as e:
             if "STATUS_MEMBER_NOT_IN_GROUP" in str(e):
                 self.context.log.display(f"User {self.target_user} is not a member of group {self.group}")
             elif "STATUS_ACCESS_DENIED" in str(e):
-                self.context.log.fail(f"Failed to remove user to group via SMB. Try with LDAP: {e}")
+                self.context.log.fail(f"Failed to remove user from group via SMB. Try with LDAP: {e}")
             elif "STATUS_NONE_MAPPED" in str(e):
                 self.context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
             else:
-                self.context.log.fail(f"Failed to remove user to group via SMB: {e}")
-        finally:
-            if "dce" in locals():
-                dce.disconnect()
+                self.context.log.fail(f"Failed to remove user from group via SMB: {e}")
+        with contextlib.suppress(Exception):
+            dce.disconnect()
 
     def _add_user_to_group_ldap(self):
         """Add user to group using LDAP protocol"""
@@ -184,7 +181,6 @@ class NXCModule:
             # Add user to group by modifying the group's "member" attribute
             self.connection.ldap_connection.modify(group_dn, {"member": [(0, [target_user_dn])]})  # 0 means Add
             self.context.log.success(f"Successfully added {self.target_user} to group {self.group}")
-
         except Exception as e:
             if "entryAlreadyExists" in str(e):
                 self.context.log.display(f"User {self.target_user} is already a member of group {self.group}")
@@ -205,14 +201,13 @@ class NXCModule:
             # Remove user from group by modifying the group's "member" attribute
             self.connection.ldap_connection.modify(group_dn, {"member": [(1, [target_user_dn])]})  # 1 means Delete
             self.context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
-
         except Exception as e:
             if "WILL_NOT_PERFORM" in str(e):
                 self.context.log.display(f"User {self.target_user} is not a member of group {self.group}")
             elif "index out of range" in str(e):
                 self.context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
             else:
-                self.context.log.fail(f"Failed to add user to group via LDAP: {e!s}")
+                self.context.log.fail(f"Failed to remove user from group via LDAP: {e!s}")
 
     def _find_object_dn(self, value):
         """Find the distinguished name (DN) of an object by sAMAccountName"""
