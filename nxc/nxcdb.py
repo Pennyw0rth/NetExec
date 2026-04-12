@@ -8,7 +8,7 @@ from os.path import exists
 from os.path import join as path_join
 from textwrap import dedent
 from requests import get, post, ConnectionError
-from terminaltables import AsciiTable
+from terminaltables3 import AsciiTable
 from termcolor import colored
 
 from nxc.loaders.protocolloader import ProtocolLoader

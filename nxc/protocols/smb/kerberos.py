@@ -21,7 +21,7 @@ from nxc.logger import nxc_logger
 def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash, aesKey, kdcHost, impersonate, spn, use_cache, no_s4u2proxy=False, u2u=False):
     my_tgt = None
     if use_cache:
-        domain, ccache_user, tgt, _ = CCache.parseFile(domain)
+        domain, ccache_user, tgt, _ = CCache.parseFile(domain, username)
         if tgt is None:
             raise Exception("No TGT found in ccache file")
         my_tgt = decoder.decode(tgt["KDC_REP"], asn1Spec=AS_REP())[0]

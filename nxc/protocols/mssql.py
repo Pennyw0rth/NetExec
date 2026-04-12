@@ -9,7 +9,7 @@ from nxc.connection import requires_admin
 from nxc.helpers.misc import gen_random_string
 from nxc.logger import NXCAdapter
 from nxc.helpers.bloodhound import add_user_bh
-from nxc.helpers.ntlm_parser import parse_challenge
+from nxc.helpers.negotiate_parser import parse_challenge, login7_integrated_auth_error_message
 from nxc.helpers.powershell import create_ps_command
 from nxc.protocols.mssql.mssqlexec import MSSQLEXEC
 
@@ -41,8 +41,9 @@ class mssql(connection):
         self.server_os = None
         self.hash = None
         self.os_arch = None
+        self.lmhash = ""
         self.nthash = ""
-        self.is_mssql = False
+        self.no_ntlm = False
 
         connection.__init__(self, args, db, host)
 
@@ -66,7 +67,6 @@ class mssql(connection):
                 self.conn.disconnect()
             return False
         else:
-            self.is_mssql = True
             return True
 
     def reconnect_mssql(func):
@@ -127,18 +127,27 @@ class mssql(connection):
                 self.conn.tlsSocket = None
 
             tdsx = self.conn.recvTDS()
-            challenge = tdsx["Data"][3:]
-            self.logger.debug(f"NTLM challenge: {challenge!s}")
+            login_response = tdsx["Data"]
+            # Impacket historically slices 3 bytes before treating payload as NTLMSSP (LOGIN7 response).
+            challenge = login_response[3:]
+            self.logger.debug(f"LOGIN7 response SSPI slice: {challenge!s}")
         except Exception as e:
             self.logger.info(f"Failed to receive NTLM challenge, reason: {e!s}")
             return False
         else:
-            ntlm_info = parse_challenge(challenge)
-            self.targetDomain = self.domain = ntlm_info["domain"]
-            self.hostname = ntlm_info["hostname"]
-            self.server_os = ntlm_info["os_version"]
-            self.logger.extra["hostname"] = self.hostname
-            self.db.add_host(self.host, self.hostname, self.targetDomain, self.server_os, len(self.mssql_instances),)
+            if challenge.startswith(b"NTLMSSP\x00"):
+                ntlm_info = parse_challenge(challenge)
+                self.targetDomain = self.domain = ntlm_info["domain"]
+                self.hostname = ntlm_info["hostname"]
+                self.server_os = ntlm_info["os_version"]
+                self.logger.extra["hostname"] = self.hostname
+            else:
+                error_msg = login7_integrated_auth_error_message(login_response, challenge)
+                detail = f": {error_msg}" if error_msg else ""
+                self.logger.debug(f"Server does not support NTLM{detail}")
+                self.no_ntlm = True
+
+        self.db.add_host(self.host, self.hostname, self.domain, self.server_os, len(self.mssql_instances))
 
         if self.args.domain:
             self.domain = self.args.domain
@@ -154,7 +163,8 @@ class mssql(connection):
 
     def print_host_info(self):
         encryption = colored(f"EncryptionReq:{self.encryption}", host_info_colors[0 if self.encryption else 1], attrs=["bold"])
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption})")
+        ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption}) {ntlm}")
 
     @reconnect_mssql
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
@@ -422,6 +432,9 @@ class mssql(connection):
 
     def rid_brute(self, max_rid=None):
         entries = []
+        if self.conn.lastError:
+            self.logger.fail(f"Cannot perform RID bruteforce due to invalid connection: {self.conn.lastError}")
+            return entries
         if not max_rid:
             max_rid = int(self.args.rid_brute)
 
@@ -434,6 +447,7 @@ class mssql(connection):
             domain_sid = SID(bytes.fromhex(raw_domain_sid.decode())).formatCanonical()[:-4]
         except Exception as e:
             self.logger.fail(f"Error parsing SID. Not domain joined?: {e}")
+            return entries
 
         so_far = 0
         simultaneous = 1000

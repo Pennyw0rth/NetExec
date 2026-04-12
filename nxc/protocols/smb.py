@@ -63,6 +63,7 @@ from nxc.protocols.ldap.resolution import LDAPResolution
 from dploot.triage.vaults import VaultsTriage
 from dploot.triage.browser import BrowserTriage, LoginData, GoogleRefreshToken, Cookie
 from dploot.triage.credentials import CredentialsTriage
+from dploot.triage.cng import CngTriage
 from dploot.lib.target import Target
 from dploot.triage.sccm import SCCMTriage, SCCMCred, SCCMSecret, SCCMCollection
 
@@ -424,7 +425,8 @@ class smb(connection):
             if self.args.delegate:
                 used_ccache = f" through S4U with {username}"
             self.logger.fail(f"{domain}\\{self.username}{used_ccache} {e}")
-        except (SessionError, Exception) as e:
+            return False
+        except SessionError as e:
             error, desc = e.getErrorString()
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             if self.args.delegate:
@@ -435,6 +437,13 @@ class smb(connection):
             )
             if error not in smb_error_status:
                 self.inc_failed_login(username)
+            return False
+        except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
+            used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
+            if self.args.delegate:
+                used_ccache = f" through S4U with {username}"
+            desc = e.getErrorString() if hasattr(e, "getErrorString") else str(e)
+            self.logger.fail(f"{domain}\\{self.username}{used_ccache} {desc}")
             return False
 
     def plaintext_login(self, domain, username, password):
@@ -452,21 +461,22 @@ class smb(connection):
             if "Unix" not in self.server_os:
                 self.check_if_admin()
 
-            self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
-            self.db.add_credential("plaintext", domain, self.username, self.password)
-            user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
-            host_id = self.db.get_hosts(self.host)[0].id
-            self.db.add_loggedin_relation(user_id, host_id)
-
-            out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_guest()}{self.mark_pwned()}"
-            self.logger.success(out)
-
-            if not self.args.local_auth and self.username != "":
-                add_user_bh(self.username, self.domain, self.logger, self.config)
-            if self.admin_privs:
+            # Only do database/bloodhound stuff if we don't have guest/null auth
+            valid_auth = not self.is_guest and self.username
+            if valid_auth:
+                self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
+                self.db.add_credential("plaintext", domain, self.username, self.password)
+                user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
+                host_id = self.db.get_hosts(self.host)[0].id
+                self.db.add_loggedin_relation(user_id, host_id)
+            if self.admin_privs and valid_auth:
                 self.logger.debug(f"Adding admin user: {self.domain}/{self.username}:{self.password}@{self.host}")
                 self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
+            if not self.args.local_auth and valid_auth:
+                add_user_bh(self.username, self.domain, self.logger, self.config)
+
+            self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_guest()}{self.mark_pwned()}")
 
             # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
             if self.args.continue_on_success and self.signing:
@@ -485,7 +495,8 @@ class smb(connection):
                 self.inc_failed_login(username)
                 return False
         except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
-            self.logger.fail(f"Connection Error: {e}")
+            desc = e.getErrorString() if hasattr(e, "getErrorString") else str(e)
+            self.logger.fail(f"{domain}\\{self.username}:{process_secret(self.password)} {desc}")
             return False
         except BrokenPipeError:
             self.logger.fail("Broken Pipe Error while attempting to login")
@@ -518,19 +529,20 @@ class smb(connection):
             if "Unix" not in self.server_os:
                 self.check_if_admin()
 
-            self.db.add_credential("hash", domain, self.username, self.hash)
-            user_id = self.db.get_credential("hash", domain, self.username, self.hash)
-            host_id = self.db.get_hosts(self.host)[0].id
-            self.db.add_loggedin_relation(user_id, host_id)
-
-            out = f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_guest()}{self.mark_pwned()}"
-            self.logger.success(out)
-
-            if not self.args.local_auth and self.username != "":
-                add_user_bh(self.username, self.domain, self.logger, self.config)
-            if self.admin_privs:
+            # Only do database/bloodhound stuff if we don't have guest
+            valid_auth = not self.is_guest and self.username and self.hash
+            if valid_auth:
+                self.db.add_credential("hash", domain, self.username, self.hash)
+                user_id = self.db.get_credential("hash", domain, self.username, self.hash)
+                host_id = self.db.get_hosts(self.host)[0].id
+                self.db.add_loggedin_relation(user_id, host_id)
+            if self.admin_privs and valid_auth:
                 self.db.add_admin_user("hash", domain, self.username, nthash, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
+            if not self.args.local_auth and valid_auth:
+                add_user_bh(self.username, self.domain, self.logger, self.config)
+
+            self.logger.success(f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_guest()}{self.mark_pwned()}")
 
             # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
             if self.args.continue_on_success and self.signing:
@@ -549,7 +561,8 @@ class smb(connection):
                 self.inc_failed_login(self.username)
                 return False
         except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
-            self.logger.fail(f"Connection Error: {e}")
+            desc = e.getErrorString() if hasattr(e, "getErrorString") else str(e)
+            self.logger.fail(f"{domain}\\{self.username}:{process_secret(self.password)} {desc}")
             return False
         except BrokenPipeError:
             self.logger.fail("Broken Pipe Error while attempting to login")
@@ -735,6 +748,9 @@ class smb(connection):
         return open_ports >= 3
 
     def is_host_dc(self):
+        if self.isdc is not None:
+            return self.isdc
+
         from impacket.dcerpc.v5 import nrpc, epm
 
         self.logger.debug("Performing authentication attempts...")
@@ -1380,7 +1396,7 @@ class smb(connection):
             self.logger.debug(f"domain: {self.domain}")
             user_id = self.db.get_user(self.domain.upper(), self.username)[0][0]
         except IndexError as e:
-            if self.kerberos or self.username == "":
+            if self.kerberos or self.username == "" or self.is_guest:
                 pass
             else:
                 self.logger.fail(f"IndexError: {e!s}")
@@ -1962,8 +1978,9 @@ class smb(connection):
             host_id = self.db.get_hosts(filter_term=self.host)[0][0]
 
             def add_sam_hash(sam_hash, host_id):
-                add_sam_hash.sam_hashes += 1
                 self.logger.highlight(sam_hash)
+                if "_history" in sam_hash:
+                    return
                 username, _, lmhash, nthash, _, _, _ = sam_hash.split(":")
                 self.db.add_credential(
                     "hash",
@@ -1972,6 +1989,7 @@ class smb(connection):
                     f"{lmhash}:{nthash}",
                     pillaged_from=host_id,
                 )
+                add_sam_hash.sam_hashes += 1
 
             add_sam_hash.sam_hashes = 0
 
@@ -1981,6 +1999,7 @@ class smb(connection):
                         self.bootkey,
                         remoteOps=self.remote_ops,
                         perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
+                        history=self.args.history,
                     )
                 else:
                     SAM_file_name = self.remote_ops.saveSAM()
@@ -1988,6 +2007,7 @@ class smb(connection):
                         SAM_file_name,
                         self.bootkey,
                         isRemote=True,
+                        history=self.args.history,
                         perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
                     )
 
@@ -2147,6 +2167,16 @@ class smb(connection):
 
         dump_cookies = "cookies" in self.args.dpapi
 
+        cng_chromekey = None
+        try:
+            cng_triage = CngTriage(target=target, conn=conn, masterkeys=masterkeys)
+            for cng_file in cng_triage.triage_system_cng():
+                if cng_file.cng_blob["Name"].decode("utf-16le").rstrip("\0") == "Google Chromekey1":
+                    self.logger.debug("Found CNG Google ChromeKey1\n")
+                    cng_chromekey = cng_file.decrypted_private_key
+        except Exception as e:
+            self.logger.debug(f"Error while getting CNG ChromeKey1: {e}")
+
         # Collect Chrome Based Browser stored secrets
         def browser_callback(secret):
             if isinstance(secret, LoginData):
@@ -2184,7 +2214,7 @@ class smb(connection):
 
         try:
             browser_triage = BrowserTriage(target=target, conn=conn, masterkeys=masterkeys, per_secret_callback=browser_callback)
-            browser_triage.triage_browsers(gather_cookies=dump_cookies)
+            browser_triage.triage_browsers(gather_cookies=dump_cookies, cng_chromekey=cng_chromekey)
         except Exception as e:
             self.logger.debug(f"Error while looting browsers: {e}")
 
