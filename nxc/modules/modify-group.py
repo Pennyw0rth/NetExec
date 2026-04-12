@@ -131,7 +131,7 @@ class NXCModule:
                 self.context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
             except Exception as e:
                 if "STATUS_MEMBER_NOT_IN_GROUP" in str(e):
-                    self.context.log.display(f"User {self.target_user} is not a member of group {self.group}")
+                    self.context.log.fail(f"User {self.target_user} is not a member of group {self.group}")
                 else:
                     self.context.log.fail(f"Failed to remove user from group via SMB: {e}")
         else:
@@ -140,7 +140,7 @@ class NXCModule:
                 self.context.log.success(f"Successfully added {self.target_user} to group {self.group}")
             except Exception as e:
                 if "STATUS_MEMBER_IN_GROUP" in str(e):
-                    self.context.log.display(f"User {self.target_user} is already a member of group {self.group}")
+                    self.context.log.fail(f"User {self.target_user} is already a member of group {self.group}")
                 else:
                     self.context.log.fail(f"Failed to add user to group via SMB: {e}")
 
@@ -173,7 +173,7 @@ class NXCModule:
                 self.context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
             except Exception as e:
                 if "unwillingToPerform" in str(e):
-                    self.context.log.display(f"User {self.target_user} is not a member of group {self.group}")
+                    self.context.log.fail(f"User {self.target_user} is not a member of group {self.group}")
                 else:
                     self.context.log.fail(f"Failed to remove user from group via LDAP: {e}")
         else:
@@ -182,7 +182,7 @@ class NXCModule:
                 self.context.log.success(f"Successfully added {self.target_user} to group {self.group}")
             except Exception as e:
                 if "entryAlreadyExists" in str(e):
-                    self.context.log.display(f"User {self.target_user} is already a member of group {self.group}")
+                    self.context.log.fail(f"User {self.target_user} is already a member of group {self.group}")
                 else:
                     self.context.log.fail(f"Failed to add user to group via LDAP: {e}")
 
