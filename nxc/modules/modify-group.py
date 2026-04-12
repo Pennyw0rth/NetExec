@@ -1,5 +1,6 @@
 import contextlib
 import sys
+from impacket.ldap.ldap import MODIFY_ADD, MODIFY_DELETE
 from impacket.dcerpc.v5 import samr, epm, transport
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from nxc.parsers.ldap_results import parse_result_attributes
@@ -179,7 +180,7 @@ class NXCModule:
             group_dn = self._find_object_dn(self.group)
 
             # Add user to group by modifying the group's "member" attribute
-            self.connection.ldap_connection.modify(group_dn, {"member": [(0, [target_user_dn])]})  # 0 means Add
+            self.connection.ldap_connection.modify(group_dn, {"member": [(MODIFY_ADD, [target_user_dn])]})
             self.context.log.success(f"Successfully added {self.target_user} to group {self.group}")
         except Exception as e:
             if "entryAlreadyExists" in str(e):
@@ -199,7 +200,7 @@ class NXCModule:
             group_dn = self._find_object_dn(self.group)
 
             # Remove user from group by modifying the group's "member" attribute
-            self.connection.ldap_connection.modify(group_dn, {"member": [(1, [target_user_dn])]})  # 1 means Delete
+            self.connection.ldap_connection.modify(group_dn, {"member": [(MODIFY_DELETE, [target_user_dn])]})
             self.context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
         except Exception as e:
             if "WILL_NOT_PERFORM" in str(e):
