@@ -14,8 +14,8 @@ def proto_args(parser, parents):
     egroup.add_argument("--asreproast", help="Output AS_REP response to crack with hashcat to file")
     kerberoasting_arg = egroup.add_argument("--kerberoasting", "--kerberoast", help="Output TGS ticket to crack with hashcat to file")
     kerberoast_users_arg = egroup.add_argument("--kerberoast-account", nargs="+", dest="kerberoast_account", action=get_conditional_action(_StoreAction), make_required=[], help="Target specific accounts for kerberoasting (sAMAccountNames or file containing sAMAccountNames)")
-    egroup.add_argument("--no-preauth-targets", nargs=1, dest="no_preauth_targets", help="Targeted kerberoastable users")
-    targeted_kerberoast_arg = egroup.add_argument("--targeted-kerberoast", nargs="+", dest="targeted_kerberoast", action=get_conditional_action(_StoreAction), make_required=[], help="Targeted kerberoasting: add temporary SPN to specified users, request ST, then remove it (sAMAccountNames or file containing sAMAccountNames)")
+    targeted_kerberoast_arg = egroup.add_argument("--targeted-kerberoast", nargs="+", dest="targeted_kerberoast", action=get_conditional_action(_StoreAction), make_required=[], help="Adds temporary SPN to specified users, requests ST, then remove added SPN. Specify sAMAccountNames or file containing sAMAccountNames")
+    egroup.add_argument("--no-preauth-targets", nargs=1, dest="no_preauth_targets", help="Specify accounts that should be kerberoasted using an account without pre-authentication requirement.")
 
     # Make kerberoast-users and targeted-kerberoast require kerberoasting
     kerberoast_users_arg.make_required = [kerberoasting_arg]
