@@ -37,14 +37,11 @@ class NXCModule:
             netexec smb <DC_IP> -u adminuser -p password -M modify-group -o USER='targetuser' GROUP='Domain Admins' REMOVE=True
             netexec ldap <DC_IP> -u adminuser -p password -M modify-group -o USER='targetuser' GROUP='Enterprise Admins' REMOVE=True
 
-        For Using SMB, Need to Know
         SMB/SAMR KNOWN LIMITATIONS:
             - SAMR only supports modification of Global security groups.
-            Domain Local and Universal groups require the LDAP protocol.
+              Domain Local and Universal groups require the LDAP protocol.
             - Cross-domain groups (e.g. Enterprise Admins) cannot be modified via SAMR.
-            Use LDAP instead.
-            - The authenticating user must have sufficient SAMR privileges
-            (e.g. Account Operators, Domain Admins).
+              Use LDAP instead.
 
         """
         self.group = module_options.get("GROUP")
