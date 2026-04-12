@@ -95,7 +95,6 @@ class NXCModule:
             return dce
         except DCERPCException as e:
             self.context.log.fail(f"DCE/RPC Exception: {e!s}")
-            raise
 
     def _add_user_to_group_smb(self):
         """Add user to group using SMB/SAMR protocol"""
