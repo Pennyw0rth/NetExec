@@ -59,10 +59,7 @@ class NXCModule:
         if context.protocol == "smb":
             self._modify_group_smb()
         elif context.protocol == "ldap" and self.group:
-            if self.remove:
-                self._remove_user_from_group_ldap()
-            else:
-                self._add_user_to_group_ldap()
+            self._modify_group_ldap()
 
     def _authenticate_dce(self, protocol="ncacn_np", interface=samr.MSRPC_UUID_SAMR):
         """Authenticate to the target using DCE/RPC"""
@@ -151,45 +148,43 @@ class NXCModule:
         with contextlib.suppress(Exception):
             dce.disconnect()
 
-    def _add_user_to_group_ldap(self):
-        """Add user to group using LDAP protocol"""
-        self.context.log.info("Started adding user to group via LDAP")
+    def _modify_group_ldap(self):
+        """Modify group membership using LDAP protocol"""
+        # Get the DN of the target user
+        resp = self._find_object_dn(self.target_user)
+        if not resp:
+            self.context.log.fail(f"Target user not found: {self.target_user}")
+            return
+        else:
+            target_user_dn = resp[0]["distinguishedName"]
 
-        try:
-            # Search for the target user and group
-            target_user_dn = self._find_object_dn(self.target_user)
-            group_dn = self._find_object_dn(self.group)
+        # Get the DN of the target group
+        resp = self._find_object_dn(self.group)
+        if not resp:
+            self.context.log.fail(f"Target group not found: {self.group}")
+            return
+        else:
+            group_dn = resp[0]["distinguishedName"]
 
-            # Add user to group by modifying the group's "member" attribute
-            self.connection.ldap_connection.modify(group_dn, {"member": [(MODIFY_ADD, [target_user_dn])]})
-            self.context.log.success(f"Successfully added {self.target_user} to group {self.group}")
-        except Exception as e:
-            if "entryAlreadyExists" in str(e):
-                self.context.log.display(f"User {self.target_user} is already a member of group {self.group}")
-            elif "index out of range" in str(e):
-                self.context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
-            else:
-                self.context.log.fail(f"Failed to add user to group via LDAP: {e!s}")
-
-    def _remove_user_from_group_ldap(self):
-        """Remove user from group using LDAP protocol"""
-        self.context.log.info("Started removing user from group via LDAP")
-
-        try:
-            # Search for the target user and group
-            target_user_dn = self._find_object_dn(self.target_user)
-            group_dn = self._find_object_dn(self.group)
-
-            # Remove user from group by modifying the group's "member" attribute
-            self.connection.ldap_connection.modify(group_dn, {"member": [(MODIFY_DELETE, [target_user_dn])]})
-            self.context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
-        except Exception as e:
-            if "WILL_NOT_PERFORM" in str(e):
-                self.context.log.display(f"User {self.target_user} is not a member of group {self.group}")
-            elif "index out of range" in str(e):
-                self.context.log.fail(f"Target user or group not found: {self.target_user} / {self.group}")
-            else:
-                self.context.log.fail(f"Failed to remove user from group via LDAP: {e!s}")
+        # Modify group membership
+        if self.remove:
+            try:
+                self.connection.ldap_connection.modify(group_dn, {"member": [(MODIFY_DELETE, [target_user_dn])]})
+                self.context.log.success(f"Successfully removed {self.target_user} from group {self.group}")
+            except Exception as e:
+                if "unwillingToPerform" in str(e):
+                    self.context.log.display(f"User {self.target_user} is not a member of group {self.group}")
+                else:
+                    self.context.log.fail(f"Failed to remove user from group via LDAP: {e}")
+        else:
+            try:
+                self.connection.ldap_connection.modify(group_dn, {"member": [(MODIFY_ADD, [target_user_dn])]})
+                self.context.log.success(f"Successfully added {self.target_user} to group {self.group}")
+            except Exception as e:
+                if "entryAlreadyExists" in str(e):
+                    self.context.log.display(f"User {self.target_user} is already a member of group {self.group}")
+                else:
+                    self.context.log.fail(f"Failed to add user to group via LDAP: {e}")
 
     def _find_object_dn(self, value):
         """Find the distinguished name (DN) of an object by sAMAccountName"""
@@ -197,5 +192,4 @@ class NXCModule:
             searchFilter=f"(sAMAccountName={value})",
             attributes=["distinguishedName"]
         )
-        resp_parsed = parse_result_attributes(resp)
-        return resp_parsed[0]["distinguishedName"]
+        return parse_result_attributes(resp)
