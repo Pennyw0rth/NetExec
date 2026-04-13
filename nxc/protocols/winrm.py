@@ -72,7 +72,10 @@ class winrm(connection):
         self.server_os = ntlm_info["os_version"]
         self.logger.extra["hostname"] = self.hostname
 
-        self.db.add_host(self.host, self.port, self.hostname, self.targetDomain, self.server_os)
+        try:
+            self.db.add_host(self.host, self.port, self.hostname, self.targetDomain, self.server_os)
+        except Exception as e:
+            self.logger.debug(f"Error adding host to database: {e!s}")
 
         if self.args.domain:
             self.domain = self.args.domain
