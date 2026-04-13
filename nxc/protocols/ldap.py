@@ -92,9 +92,6 @@ class ldap(connection):
         self.scope = None
         self.configuration_context = ""
         self.obfuscate = args.obfuscate
-        self.obfuscate_filter_chain = args.obfuscate_filter if args.obfuscate else ""
-        self.obfuscate_basedn_chain = args.obfuscate_basedn if args.obfuscate else None
-        self.obfuscate_attrs_chain = args.obfuscate_attrs if args.obfuscate else None
 
         connection.__init__(self, args, db, host)
 
@@ -110,10 +107,7 @@ class ldap(connection):
 
     def create_conn_obj(self):
         if self.obfuscate:
-            if self.obfuscate_filter_chain and "O" in self.obfuscate_filter_chain:
-                self.logger.fail("Filter chain code 'O' (OID) is incompatible with impacket's LDAP parser. Remove it from --obfuscate-filter.")
-                return False
-            self.logger.info(f"LDAP obfuscation enabled: filter={self.obfuscate_filter_chain}, baseDN={self.obfuscate_basedn_chain or 'disabled'}, attrs={self.obfuscate_attrs_chain or 'disabled'}")
+            self.logger.info("LDAP query obfuscation enabled")
 
         try:
             proto = "ldaps" if self.port == 636 else "ldap"
@@ -673,9 +667,16 @@ class ldap(connection):
             baseDN = self.baseDN
 
         if self.obfuscate:
-            searchFilter = self._obfuscate_filter(searchFilter)
-            baseDN = self._obfuscate_basedn(baseDN)
-            attributes = self._obfuscate_attrs(attributes)
+            try:
+                if searchFilter:
+                    searchFilter = ldapx.obfuscate_filter(searchFilter, "CSG")
+                if baseDN:
+                    baseDN = ldapx.obfuscate_basedn(baseDN, "CX")
+                if attributes:
+                    attributes = ldapx.obfuscate_attrlist(attributes, "CR")
+                self.logger.debug(f"Obfuscated baseDN: {baseDN}")
+            except Exception as e:
+                self.logger.debug(f"ldapx obfuscation failed, using original query: {e}")
 
         try:
             if self.ldap_connection:
@@ -704,39 +705,6 @@ class ldap(connection):
                 self.logger.fail(e)
                 return []
         return []
-
-    def _obfuscate_filter(self, search_filter):
-        if not self.obfuscate_filter_chain or not search_filter:
-            return search_filter
-        try:
-            obfuscated = ldapx.obfuscate_filter(search_filter, self.obfuscate_filter_chain)
-            self.logger.debug(f"Obfuscated filter: {obfuscated}")
-            return obfuscated
-        except Exception as e:
-            self.logger.debug(f"ldapx filter obfuscation failed, using original: {e}")
-            return search_filter
-
-    def _obfuscate_basedn(self, base_dn):
-        if not self.obfuscate_basedn_chain or not base_dn:
-            return base_dn
-        try:
-            obfuscated = ldapx.obfuscate_basedn(base_dn, self.obfuscate_basedn_chain)
-            self.logger.debug(f"Obfuscated baseDN: {obfuscated}")
-            return obfuscated
-        except Exception as e:
-            self.logger.debug(f"ldapx baseDN obfuscation failed, using original: {e}")
-            return base_dn
-
-    def _obfuscate_attrs(self, attributes):
-        if not self.obfuscate_attrs_chain or not attributes:
-            return attributes
-        try:
-            obfuscated = ldapx.obfuscate_attrlist(attributes, self.obfuscate_attrs_chain)
-            self.logger.debug(f"Obfuscated attributes: {obfuscated}")
-            return obfuscated
-        except Exception as e:
-            self.logger.debug(f"ldapx attribute obfuscation failed, using original: {e}")
-            return attributes
 
     def users(self):
         """
