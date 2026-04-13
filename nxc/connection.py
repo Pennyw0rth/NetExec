@@ -139,6 +139,7 @@ class connection:
         self.conn = None
         self.output_file_template = None
         self.output_filename = None
+        self.protocol = args.protocol
 
         # Authentication info
         self.password = ""
