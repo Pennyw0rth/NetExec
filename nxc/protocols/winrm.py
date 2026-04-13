@@ -312,10 +312,9 @@ class winrm(connection):
         try:
             self.logger.display(f'Downloading "{remote_path}" to "{download_path}"')
             self.conn.fetch(remote_path, local_path)
+            self.logger.success(f"File {remote_path} has been saved to {local_path}")
         except Exception as e:
             self.logger.fail(f"Failed to get file {remote_path}, error: {e!s}")
-        else:
-            self.logger.success(f"File {remote_path} has been saved to {local_path}")
 
     def put_file(self, local_path=None, remote_path=None):
         local_path = local_path if local_path else self.args.put_file[0]
@@ -326,10 +325,9 @@ class winrm(connection):
         try:
             self.logger.display(f'Uploading "{local_path}" to "{remote_path}"')
             self.conn.copy(local_path, remote_path)
+            self.logger.success(f"File {local_path} has been uploaded to {remote_path}")
         except Exception as e:
             self.logger.fail(f"Failed to put file {local_path} to {remote_path}, error: {e!s}")
-        else:
-            self.logger.success(f"File {local_path} has been uploaded to {remote_path}")
 
     # Dos attack prevent:
     # if someboby executed "reg save HKLM\sam C:\windows\temp\sam" before, but didn't remove "C:\windows\temp\sam" file,
