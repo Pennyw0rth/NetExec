@@ -331,8 +331,10 @@ class winrm(connection):
 
     def dir(self, directory=None):
         directory = directory if directory else self.args.dir
-        for line in self.execute(f"dir {directory}", True).splitlines():
-            self.logger.highlight(line.rstrip())
+        out = self.execute(f"dir {directory}", True)
+        if out is not None:
+            for line in out.splitlines():
+                self.logger.highlight(line.rstrip())
 
     # Dos attack prevent:
     # if someboby executed "reg save HKLM\sam C:\windows\temp\sam" before, but didn't remove "C:\windows\temp\sam" file,
