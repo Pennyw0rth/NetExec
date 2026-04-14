@@ -3,7 +3,7 @@ import random
 import contextlib
 from termcolor import colored
 
-from nxc.config import process_secret, host_info_colors
+from nxc.config import process_secret, host_info_colors, discover_sql_browser
 from nxc.connection import connection
 from nxc.connection import requires_admin
 from nxc.helpers.misc import gen_random_string
@@ -44,6 +44,7 @@ class mssql(connection):
         self.lmhash = ""
         self.nthash = ""
         self.is_mssql = False
+        self.sqlbrowser_enabled = False
 
         connection.__init__(self, args, db, host)
 
@@ -59,10 +60,21 @@ class mssql(connection):
 
     def create_conn_obj(self):
         try:
+            # Connects to default port or --port
             self.conn = tds.MSSQL(self.host, self.port, self.remoteName)
             self.conn.connect(self.args.mssql_timeout)
+
         except Exception as e:
             self.logger.debug(f"Error connecting to MSSQL service on host: {self.host}, reason: {e}")
+
+            # Even if the TCP connection failed, we still check whether the SQL Browser is running
+            # This check is only run if the nxc.config discover_sql_browser is set to True
+            if discover_sql_browser:
+                self.mssql_instances = self.conn.getInstances(self.args.mssql_timeout)
+                if len(self.mssql_instances) > 0:
+                    self.sqlbrowser_enabled = True
+                    self.list_instances()
+
             with contextlib.suppress(Exception):
                 self.conn.disconnect()
             return False
@@ -117,7 +129,9 @@ class mssql(connection):
             login["Length"] = len(login.getData())
 
             # Get number of mssql instance
-            self.mssql_instances = self.conn.getInstances(0)
+            self.mssql_instances = self.conn.getInstances(self.args.mssql_timeout)
+            if len(self.mssql_instances) > 0:
+                self.sqlbrowser_enabled = True
 
             # Send the NTLMSSP Negotiate or SQL Auth Packet
             self.conn.sendTDS(tds.TDS_LOGIN7, login.getData())
@@ -155,7 +169,8 @@ class mssql(connection):
 
     def print_host_info(self):
         encryption = colored(f"EncryptionReq:{self.encryption}", host_info_colors[0 if self.encryption else 1], attrs=["bold"])
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption})")
+        sqlbrowser = colored(f"SqlBrowser:{self.sqlbrowser_enabled}", host_info_colors[0 if self.sqlbrowser_enabled else 1], attrs=["bold"])
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption}) ({sqlbrowser})")
 
     @reconnect_mssql
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
@@ -275,6 +290,23 @@ class mssql(connection):
             error_msg = self.handle_mssql_reply()
             self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {error_msg if error_msg else ''}")
             return False
+
+    def list_instances(self):
+        if self.sqlbrowser_enabled is False:
+            self.logger.fail("MSSQL browser is not enabled, cannot enumerate...")
+            return
+
+        if len(self.mssql_instances) > 0:
+            self.logger.display("SQL Browser is enabled, listing instances :")
+            # Get information about instances
+            for index, instance in enumerate(self.mssql_instances):
+                instance_name = instance.get("InstanceName")
+                instance_port = instance.get("tcp", None)
+                instance_np = instance.get("np", None)
+                instance_version = instance.get("Version", None)
+                self.logger.success(f"#{index} {instance_name} (port:{instance_port}) (np:{instance_np}) (version:{instance_version})")
+        else:
+            self.logger.fail("No instance to enumerate")
 
     def query(self):
         if self.conn.lastError:
