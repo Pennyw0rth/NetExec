@@ -27,7 +27,7 @@ def proto_args(parser, parents):
     files_group.add_argument("--get-file", nargs=2, metavar="FILE", help="Get a remote file, ex: \\\\Windows\\\\Temp\\\\whoami.txt whoami.txt")
 
     cgroup = winrm_parser.add_argument_group("Command Execution")
-    cgroup.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output. If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
+    cgroup.add_argument("--codec", default="437", help="Set encoding used (codec) from the target's output. If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
     cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
     cgroup.add_argument("-x", metavar="COMMAND", dest="execute", help="execute the specified command")
     cgroup.add_argument("-X", metavar="PS_COMMAND", dest="ps_execute", help="execute the specified PowerShell command")
