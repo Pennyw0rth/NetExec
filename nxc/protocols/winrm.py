@@ -308,7 +308,7 @@ class winrm(connection):
 
         # Do a bit of smart handling for the local file path
         if local_path.endswith("/"):
-            local_path += os.path.basename(remote_path)
+            local_path += ntpath.basename(remote_path)
         try:
             self.logger.display(f'Downloading "{remote_path}" to "{download_path}"')
             self.conn.fetch(remote_path, local_path)
