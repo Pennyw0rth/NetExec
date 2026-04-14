@@ -180,7 +180,7 @@ class mssql(connection):
         encryption = colored(f"EncryptionReq:{self.encryption}", host_info_colors[0 if self.encryption else 1], attrs=["bold"])
         sqlbrowser = colored(f"SqlBrowser:{self.sqlbrowser_enabled}", host_info_colors[0 if self.sqlbrowser_enabled else 1], attrs=["bold"])
         ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption}) ({sqlbrowser}) ({ntlm})")
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption}) ({sqlbrowser}) {ntlm}")
 
     @reconnect_mssql
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
