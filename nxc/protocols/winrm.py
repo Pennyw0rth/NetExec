@@ -329,6 +329,11 @@ class winrm(connection):
         except Exception as e:
             self.logger.fail(f"Failed to put file {local_path} to {remote_path}, error: {e!s}")
 
+    def dir(self, directory=None):
+        directory = directory if directory else self.args.dir
+        for line in self.execute(f"dir {directory}", True).splitlines():
+            self.logger.highlight(line.rstrip())
+
     # Dos attack prevent:
     # if someboby executed "reg save HKLM\sam C:\windows\temp\sam" before, but didn't remove "C:\windows\temp\sam" file,
     # when user execute the same command next time, in tty shell, the prompt will ask "File C:\windows\temp\sam already exists. Overwrite (Yes/No)?"

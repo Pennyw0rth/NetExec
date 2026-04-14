@@ -19,6 +19,9 @@ def proto_args(parser, parents):
     cgroup.add_argument("--lsa", action="store_true", help="dump LSA secrets from target systems")
     cgroup.add_argument("--dpapi", action="store_true", help="dump user's Credential Manager secrets from target systems")
 
+    mapping_enum_group = winrm_parser.add_argument_group("Mapping/Enumeration")
+    mapping_enum_group.add_argument("--dir", nargs="?", type=str, const="", help="List the content of a path (default path: '%(const)s')")
+
     files_group = winrm_parser.add_argument_group("File Operations")
     files_group.add_argument("--put-file", nargs=2, metavar="FILE", help="Put a local file into remote target, ex: whoami.txt \\\\Windows\\\\Temp\\\\whoami.txt")
     files_group.add_argument("--get-file", nargs=2, metavar="FILE", help="Get a remote file, ex: \\\\Windows\\\\Temp\\\\whoami.txt whoami.txt")
