@@ -254,13 +254,12 @@ class connection:
 
             self.print_host_info()
             if self.login() or (self.username == "" and self.password == ""):
-                if hasattr(self.args, "module") and self.args.module:
+                self.logger.debug("Calling command arguments")
+                self.call_cmd_args()
+                if self.args.module:
                     self.load_modules()
                     self.logger.debug("Calling modules")
                     self.call_modules()
-                else:
-                    self.logger.debug("Calling command arguments")
-                    self.call_cmd_args()
             self.disconnect()
 
     def call_cmd_args(self):
