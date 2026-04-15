@@ -72,14 +72,10 @@ class mssql(connection):
             # This check is only run if the nxc.config discover_sql_browser is set to True
             if discover_sql_browser:
                 # Ignore broadcast targets (UDP)
-                if self.host.endswith(".255"):
-                    self.logger.debug("Target is a broadcast address, skipping SQL browser enumeration")
-                    self.sqlbrowser_enabled = False
-                else:
-                    self.mssql_instances = self.conn.getInstances(self.args.mssql_timeout)
-                    if len(self.mssql_instances) > 0:
-                        self.sqlbrowser_enabled = True
-                        self.list_instances()
+                self.mssql_instances = self.conn.getInstances(self.args.mssql_timeout)
+                if len(self.mssql_instances) > 0:
+                    self.sqlbrowser_enabled = True
+                    self.list_instances()
 
             with contextlib.suppress(Exception):
                 self.conn.disconnect()
@@ -134,13 +130,9 @@ class mssql(connection):
             login["Length"] = len(login.getData())
 
             # Get number of mssql instance
-            if self.host.endswith(".255"):
-                self.logger.debug("Target is a broadcast address, skipping SQL browser enumeration")
-                self.sqlbrowser_enabled = False
-            else:
-                self.mssql_instances = self.conn.getInstances(self.args.mssql_timeout)
-                if len(self.mssql_instances) > 0:
-                    self.sqlbrowser_enabled = True
+            self.mssql_instances = self.conn.getInstances(self.args.mssql_timeout)
+            if len(self.mssql_instances) > 0:
+                self.sqlbrowser_enabled = True
 
             # Send the NTLMSSP Negotiate or SQL Auth Packet
             self.conn.sendTDS(tds.TDS_LOGIN7, login.getData())
