@@ -1,302 +1,279 @@
-import ssl
-import ldap3
 import sys
-from impacket.dcerpc.v5 import samr, epm, transport
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
+
+from impacket.dcerpc.v5 import samr, transport
+from impacket.ldap.ldap import LDAPSessionError, MODIFY_REPLACE
 from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
     """
     Module by CyberCelt: @Cyb3rC3lt
-     Initial module:
+    Refactored to use impacket LDAP CRUD operations instead of ldap3.
+
+    Initial module:
         https://github.com/Cyb3rC3lt/CrackMapExec-Modules
     Thanks to the guys at impacket for the original code
     """
 
     name = "add-computer"
-    description = "Adds or deletes a domain computer"
-    supported_protocols = ["smb"]
+    description = "Adds or deletes a domain computer via SAMR (SMB) or LDAPS"
+    supported_protocols = ["smb", "ldap"]
     category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context, module_options):
         """
-        add-computer: Specify add-computer to call the module using smb
-        NAME: Specify the NAME option to name the Computer to be added
-        PASSWORD: Specify the PASSWORD option to supply a password for the Computer to be added
-        DELETE: Specify DELETE to remove a Computer
-        CHANGEPW: Specify CHANGEPW to modify a Computer password
-        Usage: nxc smb $DC-IP -u Username -p Password -M add-computer -o NAME="BADPC" PASSWORD="Password1"
-               nxc smb $DC-IP -u Username -p Password -M add-computer -o NAME="BADPC" DELETE=True
-               nxc smb $DC-IP -u Username -p Password -M add-computer -o NAME="BADPC" PASSWORD="Password2" CHANGEPW=True
+        add-computer: Adds, deletes, or changes the password of a domain computer account.
+        Uses SAMR when invoked with nxc smb, LDAPS when invoked with nxc ldap.
+
+        NAME        Computer name (required). Trailing '$' is added automatically.
+        PASSWORD    Computer password (required for add/changepw).
+        DELETE      Set to delete the computer account.
+        CHANGEPW    Set to change an existing computer's password.
+
+        Usage (same syntax for ldap):
+            nxc smb  $DC-IP -u Username -p Password -M add-computer -o NAME="BADPC" PASSWORD="Password1"
+            nxc smb  $DC-IP -u Username -p Password -M add-computer -o NAME="BADPC" DELETE=True
+            nxc smb  $DC-IP -u Username -p Password -M add-computer -o NAME="BADPC" PASSWORD="Password2" CHANGEPW=True
         """
-        self.__baseDN = None
-        self.__computerGroup = None
-        self.__method = "SAMR"
-        self.__noAdd = False
-        self.__delete = False
-        self.noLDAPRequired = False
+        self.delete = "DELETE" in module_options
+        self.change_pw = False
 
-        if "DELETE" in module_options:
-            self.__delete = True
+        if "CHANGEPW" in module_options:
+            if "NAME" not in module_options or "PASSWORD" not in module_options:
+                context.log.error("NAME and PASSWORD options are required for CHANGEPW!")
+                sys.exit(1)
+            self.change_pw = True
 
-        if "CHANGEPW" in module_options and ("NAME" not in module_options or "PASSWORD" not in module_options):
-            context.log.error("NAME  and PASSWORD options are required!")
-            sys.exit(1)
-        elif "CHANGEPW" in module_options:
-            self.__noAdd = True
-
-        if "NAME" in module_options:
-            self.__computerName = module_options["NAME"]
-            if self.__computerName[-1] != "$":
-                self.__computerName += "$"
-        else:
+        if "NAME" not in module_options:
             context.log.error("NAME option is required!")
             sys.exit(1)
 
+        self.computer_name = module_options["NAME"]
+        if not self.computer_name.endswith("$"):
+            self.computer_name += "$"
+
         if "PASSWORD" in module_options:
-            self.__computerPassword = module_options["PASSWORD"]
-        elif "PASSWORD" not in module_options and not self.__delete:
+            self.computer_password = module_options["PASSWORD"]
+        elif not self.delete:
             context.log.error("PASSWORD option is required!")
             sys.exit(1)
 
     def on_login(self, context, connection):
-        self.__domain = connection.domain
-        self.__domainNetbios = connection.domain
-        self.__kdcHost = connection.kdcHost
-        self.__username = connection.username
-        self.__password = connection.password
-        self.__host = connection.host
-        self.__port = context.smb_server_port
-        self.__aesKey = context.aesKey
-        self.__hashes = context.hash
-        self.__doKerberos = connection.kerberos
-        self.__nthash = ""
-        self.__lmhash = ""
+        self.context = context
+        self.connection = connection
 
-        if context.hash and ":" in context.hash[0]:
-            hashList = context.hash[0].split(":")
-            self.__nthash = hashList[-1]
-            self.__lmhash = hashList[0]
-        elif context.hash and ":" not in context.hash[0]:
-            self.__nthash = context.hash[0]
-            self.__lmhash = "00000000000000000000000000000000"
+        if connection.args.protocol == "smb":
+            self._do_samr()
+        elif connection.args.protocol == "ldap":
+            self._do_ldap()
 
-        # First try to add via SAMR over SMB
-        self.do_samr_add(context)
+    def _db_remove_credential(self):
+        try:
+            db = self.context.db
+            domain = self.connection.domain
+            rows = db.get_user(domain, self.computer_name) if hasattr(db, "get_user") else db.get_credentials(filter_term=self.computer_name)
+            db.remove_credentials([row[0] for row in rows])
+        except Exception as e:
+            self.context.log.debug(f"Could not remove credentials from DB: {e}")
 
-        # If SAMR fails now try over LDAPS
-        if not self.noLDAPRequired:
-            self.do_ldaps_add(connection, context)
+    def _db_add_credential(self):
+        self.context.db.add_credential("plaintext", self.connection.domain, self.computer_name, self.computer_password)
 
-    def do_samr_add(self, context):
-        """
-        Connects to a target server and performs various operations related to adding or deleting machine accounts.
+    def _do_samr(self):
+        conn = self.connection
+        rpc_transport = transport.SMBTransport(conn.conn.getRemoteHost(), 445, r"\samr", smb_connection=conn.conn)
 
-        Args:
-        ----
-            context (object): The context object.
+        try:
+            dce = rpc_transport.get_dce_rpc()
+            dce.connect()
+            dce.bind(samr.MSRPC_UUID_SAMR)
+        except Exception as e:
+            self.context.log.fail(f"Failed to connect to SAMR: {e}")
+            return
 
-        Returns:
-        -------
-            None
-        """
-        string_binding = epm.hept_map(self.__host, samr.MSRPC_UUID_SAMR, protocol="ncacn_np")
-        string_binding = string_binding.replace(self.__host, self.__kdcHost) if self.__kdcHost is not None else string_binding
-
-        rpc_transport = transport.DCERPCTransportFactory(string_binding)
-        rpc_transport.setRemoteHost(self.__host)
-
-        if hasattr(rpc_transport, "set_credentials"):
-            # This method exists only for selected protocol sequences.
-            rpc_transport.set_credentials(self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, self.__aesKey)
-
-        rpc_transport.set_kerberos(self.__doKerberos, self.__kdcHost)
-
-        dce = rpc_transport.get_dce_rpc()
-        if self.__doKerberos:
-            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-
-        dce.connect()
-        dce.bind(samr.MSRPC_UUID_SAMR)
-
-        samr_connect_response = samr.hSamrConnect5(dce, f"\\\\{self.__kdcHost}\x00", samr.SAM_SERVER_ENUMERATE_DOMAINS | samr.SAM_SERVER_LOOKUP_DOMAIN)
-        serv_handle = samr_connect_response["ServerHandle"]
-
-        samr_enum_response = samr.hSamrEnumerateDomainsInSamServer(dce, serv_handle)
-        domains = samr_enum_response["Buffer"]["Buffer"]
-        domains_without_builtin = [domain for domain in domains if domain["Name"].lower() != "builtin"]
-        if len(domains_without_builtin) > 1:
-            domain = list(filter(lambda x: x["Name"].lower() == self.__domainNetbios, domains))
-            if len(domain) != 1:
-                context.log.highlight("{}".format('This domain does not exist: "' + self.__domainNetbios + '"'))
-                context.log.highlight("Available domain(s):")
-                for domain in domains:
-                    context.log.highlight(f" * {domain['Name']}")
-                raise Exception
-            else:
-                selected_domain = domain[0]["Name"]
-        else:
-            selected_domain = domains_without_builtin[0]["Name"]
-
-        samr_lookup_domain_response = samr.hSamrLookupDomainInSamServer(dce, serv_handle, selected_domain)
-        domain_sid = samr_lookup_domain_response["DomainId"]
-
-        context.log.debug(f"Opening domain {selected_domain}...")
-        samr_open_domain_response = samr.hSamrOpenDomain(dce, serv_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_CREATE_USER, domain_sid)
-        domain_handle = samr_open_domain_response["DomainHandle"]
-
-        if self.__noAdd or self.__delete:
-            try:
-                check_for_user = samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
-            except samr.DCERPCSessionError as e:
-                if e.error_code == 0xC0000073:
-                    context.log.highlight(f"{self.__computerName} not found in domain {selected_domain}")
-                    self.noLDAPRequired = True
-                context.log.exception(e)
-
-            user_rid = check_for_user["RelativeIds"]["Element"][0]
-            if self.__delete:
-                access = samr.DELETE
-                message = "delete"
-            else:
-                access = samr.USER_FORCE_PASSWORD_CHANGE
-                message = "set the password for"
-            try:
-                open_user = samr.hSamrOpenUser(dce, domain_handle, access, user_rid)
-                user_handle = open_user["UserHandle"]
-            except samr.DCERPCSessionError as e:
-                if e.error_code == 0xC0000022:
-                    context.log.highlight(f"{self.__username + ' does not have the right to ' + message + ' ' + self.__computerName}")
-                    self.noLDAPRequired = True
-                context.log.exception(e)
-        else:
-            if self.__computerName is not None:
-                try:
-                    samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
-                    self.noLDAPRequired = True
-                    context.log.highlight("{}".format('Computer account already exists with the name: "' + self.__computerName + '"'))
-                except samr.DCERPCSessionError as e:
-                    if e.error_code != 0xC0000073:
-                        raise
-            else:
-                found_unused = False
-                while not found_unused:
-                    self.__computerName = self.generateComputerName()
-                    try:
-                        samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
-                    except samr.DCERPCSessionError as e:
-                        if e.error_code == 0xC0000073:
-                            found_unused = True
-                        else:
-                            raise
-            try:
-                create_user = samr.hSamrCreateUser2InDomain(
-                    dce,
-                    domain_handle,
-                    self.__computerName,
-                    samr.USER_WORKSTATION_TRUST_ACCOUNT,
-                    samr.USER_FORCE_PASSWORD_CHANGE,
-                )
-                self.noLDAPRequired = True
-                context.log.highlight('Successfully added the machine account: "' + self.__computerName + '" with Password: "' + self.__computerPassword + '"')
-            except samr.DCERPCSessionError as e:
-                if e.error_code == 0xC0000022:
-                    context.log.highlight("{}".format('The following user does not have the right to create a computer account: "' + self.__username + '"'))
-                elif e.error_code == 0xC00002E7:
-                    context.log.highlight("{}".format('The following user exceeded their machine account quota: "' + self.__username + '"'))
-                context.log.exception(e)
-            user_handle = create_user["UserHandle"]
-
-        if self.__delete:
-            samr.hSamrDeleteUser(dce, user_handle)
-            context.log.highlight("{}".format('Successfully deleted the "' + self.__computerName + '" Computer account'))
-            self.noLDAPRequired = True
-            user_handle = None
-        else:
-            samr.hSamrSetPasswordInternal4New(dce, user_handle, self.__computerPassword)
-            if self.__noAdd:
-                context.log.highlight("{}".format('Successfully set the password of machine "' + self.__computerName + '" with password "' + self.__computerPassword + '"'))
-                self.noLDAPRequired = True
-            else:
-                check_for_user = samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.__computerName])
-                user_rid = check_for_user["RelativeIds"]["Element"][0]
-                open_user = samr.hSamrOpenUser(dce, domain_handle, samr.MAXIMUM_ALLOWED, user_rid)
-                user_handle = open_user["UserHandle"]
-                req = samr.SAMPR_USER_INFO_BUFFER()
-                req["tag"] = samr.USER_INFORMATION_CLASS.UserControlInformation
-                req["Control"]["UserAccountControl"] = samr.USER_WORKSTATION_TRUST_ACCOUNT
-                samr.hSamrSetInformationUser2(dce, user_handle, req)
-                if not self.noLDAPRequired:
-                    context.log.highlight("{}".format('Successfully added the machine account "' + self.__computerName + '" with Password: "' + self.__computerPassword + '"'))
-                self.noLDAPRequired = True
-
-            if user_handle is not None:
-                samr.hSamrCloseHandle(dce, user_handle)
-            if domain_handle is not None:
-                samr.hSamrCloseHandle(dce, domain_handle)
-            if serv_handle is not None:
-                samr.hSamrCloseHandle(dce, serv_handle)
+        try:
+            self._samr_execute(dce, conn.conn.getRemoteName())
+        finally:
             dce.disconnect()
 
-    def do_ldaps_add(self, connection, context):
-        """
-        Performs an LDAPS add operation.
+    def _samr_execute(self, dce, target_name):
+        domain = self.connection.domain
 
-        Args:
-        ----
-            connection (Connection): The LDAP connection object.
-            context (Context): The context object.
+        serv_handle = samr.hSamrConnect5(dce, f"\\\\{target_name}\x00", samr.SAM_SERVER_ENUMERATE_DOMAINS | samr.SAM_SERVER_LOOKUP_DOMAIN)["ServerHandle"]
+        domains = samr.hSamrEnumerateDomainsInSamServer(dce, serv_handle)["Buffer"]["Buffer"]
+        non_builtin = [d for d in domains if d["Name"].lower() != "builtin"]
 
-        Returns:
-        -------
-            None
-
-        Raises:
-        ------
-            None
-        """
-        ldap_domain = connection.domain.replace(".", ",dc=")
-        spns = [
-            f"HOST/{self.__computerName}",
-            f"HOST/{self.__computerName}.{connection.domain}",
-            f"RestrictedKrbHost/{self.__computerName}",
-            f"RestrictedKrbHost/{self.__computerName}.{connection.domain}",
-        ]
-        ucd = {
-            "dnsHostName": f"{self.__computerName}.{connection.domain}",
-            "userAccountControl": 0x1000,
-            "servicePrincipalName": spns,
-            "sAMAccountName": self.__computerName,
-            "unicodePwd": f"{self.__computerPassword}".encode("utf-16-le")
-        }
-        tls = ldap3.Tls(validate=ssl.CERT_NONE, version=ssl.PROTOCOL_TLSv1_2, ciphers="ALL:@SECLEVEL=0")
-        ldap_server = ldap3.Server(connection.host, use_ssl=True, port=636, get_info=ldap3.ALL, tls=tls)
-        c = ldap3.Connection(ldap_server, f"{connection.username}@{connection.domain}", connection.password)
-        c.bind()
-
-        if self.__delete:
-            result = c.delete(f"cn={self.__computerName},cn=Computers,dc={ldap_domain}")
-            if result:
-                context.log.highlight(f'Successfully deleted the "{self.__computerName}" Computer account')
-            elif result is False and c.last_error == "noSuchObject":
-                context.log.highlight(f'Computer named "{self.__computerName}" was not found')
-            elif result is False and c.last_error == "insufficientAccessRights":
-                context.log.highlight(f'Insufficient Access Rights to delete the Computer "{self.__computerName}"')
-            else:
-                context.log.highlight(f'Unable to delete the "{self.__computerName}" Computer account. The error was: {c.last_error}')
+        if len(non_builtin) > 1:
+            matched = [d for d in domains if d["Name"].lower() == domain.lower()]
+            if len(matched) != 1:
+                self.context.log.fail(f"Domain '{domain}' not found. Available: {', '.join(d['Name'] for d in domains)}")
+                return
+            selected = matched[0]["Name"]
         else:
-            result = c.add(
-                f"cn={self.__computerName},cn=Computers,dc={ldap_domain}",
+            selected = non_builtin[0]["Name"]
+
+        domain_sid = samr.hSamrLookupDomainInSamServer(dce, serv_handle, selected)["DomainId"]
+        domain_handle = samr.hSamrOpenDomain(dce, serv_handle, samr.DOMAIN_LOOKUP | samr.DOMAIN_CREATE_USER, domain_sid)["DomainHandle"]
+
+        try:
+            if self.delete or self.change_pw:
+                user_handle = self._samr_open_existing(dce, domain_handle, selected, self.connection.username)
+            else:
+                user_handle = self._samr_create(dce, domain_handle, self.connection.username)
+
+            if user_handle is None:
+                return
+
+            if self.delete:
+                samr.hSamrDeleteUser(dce, user_handle)
+                user_handle = None
+                self.context.log.highlight(f"Successfully deleted the '{self.computer_name}' Computer account")
+                self._db_remove_credential()
+            else:
+                samr.hSamrSetPasswordInternal4New(dce, user_handle, self.computer_password)
+                if self.change_pw:
+                    self.context.log.highlight(f"Successfully changed password for '{self.computer_name}'")
+                else:
+                    user_handle = self._samr_set_workstation_trust(dce, domain_handle, user_handle)
+                    self.context.log.highlight(f"Successfully added '{self.computer_name}' with password '{self.computer_password}'")
+                self._db_add_credential()
+        finally:
+            if user_handle is not None:
+                samr.hSamrCloseHandle(dce, user_handle)
+            samr.hSamrCloseHandle(dce, domain_handle)
+            samr.hSamrCloseHandle(dce, serv_handle)
+
+    def _samr_set_workstation_trust(self, dce, domain_handle, user_handle):
+        user_rid = samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.computer_name])["RelativeIds"]["Element"][0]
+        samr.hSamrCloseHandle(dce, user_handle)
+        new_handle = samr.hSamrOpenUser(dce, domain_handle, samr.MAXIMUM_ALLOWED, user_rid)["UserHandle"]
+        req = samr.SAMPR_USER_INFO_BUFFER()
+        req["tag"] = samr.USER_INFORMATION_CLASS.UserControlInformation
+        req["Control"]["UserAccountControl"] = samr.USER_WORKSTATION_TRUST_ACCOUNT
+        samr.hSamrSetInformationUser2(dce, new_handle, req)
+        return new_handle
+
+    def _samr_open_existing(self, dce, domain_handle, selected_domain, username):
+        try:
+            user_rid = samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.computer_name])["RelativeIds"]["Element"][0]
+        except samr.DCERPCSessionError as e:
+            if "STATUS_NONE_MAPPED" in str(e):
+                self.context.log.fail(f"'{self.computer_name}' not found in domain {selected_domain}")
+            else:
+                self.context.log.fail(f"Error looking up {self.computer_name}: {e}")
+            return None
+
+        try:
+            access = samr.DELETE if self.delete else samr.USER_FORCE_PASSWORD_CHANGE
+            return samr.hSamrOpenUser(dce, domain_handle, access, user_rid)["UserHandle"]
+        except samr.DCERPCSessionError as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                action = "delete" if self.delete else "change password for"
+                self.context.log.fail(f"{username} does not have the right to {action} '{self.computer_name}'")
+            else:
+                self.context.log.fail(f"Error opening {self.computer_name}: {e}")
+            return None
+
+    def _samr_create(self, dce, domain_handle, username):
+        try:
+            samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.computer_name])
+            self.context.log.fail(f"Computer '{self.computer_name}' already exists")
+            return None
+        except samr.DCERPCSessionError as e:
+            if "STATUS_NONE_MAPPED" not in str(e):
+                self.context.log.fail(f"Error looking up {self.computer_name}: {e}")
+                return None
+
+        try:
+            # Doing this call manually because of weird exception handling in https://github.com/fortra/impacket/blob/084aff60df7e8a5784bee3fb6ac74ed9d1362af8/impacket/dcerpc/v5/samr.py#L2591-L2599
+            request = samr.SamrCreateUser2InDomain()
+            request["DomainHandle"] = domain_handle
+            request["Name"] = self.computer_name
+            request["AccountType"] = samr.USER_WORKSTATION_TRUST_ACCOUNT
+            request["DesiredAccess"] = samr.USER_FORCE_PASSWORD_CHANGE
+            return dce.request(request)
+        except samr.DCERPCSessionError as e:
+            if "STATUS_USER_EXISTS" in str(e):
+                self.context.log.fail(f"Computer '{self.computer_name}' already exists")
+            elif "STATUS_ACCESS_DENIED" in str(e):
+                self.context.log.fail(f"{username} does not have the right to create a computer account")
+            elif "STATUS_DS_MACHINE_ACCOUNT_QUOTA_EXCEEDED" in str(e):
+                self.context.log.fail(f"{username} exceeded the machine account quota")
+            else:
+                self.context.log.fail(f"Error creating computer: {e}")
+            return None
+
+    def _do_ldap(self):
+        name = self.computer_name.rstrip("$")
+        computer_dn = f"CN={name},CN=Computers,{self.connection.baseDN}"
+
+        if self.delete:
+            self._ldap_delete(self.connection.ldap_connection, computer_dn)
+        elif self.change_pw:
+            self._ldap_change_password(self.connection.ldap_connection, computer_dn)
+        else:
+            self._ldap_add(self.connection.ldap_connection, computer_dn, name)
+
+    def _ldap_delete(self, ldap_conn, dn):
+        try:
+            ldap_conn.delete(dn)
+            self.context.log.highlight(f'Successfully deleted the "{self.computer_name}" Computer account')
+            self._db_remove_credential()
+        except LDAPSessionError as e:
+            if "noSuchObject" in str(e):
+                self.context.log.fail(f'Computer "{self.computer_name}" was not found')
+            elif "insufficientAccessRights" in str(e):
+                self.context.log.fail(f'Insufficient rights to delete "{self.computer_name}"')
+            else:
+                self.context.log.fail(f'Failed to delete "{self.computer_name}": {e}')
+
+    def _ldap_change_password(self, ldap_conn, dn):
+        try:
+            encoded_pw = f'"{self.computer_password}"'.encode("utf-16-le")
+            ldap_conn.modify(dn, {"unicodePwd": [(MODIFY_REPLACE, encoded_pw)]})
+            self.context.log.highlight(f"Successfully changed password for '{self.computer_name}'")
+            self._db_add_credential()
+        except LDAPSessionError as e:
+            if "noSuchObject" in str(e):
+                self.context.log.fail(f'Computer "{self.computer_name}" was not found')
+            elif "insufficientAccessRights" in str(e):
+                self.context.log.fail(f'Insufficient rights to change password for "{self.computer_name}"')
+            elif "unwillingToPerform" in str(e):
+                self.context.log.fail(f'Server unwilling to change password for "{self.computer_name}"')
+            else:
+                self.context.log.fail(f'Failed to change password for "{self.computer_name}": {e}')
+
+    def _ldap_add(self, ldap_conn, dn, name):
+        fqdn = f"{name}.{self.connection.domain}"
+        spns = [
+            f"HOST/{name}",
+            f"HOST/{fqdn}",
+            f"RestrictedKrbHost/{name}",
+            f"RestrictedKrbHost/{fqdn}",
+        ]
+
+        try:
+            ldap_conn.add(
+                dn,
                 ["top", "person", "organizationalPerson", "user", "computer"],
-                ucd
+                {
+                    "dnsHostName": fqdn,
+                    "userAccountControl": 0x1000,
+                    "servicePrincipalName": spns,
+                    "sAMAccountName": self.computer_name,
+                    "unicodePwd": f'"{self.computer_password}"'.encode("utf-16-le"),
+                },
             )
-            if result:
-                context.log.highlight(f'Successfully added the machine account: "{self.__computerName}" with Password: "{self.__computerPassword}"')
-                context.log.highlight("You can try to verify this with the nxc command:")
-                context.log.highlight(f"nxc ldap {connection.host} -u {connection.username} -p {connection.password} -M group-mem -o GROUP='Domain Computers'")
-            elif result is False and c.last_error == "entryAlreadyExists":
-                context.log.highlight(f"The Computer account '{self.__computerName}' already exists")
-            elif not result:
-                context.log.highlight(f"Unable to add the '{self.__computerName}' Computer account. The error was: {c.last_error}")
-            c.unbind()
+            self.context.log.highlight(f'Successfully added "{self.computer_name}" with password "{self.computer_password}"')
+            self._db_add_credential()
+        except LDAPSessionError as e:
+            if "entryAlreadyExists" in str(e):
+                self.context.log.fail(f"Computer '{self.computer_name}' already exists")
+            elif "insufficientAccessRights" in str(e):
+                self.context.log.fail(f"Insufficient rights to add '{self.computer_name}'")
+            elif "unwillingToPerform" in str(e):
+                self.context.log.fail("Server unwilling to perform")
+            elif "constraintViolation" in str(e):
+                self.context.log.fail(f"Constraint violation for '{self.computer_name}'. Quota exceeded or password policy.")
+            else:
+                self.context.log.fail(f"Failed to add '{self.computer_name}': {e}")

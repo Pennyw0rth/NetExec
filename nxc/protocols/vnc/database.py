@@ -2,7 +2,7 @@ import warnings
 
 from sqlalchemy import Column, Integer, PrimaryKeyConstraint, String
 from sqlalchemy.exc import SAWarning
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 
 from nxc.database import BaseDB
 

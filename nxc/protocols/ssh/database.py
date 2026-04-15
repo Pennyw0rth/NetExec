@@ -2,7 +2,7 @@ import configparser
 
 from sqlalchemy import Boolean, Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, select, func, delete
 from sqlalchemy.dialects.sqlite import Insert
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 
 from nxc.database import BaseDB, format_host_query
 from nxc.logger import nxc_logger
@@ -246,7 +246,7 @@ class database(BaseDB):
         add_links = []
 
         creds_q = select(self.CredentialsTable)
-        if cred_id:  # noqa: SIM108
+        if cred_id:
             creds_q = creds_q.filter(self.CredentialsTable.c.id == cred_id)
         else:
             creds_q = creds_q.filter(

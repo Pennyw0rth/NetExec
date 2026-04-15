@@ -26,7 +26,7 @@ class NXCModule:
 
         Examples
         --------
-        If STATUS_PASSWORD_MUST_CHANGE or STATUS_PASSWORD_EXPIRED (Change password for current user)
+        If STATUS_PASSWORD_MUST_CHANGE, STATUS_PASSWORD_EXPIRED or STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT (Change password for current user)
             netexec smb <DC_IP> -u username -p oldpass -M change-password -o NEWNTHASH='nthash'
             netexec smb <DC_IP> -u username -H oldnthash -M change-password -o NEWPASS='newpass'
 
@@ -95,14 +95,12 @@ class NXCModule:
                 new_nthash = self.newhash
 
         try:
-            self.anonymous = False
-            self.dce = self.authenticate(context, connection, protocol="ncacn_np", anonymous=self.anonymous)
+            self.dce = self.authenticate(context, connection, protocol="ncacn_np", anonymous=False)
         except Exception as e:
             # Handle specific errors like password expiration or must be change
-            if "STATUS_PASSWORD_MUST_CHANGE" in str(e) or "STATUS_PASSWORD_EXPIRED" in str(e):
+            if "STATUS_PASSWORD_MUST_CHANGE" in str(e) or "STATUS_PASSWORD_EXPIRED" in str(e) or "STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT" in str(e):
                 context.log.warning("Password must be changed. Trying with null session.")
-                self.anonymous = True
-                self.dce = self.authenticate(context, connection, protocol="ncacn_ip_tcp", anonymous=self.anonymous)
+                self.dce = self.authenticate(context, connection, protocol="ncacn_ip_tcp", anonymous=True)
             elif "STATUS_LOGON_FAILURE" in str(e):
                 context.log.fail("Authentication failure: wrong credentials.")
                 return False
@@ -124,7 +122,12 @@ class NXCModule:
             else:
                 self.context.db.add_credential("plaintext", target_domain, target_username, self.newpass)
         except Exception as e:
-            context.log.fail(f"SMB-SAMR password change failed: {e}")
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.context.log.fail(f"STATUS_ACCESS_DENIED while changing password for user: {target_username}")
+            elif "STATUS_NONE_MAPPED" in str(e):
+                self.context.log.fail(f"User '{target_username}' not found or not resolvable")
+            else:
+                context.log.fail(f"SMB-SAMR password change failed: {e}")
         finally:
             self.dce.disconnect()
 
@@ -147,13 +150,9 @@ class NXCModule:
             context.log.success(f"Successfully changed password for {target_username}")
 
     def _hSamrOpenUser(self, connection, username):
-        """Get handle to the user object"""
-        try:
-            # Connect to the target server and retrieve handles
-            server_handle = samr.hSamrConnect(self.dce, connection.host + "\x00")["ServerHandle"]
-            domain_sid = samr.hSamrLookupDomainInSamServer(self.dce, server_handle, connection.domain)["DomainId"]
-            domain_handle = samr.hSamrOpenDomain(self.dce, server_handle, domainId=domain_sid)["DomainHandle"]
-            user_rid = samr.hSamrLookupNamesInDomain(self.dce, domain_handle, (username,))["RelativeIds"]["Element"][0]
-            return samr.hSamrOpenUser(self.dce, domain_handle, userId=user_rid)["UserHandle"]
-        except Exception as e:
-            self.context.log.fail(f"Failed to open user: {e}")
+        """Connect to the target server and retrieve the user handle"""
+        server_handle = samr.hSamrConnect(self.dce, connection.host + "\x00")["ServerHandle"]
+        domain_sid = samr.hSamrLookupDomainInSamServer(self.dce, server_handle, connection.domain)["DomainId"]
+        domain_handle = samr.hSamrOpenDomain(self.dce, server_handle, domainId=domain_sid)["DomainHandle"]
+        user_rid = samr.hSamrLookupNamesInDomain(self.dce, domain_handle, (username,))["RelativeIds"]["Element"][0]
+        return samr.hSamrOpenUser(self.dce, domain_handle, userId=user_rid)["UserHandle"]

@@ -1,6 +1,6 @@
-from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, select, func, delete
+from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, UniqueConstraint, select, func, delete
 from sqlalchemy.dialects.sqlite import Insert
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 
 from nxc.database import BaseDB, format_host_query
 from nxc.logger import nxc_logger
@@ -28,6 +28,7 @@ class database(BaseDB):
 
         __table_args__ = (
             PrimaryKeyConstraint("id"),
+            UniqueConstraint("ip"),
         )
 
     class User(Base):
@@ -83,7 +84,6 @@ class database(BaseDB):
         Check if this host has already been added to the database, if not, add it in.
         TODO: return inserted or updated row ids as a list
         """
-        domain = domain.split(".")[0].upper()
         hosts = []
 
         q = select(self.HostsTable).filter(self.HostsTable.c.ip == ip)
@@ -123,7 +123,7 @@ class database(BaseDB):
         # TODO: find a way to abstract this away to a single Upsert call
         q = Insert(self.HostsTable)
         update_columns = {col.name: col for col in q.excluded if col.name not in "id"}
-        q = q.on_conflict_do_update(index_elements=self.HostsTable.primary_key, set_=update_columns)
+        q = q.on_conflict_do_update(index_elements=["ip"], set_=update_columns)
         self.db_execute(q, hosts)
 
     def add_credential(self, credtype, domain, username, password, pillaged_from=None):
@@ -198,7 +198,7 @@ class database(BaseDB):
         add_links = []
 
         creds_q = select(self.UsersTable)
-        if user_id:  # noqa: SIM108
+        if user_id:
             creds_q = creds_q.filter(self.UsersTable.c.id == user_id)
         else:
             creds_q = creds_q.filter(
