@@ -71,10 +71,15 @@ class mssql(connection):
             # Even if the TCP connection failed, we still check whether the SQL Browser is running
             # This check is only run if the nxc.config discover_sql_browser is set to True
             if discover_sql_browser:
-                self.mssql_instances = self.conn.getInstances(self.args.mssql_timeout)
-                if len(self.mssql_instances) > 0:
-                    self.sqlbrowser_enabled = True
-                    self.list_instances()
+                # Ignore broadcast targets (UDP)
+                if self.host.endswith(".255"):
+                    self.logger.debug("Target is a broadcast address, skipping SQL browser enumeration")
+                    self.sqlbrowser_enabled = False
+                else:
+                    self.mssql_instances = self.conn.getInstances(self.args.mssql_timeout)
+                    if len(self.mssql_instances) > 0:
+                        self.sqlbrowser_enabled = True
+                        self.list_instances()
 
             with contextlib.suppress(Exception):
                 self.conn.disconnect()
@@ -129,9 +134,13 @@ class mssql(connection):
             login["Length"] = len(login.getData())
 
             # Get number of mssql instance
-            self.mssql_instances = self.conn.getInstances(self.args.mssql_timeout)
-            if len(self.mssql_instances) > 0:
-                self.sqlbrowser_enabled = True
+            if self.host.endswith(".255"):
+                self.logger.debug("Target is a broadcast address, skipping SQL browser enumeration")
+                self.sqlbrowser_enabled = False
+            else:
+                self.mssql_instances = self.conn.getInstances(self.args.mssql_timeout)
+                if len(self.mssql_instances) > 0:
+                    self.sqlbrowser_enabled = True
 
             # Send the NTLMSSP Negotiate or SQL Auth Packet
             self.conn.sendTDS(tds.TDS_LOGIN7, login.getData())
@@ -180,7 +189,7 @@ class mssql(connection):
         encryption = colored(f"EncryptionReq:{self.encryption}", host_info_colors[0 if self.encryption else 1], attrs=["bold"])
         sqlbrowser = colored(f"SqlBrowser:{self.sqlbrowser_enabled}", host_info_colors[0 if self.sqlbrowser_enabled else 1], attrs=["bold"])
         ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption}) ({sqlbrowser}) {ntlm}")
+        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption}) ({sqlbrowser}) ({ntlm})")
 
     @reconnect_mssql
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
