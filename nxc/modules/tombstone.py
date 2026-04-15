@@ -1,10 +1,11 @@
 import sys
 from impacket.ldap import ldap as ldap_impacket
+from impacket.ldap import ldapasn1
 from nxc.logger import nxc_logger
 from nxc.parsers.ldap_results import parse_result_attributes
 from impacket.ldap.ldapasn1 import Control
-from impacket.examples.utils import init_ldap_session
-from ldap3 import MODIFY_REPLACE, MODIFY_DELETE
+from impacket.ldap.ldap import LDAPSessionError, MODIFY_REPLACE, MODIFY_DELETE
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -15,6 +16,7 @@ class NXCModule:
     supported_protocols = ["ldap"]
     opsec_safe = True
     multiple_hosts = False
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -26,11 +28,9 @@ class NXCModule:
         ACTION: Specify the action to execute, by default it uses the "query" action which only retrieve deleted objects, "restore" recover the object from the "ID" param, delete will delete the object.
         ID: The id of which object you want to restore.
         DN: The DN of which object you want to delete.
-        SCHEME: Force to use ldap or ldaps when trying to restore or delete an object, by default it uses ldaps.
         Usage: nxc ldap $DC-IP -u Username -p Password -M tombstone"
                nxc ldap $DC-IP -u Username -p Password -M tombstone -o ACTION=restore ID=5ad162c9-97b1-4a90-a17c-5c2aedb7d1e3
                nxc ldap $DC-IP -u Username -p Password -M tombstone -o ACTION=delete DN="CN=test,OU=Users,DC=test,DC=local"
-               nxc ldap $DC-IP -u Username -p Password -M tombstone -o ACTION=restore ID=5ad162c9-97b1-4a90-a17c-5c2aedb7d1e3 SCHEME=ldap
                nxc ldap $DC-IP -u Username -p Password -M tombstone -o ACTION=query
         """
         self.action = "query"
@@ -43,8 +43,6 @@ class NXCModule:
             self.id = module_options["ID"]
         if "DN" in module_options:
             self.deleteDN = module_options["DN"]
-        if "SCHEME" in module_options and module_options["SCHEME"] == "ldap":
-            self.ssl = False
         
         if "ACTION" in module_options and self.action == "restore" and "ID" not in module_options:
             context.log.error("ID is necessary when calling tombstone with the restore action")
@@ -92,16 +90,10 @@ class NXCModule:
             else:
                 nxc_logger.debug(e)
                 return False
-        
-        if len(resp) < 1:
-            context.log.highlight("Recycle is not active on that domain or no object is deleted.")
-
-            return None
-
-        context.log.highlight(f"Found {len(resp)} deleted objects, parsing results to recover necessary informations from given ID")
-        context.log.highlight("")
-
+    
         resp_parsed = parse_result_attributes(resp)
+
+        context.log.highlight(f"")
 
         for response in resp_parsed:
             
@@ -125,54 +117,40 @@ class NXCModule:
             context.log.highlight(f"The object was not found with id {self.id}.")
             return None
 
-        #If Kerberos True, then fqdn is used, similar to the -dc-host from impacket, set the machine_name to a fqdn and don't call _get_machine_name (good when NTLM is disabled)
-        if self.__doKerberos == True:
+        # LDAP control necessary to pass when recovering deleted objects [LDAP_SERVER_SHOW_DELETED_OID]
+        show_deleted_control = Control()
+        show_deleted_control["controlType"] = "1.2.840.113556.1.4.417"
+        show_deleted_control["criticality"] = True
 
-            self.__kdcHost = self.__host
-
-        ldap_server, ldap_session = init_ldap_session(self.__domain, self.__username, self.__password, self.__lmhash, self.__nthash, self.__doKerberos, self.__host, self.__kdcHost, self.__aesKey, self.ssl)
-
-        control = ("1.2.840.113556.1.4.417", True, None)      
-
-        success = ldap_session.modify(
-            dn=self.__objectDN,
-            changes={
-            "isDeleted": [(MODIFY_DELETE, [])],  # Remove the isDeleted atribute
-            "distinguishedName": [(MODIFY_REPLACE, [f"CN={self.__sAMAccountName},{self.__lastKnownParent}"])]  # Change the old dn to the original DN
-            },
-            controls=[control]
-        )
-       
-        if success:
+        try:
+            connection.ldap_connection.modify(dn=self.__objectDN,
+                           modifications={
+                               "isDeleted": [(MODIFY_DELETE, [])], # Remove the isDeleted atribute
+                               "distinguishedName": [(MODIFY_REPLACE, [f"CN={self.__sAMAccountName},{self.__lastKnownParent}"])] #restore the user DN
+                               },
+                            controls=[show_deleted_control]
+            )
 
             context.log.highlight(f'Success "CN={self.__sAMAccountName},{self.__lastKnownParent}" restored')
 
-        else:
+        except LDAPSessionError as e:
+            context.log.highlight(f"Error at trying to recover the object {e}")
 
-            context.log.highlight(f"Error at trying to recover the object {ldap_session.result['description']}")
-
+        return
+            
     def delete_object(self, context, connection):
-
-        #If Kerberos True, then fqdn is used, similar to the -dc-host from impacket, set the machine_name to a fqdn and don't call _get_machine_name (good when NTLM is disabled)
-        if self.__doKerberos == True:
-
-            self.__kdcHost = self.__host
-
-        ldap_server, ldap_session = init_ldap_session(self.__domain, self.__username, self.__password, self.__lmhash, self.__nthash, self.__doKerberos, self.__host, self.__kdcHost, self.__aesKey, self.ssl)
         
         context.log.highlight(f"Trying to delete {self.deleteDN}")
-                    
-        success = ldap_session.delete(self.deleteDN)
 
-        if success:
+        try:
+            connection.ldap_connection.delete(dn=self.deleteDN)
             
             context.log.highlight("")
             context.log.highlight(f'Success, "{self.deleteDN}" deleted')
 
-        else:
-
+        except LDAPSessionError as e:
             context.log.highlight("")
-            context.log.highlight(f'Error when trying to delete "{self.deleteDN}" {ldap_session.result}')                
+            context.log.highlight(f'Error when trying to delete "{self.deleteDN}" {e}')                
 
         return
 
@@ -209,9 +187,11 @@ class NXCModule:
             else:
                 nxc_logger.debug(e)
                 return False
-            
-        if len(resp) < 1:
-            context.log.highlight("Recycle is not active on that domain or no object is deleted with that id.")
+
+        entries = [item for item in resp if isinstance(item, ldapasn1.SearchResultEntry)]  
+
+        if len(entries) < 2:
+            context.log.highlight("Recycle bin is not active on the domain or no user is in a tombstone state")
 
             return None
 
@@ -234,27 +214,9 @@ class NXCModule:
     
     def on_login(self, context, connection):
         self.__domain = connection.domain
-        self.__domainNetbios = connection.domain
-        self.__kdcHost = connection.kdcHost
-        self.__username = connection.username
-        self.__password = connection.password
-        self.__host = connection.host
-        self.__aesKey = context.aesKey
-        self.__hashes = context.hash
-        self.__doKerberos = connection.kerberos
-        self.__nthash = ""
-        self.__lmhash = ""
         self.__sAMAccountName = ""
         self.__objectDN = ""
         self.__lastKnownParent = ""
-
-        if context.hash and ":" in context.hash[0]:
-            hashList = context.hash[0].split(":")
-            self.__nthash = hashList[-1]
-            self.__lmhash = hashList[0]
-        elif context.hash and ":" not in context.hash[0]:
-            self.__nthash = context.hash[0]
-            self.__lmhash = "00000000000000000000000000000000"
         
         self.__domain = connection.domain
 
