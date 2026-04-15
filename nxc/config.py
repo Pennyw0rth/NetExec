@@ -39,7 +39,7 @@ config_log = nxc_config.getboolean("nxc", "log_mode", fallback=False)
 host_info_colors = literal_eval(nxc_config.get("nxc", "host_info_colors", fallback=["green", "red", "yellow", "cyan"]))
 check_guest_account = nxc_config.getboolean("nxc", "check_guest_account", fallback=False)
 
-exclude_hosts = literal_eval(nxc_config.get("nxc", "exclude_hosts", fallback=""))
+exclude_hosts = literal_eval(nxc_config.get("nxc", "exclude_hosts", fallback=[]))
 if not isinstance(exclude_hosts, list):
     nxc_logger.error(f"exclude_hosts must be a 'list', got '{type(exclude_hosts).__name__}'. Exiting.")
     exit(1)
