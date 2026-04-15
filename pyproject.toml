@@ -49,6 +49,7 @@ dependencies = [
     "impacket @ git+https://github.com/Pennyw0rth/impacket",
     "oscrypto @ git+https://github.com/wbond/oscrypto",
     "pynfsclient @ git+https://github.com/Pennyw0rth/NfsClient",
+    "netifaces (>=0.11.0,<0.12.0)",
 ]
 
 [project.urls]
