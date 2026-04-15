@@ -32,6 +32,26 @@ from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError
 from impacket.krb5.ccache import CCache
 from impacket.krb5.types import Principal, KerberosException
 from impacket.ldap import ldap as ldap_impacket
+from urllib.parse import urlparse
+
+# Monkey patch LDAPConnection to support custom ports in the URL
+_original_ldap_init = ldap_impacket.LDAPConnection.__init__
+
+def _patched_ldap_init(self, url, baseDN='', dstIp=None, signing=True):
+    parsed = urlparse(url)
+    self._custom_port = parsed.port
+    _original_ldap_init(self, url, baseDN=baseDN, dstIp=dstIp, signing=signing)
+
+ldap_impacket.LDAPConnection.__init__ = _patched_ldap_init
+
+def _dstPort_getter(self):
+    return self._custom_port if getattr(self, '_custom_port', None) else self._original_dstPort
+
+def _dstPort_setter(self, value):
+    self._original_dstPort = value
+
+ldap_impacket.LDAPConnection._dstPort = property(_dstPort_getter, _dstPort_setter)
+
 from impacket.ldap import ldaptypes
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ldap.ldap import LDAPFilterSyntaxError
@@ -92,10 +112,19 @@ class ldap(connection):
 
         connection.__init__(self, args, db, host)
 
+    def proto_flow(self):
+        self.protocol = getattr(self.args, "scheme", "ldaps")
+        if not getattr(self.args, "port_explicitly_set", False):
+            if self.protocol == "ldaps":
+                self.port = 636
+            else:
+                self.port = 389
+        super().proto_flow()
+
     def proto_logger(self):
         self.logger = NXCAdapter(
             extra={
-                "protocol": "LDAP",
+                "protocol": self.protocol.upper(),
                 "host": self.host,
                 "port": self.port,
                 "hostname": self.hostname,
@@ -104,8 +133,8 @@ class ldap(connection):
 
     def create_conn_obj(self):
         try:
-            proto = "ldaps" if self.port == 636 else "ldap"
-            ldap_url = f"{proto}://{self.host}"
+            proto = self.protocol
+            ldap_url = f"{proto}://{self.host}:{self.port}"
             self.logger.info(f"Connecting to {ldap_url} with no baseDN")
 
             self.ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.host)
@@ -148,7 +177,7 @@ class ldap(connection):
 
     def check_ldap_signing(self):
         self.signing_required = False
-        ldap_url = f"ldap://{self.target}"
+        ldap_url = f"ldap://{self.target}:{self.port}"
         try:
             ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
             ldap_connection.login(domain=self.domain)
@@ -162,7 +191,8 @@ class ldap(connection):
 
     def check_ldaps_cbt(self):
         self.cbt_status = "Never"
-        ldap_url = f"ldaps://{self.target}"
+        ldaps_port = 636 if self.protocol == "ldap" else self.port
+        ldap_url = f"ldaps://{self.target}:{ldaps_port}"
         try:
             ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
             ldap_connection.channel_binding_value = None
@@ -283,7 +313,7 @@ class ldap(connection):
         cbt_status = colored(f"channel binding:{self.cbt_status}", host_info_colors[3], attrs=["bold"]) if self.cbt_status == "Always" else colored(f"channel binding:{self.cbt_status}", host_info_colors[2], attrs=["bold"])
         ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
 
-        self.logger.extra["protocol"] = "LDAP" if str(self.port) == "389" else "LDAPS"
+        self.logger.extra["protocol"] = self.protocol.upper()
         self.logger.extra["port"] = self.port
         self.logger.extra["hostname"] = self.hostname
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({signing}) ({cbt_status}) {ntlm}")
@@ -326,10 +356,10 @@ class ldap(connection):
 
         try:
             # Connect to LDAP
-            self.logger.extra["protocol"] = "LDAPS" if self.port == 636 else "LDAP"
-            self.logger.extra["port"] = "636" if self.port == 636 else "389"
-            proto = "ldaps" if self.port == 636 else "ldap"
-            ldap_url = f"{proto}://{self.target}"
+            self.logger.extra["protocol"] = self.protocol.upper()
+            self.logger.extra["port"] = self.port
+            proto = self.protocol
+            ldap_url = f"{proto}://{self.target}:{self.port}"
             self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [1]")
             self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
             self.ldap_connection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
@@ -388,7 +418,7 @@ class ldap(connection):
                     self.logger.extra["protocol"] = "LDAPS"
                     self.logger.extra["port"] = "636"
                     self.port = 636
-                    ldaps_url = f"ldaps://{self.target}"
+                    ldaps_url = f"ldaps://{self.target}:{self.port}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [2]")
                     self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
                     self.ldap_connection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
@@ -449,10 +479,10 @@ class ldap(connection):
 
         try:
             # Connect to LDAP
-            self.logger.extra["protocol"] = "LDAPS" if self.port == 636 else "LDAP"
-            self.logger.extra["port"] = "636" if self.port == 636 else "389"
-            proto = "ldaps" if self.port == 636 else "ldap"
-            ldap_url = f"{proto}://{self.target}"
+            self.logger.extra["protocol"] = self.protocol.upper()
+            self.logger.extra["port"] = self.port
+            proto = self.protocol
+            ldap_url = f"{proto}://{self.target}:{self.port}"
             self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3]")
             self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=self.auth_choice != "simple")
             self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=self.auth_choice)
@@ -481,7 +511,7 @@ class ldap(connection):
                     self.logger.extra["protocol"] = "LDAPS"
                     self.logger.extra["port"] = "636"
                     self.port = 636
-                    ldaps_url = f"ldaps://{self.target}"
+                    ldaps_url = f"ldaps://{self.target}:{self.port}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [4]")
                     self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
                     self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=self.auth_choice)
@@ -515,8 +545,8 @@ class ldap(connection):
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
-        self.logger.extra["protocol"] = "LDAP"
-        self.logger.extra["port"] = "389"
+        self.logger.extra["protocol"] = self.protocol.upper()
+        self.logger.extra["port"] = self.port
         lmhash = ""
         nthash = ""
 
@@ -545,10 +575,10 @@ class ldap(connection):
 
         try:
             # Connect to LDAP
-            self.logger.extra["protocol"] = "LDAPS" if self.port == 636 else "LDAP"
-            self.logger.extra["port"] = "636" if self.port == 636 else "389"
-            proto = "ldaps" if self.port == 636 else "ldap"
-            ldaps_url = f"{proto}://{self.target}"
+            self.logger.extra["protocol"] = self.protocol.upper()
+            self.logger.extra["port"] = self.port
+            proto = self.protocol
+            ldaps_url = f"{proto}://{self.target}:{self.port}"
             self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
             self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
             self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
@@ -574,7 +604,7 @@ class ldap(connection):
                     self.logger.extra["protocol"] = "LDAPS"
                     self.logger.extra["port"] = "636"
                     self.port = 636
-                    ldaps_url = f"ldaps://{self.target}"
+                    ldaps_url = f"ldaps://{self.target}:{self.port}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
                     self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
                     self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
