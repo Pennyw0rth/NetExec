@@ -1,7 +1,7 @@
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ldap import ldaptypes
 from nxc.helpers.misc import CATEGORY
-from nxc.parsers.ldap_results import parse_result_attributes, sid_to_str
+from nxc.parsers.ldap_results import parse_result_attributes
 
 
 class NXCModule:
@@ -80,9 +80,9 @@ class NXCModule:
             matched = False
 
             # Method 1: ms-DS-CreatorSID — set by DC for SAMR domain joins
-            raw_sid = comp.get("ms-DS-CreatorSID")
-            if raw_sid is not None:
-                matched = sid_to_str(raw_sid) == user_sid
+            creator_sid = comp.get("ms-DS-CreatorSID")
+            if creator_sid is not None:
+                matched = creator_sid == user_sid
 
             # Method 2: nTSecurityDescriptor owner — set for direct LDAP creation (addcomputer.py)
             if not matched:
