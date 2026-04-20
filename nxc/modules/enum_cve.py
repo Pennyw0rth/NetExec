@@ -187,7 +187,7 @@ class NXCModule:
         },
         # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2024-49019
         "CVE-2024-49019": {
-            "alias": "EKUwu / ESC15",
+            "alias": "ESC15 / EKUwu",
             "patches": {
                 (6, 0, 6003): 22966,      # Windows Server 2008 SP2
                 (6, 1, 7601): 27415,      # Windows Server 2008 R2 SP1
@@ -199,7 +199,7 @@ class NXCModule:
                 (10, 0, 25398): 1251,     # Windows Server 2022 23H2
                 (10, 0, 26100): 2314,     # Windows Server 2025 / Win11 24H2
             },
-            "message": "If host is an AD CS / CA server, it may be vulnerable to ESC15 - privilege escalation via built-in v1 templates allowing 'Supplied in the request' subject name",
+            "message": "If host is an AD CS / CA server, it may be vulnerable to ESC15",
             "exploitation": "https://trustedsec.com/blog/ekuwu-not-just-another-ad-cs-esc",
         },
     }
