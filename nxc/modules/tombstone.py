@@ -1,7 +1,4 @@
 import sys
-from impacket.ldap import ldap as ldap_impacket
-from impacket.ldap import ldapasn1
-from nxc.logger import nxc_logger
 from nxc.parsers.ldap_results import parse_result_attributes
 from impacket.ldap.ldapasn1 import Control
 from impacket.ldap.ldap import LDAPSessionError, MODIFY_REPLACE, MODIFY_DELETE
@@ -36,7 +33,6 @@ class NXCModule:
         self.action = "query"
         self.id = ""
         self.deleteDN = ""
-        self.ssl = True
         if "ACTION" in module_options:
             self.action = module_options["ACTION"]
         if "ID" in module_options:
@@ -51,6 +47,21 @@ class NXCModule:
             context.log.error("DN is necessary when calling tombstone with the delete action")
             sys.exit(1)
 
+    def on_login(self, context, connection):
+        self.__domain = connection.domain
+        self.__sAMAccountName = ""
+        self.__objectDN = ""
+        self.__lastKnownParent = ""
+        self.__domain = connection.domain
+        self.connection = connection
+
+        if self.action == "query":
+            self.query_deleted_objects(context)
+        if self.action == "delete":
+            self.delete_object(context, connection)
+        if self.action == "restore":
+            self.restore_deleted_object(context, connection)
+
     def domain_to_dn(self, domain):
         return ",".join(f"DC={part}" for part in domain.split("."))
 
@@ -59,8 +70,6 @@ class NXCModule:
         # ldap DN for deleted objects
         dn = "CN=Deleted Objects," + self.domain_to_dn(self.__domain)
 
-        # Search filter used to recover only Deleted objects and only the one with the specified id
-        searchFilter = "(isDeleted=TRUE)"
         # LDAP control necessary to show the deleted objects LDAP_SERVER_SHOW_DELETED_OID
         show_deleted_control = Control()
         show_deleted_control["controlType"] = "1.2.840.113556.1.4.417"
@@ -68,69 +77,45 @@ class NXCModule:
 
         context.log.highlight(f"Trying to find object with given id {self.id}")
 
-        try:
-            context.log.debug(f"Search Filter={searchFilter}")
-            resp = connection.ldap_connection.search(
-                dn,
-                2,
-                searchFilter=searchFilter,
-                attributes=["*"],
-                sizeLimit=0,
-                searchControls=[show_deleted_control]
-            )
+        context.log.debug("Search Filter=(isDeleted=TRUE)")
+        resp = self.connection.search(baseDN=dn, searchFilter="(isDeleted=TRUE)", attributes=["*"], searchControls=[show_deleted_control])
 
-        except ldap_impacket.LDAPSearchError as e:
-            if e.getErrorString().find("sizeLimitExceeded") >= 0:
-                context.log.debug("sizeLimitExceeded exception caught, giving up and processing the data received")
-                # We reached the sizeLimit, process the answers we have already and that's it. Until we implement
-                # paged queries
-                resp = e.getAnswers()
-            else:
-                nxc_logger.debug(e)
-                return False
         resp_parsed = parse_result_attributes(resp)
         context.log.highlight("")
 
-        for response in resp_parsed:
-            # The value 17 is the first entry from the ldap query when returning deleted objects and it should by default return the Deleted Objects OU information, by skipping this we return only objects that we want
-            if len(response) != 17 and self.id == response["name"].split(":")[1]:
+        for entries in resp_parsed:
+
+            # This check ensures that we skip the result for the Default container and only get the result from the given ID.
+            if "container" in entries["objectClass"] and entries["description"] == "Default container for deleted objects":
+                continue
+
+            if self.id == entries["name"].split(":")[1]:
+
                 context.log.highlight("Found target!")
-                context.log.highlight(f"sAMAccountName      {response['sAMAccountName']}")
-                context.log.highlight(f"dn      {response['distinguishedName']}")
-                context.log.highlight(f"ID      {response['name'].split(':')[1]}")
-                context.log.highlight(f"isDeleted       {response['isDeleted']}")
-                context.log.highlight(f"lastKnownParent       {response['lastKnownParent']}")
+                context.log.highlight(f"{'sAMAccountName':<20}: {entries['sAMAccountName']}")
+                context.log.highlight(f"{'dn':<20}: {entries['distinguishedName']}")
+                context.log.highlight(f"{'ID':<20}: {entries['name'].split(':')[1]}")
+                context.log.highlight(f"{'isDeleted':<20}: {entries['isDeleted']}")
+                context.log.highlight(f"{'lastKnownParent':<20}: {entries['lastKnownParent']}")
                 context.log.highlight("")
-                self.__sAMAccountName = response["sAMAccountName"]
-                self.__objectDN = response["distinguishedName"]
-                self.__lastKnownParent = response["lastKnownParent"]
+
+                self.__sAMAccountName = entries["sAMAccountName"]
+                self.__objectDN = entries["distinguishedName"]
+                self.__lastKnownParent = entries["lastKnownParent"]
 
                 break
 
         if self.__sAMAccountName == "":
             context.log.highlight(f"The object was not found with id {self.id}.")
-            return None
-
-        # LDAP control necessary to pass when recovering deleted objects [LDAP_SERVER_SHOW_DELETED_OID]
-        show_deleted_control = Control()
-        show_deleted_control["controlType"] = "1.2.840.113556.1.4.417"
-        show_deleted_control["criticality"] = True
+            return False
 
         try:
-            connection.ldap_connection.modify(dn=self.__objectDN,
-                           modifications={
-                               "isDeleted": [(MODIFY_DELETE, [])],  # Remove the isDeleted atribute
-                               "distinguishedName": [(MODIFY_REPLACE, [f"CN={self.__sAMAccountName},{self.__lastKnownParent}"])]  # Restore the user DN
-                               },
-                            controls=[show_deleted_control]
-            )
-
+            connection.ldap_connection.modify(dn=self.__objectDN, modifications={"isDeleted": [(MODIFY_DELETE, [])], "distinguishedName": [(MODIFY_REPLACE, [f"CN={self.__sAMAccountName},{self.__lastKnownParent}"])]}, controls=[show_deleted_control])
             context.log.highlight(f'Success "CN={self.__sAMAccountName},{self.__lastKnownParent}" restored')
 
         except LDAPSessionError as e:
-            context.log.highlight(f"Error at trying to recover the object {e}")
-
-        return None
+            context.log.fail(f"Error at trying to recover the object {e}")
+            return False
 
     def delete_object(self, context, connection):
         context.log.highlight(f"Trying to delete {self.deleteDN}")
@@ -142,77 +127,42 @@ class NXCModule:
 
         except LDAPSessionError as e:
             context.log.highlight("")
-            context.log.highlight(f'Error when trying to delete "{self.deleteDN}" {e}')
+            context.log.fail(f'Error when trying to delete "{self.deleteDN}" {e}')
 
-        return
-
-    def query_deleted_objects(self, context, connection):
+    def query_deleted_objects(self, context):
 
         # ldap DN for deleted objects
         dn = "CN=Deleted Objects," + self.domain_to_dn(self.__domain)
-
-        # Search filter used to recover only Deleted objects
-        searchFilter = "(isDeleted=TRUE)"
 
         # LDAP control necessary to show the deleted objects LDAP_SERVER_SHOW_DELETED_OID
         show_deleted_control = Control()
         show_deleted_control["controlType"] = "1.2.840.113556.1.4.417"
         show_deleted_control["criticality"] = True
 
-        try:
-            context.log.debug(f"Search Filter={searchFilter}")
-            resp = connection.ldap_connection.search(
-                dn,
-                2,
-                searchFilter=searchFilter,
-                attributes=["*"],
-                sizeLimit=0,
-                searchControls=[show_deleted_control]
-            )
-
-        except ldap_impacket.LDAPSearchError as e:
-            if e.getErrorString().find("sizeLimitExceeded") >= 0:
-                context.log.debug("sizeLimitExceeded exception caught, giving up and processing the data received")
-                # We reached the sizeLimit, process the answers we have already and that's it. Until we implement
-                # paged queries
-                resp = e.getAnswers()
-            else:
-                nxc_logger.debug(e)
-                return False
-
-        entries = [item for item in resp if isinstance(item, ldapasn1.SearchResultEntry)]
-
-        if len(entries) < 2:
-            context.log.highlight("Recycle bin is not active on the domain or no user is in a tombstone state")
-
-            return None
-
-        context.log.highlight(f"Found {len(resp)} deleted objects")
-        context.log.highlight("")
-
+        context.log.debug("Search Filter=(isDeleted=TRUE)")
+        resp = self.connection.search(baseDN=dn, searchFilter="(isDeleted=TRUE)", attributes=["*"], searchControls=[show_deleted_control])
         resp_parsed = parse_result_attributes(resp)
 
-        for response in resp_parsed:
+        if len(resp_parsed) == 0:
+            context.log.highlight("Could not find the Deleted Objects container, AD recycle bin might not be active")
+            return False
 
-            # The value 17 is the first entry from the ldap query when returning deleted objects and it should by default return the Deleted Objects OU information, by skipping this we return only objects that we want
-            if len(response) != 17:
-                context.log.highlight(f"sAMAccountName      {response['sAMAccountName']}")
-                context.log.highlight(f"dn      {response['distinguishedName']}")
-                context.log.highlight(f"ID      {response['name'].split(':')[1]}")
-                context.log.highlight(f"isDeleted       {response['isDeleted']}")
-                context.log.highlight(f"lastKnownParent       {response['lastKnownParent']}")
-                context.log.highlight("")
+        elif len(resp_parsed) < 2:
+            context.log.highlight("No objects are in a tombstone state")
+            return False
 
-    def on_login(self, context, connection):
-        self.__domain = connection.domain
-        self.__sAMAccountName = ""
-        self.__objectDN = ""
-        self.__lastKnownParent = ""
-        self.__domain = connection.domain
+        context.log.highlight(f"Found {len(resp) - 1} deleted objects")
+        context.log.highlight("")
 
-        if self.action == "query":
-            self.query_deleted_objects(context, connection)
-        if self.action == "delete":
-            self.delete_object(context, connection)
-        if self.action == "restore":
-            self.restore_deleted_object(context, connection)
+        for entries in resp_parsed:
+
+            # This check ensures that we skip the result for the Default container and only get results that are valid for us.
+            if "container" in entries["objectClass"] and entries["description"] == "Default container for deleted objects":
+                continue
+
+            context.log.highlight(f"{'sAMAccountName':<20}: {entries['sAMAccountName']}")
+            context.log.highlight(f"{'dn':<20}: {entries['distinguishedName']}")
+            context.log.highlight(f"{'ID':<20}: {entries['name'].split(':')[1]}")
+            context.log.highlight(f"{'isDeleted':<20}: {entries['isDeleted']}")
+            context.log.highlight(f"{'lastKnownParent':<20}: {entries['lastKnownParent']}")
+            context.log.highlight("")
