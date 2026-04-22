@@ -49,7 +49,7 @@ class NXCModule:
         self.remove = module_options.get("REMOVE", "False").lower() == "true"
 
         if not (self.target_user and self.group):
-            self.context.log.fail("USER and GROUP parameters are required!")
+            context.log.fail("USER and GROUP parameters are required!")
             sys.exit(1)
 
     def on_login(self, context, connection):
