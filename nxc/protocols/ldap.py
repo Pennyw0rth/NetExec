@@ -648,6 +648,10 @@ class ldap(connection):
             for item in resp_parsed:
                 if item:
                     self.admin_privs = True
+                    return
+
+        # If nothing matched we are not admin
+        self.admin_privs = False
 
     def getUnixTime(self, t):
         t -= 116444736000000000
