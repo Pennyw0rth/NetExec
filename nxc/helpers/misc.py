@@ -227,7 +227,7 @@ def convert(low, high, lockout=False):
 
 
 def parse_argument(argument: list) -> list:
-    """Parse input (list) from an argparse argument, which can be either a value or a file containing values."""
+    """Parse input from an argparse argument, which can be either a value or a file containing values."""
     parsed_items = []
     for item in argument:
         if os.path.isfile(item):
