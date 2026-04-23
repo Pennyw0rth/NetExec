@@ -994,7 +994,7 @@ class ldap(connection):
             "distinguishedName",
         ]
 
-        resp = self.search(searchFilter, attributes, 0)
+        resp = self.search(searchFilter, attributes)
         resp_parsed = parse_result_attributes(resp)
         self.logger.debug(f"Search Filter: {searchFilter}")
         self.logger.debug(f"Attributes: {attributes}")
