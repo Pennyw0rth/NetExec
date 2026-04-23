@@ -1024,8 +1024,7 @@ class ldap(connection):
                     self.logger.debug(f"SPN 'cifs/{user['sAMAccountName']}' added for {user['sAMAccountName']}")
                     spn_added = True
                 except ldap_impacket.LDAPSessionError as e:
-                    error_str = str(e)
-                    if "insufficientAccessRights" in error_str or "INSUFF_ACCESS_RIGHTS" in error_str:
+                    if "insufficientAccessRights" in str(e) or "INSUFF_ACCESS_RIGHTS" in str(e):
                         self.logger.fail(f"No write access to {user['sAMAccountName']}'s SPN attribute")
                     else:
                         self.logger.fail(f"LDAP error for {user['sAMAccountName']}: {e}")
@@ -1061,7 +1060,7 @@ class ldap(connection):
                         pwdLastSet = "<never>" if str(user.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(user["pwdLastSet"]))))
                         lastLogon = "<never>" if str(user.get("lastLogon", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(user["lastLogon"]))))
                         self.logger.display(f"sAMAccountName: {user['sAMAccountName']}, memberOf: {user.get('memberOf', [])}, pwdLastSet: {pwdLastSet}, lastLogon: {lastLogon}")
-                        self.logger.highlight(f"{out}")
+                        self.logger.highlight(out)
                         if self.args.kerberoasting:
                             with open(self.args.kerberoasting, "a+") as hash_kerberoasting:
                                 hash_kerberoasting.write(out + "\n")
