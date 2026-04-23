@@ -41,7 +41,7 @@ from impacket.ntlm import getNTLMSSPType1
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
-from nxc.helpers.misc import get_bloodhound_info, convert, d2b
+from nxc.helpers.misc import get_bloodhound_info, convert, d2b, parse_argument
 from nxc.logger import NXCAdapter
 from nxc.protocols.ldap.bloodhound import BloodHound, resolve_collection_methods
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
@@ -969,28 +969,11 @@ class ldap(connection):
             return
 
         if self.args.targeted_kerberoast:
-            target_users = []
-            for item in self.args.targeted_kerberoast:
-                if os.path.isfile(item):
-                    with open(item, encoding="utf-8") as f:
-                        target_users.extend(line.strip() for line in f if line.strip())
-                else:
-                    target_users.append(item.strip())
-
+            target_users = parse_argument(self.args.targeted_kerberoast)
             user_filter = "".join(f"(sAMAccountName={user})" for user in target_users)
             searchFilter = f"(&(objectCategory=person)(!(servicePrincipalName=*))(|{user_filter}))"
         elif self.args.kerberoast_account:
-            target_accounts = []
-            for item in self.args.kerberoast_account:
-                if os.path.isfile(item):
-                    try:
-                        with open(item, encoding="utf-8") as f:
-                            target_accounts.extend(line.strip() for line in f if line.strip())
-                    except Exception as e:
-                        self.logger.fail(f"Failed to read file '{item}': {e}")
-                else:
-                    target_accounts.append(item.strip())
-
+            target_accounts = parse_argument(self.args.kerberoast_account)
             self.logger.info(f"Targeting specific accounts for kerberoasting: {', '.join(target_accounts)}")
 
             # build search filter for specific users
@@ -1096,13 +1079,7 @@ class ldap(connection):
                         self.logger.fail(f"Failed to remove SPN for {user['sAMAccountName']}: {cleanup_error}")
 
     def roast_no_preauth(self):
-        usernames = []
-        for item in self.args.no_preauth_targets:
-            if os.path.isfile(item):
-                with open(item, encoding="utf-8") as f:
-                    usernames.extend(line.strip() for line in f if line.strip())
-            else:
-                usernames.append(item.strip())
+        usernames = parse_argument(self.args.no_preauth_targets)
 
         skipped = []
         hashes = []
