@@ -744,7 +744,7 @@ class ldap(connection):
             self.logger.debug(f"Dumping group: {self.args.groups}")
 
             # Resolve group DN and primaryGroupID (objectSid)
-            group_resp = self.search(f"(cn={self.args.groups})", ["distinguishedName", "objectSid"])
+            group_resp = self.search(f"(&(cn={self.args.groups})(objectClass=group))", ["distinguishedName", "objectSid"])
             group_parsed = parse_result_attributes(group_resp)
 
             if not group_parsed:
@@ -772,7 +772,8 @@ class ldap(connection):
             else:
                 for item in resp_parsed:
                     # Display sAMAccountName or CN if sAMAccountName not present (could be a group)
-                    self.logger.highlight(item["sAMAccountName"] if "group" not in item["objectClass"] else item["cn"])
+                    # Fallback to cn should sAMAccountName not be present (e.g. Service Principal Names)
+                    self.logger.highlight(item.get("sAMAccountName", item["cn"]) if "group" not in item["objectClass"] else item["cn"])
         else:
             # Display all groups
             self.logger.highlight(f"{'-Group-':<40} {'-Members-':<9} {'-Description-':<60}")
