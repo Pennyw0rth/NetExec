@@ -109,7 +109,10 @@ class rdp(connection):
             self.logger.display(f"Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
         else:
             self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({nla})")
-            self.db.add_host(self.host, self.port, self.hostname, self.domain, self.server_os, self.nla)
+            try:
+                self.db.add_host(self.host, self.port, self.hostname, self.domain, self.server_os, self.nla)
+            except Exception as e:
+                self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
 
     def create_conn_obj(self):
         self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout)
