@@ -744,7 +744,7 @@ class ldap(connection):
             self.logger.debug(f"Dumping group: {self.args.groups}")
 
             # Resolve group DN and primaryGroupID (objectSid)
-            group_resp = self.search(f"(cn={self.args.groups})", ["distinguishedName", "objectSid"])
+            group_resp = self.search(f"(&(cn={self.args.groups})(objectClass=group))", ["distinguishedName", "objectSid"])
             group_parsed = parse_result_attributes(group_resp)
 
             if not group_parsed:
