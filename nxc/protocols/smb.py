@@ -1705,13 +1705,23 @@ class smb(connection):
         self.logger.fail("[REMOVED] Arg moved to the ldap protocol")
         return
 
+    def _export_lines(self, lines, object_name="entries"):
+        if not self.args.export:
+            return
+
+        try:
+            with open(self.args.export, "w", encoding="utf-8") as file:
+                file.writelines(f"{line}\n" for line in lines)
+            self.logger.success(f"Exported {len(lines)} {object_name} to {self.args.export}")
+        except OSError as e:
+            self.logger.fail(f"Export failed: {e}")
+
     def users(self):
         if self.args.users:
             self.logger.debug(f"Dumping users: {', '.join(self.args.users)}")
-        return UserSamrDump(self).dump(requested_users=self.args.users, dump_path=self.args.users_export)
-
-    def users_export(self):
-        self.users()
+        users = UserSamrDump(self).dump(requested_users=self.args.users)
+        self._export_lines(users, "users")
+        return users
 
     def computers(self):
         self.logger.fail("[REMOVED] Arg moved to the ldap protocol")
@@ -1929,6 +1939,8 @@ class smb(connection):
                     )
             so_far += simultaneous
         dce.disconnect()
+        usernames = sorted({entry["username"] for entry in entries if entry["sidtype"] == "SidTypeUser" and not entry["username"].endswith("$")})
+        self._export_lines(usernames, "users")
         return entries
 
     def put_file_single(self, src, dst):
