@@ -46,6 +46,7 @@ from nxc.protocols.smb.dpapi import collect_masterkeys_from_target, get_domain_b
 from nxc.protocols.smb.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
 from nxc.protocols.smb.kerberos import kerberos_login_with_S4U, kerberos_altservice, get_realm_from_ticket
 from nxc.protocols.smb.wmiexec import WMIEXEC
+from nxc.protocols.smb.psexec import PSEXEC
 from nxc.protocols.smb.atexec import TSCH_EXEC
 from nxc.protocols.smb.smbexec import SMBEXEC
 from nxc.protocols.smb.mmcexec import MMCEXEC
@@ -839,7 +840,7 @@ class smb(connection):
         if getattr(self.args, "exec_method_explicitly_set", False):
             methods = [self.args.exec_method]
         if not methods:
-            methods = ["wmiexec", "atexec", "smbexec", "mmcexec"]
+            methods = ["wmiexec", "atexec", "smbexec", "mmcexec", "psexec"]
 
         if not payload and self.args.execute:
             payload = self.args.execute
@@ -950,6 +951,35 @@ class smb(connection):
                     self.logger.debug("Error executing command via smbexec, traceback:")
                     self.logger.debug(format_exc())
                     continue
+            elif method == "psexec":
+                if self.args.as_user and (self.args.use_kcache or self.hash):
+                    self.logger.fail("Cannot use --as-user with -H/--hash or --use-kcache (cleartext credential required)")
+                else:
+                    try:
+                        exec_method = PSEXEC(
+                            self.host if not self.kerberos else self.hostname + "." + self.domain,
+                            self.smb_share_name,
+                            self.conn,
+                            self.username,
+                            self.password,
+                            self.domain,
+                            self.kerberos,
+                            self.aesKey,
+                            self.host,
+                            self.kdcHost,
+                            self.hash,
+                            self.args.share,
+                            self.port,
+                            self.logger,
+                            self.args.get_output_tries,
+                            self.args.as_user
+                        )
+                        self.logger.info("Executed command via psexec")
+                        break
+                    except Exception:
+                        self.logger.debug("Error executing command via psexec, traceback:")
+                        self.logger.debug(format_exc())
+                        continue
 
         if hasattr(self, "server"):
             self.server.track_host(self.host)
