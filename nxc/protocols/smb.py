@@ -35,7 +35,30 @@ from impacket.krb5 import constants
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login
-from impacket.smb3structs import FILE_SHARE_WRITE, FILE_SHARE_DELETE, SMB2_0_IOCTL_IS_FSCTL
+from impacket.smb3structs import (
+    FILE_SHARE_READ,
+    FILE_SHARE_WRITE,
+    FILE_SHARE_DELETE,
+    GENERIC_WRITE,
+    FILE_DIRECTORY_FILE,
+    FILE_SYNCHRONOUS_IO_NONALERT,
+    SMB2_0_IOCTL_IS_FSCTL,
+)
+
+# ACL-based write check constants (used by shares())
+_SMB_FILE_OPEN             = 0x00000001  # Open existing object only — never creates
+_SMB_FILE_ADD_FILE         = 0x00000002  # Create files in a directory
+_SMB_FILE_ADD_SUBDIRECTORY = 0x00000004  # Create subdirectories in a directory
+_SMB_WRITE_DAC             = 0x00040000  # Modify DACL (ACL escalation path)
+_SMB_WRITE_OWNER           = 0x00080000  # Change owner (ACL escalation path)
+_SMB_WRITE_CHECKS = [
+    (GENERIC_WRITE,              "WRITE"),
+    (_SMB_FILE_ADD_FILE,         "WRITE"),
+    (_SMB_FILE_ADD_SUBDIRECTORY, "WRITE (SUBDIR)"),
+    (_SMB_WRITE_DAC,             "WRITE (ACL)"),
+    (_SMB_WRITE_OWNER,           "WRITE (ACL)"),
+]
+
 from impacket.dcerpc.v5 import tsts as TSTS
 
 from nxc.config import process_secret, host_info_colors, check_guest_account
@@ -1389,11 +1412,13 @@ class smb(connection):
         else:
             output(sessions)
 
+    def file_write_check(self):
+        if self.args.shares is None:
+            self.logger.fail("--file-write-check requires --shares")
+
     def shares(self):
-        temp_dir = ntpath.normpath("\\" + gen_random_string())
-        temp_file = ntpath.normpath("\\" + gen_random_string() + ".txt")
         permissions = []
-        write_check = bool(not self.args.no_write_check)
+        file_write_check = bool(getattr(self.args, "file_write_check", False))
 
         try:
             self.logger.debug(f"domain: {self.domain}")
@@ -1434,12 +1459,15 @@ class smb(connection):
                 self.logger.debug(f"Skipping excluded share: {share_name}")
                 continue
 
+            # shi1_type base type (strip STYPE_SPECIAL 0x80000000):
+            #   0 = STYPE_DISKTREE (real filesystem) — write checks apply
+            #   1 = STYPE_PRINTQ   (print spooler)   — skip; spool semantics, not file creation
+            #   3 = STYPE_IPC      (named pipes)      — skip; pipe write ≠ file creation
+            share_type = share["shi1_type"] & 0x3
             share_remark = share["shi1_remark"][:-1]
             share_info = {"name": share_name, "remark": share_remark, "access": []}
             read = False
             write = False
-            write_dir = False
-            write_file = False
             try:
                 self.conn.listPath(share_name, "*")
                 read = True
@@ -1448,13 +1476,27 @@ class smb(connection):
                 error = get_error_string(e)
                 self.logger.debug(f"Error checking READ access on share {share_name}: {error}")
             except (NetBIOSError, UnicodeEncodeError) as e:
-                write_check = False
                 share_info["access"].append("UNKNOWN (try '--no-smbv1')")
                 error = get_error_string(e)
                 self.logger.debug(f"Error checking READ access on share {share_name}: {error}. This exception always caused by special character in share name with SMBv1")
                 self.logger.info(f"Skipping WRITE permission check on share {share_name}")
+                permissions.append(share_info)
+                continue
 
-            if write_check:
+            if share_type != 0:
+                # Non-filesystem share (IPC, print queue, etc.) — write checks produce
+                # false positives due to non-file semantics; skip and report access as-is
+                permissions.append(share_info)
+                continue
+
+            if file_write_check:
+                # Empirical write check — creates and deletes a temp file/dir.
+                # Use --file-write-check to enable. Catches post-ACL blocking (AV/EDR/quota)
+                # but leaves a brief artifact window if delete permissions are missing.
+                temp_dir = ntpath.normpath("\\" + gen_random_string())
+                temp_file = ntpath.normpath("\\" + gen_random_string() + ".txt")
+                write_dir = False
+                write_file = False
                 try:
                     self.conn.createDirectory(share_name, temp_dir)
                     write_dir = True
@@ -1463,9 +1505,7 @@ class smb(connection):
                         self.conn.deleteDirectory(share_name, temp_dir)
                     except SessionError as e:
                         error = get_error_string(e)
-                        if error == "STATUS_OBJECT_NAME_NOT_FOUND":
-                            pass
-                        else:
+                        if error != "STATUS_OBJECT_NAME_NOT_FOUND":
                             self.logger.debug(f"Error DELETING created temp dir {temp_dir} on share {share_name}: {error}")
                 except SessionError as e:
                     error = get_error_string(e)
@@ -1481,18 +1521,62 @@ class smb(connection):
                         self.conn.deleteFile(share_name, temp_file)
                     except SessionError as e:
                         error = get_error_string(e)
-                        if error == "STATUS_OBJECT_NAME_NOT_FOUND":
-                            pass
-                        else:
+                        if error != "STATUS_OBJECT_NAME_NOT_FOUND":
                             self.logger.debug(f"Error DELETING created temp file {temp_file} on share {share_name}")
                 except SessionError as e:
                     error = get_error_string(e)
                     self.logger.debug(f"Error checking WRITE access with FILE creation on share {share_name}: {error}")
 
-                # If we either can create a file or a directory we add the write privs to the output. Agreed on in https://github.com/Pennyw0rth/NetExec/pull/404
+                # Agreed on in https://github.com/Pennyw0rth/NetExec/pull/404
                 if write_dir or write_file:
                     write = True
                     share_info["access"].append("WRITE")
+            else:
+                # ACL-based write check (default) — opens share root with FILE_OPEN +
+                # various access masks. No files created on disk. May not detect writes
+                # blocked post-ACL by AV/EDR or disk quota. Detects WRITE_DAC/WRITE_OWNER
+                # escalation paths that the empirical check misses.
+                seen_labels = set()
+                write_labels = []
+                for mask, label in _SMB_WRITE_CHECKS:
+                    if label in seen_labels:
+                        continue
+                    tid = None
+                    try:
+                        tid = self.conn.connectTree(share_name)
+                        fid = self.conn.openFile(
+                            tid,
+                            "\\",
+                            desiredAccess=mask,
+                            shareMode=FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                            creationDisposition=_SMB_FILE_OPEN,
+                            fileAttributes=0,
+                            creationOption=FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+                        )
+                        self.conn.closeFile(tid, fid)
+                        write_labels.append(label)
+                        seen_labels.add(label)
+                        self.logger.debug(f"{label} confirmed on {share_name} (mask=0x{mask:08x})")
+                    except SessionError as e:
+                        error = get_error_string(e)
+                        self.logger.debug(f"No {label} on {share_name}: {error}")
+                    except Exception as e:
+                        self.logger.debug(f"{label} check error on {share_name}: {e}")
+                    finally:
+                        if tid:
+                            try:
+                                self.conn.disconnectTree(tid)
+                            except Exception:
+                                pass
+
+                # If direct WRITE is achievable, suppress more granular labels
+                if "WRITE" in write_labels:
+                    write_labels = ["WRITE"]
+
+                for lbl in write_labels:
+                    share_info["access"].append(lbl)
+                    if not write:
+                        write = True
 
             permissions.append(share_info)
 
@@ -1507,17 +1591,24 @@ class smb(connection):
         if self.args.filter_shares:
             self.logger.display("[REMOVED] Use the --shares read,write options instead.")
 
-        self.logger.display("Enumerated shares")
-        self.logger.highlight(f"{'Share':<15} {'Permissions':<15} {'Remark'}")
-        self.logger.highlight(f"{'-----':<15} {'-----------':<15} {'------'}")
-
+        # Build filtered list first so column widths reflect only displayed rows
+        display_rows = []
         for share in permissions:
             name = share["name"]
             remark = share["remark"]
             perms = ",".join(share["access"])
             if self.args.shares and self.args.shares.lower() not in perms.lower():
                 continue
-            self.logger.highlight(f"{name:<15} {perms:<15} {remark}")
+            display_rows.append((name, perms, remark))
+
+        c_name  = max((len(r[0]) for r in display_rows), default=5) + 2
+        c_perms = max((len(r[1]) for r in display_rows), default=11) + 2
+
+        self.logger.display("Enumerated shares")
+        self.logger.highlight(f"{'Share':<{c_name}} {'Permissions':<{c_perms}} {'Remark'}")
+        self.logger.highlight(f"{'-----':<{c_name}} {'-----------':<{c_perms}} {'------'}")
+        for name, perms, remark in display_rows:
+            self.logger.highlight(f"{name:<{c_name}} {perms:<{c_perms}} {remark}")
         return permissions
 
     def dir(self):
