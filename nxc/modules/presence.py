@@ -1,10 +1,11 @@
 import re
-from impacket.dcerpc.v5 import samr, tsch, transport
+from impacket.dcerpc.v5 import samr, tsch
 from impacket.dcerpc.v5 import tsts as TSTS
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 from contextlib import suppress
 import traceback
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.rpc import NXCRPCConnection
 
 
 class NXCModule:
@@ -39,36 +40,18 @@ class NXCModule:
             context.log.fail(str(e))
             context.log.debug(traceback.format_exc())
 
-    def get_dce_rpc(self, target, string_binding, dce_binding, connection):
-        # Create a DCE/RPC transport object with the specified string binding
-        rpctransport = transport.DCERPCTransportFactory(string_binding)
-        rpctransport.setRemoteHost(target)
-        rpctransport.set_credentials(
-            connection.username,
-            connection.password,
-            connection.domain,
-            connection.lmhash,
-            connection.nthash,
-            aesKey=connection.aesKey,
+    def get_dce_rpc(self, named_pipe, dce_binding, connection, target_ip=None, auth_level=None):
+        return NXCRPCConnection(connection).connect(
+            named_pipe, dce_binding,
+            target_ip=target_ip,
+            auth_level=auth_level or RPC_C_AUTHN_LEVEL_PKT_PRIVACY,
         )
-        rpctransport.set_kerberos(connection.kerberos, connection.kdcHost)
-
-        # Connect to the DCE/RPC endpoint
-        dce = rpctransport.get_dce_rpc()
-        if connection.kerberos:
-            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-        dce.set_credentials(*rpctransport.get_credentials())
-        dce.connect()
-        dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
-        dce.bind(dce_binding)
-        return dce
 
     def enumerate_admin_users(self, context, connection):
         admin_users = []
 
         try:
-            string_binding = fr"ncacn_np:{connection.kdcHost}[\pipe\samr]"
-            dce = self.get_dce_rpc(connection.kdcHost, string_binding, samr.MSRPC_UUID_SAMR, connection)
+            dce = self.get_dce_rpc(r"\samr", samr.MSRPC_UUID_SAMR, connection, target_ip=connection.kdcHost)
         except Exception as e:
             context.log.fail(f"Failed to connect to SAMR: {e}")
             context.log.debug(traceback.format_exc())
@@ -174,9 +157,7 @@ class NXCModule:
     def check_scheduled_tasks(self, context, connection, admin_users):
         """Checks scheduled tasks over rpc."""
         try:
-            target = connection.remoteName if connection.kerberos else connection.host
-            stringbinding = f"ncacn_np:{target}[\\pipe\\atsvc]"
-            dce = self.get_dce_rpc(target, stringbinding, tsch.MSRPC_UUID_TSCHS, connection)
+            dce = self.get_dce_rpc(r"\atsvc", tsch.MSRPC_UUID_TSCHS, connection)
 
             # Also extract non admins where we can get the password
             self.non_admins = []
@@ -200,8 +181,7 @@ class NXCModule:
                         non_admin_sids.add(sid.group(1))
 
             if non_admin_sids:
-                string_binding = fr"ncacn_np:{connection.kdcHost}[\pipe\samr]"
-                dce = self.get_dce_rpc(connection.kdcHost, string_binding, samr.MSRPC_UUID_SAMR, connection)
+                dce = self.get_dce_rpc(r"\samr", samr.MSRPC_UUID_SAMR, connection, target_ip=connection.kdcHost)
 
                 # Get Domain Handle
                 server_handle = samr.hSamrConnect2(dce)["ServerHandle"]
