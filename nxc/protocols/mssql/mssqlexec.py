@@ -62,10 +62,20 @@ class MSSQLEXEC:
     def is_option_enabled(self, option):
         query = f"EXEC master.dbo.sp_configure '{option}';"
         self.logger.debug(f"Checking if {option} is enabled: {query}")
-        result = self.mssql_conn.sql_query(query)
+        try:
+            result = self.mssql_conn.sql_query(query)
+        except Exception as e:
+            # Old MSSQL versions (e.g. 2012) may return responses that impacket's TDS parser
+            # cannot handle, causing an unpack error. Assume disabled so we attempt to enable it.
+            self.logger.debug(f"Error querying option '{option}', assuming disabled: {e}")
+            return False
         # Assuming the query returns a list of dictionaries with 'config_value' as the key
         self.logger.debug(f"{option} check result: {result}")
-        return bool(result and result[0]["config_value"] == 1)
+        try:
+            return bool(result and result[0]["config_value"] == 1)
+        except Exception as e:
+            self.logger.debug(f"Error parsing config_value for '{option}', assuming disabled: {e}")
+            return False
 
     def put_file(self, data, remote):
         try:
