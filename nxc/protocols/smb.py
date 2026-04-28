@@ -2042,7 +2042,7 @@ class smb(connection):
 
     def get_folder(self):
         recursive = self.args.recursive
-        ignore_empty = getattr(self.args, "ignore_empty_folders", False)
+        ignore_empty = self.args.ignore_empty_folders
         self.logger.debug(f"Recursive option set to {recursive}")
         self.logger.debug(f"Ignore empty folders option set to {ignore_empty}")
         for folder, dest in self.args.get_folder:
