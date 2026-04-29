@@ -508,6 +508,13 @@ conf = {
             ]
         },
         {
+            "name": "Wazuh",
+            "services": [
+                {"name": "WazuhSvc", "description": "Wazuh Windows Agent"}
+            ],
+            "pipes": []
+        },
+        {
             "name": "Windows Defender",
             "services": [
                 {"name": "WinDefend", "description": "Windows Defender Antivirus Service"},
