@@ -423,3 +423,4 @@ class NXCModule:
             password = password[:-1] + "!"
 
         return password
+        
