@@ -191,7 +191,7 @@ class NXCModule:
             request["Name"] = self.computer_name
             request["AccountType"] = samr.USER_WORKSTATION_TRUST_ACCOUNT
             request["DesiredAccess"] = samr.USER_FORCE_PASSWORD_CHANGE
-            return dce.request(request)
+            return dce.request(request)["UserHandle"]
         except samr.DCERPCSessionError as e:
             if "STATUS_USER_EXISTS" in str(e):
                 self.context.log.fail(f"Computer '{self.computer_name}' already exists")
