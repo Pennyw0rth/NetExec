@@ -16,14 +16,14 @@ class NXCModule:
     """
 
     name = "add-computer"
-    description = "Adds or deletes a domain computer via SAMR (SMB) or LDAPS"
+    description = "Adds or deletes a domain computer via SAMR (SMB) or LDAP"
     supported_protocols = ["smb", "ldap"]
     category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context, module_options):
         """
         add-computer: Adds, deletes, or changes the password of a domain computer account.
-        Uses SAMR when invoked with nxc smb, LDAPS when invoked with nxc ldap.
+        Uses SAMR when invoked with nxc smb.
 
         NAME        Computer name (required). Trailing '$' is added automatically.
         PASSWORD    Computer password (required for add/changepw).
