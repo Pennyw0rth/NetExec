@@ -343,9 +343,9 @@ class NXCModule:
 
     def _provide_manual_steps(self):
         """Provide manual exploitation steps"""
-        self.context.log.info("\n" + "="*70)
+        self.context.log.info("\n" + "=" * 70)
         self.context.log.info("EXPLOITATION STEPS")
-        self.context.log.info("="*70)
+        self.context.log.info("=" * 70)
         self.context.log.info(f"Machine account created: {self.computer_name_full}")
         self.context.log.info(f"Password: {self.password}")
         self.context.log.info(f"Domain: {self.connection.domain.upper()}")
@@ -364,16 +364,13 @@ class NXCModule:
         self.context.log.info("   id")
         self.context.log.info("   whoami")
         self.context.log.info("")
-        self.context.log.info("Note: KDC issues ticket for '{}' when '{}' is requested".format(
-            self.computer_name_full, self.target_user))
-        self.context.log.info("      MIT Kerberos on target maps '{}' -> '{}'".format(
-            self.computer_name_full, self.target_user))
+        self.context.log.info(f"Note: KDC issues ticket for '{self.computer_name_full}' when '{self.target_user}' is requested")
+        self.context.log.info(f"      MIT Kerberos on target maps '{self.computer_name_full}' -> '{self.target_user}'")
         self.context.log.info("")
         self.context.log.info("CLEANUP (when done):")
-        self.context.log.info("  nxc smb {} -u {} -p <password> \\".format(
-            self.connection.host, self.connection.username))
+        self.context.log.info(f"  nxc smb {self.connection.host} -u {self.connection.username} -p <password> \\")
         self.context.log.info(f"      -M add-computer -o NAME={self.computer_name} DELETE=True")
-        self.context.log.info("="*70 + "\n")
+        self.context.log.info("=" * 70 + "\n")
 
     def _check_kerberos_tools(self):
         """Check if kinit and klist are available"""
