@@ -288,6 +288,13 @@ conf = {
             ]
         },
         {
+            "name": "Cynet",
+            "services": [
+                {"name": "CynetLauncher", "description": "CynetLauncher"}
+            ],
+            "pipes": []
+        },
+        {
             "name": "Elastic EDR",
             "services": [
                 {"name": "Elastic Agent", "description": "Elastic Agent Service"},
