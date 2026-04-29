@@ -282,7 +282,8 @@ class smb(connection):
             self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
 
         # DCOM connection with kerberos needed
-        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.targetDomain}"
+        # When the target is already an FQDN, use it directly so the SPN matches the host's AD registration (e.g. host.aepsc.com, not host.corp.aepsc.com).
+        self.remoteName = self.host if (not self.kerberos or "." in self.host) else f"{self.hostname}.{self.targetDomain}"
 
         # using kdcHost is buggy on impacket when using trust relation between ad so we kdcHost must stay to none if targetdomain is not equal to domain
         if not self.kdcHost and self.domain and self.domain == self.targetDomain:
