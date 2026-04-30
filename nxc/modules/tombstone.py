@@ -25,7 +25,7 @@ class NXCModule:
         ACTION: Specify the action to execute, by default it uses the "query" action which only retrieve deleted objects, "restore" recover the object from the "ID" param, delete will delete the object.
         ID: The id of which object you want to restore.
         DN: The DN of which object you want to delete.
-        Usage: nxc ldap $DC-IP -u Username -p Password -M tombstone"
+        Usage: nxc ldap $DC-IP -u Username -p Password -M tombstone
                nxc ldap $DC-IP -u Username -p Password -M tombstone -o ACTION=restore ID=5ad162c9-97b1-4a90-a17c-5c2aedb7d1e3
                nxc ldap $DC-IP -u Username -p Password -M tombstone -o ACTION=delete DN="CN=test,OU=Users,DC=test,DC=local"
                nxc ldap $DC-IP -u Username -p Password -M tombstone -o ACTION=query
