@@ -291,9 +291,8 @@ class mssql(connection):
             self.logger.error("Impersonation target is empty")
             return False
 
-        safe_target = target.replace("'", "''")
         try:
-            self.conn.sql_query(f"EXECUTE AS {mode} = N'{safe_target}';")
+            self.conn.sql_query(f"EXECUTE AS {mode} = N'{target}';")
             if self.conn.lastError:
                 self.logger.fail(self.conn.lastError)
                 return False
