@@ -6,7 +6,6 @@ import socket
 import struct
 from nxc.config import host_info_colors
 from nxc.connection import connection
-from nxc.helpers.logger import highlight
 from nxc.logger import NXCAdapter
 from nxc.paths import NXC_PATH
 from aardwolf.commons.target import RDPTarget
@@ -127,18 +126,12 @@ class vnc(connection):
             )
             asyncio.run(self.connect_vnc())
 
-            self.admin_privs = True
-            self.logger.success(
-                "{} {}".format(
-                    password,
-                    highlight(f"({self.config.get('nxc', 'pwn3d_label')})" if self.admin_privs else ""),
-                )
-            )
+            self.logger.success(f":{password}")
             return True
 
         except Exception as e:
             self.logger.debug(str(e))
-            self.logger.fail(f"{password} - Authentication failed")
+            self.logger.fail(f":{password} - Authentication failed")
             return False
 
     async def screen(self):
