@@ -31,6 +31,13 @@ EPA_LABELS = {
         host_info_colors[0],
         attrs=["bold"],
     ),
+    "kerberos_no_tls": colored(
+        "Extended Protection: Cannot be evaluated with Kerberos when Force Encryption is OFF "
+        "(MSSQL does not validate Kerberos channel bindings without TLS). "
+        "Re-run without Kerberos (NTLM auth) to determine EPA in this case.",
+        host_info_colors[2],
+        attrs=["bold"],
+    ),
 }
 
 
@@ -126,7 +133,7 @@ class MSSQLEpaTest(tds.MSSQL):
 
 
 class NXCModule:
-    """Module by @NoahDSJP - replaces mssql_cbt by @Dfte"""
+    """Module by @NoahDSJP, replaces mssql_cbt by @Dfte"""
 
     name = "mssql_epa"
     description = "Check Extended Protection for Authentication (EPA) enforcement on MSSQL"
@@ -160,6 +167,32 @@ class NXCModule:
             with contextlib.suppress(Exception):
                 conn.disconnect()
 
+    def _test_connection_kerberos(self, host, port, remote_name, timeout, username, password,
+                                   domain, hashes, aes_key, kdc_host, use_cache,
+                                   channel_binding_value=None):
+        conn = MSSQLEpaTest(host, port, remote_name)
+        conn.connect(timeout)
+        try:
+            res = conn.kerberosLogin(
+                None, username, password, domain,
+                hashes=hashes, aesKey=aes_key, kdcHost=kdc_host,
+                useCache=use_cache,
+                cbt_fake_value=channel_binding_value,
+            )
+            if res:
+                return "success"
+            errors = conn.get_error_messages()
+            if "untrusted domain" in errors:
+                return "untrusted_domain"
+            if "Login failed" in errors:
+                return "login_failed"
+            return "other"
+        except Exception as e:
+            return f"error: {e}"
+        finally:
+            with contextlib.suppress(Exception):
+                conn.disconnect()
+
     def on_login(self, context, connection):
         self.logger = context.log
 
@@ -168,12 +201,18 @@ class NXCModule:
             return
 
         if connection.kerberos:
-            self.logger.fail("Kerberos auth: EPA check requires NTLM authentication")
+            self._check_kerberos(connection)
             return
 
         if getattr(connection, "no_ntlm", False):
             self.logger.fail("Server does not support NTLM, EPA check not applicable")
             return
+
+        self._check_ntlm(connection)
+
+    def _check_ntlm(self, connection):
+        lmhash = getattr(connection, "lmhash", "") or ""
+        nthash = getattr(connection, "nthash", "") or ""
 
         test_args = {
             "host": connection.host,
@@ -183,7 +222,7 @@ class NXCModule:
             "username": connection.username,
             "password": connection.password,
             "domain": connection.targetDomain,
-            "hashes": f"{connection.lmhash}:{connection.nthash}" if connection.nthash else None,
+            "hashes": f"{lmhash}:{nthash}" if nthash else None,
         }
 
         if connection.encryption:
@@ -206,5 +245,44 @@ class NXCModule:
                 result = "required_sb" if missing == "untrusted_domain" else "allowed"
             else:
                 result = "off"
+
+        self.logger.highlight(EPA_LABELS[result])
+
+    def _check_kerberos(self, connection):
+        # Kerberos + Force Encryption OFF: MSSQL does NOT validate Kerberos channel
+        # bindings in this case. Without a working CBT validation path AND without an
+        # NTLM-style Service-Binding-in-message (Kerberos has no MsvAvTargetName
+        # equivalent — Service Binding is intrinsic to ticket encryption), there is no
+        # reliable way to determine EPA over Kerberos here. Bail out with a clear message.
+        if not connection.encryption:
+            self.logger.highlight(EPA_LABELS["kerberos_no_tls"])
+            return
+
+        lmhash = getattr(connection, "lmhash", "") or ""
+        nthash = getattr(connection, "nthash", "") or ""
+
+        test_args = {
+            "host": connection.host,
+            "port": connection.port,
+            "remote_name": connection.conn.remoteName,
+            "timeout": connection.args.mssql_timeout,
+            "username": connection.username,
+            "password": connection.password,
+            "domain": connection.targetDomain,
+            "hashes": f"{lmhash}:{nthash}" if (lmhash or nthash) else None,
+            "aes_key": getattr(connection, "aesKey", "") or "",
+            "kdc_host": getattr(connection, "kdcHost", None),
+            "use_cache": getattr(connection, "use_kcache", False),
+        }
+
+        bogus = self._test_connection_kerberos(**test_args, channel_binding_value=b"\xde\xad" * 8)
+        self.logger.info(f"Bogus CBT: {bogus}")
+
+        if bogus == "untrusted_domain":
+            missing = self._test_connection_kerberos(**test_args, channel_binding_value=b"\x00" * 16)
+            self.logger.info(f"Missing CBT: {missing}")
+            result = "required_cb" if missing == "untrusted_domain" else "allowed"
+        else:
+            result = "off"
 
         self.logger.highlight(EPA_LABELS[result])
