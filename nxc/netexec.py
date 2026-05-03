@@ -1,4 +1,5 @@
 # PYTHON_ARGCOMPLETE_OK
+import socket
 import sys
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import identify_target_file, display_modules
@@ -38,6 +39,22 @@ if platform.system() != "Windows":
         file_limit[0] = file_limit[1]
     file_limit = tuple(file_limit)
     resource.setrlimit(resource.RLIMIT_NOFILE, file_limit)
+
+
+def _detect_local_ip():
+    """Return the attacker host's primary outbound IPv4 address, or None.
+
+    Uses a UDP `connect` to a non-routable address — no traffic actually
+    leaves the host but the kernel populates the local end of the socket
+    with whichever interface IP would be used to reach the destination.
+    Mirrors the snippet in NetExec issue #674.
+    """
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("172.31.255.254", 80))
+            return s.getsockname()[0]
+    except OSError:
+        return None
 
 
 async def start_run(protocol_obj, args, db, targets):  # noqa: RUF029
@@ -127,6 +144,27 @@ def main():
                     targets.extend(parse_targets(target))
             except Exception as e:
                 nxc_logger.fail(f"Failed to parse target '{target}': {e}")
+
+    # Build the exclusion set after resolution so users can pass CIDRs / ranges
+    # to --exclude exactly the way they pass them to the positional `target`.
+    excluded = set()
+    if hasattr(args, "exclude") and args.exclude:
+        for entry in args.exclude:
+            try:
+                excluded.update(parse_targets(entry))
+            except Exception as e:  # noqa: BLE001
+                nxc_logger.fail(f"Failed to parse --exclude entry '{entry}': {e}")
+    if hasattr(args, "skip_self") and args.skip_self:
+        local_ip = _detect_local_ip()
+        if local_ip:
+            excluded.add(local_ip)
+            nxc_logger.debug(f"--skip-self: excluding local IP {local_ip}")
+    if excluded:
+        before = len(targets)
+        targets = [t for t in targets if t not in excluded]
+        removed = before - len(targets)
+        if removed:
+            nxc_logger.info(f"Excluded {removed} host(s) from the target list")
 
     # The following is a quick hack for the powershell obfuscation functionality, I know this is yucky
     if hasattr(args, "clear_obfscripts") and args.clear_obfscripts:
