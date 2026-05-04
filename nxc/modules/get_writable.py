@@ -14,7 +14,7 @@ OTYPE_FILTERS = {
 }
 
 SD_RIGHTS = {
-    3: "OWNER",
+    1: "OWNER",
     4: "DACL",
     8: "SACL",
 }
