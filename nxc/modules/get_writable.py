@@ -37,7 +37,7 @@ class NXCModule:
     def options(self, context, module_options):
         """
         OTYPE   Object type to filter: all, user, computer, group, ou, gpo, domain (default: all)
-        RIGHT   Right to look for: ALL, WRITE, CHILD (default: ALL)
+        RIGHT   Right to look for: ALL, WRITE, CHILD, SD (OWNER/DACL/SACL) (default: ALL)
         DETAIL  Show attribute/class names instead of just 'permission' (default: False)
         """
         otype = module_options.get("OTYPE", "all").lower()
@@ -48,7 +48,7 @@ class NXCModule:
             self.otype_filter = OTYPE_FILTERS[otype]
 
         self.right = module_options.get("RIGHT", "ALL").upper()
-        if self.right not in ("ALL", "WRITE", "CHILD"):
+        if self.right not in ("ALL", "WRITE", "CHILD", "SD"):
             self.right = "ALL"
 
         self.detail = module_options.get("DETAIL", "").lower() in ("true", "1", "yes")
@@ -56,7 +56,9 @@ class NXCModule:
     def on_login(self, context, connection):
         attrs = ["distinguishedName", "sAMAccountName", "objectClass"]
         if self.right in ("WRITE", "ALL"):
-            attrs += ["allowedAttributesEffective", "sDRightsEffective"]
+            attrs.append("allowedAttributesEffective")
+        if self.right in ("SD", "ALL"):
+            attrs.append("sDRightsEffective")
         if self.right in ("CHILD", "ALL"):
             attrs.append("allowedChildClassesEffective")
 
@@ -84,8 +86,9 @@ class NXCModule:
                 if isinstance(allowed_attrs, str):
                     allowed_attrs = [allowed_attrs]
                 if allowed_attrs:
-                    permissions.append(("WRITE", list(allowed_attrs) if self.detail else []))
+                    permissions.append(("WRITE", list(allowed_attrs)))
 
+            if self.right in ("SD", "ALL"):
                 sd_raw = entry.get("sDRightsEffective", 0)
                 try:
                     sd_mask = int(sd_raw)
@@ -100,7 +103,7 @@ class NXCModule:
                 if isinstance(child_classes, str):
                     child_classes = [child_classes]
                 if child_classes:
-                    permissions.append(("CREATE_CHILD", list(child_classes) if self.detail else []))
+                    permissions.append(("CREATE_CHILD", list(child_classes)))
 
             if permissions:
                 sam = entry.get("sAMAccountName", "")
@@ -115,11 +118,10 @@ class NXCModule:
             context.log.highlight(f"DN         : {f['dn']}")
             if self.detail:
                 context.log.highlight("Permission :")
-            sd_rights = []
             simple_rights = []
             for right, details in f["permissions"]:
                 if right in ("OWNER", "DACL", "SACL"):
-                    sd_rights.append(right)
+                    simple_rights.append(right)
                 elif self.detail and details:
                     label = f"  {right:<12} : "
                     pad = " " * len(label)
@@ -143,8 +145,9 @@ class NXCModule:
                     for line in lines[1:]:
                         context.log.highlight(f"{pad}{', '.join(line)}")
                 else:
-                    simple_rights.append(right)
+                    simple_rights.append(f"{right} ({len(details)} attrs)" if details else right)
             if simple_rights:
-                context.log.highlight(f"  Permission : {'; '.join(simple_rights)}")
-            if sd_rights:
-                context.log.highlight(f"  {' / '.join(sd_rights)}")
+                if self.detail:
+                    context.log.highlight(f"  {'; '.join(simple_rights)}")
+                else:
+                    context.log.highlight(f"  Permission : {'; '.join(simple_rights)}")
