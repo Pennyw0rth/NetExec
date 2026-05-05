@@ -2,13 +2,14 @@ import os
 from os.path import join as path_join
 from time import sleep
 from impacket.dcerpc.v5 import transport, scmr
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from nxc.helpers.misc import gen_random_string
 from nxc.paths import TMP_PATH
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
+from nxc.helpers.rpc import NXCRPCConnection
 
 
 class SMBEXEC:
-    def __init__(self, host, share_name, smbconnection, username="", password="", domain="", doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, share=None, port=445, logger=None, tries=None):
+    def __init__(self, host, share_name, smbconnection, username="", password="", domain="", doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, share=None, port=445, logger=None, tries=None, connection=None):
         self.__host = host
         self.__share_name = share_name
         self.__port = port
@@ -25,7 +26,6 @@ class SMBEXEC:
         self.__outputBuffer = b""
         self.__shell = "%COMSPEC% /Q /c "
         self.__retOutput = False
-        self.__rpctransport = None
         self.__scmr = None
         self.__aesKey = aesKey
         self.__doKerberos = doKerberos
@@ -33,6 +33,7 @@ class SMBEXEC:
         self.__kdcHost = kdcHost
         self.__tries = tries
         self.logger = logger
+        self.__connection = connection
 
         if hashes is not None:
             # This checks to see if we didn't provide the LM Hash
@@ -44,35 +45,40 @@ class SMBEXEC:
         if self.__password is None:
             self.__password = ""
 
-        stringbinding = f"ncacn_np:{self.__host}[\\pipe\\svcctl]"
-        self.logger.debug(f"StringBinding {stringbinding}")
-        self.__rpctransport = transport.DCERPCTransportFactory(stringbinding)
-        self.__rpctransport.set_dport(self.__port)
+        if self.__connection:
+            rpc = NXCRPCConnection(self.__connection)
+            self.__scmr = rpc.connect(r"\svcctl", scmr.MSRPC_UUID_SCMR)
+            self.__rpctransport = rpc.transport
+        else:
+            stringbinding = f"ncacn_np:{self.__host}[\\pipe\\svcctl]"
+            self.logger.debug(f"StringBinding {stringbinding}")
+            self.__rpctransport = transport.DCERPCTransportFactory(stringbinding)
+            self.__rpctransport.set_dport(self.__port)
 
-        if hasattr(self.__rpctransport, "setRemoteHost"):
-            self.__rpctransport.setRemoteHost(self.__remoteHost)
+            if hasattr(self.__rpctransport, "setRemoteHost"):
+                self.__rpctransport.setRemoteHost(self.__remoteHost)
 
-        if hasattr(self.__rpctransport, "set_credentials"):
-            # This method exists only for selected protocol sequences.
-            self.__rpctransport.set_credentials(
-                self.__username,
-                self.__password,
-                self.__domain,
-                self.__lmhash,
-                self.__nthash,
-                self.__aesKey,
-            )
-            self.__rpctransport.set_kerberos(self.__doKerberos, self.__kdcHost)
+            if hasattr(self.__rpctransport, "set_credentials"):
+                self.__rpctransport.set_credentials(
+                    self.__username,
+                    self.__password,
+                    self.__domain,
+                    self.__lmhash,
+                    self.__nthash,
+                    self.__aesKey,
+                )
+                self.__rpctransport.set_kerberos(self.__doKerberos, self.__kdcHost)
 
-        self.__scmr = self.__rpctransport.get_dce_rpc()
-        if self.__doKerberos:
-            self.__scmr.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-        self.__scmr.connect()
+            self.__scmr = self.__rpctransport.get_dce_rpc()
+            if self.__doKerberos:
+                self.__scmr.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+            self.__scmr.connect()
+            self.__scmr.bind(scmr.MSRPC_UUID_SCMR)
+
         s = self.__rpctransport.get_smb_connection()
         # We don't wanna deal with timeouts from now on.
         s.setTimeout(100000)
 
-        self.__scmr.bind(scmr.MSRPC_UUID_SCMR)
         resp = scmr.hROpenSCManagerW(self.__scmr)
         self.__scHandle = resp["lpScHandle"]
 
