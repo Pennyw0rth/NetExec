@@ -8,7 +8,7 @@ from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 
 
 class SMBEXEC:
-    def __init__(self, host, share_name, smbconnection, username="", password="", domain="", doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, share=None, port=445, logger=None, tries=None):
+    def __init__(self, host, share_name, smbconnection, username="", password="", domain="", doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, share=None, port=445, logger=None, tries=None, st=None):
         self.__host = host
         self.__share_name = share_name
         self.__port = port
@@ -61,6 +61,7 @@ class SMBEXEC:
                 self.__lmhash,
                 self.__nthash,
                 self.__aesKey,
+                TGS=st,
             )
             self.__rpctransport.set_kerberos(self.__doKerberos, self.__kdcHost)
 

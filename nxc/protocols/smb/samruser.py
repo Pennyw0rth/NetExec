@@ -27,6 +27,7 @@ class UserSamrDump:
         self.doKerberos = connection.kerberos
         self.host = connection.host
         self.kdcHost = connection.kdcHost
+        self.delegated_st = connection.delegated_st
         self.protocols = UserSamrDump.KNOWN_PROTOCOLS.keys()
         self.users = []
         self.rpc_transport = None
@@ -51,7 +52,7 @@ class UserSamrDump:
                 self.logger.debug(f"Invalid Protocol: {protocol}")
 
             self.logger.debug(f"Trying protocol {protocol}")
-            self.rpc_transport = transport.SMBTransport(self.addr, port, r"\samr", self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey, doKerberos=self.doKerberos, kdcHost=self.kdcHost, remote_host=self.host)
+            self.rpc_transport = transport.SMBTransport(self.addr, port, r"\samr", self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey, TGS=self.delegated_st, doKerberos=self.doKerberos, kdcHost=self.kdcHost, remote_host=self.host)
             try:
                 self.fetch_users(requested_users, dump_path)
                 break
