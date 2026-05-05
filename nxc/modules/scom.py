@@ -2,6 +2,7 @@ from nxc.helpers.misc import CATEGORY
 from nxc.logger import nxc_logger
 from impacket.ldap.ldap import LDAPSearchError
 from impacket.ldap.ldapasn1 import SearchResultEntry
+from datetime import datetime
 
 
 class NXCModule:
@@ -16,32 +17,38 @@ class NXCModule:
         pass
 
     def on_login(self, context, connection):
-        
+
         context.log.display("Starting SCOM infrastructure enumeration...")
-        
+
         # Search for SCOM Management Servers
         self.find_management_servers(context, connection)
-        
+
         # Search for SCOM SDK Service Accounts
         self.find_sdk_users(context, connection)
 
+    def filetime_to_str(self, ft):
+        ft = int(ft)
+        if ft == 0:
+            return "Never Set"
+        timestamp = (ft / 10000000) - 11644473600
+        return datetime.utcfromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S UTC")
+
     def find_management_servers(self, context, connection):
         """Find SCOM Management Servers by searching for MSOMHSvc ServicePrincipalName"""
-        
         context.log.display("Searching for SCOM Management Servers...")
         search_filter = "(serviceprincipalname=MSOMHSvc/*)"
         attributes = ["dNSHostName", "servicePrincipalName", "operatingSystem"]
-        
+
         context.log.debug(f"LDAP Search Filter: {search_filter}")
         context.log.debug(f"LDAP Attributes: {', '.join(attributes)}")
-        
+
         try:
             resp = connection.ldap_connection.search(
                 searchFilter=search_filter,
                 attributes=attributes,
                 sizeLimit=0
             )
-            context.log.debug(f"LDAP search completed successfully")
+            context.log.debug("LDAP search completed successfully")
         except LDAPSearchError as e:
             if e.getErrorString().find("sizeLimitExceeded") >= 0:
                 context.log.debug("LDAP sizeLimitExceeded exception caught, processing received data")
@@ -59,16 +66,16 @@ class NXCModule:
         # Process results
         servers = []
         context.log.debug(f"Processing {len(resp)} LDAP entries for Management Servers")
-        
+
         for item in resp:
             if isinstance(item, SearchResultEntry) is not True:
-                context.log.debug(f"Skipping non-SearchResultEntry item")
+                context.log.debug("Skipping non-SearchResultEntry item")
                 continue
-            
+
             dns_host_name = ""
             spns = []
             operating_system = ""
-            
+
             try:
                 for attribute in item["attributes"]:
                     attr_type = str(attribute["type"])
@@ -81,16 +88,16 @@ class NXCModule:
                     elif attr_type == "operatingSystem":
                         operating_system = str(attribute["vals"][0])
                         context.log.debug(f"Operating System: {operating_system}")
-                
+
                 if dns_host_name:
                     # Check if server has both MSOMHSvc and MSOMSdkSvc (potentially vulnerable)
                     has_hsvc = any("MSOMHSvc" in spn for spn in spns)
                     has_sdksvc = any("MSOMSdkSvc" in spn for spn in spns)
                     is_vulnerable = has_hsvc and has_sdksvc
-                    
+
                     if is_vulnerable:
                         context.log.debug(f"{dns_host_name} has both MSOMHSvc and MSOMSdkSvc SPNs - VULNERABLE")
-                    
+
                     servers.append({
                         "hostname": dns_host_name,
                         "spns": spns,
@@ -109,11 +116,11 @@ class NXCModule:
                     context.log.highlight(f"{server['hostname']} - VULNERABLE")
                 else:
                     context.log.highlight(f"{server['hostname']}")
-                
+
                 for spn in server["spns"]:
                     if "MSOMHSvc" in spn or "MSOMSdkSvc" in spn:
                         context.log.highlight(f"      {spn}")
-                
+
                 if server["os"]:
                     context.log.debug(f"Operating System: {server['os']}")
         else:
@@ -121,21 +128,20 @@ class NXCModule:
 
     def find_sdk_users(self, context, connection):
         """Find SCOM Data Access Service Accounts (SDK users)"""
-        
         context.log.display("Searching for SCOM SDK Service Accounts...")
         search_filter = "(&(serviceprincipalname=MSOMSdkSvc/*)(samaccounttype=805306368)(!(samaccounttype=805306370)))"
         attributes = ["userPrincipalName", "sAMAccountName", "servicePrincipalName", "description", "pwdLastSet"]
-        
+
         context.log.debug(f"LDAP Search Filter: {search_filter}")
         context.log.debug(f"LDAP Attributes: {', '.join(attributes)}")
-        
+
         try:
             resp = connection.ldap_connection.search(
                 searchFilter=search_filter,
                 attributes=attributes,
                 sizeLimit=0
             )
-            context.log.debug(f"LDAP search completed successfully")
+            context.log.debug("LDAP search completed successfully")
         except LDAPSearchError as e:
             if e.getErrorString().find("sizeLimitExceeded") >= 0:
                 context.log.debug("LDAP sizeLimitExceeded exception caught, processing received data")
@@ -153,18 +159,18 @@ class NXCModule:
         # Process results
         users = []
         context.log.debug(f"Processing {len(resp)} LDAP entries for SDK Service Accounts")
-        
+
         for item in resp:
             if isinstance(item, SearchResultEntry) is not True:
-                context.log.debug(f"Skipping non-SearchResultEntry item")
+                context.log.debug("Skipping non-SearchResultEntry item")
                 continue
-            
+
             user_principal_name = ""
             sam_account_name = ""
             spns = []
             description = ""
             pwd_last_set = ""
-            
+
             try:
                 for attribute in item["attributes"]:
                     attr_type = str(attribute["type"])
@@ -181,9 +187,9 @@ class NXCModule:
                         description = str(attribute["vals"][0])
                         context.log.debug(f"Description: {description}")
                     elif attr_type == "pwdLastSet":
-                        pwd_last_set = str(attribute["vals"][0])
+                        pwd_last_set = self.filetime_to_str(attribute["vals"][0])
                         context.log.debug(f"Password Last Set: {pwd_last_set}")
-                
+
                 if user_principal_name or sam_account_name:
                     users.append({
                         "upn": user_principal_name,
@@ -202,11 +208,11 @@ class NXCModule:
             for user in users:
                 username = user["upn"] if user["upn"] else user["sam"]
                 context.log.highlight(f"{username}")
-                
+
                 for spn in user["spns"]:
                     if "MSOMHSvc" in spn or "MSOMSdkSvc" in spn:
                         context.log.highlight(f"      {spn}")
-                
+
                 if user["description"]:
                     context.log.debug(f"Description: {user['description']}")
                 if user["pwd_last_set"]:
