@@ -28,7 +28,7 @@ from impacket.dcerpc.v5.samr import (
     SAM_MACHINE_ACCOUNT,
 )
 from impacket.krb5 import constants
-from impacket.krb5.crypto import generate_kerberos_keys, string_to_key
+from impacket.krb5.crypto import generate_kerberos_keys
 from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError
 from impacket.krb5.ccache import CCache
 from impacket.krb5.types import Principal, KerberosException
