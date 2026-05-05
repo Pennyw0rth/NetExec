@@ -1,8 +1,9 @@
 # PYTHON_ARGCOMPLETE_OK
 import sys
+
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import identify_target_file, display_modules
-from nxc.parsers.ip import parse_targets
+from nxc.parsers.ip import parse_targets, get_local_ips
 from nxc.parsers.nmap import parse_nmap_xml
 from nxc.parsers.nessus import parse_nessus_file
 from nxc.cli import gen_cli_args
@@ -12,7 +13,7 @@ from nxc.first_run import first_run_setup
 from nxc.paths import NXC_PATH, WORKSPACE_DIR
 from nxc.console import nxc_console
 from nxc.logger import nxc_logger
-from nxc.config import nxc_config, nxc_workspace, config_log
+from nxc.config import nxc_config, nxc_workspace, config_log, exclude_hosts, skip_self
 from nxc.database import create_db_engine
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
@@ -23,6 +24,7 @@ from os.path import exists
 from os.path import join as path_join
 from sys import exit
 from rich.progress import Progress
+from pathlib import Path
 import platform
 if sys.stdout.encoding == "cp1252":
     sys.stdout.reconfigure(encoding="utf-8")
@@ -127,6 +129,38 @@ def main():
                     targets.extend(parse_targets(target))
             except Exception as e:
                 nxc_logger.fail(f"Failed to parse target '{target}': {e}")
+
+    # Handle exclusions from config
+    excluded_ips = set()
+
+    # Process exclude_hosts from config
+    # Important, we are reusing the parse_targets because it already provides the code necessary for
+    # parsing all provided inputs
+    if exclude_hosts:
+        nxc_logger.debug(f"Processing exclusions from config: {exclude_hosts}")
+        for excluded in exclude_hosts:
+            if Path(excluded).is_file():
+                with open(excluded) as excluded_file_handler:
+                    for line in excluded_file_handler.readlines():
+                        excluded_ips.update(parse_targets(line.strip()))
+            else:
+                excluded_ips.update(parse_targets(excluded))
+
+    # Process skip_self from config
+    if skip_self:
+        local_ips = get_local_ips()
+        if local_ips:
+            nxc_logger.debug(f"Local IPs detected: {local_ips}")
+            excluded_ips.update(local_ips)
+        else:
+            nxc_logger.error("Could not determine local IP address for skip_self")
+
+    # Filter out excluded targets
+    if excluded_ips:
+        original_count = len(targets)
+        excluded_targets = [target for target in targets if target in excluded_ips]
+        targets = [target for target in targets if target not in excluded_ips]
+        nxc_logger.debug(f"Excluding {original_count - len(targets)} hosts from scan: {excluded_targets}")
 
     # The following is a quick hack for the powershell obfuscation functionality, I know this is yucky
     if hasattr(args, "clear_obfscripts") and args.clear_obfscripts:
