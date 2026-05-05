@@ -14,7 +14,6 @@ from termcolor import colored
 from dns import resolver
 from dateutil.relativedelta import relativedelta as rd
 
-from Cryptodome.Hash import MD4
 from OpenSSL.SSL import SysCallError
 from bloodhound.ad.authentication import ADAuthentication
 from bloodhound.ad.domain import AD
