@@ -1393,12 +1393,10 @@ class ldap(connection):
             if "_SC_GMSA_{84A78B8C" in self.args.gmsa_decrypt_lsa:
                 gmsa_id, gmsa_pass = self.args.gmsa_decrypt_lsa.split("_")[4].split(":")
                 # getting the gmsa account
-                search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
-                gmsa_accounts = self.ldap_connection.search(
+                gmsa_accounts = self.search(
                     searchBase=self.baseDN,
-                    searchFilter=search_filter,
+                    searchFilter="(objectClass=msDS-GroupManagedServiceAccount)",
                     attributes=["sAMAccountName"],
-                    sizeLimit=0,
                 )
                 gmsa_accounts_parsed = parse_result_attributes(gmsa_accounts)
                 if gmsa_accounts_parsed:
