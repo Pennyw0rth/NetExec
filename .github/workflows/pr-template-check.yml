@@ -1,8 +1,11 @@
 name: PR Template Check
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, edited]
+
+permissions:
+  pull-requests: write
 
 jobs:
   check-template:

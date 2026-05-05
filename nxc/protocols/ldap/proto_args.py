@@ -14,10 +14,12 @@ def proto_args(parser, parents):
     egroup.add_argument("--asreproast", help="Output AS_REP response to crack with hashcat to file")
     kerberoasting_arg = egroup.add_argument("--kerberoasting", "--kerberoast", help="Output TGS ticket to crack with hashcat to file")
     kerberoast_users_arg = egroup.add_argument("--kerberoast-account", nargs="+", dest="kerberoast_account", action=get_conditional_action(_StoreAction), make_required=[], help="Target specific accounts for kerberoasting (sAMAccountNames or file containing sAMAccountNames)")
-    egroup.add_argument("--no-preauth-targets", nargs=1, dest="no_preauth_targets", help="Targeted kerberoastable users")
+    targeted_kerberoast_arg = egroup.add_argument("--targeted-kerberoast", nargs="+", dest="targeted_kerberoast", action=get_conditional_action(_StoreAction), make_required=[], help="Adds temporary SPN to specified users, requests ST, then remove added SPN. Specify sAMAccountNames or file containing sAMAccountNames")
+    egroup.add_argument("--no-preauth-targets", nargs=1, dest="no_preauth_targets", help="Specify accounts that should be kerberoasted using an account without pre-authentication requirement.")
 
-    # Make kerberoast-users require kerberoasting
+    # Make kerberoast-users and targeted-kerberoast require kerberoasting
     kerberoast_users_arg.make_required = [kerberoasting_arg]
+    targeted_kerberoast_arg.make_required = [kerberoasting_arg]
 
     vgroup = ldap_parser.add_argument_group("Retrieve useful information on the domain")
     vgroup.add_argument("--base-dn", metavar="BASE_DN", dest="base_dn", type=str, default=None, help="base DN for search queries")
@@ -43,6 +45,6 @@ def proto_args(parser, parents):
 
     bgroup = ldap_parser.add_argument_group("Bloodhound Scan", "Options to play with Bloodhoud")
     bgroup.add_argument("--bloodhound", action="store_true", help="Perform a Bloodhound scan")
-    bgroup.add_argument("-c", "--collection", default="Default", help="Which information to collect. Supported: Group, LocalAdmin, Session, Trusts, Default, DCOnly, DCOM, RDP, PSRemote, LoggedOn, Container, ObjectProps, ACL, All. You can specify more than one by separating them with a comma")
+    bgroup.add_argument("-c", "--collection", default="Default", help="Which information to collect. Supported: Group, LocalAdmin, Session, Trusts, Default, DCOnly, DCOM, RDP, PSRemote, LoggedOn, Container, ObjectProps, ACL, ADCS, All. You can specify more than one by separating them with a comma.")
 
     return parser
