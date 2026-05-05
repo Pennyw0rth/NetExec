@@ -1333,18 +1333,23 @@ class ldap(connection):
                 rc4 = "<no read permissions>"
                 aes128 = aes256 = ""
                 if "msDS-ManagedPassword" in acc:
-                    blob = MSDS_MANAGEDPASSWORD_BLOB()
-                    blob.fromString(acc["msDS-ManagedPassword"])
-                    currentPassword = hexlify(blob["CurrentPassword"].rstrip(b"\x00")).decode()
-
-                    keys = generate_kerberos_keys(hex_pass=currentPassword, user=acc["sAMAccountName"], domain=self.targetDomain)
-                    rc4 = hexlify(keys[constants.EncryptionTypes.rc4_hmac.value].contents).decode()
-                    aes128 = hexlify(keys[constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value].contents).decode()
-                    aes256 = hexlify(keys[constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value].contents).decode()
+                    rc4, aes128, aes256 = self.gmsa_compute_secrets(acc["msDS-ManagedPassword"], acc["sAMAccountName"])
                 self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} NTLM: {rc4:<36} PrincipalsAllowedToReadPassword: {principal_with_read}")
                 if aes128 and aes256:
                     self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} aes128-cts-hmac-sha1-96: {aes128}")
                     self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} aes256-cts-hmac-sha1-96: {aes256}")
+
+    def gmsa_compute_secrets(self, password_data: bytes, sAMAccountName: str):
+        """Generate RC4, AES128, and AES256 keys for a GMSA account based on the provided password data and username."""
+        blob = MSDS_MANAGEDPASSWORD_BLOB()
+        blob.fromString(password_data)
+        currentPassword = hexlify(blob["CurrentPassword"].rstrip(b"\x00")).decode()
+
+        keys = generate_kerberos_keys(hex_pass=currentPassword, user=sAMAccountName, domain=self.targetDomain)
+        rc4 = hexlify(keys[constants.EncryptionTypes.rc4_hmac.value].contents).decode()
+        aes128 = hexlify(keys[constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value].contents).decode()
+        aes256 = hexlify(keys[constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value].contents).decode()
+        return rc4, aes128, aes256
 
     def decipher_gmsa_name(self, domain_name=None, account_name=None):
         # https://aadinternals.com/post/gmsa/
@@ -1406,8 +1411,8 @@ class ldap(connection):
                             break
                 # Compute the password and keys
                 data = bytes.fromhex(gmsa_pass)
-                passwd, aes128, aes256 = self.gmsa_compute_secrets(data, gmsa_id)
-                self.logger.highlight(f"Account: {gmsa_id:<20} NTLM: {passwd}")
+                rc4, aes128, aes256 = self.gmsa_compute_secrets(data, gmsa_id)
+                self.logger.highlight(f"Account: {gmsa_id:<20} NTLM: {rc4}")
                 self.logger.highlight(f"Account: {gmsa_id:<20} aes256-cts-hmac-sha1-96: {aes256}")
                 self.logger.highlight(f"Account: {gmsa_id:<20} aes128-cts-hmac-sha1-96: {aes128}")
         else:
