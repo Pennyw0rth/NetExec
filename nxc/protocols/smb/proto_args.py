@@ -90,6 +90,9 @@ def proto_args(parser, parents):
     files_group = smb_parser.add_argument_group("File Operations")
     files_group.add_argument("--put-file", action="append", nargs=2, metavar="FILE", help="Put a local file into remote target, ex: whoami.txt \\\\Windows\\\\Temp\\\\whoami.txt")
     files_group.add_argument("--get-file", action="append", nargs=2, metavar="FILE", help="Get a remote file, ex: \\\\Windows\\\\Temp\\\\whoami.txt whoami.txt")
+    files_group.add_argument("--get-folder", action="append", nargs=2, metavar="DIR", help="Get a remote directory, ex: \\\\Windows\\\\Temp\\\\testing testing")
+    files_group.add_argument("--recursive", default=False, action="store_true", help="Recursively get a folder")
+    files_group.add_argument("--ignore-empty-folders", default=False, action="store_true", help="Ignore empty folders when downloading")
     files_group.add_argument("--append-host", action="store_true", help="append the host to the get-file filename")
 
     cmd_exec_group = smb_parser.add_argument_group("Command Execution")
