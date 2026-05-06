@@ -288,6 +288,13 @@ conf = {
             ]
         },
         {
+            "name": "Cynet",
+            "services": [
+                {"name": "CynetLauncher", "description": "CynetLauncher"}
+            ],
+            "pipes": []
+        },
+        {
             "name": "Elastic EDR",
             "services": [
                 {"name": "Elastic Agent", "description": "Elastic Agent Service"},
@@ -499,6 +506,13 @@ conf = {
                 {"name": "Log_ServerNamePipe", "processes": ["LogServer.exe"]},
                 {"name": "OIPC_NTRTSCAN_PIPE_*", "processes": ["Ntrtscan.exe"]}
             ]
+        },
+        {
+            "name": "Wazuh",
+            "services": [
+                {"name": "WazuhSvc", "description": "Wazuh Windows Agent"}
+            ],
+            "pipes": []
         },
         {
             "name": "Windows Defender",

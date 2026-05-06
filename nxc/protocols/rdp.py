@@ -251,7 +251,7 @@ class rdp(connection):
                 stype = asyauthSecret.PASS if not nthash else asyauthSecret.NT
 
             kerberos_target = UniTarget(
-                self.host,
+                self.kdcHost,
                 88,
                 UniProto.CLIENT_TCP,
                 timeout=self.args.rdp_timeout,
