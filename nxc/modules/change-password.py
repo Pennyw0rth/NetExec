@@ -122,7 +122,12 @@ class NXCModule:
             else:
                 self.context.db.add_credential("plaintext", target_domain, target_username, self.newpass)
         except Exception as e:
-            context.log.fail(f"SMB-SAMR password change failed: {e}")
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.context.log.fail(f"STATUS_ACCESS_DENIED while changing password for user: {target_username}")
+            elif "STATUS_NONE_MAPPED" in str(e):
+                self.context.log.fail(f"User '{target_username}' not found or not resolvable")
+            else:
+                context.log.fail(f"SMB-SAMR password change failed: {e}")
         finally:
             self.dce.disconnect()
 
@@ -145,13 +150,9 @@ class NXCModule:
             context.log.success(f"Successfully changed password for {target_username}")
 
     def _hSamrOpenUser(self, connection, username):
-        """Get handle to the user object"""
-        try:
-            # Connect to the target server and retrieve handles
-            server_handle = samr.hSamrConnect(self.dce, connection.host + "\x00")["ServerHandle"]
-            domain_sid = samr.hSamrLookupDomainInSamServer(self.dce, server_handle, connection.domain)["DomainId"]
-            domain_handle = samr.hSamrOpenDomain(self.dce, server_handle, domainId=domain_sid)["DomainHandle"]
-            user_rid = samr.hSamrLookupNamesInDomain(self.dce, domain_handle, (username,))["RelativeIds"]["Element"][0]
-            return samr.hSamrOpenUser(self.dce, domain_handle, userId=user_rid)["UserHandle"]
-        except Exception as e:
-            self.context.log.fail(f"Failed to open user: {e}")
+        """Connect to the target server and retrieve the user handle"""
+        server_handle = samr.hSamrConnect(self.dce, connection.host + "\x00")["ServerHandle"]
+        domain_sid = samr.hSamrLookupDomainInSamServer(self.dce, server_handle, connection.domain)["DomainId"]
+        domain_handle = samr.hSamrOpenDomain(self.dce, server_handle, domainId=domain_sid)["DomainHandle"]
+        user_rid = samr.hSamrLookupNamesInDomain(self.dce, domain_handle, (username,))["RelativeIds"]["Element"][0]
+        return samr.hSamrOpenUser(self.dce, domain_handle, userId=user_rid)["UserHandle"]

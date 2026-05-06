@@ -125,6 +125,8 @@ class SMBSpiderPlus:
                 self.logger.debug(f'Cannot list files in folder "{subfolder}".')
             elif "STATUS_OBJECT_PATH_NOT_FOUND" in str(e):
                 self.logger.debug(f"The folder {subfolder} does not exist.")
+            elif "STATUS_STOPPED_ON_SYMLINK" in str(e):
+                self.logger.debug(f"The folder {subfolder} is a symlink that cannot be followed. Skipping.")
             elif self.reconnect():
                 filelist = self.list_path(share, subfolder)
         except NetBIOSTimeout as e:

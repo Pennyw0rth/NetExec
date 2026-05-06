@@ -1,6 +1,6 @@
 import warnings
 
-from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, func, select, insert, update, delete
+from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, func, select, insert, delete
 from sqlalchemy.dialects.sqlite import Insert  # used for upsert
 from sqlalchemy.exc import SAWarning
 from sqlalchemy.orm import declarative_base
@@ -164,10 +164,22 @@ class database(BaseDB):
             self.db_execute(q)  # .first()
         else:
             for user in results:
-                # might be able to just remove this if check, but leaving it in for now
-                if not user[3] and not user[4] and not user[5]:
-                    q = update(self.UsersTable).values(credential_data)  # .returning(self.UsersTable.c.id)
-                    results = self.db_execute(q)  # .first()
+                cred_data = user._asdict()
+                if credtype is not None:
+                    cred_data["credtype"] = credtype
+                if domain is not None:
+                    cred_data["domain"] = domain
+                if username is not None:
+                    cred_data["username"] = username
+                if password is not None:
+                    cred_data["password"] = password
+                if pillaged_from is not None:
+                    cred_data["pillaged_from_hostid"] = pillaged_from
+
+                q = Insert(self.UsersTable)
+                update_columns = {col.name: col for col in q.excluded if col.name not in "id"}
+                q = q.on_conflict_do_update(index_elements=self.UsersTable.primary_key, set_=update_columns)
+                self.db_execute(q, [cred_data])
 
         nxc_logger.debug(f"add_credential(credtype={credtype}, domain={domain}, username={username}, password={password}, pillaged_from={pillaged_from})")
 
