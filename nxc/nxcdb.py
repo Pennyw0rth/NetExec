@@ -465,11 +465,10 @@ class NXCDBMenu(cmd.Cmd):
             except UserExitedProto:
                 pass
 
-    @staticmethod
-    def help_proto():
-        help_string = """
-        proto [smb|mssql|winrm]
-            *unimplemented protocols: ftp, rdp, ldap, ssh
+    def help_proto(self):
+        available_protos = "|".join(self.protocols.keys())
+        help_string = f"""
+        proto [{available_protos}]
         Changes nxcdb to the specified protocol
         """
         print_help(help_string)
