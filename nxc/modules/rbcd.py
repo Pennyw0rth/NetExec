@@ -1,6 +1,6 @@
 from impacket.ldap import ldaptypes
 from impacket.ldap.ldap import MODIFY_DELETE, MODIFY_REPLACE, LDAPSessionError
-from ldap3.protocol.microsoft import security_descriptor_control
+from impacket.ldap.ldapasn1 import SDFlagsControl
 from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
 
@@ -87,7 +87,7 @@ class NXCModule:
         """Look up an object by sAMAccountName, return parsed entry with SD attributes"""
         sam = sam_account_name if sam_account_name.endswith("$") else f"{sam_account_name}$"
         search_filter = f"(sAMAccountName={sam})"
-        controls = security_descriptor_control(sdflags=0x04)
+        controls = [SDFlagsControl(criticality=True, flags=0x04)]
         resp = connection.search(
             searchFilter=search_filter,
             attributes=["distinguishedName", "objectSid", "sAMAccountName", "msDS-AllowedToActOnBehalfOfOtherIdentity"],
