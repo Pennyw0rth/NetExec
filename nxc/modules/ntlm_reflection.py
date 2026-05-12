@@ -10,7 +10,7 @@ class NXCModule:
     # Modified by azoxlpf to handle BrokenPipe/transport errors gracefully
     # Modified by Defte following the discovery of ctjf (https://github.com/Pennyw0rth/NetExec/issues/928) and the research done along side with @NeffIsBack and I
     name = "ntlm_reflection"
-    description = "Attempt to check if the OS is vulnerable to CVE-2025-33073 (NTLM Reflection attack)"
+    description = "[REMOVED] This module has been integrated into the enum_cve module."
     supported_protocols = ["smb"]
     opsec_safe = True
     multiple_hosts = True
