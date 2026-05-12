@@ -22,6 +22,7 @@ from impacket.examples.regsecrets import (
 )
 from impacket.nmb import NetBIOSError, NetBIOSTimeout
 from impacket.dcerpc.v5 import transport, lsat, lsad, scmr, rrp, srvs, wkst
+from impacket.dcerpc.v5.srvs import STYPE_DISKTREE, STYPE_MASK
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5.transport import DCERPCTransportFactory, SMBTransport
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
@@ -36,28 +37,19 @@ from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login
 from impacket.smb3structs import (
+    FILE_ADD_FILE,
+    FILE_ADD_SUBDIRECTORY,
+    FILE_DIRECTORY_FILE,
+    FILE_OPEN,
+    FILE_SHARE_DELETE,
     FILE_SHARE_READ,
     FILE_SHARE_WRITE,
-    FILE_SHARE_DELETE,
-    GENERIC_WRITE,
-    FILE_DIRECTORY_FILE,
     FILE_SYNCHRONOUS_IO_NONALERT,
+    GENERIC_WRITE,
     SMB2_0_IOCTL_IS_FSCTL,
+    WRITE_DAC,
+    WRITE_OWNER,
 )
-
-# ACL-based write check constants (used by shares())
-_SMB_FILE_OPEN             = 0x00000001  # Open existing object only — never creates
-_SMB_FILE_ADD_FILE         = 0x00000002  # Create files in a directory
-_SMB_FILE_ADD_SUBDIRECTORY = 0x00000004  # Create subdirectories in a directory
-_SMB_WRITE_DAC             = 0x00040000  # Modify DACL (ACL escalation path)
-_SMB_WRITE_OWNER           = 0x00080000  # Change owner (ACL escalation path)
-_SMB_WRITE_CHECKS = [
-    (GENERIC_WRITE,              "WRITE"),
-    (_SMB_FILE_ADD_FILE,         "WRITE"),
-    (_SMB_FILE_ADD_SUBDIRECTORY, "WRITE (SUBDIR)"),
-    (_SMB_WRITE_DAC,             "WRITE (ACL)"),
-    (_SMB_WRITE_OWNER,           "WRITE (ACL)"),
-]
 
 from impacket.dcerpc.v5 import tsts as TSTS
 
@@ -1412,13 +1404,18 @@ class smb(connection):
         else:
             output(sessions)
 
-    def file_write_check(self):
-        if self.args.shares is None:
-            self.logger.fail("--file-write-check requires --shares")
-
     def shares(self):
         permissions = []
-        file_write_check = bool(getattr(self.args, "file_write_check", False))
+        # ACL-based write check masks: each open attempt against the share root
+        # validates one specific permission. WRITE_DAC/WRITE_OWNER cover paths
+        # where the user can grant themselves write via ACL modification.
+        write_checks = [
+            (GENERIC_WRITE, "WRITE"),
+            (FILE_ADD_FILE, "WRITE"),
+            (FILE_ADD_SUBDIRECTORY, "WRITE (SUBDIR)"),
+            (WRITE_DAC, "WRITE (ACL)"),
+            (WRITE_OWNER, "WRITE (ACL)"),
+        ]
 
         try:
             self.logger.debug(f"domain: {self.domain}")
@@ -1459,13 +1456,15 @@ class smb(connection):
                 self.logger.debug(f"Skipping excluded share: {share_name}")
                 continue
 
-            # shi1_type base type (strip STYPE_SPECIAL 0x80000000):
-            #   0 = STYPE_DISKTREE (real filesystem) — write checks apply
-            #   1 = STYPE_PRINTQ   (print spooler)   — skip; spool semantics, not file creation
-            #   3 = STYPE_IPC      (named pipes)      — skip; pipe write ≠ file creation
-            share_type = share["shi1_type"] & 0x3
+            # Mask off STYPE_SPECIAL/STYPE_TEMPORARY flags; only the base type
+            # (DISKTREE/PRINTQ/DEVICE/IPC) determines whether write checks apply.
             share_remark = share["shi1_remark"][:-1]
-            share_info = {"name": share_name, "remark": share_remark, "access": []}
+            share_info = {
+                "name": share_name,
+                "remark": share_remark,
+                "type": share["shi1_type"] & STYPE_MASK,
+                "access": [],
+            }
             read = False
             write = False
             try:
@@ -1483,13 +1482,14 @@ class smb(connection):
                 permissions.append(share_info)
                 continue
 
-            if share_type != 0:
+            if share_info["type"] != STYPE_DISKTREE:
                 # Non-filesystem share (IPC, print queue, etc.) — write checks produce
                 # false positives due to non-file semantics; skip and report access as-is
+                self.logger.debug(f"Skipping write-access check on non-filesystem share {share_name} (type=0x{share_info['type']:02x})")
                 permissions.append(share_info)
                 continue
 
-            if file_write_check:
+            if self.args.file_write_check:
                 # Empirical write check — creates and deletes a temp file/dir.
                 # Use --file-write-check to enable. Catches post-ACL blocking (AV/EDR/quota)
                 # but leaves a brief artifact window if delete permissions are missing.
@@ -1527,7 +1527,7 @@ class smb(connection):
                     error = get_error_string(e)
                     self.logger.debug(f"Error checking WRITE access with FILE creation on share {share_name}: {error}")
 
-                # Agreed on in https://github.com/Pennyw0rth/NetExec/pull/404
+                # If we either can create a file or a directory we add the write privs to the output. Agreed on in https://github.com/Pennyw0rth/NetExec/pull/404
                 if write_dir or write_file:
                     write = True
                     share_info["access"].append("WRITE")
@@ -1538,7 +1538,7 @@ class smb(connection):
                 # escalation paths that the empirical check misses.
                 seen_labels = set()
                 write_labels = []
-                for mask, label in _SMB_WRITE_CHECKS:
+                for mask, label in write_checks:
                     if label in seen_labels:
                         continue
                     tid = None
@@ -1549,7 +1549,7 @@ class smb(connection):
                             "\\",
                             desiredAccess=mask,
                             shareMode=FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                            creationDisposition=_SMB_FILE_OPEN,
+                            creationDisposition=FILE_OPEN,
                             fileAttributes=0,
                             creationOption=FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
                         )
@@ -1564,10 +1564,8 @@ class smb(connection):
                         self.logger.debug(f"{label} check error on {share_name}: {e}")
                     finally:
                         if tid:
-                            try:
+                            with contextlib.suppress(Exception):
                                 self.conn.disconnectTree(tid)
-                            except Exception:
-                                pass
 
                 # If direct WRITE is achievable, suppress more granular labels
                 if "WRITE" in write_labels:
@@ -1601,14 +1599,17 @@ class smb(connection):
                 continue
             display_rows.append((name, perms, remark))
 
-        c_name  = max((len(r[0]) for r in display_rows), default=5) + 2
-        c_perms = max((len(r[1]) for r in display_rows), default=11) + 2
+        # Size each column to the widest entry in that column, but never smaller
+        # than the header. Add a small padding so columns don't run together.
+        column_padding = 2
+        share_col_width = max((len(row[0]) for row in display_rows), default=len("Share")) + column_padding
+        perms_col_width = max((len(row[1]) for row in display_rows), default=len("Permissions")) + column_padding
 
         self.logger.display("Enumerated shares")
-        self.logger.highlight(f"{'Share':<{c_name}} {'Permissions':<{c_perms}} {'Remark'}")
-        self.logger.highlight(f"{'-----':<{c_name}} {'-----------':<{c_perms}} {'------'}")
+        self.logger.highlight(f"{'Share':<{share_col_width}} {'Permissions':<{perms_col_width}} {'Remark'}")
+        self.logger.highlight(f"{'-----':<{share_col_width}} {'-----------':<{perms_col_width}} {'------'}")
         for name, perms, remark in display_rows:
-            self.logger.highlight(f"{name:<{c_name}} {perms:<{c_perms}} {remark}")
+            self.logger.highlight(f"{name:<{share_col_width}} {perms:<{perms_col_width}} {remark}")
         return permissions
 
     def dir(self):
