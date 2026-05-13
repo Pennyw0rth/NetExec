@@ -99,3 +99,80 @@ def _add_without_domain(user_info, tx, logger):
         logger.debug(f"MATCH (c:{account_type} {{name:'{result[0]['c']['name']}'}}) SET c.owned=True RETURN c.name AS name")
         result = tx.run(f"MATCH (c:{account_type} {{name:'{result[0]['c']['name']}'}}) SET c.owned=True RETURN c.name AS name").data()[0]
         logger.highlight(f"Node {result['name']} successfully set as owned in BloodHound")
+
+
+def add_session_bh(hostname, computer_domain, username, user_domain_sid, logger, config):
+    """Adds a HasSession relationship between a computer and user in BloodHound.
+
+    Args:
+    ----
+        hostname (str): The hostname of the computer (without $ suffix).
+        computer_domain (str): The domain of the computer.
+        username (str): The username of the logged on user.
+        user_domain_sid (str): The SID of the user's domain.
+        logger (Logger): The logger object for logging messages.
+        config (ConfigParser): The configuration object for accessing BloodHound settings.
+
+    Returns:
+    -------
+        None
+    """
+    if config.get("BloodHound", "bh_enabled") == "False":
+        return
+
+    # we do a conditional import here to avoid loading these if BH isn't enabled
+    from neo4j import GraphDatabase
+    from neo4j.exceptions import AuthError, ServiceUnavailable
+
+    uri = f"bolt://{config.get('BloodHound', 'bh_uri')}:{config.get('BloodHound', 'bh_port')}"
+
+    driver = GraphDatabase.driver(
+        uri,
+        auth=(
+            config.get("BloodHound", "bh_user"),
+            config.get("BloodHound", "bh_pass"),
+        ),
+        encrypted=False,
+    )
+    try:
+        with driver.session().begin_transaction() as tx:
+            # Resolve computer domain to BloodHound FQDN
+            computer_dn = "".join([f"DC={dc}," for dc in computer_domain.upper().split(".")]).rstrip(",")
+            computer_domain_query = tx.run(f"MATCH (d:Domain) WHERE d.distinguishedname STARTS WITH '{computer_dn}' RETURN d").data()
+            if not computer_domain_query:
+                logger.debug(f"Computer domain {computer_domain} not found in BloodHound. Skipping session.")
+                return
+            computer_fqdn_domain = computer_domain_query[0]["d"].get("name")
+
+            # Resolve user domain to BloodHound FQDN
+            user_domain_query = tx.run(f"MATCH (d:Domain {{domainsid:'{user_domain_sid}'}}) RETURN d").data()
+            if not user_domain_query:
+                logger.debug(f"User domain {user_domain_sid} not found in BloodHound. Skipping session.")
+                return
+            user_fqdn_domain = user_domain_query[0]["d"].get("name")
+
+            # Build node names
+            computer_name = f"{hostname.upper()}.{computer_fqdn_domain}"
+            user_name = f"{username.upper()}@{user_fqdn_domain}"
+
+            # Create HasSession relationship
+            result = tx.run(
+                f"MATCH (c:Computer {{name:'{computer_name}'}}) "
+                f"MATCH (u:User {{name:'{user_name}'}}) "
+                f"MERGE (c)-[r:HasSession {{nxc: true}}]->(u) "
+                f"RETURN c.name AS computer, u.name AS user"
+            ).data()
+
+            if result:
+                logger.highlight(f"Added HasSession relationship: {result[0]['computer']} -> {result[0]['user']}")
+            else:
+                logger.debug(f"Could not create HasSession: Computer '{computer_name}' or User '{user_name}' not found in BloodHound.")
+    except AuthError:
+        logger.fail(f"Provided Neo4J credentials ({config.get('BloodHound', 'bh_user')}:{config.get('BloodHound', 'bh_pass')}) are not valid.")
+    except ServiceUnavailable:
+        logger.fail(f"Neo4J does not seem to be available on {uri}.")
+    except Exception as e:
+        logger.fail(f"Unexpected error with Neo4J: {e}")
+    finally:
+        driver.close()
+
