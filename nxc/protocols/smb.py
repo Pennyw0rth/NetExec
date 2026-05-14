@@ -1449,7 +1449,7 @@ class smb(connection):
             return permissions
 
         for share in shares:
-            share_name = share["shi1_netname"][:-1]
+            share_name = share["shi1_netname"].rstrip("\x00")
 
             # Skip excluded shares
             if self.args.exclude_shares and share_name in self.args.exclude_shares:
@@ -1458,7 +1458,7 @@ class smb(connection):
 
             # Mask off STYPE_SPECIAL/STYPE_TEMPORARY flags; only the base type
             # (DISKTREE/PRINTQ/DEVICE/IPC) determines whether write checks apply.
-            share_remark = share["shi1_remark"][:-1]
+            share_remark = share["shi1_remark"].rstrip("\x00")
             share_info = {
                 "name": share_name,
                 "remark": share_remark,
