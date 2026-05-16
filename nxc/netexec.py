@@ -14,13 +14,12 @@ from nxc.console import nxc_console
 from nxc.logger import nxc_logger
 from nxc.config import nxc_config, nxc_workspace, config_log
 from nxc.database import create_db_engine
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
 from nxc.helpers import powershell
 import signal
 import shutil
 import os
-import contextlib
 from os.path import exists
 from os.path import join as path_join
 from sys import exit
@@ -42,34 +41,31 @@ if platform.system() != "Windows":
     resource.setrlimit(resource.RLIMIT_NOFILE, file_limit)
 
 
-async def start_run(protocol_obj, args, db, targets):
+async def start_run(protocol_obj, args, db, targets):  # noqa: RUF029
+    futures = []
     nxc_logger.debug("Creating ThreadPoolExecutor")
-    loop = asyncio.get_running_loop()
-
     if args.no_progress or len(targets) == 1:
         with ThreadPoolExecutor(max_workers=args.threads) as executor:
             nxc_logger.debug(f"Creating thread for {protocol_obj}")
-            futures = [loop.run_in_executor(executor, protocol_obj, args, db, target) for target in targets]
-            await asyncio.gather(*futures, return_exceptions=True)
+            futures = [executor.submit(protocol_obj, args, db, target) for target in targets]
     else:
         with Progress(console=nxc_console) as progress, ThreadPoolExecutor(max_workers=args.threads) as executor:
+            current = 0
             total = len(targets)
             tasks = progress.add_task(
                 f"[green]Running nxc against {total} {'target' if total == 1 else 'targets'}",
                 total=total,
             )
             nxc_logger.debug(f"Creating thread for {protocol_obj}")
-            futures = [loop.run_in_executor(executor, protocol_obj, args, db, target) for target in targets]
-            for current, future in enumerate(asyncio.as_completed(futures), 1):
-                with contextlib.suppress(Exception):
-                    await future
+            futures = [executor.submit(protocol_obj, args, db, target) for target in targets]
+            for _ in as_completed(futures):
+                current += 1  # noqa: SIM113
                 progress.update(tasks, completed=current)
-
-    for i, future in enumerate(futures):
+    for future in as_completed(futures):
         try:
             future.result()
         except Exception:
-            nxc_logger.exception(f"Exception for target {targets[i]}: {future.exception()}")
+            nxc_logger.exception(f"Exception for target {targets[futures.index(future)]}: {future.exception()}")
 
 
 def ctrl_c(sig, frame):
