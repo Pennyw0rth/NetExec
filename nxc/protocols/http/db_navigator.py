@@ -67,6 +67,35 @@ class navigator(DatabaseNavigator):
         """
         print_help(help_string)
 
+    def do_probes(self, line):
+        filter_term = line.strip()
+        host_id = None
+        if filter_term:
+            try:
+                host_id = int(filter_term)
+            except ValueError:
+                hosts = self.db.get_hosts(filter_term=filter_term)
+                if len(hosts) == 1:
+                    host_id = hosts[0].id
+                else:
+                    print(f"[!] '{filter_term}' did not resolve to a single host")
+                    return
+        probes = self.db.get_probes(host_id=host_id)
+        if not probes:
+            print("No probes recorded")
+            return
+        data = [["ProbeID", "HostID", "Path", "Label", "Status", "Title"]]
+        data.extend([[p.id, p.hostid, p.path, p.label, p.status_code, p.title or ""] for p in probes])
+        print_table(data, title="Probes")
+
+    @staticmethod
+    def help_probes(self):
+        help_string = """
+        probes [host_id|filter_term]
+        Lists confirmed service probe matches recorded by the http_services module.
+        """
+        print_help(help_string)
+
     def do_clear_database(self, line):
         if input("This will destroy all data in the current database, are you SURE you want to run this? (y/n): ") == "y":
             self.db.clear_database()

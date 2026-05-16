@@ -14,21 +14,17 @@ from nxc.connection import connection
 from nxc.helpers.logger import highlight
 from nxc.logger import NXCAdapter
 
-urllib3.disable_warnings()
-
 
 DEFAULT_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) NetExec/HTTP"
 SSL_PORTS = {443, 8443, 4443, 9443}
 TITLE_MAX_LEN = 120
+BASELINE_MIN_SIZE_FOR_PCT = 1024  # below this size, require exact hash match
 
 
 def _compile(patterns):
     return [(name, re.compile(pattern, re.IGNORECASE)) for name, pattern in patterns]
 
 
-# Inspired by ProjectDiscovery httpx + Wappalyzer style fingerprints. Patterns
-# are intentionally conservative — they trigger on strings that are unlikely to
-# show up by coincidence on unrelated pages.
 SERVER_FINGERPRINTS = _compile([
     ("nginx", r"nginx"),
     ("apache", r"apache"),
@@ -66,8 +62,6 @@ COOKIE_FINGERPRINTS = _compile([
     ("rails", r"_rails_session|_session_id"),
 ])
 
-# Body patterns are anchored to strings specific enough to avoid matching the
-# product name appearing in unrelated content (blog posts, status pages, etc.).
 BODY_FINGERPRINTS = _compile([
     ("wordpress", r"wp-content/|wp-includes/|/wp-json/"),
     ("drupal", r"Drupal\.settings|/sites/default/files/"),
@@ -89,31 +83,98 @@ BODY_FINGERPRINTS = _compile([
 ])
 
 
-def _content_hash(text):
-    return hashlib.md5((text or "").encode(errors="ignore")).hexdigest()
+def _content_hash(data):
+    """Hash of the raw response bytes (or text)."""
+    if isinstance(data, str):
+        data = data.encode(errors="ignore")
+    return hashlib.md5(data or b"").hexdigest()
+
+
+def _read_capped(response, max_bytes):
+    """Read up to max_bytes of the response body without loading everything
+    into memory. Returns raw bytes.
+    """
+    chunks = []
+    total = 0
+    try:
+        for chunk in response.iter_content(chunk_size=8192):
+            if not chunk:
+                continue
+            chunks.append(chunk)
+            total += len(chunk)
+            if total >= max_bytes:
+                break
+    except Exception:
+        pass
+    finally:
+        with contextlib.suppress(Exception):
+            response.close()
+    body = b"".join(chunks)
+    return body[:max_bytes]
+
+
+def _decode(body_bytes, response):
+    """Decode response body bytes using the response-declared encoding."""
+    encoding = response.encoding or response.apparent_encoding or "utf-8"
+    try:
+        return body_bytes.decode(encoding, errors="replace")
+    except (LookupError, UnicodeDecodeError):
+        return body_bytes.decode("utf-8", errors="replace")
+
+
+def _build_url(scheme, host, port, path, is_ipv6=False):
+    """Build a URL safely handling IPv6 zone-ids."""
+    default_port = 443 if scheme == "https" else 80
+    host_part = host
+    if is_ipv6:
+        # Percent-encode the zone-id separator per RFC 6874
+        host_part = host.replace("%", "%25")
+        host_part = f"[{host_part}]"
+    port_part = "" if port == default_port else f":{port}"
+    request_path = path if path is not None else "/"
+    if not request_path.startswith("/"):
+        request_path = "/" + request_path
+    return f"{scheme}://{host_part}{port_part}{request_path}"
+
+
+class _Baseline:
+    """Captured response from a known-nonexistent path, used to detect SPA
+    catch-all 200 responses where every path returns index.html.
+    """
+
+    __slots__ = ("captured", "hash", "size", "status", "title")
+
+    def __init__(self):
+        self.status = None
+        self.size = None
+        self.hash = None
+        self.title = None
+        self.captured = False
 
 
 class http(connection):
     def __init__(self, args, db, host):
         # --ssl with the default port 80 almost always means the user wants 443.
-        # Mutating args here is fine since args.ssl is sticky across targets;
-        # on subsequent targets args.port is already 443.
+        # Mutating args here is fine since args.ssl is sticky across targets.
         if args.ssl and args.port == 80:
             args.port = 443
 
         self.protocol = "HTTP"
         self.url = None
+        self.final_url = None
         self.scheme = "http"
+        self.is_ssl = False
         self.status_code = None
         self.server = None
         self.title = None
         self.technologies = []
         self.session = None
         self.response = None
-        self.baseline_hash = None
-        self.baseline_size = None
-        self.baseline_status = None
+        self.body_text = ""
+        self.body_bytes = b""
+        self.baseline = _Baseline()
         self.www_authenticate = None
+        self.max_body_size = getattr(args, "max_body_size", 262144)
 
         super().__init__(args, db, host)
 
@@ -127,20 +188,21 @@ class http(connection):
             }
         )
 
-    def _use_ssl(self):
-        return bool(self.args.ssl) or self.port in SSL_PORTS
+    def _resolve_scheme(self):
+        """Cache the scheme decision after __init__ port-mutation has settled."""
+        self.is_ssl = bool(self.args.ssl) or self.port in SSL_PORTS
+        self.scheme = "https" if self.is_ssl else "http"
 
-    def _build_url(self, path=None):
-        scheme = "https" if self._use_ssl() else "http"
-        default_port = 443 if scheme == "https" else 80
-        host_part = self.host
-        if getattr(self, "is_ipv6", False):
-            host_part = f"[{self.host}]"
-        port_part = "" if self.port == default_port else f":{self.port}"
+    def build_url(self, path=None):
+        """Construct a URL for the given path against this host. Public API
+        used by modules that probe additional paths.
+        """
         request_path = path if path is not None else self.args.path
-        if not request_path.startswith("/"):
-            request_path = "/" + request_path
-        return f"{scheme}://{host_part}{port_part}{request_path}"
+        return _build_url(self.scheme, self.host, self.port,
+                          request_path, getattr(self, "is_ipv6", False))
+
+    # Kept for backwards compatibility / module code that grabbed the private name.
+    _build_url = build_url
 
     def _build_session(self):
         session = requests.Session()
@@ -148,7 +210,21 @@ class http(connection):
         session.headers["User-Agent"] = self.args.user_agent or DEFAULT_USER_AGENT
         if self.args.proxy:
             session.proxies = {"http": self.args.proxy, "https": self.args.proxy}
+        # Only suppress urllib3 SSL warnings when the user opted out of
+        # verification, so other code in the process isn't silenced.
+        if self.args.no_verify:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         return session
+
+    def _request(self, url, **kwargs):
+        """Streaming GET that caps body reads at max_body_size."""
+        kwargs.setdefault("timeout", self.args.http_timeout)
+        kwargs.setdefault("allow_redirects", False)
+        kwargs["stream"] = True
+        r = self.session.get(url, **kwargs)
+        body_bytes = _read_capped(r, self.max_body_size)
+        body_text = _decode(body_bytes, r)
+        return r, body_bytes, body_text
 
     def _extract_title(self, text):
         if not text:
@@ -157,9 +233,9 @@ class http(connection):
             soup = BeautifulSoup(text, "html.parser")
             tag = soup.title
             if tag is not None:
-                # html.parser treats <title> content as a raw text node, so
-                # any nested tags survive as literal "<...>" strings. Strip
-                # them, then collapse whitespace and drop non-printables.
+                # html.parser treats <title> content as a raw text node, so any
+                # nested tags survive as literal "<...>" strings. Strip those,
+                # collapse whitespace, drop non-printables.
                 title = re.sub(r"<[^>]+>", "", tag.get_text())
                 title = " ".join(title.split()).strip()
                 title = "".join(c for c in title if c.isprintable() or c == " ")
@@ -170,7 +246,7 @@ class http(connection):
             self.logger.debug(f"Title parse error: {e}")
         return None
 
-    def _fingerprint(self, response):
+    def _fingerprint(self, response, body_text):
         tech = []
 
         server_header = response.headers.get("Server", "")
@@ -192,47 +268,62 @@ class http(connection):
             if pattern.search(cookie_blob) and name not in tech:
                 tech.append(name)
 
-        body_sample = response.text[:65536] if response.text else ""
         for name, pattern in BODY_FINGERPRINTS:
-            if pattern.search(body_sample) and name not in tech:
+            if pattern.search(body_text) and name not in tech:
                 tech.append(name)
 
         return tech
 
-    def _baseline_404(self):
-        """Probe a guaranteed-nonexistent path so probing modules can tell
-        a SPA's catch-all 200 (which would otherwise look like every path
-        exists) apart from a real hit.
+    def _baseline_probe(self):
+        """Fingerprint how the server handles a known-nonexistent path so
+        modules can distinguish a SPA catch-all 200 from a real hit.
         """
         rand_path = f"/nxc-baseline-{secrets.token_hex(8)}"
         try:
-            r = self.session.get(
-                self._build_url(rand_path),
-                timeout=self.args.http_timeout,
-                allow_redirects=False,
-            )
-            self.baseline_status = r.status_code
-            self.baseline_size = len(r.content)
-            self.baseline_hash = _content_hash(r.text)
+            r, body_bytes, body_text = self._request(self.build_url(rand_path))
+            self.baseline.status = r.status_code
+            self.baseline.size = len(body_bytes)
+            self.baseline.hash = _content_hash(body_bytes)
+            self.baseline.title = self._extract_title(body_text)
+            self.baseline.captured = True
             self.logger.debug(
-                f"Baseline {rand_path}: status={self.baseline_status} "
-                f"size={self.baseline_size} hash={self.baseline_hash[:8]}"
+                f"Baseline {rand_path}: status={self.baseline.status} "
+                f"size={self.baseline.size} hash={self.baseline.hash[:8]}"
             )
         except Exception as e:
             self.logger.debug(f"Baseline probe error: {e}")
 
+    def looks_like_baseline(self, status, body_bytes):
+        """Return True if a response is indistinguishable from the captured
+        baseline (i.e. a catch-all).
+        """
+        if not self.baseline.captured:
+            return False
+        if status != self.baseline.status:
+            return False
+        if _content_hash(body_bytes) == self.baseline.hash:
+            return True
+        # For larger baselines, allow a small relative byte delta to account
+        # for per-request nonces in SPA bundles. For small baselines, require
+        # an exact hash match to avoid flagging unrelated short pages as the
+        # same template.
+        baseline_size = self.baseline.size or 0
+        if baseline_size < BASELINE_MIN_SIZE_FOR_PCT:
+            return False
+        delta = abs(len(body_bytes) - baseline_size)
+        return delta < baseline_size * 0.05
+
     def create_conn_obj(self):
-        self.scheme = "https" if self._use_ssl() else "http"
+        self._resolve_scheme()
         self.session = self._build_session()
-        self.url = self._build_url()
+        self.url = self.build_url()
         try:
-            self.response = self.session.get(
+            self.response, self.body_bytes, self.body_text = self._request(
                 self.url,
-                timeout=self.args.http_timeout,
                 allow_redirects=self.args.follow_redirects,
             )
         except requests.exceptions.SSLError as e:
-            self.logger.debug(f"SSL error connecting to {self.url}: {e}")
+            self.logger.fail(f"SSL/TLS error connecting to {self.url}: {e} (try --no-verify if the cert is invalid)")
             return False
         except requests.exceptions.ConnectionError as e:
             self.logger.debug(f"Connection error to {self.url}: {e}")
@@ -243,28 +334,38 @@ class http(connection):
         except Exception as e:
             self.logger.debug(f"Unexpected error connecting to {self.url}: {e}")
             return False
+
+        self.final_url = self.response.url
         self.www_authenticate = self.response.headers.get("WWW-Authenticate")
-        self._baseline_404()
+        self._baseline_probe()
         return True
 
     def enum_host_info(self):
         if self.response is None:
             return
         self.status_code = self.response.status_code
-        self.title = self._extract_title(self.response.text)
-        self.technologies = self._fingerprint(self.response)
+        self.title = self._extract_title(self.body_text)
+        self.technologies = self._fingerprint(self.response, self.body_text)
 
         with contextlib.suppress(Exception):
             self.db.add_host(
                 host=self.host,
                 port=self.port,
                 scheme=self.scheme,
-                url=self.url,
+                url=self.final_url or self.url,
                 status_code=self.status_code,
                 server=self.server,
                 title=self.title,
                 technologies=",".join(self.technologies) if self.technologies else None,
             )
+
+    def _auth_scheme_label(self):
+        """Parse just the scheme name out of a WWW-Authenticate header value."""
+        if not self.www_authenticate:
+            return None
+        # Header may contain multiple schemes: "Negotiate, Basic realm=..."
+        first = re.split(r"[\s,]+", self.www_authenticate.strip(), maxsplit=1)[0]
+        return first.rstrip(",").strip() or None
 
     def print_host_info(self):
         status = self.status_code if self.status_code is not None else "?"
@@ -275,11 +376,12 @@ class http(connection):
         tech = ",".join(self.technologies) if self.technologies else ""
         tech_part = f" (tech:{tech})" if tech else ""
         title_part = f" (title:{title})" if title else ""
-        auth_part = ""
-        if self.www_authenticate:
-            scheme = self.www_authenticate.split(" ", 1)[0]
-            auth_part = f" (auth:{scheme})"
-        self.logger.display(f"{self.url} ({status_label}) (server:{server}){auth_part}{title_part}{tech_part}")
+        auth_scheme = self._auth_scheme_label()
+        auth_part = f" (auth:{auth_scheme})" if auth_scheme else ""
+        redirect_part = ""
+        if self.final_url and self.final_url != self.url:
+            redirect_part = f" (final:{self.final_url})"
+        self.logger.display(f"{self.url} ({status_label}) (server:{server}){auth_part}{redirect_part}{title_part}{tech_part}")
 
     def disconnect(self):
         if self.session is not None:
@@ -287,52 +389,61 @@ class http(connection):
                 self.session.close()
 
     def _auth(self, username, password):
-        # Prefer the scheme the server actually advertised
-        if self.www_authenticate and "digest" in self.www_authenticate.lower():
+        """Pick an auth handler. The server's advertised scheme wins; failing
+        that, fall back to the user's --auth-type.
+        """
+        advertised = (self._auth_scheme_label() or "").lower()
+        choice = advertised or self.args.auth_type.lower()
+        if choice == "digest":
             return HTTPDigestAuth(username, password)
-        if self.args.auth_type == "digest":
-            return HTTPDigestAuth(username, password)
+        if choice in ("ntlm", "negotiate"):
+            try:
+                from requests_ntlm import HttpNtlmAuth
+            except ImportError:
+                self.logger.fail(
+                    "NTLM authentication requested but 'requests-ntlm' is not installed; "
+                    "falling back to Basic"
+                )
+                return HTTPBasicAuth(username, password)
+            return HttpNtlmAuth(username, password)
         return HTTPBasicAuth(username, password)
 
     def plaintext_login(self, username, password):
         if self.session is None and not self.create_conn_obj():
             return False
 
-        # We can only validate HTTP Basic/Digest credentials here. Cookie- or
-        # form-based auth would need a target-specific login flow, which we
-        # don't have. If the baseline path didn't issue a 401 challenge, we
-        # have no way to tell whether creds worked, so refuse to guess.
+        # Validate only HTTP Basic/Digest/NTLM. Cookie/form auth would need a
+        # target-specific login flow we don't have, so refuse to guess.
         if self.response is None or self.response.status_code != 401 or not self.www_authenticate:
             self.logger.fail(
                 f"{username}:{process_secret(password)} "
-                f"(no HTTP Basic/Digest challenge on {self.url}; "
+                f"(no HTTP auth challenge on {self.url}; "
                 f"netexec cannot validate form-based auth)"
             )
             return False
 
         target_path = self.args.check_auth_path or self.args.path
-        url = self._build_url(target_path)
+        url = self.build_url(target_path)
         try:
             r = self.session.get(
                 url,
                 auth=self._auth(username, password),
                 timeout=self.args.http_timeout,
                 allow_redirects=False,
+                stream=True,
             )
+            # Drain a small amount so the connection can be reused
+            _read_capped(r, 4096)
         except Exception as e:
             self.logger.fail(f"{username}:{process_secret(password)} (Response: {e})")
             return False
 
-        # A 401 still on the protected resource means creds were rejected.
         if r.status_code == 401:
             self.logger.fail(f"{username}:{process_secret(password)} (HTTP 401 - bad credentials)")
             return False
         if r.status_code >= 500:
             self.logger.fail(f"{username}:{process_secret(password)} (HTTP {r.status_code} - server error)")
             return False
-        # Redirects from a previously-401 resource are ambiguous: could be a
-        # post-auth redirect to a dashboard (success) or a redirect to a login
-        # page (failure). Don't claim success without more evidence.
         if 300 <= r.status_code < 400:
             location = r.headers.get("Location", "")
             self.logger.fail(
@@ -341,8 +452,6 @@ class http(connection):
             )
             return False
 
-        # 200/2xx (or 403 — authenticated but no access to this resource) on a
-        # resource that previously returned 401 means the credentials are valid.
         self.username = username
         self.password = password
         self.admin_privs = False
@@ -353,7 +462,7 @@ class http(connection):
                 host=self.host,
                 port=self.port,
                 scheme=self.scheme,
-                url=self.url,
+                url=self.final_url or self.url,
                 status_code=self.status_code,
                 server=self.server,
                 title=self.title,

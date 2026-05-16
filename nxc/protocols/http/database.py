@@ -18,6 +18,7 @@ class database(BaseDB):
         self.CredentialsTable = None
         self.HostsTable = None
         self.LoggedinRelationsTable = None
+        self.ProbesTable = None
 
         super().__init__(db_engine)
 
@@ -59,6 +60,20 @@ class database(BaseDB):
             ForeignKeyConstraint(["hostid"], ["hosts.id"]),
         )
 
+    class Probe(Base):
+        __tablename__ = "probes"
+        id = Column(Integer)
+        hostid = Column(Integer)
+        path = Column(String)
+        label = Column(String)
+        status_code = Column(Integer)
+        title = Column(String)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            ForeignKeyConstraint(["hostid"], ["hosts.id"]),
+        )
+
     @staticmethod
     def db_schema(db_conn):
         Base.metadata.create_all(db_conn)
@@ -67,6 +82,7 @@ class database(BaseDB):
         self.CredentialsTable = self.reflect_table(self.Credential)
         self.HostsTable = self.reflect_table(self.Host)
         self.LoggedinRelationsTable = self.reflect_table(self.LoggedInRelation)
+        self.ProbesTable = self.reflect_table(self.Probe)
 
     def add_host(self, host, port, scheme=None, url=None, status_code=None, server=None, title=None, technologies=None):
         """Check if this host is already in the DB, if not add it"""
@@ -252,3 +268,29 @@ class database(BaseDB):
         elif host_id:
             q = q.filter(self.LoggedinRelationsTable.c.hostid == host_id)
         self.db_execute(q)
+
+    def add_probe(self, host_id, path, label, status_code, title):
+        """Record a confirmed service probe match against a host. Deduped
+        on (hostid, path, label).
+        """
+        existing = select(self.ProbesTable).filter(
+            self.ProbesTable.c.hostid == host_id,
+            self.ProbesTable.c.path == path,
+            self.ProbesTable.c.label == label,
+        )
+        if self.db_execute(existing).first():
+            return
+        q = Insert(self.ProbesTable)
+        self.db_execute(q, [{
+            "hostid": host_id,
+            "path": path,
+            "label": label,
+            "status_code": status_code,
+            "title": title,
+        }])
+
+    def get_probes(self, host_id=None):
+        q = select(self.ProbesTable)
+        if host_id is not None:
+            q = q.filter(self.ProbesTable.c.hostid == host_id)
+        return self.db_execute(q).all()
