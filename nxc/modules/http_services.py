@@ -11,6 +11,10 @@ from bs4 import BeautifulSoup
 from nxc.helpers.misc import CATEGORY
 
 
+_TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
 # Each entry: (label, path, [content signature regexes], extra_constraints)
 # extra_constraints is an optional dict; supported keys:
 #   - content_type_starts_with: substring the Content-Type must start with
@@ -142,6 +146,7 @@ class NXCModule:
         self._auth_protected_paths = set()
         self._lock = threading.Lock()
         self._found = 0
+        self._host_id = None  # cached so we don't query the DB per match
 
     def options(self, context, module_options):
         """
@@ -164,15 +169,19 @@ class NXCModule:
     def _extract_title(text):
         if not text:
             return None
-        with contextlib.suppress(Exception):
-            soup = BeautifulSoup(text, "html.parser")
-            tag = soup.title
-            if tag is not None:
-                title = re.sub(r"<[^>]+>", "", tag.get_text())
-                title = " ".join(title.split()).strip()
-                title = "".join(c for c in title if c.isprintable() or c == " ")
-                return title[:80] or None
-        return None
+        m = _TITLE_RE.search(text)
+        raw = m.group(1) if m else None
+        if not raw:
+            with contextlib.suppress(Exception):
+                soup = BeautifulSoup(text, "html.parser")
+                tag = soup.title
+                raw = tag.get_text() if tag is not None else None
+        if not raw:
+            return None
+        title = _TAG_RE.sub("", raw)
+        title = " ".join(title.split()).strip()
+        title = "".join(c for c in title if c.isprintable() or c == " ")
+        return title[:80] or None
 
     @staticmethod
     def _read_body(response, cap):
@@ -289,28 +298,20 @@ class NXCModule:
             if matched:
                 self._record_hit(connection, label, path, url, r.status_code, title)
 
-        if self.show_all and not any(True for _ in entries):
-            self.context.log.debug(f"{url} -> HTTP 200 (no signature match)")
-
     def _record_hit(self, connection, label, path, url, status, title):
         title_part = f" (title:{title})" if title else ""
         self.context.log.highlight(f"[{label}] {url} -> HTTP {status}{title_part}")
         with self._lock:
             self._found += 1
-        with contextlib.suppress(Exception):
-            self._save_to_db(connection, label, path, status, title)
-
-    def _save_to_db(self, connection, label, path, status, title):
-        """Persist confirmed probe matches if the protocol DB exposes a probes
-        table. The base http schema includes it; if a user has an older DB
-        without the table, this is a no-op.
-        """
-        if not hasattr(connection.db, "add_probe"):
+        if self._host_id is None or not hasattr(connection.db, "add_probe"):
             return
-        hosts = [h for h in connection.db.get_hosts(connection.host) if h.port == connection.port]
-        if not hosts:
-            return
-        connection.db.add_probe(host_id=hosts[0].id, path=path, label=label, status_code=status, title=title)
+        try:
+            connection.db.add_probe(
+                host_id=self._host_id, path=path, label=label,
+                status_code=status, title=title,
+            )
+        except Exception as e:
+            self.context.log.debug(f"add_probe failed for {label} {path}: {e}")
 
     def _probe_extra(self, connection, path):
         """Extra paths are always reported when reachable."""
@@ -333,6 +334,14 @@ class NXCModule:
         if getattr(connection, "session", None) is None:
             context.log.fail("HTTP session was not initialized; cannot probe services")
             return
+
+        # Resolve the host_id once so _record_hit can write probes without
+        # querying the DB on every match.
+        self._host_id = None
+        with contextlib.suppress(Exception):
+            hosts = [h for h in connection.db.get_hosts(connection.host) if h.port == connection.port]
+            if hosts:
+                self._host_id = hosts[0].id
 
         baseline = getattr(connection, "baseline", None)
         if baseline is None or not baseline.captured:

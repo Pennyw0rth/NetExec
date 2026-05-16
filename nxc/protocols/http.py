@@ -19,27 +19,36 @@ DEFAULT_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) NetExec/HTTP"
 SSL_PORTS = {443, 8443, 4443, 9443}
 TITLE_MAX_LEN = 120
 BASELINE_MIN_SIZE_FOR_PCT = 1024  # below this size, require exact hash match
+_TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+_TAG_RE = re.compile(r"<[^>]+>")
+_NTLM_AUTH_CLS = None  # cached HttpNtlmAuth class
+_WARNINGS_SUPPRESSED = False  # process-wide flag so we disable once
 
 
 def _compile(patterns):
     return [(name, re.compile(pattern, re.IGNORECASE)) for name, pattern in patterns]
 
 
-SERVER_FINGERPRINTS = _compile([
-    ("nginx", r"nginx"),
-    ("apache", r"apache"),
-    ("iis", r"microsoft-iis"),
-    ("lighttpd", r"lighttpd"),
-    ("caddy", r"caddy"),
-    ("openresty", r"openresty"),
-    ("tomcat", r"tomcat|coyote"),
-    ("jetty", r"jetty"),
-    ("gunicorn", r"gunicorn"),
-    ("werkzeug", r"werkzeug"),
-    ("envoy", r"envoy"),
-    ("cloudflare", r"cloudflare"),
-    ("akamai", r"akamai"),
-])
+# Server header tokens are matched with word boundaries so e.g. "apache"
+# doesn't fire on "XApacheCompat".
+SERVER_FINGERPRINTS = [
+    (name, re.compile(rf"\b{pattern}\b", re.IGNORECASE))
+    for name, pattern in [
+        ("nginx", r"nginx"),
+        ("apache", r"apache"),
+        ("iis", r"microsoft-iis"),
+        ("lighttpd", r"lighttpd"),
+        ("caddy", r"caddy"),
+        ("openresty", r"openresty"),
+        ("tomcat", r"tomcat|coyote"),
+        ("jetty", r"jetty"),
+        ("gunicorn", r"gunicorn"),
+        ("werkzeug", r"werkzeug"),
+        ("envoy", r"envoy"),
+        ("cloudflare", r"cloudflare"),
+        ("akamai", r"akamai"),
+    ]
+]
 
 HEADER_FINGERPRINTS = [
     ("php", "x-powered-by", re.compile(r"php", re.IGNORECASE)),
@@ -84,10 +93,16 @@ BODY_FINGERPRINTS = _compile([
 
 
 def _content_hash(data):
-    """Hash of the raw response bytes (or text)."""
+    """Non-cryptographic hash of response bytes for catch-all detection.
+    FIPS-safe: explicit usedforsecurity=False so this runs on hardened builds.
+    """
     if isinstance(data, str):
         data = data.encode(errors="ignore")
-    return hashlib.md5(data or b"").hexdigest()
+    try:
+        return hashlib.md5(data or b"", usedforsecurity=False).hexdigest()
+    except TypeError:
+        # Python < 3.9 without the kwarg
+        return hashlib.md5(data or b"").hexdigest()
 
 
 def _read_capped(response, max_bytes):
@@ -205,15 +220,29 @@ class http(connection):
     _build_url = build_url
 
     def _build_session(self):
+        global _WARNINGS_SUPPRESSED
         session = requests.Session()
         session.verify = not self.args.no_verify
         session.headers["User-Agent"] = self.args.user_agent or DEFAULT_USER_AGENT
         if self.args.proxy:
             session.proxies = {"http": self.args.proxy, "https": self.args.proxy}
-        # Only suppress urllib3 SSL warnings when the user opted out of
-        # verification, so other code in the process isn't silenced.
-        if self.args.no_verify:
+
+        # Size the connection pool so concurrent module probes can reuse
+        # connections instead of opening new TCP sessions each call.
+        pool_size = max(10, getattr(self.args, "probe_concurrency", 10))
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=pool_size,
+            pool_maxsize=pool_size,
+            max_retries=0,
+        )
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+
+        # Suppress urllib3 SSL warnings exactly once per process, only when
+        # the user opted out of verification.
+        if self.args.no_verify and not _WARNINGS_SUPPRESSED:
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            _WARNINGS_SUPPRESSED = True
         return session
 
     def _request(self, url, **kwargs):
@@ -229,22 +258,25 @@ class http(connection):
     def _extract_title(self, text):
         if not text:
             return None
-        try:
-            soup = BeautifulSoup(text, "html.parser")
-            tag = soup.title
-            if tag is not None:
-                # html.parser treats <title> content as a raw text node, so any
-                # nested tags survive as literal "<...>" strings. Strip those,
-                # collapse whitespace, drop non-printables.
-                title = re.sub(r"<[^>]+>", "", tag.get_text())
-                title = " ".join(title.split()).strip()
-                title = "".join(c for c in title if c.isprintable() or c == " ")
-                if len(title) > TITLE_MAX_LEN:
-                    title = title[:TITLE_MAX_LEN] + "..."
-                return title or None
-        except Exception as e:
-            self.logger.debug(f"Title parse error: {e}")
-        return None
+        # Fast path: regex grabs the title content; BS4 only for fallback.
+        m = _TITLE_RE.search(text)
+        raw = m.group(1) if m else None
+        if not raw:
+            try:
+                soup = BeautifulSoup(text, "html.parser")
+                tag = soup.title
+                raw = tag.get_text() if tag is not None else None
+            except Exception as e:
+                self.logger.debug(f"Title parse error: {e}")
+                return None
+        if not raw:
+            return None
+        title = _TAG_RE.sub("", raw)
+        title = " ".join(title.split()).strip()
+        title = "".join(c for c in title if c.isprintable() or c == " ")
+        if len(title) > TITLE_MAX_LEN:
+            title = title[:TITLE_MAX_LEN] + "..."
+        return title or None
 
     def _fingerprint(self, response, body_text):
         tech = []
@@ -392,20 +424,25 @@ class http(connection):
         """Pick an auth handler. The server's advertised scheme wins; failing
         that, fall back to the user's --auth-type.
         """
+        global _NTLM_AUTH_CLS
         advertised = (self._auth_scheme_label() or "").lower()
         choice = advertised or self.args.auth_type.lower()
         if choice == "digest":
             return HTTPDigestAuth(username, password)
         if choice in ("ntlm", "negotiate"):
-            try:
-                from requests_ntlm import HttpNtlmAuth
-            except ImportError:
+            if _NTLM_AUTH_CLS is None:
+                try:
+                    from requests_ntlm import HttpNtlmAuth as _Cls
+                    _NTLM_AUTH_CLS = _Cls
+                except ImportError:
+                    _NTLM_AUTH_CLS = False  # sentinel: import failed, don't retry
+            if _NTLM_AUTH_CLS is False:
                 self.logger.fail(
-                    "NTLM authentication requested but 'requests-ntlm' is not installed; "
+                    "NTLM auth requested but 'requests-ntlm' is not installed; "
                     "falling back to Basic"
                 )
                 return HTTPBasicAuth(username, password)
-            return HttpNtlmAuth(username, password)
+            return _NTLM_AUTH_CLS(username, password)
         return HTTPBasicAuth(username, password)
 
     def plaintext_login(self, username, password):

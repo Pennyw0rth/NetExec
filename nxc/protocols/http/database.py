@@ -1,6 +1,6 @@
 import warnings
 
-from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, select, delete, func
+from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, UniqueConstraint, select, delete, func
 from sqlalchemy.dialects.sqlite import Insert
 from sqlalchemy.exc import SAWarning
 from sqlalchemy.orm import declarative_base
@@ -72,6 +72,7 @@ class database(BaseDB):
         __table_args__ = (
             PrimaryKeyConstraint("id"),
             ForeignKeyConstraint(["hostid"], ["hosts.id"]),
+            UniqueConstraint("hostid", "path", "label", name="uq_probe_host_path_label"),
         )
 
     @staticmethod
@@ -271,16 +272,13 @@ class database(BaseDB):
 
     def add_probe(self, host_id, path, label, status_code, title):
         """Record a confirmed service probe match against a host. Deduped
-        on (hostid, path, label).
+        on (hostid, path, label) by a UNIQUE constraint + ON CONFLICT DO
+        NOTHING — atomic at the DB level, so concurrent module workers
+        can't race past each other.
         """
-        existing = select(self.ProbesTable).filter(
-            self.ProbesTable.c.hostid == host_id,
-            self.ProbesTable.c.path == path,
-            self.ProbesTable.c.label == label,
+        q = Insert(self.ProbesTable).on_conflict_do_nothing(
+            index_elements=["hostid", "path", "label"],
         )
-        if self.db_execute(existing).first():
-            return
-        q = Insert(self.ProbesTable)
         self.db_execute(q, [{
             "hostid": host_id,
             "path": path,
