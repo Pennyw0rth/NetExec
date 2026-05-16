@@ -1,5 +1,6 @@
 from datetime import datetime
 import os
+import re
 import random
 import sys
 import contextlib
@@ -245,6 +246,7 @@ class connection:
         else:
             self.logger.debug("Created connection object")
             self.enum_host_info()
+            self.hostname = re.sub(r'[^\w\-.]', '_', self.hostname)
 
             # Construct the output file template using os.path.join for OS compatibility
             base_log_dir = os.path.join(NXC_PATH, "logs")
