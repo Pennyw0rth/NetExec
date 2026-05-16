@@ -129,7 +129,7 @@ class NXCModule:
     Module by @claude
     """
 
-    name = "common_services"
+    name = "http_services"
     description = "Probe common web services and admin panels (phpMyAdmin, Tomcat, Jenkins, Spring, ...) and identify them"
     supported_protocols = ["http"]
     category = CATEGORY.ENUMERATION

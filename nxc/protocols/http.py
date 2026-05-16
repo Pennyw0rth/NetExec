@@ -129,8 +129,11 @@ def _read_capped(response, max_bytes):
 
 
 def _decode(body_bytes, response):
-    """Decode response body bytes using the response-declared encoding."""
-    encoding = response.encoding or response.apparent_encoding or "utf-8"
+    """Decode response body bytes using the response-declared encoding.
+    Don't call response.apparent_encoding — that touches response.content,
+    which raises after iter_content has consumed and closed the stream.
+    """
+    encoding = response.encoding or "utf-8"
     try:
         return body_bytes.decode(encoding, errors="replace")
     except (LookupError, UnicodeDecodeError):
