@@ -87,7 +87,7 @@ class NXCModule:
         """Look up an object by sAMAccountName, return parsed entry with SD attributes"""
         sam = sam_account_name if sam_account_name.endswith("$") else f"{sam_account_name}$"
         search_filter = f"(sAMAccountName={sam})"
-        controls = [SDFlagsControl(criticality=True, flags=0x04)]
+        controls = [SDFlagsControl(criticality=True, flags=0x05)]
         resp = connection.search(
             searchFilter=search_filter,
             attributes=["distinguishedName", "objectSid", "sAMAccountName", "msDS-AllowedToActOnBehalfOfOtherIdentity"],
@@ -119,13 +119,11 @@ class NXCModule:
 
         rbcd_data = target_entry.get("msDS-AllowedToActOnBehalfOfOtherIdentity")
         if rbcd_data:
-            existing_sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(rbcd_data))
-            existing_sids = [ace["Ace"]["Sid"].formatCanonical() for ace in existing_sd["Dacl"].aces]
+            sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(rbcd_data))
+            existing_sids = [ace["Ace"]["Sid"].formatCanonical() for ace in sd["Dacl"].aces]
             if from_sid in existing_sids:
                 context.log.display(f"{self.delegate_from} ({from_sid}) is already allowed to delegate to {self.delegate_to}")
                 return
-            sd = self.create_empty_sd()
-            sd["Dacl"].aces = list(existing_sd["Dacl"].aces)
         else:
             sd = self.create_empty_sd()
 
@@ -158,11 +156,10 @@ class NXCModule:
     def create_empty_sd(self):
         r"""Build an empty security descriptor for msDS-AllowedToActOnBehalfOfOtherIdentity.
 
-        Used as the basis for both fresh writes and writes that preserve existing ACEs.
-        We do not reuse the SD returned by AD when reading with sdflags=0x04 because the
-        server strips OwnerSid/GroupSid/Sacl from that response, and AD rejects writes
-        that lack a valid Owner with constraintViolation. So we always rebuild a clean
-        SD with BUILTIN\Administrators as Owner and copy the existing ACEs over.
+        Only used when the target has no existing SD on the attribute. When an SD already
+        exists we read it with sdflags=0x05 (Owner+DACL) and mutate it in place so we
+        don't clobber the existing Owner. AD rejects writes with a missing Owner with
+        constraintViolation, so the fresh SD seeded here uses BUILTIN\Administrators.
         """
         sd = ldaptypes.SR_SECURITY_DESCRIPTOR()
         sd["Revision"] = b"\x01"
@@ -210,20 +207,18 @@ class NXCModule:
             from_sid = self.get_sid_for_principal(context, connection, self.delegate_from)
             if not from_sid:
                 return
-            existing_sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(rbcd_data))
-            original_count = len(existing_sd["Dacl"].aces)
-            kept_aces = [ace for ace in existing_sd["Dacl"].aces if ace["Ace"]["Sid"].formatCanonical() != from_sid]
-            if len(kept_aces) == original_count:
+            sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(rbcd_data))
+            original_count = len(sd["Dacl"].aces)
+            sd["Dacl"].aces = [ace for ace in sd["Dacl"].aces if ace["Ace"]["Sid"].formatCanonical() != from_sid]
+            if len(sd["Dacl"].aces) == original_count:
                 context.log.display(f"{self.delegate_from} ({from_sid}) was not in the delegation list of {self.delegate_to}")
                 return
 
             try:
-                if len(kept_aces) == 0:
+                if len(sd["Dacl"].aces) == 0:
                     connection.ldap_connection.modify(target_dn, {"msDS-AllowedToActOnBehalfOfOtherIdentity": [(MODIFY_DELETE, [])]})
                     context.log.success(f"Removed last delegation entry and cleared attribute on {self.delegate_to}")
                 else:
-                    sd = self.create_empty_sd()
-                    sd["Dacl"].aces = kept_aces
                     connection.ldap_connection.modify(target_dn, {"msDS-AllowedToActOnBehalfOfOtherIdentity": [(MODIFY_REPLACE, sd.getData())]})
                     context.log.success(f"Removed {self.delegate_from} from delegation list of {self.delegate_to}")
             except LDAPSessionError as e:
