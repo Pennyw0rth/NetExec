@@ -7,7 +7,7 @@ def proto_args(parser, parents):
     smb_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
 
     delegate_arg = smb_parser.add_argument("--delegate", action="store", help="Impersonate user with S4U2Self + S4U2Proxy")
-    smb_parser.add_argument("--spn", action="store", help="SPN to use for the Service Ticket. With --delegate it's the SPN used for S4U2Proxy (defaults to cifs/<target>). With --generate-st (and without --delegate) it's the SPN of the target service to request a ST for.", type=str)
+    smb_parser.add_argument("--spn", action="store", help="SPN to use for the Service Ticket. With --delegate it's the SPN used for S4U2Proxy (defaults to cifs/<target>).", type=str)
     smb_parser.add_argument("--generate-st", type=str, dest="generate_st", help="Store a Service Ticket in the specified file. Use with --delegate to save the S4U ST, or without --delegate (together with --spn) to request a regular ST for the given SPN")
     self_delegate_arg = smb_parser.add_argument("--self", dest="no_s4u2proxy", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Only do S4U2Self, no S4U2Proxy (use with delegate)")
 
