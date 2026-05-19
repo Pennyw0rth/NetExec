@@ -47,7 +47,7 @@ dependencies = [
     # Git Dependencies
     "certipy-ad @ git+https://github.com/Pennyw0rth/Certipy",
     "impacket @ git+https://github.com/Pennyw0rth/impacket",
-    "oscrypto @ git+https://github.com/wbond/oscrypto",
+    "oscrypto @ git+https://github.com/wbond/oscrypto@1547f535001ba568b239b8797465536759c742a3",
     "pynfsclient @ git+https://github.com/Pennyw0rth/NfsClient",
 ]
 
