@@ -23,5 +23,5 @@ jobs:
         run: uv python install 3.13
       - name: Run ruff
         run: |
-          uvx ruff --version
-          uvx ruff check . --preview
+          uvx ruff@0.11.0 --version
+          uvx ruff@0.11.0 check . --preview
