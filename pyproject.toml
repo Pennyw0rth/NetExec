@@ -89,6 +89,9 @@ shiv = "*"
 pytest = "^7.2.2"
 ruff = "*"
 
+[tool.uv]
+exclude-newer = "1 days"
+
 [tool.ruff]
 target-version = "py310"
 exclude = [
