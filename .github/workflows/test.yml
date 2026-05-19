@@ -16,33 +16,26 @@ jobs:
         os: [ubuntu-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - name: Install poetry
-        run: |
-          pipx install poetry
-          poetry --version
-          poetry env info
-      - name: NetExec set up python ${{ matrix.python-version }} on ${{ matrix.os }}
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: poetry
-          cache-dependency-path: poetry.lock
-      - name: Install with pipx
-        run: |
-          pipx install . --python python${{ matrix.python-version }}
+          enable-cache: true
+      - name: NetExec set up python ${{ matrix.python-version }} on ${{ matrix.os }}
+        run: uv python install ${{ matrix.python-version }}
+      - name: Install with uv
+        run: uv tool install . --python ${{ matrix.python-version }}
       - name: Install libraries with dev group
-        run: |
-          poetry install --with dev
+        run: uv sync --group dev
       - name: Load every protocol and module
         run: |
-          poetry run netexec winrm 127.0.0.1
-          poetry run netexec vnc 127.0.0.1
-          poetry run netexec smb 127.0.0.1
-          poetry run netexec ldap 127.0.0.1
-          poetry run netexec wmi 127.0.0.1
-          poetry run netexec rdp 127.0.0.1
-          poetry run netexec mssql 127.0.0.1
-          poetry run netexec ssh 127.0.0.1
-          poetry run netexec ftp 127.0.0.1
-          poetry run netexec smb 127.0.0.1 -L
+          uv run netexec winrm 127.0.0.1
+          uv run netexec vnc 127.0.0.1
+          uv run netexec smb 127.0.0.1
+          uv run netexec ldap 127.0.0.1
+          uv run netexec wmi 127.0.0.1
+          uv run netexec rdp 127.0.0.1
+          uv run netexec mssql 127.0.0.1
+          uv run netexec ssh 127.0.0.1
+          uv run netexec ftp 127.0.0.1
+          uv run netexec smb 127.0.0.1 -L
