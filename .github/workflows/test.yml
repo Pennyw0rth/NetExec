@@ -1,5 +1,7 @@
 name: NetExec Tests
 
+name: NetExec Tests
+
 on:
   workflow_dispatch:
   pull_request_review:
@@ -23,10 +25,8 @@ jobs:
           enable-cache: true
       - name: NetExec set up python ${{ matrix.python-version }} on ${{ matrix.os }}
         run: uv python install ${{ matrix.python-version }}
-      - name: Install with uv
-        run: uv tool install . --python ${{ matrix.python-version }}
-      - name: Install libraries with dev group
-        run: uv sync --group dev
+      - name: Install project
+        run: uv sync --python ${{ matrix.python-version }}
       - name: Load every protocol and module
         run: |
           uv run netexec winrm 127.0.0.1
