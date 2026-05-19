@@ -1,7 +1,5 @@
 name: NetExec Tests
 
-name: NetExec Tests
-
 on:
   workflow_dispatch:
   pull_request_review:
