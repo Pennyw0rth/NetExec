@@ -89,8 +89,11 @@ shiv = "*"
 pytest = "^7.2.2"
 ruff = "*"
 
+# Supply-chain hardening: uv will ignore package artifacts uploaded to indexes
+# within the last day, giving maintainers and scanners time to detect and remove
+# malicious or compromised releases before they are selected during resolution.
 [tool.uv]
-exclude-newer = "1 days"
+exclude-newer = "1 day"
 
 [tool.ruff]
 target-version = "py310"
