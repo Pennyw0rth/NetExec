@@ -113,10 +113,6 @@ class NXCModule:
         "CVE-2025-33073": {
             "alias": "NTLM reflection",
             "patches": {
-                (6, 0, 6003): 23351,      # Windows Server 2008 SP2
-                (6, 1, 7601): 27769,      # Windows Server 2008 R2 SP1
-                (6, 2, 9200): 25522,      # Windows Server 2012
-                (6, 3, 9600): 22620,      # Windows Server 2012 R2
                 (10, 0, 10240): 21034,    # Windows 10 1507
                 (10, 0, 14393): 8148,     # Windows Server 2016 / Win10 1607
                 (10, 0, 17763): 7434,     # Windows Server 2019 / Win10 1809
