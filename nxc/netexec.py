@@ -1,4 +1,5 @@
 # PYTHON_ARGCOMPLETE_OK
+import contextlib
 import sys
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import identify_target_file, display_modules
@@ -70,13 +71,11 @@ async def start_run(protocol_obj, args, db, targets):  # noqa: RUF029
 
 def ctrl_c(sig, frame):
     nxc_logger.debug("Got keyboard interrupt")
-    try:
+    with contextlib.suppress(Exception):
         if hasattr(nxc_console, "_live_stack") and nxc_console._live_stack:
             for live in nxc_console._live_stack:
                 live.stop()
         nxc_console.show_cursor(True)
-    except Exception:
-        pass
     nxc_logger.highlight("[!] Interrupted, exiting.")
     os._exit(0)
 
