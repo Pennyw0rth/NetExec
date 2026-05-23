@@ -248,7 +248,7 @@ class connection:
             self.enum_host_info()
             sanitized = re.sub(r'[^\w\-.]', '_', self.hostname)
             if sanitized != self.hostname:
-                self.logger.warning(f"Hostname contains invalid characters (received: {self.hostname!r}), sanitized to: {sanitized!r}")
+                self.logger.display(f"Hostname contains invalid characters (received: {self.hostname!r}), sanitized to: {sanitized!r}")
                 self.hostname = sanitized
 
             # Construct the output file template using os.path.join for OS compatibility
