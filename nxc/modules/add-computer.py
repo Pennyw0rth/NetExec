@@ -81,16 +81,14 @@ class NXCModule:
         self.context.db.add_credential("plaintext", self.connection.domain, self.computer_name, self.computer_password)
 
     def _do_samr(self):
-        conn = self.connection
-
         try:
-            dce = NXCRPCConnection(conn).connect(r"\samr", samr.MSRPC_UUID_SAMR)
+            dce = NXCRPCConnection(self.connection).connect(r"\samr", samr.MSRPC_UUID_SAMR)
         except Exception as e:
             self.context.log.fail(f"Failed to connect to SAMR: {e}")
             return
 
         try:
-            self._samr_execute(dce, conn.conn.getRemoteName())
+            self._samr_execute(dce, self.connection.conn.getRemoteName())
         finally:
             dce.disconnect()
 
