@@ -46,7 +46,6 @@ class NXCModule:
 
         try:
             lsa = LsaLookupNames(connection=connection)
-
             dce = lsa.connect()
             policyHandle = lsa.open_policy(dce)
             for product in conf["products"]:
