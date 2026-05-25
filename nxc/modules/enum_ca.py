@@ -94,9 +94,8 @@ class NXCModule:
                                  "to connect to its epmapper using RpcProxy.")
             return
         finally:
-            if dce is not None:
-                with contextlib.suppress(Exception):
-                    dce.disconnect()
+            with contextlib.suppress(Exception):
+                dce.disconnect()
 
         for entry in entries:
             tmpUUID = str(entry["tower"]["Floors"][0])

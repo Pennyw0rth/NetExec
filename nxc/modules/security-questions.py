@@ -119,12 +119,11 @@ class NXCModule:
             context.log.debug(traceback_format_exc())
 
         finally:
-            if dce is not None:
-                try:
-                    if domain_handle is not None:
-                        samr.hSamrCloseHandle(dce, domain_handle)
-                    if server_handle is not None:
-                        samr.hSamrCloseHandle(dce, server_handle)
-                    dce.disconnect()
-                except Exception as e:
-                    context.log.debug(f"Error during SAMR cleanup: {e}")
+            try:
+                if domain_handle is not None:
+                    samr.hSamrCloseHandle(dce, domain_handle)
+                if server_handle is not None:
+                    samr.hSamrCloseHandle(dce, server_handle)
+            except Exception as e:
+                context.log.debug(f"Error during SAMR cleanup: {e}")
+            dce.disconnect()
