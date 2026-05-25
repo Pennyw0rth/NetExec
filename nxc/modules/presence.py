@@ -42,7 +42,8 @@ class NXCModule:
 
     def get_dce_rpc(self, named_pipe, dce_binding, connection, target_ip=None, auth_level=None):
         return NXCRPCConnection(connection).connect(
-            named_pipe, dce_binding,
+            named_pipe,
+            dce_binding,
             target_ip=target_ip,
             auth_level=auth_level or RPC_C_AUTHN_LEVEL_PKT_PRIVACY,
         )
