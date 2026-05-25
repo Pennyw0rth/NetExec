@@ -45,9 +45,8 @@ class NXCModule:
         except Exception as e:
             self.context.log.fail(f"Unexpected error: {e}")
         finally:
-            if dce is not None:
-                with contextlib.suppress(Exception):
-                    dce.disconnect()
+            with contextlib.suppress(Exception):
+                dce.disconnect()
 
     def EnumerateSS(self, dce, hRootKey):
         # Open the target registry key
