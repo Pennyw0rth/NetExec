@@ -73,27 +73,27 @@ class NXCRPCConnection:
 
         if conn.conn is not None:
             return transport.SMBTransport(conn.conn.getRemoteHost(), filename=named_pipe, smb_connection=conn.conn,)
-        result = transport.SMBTransport(conn.remoteName, conn.port, named_pipe, conn.username, conn.password if conn.password else "", conn.domain, conn.lmhash, conn.nthash, conn.aesKey, doKerberos=conn.kerberos, kdcHost=conn.kdcHost)
+        rpc_transport = transport.SMBTransport(conn.remoteName, conn.port, named_pipe, conn.username, conn.password if conn.password else "", conn.domain, conn.lmhash, conn.nthash, conn.aesKey, doKerberos=conn.kerberos, kdcHost=conn.kdcHost)
         if target_ip or conn.host:
-            result.setRemoteHost(target_ip or conn.host)
-        return result
+            rpc_transport.setRemoteHost(target_ip or conn.host)
+        return rpc_transport
 
     def create_tcp_transport(self, target_ip=None, anonymous_rpc=False):
         conn = self.connection
         target = target_ip or conn.remoteName
 
-        result = transport.DCERPCTransportFactory(rf"ncacn_ip_tcp:{target}")
-        result.setRemoteHost(target)
-        self.setup_credentials(result, anonymous_rpc)
-        return result
+        rpc_transport = transport.DCERPCTransportFactory(rf"ncacn_ip_tcp:{target}")
+        rpc_transport.setRemoteHost(target)
+        self.setup_credentials(rpc_transport, anonymous_rpc)
+        return rpc_transport
 
     def create_from_string_binding(self, string_binding, target_ip=None, set_remote_host=None, anonymous_rpc=False):
-        result = transport.DCERPCTransportFactory(string_binding)
+        rpc_transport = transport.DCERPCTransportFactory(string_binding)
 
         if target_ip is not None:
-            result.setRemoteHost(target_ip)
+            rpc_transport.setRemoteHost(target_ip)
         elif set_remote_host is not None:
-            result.setRemoteHost(set_remote_host)
+            rpc_transport.setRemoteHost(set_remote_host)
 
-        self.setup_credentials(result, anonymous_rpc)
-        return result
+        self.setup_credentials(rpc_transport, anonymous_rpc)
+        return rpc_transport
