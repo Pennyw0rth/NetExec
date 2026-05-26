@@ -191,6 +191,7 @@ class NXCModule:
                 self.output_filename,
                 self.task_name,
                 self.output_file_location,
+                connection=connection,
             )
 
             if self.show_output is False:
