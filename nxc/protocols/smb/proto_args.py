@@ -93,11 +93,13 @@ def proto_args(parser, parents):
     files_group.add_argument("--append-host", action="store_true", help="append the host to the get-file filename")
 
     cmd_exec_group = smb_parser.add_argument_group("Command Execution")
-    cmd_exec_group.add_argument("--exec-method", choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default="wmiexec", help="method to execute the command. Ignored if in MSSQL mode", action=DefaultTrackingAction)
+    cmd_exec_group.add_argument("--exec-method", choices={"wmiexec", "mmcexec", "smbexec", "atexec", "scshell"}, default="wmiexec", help="method to execute the command. Ignored if in MSSQL mode", action=DefaultTrackingAction)
     cmd_exec_group.add_argument("--dcom-timeout", help="DCOM connection timeout", type=int, default=5)
     cmd_exec_group.add_argument("--get-output-tries", help="Number of times atexec/smbexec/mmcexec tries to get results", type=int, default=10)
     cmd_exec_group.add_argument("--codec", default="utf-8", help="Set encoding used (codec) from the target's output. If errors are detected, run chcp.com at the target & map the result with https://docs.python.org/3/library/codecs.html#standard-encodings and then execute again with --codec and the corresponding codec")
     cmd_exec_group.add_argument("--no-output", action="store_true", help="do not retrieve command output")
+    cmd_exec_group.add_argument("--sc-service-name", default="RemoteRegistry", help="service name to reconfigure temporarily when using --exec-method scshell")
+    cmd_exec_group.add_argument("--sc-no-cmd", action="store_true", help="when using --exec-method scshell, do not prepend cmd.exe /c to the command")
 
     cmd_exec_method_group = cmd_exec_group.add_mutually_exclusive_group()
     cmd_exec_method_group.add_argument("-x", metavar="COMMAND", dest="execute", help="execute the specified CMD command")
