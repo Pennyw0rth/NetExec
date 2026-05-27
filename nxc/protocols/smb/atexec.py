@@ -18,12 +18,12 @@ class TSCH_EXEC:
                  # that defaults to NT AUTHORITY\System user (SID S-1-5-18) if not specified
                  run_task_as="S-1-5-18", run_cmd=None, output_filename=None, task_name=None, output_file_location=None):
         self.__connection = connection
+        self.logger = logger
+        self.__tries = tries
+        self.__share = share
         self.__outputBuffer = b""
         self.__retOutput = False
-        self.__tries = tries
         self.__output_filename = None
-        self.__share = share
-        self.logger = logger
 
         # Optional args for finetuning the task execution, e.g. used in nxc/modules/schtask_as.py
         self.task_name = task_name if task_name else gen_random_string(8)
