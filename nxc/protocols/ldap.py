@@ -787,6 +787,58 @@ class ldap(connection):
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
 
+    def ous(self):
+        # Building the search filter
+        if self.args.ous:
+            # Find the OU's distinguished name first
+            self.logger.debug(f"Dumping users from OU: {self.args.ous}")
+            ou_resp = self.search(
+                f"(&(objectCategory=organizationalUnit)(ou={self.args.ous}))",
+                ["distinguishedName"],
+                0,
+            )
+            ou_parsed = parse_result_attributes(ou_resp)
+
+            if not ou_parsed:
+                self.logger.fail(f"OU '{self.args.ous}' not found")
+                return
+
+            ou_dn = ou_parsed[0]["distinguishedName"]
+            self.logger.debug(f"Found OU DN: {ou_dn}")
+
+            # Search for users scoped to that OU
+            resp = self.search(
+                "(&(objectCategory=person)(objectClass=user))",
+                ["sAMAccountName", "cn"],
+                0,
+                baseDN=ou_dn,
+            )
+            resp_parsed = parse_result_attributes(resp)
+            self.logger.debug(f"Total of records returned: {len(resp_parsed)}")
+
+            if not resp_parsed:
+                self.logger.fail(f"OU '{self.args.ous}' has no users")
+                return
+
+            for user in resp_parsed:
+                self.logger.highlight(user.get("sAMAccountName", user.get("cn", "Unknown")))
+        else:
+            # List all OUs
+            self.logger.debug("Dumping all organizational units")
+            resp = self.search("(objectCategory=organizationalUnit)", ["ou", "distinguishedName"], 0)
+            resp_parsed = parse_result_attributes(resp)
+            self.logger.debug(f"Total of records returned: {len(resp_parsed)}")
+
+            self.logger.highlight(f"{'-OU-':<40} {'-Distinguished Name-'}")
+            for item in resp_parsed:
+                try:
+                    ou_name = item["ou"]
+                    dn = item["distinguishedName"]
+                    self.logger.highlight(f"{ou_name:<40} {dn}")
+                except Exception as e:
+                    self.logger.debug("Exception:", exc_info=True)
+                    self.logger.debug(f"Skipping item, cannot process due to error: {e}")
+
     def computers(self):
         resp = self.search(f"(sAMAccountType={SAM_MACHINE_ACCOUNT})", ["sAMAccountName"])
         resp_parsed = parse_result_attributes(resp)
