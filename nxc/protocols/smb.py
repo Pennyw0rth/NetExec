@@ -902,20 +902,10 @@ class smb(connection):
             elif method == "atexec":
                 try:
                     exec_method = TSCH_EXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
-                        self.smb_share_name,
-                        self.username,
-                        self.password,
-                        self.domain,
-                        self.kerberos,
-                        self.aesKey,
-                        self.host,
-                        self.kdcHost,
-                        self.hash,
-                        self.logger,
-                        self.args.get_output_tries,
-                        self.args.share,
                         connection=self,
+                        logger=self.logger,
+                        tries=self.args.get_output_tries,
+                        share=self.args.share,
                     )
                     self.logger.info("Executed command via atexec")
                     break
@@ -926,22 +916,10 @@ class smb(connection):
             elif method == "smbexec":
                 try:
                     exec_method = SMBEXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
-                        self.smb_share_name,
-                        self.conn,
-                        self.username,
-                        self.password,
-                        self.domain,
-                        self.kerberos,
-                        self.aesKey,
-                        self.host,
-                        self.kdcHost,
-                        self.hash,
-                        self.args.share,
-                        self.port,
-                        self.logger,
-                        self.args.get_output_tries,
                         connection=self,
+                        share=self.args.share,
+                        logger=self.logger,
+                        tries=self.args.get_output_tries,
                     )
                     self.logger.info("Executed command via smbexec")
                     break
