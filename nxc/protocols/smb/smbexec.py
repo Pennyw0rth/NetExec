@@ -98,11 +98,10 @@ class SMBEXEC:
             return
 
         tries = 1
-        smbConnection = self.__connection.conn
         while True:
             try:
                 self.logger.info(f"Attempting to read {self.__share}\\{self.__output}")
-                smbConnection.getFile(self.__share, self.__output, self.output_callback)
+                self.__connection.conn.getFile(self.__share, self.__output, self.output_callback)
                 break
             except Exception as e:
                 if tries >= self.__tries:
@@ -131,7 +130,7 @@ class SMBEXEC:
 
         try:
             self.logger.debug(f"Deleting file {self.__share}\\{self.__output}")
-            smbConnection.deleteFile(self.__share, self.__output)
+            self.__connection.conn.deleteFile(self.__share, self.__output)
         except Exception:
             pass
 
