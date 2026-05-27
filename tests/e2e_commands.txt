@@ -106,6 +106,8 @@ netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M backup_o
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M ntlm_reflection
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M ntds-dump-raw
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M ntds-dump-raw -o TARGET=SAM,LSA,NTDS
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M wds_mdt
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M wds_mdt -o DOWNLOAD=TRUE OUTDIR=/tmp/wds_mdt_loot
 # currently hanging indefinitely - TODO: look into this
 #netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M keepass_discover
 #netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M keepass_trigger -o ACTION=ALL USER=LOGIN_USERNAME KEEPASS_CONFIG_PATH="C:\\Users\\LOGIN_USERNAME\\AppData\\Roaming\\KeePass\\KeePass.config.xml"
