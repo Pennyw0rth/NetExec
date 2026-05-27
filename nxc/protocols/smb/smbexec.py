@@ -9,16 +9,17 @@ from nxc.helpers.rpc import NXCRPCConnection
 
 class SMBEXEC:
     def __init__(self, connection, share=None, logger=None, tries=None):
-        self.__serviceName = gen_random_string()
+        self.__connection = connection
         self.__share = share
+        self.logger = logger
+        self.__tries = tries
+
+        self.__serviceName = gen_random_string()
         self.__output = None
         self.__batchFile = None
         self.__outputBuffer = b""
         self.__shell = "%COMSPEC% /Q /c "
         self.__retOutput = False
-        self.__tries = tries
-        self.logger = logger
-        self.__connection = connection
 
         rpc = NXCRPCConnection(self.__connection)
         self.__scmr = rpc.connect(r"\svcctl", scmr.MSRPC_UUID_SCMR)
