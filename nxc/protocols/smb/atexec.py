@@ -171,14 +171,13 @@ class TSCH_EXEC:
         tsch.hSchRpcDelete(dce, f"\\{self.task_name}")
 
         if self.__retOutput:
-            smbConnection = self.__connection.conn
             tries = 1
             # Give the command a bit of time to execute before we try to read the output, 0.4 seconds was good in testing
             sleep(0.4)
             while True:
                 try:
                     self.logger.info(f"Attempting to read {self.__share}\\{self.__output_filename}")
-                    smbConnection.getFile(self.__share, self.__output_filename, self.output_callback)
+                    self.__connection.conn.getFile(self.__share, self.__output_filename, self.output_callback)
                     break
                 except Exception as e:
                     if tries >= self.__tries:
@@ -206,7 +205,7 @@ class TSCH_EXEC:
                         sleep(1)
             try:
                 self.logger.debug(f"Deleting file {self.__share}\\{self.__output_filename}")
-                smbConnection.deleteFile(self.__share, self.__output_filename)
+                self.__connection.conn.deleteFile(self.__share, self.__output_filename)
             except Exception:
                 pass
 
