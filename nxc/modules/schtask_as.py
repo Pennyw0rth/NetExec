@@ -173,25 +173,15 @@ class NXCModule:
         self.logger.display("Connecting to the remote Service control endpoint")
         try:
             exec_method = TSCH_EXEC(
-                connection.host if not connection.kerberos else connection.hostname + "." + connection.domain,
-                connection.smb_share_name,
-                connection.username,
-                connection.password,
-                connection.domain,
-                connection.kerberos,
-                connection.aesKey,
-                connection.host,
-                connection.kdcHost,
-                connection.hash,
-                self.logger,
-                connection.args.get_output_tries,
-                connection.args.share,
-                self.run_task_as,
-                self.command_to_run,
-                self.output_filename,
-                self.task_name,
-                self.output_file_location,
                 connection=connection,
+                logger=self.logger,
+                tries=connection.args.get_output_tries,
+                share=connection.args.share,
+                run_task_as=self.run_task_as,
+                run_cmd=self.command_to_run,
+                output_filename=self.output_filename,
+                task_name=self.task_name,
+                output_file_location=self.output_file_location,
             )
 
             if self.show_output is False:
