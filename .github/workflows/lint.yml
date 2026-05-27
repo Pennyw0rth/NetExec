@@ -14,20 +14,14 @@ jobs:
       github.event_name == 'push' || github.event.review.state == 'APPROVED' || github.event_name == 'workflow_dispatch'
 
     steps:
-      - uses: actions/checkout@v4
-      - name: Install poetry
-        run: |
-          pipx install poetry
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
-          python-version: 3.13
-          cache: poetry
-          cache-dependency-path: poetry.lock
-      - name: Install dependencies with dev group
-        run: |
-          poetry install --with dev
+          enable-cache: true
+      - name: Set up Python
+        run: uv python install 3.13
       - name: Run ruff
         run: |
-          poetry run ruff --version
-          poetry run ruff check . --preview
+          uvx ruff@0.11.0 --version
+          uvx ruff@0.11.0 check . --preview
