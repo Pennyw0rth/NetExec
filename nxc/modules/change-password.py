@@ -77,8 +77,7 @@ class NXCModule:
     def db_remove_credential(self):
         try:
             db = self.context.db
-            domain = self.connection.domain
-            rows = db.get_user(domain, self.computer_name) if hasattr(db, "get_user") else db.get_credentials(filter_term=self.computer_name)
+            rows = db.get_user(self.target_domain, self.target_username) if hasattr(db, "get_user") else db.get_credentials(filter_term=self.target_username)
             db.remove_credentials([row[0] for row in rows])
         except Exception as e:
             self.context.log.debug(f"Could not remove credentials from DB: {e}")
@@ -126,13 +125,7 @@ class NXCModule:
     def samr_bind_anonymous(self):
         string_binding = epm.hept_map(self.connection.host, samr.MSRPC_UUID_SAMR, protocol="ncacn_ip_tcp")
         rpc = NXCRPCConnection(self.connection)
-        rpc.connect(
-            None,
-            samr.MSRPC_UUID_SAMR,
-            string_binding=string_binding,
-            set_remote_host=self.connection.host,
-            anonymous_rpc=True,
-        )
+        rpc.connect(None, samr.MSRPC_UUID_SAMR, string_binding=string_binding, set_remote_host=self.connection.host, anonymous_rpc=True)
         self.context.log.info("Connecting with null session credentials.")
         return rpc
 
