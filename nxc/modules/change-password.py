@@ -1,7 +1,8 @@
 import sys
-from impacket.dcerpc.v5 import samr, epm, transport
+from impacket.dcerpc.v5 import samr, epm
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.rpc import NXCRPCConnection
 
 
 class NXCModule:
@@ -45,31 +46,21 @@ class NXCModule:
     def authenticate(self, context, connection, protocol, anonymous=False):
         # Authenticate to the target using DCE/RPC with either user credentials or a null session. Establishes a connection and binds to the SAMR service.
         try:
-            # Map to the SAMR endpoint on the target
-            string_binding = epm.hept_map(connection.host, samr.MSRPC_UUID_SAMR, protocol=protocol)
-            rpctransport = transport.DCERPCTransportFactory(string_binding)
-            rpctransport.setRemoteHost(connection.host)
-
             if anonymous:
-                rpctransport.set_credentials("", "", "", "", "", "")
-                rpctransport.set_kerberos(False, None)
+                string_binding = epm.hept_map(connection.host, samr.MSRPC_UUID_SAMR, protocol=protocol)
+                dce = NXCRPCConnection(connection).connect(
+                    None,
+                    samr.MSRPC_UUID_SAMR,
+                    string_binding=string_binding,
+                    set_remote_host=connection.host,
+                    anonymous_rpc=True,
+                )
                 context.log.info("Connecting with null session credentials.")
             else:
-                rpctransport.set_credentials(
-                    connection.username,
-                    connection.password,
-                    connection.domain,
-                    connection.lmhash,
-                    connection.nthash,
-                    aesKey=connection.aesKey,
-                )
+                dce = NXCRPCConnection(connection).connect(r"\samr", samr.MSRPC_UUID_SAMR)
                 context.log.info(f"Connecting as {connection.domain}\\{connection.username}")
 
-            # Connect to the DCE/RPC endpoint and bind to the SAMR service
-            dce = rpctransport.get_dce_rpc()
-            dce.connect()
             context.log.info("[+] Successfully connected to DCE/RPC")
-            dce.bind(samr.MSRPC_UUID_SAMR)
             context.log.info("[+] Successfully bound to SAMR")
             return dce
         except DCERPCException as e:
