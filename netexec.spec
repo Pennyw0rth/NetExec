@@ -19,6 +19,7 @@ a = Analysis(
         'aardwolf.commons.iosettings',
         'aardwolf.commons.target',
         'aardwolf.protocol.x224.constants',
+        'certihound',
         'certipy.commands.find',
         'certipy.lib.formatting',
         'certipy.lib.target',

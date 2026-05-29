@@ -1,11 +1,10 @@
-import contextlib
 import sys
 
-from impacket.dcerpc.v5 import samr, epm, transport
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
+from impacket.dcerpc.v5 import samr, epm
 from impacket.ldap.ldap import LDAPSessionError, MODIFY_ADD, MODIFY_DELETE, MODIFY_REPLACE
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.rpc import NXCRPCConnection
 
 
 class NXCModule:
@@ -91,18 +90,20 @@ class NXCModule:
             self.context.db.add_credential("plaintext", self.target_domain, self.target_username, self.newpass)
 
     def do_samr(self):
-        dce = self.samr_connect()
-        if dce is None:
+        rpc = self.samr_connect()
+        if rpc is None:
             return
         try:
-            self.samr_execute(dce)
+            self.samr_execute(rpc.dce)
         finally:
-            with contextlib.suppress(Exception):
-                dce.disconnect()
+            rpc.disconnect()
 
     def samr_connect(self):
         try:
-            return self.samr_bind()
+            rpc = NXCRPCConnection(self.connection)
+            rpc.connect(r"\samr", samr.MSRPC_UUID_SAMR)
+            self.context.log.info(f"Connecting as {self.connection.domain}\\{self.connection.username} (kerberos={self.connection.kerberos})")
+            return rpc
         except Exception as e:
             err = str(e)
 
@@ -117,39 +118,23 @@ class NXCModule:
 
             self.context.log.warning("Password must be changed. Falling back to null session over ncacn_ip_tcp.")
             try:
-                return self.samr_bind(dce_protocol="ncacn_ip_tcp", anonymous=True)
+                return self.samr_bind_anonymous()
             except Exception as e2:
                 self.context.log.fail(f"Failed to bind to SAMR with null session: {e2}")
                 return None
 
-    def samr_bind(self, dce_protocol="ncacn_np", anonymous=False):
-        target = self.connection.host if not self.connection.kerberos else f"{self.connection.hostname}.{self.connection.domain}"
-        string_binding = epm.hept_map(target, samr.MSRPC_UUID_SAMR, protocol=dce_protocol)
-        rpc_transport = transport.DCERPCTransportFactory(string_binding)
-        rpc_transport.setRemoteHost(target)
-
-        if anonymous:
-            rpc_transport.set_credentials("", "", "", "", "", "")
-            rpc_transport.set_kerberos(False, None)
-            self.context.log.info("Connecting with null session credentials.")
-        else:
-            rpc_transport.set_credentials(
-                self.connection.username,
-                self.connection.password,
-                self.connection.domain,
-                self.connection.lmhash,
-                self.connection.nthash,
-                aesKey=self.connection.aesKey,
-            )
-            rpc_transport.set_kerberos(self.connection.kerberos, kdcHost=self.connection.kdcHost)
-            self.context.log.info(f"Connecting as {self.connection.domain}\\{self.connection.username} (kerberos={self.connection.kerberos})")
-
-        dce = rpc_transport.get_dce_rpc()
-        if not anonymous and self.connection.kerberos:
-            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-        dce.connect()
-        dce.bind(samr.MSRPC_UUID_SAMR)
-        return dce
+    def samr_bind_anonymous(self):
+        string_binding = epm.hept_map(self.connection.host, samr.MSRPC_UUID_SAMR, protocol="ncacn_ip_tcp")
+        rpc = NXCRPCConnection(self.connection)
+        rpc.connect(
+            None,
+            samr.MSRPC_UUID_SAMR,
+            string_binding=string_binding,
+            set_remote_host=self.connection.host,
+            anonymous_rpc=True,
+        )
+        self.context.log.info("Connecting with null session credentials.")
+        return rpc
 
     def samr_execute(self, dce):
         if self.is_self_change and not self.connection.password and not self.connection.nthash:

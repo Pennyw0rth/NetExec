@@ -14,7 +14,6 @@ from termcolor import colored
 from dns import resolver
 from dateutil.relativedelta import relativedelta as rd
 
-from Cryptodome.Hash import MD4
 from OpenSSL.SSL import SysCallError
 from bloodhound.ad.authentication import ADAuthentication
 from bloodhound.ad.domain import AD
@@ -28,6 +27,7 @@ from impacket.dcerpc.v5.samr import (
     SAM_MACHINE_ACCOUNT,
 )
 from impacket.krb5 import constants
+from impacket.krb5.crypto import generate_kerberos_keys
 from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError
 from impacket.krb5.ccache import CCache
 from impacket.krb5.types import Principal, KerberosException
@@ -1329,16 +1329,26 @@ class ldap(connection):
                         principal_with_read = resp_parsed[0]["sAMAccountName"]
 
                 # Get the password
-                passwd = "<no read permissions>"
+                rc4 = "<no read permissions>"
+                aes128 = aes256 = ""
                 if "msDS-ManagedPassword" in acc:
-                    blob = MSDS_MANAGEDPASSWORD_BLOB()
-                    blob.fromString(acc["msDS-ManagedPassword"])
-                    currentPassword = blob["CurrentPassword"][:-2]
-                    ntlm_hash = MD4.new()
-                    ntlm_hash.update(currentPassword)
-                    passwd = hexlify(ntlm_hash.digest()).decode("utf-8")
-                self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} NTLM: {passwd:<36} PrincipalsAllowedToReadPassword: {principal_with_read}")
-        return True
+                    rc4, aes128, aes256 = self.gmsa_compute_secrets(acc["msDS-ManagedPassword"], acc["sAMAccountName"])
+                self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} NTLM: {rc4:<36} PrincipalsAllowedToReadPassword: {principal_with_read}")
+                if aes128 and aes256:
+                    self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} aes128-cts-hmac-sha1-96: {aes128}")
+                    self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} aes256-cts-hmac-sha1-96: {aes256}")
+
+    def gmsa_compute_secrets(self, password_data: bytes, sAMAccountName: str):
+        """Generate RC4, AES128, and AES256 keys for a GMSA account based on the provided password data and username."""
+        blob = MSDS_MANAGEDPASSWORD_BLOB()
+        blob.fromString(password_data)
+        current_password = hexlify(blob["CurrentPassword"].rstrip(b"\x00")).decode()
+
+        keys = generate_kerberos_keys(hex_pass=current_password, user=sAMAccountName, domain=self.targetDomain)
+        rc4 = hexlify(keys[constants.EncryptionTypes.rc4_hmac.value].contents).decode()
+        aes128 = hexlify(keys[constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value].contents).decode()
+        aes256 = hexlify(keys[constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value].contents).decode()
+        return rc4, aes128, aes256
 
     def decipher_gmsa_name(self, domain_name=None, account_name=None):
         # https://aadinternals.com/post/gmsa/
@@ -1355,60 +1365,50 @@ class ldap(connection):
         return str_hash
 
     def gmsa_convert_id(self):
-        if self.args.gmsa_convert_id:
-            if len(self.args.gmsa_convert_id) != 64:
-                self.logger.fail("Length of the gmsa id not correct :'(")
-            else:
-                # getting the gmsa account
-                search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
-                gmsa_accounts = self.ldap_connection.search(
-                    searchBase=self.baseDN,
-                    searchFilter=search_filter,
-                    attributes=["sAMAccountName"],
-                    sizeLimit=0,
-                )
-                gmsa_accounts_parsed = parse_result_attributes(gmsa_accounts)
-                if gmsa_accounts_parsed:
-                    self.logger.debug(f"Total of records returned {len(gmsa_accounts_parsed):d}")
-
-                    for acc in gmsa_accounts_parsed:
-                        if self.decipher_gmsa_name(self.domain.split(".")[0], acc["sAMAccountName"][:-1]) == self.args.gmsa_convert_id:
-                            self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} ID: {self.args.gmsa_convert_id}")
-                            break
+        if len(self.args.gmsa_convert_id) != 64:
+            self.logger.fail("Length of the gmsa id not correct :'(")
         else:
-            self.logger.fail("No string provided :'(")
+            # getting the gmsa account
+            gmsa_accounts = self.search(
+                searchFilter="(objectClass=msDS-GroupManagedServiceAccount)",
+                attributes=["sAMAccountName"],
+            )
+            gmsa_accounts_parsed = parse_result_attributes(gmsa_accounts)
+            self.logger.debug(f"Total of records returned {len(gmsa_accounts_parsed):d}")
+
+            for acc in gmsa_accounts_parsed:
+                if self.decipher_gmsa_name(self.domain.split(".")[0], acc["sAMAccountName"].rstrip("$")) == self.args.gmsa_convert_id:
+                    self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} ID: {self.args.gmsa_convert_id}")
+                    break
 
     def gmsa_decrypt_lsa(self):
-        if self.args.gmsa_decrypt_lsa:
-            if "_SC_GMSA_{84A78B8C" in self.args.gmsa_decrypt_lsa:
-                gmsa_id, gmsa_pass = self.args.gmsa_decrypt_lsa.split("_")[4].split(":")
-                # getting the gmsa account
-                search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
-                gmsa_accounts = self.ldap_connection.search(
-                    searchBase=self.baseDN,
-                    searchFilter=search_filter,
-                    attributes=["sAMAccountName"],
-                    sizeLimit=0,
-                )
-                gmsa_accounts_parsed = parse_result_attributes(gmsa_accounts)
-                if gmsa_accounts_parsed:
-                    self.logger.debug(f"Total of records returned {len(gmsa_accounts):d}")
+        if "_SC_GMSA_{84A78B8C" in self.args.gmsa_decrypt_lsa:
+            gmsa_id, gmsa_pass = self.args.gmsa_decrypt_lsa.split("_")[4].split(":")
+            # getting the gmsa account
+            gmsa_accounts = self.search(
+                searchFilter="(objectClass=msDS-GroupManagedServiceAccount)",
+                attributes=["sAMAccountName"],
+            )
+            gmsa_accounts_parsed = parse_result_attributes(gmsa_accounts)
+            sAMAccountName = ""
+            if gmsa_accounts_parsed:
+                self.logger.debug(f"Total of records returned {len(gmsa_accounts):d}")
 
-                    for acc in gmsa_accounts_parsed:
-                        if self.decipher_gmsa_name(self.domain.split(".")[0], acc["sAMAccountName"][:-1]) == gmsa_id:
-                            gmsa_id = acc["sAMAccountName"]
-                            break
-                # convert to ntlm
-                data = bytes.fromhex(gmsa_pass)
-                blob = MSDS_MANAGEDPASSWORD_BLOB()
-                blob.fromString(data)
-                currentPassword = blob["CurrentPassword"][:-2]
-                ntlm_hash = MD4.new()
-                ntlm_hash.update(currentPassword)
-                passwd = hexlify(ntlm_hash.digest()).decode("utf-8")
-                self.logger.highlight(f"Account: {gmsa_id:<20} NTLM: {passwd}")
+                for acc in gmsa_accounts_parsed:
+                    if self.decipher_gmsa_name(self.domain.split(".")[0], acc["sAMAccountName"].rstrip("$")) == gmsa_id:
+                        sAMAccountName = acc["sAMAccountName"]
+                        break
+            # Compute the password and keys
+            data = bytes.fromhex(gmsa_pass)
+            rc4, aes128, aes256 = self.gmsa_compute_secrets(data, sAMAccountName)
+            self.logger.highlight(f"Account: {sAMAccountName:<20} NTLM: {rc4}")
+            if not sAMAccountName:
+                self.logger.fail("Could not find the GMSA account associated with the provided ID.")
+            else:
+                self.logger.highlight(f"Account: {sAMAccountName:<20} aes128-cts-hmac-sha1-96: {aes128}")
+                self.logger.highlight(f"Account: {sAMAccountName:<20} aes256-cts-hmac-sha1-96: {aes256}")
         else:
-            self.logger.fail("No string provided :'(")
+            self.logger.fail("The provided string does not appear to be a valid GMSA LSA secret.")
 
     def pso(self):
         """
