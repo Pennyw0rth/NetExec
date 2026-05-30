@@ -495,6 +495,10 @@ def pfx_auth(self):
     req = ini.build_asreq(self.domain, username)
     self.logger.info("Requesting TGT")
 
+    if not self.kdcHost:
+        self.logger.fail(f"Could not resolve KDC host for domain {self.domain}. Use --kdcHost to specify the domain controller IP")
+        return False
+
     sock = KerberosClientSocket(KerberosTarget(self.kdcHost))
     try:
         res = sock.sendrecv(req)

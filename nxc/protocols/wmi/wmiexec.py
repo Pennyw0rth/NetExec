@@ -67,7 +67,7 @@ class WMIEXEC:
         self.__registry_Path = f"Software\\Classes\\{gen_random_string(8)}"
 
         # 1. Run the command and write output to file
-        self.execute_remote(f'{self.__shell} {command} 1> "{result_output}" 2>&1')
+        self.execute_remote(f'{self.__shell} ({command}) 1> "{result_output}" 2>&1')
         self.logger.info(f"Waiting {self.__exec_timeout}s for command to complete.")
         time.sleep(self.__exec_timeout)
 
@@ -109,7 +109,7 @@ class WMIEXEC:
 
         # 1. Run the command and write output to file
         if not command.lower().startswith("powershell"):
-            command = f"powershell -Command {command}"
+            command = f'powershell -Command "& {{{command}}}"'
         self.execute_remote(f'{command} > "{result_output}" 2>&1')
         self.logger.info(f"Waiting {self.__exec_timeout}s for command to complete.")
         time.sleep(self.__exec_timeout)
