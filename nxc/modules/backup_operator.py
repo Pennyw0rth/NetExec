@@ -1,11 +1,27 @@
 import contextlib
+import os
 from time import sleep
 
 from impacket.examples.secretsdump import SAMHashes, LSASecrets, LocalOperations
 from impacket.smbconnection import SessionError
+from impacket.smb3structs import (
+    FILE_READ_DATA,
+    FILE_SHARE_READ,
+    FILE_NON_DIRECTORY_FILE,
+    FILE_OPEN,
+)
 from impacket.dcerpc.v5 import rrp
 from nxc.helpers.misc import CATEGORY, gen_random_string
 from nxc.helpers.rpc import NXCRPCConnection
+
+# impacket's smb3.read() is a recursive function (see its own warning comment)
+# that reassembles multi-response reads by appending return values. When
+# get_file_single() calls getFile() → retr_file() → read(MaxReadSize), large
+# hives (HKLM\SYSTEM on a DC can exceed 50 MB) cause the recursion to corrupt
+# SMB framing, producing "Unpacked data doesn't match constant value þSMB".
+# Fix: open the file ourselves and read in ≤64 KB chunks, which keeps every
+# individual read() call well below the recursion threshold.
+_CHUNK_SIZE = 65536
 
 
 class NXCModule:
@@ -23,6 +39,66 @@ class NXCModule:
 
     def options(self, context, module_options):
         """NO OPTIONS"""
+
+    def _download_hive(self, context, connection, remote_name, local_path):
+        """Download a registry hive from SYSVOL using fixed-size chunked reads.
+
+        getFile/retr_file passes MaxReadSize (potentially megabytes) to
+        impacket's smb3.read(), which is recursive and breaks SMB framing on
+        large responses. Reading in 64 KB chunks avoids that code path entirely.
+        """
+        share = "SYSVOL"
+        context.log.display(f'Copying "{remote_name}" to "{local_path}"')
+
+        smb = connection.conn
+        try:
+            tid = smb.connectTree(share)
+        except Exception as e:
+            context.log.fail(f"Could not connect to share {share}: {e}")
+            return False
+
+        file_id = None
+        try:
+            file_id = smb.openFile(
+                tid,
+                remote_name,
+                desiredAccess=FILE_READ_DATA,
+                shareMode=FILE_SHARE_READ,
+                creationOption=FILE_NON_DIRECTORY_FILE,
+                creationDisposition=FILE_OPEN,
+            )
+
+            with open(local_path, "wb") as f:
+                offset = 0
+                while True:
+                    try:
+                        data = smb.readFile(tid, file_id, offset, _CHUNK_SIZE)
+                    except SessionError as e:
+                        if "STATUS_END_OF_FILE" in str(e):
+                            break
+                        raise
+                    if not data:
+                        break
+                    f.write(data)
+                    offset += len(data)
+                    if len(data) < _CHUNK_SIZE:
+                        # partial chunk means we reached end of file
+                        break
+
+            context.log.success(f'File "{remote_name}" was downloaded to "{local_path}"')
+            return True
+
+        except Exception as e:
+            context.log.fail(f'Error downloading "{remote_name}" from {share}: {e}')
+            if os.path.exists(local_path) and os.path.getsize(local_path) == 0:
+                os.remove(local_path)
+            return False
+        finally:
+            with contextlib.suppress(Exception):
+                if file_id is not None:
+                    smb.closeFile(tid, file_id)
+            with contextlib.suppress(Exception):
+                smb.disconnectTree(tid)
 
     def on_login(self, context, connection):
         connection.args.share = "SYSVOL"
@@ -53,10 +129,10 @@ class NXCModule:
             with contextlib.suppress(Exception):
                 dce.disconnect()
 
-        # copy remote file to local
+        # copy remote files to local using chunked downloader
         log_path = f"{connection.output_filename}."
         for hive in ["SAM", "SECURITY", "SYSTEM"]:
-            connection.get_file_single(f"{hive}_{rand_suffix}", log_path + hive)
+            self._download_hive(context, connection, f"{hive}_{rand_suffix}", log_path + hive)
 
         # read local file
         try:
