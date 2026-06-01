@@ -618,3 +618,43 @@ class mssql(connection):
             )
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
+
+    @requires_admin
+    def db_hash(self):
+        self.logger.info("Dumping local database users' hashes")
+        query = """
+        SELECT
+            sp.name,
+            CASE sp.type_desc
+                WHEN 'SQL_LOGIN' THEN 'SQL User'
+                WHEN 'WINDOWS_LOGIN' THEN
+                    CASE
+                        WHEN sp.name LIKE '{domain_prefix}%' THEN 'Domain User'
+                        WHEN sp.name LIKE '%\\%' THEN 'Local User'
+                        ELSE 'Local User'
+                    END
+                WHEN 'WINDOWS_GROUP' THEN 'Windows Group'
+                WHEN 'CERTIFICATE_MAPPED_LOGIN' THEN 'Certificate Login'
+                WHEN 'ASYMMETRIC_KEY_MAPPED_LOGIN' THEN 'Asymmetric Key Login'
+                ELSE sp.type_desc
+            END as login_type,
+            sl.password_hash
+        FROM sys.server_principals sp
+        LEFT JOIN sys.sql_logins sl ON sp.principal_id = sl.principal_id
+        WHERE sp.type IN ('S', 'U', 'G', 'C', 'K')
+        AND sp.name NOT LIKE '##%'
+        ORDER BY login_type, sp.name;
+        """
+        rows = self.conn.sql_query(query) or []
+        if not rows:
+            self.logger.display("No databases returned")
+            return
+        else:
+            self.logger.display("Enumerated logins")
+            self.logger.highlight(f"{'Login Name':<15} {'Database hash':<140}")
+            self.logger.highlight(f"{'----------':<15} {'----------':<140}")
+            for row in rows:
+                name = row.get("name")
+                password_hash = row.get("password_hash")
+                if password_hash != "NULL":
+                    self.logger.highlight(f"{name:<15} {password_hash.decode():<140}")
