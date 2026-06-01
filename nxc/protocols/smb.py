@@ -1561,27 +1561,17 @@ class smb(connection):
         if self.args.filter_shares:
             self.logger.display("[REMOVED] Use the --shares read,write options instead.")
 
-        # Build filtered list first so column widths reflect only displayed rows
-        display_rows = []
+        self.logger.display("Enumerated shares")
+        self.logger.highlight(f"{'Share':<15} {'Permissions':<22} {'Remark'}")
+        self.logger.highlight(f"{'-----':<15} {'-----------':<22} {'------'}")
+
         for share in permissions:
             name = share["name"]
             remark = share["remark"]
             perms = ",".join(share["access"])
             if self.args.shares and self.args.shares.lower() not in perms.lower():
                 continue
-            display_rows.append((name, perms, remark))
-
-        # Size each column to the widest entry in that column, but never smaller
-        # than the header. Add a small padding so columns don't run together.
-        column_padding = 2
-        share_col_width = max((len(row[0]) for row in display_rows), default=len("Share")) + column_padding
-        perms_col_width = max((len(row[1]) for row in display_rows), default=len("Permissions")) + column_padding
-
-        self.logger.display("Enumerated shares")
-        self.logger.highlight(f"{'Share':<{share_col_width}} {'Permissions':<{perms_col_width}} {'Remark'}")
-        self.logger.highlight(f"{'-----':<{share_col_width}} {'-----------':<{perms_col_width}} {'------'}")
-        for name, perms, remark in display_rows:
-            self.logger.highlight(f"{name:<{share_col_width}} {perms:<{perms_col_width}} {remark}")
+            self.logger.highlight(f"{name:<15} {perms:<22} {remark}")
         return permissions
 
     def dir(self):
