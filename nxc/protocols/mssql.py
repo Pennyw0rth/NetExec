@@ -627,15 +627,6 @@ class mssql(connection):
             sp.name,
             CASE sp.type_desc
                 WHEN 'SQL_LOGIN' THEN 'SQL User'
-                WHEN 'WINDOWS_LOGIN' THEN
-                    CASE
-                        WHEN sp.name LIKE '{domain_prefix}%' THEN 'Domain User'
-                        WHEN sp.name LIKE '%\\%' THEN 'Local User'
-                        ELSE 'Local User'
-                    END
-                WHEN 'WINDOWS_GROUP' THEN 'Windows Group'
-                WHEN 'CERTIFICATE_MAPPED_LOGIN' THEN 'Certificate Login'
-                WHEN 'ASYMMETRIC_KEY_MAPPED_LOGIN' THEN 'Asymmetric Key Login'
                 ELSE sp.type_desc
             END as login_type,
             sl.password_hash
