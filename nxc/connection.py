@@ -1,6 +1,5 @@
 from datetime import datetime
 import os
-import re
 import random
 import sys
 import contextlib
@@ -246,10 +245,6 @@ class connection:
         else:
             self.logger.debug("Created connection object")
             self.enum_host_info()
-            sanitized = re.sub(r'[^\w\-.]', '_', self.hostname)
-            if sanitized != self.hostname:
-                self.logger.display(f"Hostname contains invalid characters (received: {self.hostname!r}), sanitized to: {sanitized!r}")
-                self.hostname = sanitized
 
             # Construct the output file template using os.path.join for OS compatibility
             base_log_dir = os.path.join(NXC_PATH, "logs")
