@@ -619,7 +619,6 @@ class mssql(connection):
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
 
-    @requires_admin
     def backups(self):
         self.logger.info("Dumping database backups")
         query = """
