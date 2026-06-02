@@ -637,7 +637,7 @@ class mssql(connection):
             self.logger.fail(f"Error running the SQL query: {self.conn.lastError}")
             return
         if not rows:
-            self.logger.display("No databases returned")
+            self.logger.display("No logins returned")
             return
         else:
             self.logger.display("Enumerated logins")
