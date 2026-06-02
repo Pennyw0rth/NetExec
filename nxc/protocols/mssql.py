@@ -625,18 +625,17 @@ class mssql(connection):
         query = """
         SELECT
             sp.name,
-            CASE sp.type_desc
-                WHEN 'SQL_LOGIN' THEN 'SQL User'
-                ELSE sp.type_desc
-            END as login_type,
             sl.password_hash
         FROM sys.server_principals sp
         LEFT JOIN sys.sql_logins sl ON sp.principal_id = sl.principal_id
         WHERE sp.type IN ('S', 'U', 'G', 'C', 'K')
         AND sp.name NOT LIKE '##%'
-        ORDER BY login_type, sp.name;
+        ORDER BY sp.name;
         """
-        rows = self.conn.sql_query(query) or []
+        rows = self.conn.sql_query(query)
+        if self.conn.lastError:
+            self.logger.fail(f"Error running the SQL query: {self.conn.lastError}")
+            return
         if not rows:
             self.logger.display("No databases returned")
             return
