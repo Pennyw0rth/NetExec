@@ -621,7 +621,7 @@ class mssql(connection):
 
     @requires_admin
     def db_hash(self):
-        self.logger.info("Dumping local database users' hashes")
+        self.logger.display("Dumping local database users' hashes")
         query = """
         SELECT
             sp.name,
