@@ -634,8 +634,10 @@ class mssql(connection):
             ON bs.database_name = d.name
         ORDER BY bs.backup_finish_date DESC;
         """
-
-        rows = self.conn.sql_query(query) or []
+        rows = self.conn.sql_query(query)
+        if self.conn.lastError:
+            self.logger.fail(f"Error running the SQL query: {self.conn.lastError}")
+            return
         if not rows:
             self.logger.display("No backups returned")
             return
