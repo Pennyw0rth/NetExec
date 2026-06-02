@@ -54,11 +54,13 @@ class NXCModule:
             self.path = module_options["PATH"]
         else:
             context.log.fail("Please provide the path of the registry to query (PATH)")
+            return
 
         if module_options and "KEY" in module_options:
             self.key = module_options["KEY"]
         else:
             context.log.fail("Please provide the registry key to query (KEY)")
+            return
 
         if "VALUE" in module_options:
             self.value = module_options["VALUE"]
@@ -153,23 +155,37 @@ class NXCModule:
         if self.delete:
             query = f"EXEC xp_regdeletevalue N'{hive}', N'{subpath}', N'{key}';"
             connection.conn.sql_query(query)
-            context.log.success(f"Registry value {key} deleted")
+            if connection.conn.lastError:
+                context.log.fail(f"Failed to call xp_regdeletevalue: {connection.conn.lastError}")
+                return
+            else:
+                context.log.success(f"Registry key {key} has been deleted successfully")
             return
 
         if self.value is not None:
             type_str = self.REG_TYPE_MAP.get(self.type, "REG_SZ")
             query = f"EXEC xp_regwrite N'{hive}', N'{subpath}', N'{key}', N'{type_str}', N'{self.value!s}';"
             connection.conn.sql_query(query)
-            context.log.success(f"Registry value {key} set to {self.value}")
+            if connection.conn.lastError:
+                context.log.fail(f"Failed to call xp_regwrite: {connection.conn.lastError}")
+                return
+            else:
+                context.log.success(f"Registry value {key} set to {self.value}")
             return
 
         query = f"EXEC xp_regread N'{hive}', N'{subpath}', N'{key}';"
         rows = connection.conn.sql_query(query)
-        if not rows:
-            context.log.fail(f"No result for {subpath}\\{key}")
+        if connection.conn.lastError:
+            context.log.fail(f"Failed to call xp_regread: {connection.conn.lastError}")
             return
-        for row in rows:
-            context.log.highlight(f"{key}: {row}")
+        else:
+            if not rows:
+                context.log.fail(f"No result for {subpath}\\{key}")
+                return
+            for row in rows:
+                value = row.get("Value")
+                data = row.get("Data")
+                context.log.highlight(f"{value}: {data}")
 
     def on_admin_login(self, context, connection):
         hive, subpath = self._parse_registry_path(self.path)
