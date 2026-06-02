@@ -618,3 +618,29 @@ class mssql(connection):
             )
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
+
+    def clr(self):
+        query = """
+        SELECT
+            name,
+            CAST(value_in_use AS int) AS value_in_use
+        FROM sys.configurations
+        WHERE name IN ('clr enabled', 'clr strict security');
+        """
+
+        rows = self.conn.sql_query(query)
+        if self.conn.lastError:
+            self.logger.fail(f"Failed running the SQL query: {self.conn.lastError}")
+
+        if not rows:
+            self.logger.fail("No response from the database server")
+
+        config = {row["name"]: row["value_in_use"] for row in rows}
+
+        clr_enabled = config.get("clr enabled")
+        clr_strict = config.get("clr strict security")
+
+        self.logger.highlight(
+            f"CLR: {'enabled' if clr_enabled else 'disabled'} | "
+            f"Strict security: {'enabled' if clr_strict else 'disabled'}"
+        )
