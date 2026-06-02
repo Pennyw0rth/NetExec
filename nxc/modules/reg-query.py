@@ -153,6 +153,12 @@ class NXCModule:
 
     def _registry_mssql(self, context, connection, hive, subpath, key):
         if self.delete:
+            query = f"EXEC xp_regread N'{hive}', N'{subpath}', N'{key}';"
+            rows = connection.conn.sql_query(query)
+            if not rows:
+                context.log.fail(f"Registry key {key} does not exist")
+                return
+
             query = f"EXEC xp_regdeletevalue N'{hive}', N'{subpath}', N'{key}';"
             connection.conn.sql_query(query)
             if connection.conn.lastError:
