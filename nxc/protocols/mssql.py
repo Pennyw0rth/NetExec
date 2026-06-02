@@ -619,7 +619,7 @@ class mssql(connection):
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
 
-    def backups(self):
+    def list_backups(self):
         self.logger.info("Dumping database backups")
         query = """
         SELECT
