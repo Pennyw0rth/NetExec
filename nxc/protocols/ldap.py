@@ -626,9 +626,9 @@ class ldap(connection):
             search_filter = (f"(|(objectSid={self.sid_domain}-512)"
                              f"(objectSid={self.sid_domain}-519)"
                              f"(objectSid={self.sid_domain}-544)"
+                             "(objectSid=S-1-5-32-544)"
                              "(objectSid=S-1-5-32-549)"
-                             "(objectSid=S-1-5-32-551)"
-                             "(objectSid=S-1-5-32-544))")
+                             "(objectSid=S-1-5-32-551))")
             attributes = ["distinguishedName"]
             resp = self.search(search_filter, attributes, baseDN=self.baseDN)
             resp_parsed = parse_result_attributes(resp)
