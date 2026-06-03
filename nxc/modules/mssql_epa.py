@@ -21,6 +21,11 @@ EPA_LABELS = {
         host_info_colors[2],
         attrs=["bold"],
     ),
+    "required": colored(
+        "Extended Protection: Required - NTLM relay NOT possible (Secure)",
+        host_info_colors[0],
+        attrs=["bold"],
+    ),
     "required_cb": colored(
         "Extended Protection: Required - CBT enforced, NTLM relay NOT possible (Secure)",
         host_info_colors[0],
@@ -196,8 +201,13 @@ class NXCModule:
     def on_login(self, context, connection):
         self.logger = context.log
 
+        result = self._check_registry(connection)
+        if result:
+            self.logger.highlight(EPA_LABELS[result] + " (via Registry)")
+            return
+
         if connection.args.local_auth:
-            self.logger.fail("Local auth: cannot check EPA configuration (requires domain auth)")
+            self.logger.fail("xp_instance_regread denied, EPA could not be determined. Try with domain auth instead.")
             return
 
         if connection.kerberos:
@@ -209,6 +219,25 @@ class NXCModule:
             return
 
         self._check_ntlm(connection)
+
+    def _check_registry(self, connection):
+        reg_map = {0: "off", 1: "allowed", 2: "required"}
+        try:
+            result = connection.conn.sql_query(
+                "EXEC xp_instance_regread "
+                "N'HKEY_LOCAL_MACHINE', "
+                "N'SOFTWARE\\Microsoft\\Microsoft SQL Server\\MSSQLServer\\SuperSocketNetLib', "
+                "N'ExtendedProtection';"
+            )
+            if connection.conn.lastError:
+                return None
+            if result:
+                data = result[0].get("Data")
+                if data is not None:
+                    return reg_map.get(int(data))
+        except Exception:
+            pass
+        return None
 
     def _check_ntlm(self, connection):
         lmhash = getattr(connection, "lmhash", "") or ""
@@ -246,7 +275,7 @@ class NXCModule:
             else:
                 result = "off"
 
-        self.logger.highlight(EPA_LABELS[result])
+        self.logger.highlight(EPA_LABELS[result] + " (via NTLM)")
 
     def _check_kerberos(self, connection):
         # Kerberos + Force Encryption OFF: MSSQL does NOT validate Kerberos channel
@@ -285,4 +314,4 @@ class NXCModule:
         else:
             result = "off"
 
-        self.logger.highlight(EPA_LABELS[result])
+        self.logger.highlight(EPA_LABELS[result] + " (via Kerberos)")
