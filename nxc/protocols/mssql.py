@@ -618,3 +618,28 @@ class mssql(connection):
             )
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
+
+    def list_linked_servers(self):
+        self.logger.display("Listing linked servers and their credentials")
+        query = """
+        SELECT s.name AS linked_server,
+        l.remote_name AS remote_login
+        FROM sys.servers s
+        LEFT JOIN sys.linked_logins l ON s.server_id = l.server_id
+        LEFT JOIN sys.server_principals p ON l.local_principal_id = p.principal_id
+        WHERE s.is_linked = 1;
+        """
+        rows = self.conn.sql_query(query)
+        if self.conn.lastError:
+            self.logger.fail(f"Error listing linked servers: {self.conn.lastError}")
+
+        if not rows:
+            self.logger.fail("No linked servers configured")
+        else:
+            self.logger.display("Enumerated linked servers")
+            self.logger.highlight(f"{'Linked server':<30} {'Remote login'}")
+            self.logger.highlight(f"{'----------':<30} {'----------'}")
+            for row in rows:
+                linked_server = row.get("linked_server")
+                remote_login = row.get("remote_login")
+                self.logger.highlight(f"{linked_server:<30} {remote_login}")
