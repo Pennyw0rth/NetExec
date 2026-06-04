@@ -493,14 +493,14 @@ files = [
 
 [[package]]
 name = "certihound"
-version = "0.1.1"
+version = "0.2.0"
 description = "Linux-native AD CS collector library for BloodHound CE - enumerate ADCS and export to BloodHound format"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "certihound-0.1.1-py3-none-any.whl", hash = "sha256:9e22eb8d465b4ac2ffb9c2f2db1d3998ab44b5acfcf9f8e7b65136acb1855112"},
-    {file = "certihound-0.1.1.tar.gz", hash = "sha256:9c4006dd682e927bd7f1e0e1e4f2fae0a00c9ef10f971344f5a3d9d96f1289d7"},
+    {file = "certihound-0.2.0-py3-none-any.whl", hash = "sha256:771dc745a9e66c5f03b6c6a2c3574355b4c1a0a959c391ad57233599be2dfcf3"},
+    {file = "certihound-0.2.0.tar.gz", hash = "sha256:fc8b3c357a91f8845bac34d91e7a8d644aa4d61db09d880249bb5e544a0a100a"},
 ]
 
 [package.dependencies]

@@ -21,9 +21,10 @@ from impacket.examples.regsecrets import (
     LSASecrets as RegSecretsLSASecrets
 )
 from impacket.nmb import NetBIOSError, NetBIOSTimeout
-from impacket.dcerpc.v5 import transport, lsat, lsad, scmr, rrp, srvs, wkst
+from impacket.dcerpc.v5 import lsat, lsad, scmr, rrp, srvs, wkst
+from impacket.dcerpc.v5.srvs import STYPE_DISKTREE, STYPE_MASK
 from impacket.dcerpc.v5.rpcrt import DCERPCException
-from impacket.dcerpc.v5.transport import DCERPCTransportFactory, SMBTransport
+from impacket.dcerpc.v5.transport import DCERPCTransportFactory
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.dcerpc.v5.epm import MSRPC_UUID_PORTMAP
 from impacket.dcerpc.v5.samr import SID_NAME_USE
@@ -35,7 +36,21 @@ from impacket.krb5 import constants
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login
-from impacket.smb3structs import FILE_SHARE_WRITE, FILE_SHARE_DELETE, SMB2_0_IOCTL_IS_FSCTL
+from impacket.smb3structs import (
+    FILE_ADD_FILE,
+    FILE_ADD_SUBDIRECTORY,
+    FILE_DIRECTORY_FILE,
+    FILE_OPEN,
+    FILE_SHARE_DELETE,
+    FILE_SHARE_READ,
+    FILE_SHARE_WRITE,
+    FILE_SYNCHRONOUS_IO_NONALERT,
+    GENERIC_WRITE,
+    SMB2_0_IOCTL_IS_FSCTL,
+    WRITE_DAC,
+    WRITE_OWNER,
+)
+
 from impacket.dcerpc.v5 import tsts as TSTS
 
 from nxc.config import process_secret, host_info_colors, check_guest_account
@@ -56,6 +71,7 @@ from nxc.protocols.smb.samrfunc import SamrFunc
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.helpers.logger import highlight
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.rpc import NXCRPCConnection
 from nxc.helpers.powershell import create_ps_command
 from nxc.helpers.misc import detect_if_ip
 from nxc.protocols.ldap.resolution import LDAPResolution
@@ -192,7 +208,14 @@ class smb(connection):
         # self.domain is the attribute we authenticate with
         # self.targetDomain is the attribute which gets displayed as host domain
         if not self.no_ntlm:
-            self.hostname = self.conn.getServerName()
+            # Try to get hostname with getServerDNSHostName as getServerName is truncated to 15 chars
+            dns_hostname = self.conn.getServerDNSHostName().upper()
+            if dns_hostname and "." in dns_hostname:
+                self.hostname = dns_hostname.split(".")[0]
+            elif dns_hostname:
+                self.hostname = dns_hostname
+            else:
+                self.hostname = self.conn.getServerName()
             self.targetDomain = self.conn.getServerDNSDomainName()
             if not self.targetDomain:   # Not sure if that can even happen but now we are safe
                 self.targetDomain = self.hostname
@@ -649,27 +672,23 @@ class smb(connection):
         if self.args.no_admin_check:
             return
         self.logger.debug(f"Checking if user is admin on {self.host}")
-        rpctransport = SMBTransport(self.conn.getRemoteHost(), 445, r"\svcctl", smb_connection=self.conn)
-        dce = rpctransport.get_dce_rpc()
         try:
-            dce.connect()
+            dce = NXCRPCConnection(self).connect(r"\svcctl", scmr.MSRPC_UUID_SCMR)
         except Exception:
             self.admin_privs = False
-        else:
-            with contextlib.suppress(Exception):
-                dce.bind(scmr.MSRPC_UUID_SCMR)
-            try:
-                # 0xF003F - SC_MANAGER_ALL_ACCESS
-                # http://msdn.microsoft.com/en-us/library/windows/desktop/ms685981(v=vs.85).aspx
-                scmrobj = scmr.hROpenSCManagerW(dce, f"{self.host}\x00", "ServicesActive\x00", 0xF003F)
-                scmr.hREnumServicesStatusW(dce, scmrobj["lpScHandle"])
-                self.logger.debug(f"User is admin on {self.host}!")
-                self.admin_privs = True
-            except scmr.DCERPCException:
-                self.admin_privs = False
-            except Exception as e:
-                self.logger.fail(f"Error checking if user is admin on {self.host}: {e}")
-                self.admin_privs = False
+            return
+        try:
+            # 0xF003F - SC_MANAGER_ALL_ACCESS
+            # http://msdn.microsoft.com/en-us/library/windows/desktop/ms685981(v=vs.85).aspx
+            scmrobj = scmr.hROpenSCManagerW(dce, f"{self.host}\x00", "ServicesActive\x00", 0xF003F)
+            scmr.hREnumServicesStatusW(dce, scmrobj["lpScHandle"])
+            self.logger.debug(f"User is admin on {self.host}!")
+            self.admin_privs = True
+        except scmr.DCERPCException:
+            self.admin_privs = False
+        except Exception as e:
+            self.logger.fail(f"Error checking if user is admin on {self.host}: {e}")
+            self.admin_privs = False
 
     def gen_relay_list(self):
         if self.server_os.lower().find("windows") != -1 and self.signing is False:
@@ -902,19 +921,10 @@ class smb(connection):
             elif method == "atexec":
                 try:
                     exec_method = TSCH_EXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
-                        self.smb_share_name,
-                        self.username,
-                        self.password,
-                        self.domain,
-                        self.kerberos,
-                        self.aesKey,
-                        self.host,
-                        self.kdcHost,
-                        self.hash,
-                        self.logger,
-                        self.args.get_output_tries,
-                        self.args.share
+                        connection=self,
+                        logger=self.logger,
+                        tries=self.args.get_output_tries,
+                        share=self.args.share,
                     )
                     self.logger.info("Executed command via atexec")
                     break
@@ -925,21 +935,10 @@ class smb(connection):
             elif method == "smbexec":
                 try:
                     exec_method = SMBEXEC(
-                        self.host if not self.kerberos else self.hostname + "." + self.domain,
-                        self.smb_share_name,
-                        self.conn,
-                        self.username,
-                        self.password,
-                        self.domain,
-                        self.kerberos,
-                        self.aesKey,
-                        self.host,
-                        self.kdcHost,
-                        self.hash,
-                        self.args.share,
-                        self.port,
-                        self.logger,
-                        self.args.get_output_tries
+                        connection=self,
+                        share=self.args.share,
+                        logger=self.logger,
+                        tries=self.args.get_output_tries,
                     )
                     self.logger.info("Executed command via smbexec")
                     break
@@ -1280,12 +1279,10 @@ class smb(connection):
                 self.logger.info(f"No active session found for specified user(s) using the Remote Registry service on {self.hostname}.")
 
         # Bind to the Remote Registry Pipe
-        rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\winreg", smb_connection=self.conn)
+        rpc = NXCRPCConnection(self)
         for binding_attempts in range(2, 0, -1):
-            dce = rpctransport.get_dce_rpc()
             try:
-                dce.connect()
-                dce.bind(rrp.MSRPC_UUID_RRP)
+                dce = rpc.connect(r"\winreg", rrp.MSRPC_UUID_RRP)
                 break
             except SessionError as e:
                 self.logger.debug(f"Could not bind to the Remote Registry on {self.hostname}: {e}")
@@ -1339,11 +1336,8 @@ class smb(connection):
             return
 
         # Bind to the LSARPC Pipe for SID resolution
-        rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\lsarpc", smb_connection=self.conn)
-        dce = rpctransport.get_dce_rpc()
         try:
-            dce.connect()
-            dce.bind(lsat.MSRPC_UUID_LSAT)
+            dce = NXCRPCConnection(self).connect(r"\lsarpc", lsat.MSRPC_UUID_LSAT)
         except Exception as e:
             self.logger.debug(f"Failed to connect to LSARPC for SID resolution on {self.hostname}: {e}")
             output(sessions)
@@ -1387,10 +1381,17 @@ class smb(connection):
             output(sessions)
 
     def shares(self):
-        temp_dir = ntpath.normpath("\\" + gen_random_string())
-        temp_file = ntpath.normpath("\\" + gen_random_string() + ".txt")
         permissions = []
-        write_check = bool(not self.args.no_write_check)
+        # ACL-based write check masks: each open attempt against the share root
+        # validates one specific permission. WRITE_DAC/WRITE_OWNER cover paths
+        # where the user can grant themselves write via ACL modification.
+        write_checks = [
+            (GENERIC_WRITE, "WRITE"),
+            (FILE_ADD_FILE, "WRITE"),
+            (FILE_ADD_SUBDIRECTORY, "WRITE (SUBDIR)"),
+            (WRITE_DAC, "WRITE (ACL)"),
+            (WRITE_OWNER, "WRITE (ACL)"),
+        ]
 
         try:
             self.logger.debug(f"domain: {self.domain}")
@@ -1424,19 +1425,24 @@ class smb(connection):
             return permissions
 
         for share in shares:
-            share_name = share["shi1_netname"][:-1]
+            share_name = share["shi1_netname"].rstrip("\x00")
 
             # Skip excluded shares
             if self.args.exclude_shares and share_name in self.args.exclude_shares:
                 self.logger.debug(f"Skipping excluded share: {share_name}")
                 continue
 
-            share_remark = share["shi1_remark"][:-1]
-            share_info = {"name": share_name, "remark": share_remark, "access": []}
+            # Mask off STYPE_SPECIAL/STYPE_TEMPORARY flags; only the base type
+            # (DISKTREE/PRINTQ/DEVICE/IPC) determines whether write checks apply.
+            share_remark = share["shi1_remark"].rstrip("\x00")
+            share_info = {
+                "name": share_name,
+                "remark": share_remark,
+                "type": share["shi1_type"] & STYPE_MASK,
+                "access": [],
+            }
             read = False
             write = False
-            write_dir = False
-            write_file = False
             try:
                 self.conn.listPath(share_name, "*")
                 read = True
@@ -1445,13 +1451,28 @@ class smb(connection):
                 error = get_error_string(e)
                 self.logger.debug(f"Error checking READ access on share {share_name}: {error}")
             except (NetBIOSError, UnicodeEncodeError) as e:
-                write_check = False
                 share_info["access"].append("UNKNOWN (try '--no-smbv1')")
                 error = get_error_string(e)
                 self.logger.debug(f"Error checking READ access on share {share_name}: {error}. This exception always caused by special character in share name with SMBv1")
                 self.logger.info(f"Skipping WRITE permission check on share {share_name}")
+                permissions.append(share_info)
+                continue
 
-            if write_check:
+            if share_info["type"] != STYPE_DISKTREE:
+                # Non-filesystem share (IPC, print queue, etc.) — write checks produce
+                # false positives due to non-file semantics; skip and report access as-is
+                self.logger.debug(f"Skipping write-access check on non-filesystem share {share_name} (type=0x{share_info['type']:02x})")
+                permissions.append(share_info)
+                continue
+
+            if self.args.file_write_check:
+                # Empirical write check — creates and deletes a temp file/dir.
+                # Use --file-write-check to enable. Catches post-ACL blocking (AV/EDR/quota)
+                # but leaves a brief artifact window if delete permissions are missing.
+                temp_dir = ntpath.normpath("\\" + gen_random_string())
+                temp_file = ntpath.normpath("\\" + gen_random_string() + ".txt")
+                write_dir = False
+                write_file = False
                 try:
                     self.conn.createDirectory(share_name, temp_dir)
                     write_dir = True
@@ -1460,9 +1481,7 @@ class smb(connection):
                         self.conn.deleteDirectory(share_name, temp_dir)
                     except SessionError as e:
                         error = get_error_string(e)
-                        if error == "STATUS_OBJECT_NAME_NOT_FOUND":
-                            pass
-                        else:
+                        if error != "STATUS_OBJECT_NAME_NOT_FOUND":
                             self.logger.debug(f"Error DELETING created temp dir {temp_dir} on share {share_name}: {error}")
                 except SessionError as e:
                     error = get_error_string(e)
@@ -1478,9 +1497,7 @@ class smb(connection):
                         self.conn.deleteFile(share_name, temp_file)
                     except SessionError as e:
                         error = get_error_string(e)
-                        if error == "STATUS_OBJECT_NAME_NOT_FOUND":
-                            pass
-                        else:
+                        if error != "STATUS_OBJECT_NAME_NOT_FOUND":
                             self.logger.debug(f"Error DELETING created temp file {temp_file} on share {share_name}")
                 except SessionError as e:
                     error = get_error_string(e)
@@ -1490,6 +1507,50 @@ class smb(connection):
                 if write_dir or write_file:
                     write = True
                     share_info["access"].append("WRITE")
+            else:
+                # ACL-based write check (default) — opens share root with FILE_OPEN +
+                # various access masks. No files created on disk. May not detect writes
+                # blocked post-ACL by AV/EDR or disk quota. Detects WRITE_DAC/WRITE_OWNER
+                # escalation paths that the empirical check misses.
+                seen_labels = set()
+                write_labels = []
+                for mask, label in write_checks:
+                    if label in seen_labels:
+                        continue
+                    tid = None
+                    try:
+                        tid = self.conn.connectTree(share_name)
+                        fid = self.conn.openFile(
+                            tid,
+                            "\\",
+                            desiredAccess=mask,
+                            shareMode=FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                            creationDisposition=FILE_OPEN,
+                            fileAttributes=0,
+                            creationOption=FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+                        )
+                        self.conn.closeFile(tid, fid)
+                        write_labels.append(label)
+                        seen_labels.add(label)
+                        self.logger.debug(f"{label} confirmed on {share_name} (mask=0x{mask:08x})")
+                    except SessionError as e:
+                        error = get_error_string(e)
+                        self.logger.debug(f"No {label} on {share_name}: {error}")
+                    except Exception as e:
+                        self.logger.debug(f"{label} check error on {share_name}: {e}")
+                    finally:
+                        if tid:
+                            with contextlib.suppress(Exception):
+                                self.conn.disconnectTree(tid)
+
+                # If direct WRITE is achievable, suppress more granular labels
+                if "WRITE" in write_labels:
+                    write_labels = ["WRITE"]
+
+                for lbl in write_labels:
+                    share_info["access"].append(lbl)
+                    if not write:
+                        write = True
 
             permissions.append(share_info)
 
@@ -1505,8 +1566,8 @@ class smb(connection):
             self.logger.display("[REMOVED] Use the --shares read,write options instead.")
 
         self.logger.display("Enumerated shares")
-        self.logger.highlight(f"{'Share':<15} {'Permissions':<15} {'Remark'}")
-        self.logger.highlight(f"{'-----':<15} {'-----------':<15} {'------'}")
+        self.logger.highlight(f"{'Share':<15} {'Permissions':<22} {'Remark'}")
+        self.logger.highlight(f"{'-----':<15} {'-----------':<22} {'------'}")
 
         for share in permissions:
             name = share["name"]
@@ -1514,7 +1575,7 @@ class smb(connection):
             perms = ",".join(share["access"])
             if self.args.shares and self.args.shares.lower() not in perms.lower():
                 continue
-            self.logger.highlight(f"{name:<15} {perms:<15} {remark}")
+            self.logger.highlight(f"{name:<15} {perms:<22} {remark}")
         return permissions
 
     def dir(self):
@@ -1661,10 +1722,7 @@ class smb(connection):
 
     def disks(self):
         try:
-            rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\srvsvc", smb_connection=self.conn)
-            dce = rpctransport.get_dce_rpc()
-            dce.connect()
-            dce.bind(srvs.MSRPC_UUID_SRVS)
+            dce = NXCRPCConnection(self).connect(r"\srvsvc", srvs.MSRPC_UUID_SRVS)
 
             response = srvs.hNetrServerDiskEnum(dce, 0)
             # Process the response
@@ -1720,10 +1778,7 @@ class smb(connection):
 
         logged_on = set()
         try:
-            rpctransport = transport.SMBTransport(self.conn.getRemoteName(), self.conn.getRemoteHost(), filename=r"\wkssvc", smb_connection=self.conn)
-            dce = rpctransport.get_dce_rpc()
-            dce.connect()
-            dce.bind(wkst.MSRPC_UUID_WKST)
+            dce = NXCRPCConnection(self).connect(r"\wkssvc", wkst.MSRPC_UUID_WKST)
 
             response = wkst.hNetrWkstaUserEnum(dce, 1)
             for user in response["UserInfo"]["WkstaUserInfo"]["Level1"]["Buffer"]:
@@ -1836,40 +1891,12 @@ class smb(connection):
         if not max_rid:
             max_rid = int(self.args.rid_brute)
 
-        KNOWN_PROTOCOLS = {
-            135: {"bindstr": rf"ncacn_ip_tcp:{self.remoteName}"},
-            139: {"bindstr": rf"ncacn_np:{self.remoteName}[\pipe\lsarpc]"},
-            445: {"bindstr": rf"ncacn_np:{self.remoteName}[\pipe\lsarpc]"},
-        }
-
         try:
-            string_binding = KNOWN_PROTOCOLS[self.port]["bindstr"]
-            self.logger.debug(f"StringBinding {string_binding}")
-            rpc_transport = transport.DCERPCTransportFactory(string_binding)
-            rpc_transport.setRemoteHost(self.remoteName)
-
-            if hasattr(rpc_transport, "set_credentials"):
-                # This method exists only for selected protocol sequences.
-                rpc_transport.set_credentials(self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey)
-
-            if self.kerberos:
-                rpc_transport.set_kerberos(self.kerberos, self.kdcHost)
-
-            dce = rpc_transport.get_dce_rpc()
-            if self.kerberos:
-                dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-
-            dce.connect()
+            use_tcp = self.port == 135
+            dce = NXCRPCConnection(self, force_tcp=use_tcp).connect(r"\lsarpc", lsat.MSRPC_UUID_LSAT)
         except Exception as e:
             self.logger.fail(f"Error creating DCERPC connection: {e}")
             return entries
-
-        # Want encryption? Uncomment next line
-        # But make simultaneous variable <= 100
-
-        # Want fragmentation? Uncomment next line
-
-        dce.bind(lsat.MSRPC_UUID_LSAT)
         try:
             resp = lsad.hLsarOpenPolicy2(dce, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES)
         except lsad.DCERPCSessionError as e:
@@ -2273,6 +2300,9 @@ class smb(connection):
 
         if self.output_file:
             self.output_file.close()
+            with open(self.output_file_template.format(output_folder="dpapi")) as f:
+                if sum(1 for _ in f) == 0:
+                    self.logger.fail("No dpapi loot retrieved")
 
     @requires_admin
     def list_snapshots(self):
