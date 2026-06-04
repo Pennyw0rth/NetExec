@@ -171,7 +171,7 @@ class mssql(connection):
             str(self.conn.mssql_version).rsplit("(", 1)[1].rstrip(")")
         )
 
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) (MSSQL:{edition} {version}) ({encryption}) {ntlm}")
+        self.logger.display(f"{self.server_os} ({edition} {version}) (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption}) {ntlm}")
 
     @reconnect_mssql
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
