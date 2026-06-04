@@ -710,7 +710,7 @@ class mssql(connection):
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
 
-    def is_option_enabled(self, option):
+    def _is_option_enabled(self, option):
         query = f"EXEC master.dbo.sp_configure '{option}';"
         self.logger.debug(f"Checking if '{option}' is enabled: {query}")
         result = self.conn.sql_query(query)
@@ -720,7 +720,7 @@ class mssql(connection):
     @requires_admin
     def backup_and_enable(self, option):
         try:
-            self.backuped_options[option] = self.is_option_enabled(option)
+            self.backuped_options[option] = self._is_option_enabled(option)
             if not self.backuped_options[option]:
                 self.logger.debug(f"Option '{option}' is disabled, enabling it.")
                 self.conn.sql_query(f"EXEC master.dbo.sp_configure '{option}', 1;RECONFIGURE;")
@@ -732,7 +732,7 @@ class mssql(connection):
     @requires_admin
     def backup_and_disable(self, option):
         try:
-            self.backuped_options[option] = self.is_option_enabled(option)
+            self.backuped_options[option] = self._is_option_enabled(option)
             if self.backuped_options[option]:
                 self.logger.debug(f"Option '{option}' is enabled, disabling it.")
                 self.conn.sql_query(f"EXEC master.dbo.sp_configure '{option}', 0;RECONFIGURE;")
