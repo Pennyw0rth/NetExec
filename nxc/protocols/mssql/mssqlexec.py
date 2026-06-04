@@ -9,7 +9,7 @@ class MSSQLEXEC:
         # Store the original state of options that have to be enabled/disabled in order to restore them later
         self.backuped_options = {}
 
-    def execute(self, command):
+    def execute(self, command, get_output, clr_assembly=None):
         result = ""
 
         self.backup_and_enable("advanced options")
@@ -66,39 +66,3 @@ class MSSQLEXEC:
         # Assuming the query returns a list of dictionaries with 'config_value' as the key
         self.logger.debug(f"{option} check result: {result}")
         return bool(result and result[0]["config_value"] == 1)
-
-    def put_file(self, data, remote):
-        try:
-            self.backup_and_enable("advanced options")
-            self.backup_and_enable("Ole Automation Procedures")
-            hexdata = data.hex()
-            self.logger.debug(f"Hex data to write to file: {hexdata}")
-            query = f"DECLARE @ob INT;EXEC sp_OACreate 'ADODB.Stream', @ob OUTPUT;EXEC sp_OASetProperty @ob, 'Type', 1;EXEC sp_OAMethod @ob, 'Open';EXEC sp_OAMethod @ob, 'Write', NULL, 0x{hexdata};EXEC sp_OAMethod @ob, 'SaveToFile', NULL, '{remote}', 2;EXEC sp_OAMethod @ob, 'Close';EXEC sp_OADestroy @ob;"
-            self.logger.debug(f"Executing query: {query}")
-            self.mssql_conn.sql_query(query)
-            self.restore("Ole Automation Procedures")
-            self.restore("advanced options")
-        except Exception as e:
-            self.logger.debug(f"Error uploading via mssqlexec: {e}")
-
-    def file_exists(self, remote):
-        try:
-            query = f"DECLARE @r INT; EXEC master.dbo.xp_fileexist '{remote}', @r OUTPUT; SELECT @r as n"
-            self.logger.debug(f"Executing query: {query}")
-            res = self.mssql_conn.batch(query)
-            self.logger.debug(f"File check response: {res}")
-            return res[0]["n"] == 1
-        except Exception:
-            return False
-
-    def get_file(self, remote, local):
-        try:
-            query = f"SELECT * FROM OPENROWSET(BULK N'{remote}', SINGLE_BLOB) rs"
-            self.logger.debug(f"Executing query: {query}")
-            self.mssql_conn.sql_query(query)
-            data = self.mssql_conn.rows
-            self.logger.debug(f"Get file returned: {data}")
-            with open(local, "wb+") as f:
-                f.write(binascii.unhexlify(data[0]["BulkColumn"]))
-        except Exception as e:
-            self.logger.debug(f"Error downloading via mssqlexec: {e}")

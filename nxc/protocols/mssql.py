@@ -12,6 +12,9 @@ from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.negotiate_parser import parse_challenge, login7_integrated_auth_error_message
 from nxc.helpers.powershell import create_ps_command
 from nxc.protocols.mssql.mssqlexec import MSSQLEXEC
+from nxc.protocols.mssql.oleexec import OLEEXEC
+from nxc.protocols.mssql.clrexec import CLREXEC
+
 
 from impacket import tds, ntlm
 from impacket.krb5.ccache import CCache
@@ -44,6 +47,7 @@ class mssql(connection):
         self.lmhash = ""
         self.nthash = ""
         self.no_ntlm = False
+        self.args = args
 
         connection.__init__(self, args, db, host)
 
@@ -310,31 +314,104 @@ class mssql(connection):
         return raw_output
 
     @requires_admin
-    def execute(self, payload=None, get_output=False):
-        payload = self.args.execute if not payload and self.args.execute else payload
-        if not payload:
-            self.logger.error("No command to execute specified!")
-            return None
+    def execute(self, payload=None, get_output=False, methods=None) -> str:
+        """
+        Executes a command on the target host using CMD.exe and the specified method(s).
 
-        get_output = True if not self.args.no_output else get_output
-        self.logger.debug(f"{get_output=}")
+        Args:
+        ----
+            payload (str): The command to execute
+            get_output (bool): Whether to get the output of the command (can be useful for AV evasion)
+            methods (list): The method(s) to use for command execution
 
-        output = ""
-        try:
-            exec_method = MSSQLEXEC(self.conn, self.logger)
-            output = exec_method.execute(payload)
-            self.logger.debug(f"Output: {output}")
-        except Exception as e:
-            self.logger.fail(f"Execute command failed, error: {e!s}")
-            return False
-        else:
-            if self.conn.lastError:
-                self.logger.fail(f"Error during command execution: {self.conn.lastError}")
+        Returns:
+        -------
+            str: The output of the command
+        """
+        if getattr(self.args, "exec_method_explicitly_set", False):
+            methods = [self.args.exec_method]
+        if not methods:
+            methods = ["mssqlexec", "oleexec", "clrexec"]
+
+        if not payload and self.args.execute:
+            payload = self.args.execute
+            if not self.args.no_output:
+                get_output = True
+
+        current_method = ""
+        for method in methods:
+            current_method = method
+            if method == "mssqlexec":
+                try:
+                    exec_method = MSSQLEXEC(self.conn, self.logger)
+                    self.logger.debug("MSSQLEXEC execution method instantiated")
+                    break
+                except Exception as e:
+                    self.logger.fail(f"Couldn't instantiate MSSQLEXEC method: {e!s}")
+                    continue
+            elif method == "oleexec":
+                try:
+                    exec_method = OLEEXEC(self.conn, self.logger)
+                    self.logger.debug("OLEEXEC execution method instantiated")
+                    break
+                except Exception as e:
+                    self.logger.fail(f"Couldn't instantiate OLEEXEC method: {e!s}")
+                    continue
+            elif method == "clrexec":
+                try:
+                    exec_method = CLREXEC(self.conn, self.logger)
+                    self.logger.debug("CLREXEC execution method instantiated")
+                    break
+                except Exception as e:
+                    self.logger.fail(f"Couldn't instantiate CLREXEC method: {e!s}")
+                    continue
+
+        if "exec_method" in locals():
+
+            # This part is hacky because we need to be able to determine whether the user used -x/-X with a command
+            # Or with a custom assembly to execute.
+            clr_assembly_explicitly_set = getattr(self.args, "clr_assembly_explicitly_set", False)
+            if (self.args.execute is True or self.args.ps_execute is True) and not clr_assembly_explicitly_set:
+                if self.args.execute is True:
+                    self.logger.fail("-x requires a command to execute")
+                if self.args.ps_execute is True:
+                    self.logger.fail("-X requires a command to execute")
+                return ""
+
+            if method == "clrexec":
+                # if --clr-assembly is explicitly set then we don't have to provide the command to execute at all
+                # As such we overwrite it so that clrexec.py simply execute the provided CLR.
+                if getattr(self.args, "clr_assembly_explicitly_set", False):
+                    payload = None
+                # Otherwise we rely on the default assembly that calls cmd /c payload
+                output = exec_method.execute(payload, get_output, self.args)
             else:
-                self.logger.success("Executed command via mssqlexec")
-                for line in output.splitlines():
-                    self.logger.highlight(line.strip())
-        return output
+                output = exec_method.execute(payload, get_output)
+
+            try:
+                if not isinstance(output, str):
+                    output = output.decode(self.args.codec)
+            except UnicodeDecodeError:
+                self.logger.debug("Decoding error detected, consider running chcp.com at the target, map the result with https://docs.python.org/3/library/codecs.html#standard-encodings")
+                output = output.decode("cp437")
+
+            self.logger.debug(f"Raw Output: {output}")
+            output = "\n".join([ll.rstrip() for ll in output.splitlines() if ll.strip()])
+            self.logger.debug(f"Cleaned Output: {output}")
+
+            if "This script contains malicious content" in output:
+                self.logger.fail("Command execution blocked by AMSI")
+                return ""
+
+            if (self.args.execute or self.args.ps_execute or self.args.clr_assembly_explicitly_set):
+                self.logger.success(f"Executed command via {current_method}")
+                if output:
+                    for line in output.split("\n"):
+                        self.logger.highlight(line)
+            return output
+        else:
+            self.logger.fail(f"Execute command failed with {current_method}")
+            return ""
 
     @requires_admin
     def ps_execute(self, payload=None, get_output=False, methods=None, force_ps32=False, obfs=False, encode=False):
