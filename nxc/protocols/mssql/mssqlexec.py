@@ -1,19 +1,14 @@
-import binascii
-
-
 class MSSQLEXEC:
-    def __init__(self, connection, logger):
-        self.mssql_conn = connection
-        self.logger = logger
-
-        # Store the original state of options that have to be enabled/disabled in order to restore them later
-        self.backuped_options = {}
+    def __init__(self, mssql):
+        self.mssql = mssql
+        self.mssql_conn = mssql.conn
+        self.logger = mssql.logger
 
     def execute(self, command, get_output, clr_assembly=None):
         result = ""
 
-        self.backup_and_enable("advanced options")
-        self.backup_and_enable("xp_cmdshell")
+        self.mssql.backup_and_enable("advanced options")
+        self.mssql.backup_and_enable("xp_cmdshell")
 
         try:
             cmd = f"exec master..xp_cmdshell '{command}'"
@@ -29,40 +24,7 @@ class MSSQLEXEC:
         except Exception as e:
             self.logger.error(f"Error when attempting to execute command via xp_cmdshell: {e}")
 
-        self.restore("xp_cmdshell")
-        self.restore("advanced options")
+        self.mssql.restore("xp_cmdshell")
+        self.mssql.restore("advanced options")
 
         return result
-
-    def restore(self, option):
-        try:
-            if not self.backuped_options[option]:
-                self.logger.debug(f"Option '{option}' was not enabled originally, attempting to disable it.")
-                query = f"EXEC master.dbo.sp_configure '{option}', 0;RECONFIGURE;"
-                self.logger.debug(f"Executing query: {query}")
-                self.mssql_conn.sql_query(query)
-            else:
-                self.logger.debug(f"Option '{option}' was originally enabled, leaving it enabled.")
-        except Exception as e:
-            self.logger.error(f"[OPSEC] Error when attempting to restore option '{option}': {e}")
-
-    def backup_and_enable(self, option):
-        try:
-            self.backuped_options[option] = self.is_option_enabled(option)
-            if not self.backuped_options[option]:
-                self.logger.debug(f"Option '{option}' is disabled, attempting to enable it.")
-                query = f"EXEC master.dbo.sp_configure '{option}', 1;RECONFIGURE;"
-                self.logger.debug(f"Executing query: {query}")
-                self.mssql_conn.sql_query(query)
-            else:
-                self.logger.debug(f"Option '{option}' is already enabled.")
-        except Exception as e:
-            self.logger.error(f"Error when checking/enabling option '{option}': {e}")
-
-    def is_option_enabled(self, option):
-        query = f"EXEC master.dbo.sp_configure '{option}';"
-        self.logger.debug(f"Checking if {option} is enabled: {query}")
-        result = self.mssql_conn.sql_query(query)
-        # Assuming the query returns a list of dictionaries with 'config_value' as the key
-        self.logger.debug(f"{option} check result: {result}")
-        return bool(result and result[0]["config_value"] == 1)

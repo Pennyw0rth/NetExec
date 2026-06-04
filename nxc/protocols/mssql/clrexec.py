@@ -3,9 +3,10 @@ from nxc.helpers.misc import gen_random_string
 
 
 class CLREXEC:
-    def __init__(self, connection, logger):
-        self.mssql_conn = connection
-        self.logger = logger
+    def __init__(self, mssql):
+        self.mssql = mssql
+        self.mssql_conn = mssql.conn
+        self.logger = mssql.logger
         self.assembly_name = f"nxc_mssql_{gen_random_string(10)}"
         self.procedure_name = f"nxc_mssql_{gen_random_string(10)}"
         self.backuped_options = {}
@@ -24,9 +25,9 @@ class CLREXEC:
             data = f.read()
         self.assembly_hex = f"0x{data.hex()}"
 
-        self.backup_and_enable("advanced options")
-        self.backup_and_enable("clr enabled")
-        self.backup_and_disable("clr strict security")
+        self.mssql.backup_and_enable("advanced options")
+        self.mssql.backup_and_enable("clr enabled")
+        self.mssql.backup_and_disable("clr strict security")
 
         self._cleanup_stale()
 
@@ -137,44 +138,6 @@ class CLREXEC:
             self.logger.error(f"Removing the assembly and the procedure failed, artifacts may remain: {self.mssql_conn.lastError}")
 
     def _restore_all(self):
-        self.restore("clr strict security")
-        self.restore("clr enabled")
-        self.restore("advanced options")
-
-    def restore(self, option):
-        try:
-            original = self.backuped_options.get(option)
-            if original is None:
-                return
-            target_val = 1 if original else 0
-            query = f"EXEC master.dbo.sp_configure '{option}', {target_val};RECONFIGURE;"
-            self.logger.debug(f"Restoring '{option}' to {target_val}: {query}")
-            self.mssql_conn.sql_query(query)
-        except Exception as e:
-            self.logger.error(f"[OPSEC] Error restoring '{option}': {e}")
-
-    def backup_and_enable(self, option):
-        try:
-            self.backuped_options[option] = self.is_option_enabled(option)
-            if not self.backuped_options[option]:
-                query = f"EXEC master.dbo.sp_configure '{option}', 1;RECONFIGURE;"
-                self.logger.debug(f"Enabling '{option}': {query}")
-                self.mssql_conn.sql_query(query)
-        except Exception as e:
-            self.logger.error(f"Error enabling '{option}': {e}")
-
-    def backup_and_disable(self, option):
-        try:
-            self.backuped_options[option] = self.is_option_enabled(option)
-            if self.backuped_options[option]:
-                query = f"EXEC master.dbo.sp_configure '{option}', 0;RECONFIGURE;"
-                self.logger.debug(f"Disabling '{option}': {query}")
-                self.mssql_conn.sql_query(query)
-        except Exception as e:
-            self.logger.error(f"Error disabling '{option}': {e}")
-
-    def is_option_enabled(self, option):
-        query = f"EXEC master.dbo.sp_configure '{option}';"
-        result = self.mssql_conn.sql_query(query)
-        self.logger.debug(f"'{option}' check result: {result}")
-        return bool(result and result[0]["config_value"] == 1)
+        self.mssql.restore("clr strict security")
+        self.mssql.restore("clr enabled")
+        self.mssql.restore("advanced options")

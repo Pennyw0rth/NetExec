@@ -2,18 +2,16 @@ from nxc.helpers.misc import gen_random_string
 
 
 class OLEEXEC:
-    def __init__(self, connection, logger):
-        self.mssql_conn = connection
-        self.logger = logger
+    def __init__(self, mssql):
+        self.mssql = mssql
+        self.mssql_conn = mssql.conn
+        self.logger = mssql.logger
         self.default_output_dir = "c:\\Windows\\Temp\\"
-        self.output_file = f"{gen_random_string(6)}.log"
-
-        # Store the original state of options that have to be enabled/disabled in order to restore them later
-        self.backuped_options = {}
+        self.output_file = f"{gen_random_string(8)}.log"
 
     def execute(self, command, get_output, clr_assembly=None):
-        self.backup_and_enable("advanced options")
-        self.backup_and_enable("Ole Automation Procedures")
+        self.mssql.backup_and_enable("advanced options")
+        self.mssql.backup_and_enable("Ole Automation Procedures")
 
         command_query = f"""
         DECLARE @shell INT;
@@ -67,39 +65,6 @@ class OLEEXEC:
         if self.mssql_conn.lastError:
             self.logger.debug(f"Error while deleting '{self.default_output_dir}{self.output_file}': {self.mssql_conn.lastError}")
 
-        self.restore("Ole Automation Procedures")
-        self.restore("advanced options")
+        self.mssql.restore("Ole Automation Procedures")
+        self.mssql.restore("advanced options")
         return output
-
-    def restore(self, option):
-        try:
-            if not self.backuped_options[option]:
-                self.logger.debug(f"Option '{option}' was not enabled originally, attempting to disable it.")
-                query = f"EXEC master.dbo.sp_configure '{option}', 0;RECONFIGURE;"
-                self.logger.debug(f"Executing query: {query}")
-                self.mssql_conn.sql_query(query)
-            else:
-                self.logger.debug(f"Option '{option}' was originally enabled, leaving it enabled.")
-        except Exception as e:
-            self.logger.error(f"[OPSEC] Error when attempting to restore option '{option}': {e}")
-
-    def backup_and_enable(self, option):
-        try:
-            self.backuped_options[option] = self.is_option_enabled(option)
-            if not self.backuped_options[option]:
-                self.logger.debug(f"Option '{option}' is disabled, attempting to enable it.")
-                query = f"EXEC master.dbo.sp_configure '{option}', 1;RECONFIGURE;"
-                self.logger.debug(f"Executing query: {query}")
-                self.mssql_conn.sql_query(query)
-            else:
-                self.logger.debug(f"Option '{option}' is already enabled.")
-        except Exception as e:
-            self.logger.error(f"Error when checking/enabling option '{option}': {e}")
-
-    def is_option_enabled(self, option):
-        query = f"EXEC master.dbo.sp_configure '{option}';"
-        self.logger.debug(f"Checking if {option} is enabled: {query}")
-        result = self.mssql_conn.sql_query(query)
-        # Assuming the query returns a list of dictionaries with 'config_value' as the key
-        self.logger.debug(f"{option} check result: {result}")
-        return bool(result and result[0]["config_value"] == 1)

