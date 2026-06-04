@@ -2215,9 +2215,8 @@ class smb(connection):
         if self.output_file:
             self.output_file.close()
             with open(self.output_file_template.format(output_folder="dpapi")) as f:
-                count = sum(1 for _ in f)
-                if count == 0:
-                    self.logger.fail("No loot retrieved")
+                if sum(1 for _ in f) == 0:
+                    self.logger.fail("No dpapi loot retrieved")
 
     @requires_admin
     def list_snapshots(self):
