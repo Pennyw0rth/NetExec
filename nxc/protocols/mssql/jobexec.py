@@ -35,7 +35,7 @@ class JOBEXEC:
             @job_name = '{self.job_name}',
             @step_name = 'Run CMD',
             @subsystem = 'CMDEXEC',
-            @command = 'whoami /priv';
+            @command = '{command}';
 
         EXEC msdb.dbo.sp_add_jobserver
             @job_name = '{self.job_name}';
