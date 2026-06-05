@@ -15,7 +15,7 @@ from nxc.helpers.powershell import create_ps_command
 from nxc.protocols.mssql.mssqlexec import MSSQLEXEC
 from nxc.protocols.mssql.oleexec import OLEEXEC
 from nxc.protocols.mssql.clrexec import CLREXEC
-
+from nxc.protocols.mssql.jobexec import JOBEXEC
 
 from impacket import tds, ntlm
 from impacket.krb5.ccache import CCache
@@ -367,7 +367,14 @@ class mssql(connection):
                 except Exception as e:
                     self.logger.fail(f"Couldn't instantiate CLREXEC method: {e!s}")
                     continue
-
+            elif method == "jobexec":
+                try:
+                    exec_method = JOBEXEC(self)
+                    self.logger.debug("JOBEXEC execution method instantiated")
+                    break
+                except Exception as e:
+                    self.logger.fail(f"Couldn't instantiate JOBEXEC method: {e!s}")
+                    continue
         if "exec_method" in locals():
 
             # This part is hacky because we need to be able to determine whether the user used -x/-X with a command
