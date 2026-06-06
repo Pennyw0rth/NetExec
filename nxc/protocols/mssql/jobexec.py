@@ -1,3 +1,4 @@
+from re import search
 from time import sleep
 from nxc.helpers.misc import gen_random_string
 
@@ -80,6 +81,11 @@ class JOBEXEC:
         self.logger.debug(f"Running {get_output_query}")
         result_rows = self.mssql_conn.sql_query(get_output_query)
         if self.mssql_conn.lastError:
+            self.logger.fail(f"Fail running command execution: {self.mssql_conn.lastError}")
+
+        if match := search(r"\.(.*?)\.", result_rows[0]["message"]):
+            output = match.group(1).strip()
+        if self.mssql_conn.lastError:
             self.logger.fail(f"Error executing history retrieval: {self.mssql_conn.lastError}")
 
         cleanup_query = f"""
@@ -90,4 +96,4 @@ class JOBEXEC:
         if self.mssql_conn.lastError:
             self.logger.fail(f"Error cleaning up: {self.mssql_conn.lastError}")
 
-        return result_rows[0].get("message")
+        return output
