@@ -29,14 +29,14 @@ def gen_random_string(length=10):
 _HOSTNAME_SANITIZE_RE = re.compile(r"[^\w\-.]")
 
 
-def sanitize_hostname(hostname, logger=None):
+def sanitize_hostname(hostname, logger):
     """Strip characters from a server-provided hostname that could cause path
     traversal, newline injection, or format-string issues when used in file
     paths or output content.  Logs a warning when the value is modified.
     """
     sanitized = _HOSTNAME_SANITIZE_RE.sub("_", hostname)
-    if sanitized != hostname and logger:
-        logger.display(f"Hostname contained invalid characters (received: {hostname!r}), sanitized to: {sanitized!r}")
+    if sanitized != hostname:
+        logger.fail(f"Hostname contained invalid characters (received: {hostname!r}), sanitized to: {sanitized!r}")
     return sanitized
 
 
