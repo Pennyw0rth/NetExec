@@ -1,7 +1,8 @@
-from impacket.dcerpc.v5 import transport, rrp
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, DCERPCException
+from impacket.dcerpc.v5 import rrp
+from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.smbconnection import SessionError
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.rpc import NXCRPCConnection
 from impacket.nmb import NetBIOSError
 
 
@@ -55,19 +56,9 @@ class NXCModule:
     def on_login(self, context, connection):
         connection.trigger_winreg()
 
-        # Connect to RemoteRegistry to read UBR from registry
-        rpc = transport.DCERPCTransportFactory(r"ncacn_np:445[\pipe\winreg]")
-        rpc.set_smb_connection(connection.conn)
-        if connection.kerberos:
-            rpc.set_kerberos(connection.kerberos, kdcHost=connection.kdcHost)
-        dce = rpc.get_dce_rpc()
-        if connection.kerberos:
-            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-
-        # Query the UBR
         try:
-            dce.connect()
-            dce.bind(rrp.MSRPC_UUID_RRP)
+            # Connect to RemoteRegistry to read UBR from registry
+            dce = NXCRPCConnection(connection).connect(r"\winreg", rrp.MSRPC_UUID_RRP)
             # Reading UBR from registry
             hRootKey = rrp.hOpenLocalMachine(dce)["phKey"]
             hKey = rrp.hBaseRegOpenKey(dce, hRootKey, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion")["phkResult"]
@@ -113,10 +104,6 @@ class NXCModule:
         "CVE-2025-33073": {
             "alias": "NTLM reflection",
             "patches": {
-                (6, 0, 6003): 23351,      # Windows Server 2008 SP2
-                (6, 1, 7601): 27769,      # Windows Server 2008 R2 SP1
-                (6, 2, 9200): 25522,      # Windows Server 2012
-                (6, 3, 9600): 22620,      # Windows Server 2012 R2
                 (10, 0, 10240): 21034,    # Windows 10 1507
                 (10, 0, 14393): 8148,     # Windows Server 2016 / Win10 1607
                 (10, 0, 17763): 7434,     # Windows Server 2019 / Win10 1809
