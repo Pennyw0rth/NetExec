@@ -96,6 +96,7 @@ class mssql(connection):
             # If the MSSQL Server responds with a TDS_ENCRYPT_REQ or TDS_ENCRYPT_OFF then we need to setup a TLS context
             resp = self.conn.preLogin()
             self.encryption = False
+
             if resp["Encryption"] == TDS_ENCRYPT_REQ or resp["Encryption"] == TDS_ENCRYPT_OFF:
                 # We switch to a TLS context handled by tds.py
                 self.conn.set_tls_context()
@@ -164,7 +165,13 @@ class mssql(connection):
     def print_host_info(self):
         encryption = colored(f"EncryptionReq:{self.encryption}", host_info_colors[0 if self.encryption else 1], attrs=["bold"])
         ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption}) {ntlm}")
+
+        edition, version = (
+            str(self.conn.mssql_version).split("Server ")[1].split(" (")[0],
+            str(self.conn.mssql_version).rsplit("(", 1)[1].rstrip(")")
+        )
+
+        self.logger.display(f"{self.server_os} ({edition} {version}) (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption}) {ntlm}")
 
     @reconnect_mssql
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
