@@ -10,7 +10,7 @@ class MSSQLEXEC:
         self.backuped_options = {}
 
     def execute(self, command):
-        result = None
+        result = ""
 
         self.backup_and_enable("advanced options")
         self.backup_and_enable("xp_cmdshell")
@@ -18,10 +18,10 @@ class MSSQLEXEC:
         try:
             cmd = f"exec master..xp_cmdshell '{command}'"
             self.logger.debug(f"Attempting to execute query: {cmd}")
-            result = self.mssql_conn.sql_query(cmd)
-            self.logger.debug(f"Raw results from query: {result}")
-            if result:
-                result = "\n".join(line["output"] for line in result if line["output"] != "NULL")
+            raw = self.mssql_conn.sql_query(cmd)
+            self.logger.debug(f"Raw results from query: {raw}")
+            if raw:
+                result = "\n".join(line["output"] for line in raw if line["output"] != "NULL")
                 self.logger.debug(f"Concatenated result together for easier parsing: {result}")
                 # if you prepend SilentlyContinue it will still output the error, but it will still continue on (so it's not silent...)
                 if "Preparing modules for first use" in result and "Completed" not in result:

@@ -84,7 +84,7 @@ class nfs(connection):
             "gid": 0,
             "aux_gid": [],
         }
-        self.root_escape = False
+        self.root_escape = None
         # If root escape is possible, the escape_share and escape_fh will be populated
         self.escape_share = None
         self.escape_fh = b""
@@ -130,15 +130,22 @@ class nfs(connection):
                 if program["program"] == NFS_PROGRAM:
                     self.nfs_versions.add(program["version"])
         except Exception as e:
-            self.logger.debug(f"Error checking NFS version: {self.host} {e}")
+            self.logger.fail(f"Error checking NFS version: {self.host} {e}")
 
         # Connect to NFS
-        nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
-        self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
-        self.nfs3.connect()
-        # Check if root escape is possible
-        self.root_escape = self.try_root_escape()
-        self.nfs3.disconnect()
+        try:
+            nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
+            if nfs_port:
+                self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
+                self.nfs3.connect()
+                # Check if root escape is possible
+                if NFS_V3 in self.nfs_versions:
+                    self.root_escape = self.try_root_escape()
+                else:
+                    self.logger.debug("NFSv3 not supported, skipping root escape check")
+                self.nfs3.disconnect()
+        except Exception as e:
+            self.logger.fail(f"Failed to connect to NFS3 host: {e}")
 
     def print_host_info(self):
         root_escape_str = colored(f"root escape:{self.root_escape}", host_info_colors[1 if self.root_escape else 0], attrs=["bold"])
@@ -366,7 +373,7 @@ class nfs(connection):
             curr_fh = mount_fh
             for sub_path in remote_file_path.lstrip("/").split("/"):
                 # Update the UID for the next object and get the handle
-                self.update_auth(mount_fh)
+                self.update_auth(curr_fh)
                 res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
 
                 # Check for a bad path
@@ -448,7 +455,7 @@ class nfs(connection):
             curr_fh = mount_fh
             # If target dir is "" or "/" without filter we would get one item with [""]
             for sub_path in list(filter(None, remote_dir_path.lstrip("/").split("/"))):
-                self.update_auth(mount_fh)
+                self.update_auth(curr_fh)
                 res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
 
                 # If the path does not exist, create it
@@ -522,6 +529,62 @@ class nfs(connection):
             self.logger.fail(f"Error writing file to share {remote_file_path}: {e}")
         else:
             self.logger.highlight(f"File {local_file_path} successfully uploaded to {remote_file_path}")
+
+    def chmod(self):
+        try:
+            # Connect to NFS
+            nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
+            self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
+            self.nfs3.connect()
+
+            # Mount the NFS share or get the root handle
+            if self.root_escape and not self.args.share:
+                mount_fh = self.escape_fh
+            elif not self.args.share:
+                self.logger.fail("No root escape possible, please specify a share")
+                return
+            else:
+                mnt_info = self.mount.mnt(self.args.share, self.auth)
+                if mnt_info["status"] != 0:
+                    self.logger.fail(f"Error mounting share {self.args.share}: {NFSSTAT3[mnt_info['status']]}")
+                    return
+                mount_fh = mnt_info["mountinfo"]["fhandle"]
+
+            # Iterate over the path
+            curr_fh = mount_fh
+            privs = int(self.args.chmod[0], 8)
+            filepath = self.args.chmod[1]
+            file_path, file_name = os.path.split(filepath)
+
+            # If target dir is "" or "/" without filter we would get one item with [""]
+            for sub_path in list(filter(None, file_path.lstrip("/").split("/"))):
+                self.update_auth(curr_fh)
+                res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
+
+                # If the path does not exist, create it
+                if "resfail" in res and res["status"] == NFS3ERR_NOENT:
+                    self.logger.fail(f"Directory '{sub_path}' does not exist on path '{file_path}/'")
+
+                curr_fh = res["resok"]["object"]["data"]
+
+            # Update the UID and GID from the directory
+            self.update_auth(curr_fh)
+
+            # Checking if file_name already exists on remote file path
+            lookup_response = self.nfs3.lookup(curr_fh, file_name, auth=self.auth)
+
+            if "resfail" in lookup_response and lookup_response["status"] == NFS3ERR_NOENT:
+                self.logger.fail(f"File '{file_name}' does not exist on path '{file_path}/'")
+                return
+
+            current_privs = self.nfs3.getattr(lookup_response["resok"]["object"]["data"], auth=self.auth)["attributes"]["mode"]
+            res = self.nfs3.setattr(lookup_response["resok"]["object"]["data"], mode=privs, auth=self.auth)
+            if "resfail" in res:
+                self.logger.fail(f"Failed to change permissions for '{filepath}': {NFSSTAT3[res['status']]}")
+            else:
+                self.logger.success(f"Permissions for '{filepath}' successfully changed from {format(current_privs, 'o')} to {format(privs, 'o')}")
+        except Exception as e:
+            self.logger.fail(f"Error occurred while processing path: {e}")
 
     def get_root_handles(self, mount_fh):
         """
@@ -645,19 +708,21 @@ class nfs(connection):
             self.logger.fail("No root escape possible, please specify a share")
             return
 
-        # Update UID and GID for the share
-        self.update_auth(mount_fh)
-
         # We got a path to look up
         curr_fh = mount_fh
         is_file = False     # If the last path is a file
 
         # If ls is "" or "/" without filter we would get one item with [""]
         for sub_path in list(filter(None, self.args.ls.split("/"))):
+            # Update UID and GID for the path
+            self.update_auth(curr_fh)
             res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
 
             if "resfail" in res and res["status"] == NFS3ERR_NOENT:
                 self.logger.fail(f"Unknown path: {self.args.ls!r}")
+                return
+            elif "resfail" in res:
+                self.logger.fail(f"Error on looking up path '{sub_path}': {NFSSTAT3[res['status']]}")
                 return
             # If file then break and only display file
             if res["resok"]["obj_attributes"]["attributes"]["type"] == NF3REG:
@@ -722,7 +787,10 @@ class nfs(connection):
                 read_perm, write_perm, exec_perm = self.get_permissions(item["name_handle"]["handle"]["data"])
                 perms = f"{is_dir}{'r' if read_perm else '-'}{'w' if write_perm else '-'}{'x' if exec_perm else '-'}"
                 file_size = convert_size(item["name_attributes"]["attributes"]["size"])
-            self.logger.highlight(f"{uid:<11}{perms:<7}{file_size:<14}{path.rstrip('/') + '/' + item['name'].decode()}")
+            try:
+                self.logger.highlight(f"{uid:<11}{perms:<7}{file_size:<14}{path.rstrip('/') + '/' + item['name'].decode()}")
+            except UnicodeDecodeError:
+                self.logger.highlight(f"{uid:<11}{perms:<7}{file_size:<14}{path.rstrip('/') + '/' + item['name'].decode('CP437')}")
 
     def format_directory(self, raw_directory):
         """Convert the chained directory entries to a list of the entries"""

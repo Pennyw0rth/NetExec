@@ -1,38 +1,31 @@
 import os
 import random
+from datetime import datetime, timedelta
 from textwrap import dedent
-from impacket.dcerpc.v5 import tsch, transport
+from time import sleep
+
+from impacket.dcerpc.v5 import tsch
 from impacket.dcerpc.v5.dtypes import NULL
+
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 from impacket.smb3structs import SMB2_DIALECT_311
 
 from nxc.helpers.misc import gen_random_string
-from time import sleep
-from datetime import datetime, timedelta
+from nxc.helpers.rpc import NXCRPCConnection
 
 
 class TSCH_EXEC:
-    def __init__(self, target, share_name, username, password, domain, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None,
+    def __init__(self, connection, logger=None, tries=None, share=None,
                  # These options are used by the schtask_as module, except the run_task_as
                  # that defaults to NT AUTHORITY\System user (SID S-1-5-18) if not specified
                  run_task_as="S-1-5-18", run_cmd=None, output_filename=None, task_name=None, output_file_location=None):
-        self.__target = target
-        self.__username = username
-        self.__password = password
-        self.__domain = domain
-        self.__share_name = share_name
-        self.__lmhash = ""
-        self.__nthash = ""
+        self.__connection = connection
+        self.logger = logger
+        self.__tries = tries
+        self.__share = share
         self.__outputBuffer = b""
         self.__retOutput = False
-        self.__aesKey = aesKey
-        self.__doKerberos = doKerberos
-        self.__remoteHost = remoteHost
-        self.__kdcHost = kdcHost
-        self.__tries = tries
         self.__output_filename = None
-        self.__share = share
-        self.logger = logger
 
         # Optional args for finetuning the task execution, e.g. used in nxc/modules/schtask_as.py
         self.task_name = task_name if task_name else gen_random_string(8)
@@ -40,34 +33,6 @@ class TSCH_EXEC:
         self.run_cmd = run_cmd
         self.output_filename = output_filename
         self.output_file_location = output_file_location
-
-        if hashes is not None:
-            # This checks to see if we didn't provide the LM Hash
-            if hashes.find(":") != -1:
-                self.__lmhash, self.__nthash = hashes.split(":")
-            else:
-                self.__nthash = hashes
-
-        if self.__password is None:
-            self.__password = ""
-
-        stringbinding = rf"ncacn_np:{self.__target}[\pipe\atsvc]"
-        self.__rpctransport = transport.DCERPCTransportFactory(stringbinding)
-        self.__rpctransport.setRemoteHost(self.__remoteHost)
-
-        if hasattr(self.__rpctransport, "set_credentials"):
-            # This method exists only for selected protocol sequences.
-            self.__rpctransport.set_credentials(
-                self.__username,
-                self.__password,
-                self.__domain,
-                self.__lmhash,
-                self.__nthash,
-                self.__aesKey,
-            )
-            self.__rpctransport.set_kerberos(self.__doKerberos, self.__kdcHost)
-            self.__rpctransport.preferred_dialect(SMB2_DIALECT_311)
-
 
     def execute(self, command, output=False):
         self.__retOutput = output
@@ -176,20 +141,12 @@ class TSCH_EXEC:
         return dedent(xml)
 
     def execute_handler(self, command):
-        dce = self.__rpctransport.get_dce_rpc()
-        if self.__doKerberos:
-            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-
-        dce.set_credentials(*self.__rpctransport.get_credentials())
-        dce.connect()
+        dce = NXCRPCConnection(self.__connection).connect(r"\atsvc", tsch.MSRPC_UUID_TSCHS, auth_level=RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
 
         xml = self.gen_xml(command)
         self.logger.debug(f"Task XML: {xml}")
         self.logger.info(f"Creating task \\{self.task_name}")
         try:
-            # Windows server 2003 has no MSRPC_UUID_TSCHS, if it bind, it will return abstract_syntax_not_supported
-            dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
-            dce.bind(tsch.MSRPC_UUID_TSCHS)
             tsch.hSchRpcRegisterTask(dce, f"\\{self.task_name}", xml, tsch.TASK_CREATE, NULL, tsch.TASK_LOGON_NONE)
         except Exception as e:
             if e.error_code and hex(e.error_code) == "0x80070005":
@@ -216,14 +173,13 @@ class TSCH_EXEC:
         tsch.hSchRpcDelete(dce, f"\\{self.task_name}")
 
         if self.__retOutput:
-            smbConnection = self.__rpctransport.get_smb_connection()
             tries = 1
             # Give the command a bit of time to execute before we try to read the output, 0.4 seconds was good in testing
             sleep(0.4)
             while True:
                 try:
                     self.logger.info(f"Attempting to read {self.__share}\\{self.__output_filename}")
-                    smbConnection.getFile(self.__share, self.__output_filename, self.output_callback)
+                    self.__connection.conn.getFile(self.__share, self.__output_filename, self.output_callback)
                     break
                 except Exception as e:
                     if tries >= self.__tries:
@@ -251,7 +207,7 @@ class TSCH_EXEC:
                         sleep(1)
             try:
                 self.logger.debug(f"Deleting file {self.__share}\\{self.__output_filename}")
-                smbConnection.deleteFile(self.__share, self.__output_filename)
+                self.__connection.conn.deleteFile(self.__share, self.__output_filename)
             except Exception:
                 pass
 

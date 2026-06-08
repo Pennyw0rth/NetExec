@@ -6,7 +6,7 @@ def proto_args(parser, parents):
     ftp_parser.add_argument("--port", type=int, default=21, help="FTP port")
 
     cgroup = ftp_parser.add_argument_group("File Operations")
-    cgroup.add_argument("--ls", metavar="DIRECTORY", nargs="?", const=".", help="List files in the directory")
+    cgroup.add_argument("--ls", metavar="DIRECTORY", nargs="?", const=".", help="List all files (including hidden) in the directory")
     cgroup.add_argument("--get", metavar="FILE", help="Download a file")
     cgroup.add_argument("--put", metavar=("LOCAL_FILE", "REMOTE_FILE"), nargs=2, help="Upload a file")
     return parser
