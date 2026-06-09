@@ -41,6 +41,7 @@ from impacket.ntlm import getNTLMSSPType1
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.pfx import pfx_to_pem_files
 from nxc.helpers.misc import get_bloodhound_info, convert, d2b, parse_argument
 from nxc.logger import NXCAdapter
 from nxc.protocols.ldap.bloodhound import BloodHound, resolve_collection_methods
@@ -434,6 +435,48 @@ class ldap(connection):
                 )
                 return False
 
+    def schannel_login(self):
+        cert_file, key_file = pfx_to_pem_files(self)
+        if not cert_file:
+            return False
+
+        self.username = self.args.username[0]
+        try:
+            # Schannel needs TLS: over LDAPS the certificate is sent during the handshake, over LDAP it is sent during StartTLS
+            self.logger.extra["protocol"] = "LDAPS" if self.port == 636 else "LDAP"
+            self.logger.extra["port"] = "636" if self.port == 636 else "389"
+            proto = "ldaps" if self.port == 636 else "ldap"
+            ldap_url = f"{proto}://{self.target}"
+            self.logger.info(f"Connecting to {ldap_url} using Schannel")
+            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, certfile=cert_file, keyfile=key_file)
+            self.ldap_connection.login(authenticationChoice="external")
+
+            mapped_user = self.get_ldap_username()
+            if mapped_user:
+                self.username = mapped_user
+
+            self.check_if_admin()
+            self.logger.debug(f"Adding credential: {self.domain}/{self.username} from pfx")
+            self.db.add_credential("certificate", self.domain, self.username, "")
+
+            self.logger.success(f"{self.domain}\\{self.username} from pfx {self.mark_pwned()}")
+
+            if self.username != "":
+                add_user_bh(self.username, self.domain, self.logger, self.config)
+            if self.admin_privs:
+                add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
+            return True
+        except ldap_impacket.LDAPSessionError as e:
+            self.logger.fail(f"{self.domain}\\{self.username} {e!s}", color="red")
+            return False
+        except OSError as e:
+            self.logger.fail(f"{self.domain}\\{self.username} Error connecting to the domain, are you sure the LDAP service is running on the target? \nError: {e}")
+            return False
+        finally:
+            for tmp_file in (cert_file, key_file):
+                if tmp_file and os.path.exists(tmp_file):
+                    os.remove(tmp_file)
+
     def plaintext_login(self, domain, username, password):
         self.username = username
         self.password = password
@@ -618,7 +661,7 @@ class ldap(connection):
         resp = self.search(search_filter, attributes, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
 
-        if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "" or self.use_kcache) and self.username != "":
+        if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "" or self.use_kcache or self.args.schannel) and self.username != "":
             for item in resp_parsed:
                 self.sid_domain = "-".join(item["objectSid"].split("-")[:-1])
 
