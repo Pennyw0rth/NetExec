@@ -1,0 +1,5 @@
+# Supply-chain hardening: Poetry will ignore package versions whose distribution
+# files were uploaded within the last day, giving maintainers and scanners time
+# to detect and remove malicious or compromised releases before resolution.
+[solver]
+min-release-age = 1

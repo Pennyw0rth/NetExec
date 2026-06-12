@@ -47,7 +47,7 @@ dependencies = [
     # Git Dependencies
     "certipy-ad @ git+https://github.com/Pennyw0rth/Certipy",
     "impacket @ git+https://github.com/Pennyw0rth/impacket",
-    "oscrypto @ git+https://github.com/wbond/oscrypto",
+    "oscrypto @ git+https://github.com/wbond/oscrypto@1547f535001ba568b239b8797465536759c742a3",
     "pynfsclient @ git+https://github.com/Pennyw0rth/NfsClient",
 ]
 
@@ -88,6 +88,12 @@ flake8 = "*"
 shiv = "*"
 pytest = "^7.2.2"
 ruff = "*"
+
+# Supply-chain hardening: uv will ignore package artifacts uploaded to indexes
+# within the last day, giving maintainers and scanners time to detect and remove
+# malicious or compromised releases before they are selected during resolution.
+[tool.uv]
+exclude-newer = "1 day"
 
 [tool.ruff]
 target-version = "py310"
