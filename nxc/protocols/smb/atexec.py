@@ -155,10 +155,12 @@ class TSCH_EXEC:
                 self.logger.fail(str(e))
             return
 
-        try:
-            tsch.hSchRpcRun(dce, f"\\{self.task_name}")
-        except tsch.DCERPCSessionError as e:
-            self.logger.debug(f"hSchRpcRun returned: {e}")
+        # Win2025+ (build 26100): RegistrationTrigger does not start the task over remote TSCH.
+        if self.__connection.server_os_build and int(self.__connection.server_os_build) >= 26100:
+            try:
+                tsch.hSchRpcRun(dce, f"\\{self.task_name}")
+            except tsch.DCERPCSessionError as e:
+                self.logger.debug(f"hSchRpcRun returned: {e}")
 
         done = False
         while not done:
