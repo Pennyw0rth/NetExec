@@ -1,8 +1,9 @@
-import ssl
-import ldap3
 import re
 from io import BytesIO
+from impacket.ldap import ldap as ldap_impacket
+from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from nxc.helpers.misc import CATEGORY
+from nxc.parsers.ldap_results import parse_result_attributes
 
 
 class NXCModule:
@@ -138,7 +139,7 @@ class NXCModule:
                     context.log.highlight(f"{privilege}: {', '.join(resolved_sids)}")
 
                 if ldap_connection:
-                    ldap_connection.unbind()
+                    ldap_connection.close()
 
     def extract_privileges(self, content):
         """Parses the content of GptTmpl.inf to extract privilege rights."""
@@ -161,99 +162,90 @@ class NXCModule:
 
     def initialize_ldap_connection(self, context, connection):
         """
-        Initializes an LDAP connection using LDAP3 with LDAPS first, then falls back to plaintext LDAP if LDAPS fails.
+        Initializes an LDAP connection using impacket with LDAPS first, then falls back to plaintext LDAP if LDAPS fails.
         Attempts to retrieve the base DN from the Root DSE or derive it from the domain name.
         """
-        tls = ldap3.Tls(validate=ssl.CERT_NONE, version=ssl.PROTOCOL_TLSv1_2, ciphers="ALL:@SECLEVEL=0")
-        base_dn = None
-
-        try:
-            ldap_server = ldap3.Server(connection.host, use_ssl=True, port=636, tls=tls, get_info=ldap3.ALL)
-            ldap_connection = ldap3.Connection(
-                ldap_server,
-                user=f"{connection.domain}\\{connection.username}",
-                password=connection.password,
-                authentication=ldap3.NTLM,
-                raise_exceptions=True,
-            )
-            ldap_connection.bind()
-            context.log.success("Connected to LDAP over SSL (LDAPS).")
-
+        ldap_connection = None
+        for proto in ("ldaps", "ldap"):
             try:
-                base_dn = ldap_server.info.other.get("defaultNamingContext", [None])[0]
+                ldap_connection = ldap_impacket.LDAPConnection(url=f"{proto}://{connection.remoteName}", dstIp=connection.host)
+                if connection.kerberos:
+                    ldap_connection.kerberosLogin(
+                        connection.username,
+                        connection.password or "",
+                        connection.domain,
+                        connection.lmhash,
+                        connection.nthash,
+                        connection.aesKey or "",
+                        kdcHost=connection.kdcHost,
+                        useCache=bool(connection.use_kcache),
+                    )
+                else:
+                    ldap_connection.login(
+                        user=connection.username,
+                        password=connection.password or "",
+                        domain=connection.domain,
+                        lmhash=connection.lmhash,
+                        nthash=connection.nthash,
+                    )
+                context.log.success(f"Connected to LDAP ({proto}).")
+                break
             except Exception as e:
-                context.log.warning(f"Failed to query Root DSE for defaultNamingContext over plaintext LDAP: {e}")
+                context.log.warning(f"{proto.upper()} connection failed: {e}")
+                ldap_connection = None
 
-            if not base_dn:
-                domain_parts = connection.domain.split(".")
-                base_dn = ",".join([f"dc={part}" for part in domain_parts])
-                context.log.info(f"Derived base DN: {base_dn}")
+        if not ldap_connection:
+            context.log.error("Failed to connect to LDAP.")
+            return None
 
-            ldap_connection.base_dn = base_dn
-            return ldap_connection
+        ldap_connection._baseDN = self.get_base_dn(context, ldap_connection, connection.domain)
+        return ldap_connection
 
-        except Exception as ldaps_error:
-            context.log.warning(f"LDAPS connection failed: {ldaps_error}")
-            context.log.info("Falling back to plain LDAP...")
-
+    def get_base_dn(self, context, ldap_connection, domain):
+        """Retrieves the base DN from the Root DSE, falling back to deriving it from the domain name."""
         try:
-            ldap_server = ldap3.Server(connection.host, use_ssl=False, port=389, get_info=ldap3.ALL)
-            ldap_connection = ldap3.Connection(
-                ldap_server,
-                user=f"{connection.domain}\\{connection.username}",
-                password=connection.password,
-                authentication=ldap3.NTLM,
-                raise_exceptions=True,
+            resp = ldap_connection.search(
+                searchBase="",
+                scope=ldapasn1_impacket.Scope("baseObject"),
+                searchFilter="(objectClass=*)",
+                attributes=["defaultNamingContext"],
             )
-            ldap_connection.bind()
-            context.log.info("Connected to LDAP successfully (plaintext).")
+            base_dn = parse_result_attributes(resp)[0]["defaultNamingContext"]
+            if base_dn:
+                return base_dn
+        except Exception as e:
+            context.log.warning(f"Failed to query Root DSE for defaultNamingContext: {e}")
 
-            try:
-                base_dn = ldap_server.info.other.get("defaultNamingContext", [None])[0]
-            except Exception as e:
-                context.log.warning(f"Failed to query Root DSE for defaultNamingContext over plaintext LDAP: {e}")
-
-            if not base_dn:
-                domain_parts = connection.domain.split(".")
-                base_dn = ",".join([f"dc={part}" for part in domain_parts])
-                context.log.info(f"Derived base DN: {base_dn}")
-
-            ldap_connection.base_dn = base_dn
-            return ldap_connection
-
-        except Exception as ldap_error:
-            context.log.error(f"Failed to connect to LDAP: {ldap_error}")
-
-        return None
+        base_dn = ",".join([f"dc={part}" for part in domain.split(".")])
+        context.log.info(f"Derived base DN: {base_dn}")
+        return base_dn
 
     def resolve_sid(self, context, sid, ldap_connection):
         """Resolves a SID to a human-readable name using well-known mappings or LDAP queries."""
         if sid in self.WELL_KNOWN_SIDS:
             return self.WELL_KNOWN_SIDS[sid]
 
-        if ldap_connection and ldap_connection.bound:
+        if ldap_connection:
             try:
-                base_dn = getattr(ldap_connection, "base_dn", None)
-                if not base_dn:
+                if not ldap_connection._baseDN:
                     context.log.warning(f"No base DN found for LDAP connection. Cannot resolve SID {sid}.")
                     return sid
 
-                search_filter = f"(objectSid={ldap3.utils.conv.escape_filter_chars(sid)})"
-                ldap_connection.search(
-                    search_base=base_dn,
-                    search_filter=search_filter,
+                resp = ldap_connection.search(
+                    searchBase=ldap_connection._baseDN,
+                    searchFilter=f"(objectSid={sid})",
                     attributes=["sAMAccountName"],
                 )
+                parsed_result = parse_result_attributes(resp)
 
-                if ldap_connection.entries:
-                    entry = ldap_connection.entries[0]
-                    return f"{entry['sAMAccountName']}"
+                if parsed_result and "sAMAccountName" in parsed_result[0]:
+                    return f"{parsed_result[0]['sAMAccountName']}"
                 else:
                     context.log.warning(f"SID {sid} not found in LDAP. Returning raw SID.")
 
             except Exception as e:
                 context.log.error(f"Failed to resolve SID {sid} via LDAP: {e}")
         else:
-            context.log.warning(f"LDAP connection not established or unbound. Returning raw SID: {sid}")
+            context.log.warning(f"LDAP connection not established. Returning raw SID: {sid}")
 
         return sid
