@@ -3,15 +3,29 @@ import json
 import datetime
 from enum import Enum
 from impacket.ldap import ldaptypes
+from impacket.ldap.ldapasn1 import SDFlagsControl
 from impacket.uuid import bin_to_string
 from nxc.helpers.misc import CATEGORY
 from nxc.helpers.msada_guids import SCHEMA_OBJECTS, EXTENDED_RIGHTS
 from nxc.parsers.ldap_results import parse_result_attributes
-from ldap3.utils.conv import escape_filter_chars
-from ldap3.protocol.microsoft import security_descriptor_control
 import sys
 import traceback
 from os.path import isfile
+
+
+def escape_filter_chars(text, encoding="utf-8"):
+    """Escape special characters in an LDAP search filter assertion value (RFC 4515)."""
+    if isinstance(text, (bytes, bytearray)):
+        try:
+            text = text.decode(encoding)
+        except Exception:
+            return "".join(f"\\{b:02x}" for b in text)
+    escaped = text.replace("\\", "\\5c")
+    escaped = escaped.replace("*", "\\2a")
+    escaped = escaped.replace("(", "\\28")
+    escaped = escaped.replace(")", "\\29")
+    return escaped.replace("\x00", "\\00")
+
 
 OBJECT_TYPES_GUID = {}
 OBJECT_TYPES_GUID.update(SCHEMA_OBJECTS)
@@ -306,7 +320,7 @@ class NXCModule:
                 resp = connection.search(
                     searchFilter=search_filter(target),
                     attributes=["distinguishedName", "nTSecurityDescriptor"],
-                    searchControls=security_descriptor_control(sdflags=0x04),
+                    searchControls=[SDFlagsControl(criticality=False, flags=0x04)],
                 )
                 resp_parsed = parse_result_attributes(resp)[0]
 
