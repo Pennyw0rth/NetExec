@@ -572,7 +572,7 @@ class connection:
                     self.logger.fail("Schannel authentication is only supported for the LDAP protocol")
                     return False
                 with sem:
-                    return self.schannel_login()
+                    return self.plaintext_login(self.domain, self.args.username[0], "")
             with sem:
                 return pfx_auth(self)
 

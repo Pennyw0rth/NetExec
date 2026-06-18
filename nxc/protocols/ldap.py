@@ -435,48 +435,6 @@ class ldap(connection):
                 )
                 return False
 
-    def schannel_login(self):
-        cert_file, key_file = pfx_to_pem_files(self)
-        if not cert_file:
-            return False
-
-        self.username = self.args.username[0]
-        try:
-            # Schannel needs TLS: over LDAPS the certificate is sent during the handshake, over LDAP it is sent during StartTLS
-            self.logger.extra["protocol"] = "LDAPS" if self.port == 636 else "LDAP"
-            self.logger.extra["port"] = "636" if self.port == 636 else "389"
-            proto = "ldaps" if self.port == 636 else "ldap"
-            ldap_url = f"{proto}://{self.target}"
-            self.logger.info(f"Connecting to {ldap_url} using Schannel")
-            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, certfile=cert_file, keyfile=key_file)
-            self.ldap_connection.login(authenticationChoice="external")
-
-            mapped_user = self.get_ldap_username()
-            if mapped_user:
-                self.username = mapped_user
-
-            self.check_if_admin()
-            self.logger.debug(f"Adding credential: {self.domain}/{self.username} from pfx")
-            self.db.add_credential("certificate", self.domain, self.username, "")
-
-            self.logger.success(f"{self.domain}\\{self.username} from pfx {self.mark_pwned()}")
-
-            if self.username != "":
-                add_user_bh(self.username, self.domain, self.logger, self.config)
-            if self.admin_privs:
-                add_user_bh(f"{self.hostname}$", self.domain, self.logger, self.config)
-            return True
-        except ldap_impacket.LDAPSessionError as e:
-            self.logger.fail(f"{self.domain}\\{self.username} {e!s}", color="red")
-            return False
-        except OSError as e:
-            self.logger.fail(f"{self.domain}\\{self.username} Error connecting to the domain, are you sure the LDAP service is running on the target? \nError: {e}")
-            return False
-        finally:
-            for tmp_file in (cert_file, key_file):
-                if tmp_file and os.path.exists(tmp_file):
-                    os.remove(tmp_file)
-
     def plaintext_login(self, domain, username, password):
         self.username = username
         self.password = password
@@ -490,21 +448,43 @@ class ldap(connection):
                     hash_asreproast.write(f"{hash_tgt}\n")
             return False
 
+        cert_file = key_file = None
+        if self.args.schannel:
+            cert_file, key_file = pfx_to_pem_files(self)
+            if not cert_file:
+                return False
+
         try:
             # Connect to LDAP
             self.logger.extra["protocol"] = "LDAPS" if self.port == 636 else "LDAP"
             self.logger.extra["port"] = "636" if self.port == 636 else "389"
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.target}"
-            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3]")
-            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=self.auth_choice != "simple")
-            self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=self.auth_choice)
-            self.check_if_admin()
-            self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
-            self.db.add_credential("plaintext", domain, self.username, self.password)
+            if self.args.schannel:
+                # Schannel needs TLS: over LDAPS the certificate is sent during the handshake, over LDAP it is sent during StartTLS
+                self.logger.info(f"Connecting to {ldap_url} using Schannel")
+                self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, certfile=cert_file, keyfile=key_file)
+                self.ldap_connection.login(authenticationChoice="external")
 
-            # Prepare success credential text
-            self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
+                mapped_user = self.get_ldap_username()
+                if mapped_user:
+                    self.username = mapped_user
+            else:
+                self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3]")
+                self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=self.auth_choice != "simple")
+                self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=self.auth_choice)
+
+            self.check_if_admin()
+
+            if self.args.schannel:
+                self.logger.debug(f"Adding credential: {self.domain}/{self.username} from certificate")
+                self.db.add_credential("certificate", self.domain, self.username, "")
+                self.logger.success(f"{self.domain}\\{self.username} from certificate {self.mark_pwned()}")
+            else:
+                self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
+                self.db.add_credential("plaintext", domain, self.username, self.password)
+                # Prepare success credential text
+                self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
 
             if self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
@@ -556,6 +536,10 @@ class ldap(connection):
         except OSError as e:
             self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {'Error connecting to the domain, are you sure LDAP service is running on the target?'} \nError: {e}")
             return False
+        finally:
+            for tmp_file in (cert_file, key_file):
+                if tmp_file and os.path.exists(tmp_file):
+                    os.remove(tmp_file)
 
     def hash_login(self, domain, username, ntlm_hash):
         self.logger.extra["protocol"] = "LDAP"
