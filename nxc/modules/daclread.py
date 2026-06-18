@@ -214,7 +214,7 @@ class NXCModule:
 
     This module is essentially inspired from the dacledit.py script of Impacket that we have coauthored, @_nwodtuhs and me.
     It has been converted to an LDAPConnection session, and improvements on the filtering and the ability to specify multiple targets have been added.
-    It could be interesting to implement the write/remove functions here, but a ldap3 session instead of a LDAPConnection one is required to write.
+    It could be interesting to implement the write/remove functions here.
     """
 
     name = "daclread"
