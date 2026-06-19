@@ -10,6 +10,7 @@ def proto_args(parser, parents):
     smb_parser.add_argument("--spn", action="store", help="SPN to use for the Service Ticket. With --delegate it's the SPN used for S4U2Proxy (defaults to cifs/<target>).", type=str)
     smb_parser.add_argument("--generate-st", type=str, dest="generate_st", help="Store a Service Ticket in the specified file. Use with --delegate to save the S4U ST, or without --delegate (together with --spn) to request a regular ST for the given SPN")
     self_delegate_arg = smb_parser.add_argument("--self", dest="no_s4u2proxy", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Only do S4U2Self, no S4U2Proxy (use with delegate)")
+    u2u_arg = smb_parser.add_argument("--u2u", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Use User-to-User (U2U) authentication with S4U2Self")
 
     dgroup = smb_parser.add_mutually_exclusive_group()
     dgroup.add_argument("-d", "--domain", metavar="DOMAIN", dest="domain", type=str, help="domain to authenticate to")
@@ -27,6 +28,7 @@ def proto_args(parser, parents):
     smb_parser.add_argument("--generate-krb5-file", type=str, help="Generate a krb5 file like from a range of IP")
     smb_parser.add_argument("--generate-tgt", type=str, help="Generate a tgt ticket")
     self_delegate_arg.make_required = [delegate_arg]
+    u2u_arg.make_required = [delegate_arg]
 
     cred_gathering_group = smb_parser.add_argument_group("Credential Gathering")
     cred_gathering_group.add_argument("--sam", choices={"regdump", "secdump"}, nargs="?", const="regdump", help="dump SAM hashes from target systems")
@@ -47,11 +49,12 @@ def proto_args(parser, parents):
     cred_gathering_group.add_argument("--list-snapshots", nargs="?", dest="list_snapshots", const="ADMIN$", help="Lists the VSS snapshots (default: %(const)s)")
 
     mapping_enum_group = smb_parser.add_argument_group("Mapping/Enumeration")
-    mapping_enum_group.add_argument("--shares", type=str, nargs="?", const="", help="Enumerate shares and access, filter on specified argument (read ; write ; read,write)")
+    shares_arg = mapping_enum_group.add_argument("--shares", type=str, nargs="?", const="", help="Enumerate shares and access, filter on specified argument (read ; write ; read,write)")
     mapping_enum_group.add_argument("--exclude-shares", nargs="+", help="List of shares to exclude from enumeration (e.g., C$ Admin$ IPC$)")
     mapping_enum_group.add_argument("--dir", nargs="?", type=str, const="", help="List the content of a path (default path: '%(const)s')")
     mapping_enum_group.add_argument("--interfaces", action="store_true", help="Enumerate network interfaces")
-    mapping_enum_group.add_argument("--no-write-check", action="store_true", help="Skip write check on shares (avoid leaving traces when missing delete permissions)")
+    file_write_check_arg = mapping_enum_group.add_argument("--file-write-check", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Use file creation to check WRITE access on shares (default: ACL-based check, no disk writes)")
+    file_write_check_arg.make_required = [shares_arg]
     mapping_enum_group.add_argument("--filter-shares", nargs="+", help="Filter share by access, option 'READ' 'WRITE' or 'READ,WRITE'")
     mapping_enum_group.add_argument("--disks", action="store_true", help="Enumerate disks")
     mapping_enum_group.add_argument("--users", nargs="*", metavar="USER", help="Enumerate domain users, if a user is specified than only its information is queried.")
