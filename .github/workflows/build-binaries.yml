@@ -9,7 +9,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macOS-latest, windows-latest]
+        os: [ubuntu-latest, macOS-latest, macos-26-intel, windows-latest]
         python-version: ["3.13"]
         #python-version: ["3.8", "3.9", "3.10", "3.11"] # for binary builds we only need one version
     steps:
