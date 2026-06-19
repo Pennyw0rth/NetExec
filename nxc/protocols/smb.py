@@ -146,6 +146,8 @@ class smb(connection):
         self.protocol = "SMB"
         self.is_guest = None
         self.isdc = None
+        self.tgt = None
+        self.tgs = None
 
         connection.__init__(self, args, db, host)
 
@@ -401,6 +403,11 @@ class smb(connection):
                     self.save_st(tgs, sk, spn if self.args.spn else None)
 
             self.conn.kerberosLogin(self.username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache=useCache, TGS=tgs)
+
+            with contextlib.suppress(Exception):
+                creds = self.conn.getCredentials()
+                self.tgt, self.tgs = creds[6], creds[7]
+
             if "Unix" not in self.server_os:
                 self.check_if_admin()
 
@@ -760,7 +767,12 @@ class smb(connection):
         try:
             tgt = cipher = tgt_session_key = None
 
-            if self.use_kcache:
+            if self.tgt is not None:
+                tgt = self.tgt["KDC_REP"]
+                cipher = self.tgt["cipher"]
+                tgt_session_key = self.tgt["sessionKey"]
+                self.logger.debug("Reusing TGT obtained during SMB login")
+            elif self.use_kcache:
                 try:
                     _, _, cached_tgt, _ = CCache.parseFile(self.domain, self.username)
                     if cached_tgt is not None:
