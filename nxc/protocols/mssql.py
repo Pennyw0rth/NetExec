@@ -442,6 +442,9 @@ class mssql(connection):
         if self.conn.lastError:
             self.logger.fail(f"Cannot perform RID bruteforce due to invalid connection: {self.conn.lastError}")
             return entries
+        if not self.username and not self.password:
+            self.logger.fail("Cannot perform RID bruteforce without authentication, provide credentials with -u/-p, -H (hash), or Kerberos")
+            return entries
         if not max_rid:
             max_rid = int(self.args.rid_brute)
 
