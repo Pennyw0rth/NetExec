@@ -13,7 +13,7 @@ class NXCModule:
 
     name = "tspkg"
     description = (
-        "Creates, removes or inspects the AllowDefaultCredentials registry entry"
+        "Creates, removes or inspects the AllowDefaultCredentials registry entry "
         "to enable or disable TSPKG / CredSSP credential delegation used for credential-dumping"
     )
     supported_protocols = ["smb"]
