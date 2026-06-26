@@ -469,7 +469,7 @@ class mssql(connection):
 
             for n, item in enumerate(raw_output):
                 username = item[""]
-                if username == "NULL":
+                if username == "NULL" or username is None:
                     continue
                 rid = so_far + n
                 self.logger.highlight(f"{rid}: {username}")
