@@ -49,6 +49,7 @@ from impacket.smb3structs import (
     SMB2_0_IOCTL_IS_FSCTL,
     WRITE_DAC,
     WRITE_OWNER,
+    SMB2_DIALECT_302,
 )
 
 from impacket.dcerpc.v5 import tsts as TSTS
@@ -631,6 +632,7 @@ class smb(connection):
                 None,
                 self.port,
                 timeout=self.args.smb_timeout,
+                preferredDialect=SMB2_DIALECT_302,
             )
             self.smbv3 = True
         except (Exception, NetBIOSTimeout, OSError) as e:
