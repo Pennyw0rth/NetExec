@@ -33,7 +33,11 @@ def smb_module():
 
 
 def make_smbv2_conn(dialect, server_security_mode, require_signing):
-    """Mimic the relevant slice of an impacket SMBConnection for SMB2/3."""
+    """Mimic the relevant slice of an impacket SMBConnection for SMB2/3.
+
+    ``isSigningRequired()`` returns ``RequireSigning``, matching impacket, for
+    the dialects below SMB 3.0 that fall back to it.
+    """
     inner = SimpleNamespace(
         _Connection={
             "Dialect": dialect,
@@ -41,7 +45,7 @@ def make_smbv2_conn(dialect, server_security_mode, require_signing):
             "RequireSigning": require_signing,
         }
     )
-    return SimpleNamespace(_SMBConnection=inner)
+    return SimpleNamespace(_SMBConnection=inner, isSigningRequired=lambda: require_signing)
 
 
 def make_smbv1_conn(signing_required):
@@ -56,7 +60,7 @@ def test_smb311_signing_enabled_not_required_reports_false(smb_module):
         server_security_mode=SMB2_NEGOTIATE_SIGNING_ENABLED,
         require_signing=True,
     )
-    assert smb_module.smb._is_signing_required(conn, smbv1=False) is False
+    assert smb_module.smb._is_signing_required(None, conn, smbv1=False) is False
 
 
 def test_smb311_signing_required_reports_true(smb_module):
@@ -65,7 +69,7 @@ def test_smb311_signing_required_reports_true(smb_module):
         server_security_mode=SMB2_NEGOTIATE_SIGNING_ENABLED | SMB2_NEGOTIATE_SIGNING_REQUIRED,
         require_signing=True,
     )
-    assert smb_module.smb._is_signing_required(conn, smbv1=False) is True
+    assert smb_module.smb._is_signing_required(None, conn, smbv1=False) is True
 
 
 def test_smb30_signing_not_required_reports_false(smb_module):
@@ -74,7 +78,7 @@ def test_smb30_signing_not_required_reports_false(smb_module):
         server_security_mode=SMB2_NEGOTIATE_SIGNING_ENABLED,
         require_signing=False,
     )
-    assert smb_module.smb._is_signing_required(conn, smbv1=False) is False
+    assert smb_module.smb._is_signing_required(None, conn, smbv1=False) is False
 
 
 def test_smb21_falls_back_to_require_signing(smb_module):
@@ -85,9 +89,9 @@ def test_smb21_falls_back_to_require_signing(smb_module):
         server_security_mode=0,
         require_signing=True,
     )
-    assert smb_module.smb._is_signing_required(conn, smbv1=False) is True
+    assert smb_module.smb._is_signing_required(None, conn, smbv1=False) is True
 
 
 def test_smbv1_uses_session_signing_flag(smb_module):
-    assert smb_module.smb._is_signing_required(make_smbv1_conn(True), smbv1=True) is True
-    assert smb_module.smb._is_signing_required(make_smbv1_conn(False), smbv1=True) is False
+    assert smb_module.smb._is_signing_required(None, make_smbv1_conn(True), smbv1=True) is True
+    assert smb_module.smb._is_signing_required(None, make_smbv1_conn(False), smbv1=True) is False

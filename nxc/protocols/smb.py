@@ -592,27 +592,24 @@ class smb(connection):
             self.logger.fail("Broken Pipe Error while attempting to login")
             return False
 
-    @staticmethod
-    def _is_signing_required(conn, smbv1):
+    def _is_signing_required(self, conn, smbv1):
         """Determine whether the remote server REQUIRES SMB signing.
 
-        For SMB2/3 we read the real negotiated ``ServerSecurityMode`` rather than
-        impacket's ``RequireSigning`` flag. impacket force-sets ``RequireSigning``
-        to True for any SMB 3.1.1 negotiation regardless of the server's actual
-        policy (the 3.1.1 session setup is always signed). Relying on that flag
-        produced false negatives for relay-target discovery: 3.1.1 hosts that
-        merely *enable* (but do not *require*) signing were reported as
-        ``signing:True`` and silently dropped from ``--gen-relay-list`` output.
+        For SMB 3.0+ we read the real negotiated ``ServerSecurityMode`` rather
+        than impacket's ``RequireSigning`` flag. impacket force-sets
+        ``RequireSigning`` to True for any SMB 3.1.1 negotiation regardless of
+        the server's actual policy (the 3.1.1 session setup is always signed).
+        Relying on that flag produced false negatives for relay-target
+        discovery: 3.1.1 hosts that merely *enable* (but do not *require*)
+        signing were reported as ``signing:True`` and silently dropped from
+        ``--gen-relay-list`` output.
 
-        ``ServerSecurityMode`` is only populated by impacket for SMB 3.0+; for
-        SMB 2.0.2/2.1 we fall back to ``RequireSigning`` (accurate below 3.1.1).
+        For SMBv1 and SMB 2.0.2/2.1, ``isSigningRequired()`` is accurate: it
+        reads ``RequireSigning``, which impacket only force-sets at 3.1.1.
         """
-        if smbv1:
-            return conn.isSigningRequired()
-        connection = conn._SMBConnection._Connection
-        if connection["Dialect"] >= SMB2_DIALECT_30:
-            return bool(connection["ServerSecurityMode"] & SMB2_NEGOTIATE_SIGNING_REQUIRED)
-        return connection["RequireSigning"]
+        if not smbv1 and conn._SMBConnection._Connection["Dialect"] >= SMB2_DIALECT_30:
+            return bool(conn._SMBConnection._Connection["ServerSecurityMode"] & SMB2_NEGOTIATE_SIGNING_REQUIRED)
+        return conn.isSigningRequired()
 
     def create_smbv1_conn(self, check=False):
         self.logger.info(f"Creating SMBv1 connection to {self.host}")
