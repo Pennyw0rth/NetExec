@@ -103,6 +103,8 @@ class ldap(connection):
         )
 
     def create_conn_obj(self):
+        # impacket's LDAPConnection has no timeout parameter :'(
+        socket.setdefaulttimeout(self.args.ldap_timeout)
         try:
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.host}"
