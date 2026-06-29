@@ -614,12 +614,15 @@ class smb(connection):
                 self.logger.debug(f"Timeout creating SMBv1 connection to {self.host}")
             else:
                 self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
+            self.smbv1 = False
             return False
         except NetBIOSError:
             self.logger.info(f"SMBv1 disabled on {self.host}")
+            self.smbv1 = False
             return False
         except (Exception, NetBIOSTimeout) as e:
             self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
+            self.smbv1 = False
             return False
         return True
 
@@ -641,6 +644,7 @@ class smb(connection):
                 self.logger.debug(f"Timeout creating SMBv3 connection to {self.host}")
             else:
                 self.logger.info(f"Error creating SMBv3 connection to {self.host}: {e}")
+            self.smbv3 = False
             return False
         return True
 
