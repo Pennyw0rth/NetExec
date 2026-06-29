@@ -193,10 +193,6 @@ class ldap(connection):
                 self.cbt_status = "No TLS cert"
             else:
                 raise
-        except OSError as e:
-            # Should catch TimeoutError ([Errno 110]), ConnectionRefusedError, host/network unreachable, etc.
-            self.logger.debug(f"Connection error while checking LDAPS channel binding on {self.host}: {e!s}")
-            self.cbt_status = "Unknown"
 
     def enum_host_info(self):
         # Enumerate LDAP info
