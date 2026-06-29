@@ -592,7 +592,7 @@ class smb(connection):
             self.logger.fail("Broken Pipe Error while attempting to login")
             return False
 
-    def _is_signing_required(self, conn, smbv1):
+    def _is_signing_required(self, smbv1):
         """Determine whether the remote server REQUIRES SMB signing.
 
         For SMB 3.0+ we read the real negotiated ``ServerSecurityMode`` rather
@@ -607,9 +607,9 @@ class smb(connection):
         For SMBv1 and SMB 2.0.2/2.1, ``isSigningRequired()`` is accurate: it
         reads ``RequireSigning``, which impacket only force-sets at 3.1.1.
         """
-        if not smbv1 and conn._SMBConnection._Connection["Dialect"] >= SMB2_DIALECT_30:
-            return bool(conn._SMBConnection._Connection["ServerSecurityMode"] & SMB2_NEGOTIATE_SIGNING_REQUIRED)
-        return conn.isSigningRequired()
+        if not smbv1 and self.conn._SMBConnection._Connection["Dialect"] >= SMB2_DIALECT_30:
+            return bool(self.conn._SMBConnection._Connection["ServerSecurityMode"] & SMB2_NEGOTIATE_SIGNING_REQUIRED)
+        return self.conn.isSigningRequired()
 
     def create_smbv1_conn(self, check=False):
         self.logger.info(f"Creating SMBv1 connection to {self.host}")
