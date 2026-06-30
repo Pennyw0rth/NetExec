@@ -1011,25 +1011,11 @@ class ldap(connection):
             return
 
         # Filter disabled and invalid accounts
-        disabled_accounts = []
-        for x in resp_parsed:
-            if "userAccountControl" in x:
-                # account is disabled
-                if (int(x["userAccountControl"]) & UF_ACCOUNTDISABLE):
-                    disabled_accounts.append(x)
-            else:
-                # ldap object does not have UAC field, weird but happens
-                disabled_accounts.append(x)
+        disabled_accounts = [x for x in resp_parsed if int(x.get("userAccountControl", 0)) & UF_ACCOUNTDISABLE]
         for account in disabled_accounts:
-            self.logger.display(f"Skipping disabled or invalid account: {account['sAMAccountName']}")
+            self.logger.display(f"Skipping disabled account: {account['sAMAccountName']}")
 
-        # Get all enabled accounts
-        enabled = []
-        for x in resp_parsed:
-            if "userAccountControl" in x:
-                if not (int(x["userAccountControl"]) & UF_ACCOUNTDISABLE):
-                    enabled.append(x)
-        self.logger.display(f"Total of records returned {len(enabled):d}")
+        enabled = [x for x in resp_parsed if not int(x.get("userAccountControl", 0)) & UF_ACCOUNTDISABLE]
 
         if self.args.targeted_kerberoast:
             self.logger.success(f"Found {len(enabled)} enabled users without SPN.")
