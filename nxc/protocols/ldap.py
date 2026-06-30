@@ -1014,11 +1014,12 @@ class ldap(connection):
             self.logger.highlight("No entries found!")
             return
 
-        disabled_accounts = [x for x in resp_parsed if int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
+        # Filter disabled and invalid accounts
+        disabled_accounts = [x for x in resp_parsed if int(x.get("userAccountControl", 0)) & UF_ACCOUNTDISABLE]
         for account in disabled_accounts:
             self.logger.display(f"Skipping disabled account: {account['sAMAccountName']}")
 
-        enabled = [x for x in resp_parsed if not int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
+        enabled = [x for x in resp_parsed if not int(x.get("userAccountControl", 0)) & UF_ACCOUNTDISABLE]
 
         if self.args.targeted_kerberoast:
             self.logger.success(f"Found {len(enabled)} enabled users without SPN.")
