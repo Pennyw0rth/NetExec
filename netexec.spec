@@ -81,6 +81,7 @@ a = Analysis(
         'dploot.triage.wam',
         'dploot.triage.wifi',
         'dploot.triage.sccm',
+        'dploot.triage.cng',
         'dploot.lib.target',
         'dploot.lib.smb',
         'pyasn1_modules.rfc5652',
