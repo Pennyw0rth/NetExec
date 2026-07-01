@@ -65,9 +65,13 @@ from minikerberos.network.clientsocket import KerberosClientSocket
 from minikerberos.common.target import KerberosTarget
 from minikerberos.common.ccache import CCACHE
 
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.serialization import pkcs12
+from cryptography.x509 import load_pem_x509_certificate
+
 from impacket.krb5.ccache import CCache as impacket_CCache
 
-from nxc.paths import NXC_PATH
+from nxc.paths import NXC_PATH, TMP_PATH
 from nxc.logger import nxc_logger
 
 
@@ -533,3 +537,40 @@ def pfx_auth(self):
 
     self.logger.info("Successfully authenticated using Certificate")
     return True
+
+
+def pfx_to_pem_files(self):
+    """Convert the provided certificate material (PFX or PEM) into PEM cert and key files in TMP_PATH."""
+    if self.args.pfx_cert or self.args.pfx_base64:
+        if self.args.pfx_base64:
+            with open(self.args.pfx_base64, "rb") as f:
+                pfx_data = base64.b64decode(f.read())
+        else:
+            with open(self.args.pfx_cert, "rb") as f:
+                pfx_data = f.read()
+        pfx_pass = self.args.pfx_pass.encode() if self.args.pfx_pass else None
+        key, cert, _ = pkcs12.load_key_and_certificates(pfx_data, pfx_pass)
+    elif self.args.pem_cert and self.args.pem_key:
+        with open(self.args.pem_cert, "rb") as f:
+            cert = load_pem_x509_certificate(f.read())
+        with open(self.args.pem_key, "rb") as f:
+            key = serialization.load_pem_private_key(f.read(), password=None)
+    else:
+        self.logger.fail("You must either specify a PFX file + optional password or a combination of Cert PEM file and Private key PEM file")
+        return None, None
+
+    basename = f"{self.hostname}_{self.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}"
+    cert_path = os.path.normpath(os.path.expanduser(f"{TMP_PATH}/{basename}_cert.pem"))
+    key_path = os.path.normpath(os.path.expanduser(f"{TMP_PATH}/{basename}_key.pem"))
+
+    with open(cert_path, "wb") as cert_file:
+        cert_file.write(cert.public_bytes(serialization.Encoding.PEM))
+
+    with open(key_path, "wb") as key_file:
+        key_file.write(key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        ))
+
+    return cert_path, key_path

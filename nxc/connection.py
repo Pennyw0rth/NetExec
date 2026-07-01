@@ -567,6 +567,12 @@ class connection:
             if not self.args.username:
                 self.logger.fail("You must specify a username when using certificate authentication")
                 return False
+            if self.args.schannel:
+                if self.args.protocol != "ldap":
+                    self.logger.fail("Schannel authentication is only supported for the LDAP protocol")
+                    return False
+                with sem:
+                    return self.plaintext_login(self.domain, self.args.username[0], "")
             with sem:
                 return pfx_auth(self)
 
