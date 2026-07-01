@@ -299,7 +299,7 @@ class mssql(connection):
             return None
         self.logger.info(f"Query to run: {self.args.query}")
         try:
-            raw_output = self.conn.sql_query(self.args.query)
+            raw_output = self.conn.sql_query(self._wrap_linked(self.args.query))
             self.logger.debug(f"Raw output: {raw_output}")
             if self.conn.lastError:
                 self.logger.debug(f"Error during query execution: {self.conn.lastError}")
@@ -625,3 +625,63 @@ class mssql(connection):
             )
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
+
+    def _wrap_linked(self, query):
+        if not getattr(self.args, "on_linked_server", None):
+            return query
+
+        # Enable RPC out for complexe queries
+        # Here we should check the value, back it up
+        # enable then restore
+        check_rpc_out_query = f"""
+        EXEC sp_serveroption @server = N'{self.args.on_linked_server}', @optname = 'rpc out', @optvalue = 'true';
+        """
+        self.conn.sql_query(check_rpc_out_query)
+
+        # Second we need to check that the actual user can rely on the linked server link
+        check_user_has_access_query = f"""
+        SELECT l.remote_name, l.uses_self_credential
+        FROM sys.linked_logins l
+        JOIN sys.servers s ON s.server_id = l.server_id
+        WHERE s.name = N'{self.args.on_linked_server}'
+        AND (l.local_principal_id = 0 OR l.local_principal_id = USER_ID(SYSTEM_USER));
+        """
+        rows = self.conn.sql_query(check_user_has_access_query)
+        if not rows or not rows[0].get("remote_name"):
+            self.logger.fail(f"No valid login mapping found for {self.username} on linked server '{self.args.on_linked_server}'")
+
+        escaped = query.replace("'", "''")
+        wrapped_query = f"EXEC('{escaped}') AT [{self.args.on_linked_server}];"
+        print(wrapped_query)
+        return wrapped_query
+
+    def list_linked_servers(self):
+        self.logger.display("Listing linked servers and their credentials")
+        query = """
+        SELECT s.name AS linked_server,
+            p.name AS local_login,
+            l.remote_name AS remote_login,
+            CASE l.uses_self_credential
+                WHEN 1 THEN 'true'
+                ELSE 'false'
+            END AS uses_self_credential
+        FROM sys.servers s
+        LEFT JOIN sys.linked_logins l ON s.server_id = l.server_id
+        LEFT JOIN sys.server_principals p ON l.local_principal_id = p.principal_id
+        WHERE s.is_linked = 1;
+        """
+        rows = self.conn.sql_query(query)
+        if self.conn.lastError:
+            self.logger.fail(f"Error listing linked servers: {self.conn.lastError}")
+
+        if not rows:
+            self.logger.fail("No linked servers configured")
+        else:
+            self.logger.highlight(f"{'Linked server':<30} {'Local login':<30} {'Remote login':<30} {'Use self':5}")
+            self.logger.highlight(f"{'----------':<30} {'----------':<30} {'----------':<30} {'----------':<5}")
+            for row in rows:
+                linked_server = row.get("linked_server")
+                remote_login = row.get("remote_login")
+                local_login = row.get("local_login")
+                use_self = row.get("use_self")
+                self.logger.highlight(f"{linked_server:<30} {local_login:<30} {remote_login:<30} {use_self}")
