@@ -26,6 +26,20 @@ def gen_random_string(length=10):
     return "".join(random.sample(string.ascii_letters, int(length)))
 
 
+_HOSTNAME_SANITIZE_RE = re.compile(r"[^\w\-.]")
+
+
+def sanitize_hostname(hostname, logger):
+    """Strip characters from a server-provided hostname that could cause path
+    traversal, newline injection, or format-string issues when used in file
+    paths or output content.  Logs a warning when the value is modified.
+    """
+    sanitized = _HOSTNAME_SANITIZE_RE.sub("_", hostname)
+    if sanitized != hostname:
+        logger.fail(f"Hostname contained invalid characters (received: {hostname!r}), sanitized to: {sanitized!r}")
+    return sanitized
+
+
 def validate_ntlm(data):
     allowed = re.compile(r"^[0-9a-f]{32}", re.IGNORECASE)
     return bool(allowed.match(data))

@@ -6,6 +6,7 @@ import struct
 import ipaddress
 from Cryptodome.Hash import MD4
 from textwrap import dedent
+from nxc.helpers.misc import sanitize_hostname
 
 from impacket.smbconnection import SMBConnection, SessionError
 from impacket.smb import SMB_DIALECT
@@ -217,6 +218,7 @@ class smb(connection):
                 self.hostname = dns_hostname
             else:
                 self.hostname = self.conn.getServerName()
+            self.hostname = sanitize_hostname(self.hostname, self.logger)
             self.targetDomain = self.conn.getServerDNSDomainName()
             if not self.targetDomain:   # Not sure if that can even happen but now we are safe
                 self.targetDomain = self.hostname
