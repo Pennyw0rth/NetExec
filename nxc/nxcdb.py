@@ -112,7 +112,7 @@ class DatabaseNavigator(cmd.Cmd):
         # Users
         if command == "creds":
             if len(line) < 3:
-                print("[-] invalid arguments, export creds <simple|detailed|hashcat> <filename>")
+                print("[-] invalid arguments, export creds <simple|detailed|hashcat|combo> <filename>")
                 return
 
             filename = line[2]
@@ -154,6 +154,19 @@ class DatabaseNavigator(cmd.Cmd):
                         passwords.append(cred[3])
                 output_list = [":".join(combination) for combination in zip(usernames, passwords, strict=True)]
                 write_list(filename, output_list)
+            elif line[1].lower() == "combo":
+                csv_header = (
+                "username",
+                "password",
+                )
+                formatted_creds = []
+                for cred in creds:
+                    entry = [
+                        cred[2],
+                        cred[3]
+                    ]
+                    formatted_creds.append(entry)
+                write_csv(filename, csv_header, formatted_creds)
             else:
                 print(f"[-] No such export option: {line[1]}")
                 return
