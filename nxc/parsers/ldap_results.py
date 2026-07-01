@@ -17,6 +17,8 @@ def parse_result_attributes(ldap_response):
                     val_decoded = UUID(bytes=val.__bytes__())
                 elif str(attribute["type"]) == "objectSid":
                     val_decoded = sid_to_str(val.__bytes__())
+                elif str(attribute["type"]) == "ms-DS-CreatorSID":
+                    val_decoded = sid_to_str(val.__bytes__())
                 elif str(attribute["type"]) == "dNSProperty":
                     val_decoded = val.__bytes__()
                 else:
