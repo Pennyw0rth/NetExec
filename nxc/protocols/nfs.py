@@ -431,6 +431,10 @@ class nfs(connection):
             self.logger.fail(f"{local_file_path} does not exist.")
             return
 
+        # Do a bit of smart handling for the remote file path
+        if remote_file_path.endswith("/"):
+            file_name = os.path.basename(local_file_path)
+
         self.logger.display(f"Uploading from {local_file_path} to {remote_file_path}")
         try:
             # Connect to NFS
