@@ -80,8 +80,9 @@ class JOBEXEC:
         """
         self.logger.debug(f"Running {get_output_query}")
         result_rows = self.mssql_conn.sql_query(get_output_query)
-        if self.mssql_conn.lastError:
+        if self.mssql_conn.lastError or not result_rows:
             self.logger.fail(f"Fail running command execution: {self.mssql_conn.lastError}")
+            return
 
         if match := search(r"\.(.*?)\.", result_rows[0]["message"]):
             output = match.group(1).strip()
