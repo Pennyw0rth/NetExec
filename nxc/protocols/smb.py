@@ -777,6 +777,7 @@ class smb(connection):
         open_ports = 0
 
         for port in dc_ports:
+            sock = None
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.settimeout(timeout)
@@ -784,9 +785,11 @@ class smb(connection):
                 if result == 0:
                     self.logger.debug(f"Port {port} is open on {self.host}")
                     open_ports += 1
-                sock.close()
             except Exception:
                 pass
+            finally:
+                if sock:
+                    sock.close()
         # If 3 or more DC ports are open, likely a DC
         return open_ports >= 3
 
@@ -2155,7 +2158,8 @@ class smb(connection):
 
         if self.args.pvk is not None:
             try:
-                self.pvkbytes = open(self.args.pvk, "rb").read()  # noqa: SIM115
+                with open(self.args.pvk, "rb") as f:
+                    self.pvkbytes = f.read()
                 self.logger.success(f"Loading domain backupkey from {self.args.pvk}")
             except Exception as e:
                 self.logger.fail(str(e))

@@ -149,6 +149,7 @@ class ldap(connection):
     def check_ldap_signing(self):
         self.signing_required = False
         ldap_url = f"ldap://{self.target}"
+        ldap_connection = None
         try:
             ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
             ldap_connection.login(domain=self.domain)
@@ -159,10 +160,15 @@ class ldap(connection):
                 self.signing_required = True
             else:
                 self.logger.debug(f"LDAPSessionError while checking for signing requirements (likely NTLM disabled): {e!s}")
+        finally:
+            if ldap_connection:
+                with contextlib.suppress(Exception):
+                    ldap_connection.close()
 
     def check_ldaps_cbt(self):
         self.cbt_status = "Never"
         ldap_url = f"ldaps://{self.target}"
+        ldap_connection = None
         try:
             ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
             ldap_connection.channel_binding_value = None
@@ -173,6 +179,9 @@ class ldap(connection):
                 self.cbt_status = "Always"  # CBT is Required
             # Login failed (wrong credentials). test if we get an error with an existing, but wrong CBT -> When supported
             elif str(e).find("data 52e") >= 0:
+                if ldap_connection:
+                    with contextlib.suppress(Exception):
+                        ldap_connection.close()
                 ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
                 new_cbv = bytearray(ldap_connection.channel_binding_value)
                 new_cbv[15] = (new_cbv[3] + 1) % 256
@@ -195,6 +204,10 @@ class ldap(connection):
             # Should catch TimeoutError ([Errno 110]), ConnectionRefusedError, host/network unreachable, etc.
             self.logger.debug(f"Connection error while checking LDAPS channel binding on {self.host}: {e!s}")
             self.cbt_status = "Unknown"
+        finally:
+            if ldap_connection:
+                with contextlib.suppress(Exception):
+                    ldap_connection.close()
 
     def enum_host_info(self):
         # Enumerate LDAP info
