@@ -2182,16 +2182,17 @@ class smb(connection):
 
         self.output_file = open(self.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # noqa: SIM115
 
-        conn = upgrade_to_dploot_connection(connection=self.conn, target=target)
-        if conn is None:
-            self.logger.debug("Could not upgrade connection")
-            return
+        try:
+            conn = upgrade_to_dploot_connection(connection=self.conn, target=target)
+            if conn is None:
+                self.logger.debug("Could not upgrade connection")
+                return
 
-        masterkeys = collect_masterkeys_from_target(self, target, conn, system=dump_system)
+            masterkeys = collect_masterkeys_from_target(self, target, conn, system=dump_system)
 
-        if len(masterkeys) == 0:
-            self.logger.fail("No masterkeys looted")
-            return
+            if len(masterkeys) == 0:
+                self.logger.fail("No masterkeys looted")
+                return
 
         self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting secrets...")
 
@@ -2326,11 +2327,12 @@ class smb(connection):
         except Exception as e:
             self.logger.debug(f"Error while looting firefox: {e}")
 
-        if self.output_file:
-            self.output_file.close()
-            with open(self.output_file_template.format(output_folder="dpapi")) as f:
-                if sum(1 for _ in f) == 0:
-                    self.logger.fail("No dpapi loot retrieved")
+        finally:
+            if self.output_file:
+                self.output_file.close()
+                with open(self.output_file_template.format(output_folder="dpapi")) as f:
+                    if sum(1 for _ in f) == 0:
+                        self.logger.fail("No dpapi loot retrieved")
 
     @requires_admin
     def list_snapshots(self):

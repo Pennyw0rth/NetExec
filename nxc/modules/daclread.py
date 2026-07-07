@@ -249,10 +249,10 @@ class NXCModule:
                 context.log.debug("There is a target specified!")
                 if isfile(module_options[option]):
                     try:
-                        target_file = open(module_options[option])  # noqa: SIM115
-                        for line in target_file:
-                            context.log.debug(f"Adding target from file: {line}")
-                            self.targets.append((line.strip(), SEARCH_FILTERS[option]))
+                        with open(module_options[option]) as target_file:
+                            for line in target_file:
+                                context.log.debug(f"Adding target from file: {line}")
+                                self.targets.append((line.strip(), SEARCH_FILTERS[option]))
                     except Exception:
                         context.log.fail("The file doesn't exist or cannot be opened.")
                 else:
