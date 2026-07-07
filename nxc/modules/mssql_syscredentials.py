@@ -31,7 +31,7 @@ class NXCModule:
         self.connection = connection
         self.logger = context.log
 
-        local_script_path = f"{DATA_PATH}/mssql_syscredentials_module/mssq_syscredentials.ps1"
+        local_script_path = f"{DATA_PATH}/mssql_syscredentials_module/mssql_syscredentials.ps1"
         if not Path(local_script_path).is_file():
             self.logger.fail(f"Cannot read {local_script_path}")
             return
