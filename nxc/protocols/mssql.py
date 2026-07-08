@@ -625,10 +625,17 @@ class mssql(connection):
         query = """
         SELECT
             sp.name,
+            CASE
+                WHEN SUBSTRING(sl.password_hash, 1, 2) = 0x0200 THEN 'SHA-512'
+                WHEN SUBSTRING(sl.password_hash, 1, 2) = 0x0300 THEN 'PBKDF2'
+                WHEN SUBSTRING(sl.password_hash, 1, 2) = 0x0100 THEN 'SHA-1'
+                ELSE 'Unknown'
+            END AS hash_type,
             sl.password_hash
         FROM sys.server_principals sp
-        LEFT JOIN sys.sql_logins sl ON sp.principal_id = sl.principal_id
-        WHERE sp.type IN ('S', 'U', 'G', 'C', 'K')
+        INNER JOIN sys.sql_logins sl
+            ON sp.principal_id = sl.principal_id
+        WHERE sp.type = 'S'           -- uniquement les logins SQL
         AND sp.name NOT LIKE '##%'
         ORDER BY sp.name;
         """
@@ -641,10 +648,11 @@ class mssql(connection):
             return
         else:
             self.logger.display("Enumerated logins")
-            self.logger.highlight(f"{'Login Name':<15} {'Database hash':<140}")
-            self.logger.highlight(f"{'----------':<15} {'----------':<140}")
+            self.logger.highlight(f"{'Login Name':<15} {'Hash type':<10} {'Database hash'}")
+            self.logger.highlight(f"{'----------':<15} {'----------':<10} {'--------------':}")
             for row in rows:
                 name = row.get("name")
+                hash_type = row.get("hash_type")
                 password_hash = row.get("password_hash")
                 if password_hash != "NULL":
-                    self.logger.highlight(f"{name:<15} {password_hash.decode():<140}")
+                    self.logger.highlight(f"{name:<15} {hash_type:<10} {password_hash.decode():<140}")
