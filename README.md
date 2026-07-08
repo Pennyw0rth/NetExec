@@ -66,3 +66,12 @@ Awesome code contributors of NetExec:
 [![](https://github.com/termanix.png?size=50)](https://github.com/termanix)
 [![](https://github.com/Dfte.png?size=50)](https://github.com/Dfte)
 [![](https://github.com/azoxlpf.png?size=50)](https://github.com/azoxlpf)
+
+
+## Known Issues and Workarounds
+
+The maintainers are aware of the following issues:
+
+- Issue mentioned in the bug tracker
+- Users should follow the recommended practices
+- See the documentation for more details
