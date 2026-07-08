@@ -625,11 +625,17 @@ class mssql(connection):
         SELECT
             bs.database_name,
             bs.server_name,
-            bmf.physical_device_name AS backup_file_path
-        FROM msdb.dbo.backupset bs
-        INNER JOIN msdb.dbo.backupmediafamily bmf
+            bmf.physical_device_name AS backup_file_path,
+            CASE
+                WHEN bs.encryptor_type IS NULL THEN 'Unencrypted'
+                ELSE 'Encrypted'
+            END AS backup_encryption_status,
+            bs.encryptor_type,
+            bs.key_algorithm
+        FROM msdb.dbo.backupset AS bs
+        INNER JOIN msdb.dbo.backupmediafamily AS bmf
             ON bs.media_set_id = bmf.media_set_id
-        INNER JOIN sys.databases d
+        INNER JOIN sys.databases AS d
             ON bs.database_name = d.name
         ORDER BY bs.backup_finish_date DESC;
         """
@@ -642,9 +648,10 @@ class mssql(connection):
             return
         else:
             self.logger.display("Enumerated backups")
-            self.logger.highlight(f"{'Backup Name':<30} {'Backup Path'}")
-            self.logger.highlight(f"{'----------':<30} {'----------'}")
+            self.logger.highlight(f"{'Backup Name':<20} {'Encryption':<15} {'Backup Path'}")
+            self.logger.highlight(f"{'-----------':<20} {'----------':<15} {'-----------'}")
             for row in rows:
                 database_name = row.get("database_name").strip()
+                is_encrypted = row.get("backup_encryption_status").strip()
                 backup_file_path = row.get("backup_file_path").strip()
-                self.logger.highlight(f"{database_name:<30} {backup_file_path}")
+                self.logger.highlight(f"{database_name:<20} {is_encrypted:<15s} {backup_file_path}")
