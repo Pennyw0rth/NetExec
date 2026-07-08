@@ -97,6 +97,12 @@ class mssql(connection):
             resp = self.conn.preLogin()
             self.encryption = False
 
+            # Parses the MSSQL version
+            self.edition, self.version = (
+                str(self.conn.mssql_version).split("Server ")[1].split(" (")[0],
+                str(self.conn.mssql_version).rsplit("(", 1)[1].rstrip(")")
+            )
+
             if resp["Encryption"] == TDS_ENCRYPT_REQ or resp["Encryption"] == TDS_ENCRYPT_OFF:
                 # We switch to a TLS context handled by tds.py
                 self.conn.set_tls_context()
@@ -148,7 +154,7 @@ class mssql(connection):
                 self.logger.debug(f"Server does not support NTLM{detail}")
                 self.no_ntlm = True
 
-        self.db.add_host(self.host, self.hostname, self.domain, self.server_os, len(self.mssql_instances))
+        self.db.add_host(self.host, self.hostname, self.domain, self.server_os, self.version, len(self.mssql_instances), self.encryption)
 
         if self.args.domain:
             self.domain = self.args.domain
@@ -165,13 +171,7 @@ class mssql(connection):
     def print_host_info(self):
         encryption = colored(f"EncryptionReq:{self.encryption}", host_info_colors[0 if self.encryption else 1], attrs=["bold"])
         ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
-
-        edition, version = (
-            str(self.conn.mssql_version).split("Server ")[1].split(" (")[0],
-            str(self.conn.mssql_version).rsplit("(", 1)[1].rstrip(")")
-        )
-
-        self.logger.display(f"{self.server_os} ({edition} {version}) (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption}) {ntlm}")
+        self.logger.display(f"{self.server_os} ({self.edition} {self.version}) (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption}) {ntlm}")
 
     @reconnect_mssql
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
