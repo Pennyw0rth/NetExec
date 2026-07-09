@@ -370,6 +370,9 @@ class mssql(connection):
             elif method == "jobexec":
                 try:
                     exec_method = JOBEXEC(self)
+                    # SQL agent is not running, as such we just return and avoid command execution
+                    if exec_method.is_sql_server_agent_running is False:
+                        return None
                     self.logger.debug("JOBEXEC execution method instantiated")
                     break
                 except Exception as e:

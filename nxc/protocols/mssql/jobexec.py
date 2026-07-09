@@ -11,8 +11,7 @@ class JOBEXEC:
         self.job_name = f"nxc_mssql_{gen_random_string(10)}"
         self.backuped_options = {}
         self.assembly_hex = None
-
-    def execute(self, command, get_output, args=None) -> str:
+        self.is_sql_server_agent_running = True
 
         check_if_server_agent_run_query = """
         SELECT *
@@ -26,8 +25,9 @@ class JOBEXEC:
             self.logger.fail(f"Error executing jobexec: {self.mssql_conn.lastError}")
         if not rows or rows[0]["status"] != 4:
             self.logger.fail("SQL Server Agent not running.")
-            return
+            self.is_sql_server_agent_running = False
 
+    def execute(self, command, get_output, args=None) -> str:
         jobexec_query = f"""
         EXEC msdb.dbo.sp_add_job
             @job_name = '{self.job_name}';
