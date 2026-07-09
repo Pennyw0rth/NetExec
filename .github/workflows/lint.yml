@@ -15,19 +15,19 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Install poetry
+      - name: Install uv
         run: |
-          pipx install poetry
+          pip install uv
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: 3.13
-          cache: poetry
-          cache-dependency-path: poetry.lock
+          cache: pip
+          cache-dependency-path: uv.lock
       - name: Install dependencies with dev group
         run: |
-          poetry install --with dev
+          uv sync --group dev
       - name: Run ruff
         run: |
-          poetry run ruff --version
-          poetry run ruff check . --preview
+          uv run ruff --version
+          uv run ruff check . --preview
