@@ -3,9 +3,9 @@ from time import sleep
 
 from impacket.examples.secretsdump import SAMHashes, LSASecrets, LocalOperations
 from impacket.smbconnection import SessionError
-from impacket.dcerpc.v5 import transport, rrp
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
+from impacket.dcerpc.v5 import rrp
 from nxc.helpers.misc import CATEGORY, gen_random_string
+from nxc.helpers.rpc import NXCRPCConnection
 
 
 class NXCModule:
@@ -31,17 +31,9 @@ class NXCModule:
         # enable remote registry
         context.log.display("Triggering RemoteRegistry to start through named pipe...")
         connection.trigger_winreg()
-        rpc = transport.DCERPCTransportFactory(r"ncacn_np:445[\pipe\winreg]")
-        rpc.set_smb_connection(connection.conn)
-        if connection.kerberos:
-            rpc.set_kerberos(connection.kerberos, kdcHost=connection.kdcHost)
-        dce = rpc.get_dce_rpc()
-        if connection.kerberos:
-            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+        dce = NXCRPCConnection(connection).connect(r"\winreg", rrp.MSRPC_UUID_RRP)
 
         try:
-            dce.connect()
-            dce.bind(rrp.MSRPC_UUID_RRP)
 
             for hive in ["HKLM\\SAM", "HKLM\\SYSTEM", "HKLM\\SECURITY"]:
                 hRootKey, subKey = self._strip_root_key(dce, hive)

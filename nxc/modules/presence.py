@@ -1,10 +1,11 @@
 import re
-from impacket.dcerpc.v5 import samr, tsch, transport
+from impacket.dcerpc.v5 import samr, tsch
 from impacket.dcerpc.v5 import tsts as TSTS
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 from contextlib import suppress
 import traceback
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.rpc import NXCRPCConnection
 
 
 class NXCModule:
@@ -20,46 +21,6 @@ class NXCModule:
 
     def options(self, context, module_options):
         """There are no module options."""
-
-    # --- helper: build/bind DCE-RPC while pinning TCP to IP and using safe server name ---
-    def get_dce_rpc(self, tcp_host, string_binding, dce_binding, connection, remote_name=None):
-        """
-        tcp_host: the TCP destination (IP)
-        string_binding: ncacn_np binding (FQDN for Kerberos SPN; IP for NTLM is fine)
-        remote_name: SMB server name for auth ('*SMBSERVER' for NTLM; FQDN for Kerberos)
-        """
-        rpctransport = transport.DCERPCTransportFactory(string_binding)
-
-        # Pin the actual TCP destination to the IP we intend to hit.
-        rpctransport.setRemoteHost(tcp_host)
-
-        # Choose the SMB "server name" used by the session.
-        if remote_name is None:
-            remote_name = (
-                f"{connection.hostname}.{connection.domain}"
-                if connection.kerberos
-                else "*SMBSERVER"
-            )
-        rpctransport.setRemoteName(remote_name)
-
-        rpctransport.set_credentials(
-            connection.username,
-            connection.password,
-            connection.domain,
-            connection.lmhash,
-            connection.nthash,
-            aesKey=connection.aesKey,
-        )
-        rpctransport.set_kerberos(connection.kerberos, connection.kdcHost)
-
-        dce = rpctransport.get_dce_rpc()
-        if connection.kerberos:
-            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-        dce.set_credentials(*rpctransport.get_credentials())
-        dce.connect()
-        dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
-        dce.bind(dce_binding)
-        return dce
 
     def on_admin_login(self, context, connection):
         try:
@@ -79,26 +40,19 @@ class NXCModule:
             context.log.fail(str(e))
             context.log.debug(traceback.format_exc())
 
+    def get_dce_rpc(self, named_pipe, dce_binding, connection, target_ip=None, auth_level=None):
+        return NXCRPCConnection(connection).connect(
+            named_pipe,
+            dce_binding,
+            target_ip=target_ip,
+            auth_level=auth_level or RPC_C_AUTHN_LEVEL_PKT_PRIVACY,
+        )
+
     def enumerate_admin_users(self, context, connection):
         admin_users = []
 
         try:
-            tcp_ip = connection.host  # e.g., 10.10.11.181
-            # Binding name: FQDN for Kerberos SPN; IP is fine for NTLM.
-            bind_name = (
-                f"{connection.hostname}.{connection.domain}"
-                if connection.kerberos
-                else tcp_ip
-            )
-            string_binding = fr"ncacn_np:{bind_name}[\pipe\samr]"
-            dce = self.get_dce_rpc(
-                tcp_host=tcp_ip,
-                string_binding=string_binding,
-                dce_binding=samr.MSRPC_UUID_SAMR,
-                connection=connection,
-                remote_name=(f"{connection.hostname}.{connection.domain}"
-                             if connection.kerberos else "*SMBSERVER"),
-            )
+            dce = self.get_dce_rpc(r"\samr", samr.MSRPC_UUID_SAMR, connection, target_ip=connection.kdcHost)
         except Exception as e:
             context.log.fail(f"Failed to connect to SAMR: {e}")
             context.log.debug(traceback.format_exc())
@@ -229,21 +183,7 @@ class NXCModule:
     def check_scheduled_tasks(self, context, connection, admin_users):
         """Checks scheduled tasks over rpc."""
         try:
-            tcp_ip = connection.host
-            target_name = (
-                f"{connection.hostname}.{connection.domain}"
-                if connection.kerberos
-                else tcp_ip
-            )
-            stringbinding = f"ncacn_np:{target_name}[\\pipe\\atsvc]"
-            dce = self.get_dce_rpc(
-                tcp_host=tcp_ip,
-                string_binding=stringbinding,
-                dce_binding=tsch.MSRPC_UUID_TSCHS,
-                connection=connection,
-                remote_name=(f"{connection.hostname}.{connection.domain}"
-                             if connection.kerberos else "*SMBSERVER"),
-            )
+            dce = self.get_dce_rpc(r"\atsvc", tsch.MSRPC_UUID_TSCHS, connection)
 
             # Also extract non admins where we can get the password
             self.non_admins = []
@@ -267,22 +207,7 @@ class NXCModule:
                         non_admin_sids.add(sid.group(1))
 
             if non_admin_sids:
-                # Re-use SAMR with pinned TCP to IP and correct server name.
-                tcp_ip = connection.host
-                bind_name = (
-                    f"{connection.hostname}.{connection.domain}"
-                    if connection.kerberos
-                    else tcp_ip
-                )
-                string_binding = fr"ncacn_np:{bind_name}[\pipe\samr]"
-                dce = self.get_dce_rpc(
-                    tcp_host=tcp_ip,
-                    string_binding=string_binding,
-                    dce_binding=samr.MSRPC_UUID_SAMR,
-                    connection=connection,
-                    remote_name=(f"{connection.hostname}.{connection.domain}"
-                                 if connection.kerberos else "*SMBSERVER"),
-                )
+                dce = self.get_dce_rpc(r"\samr", samr.MSRPC_UUID_SAMR, connection, target_ip=connection.kdcHost)
 
                 # Get Domain Handle
                 server_handle = samr.hSamrConnect2(dce)["ServerHandle"]

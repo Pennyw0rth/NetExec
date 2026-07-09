@@ -1,9 +1,10 @@
 import re
-from impacket.dcerpc.v5 import transport, even6
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
+from impacket.dcerpc.v5 import even6
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 from impacket.dcerpc.v5.epm import hept_map
 from nxc.helpers.even6_parser import ResultSet
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.rpc import NXCRPCConnection
 
 
 class NXCModule:
@@ -110,18 +111,7 @@ class NXCModule:
         else:
             msevenclass = MSEven6Trigger(context)
             target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
-            msevenclass.connect(
-                username=connection.username,
-                password=connection.password,
-                domain=connection.domain,
-                lmhash=connection.lmhash,
-                nthash=connection.nthash,
-                target=target,
-                doKerberos=connection.kerberos,
-                dcHost=connection.kdcHost,
-                aesKey=connection.aesKey,
-                pipe="eventlog"
-            )
+            msevenclass.connect(connection, target)
             for record in msevenclass.query("\x00", '<QueryList><Query Id="0"><Select Path="Security">*[System/EventID=4688]</Select></Query><Query Id="0"><Select Path="Microsoft-Windows-Sysmon/Operational">*[System/EventID=1]</Select></Query></QueryList>\x00', self.limit):
                 if record is None:
                     continue
@@ -142,37 +132,21 @@ class MSEven6Trigger:
         self.context = context
         self.dce = None
 
-    def connect(self, username, password, domain, lmhash, nthash, aesKey, target, doKerberos, dcHost, pipe):
-        rpctransport = transport.DCERPCTransportFactory(hept_map(target, even6.MSRPC_UUID_EVEN6, protocol="ncacn_ip_tcp"))
-        if hasattr(rpctransport, "set_credentials"):
-            rpctransport.set_credentials(
-                username=username,
-                password=password,
-                domain=domain,
-                lmhash=lmhash,
-                nthash=nthash,
-                aesKey=aesKey,
-            )
-        if doKerberos:
-            rpctransport.set_kerberos(doKerberos, kdcHost=dcHost)
-        rpctransport.setRemoteHost(target)
-        self.dce = rpctransport.get_dce_rpc()
-        if doKerberos:
-            self.dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-        self.dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
+    def connect(self, connection, target):
+        binding = hept_map(target, even6.MSRPC_UUID_EVEN6, protocol="ncacn_ip_tcp")
         self.context.log.debug(f"Connecting to {target}...")
         try:
-            self.dce.connect()
-        except Exception as e:
-            self.context.log.debug(f"Something went wrong, check error status => {e!s}")
-            return
-        try:
-            self.dce.bind(even6.MSRPC_UUID_EVEN6)
+            self.dce = NXCRPCConnection(connection).connect(
+                None,
+                even6.MSRPC_UUID_EVEN6,
+                target_ip=target,
+                string_binding=binding,
+                auth_level=RPC_C_AUTHN_LEVEL_PKT_PRIVACY,
+            )
             self.context.log.debug("[+] Successfully bound!")
         except Exception as e:
             self.context.log.debug(f"Something went wrong, check error status => {e!s}")
             return
-        self.context.log.debug("[+] Successfully bound!")
 
     def query(self, path, query, limit):
         req = even6.EvtRpcRegisterLogQuery()

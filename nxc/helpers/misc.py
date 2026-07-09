@@ -226,6 +226,18 @@ def convert(low, high, lockout=False):
     return time
 
 
+def parse_argument(argument: list) -> list:
+    """Parse input from an argparse argument, which can be either a value or a file containing values."""
+    parsed_items = []
+    for item in argument:
+        if os.path.isfile(item):
+            with open(item) as f:
+                parsed_items.extend(line.strip() for line in f if line.strip())
+        else:
+            parsed_items.append(item.strip())
+    return parsed_items
+
+
 def display_modules(args, modules):
     for category, color in {CATEGORY.ENUMERATION: "green", CATEGORY.CREDENTIAL_DUMPING: "cyan", CATEGORY.PRIVILEGE_ESCALATION: "magenta"}.items():
         # Add category filter for module listing
