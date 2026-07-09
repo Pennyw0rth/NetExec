@@ -409,7 +409,8 @@ class smb(connection):
                     creds = self.conn.getCredentials()
                     self.tgt, self.tgs = creds[6], creds[7]
                 except Exception as e:
-                    self.logger.debug(f"Could not retrieve credentials for --generate-st: {e}")
+                    self.logger.fail(f"Could not retrieve credentials for --generate-st: {e}")
+                    return False
 
             if "Unix" not in self.server_os:
                 self.check_if_admin()
