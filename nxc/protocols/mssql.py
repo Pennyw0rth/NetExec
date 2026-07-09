@@ -649,6 +649,25 @@ class mssql(connection):
             self.logger.highlight(f"Total: {len(rows)} table(s)")
             return
 
+    def sql_agent(self):
+        check_sql_agent_server_req = """
+        SELECT
+            status_desc,
+            status,
+            service_account
+        FROM sys.dm_server_services
+        WHERE servicename LIKE '%SQL Server Agent%';
+        """
+
+        self.logger.debug(f"Running {check_sql_agent_server_req}")
+        rows = self.conn.sql_query(check_sql_agent_server_req)
+        if self.conn.lastError:
+            self.logger.fail(f"Error executing jobexec: {self.conn.lastError}")
+        if not rows or rows[0]["status"] != 4:
+            self.logger.fail("SQL Server Agent not running.")
+        else:
+            self.logger.highlight(f"SQL server agent running as {rows[0]['service_account']}")
+
     @requires_admin
     def sam(self):
         sam_storename = gen_random_string(6)
