@@ -32,7 +32,7 @@ jobs:
           pipx install . --python python${{ matrix.python-version }}
       - name: Install libraries with dev group
         run: |
-          uv sync --group dev
+          uv sync
       - name: Load every protocol and module
         run: |
           uv run netexec winrm 127.0.0.1

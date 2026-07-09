@@ -26,7 +26,7 @@ jobs:
           cache-dependency-path: uv.lock
       - name: Install dependencies with dev group
         run: |
-          uv sync --group dev
+          uv sync
       - name: Run ruff
         run: |
           uv run ruff --version
