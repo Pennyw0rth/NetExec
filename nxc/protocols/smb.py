@@ -9,6 +9,7 @@ from textwrap import dedent
 
 from impacket.smbconnection import SMBConnection, SessionError
 from impacket.smb import SMB_DIALECT
+from impacket.smb3structs import SMB2_DIALECT_30, SMB2_NEGOTIATE_SIGNING_REQUIRED
 from impacket.examples.secretsdump import (
     RemoteOperations,
     SAMHashes,
@@ -281,7 +282,7 @@ class smb(connection):
         self.logger.extra["hostname"] = self.hostname
 
         try:
-            self.signing = self.conn.isSigningRequired() if self.smbv1 else self.conn._SMBConnection._Connection["RequireSigning"]
+            self.signing = self._is_signing_required()
         except Exception as e:
             self.logger.debug(e)
 
@@ -591,6 +592,25 @@ class smb(connection):
             self.logger.fail("Broken Pipe Error while attempting to login")
             return False
 
+    def _is_signing_required(self):
+        """Determine whether the remote server REQUIRES SMB signing.
+
+        For SMB 3.0+ we read the real negotiated ``ServerSecurityMode`` rather
+        than impacket's ``RequireSigning`` flag. impacket force-sets
+        ``RequireSigning`` to True for any SMB 3.1.1 negotiation regardless of
+        the server's actual policy (the 3.1.1 session setup is always signed).
+        Relying on that flag produced false negatives for relay-target
+        discovery: 3.1.1 hosts that merely *enable* (but do not *require*)
+        signing were reported as ``signing:True`` and silently dropped from
+        ``--gen-relay-list`` output.
+
+        For SMBv1 and SMB 2.0.2/2.1, ``isSigningRequired()`` is accurate: it
+        reads ``RequireSigning``, which impacket only force-sets at 3.1.1.
+        """
+        if not self.smbv1 and self.conn._SMBConnection._Connection["Dialect"] >= SMB2_DIALECT_30:
+            return bool(self.conn._SMBConnection._Connection["ServerSecurityMode"] & SMB2_NEGOTIATE_SIGNING_REQUIRED)
+        return self.conn.isSigningRequired()
+
     def create_smbv1_conn(self, check=False):
         self.logger.info(f"Creating SMBv1 connection to {self.host}")
         try:
@@ -613,12 +633,15 @@ class smb(connection):
                 self.logger.debug(f"Timeout creating SMBv1 connection to {self.host}")
             else:
                 self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
+            self.smbv1 = False
             return False
         except NetBIOSError:
             self.logger.info(f"SMBv1 disabled on {self.host}")
+            self.smbv1 = False
             return False
         except (Exception, NetBIOSTimeout) as e:
             self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
+            self.smbv1 = False
             return False
         return True
 
@@ -639,6 +662,7 @@ class smb(connection):
                 self.logger.debug(f"Timeout creating SMBv3 connection to {self.host}")
             else:
                 self.logger.info(f"Error creating SMBv3 connection to {self.host}: {e}")
+            self.smbv3 = False
             return False
         return True
 
