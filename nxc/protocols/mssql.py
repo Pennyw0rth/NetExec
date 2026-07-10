@@ -648,7 +648,7 @@ class mssql(connection):
         print(wrapped_query)
         return wrapped_query
 
-    def list_linked_servers(self):
+    def links(self):
         self.logger.display("Listing linked servers and their credentials")
         query = """
         SELECT s.name AS linked_server,
@@ -670,11 +670,11 @@ class mssql(connection):
         if not rows:
             self.logger.fail("No linked servers configured")
         else:
-            self.logger.highlight(f"{'Linked server':<30} {'Local login':<30} {'Remote login':<30} {'Use self':5}")
+            self.logger.highlight(f"{'Local login':<30} {'Linked server':<30}  {'Remote login':<30} {'Use self':5}")
             self.logger.highlight(f"{'----------':<30} {'----------':<30} {'----------':<30} {'----------':<5}")
             for row in rows:
                 linked_server = row.get("linked_server")
                 remote_login = row.get("remote_login")
                 local_login = row.get("local_login")
                 use_self = row.get("use_self")
-                self.logger.highlight(f"{linked_server:<30} {local_login:<30} {remote_login:<30} {use_self}")
+                self.logger.highlight(f"{local_login:<30} {linked_server:<30} {remote_login:<30} {use_self}")
