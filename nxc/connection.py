@@ -559,9 +559,7 @@ class connection:
             with sem:
                 username = self.args.username[0] if len(self.args.username) else CCache.parseFile()[1]
                 password = self.args.password[0] if len(self.args.password) else ""
-                self.kerberos_login(self.domain, username, password, "", "", self.kdcHost, True)
-                self.logger.info("Successfully authenticated using Kerberos cache")
-                return True
+                return self.kerberos_login(self.domain, username, password, "", "", self.kdcHost, True)
 
         if self.args.pfx_cert or self.args.pfx_base64 or self.args.pem_cert:
             self.logger.debug("Trying to authenticate using Certificate pfx")
