@@ -43,6 +43,16 @@ sudo apt install pipx git
 pipx ensurepath
 pipx install git+https://github.com/blacklanternsecurity/NetExec
 ```
+### Development Install
+
+```bash
+git clone https://github.com/blacklanternsecurity/NetExec.git
+cd NetExec
+uv sync
+uv run --no-sync nxc -h
+```
+
+> Requires [uv](https://docs.astral.sh/uv/getting-started/installation/). To activate the virtual environment directly instead of using `uv run`, run `source .venv/bin/activate` then use `nxc` as normal.
 
 ## Availability on Unix distributions
 
