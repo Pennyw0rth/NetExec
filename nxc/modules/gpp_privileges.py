@@ -1,7 +1,6 @@
 import re
 from io import BytesIO
 from impacket.ldap import ldap as ldap_impacket
-from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
 
@@ -99,24 +98,25 @@ class NXCModule:
         self.no_ldap = module_options.get("NO_LDAP", False)
 
     def on_login(self, context, connection):
+        self.context = context
         try:
             connection.conn.listPath("SYSVOL", "*")
         except Exception as e:
-            context.log.fail(f"Failed to list shares: {e}")
+            self.context.log.fail(f"Failed to list shares: {e}")
             return
 
-        context.log.display("Searching for GptTmpl.inf files")
+        self.context.log.display("Searching for GptTmpl.inf files")
         paths = connection.spider("SYSVOL", pattern=["GptTmpl.inf"])
 
         if not paths:
-            context.log.warning("No GptTmpl.inf files found in SYSVOL.")
+            self.context.log.warning("No GptTmpl.inf files found in SYSVOL.")
             return
 
         for path in paths:
             if "6AC1786C-016F-11D2-945F-00C04fB984F9" in path:  # Default Domain Policy
-                context.log.success(f"Found Default Domain Policy GptTmpl.inf: {path}")
+                self.context.log.success(f"Found Default Domain Policy GptTmpl.inf: {path}")
             else:
-                context.log.info(f"Found GptTmpl.inf: {path}")
+                self.context.log.info(f"Found GptTmpl.inf: {path}")
 
             buf = BytesIO()
             connection.conn.getFile("SYSVOL", path, buf.write)
@@ -124,19 +124,19 @@ class NXCModule:
             try:
                 content = buf.getvalue().decode("utf-16le")
             except UnicodeDecodeError as e:
-                context.log.error(f"Failed to decode {path} as UTF-16LE: {e}")
+                self.context.log.error(f"Failed to decode {path} as UTF-16LE: {e}")
                 continue
 
             privileges = self.extract_privileges(content)
             if privileges:
                 ldap_connection = None
                 if not self.no_ldap:
-                    ldap_connection = self.initialize_ldap_connection(context, connection)
+                    ldap_connection = self.initialize_ldap_connection(connection)
 
-                context.log.success(f"Privileges extracted from {path}:")
+                self.context.log.success(f"Privileges extracted from {path}:")
                 for privilege, sids in privileges.items():
-                    resolved_sids = [self.resolve_sid(context, sid, ldap_connection) for sid in sids]
-                    context.log.highlight(f"{privilege}: {', '.join(resolved_sids)}")
+                    resolved_sids = [self.resolve_sid(sid, ldap_connection) for sid in sids]
+                    self.context.log.highlight(f"{privilege}: {', '.join(resolved_sids)}")
 
                 if ldap_connection:
                     ldap_connection.close()
@@ -160,79 +160,47 @@ class NXCModule:
 
         return privileges
 
-    def initialize_ldap_connection(self, context, connection):
+    def initialize_ldap_connection(self, connection):
         """
         Initializes an LDAP connection using impacket with LDAPS first, then falls back to plaintext LDAP if LDAPS fails.
         Attempts to retrieve the base DN from the Root DSE or derive it from the domain name.
         """
         ldap_connection = None
-        for proto in ("ldaps", "ldap"):
-            try:
-                ldap_connection = ldap_impacket.LDAPConnection(url=f"{proto}://{connection.remoteName}", dstIp=connection.host)
-                if connection.kerberos:
-                    ldap_connection.kerberosLogin(
-                        connection.username,
-                        connection.password or "",
-                        connection.domain,
-                        connection.lmhash,
-                        connection.nthash,
-                        connection.aesKey or "",
-                        kdcHost=connection.kdcHost,
-                        useCache=bool(connection.use_kcache),
-                    )
-                else:
-                    ldap_connection.login(
-                        user=connection.username,
-                        password=connection.password or "",
-                        domain=connection.domain,
-                        lmhash=connection.lmhash,
-                        nthash=connection.nthash,
-                    )
-                context.log.success(f"Connected to LDAP ({proto}).")
-                break
-            except Exception as e:
-                context.log.warning(f"{proto.upper()} connection failed: {e}")
-                ldap_connection = None
-
-        if not ldap_connection:
-            context.log.error("Failed to connect to LDAP.")
+        try:
+            ldap_connection = ldap_impacket.LDAPConnection(url=f"ldap://{connection.remoteName}", dstIp=connection.host)
+            if connection.kerberos:
+                ldap_connection.kerberosLogin(
+                    connection.username,
+                    connection.password or "",
+                    connection.domain,
+                    connection.lmhash,
+                    connection.nthash,
+                    connection.aesKey or "",
+                    kdcHost=connection.kdcHost,
+                    useCache=bool(connection.use_kcache),
+                )
+            else:
+                ldap_connection.login(
+                    user=connection.username,
+                    password=connection.password or "",
+                    domain=connection.domain,
+                    lmhash=connection.lmhash,
+                    nthash=connection.nthash,
+                )
+            self.context.log.success("Connected to LDAP.")
+        except Exception as e:
+            self.context.log.fail(f"LDAP connection failed: {e}")
             return None
-
-        ldap_connection._baseDN = self.get_base_dn(context, ldap_connection, connection.domain)
         return ldap_connection
 
-    def get_base_dn(self, context, ldap_connection, domain):
-        """Retrieves the base DN from the Root DSE, falling back to deriving it from the domain name."""
-        try:
-            resp = ldap_connection.search(
-                searchBase="",
-                scope=ldapasn1_impacket.Scope("baseObject"),
-                searchFilter="(objectClass=*)",
-                attributes=["defaultNamingContext"],
-            )
-            base_dn = parse_result_attributes(resp)[0]["defaultNamingContext"]
-            if base_dn:
-                return base_dn
-        except Exception as e:
-            context.log.warning(f"Failed to query Root DSE for defaultNamingContext: {e}")
-
-        base_dn = ",".join([f"dc={part}" for part in domain.split(".")])
-        context.log.info(f"Derived base DN: {base_dn}")
-        return base_dn
-
-    def resolve_sid(self, context, sid, ldap_connection):
+    def resolve_sid(self, sid, ldap_connection):
         """Resolves a SID to a human-readable name using well-known mappings or LDAP queries."""
         if sid in self.WELL_KNOWN_SIDS:
             return self.WELL_KNOWN_SIDS[sid]
 
         if ldap_connection:
             try:
-                if not ldap_connection._baseDN:
-                    context.log.warning(f"No base DN found for LDAP connection. Cannot resolve SID {sid}.")
-                    return sid
-
                 resp = ldap_connection.search(
-                    searchBase=ldap_connection._baseDN,
                     searchFilter=f"(objectSid={sid})",
                     attributes=["sAMAccountName"],
                 )
@@ -241,11 +209,15 @@ class NXCModule:
                 if parsed_result and "sAMAccountName" in parsed_result[0]:
                     return f"{parsed_result[0]['sAMAccountName']}"
                 else:
-                    context.log.warning(f"SID {sid} not found in LDAP. Returning raw SID.")
+                    self.context.log.warning(f"SID {sid} not found in LDAP. Returning raw SID.")
 
+            except ldap_impacket.LDAPSearchError:
+                self.context.log.warning(f"SID {sid} not found in LDAP. Returning raw SID.")
+            except ldap_impacket.LDAPFilterSyntaxError:
+                self.context.log.warning(f"Invalid LDAP filter syntax for SID {sid}. Returning raw SID.")
             except Exception as e:
-                context.log.error(f"Failed to resolve SID {sid} via LDAP: {e}")
+                self.context.log.error(f"Failed while resolving SID {sid} via LDAP: {e}")
         else:
-            context.log.warning(f"LDAP connection not established. Returning raw SID: {sid}")
+            self.context.log.warning(f"LDAP connection not established. Returning raw SID: {sid}")
 
         return sid
