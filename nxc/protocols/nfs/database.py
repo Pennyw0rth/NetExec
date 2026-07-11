@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, UniqueConstraint, String, select
+from sqlalchemy import Boolean, Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, UniqueConstraint, String, func, select
 from sqlalchemy.dialects.sqlite import Insert  # used for upsert
 from sqlalchemy.orm import declarative_base
 
@@ -56,12 +56,17 @@ class database(BaseDB):
     class Share(Base):
         __tablename__ = "shares"
         id = Column(Integer)
-        lir_id = Column(Integer)
-        data = Column(String)
+        host = Column(String)
+        read_perm = Column(Boolean)
+        write_perm = Column(Boolean)
+        exec_perm = Column(Boolean)
+        storage = Column(String)
+        share = Column(String)
+        access = Column(String)
 
         __table_args__ = (
             PrimaryKeyConstraint("id"),
-            ForeignKeyConstraint(["lir_id"], ["loggedin_relations.id"]),
+            UniqueConstraint("host", "share"),
         )
 
     @staticmethod
@@ -132,3 +137,45 @@ class database(BaseDB):
         if updated_ids:
             nxc_logger.debug(f"add_host() - Host IDs Updated: {updated_ids}")
             return updated_ids
+
+    def add_share(self, host, permission, storage, share, access):
+        """Check if this share is already in the DB, if not add it."""
+        read_perm, write_perm, exec_perm = permission
+        used, _, total = storage
+        storage_str = f"{used} / {total}"
+        access_str = ", ".join(access) if access else ""
+
+        new_share = {
+            "host": host,
+            "read_perm": read_perm,
+            "write_perm": write_perm,
+            "exec_perm": exec_perm,
+            "storage": storage_str,
+            "share": share,
+            "access": access_str,
+        }
+
+        self.db_execute(
+            Insert(self.SharesTable).on_conflict_do_nothing(),
+            new_share,
+        )
+
+    def get_shares(self, filter_term=None):
+        """Return shares from the database, optionally filtered by host or share path."""
+        if self.is_share_valid(filter_term):
+            q = select(self.SharesTable).filter(self.SharesTable.c.id == filter_term)
+        elif filter_term:
+            like_term = func.lower(f"%{filter_term}%")
+            q = select(self.SharesTable).filter(
+                self.SharesTable.c.host.like(like_term) | self.SharesTable.c.share.like(like_term)
+            )
+        else:
+            q = select(self.SharesTable)
+        return self.db_execute(q).all()
+
+    def is_share_valid(self, share_id):
+        """Check if this share ID is valid."""
+        q = select(self.SharesTable).filter(self.SharesTable.c.id == share_id)
+        results = self.db_execute(q).all()
+        nxc_logger.debug(f"is_share_valid(shareID={share_id}) => {len(results) > 0}")
+        return len(results) > 0
