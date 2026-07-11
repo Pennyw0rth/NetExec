@@ -147,6 +147,8 @@ class nfs(connection):
         except Exception as e:
             self.logger.fail(f"Failed to connect to NFS3 host: {e}")
 
+        self.db.add_host(self.host, self.hostname, self.port, self.nfs_versions, self.root_escape)
+
     def print_host_info(self):
         root_escape_str = colored(f"root escape:{self.root_escape}", host_info_colors[1 if self.root_escape else 0], attrs=["bold"])
         self.logger.display(f"Supported NFS versions: ({', '.join(str(x) for x in self.nfs_versions)}) ({root_escape_str})")
