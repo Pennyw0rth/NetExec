@@ -96,7 +96,16 @@ class navigator(DatabaseNavigator):
         line = line.split()
         command = line[0].lower()
 
-        if command == "shares":
+        if command == "hosts":
+            if len(line) < 2:
+                print("[-] invalid arguments, export hosts <filename>")
+                return
+            filename = line[1]
+            hosts = self.db.get_hosts()
+            csv_header = ("id", "ip", "hostname", "port", "version", "root_escape")
+            write_csv(filename, csv_header, hosts)
+            print("[+] NFS hosts exported")
+        elif command == "shares":
             if len(line) < 3:
                 print("[-] invalid arguments, export shares <simple|detailed> <filename>")
                 return
@@ -132,10 +141,12 @@ class navigator(DatabaseNavigator):
             else:
                 print(f"[-] No such export option: {line[1]}")
         else:
-            print(f"[-] Export command '{command}' is not supported for NFS. Supported: shares")
+            print(f"[-] Export command '{command}' is not supported for NFS. Supported: hosts, shares")
 
     def help_export(self):
         help_string = """
+        export hosts <filename>
+            exports: id, ip, hostname, port, version, root_escape
         export shares <simple|detailed> <filename>
             simple   - exports: id, host, read, write, exec, storage, share, access
             detailed - exports: id, host, version, read, write, exec, storage, share, access
