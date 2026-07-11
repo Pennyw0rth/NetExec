@@ -255,7 +255,7 @@ class connection:
             self.output_filename = os.path.join(base_log_dir, filename_pattern)
 
             self.print_host_info()
-            if self.login() or (self.username == "" and self.password == ""):
+            if self.login() or (self.username == "" and self.password == "" and self.protocol != "mssql"):
                 self.logger.debug("Calling command arguments")
                 self.call_cmd_args()
                 if self.args.module:
