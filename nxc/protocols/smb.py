@@ -762,11 +762,9 @@ class smb(connection):
         if self.args.delegate:
             return
 
-        if not self.args.spn:
-            self.logger.fail("--spn is required with --generate-st when --delegate is not used")
-            return
+        spn = f"cifs/{self.remoteName}" if not self.args.spn else self.args.spn
 
-        self.logger.info(f"Attempting to get ST for SPN {self.args.spn} as {self.username}@{self.domain}")
+        self.logger.info(f"Attempting to get ST for SPN {spn} as {self.username}@{self.domain}")
 
         try:
             tgt = cipher = tgt_session_key = None
@@ -800,7 +798,7 @@ class smb(connection):
                 )
                 self.logger.debug(f"TGT obtained for {self.username}@{self.domain}")
 
-            server_name = Principal(self.args.spn, type=constants.PrincipalNameType.NT_SRV_INST.value)
+            server_name = Principal(spn, type=constants.PrincipalNameType.NT_SRV_INST.value)
             tgs, _, tgs_session_key, _ = getKerberosTGS(
                 server_name,
                 self.domain.upper(),
@@ -809,7 +807,7 @@ class smb(connection):
                 cipher,
                 tgt_session_key,
             )
-            self.logger.debug(f"ST successfully obtained for SPN {self.args.spn}")
+            self.logger.debug(f"ST successfully obtained for SPN {spn}")
 
             ccache = CCache()
             ccache.fromTGS(tgs, tgs_session_key, tgs_session_key)
