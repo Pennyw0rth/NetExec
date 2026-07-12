@@ -100,7 +100,7 @@ class navigator(DatabaseNavigator):
             if len(line) < 2:
                 print("[-] invalid arguments, export hosts <filename>")
                 return
-            filename = line[1]
+            filename = line[2]
             hosts = self.db.get_hosts()
             csv_header = ("id", "ip", "hostname", "port", "version", "root_escape")
             write_csv(filename, csv_header, hosts)
