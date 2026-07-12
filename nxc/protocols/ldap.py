@@ -38,7 +38,7 @@ from impacket.ldap.ldap import LDAPFilterSyntaxError, MODIFY_REPLACE
 from impacket.smbconnection import SessionError
 from impacket.ntlm import getNTLMSSPType1
 
-from nxc.config import process_secret, host_info_colors
+from nxc.config import process_secret, process_secret_dump, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.misc import get_bloodhound_info, convert, d2b, parse_argument
@@ -321,7 +321,7 @@ class ldap(connection):
         if self.username and self.password == "" and self.args.asreproast:
             hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
-                self.logger.highlight(f"{hash_tgt}")
+                self.logger.highlight(process_secret_dump(hash_tgt))
                 with open(self.args.asreproast, "a+") as hash_asreproast:
                     hash_asreproast.write(f"{hash_tgt}\n")
             return False
@@ -446,7 +446,7 @@ class ldap(connection):
         if self.username and self.password == "" and self.args.asreproast:
             hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
-                self.logger.highlight(f"{hash_tgt}")
+                self.logger.highlight(process_secret_dump(hash_tgt))
                 with open(self.args.asreproast, "a+") as hash_asreproast:
                     hash_asreproast.write(f"{hash_tgt}\n")
             return False
@@ -542,7 +542,7 @@ class ldap(connection):
         if self.username and self.hash == "" and self.args.asreproast:
             hash_tgt = KerberosAttacks(self).get_tgt_asroast(self.username)
             if hash_tgt:
-                self.logger.highlight(f"{hash_tgt}")
+                self.logger.highlight(process_secret_dump(hash_tgt))
                 with open(self.args.asreproast, "a+") as hash_asreproast:
                     hash_asreproast.write(f"{hash_tgt}\n")
             return False
@@ -969,7 +969,7 @@ class ldap(connection):
             for user in resp_parsed:
                 hash_TGT = KerberosAttacks(self).get_tgt_asroast(user["sAMAccountName"])
                 if hash_TGT:
-                    self.logger.highlight(f"{hash_TGT}")
+                    self.logger.highlight(process_secret_dump(hash_TGT))
                     with open(self.args.asreproast, "a+") as hash_asreproast:
                         hash_asreproast.write(f"{hash_TGT}\n")
 
@@ -1071,7 +1071,7 @@ class ldap(connection):
                         pwdLastSet = "<never>" if str(user.get("pwdLastSet", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(user["pwdLastSet"]))))
                         lastLogon = "<never>" if str(user.get("lastLogon", 0)) == "0" else str(datetime.fromtimestamp(self.getUnixTime(int(user["lastLogon"]))))
                         self.logger.display(f"sAMAccountName: {user['sAMAccountName']}, memberOf: {user.get('memberOf', [])}, pwdLastSet: {pwdLastSet}, lastLogon: {lastLogon}")
-                        self.logger.highlight(out)
+                        self.logger.highlight(process_secret_dump(out, sep="*", keep=2))
                         if self.args.kerberoasting:
                             with open(self.args.kerberoasting, "a+") as hash_kerberoasting:
                                 hash_kerberoasting.write(out + "\n")
