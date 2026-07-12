@@ -13,20 +13,6 @@ import traceback
 from os.path import isfile
 
 
-def escape_filter_chars(text, encoding="utf-8"):
-    """Escape special characters in an LDAP search filter assertion value (RFC 4515)."""
-    if isinstance(text, (bytes, bytearray)):
-        try:
-            text = text.decode(encoding)
-        except Exception:
-            return "".join(f"\\{b:02x}" for b in text)
-    escaped = text.replace("\\", "\\5c")
-    escaped = escaped.replace("*", "\\2a")
-    escaped = escaped.replace("(", "\\28")
-    escaped = escaped.replace(")", "\\29")
-    return escaped.replace("\x00", "\\00")
-
-
 OBJECT_TYPES_GUID = {}
 OBJECT_TYPES_GUID.update(SCHEMA_OBJECTS)
 OBJECT_TYPES_GUID.update(EXTENDED_RIGHTS)
@@ -204,8 +190,8 @@ class ALLOWED_OBJECT_ACE_MASK_FLAGS(Enum):
 
 
 SEARCH_FILTERS = {
-    "TARGET": lambda target: f"(sAMAccountName={escape_filter_chars(target)})",
-    "TARGET_DN": lambda target: f"(distinguishedName={escape_filter_chars(target)})"
+    "TARGET": lambda target: f"(sAMAccountName={target})",
+    "TARGET_DN": lambda target: f"(distinguishedName={target})"
 }
 
 
@@ -302,7 +288,7 @@ class NXCModule:
         if self.principal_sAMAccountName is not None:
             try:
                 resp = connection.search(
-                    searchFilter=f"(sAMAccountName={escape_filter_chars(self.principal_sAMAccountName)})",
+                    searchFilter=f"(sAMAccountName={self.principal_sAMAccountName})",
                     attributes=["objectSid"],
                 )
                 resp_parsed = parse_result_attributes(resp)[0]
