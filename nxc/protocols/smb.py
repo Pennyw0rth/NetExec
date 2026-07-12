@@ -2494,10 +2494,10 @@ class smb(connection):
             if self.args.enabled:
                 if "Enabled" in secret:
                     secret = " ".join(secret.split(" ")[:-1])
-                    self.logger.highlight(process_secret_dump(secret))
+                    self.logger.highlight(process_secret_dump(secret, keep=2))
             else:
                 secret = " ".join(secret.split(" ")[:-1]) if " " in secret else secret
-                self.logger.highlight(process_secret_dump(secret))
+                self.logger.highlight(process_secret_dump(secret, keep=2))
 
             # Filter out computer accounts, history hashes and kerberos keys for adding to db
             if secret.find("$") == -1 and secret_type == NTDSHashes.SECRET_TYPE.NTDS and "_history" not in secret:
