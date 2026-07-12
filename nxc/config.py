@@ -48,3 +48,17 @@ if len(host_info_colors) != 4:
 def process_secret(text):
     reveal = text[:reveal_chars_of_pwd]
     return text if not audit_mode else reveal + (audit_mode if len(audit_mode) > 1 else audit_mode * 8)
+
+
+def process_secret_dump(line, sep=":"):
+    """
+    Redacts the credential material of a dumped secret line (SAM/LSA/NTDS) when audit_mode is
+    enabled, keeping only the identifier (username, secret name, etc.) before the first separator.
+    """
+    if not audit_mode:
+        return line
+    if sep not in line:
+        return process_secret(line)
+    identifier, _, _ = line.partition(sep)
+    mask = audit_mode if len(audit_mode) > 1 else audit_mode * 8
+    return f"{identifier}{sep}{mask}"

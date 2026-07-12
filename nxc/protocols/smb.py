@@ -54,7 +54,7 @@ from impacket.smb3structs import (
 
 from impacket.dcerpc.v5 import tsts as TSTS
 
-from nxc.config import process_secret, host_info_colors, check_guest_account
+from nxc.config import process_secret, process_secret_dump, host_info_colors, check_guest_account
 from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
@@ -2102,7 +2102,7 @@ class smb(connection):
             host_id = self.db.get_hosts(filter_term=self.host)[0][0]
 
             def add_sam_hash(sam_hash, host_id):
-                self.logger.highlight(sam_hash)
+                self.logger.highlight(process_secret_dump(sam_hash))
                 if "_history" in sam_hash:
                     return
                 username, _, lmhash, nthash, _, _, _ = sam_hash.split(":")
@@ -2422,7 +2422,7 @@ class smb(connection):
 
             def add_lsa_secret(secret):
                 add_lsa_secret.secrets += 1
-                self.logger.highlight(secret)
+                self.logger.highlight(process_secret_dump(secret))
                 if "_SC_GMSA_{84A78B8C" in secret:
                     gmsa_id = secret.split("_")[4].split(":")[0]
                     data = bytes.fromhex(secret.split("_")[4].split(":")[1])
@@ -2432,7 +2432,7 @@ class smb(connection):
                     ntlm_hash = MD4.new()
                     ntlm_hash.update(currentPassword)
                     passwd = binascii.hexlify(ntlm_hash.digest()).decode("utf-8")
-                    self.logger.highlight(f"GMSA ID: {gmsa_id:<20} NTLM: {passwd}")
+                    self.logger.highlight(process_secret_dump(f"GMSA ID: {gmsa_id:<20} NTLM: {passwd}", sep="NTLM: "))
 
             add_lsa_secret.secrets = 0
 
@@ -2494,10 +2494,10 @@ class smb(connection):
             if self.args.enabled:
                 if "Enabled" in secret:
                     secret = " ".join(secret.split(" ")[:-1])
-                    self.logger.highlight(secret)
+                    self.logger.highlight(process_secret_dump(secret))
             else:
                 secret = " ".join(secret.split(" ")[:-1]) if " " in secret else secret
-                self.logger.highlight(secret)
+                self.logger.highlight(process_secret_dump(secret))
 
             # Filter out computer accounts, history hashes and kerberos keys for adding to db
             if secret.find("$") == -1 and secret_type == NTDSHashes.SECRET_TYPE.NTDS and "_history" not in secret:
