@@ -1339,10 +1339,10 @@ class ldap(connection):
                 aes128 = aes256 = ""
                 if "msDS-ManagedPassword" in acc:
                     rc4, aes128, aes256 = self.gmsa_compute_secrets(acc["msDS-ManagedPassword"], acc["sAMAccountName"])
-                self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} NTLM: {rc4:<36} PrincipalsAllowedToReadPassword: {principal_with_read}")
+                self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} NTLM: {process_secret(rc4):<36} PrincipalsAllowedToReadPassword: {principal_with_read}")
                 if aes128 and aes256:
-                    self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} aes128-cts-hmac-sha1-96: {aes128}")
-                    self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} aes256-cts-hmac-sha1-96: {aes256}")
+                    self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} aes128-cts-hmac-sha1-96: {process_secret(aes128)}")
+                    self.logger.highlight(f"Account: {acc['sAMAccountName']:<20} aes256-cts-hmac-sha1-96: {process_secret(aes256)}")
 
     def gmsa_compute_secrets(self, password_data: bytes, sAMAccountName: str):
         """Generate RC4, AES128, and AES256 keys for a GMSA account based on the provided password data and username."""
@@ -1407,12 +1407,12 @@ class ldap(connection):
             # Compute the password and keys
             data = bytes.fromhex(gmsa_pass)
             rc4, aes128, aes256 = self.gmsa_compute_secrets(data, sAMAccountName)
-            self.logger.highlight(f"Account: {sAMAccountName:<20} NTLM: {rc4}")
+            self.logger.highlight(f"Account: {sAMAccountName:<20} NTLM: {process_secret(rc4)}")
             if not sAMAccountName:
                 self.logger.fail("Could not find the GMSA account associated with the provided ID.")
             else:
-                self.logger.highlight(f"Account: {sAMAccountName:<20} aes128-cts-hmac-sha1-96: {aes128}")
-                self.logger.highlight(f"Account: {sAMAccountName:<20} aes256-cts-hmac-sha1-96: {aes256}")
+                self.logger.highlight(f"Account: {sAMAccountName:<20} aes128-cts-hmac-sha1-96: {process_secret(aes128)}")
+                self.logger.highlight(f"Account: {sAMAccountName:<20} aes256-cts-hmac-sha1-96: {process_secret(aes256)}")
         else:
             self.logger.fail("The provided string does not appear to be a valid GMSA LSA secret.")
 
