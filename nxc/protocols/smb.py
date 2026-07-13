@@ -2267,7 +2267,7 @@ class smb(connection):
         # Collect User and Machine Credentials Manager secrets
         def credential_callback(credential):
             tag = "CREDENTIAL"
-            line = f"[{credential.winuser}][{tag}] {credential.target} - {credential.username}:{credential.password}"
+            line = f"[{credential.winuser}][{tag}] {credential.target} - {credential.username}:{process_secret(credential.password)}"
             self.logger.highlight(line)
             if self.output_file:
                 self.output_file.write(line + "\n")
@@ -2305,7 +2305,7 @@ class smb(connection):
         def browser_callback(secret):
             if isinstance(secret, LoginData):
                 secret_url = secret.url + " -" if secret.url != "" else "-"
-                line = f"[{secret.winuser}][{secret.browser.upper()}] {secret_url} {secret.username}:{secret.password}"
+                line = f"[{secret.winuser}][{secret.browser.upper()}] {secret_url} {secret.username}:{process_secret(secret.password)}"
                 self.logger.highlight(line)
                 if self.output_file:
                     self.output_file.write(line + "\n")
@@ -2318,7 +2318,7 @@ class smb(connection):
                     secret.url,
                 )
             elif isinstance(secret, GoogleRefreshToken):
-                line = f"[{secret.winuser}][{secret.browser.upper()}] Google Refresh Token: {secret.service}:{secret.token}"
+                line = f"[{secret.winuser}][{secret.browser.upper()}] Google Refresh Token: {secret.service}:{process_secret(secret.token)}"
                 self.logger.highlight(line)
                 if self.output_file:
                     self.output_file.write(line + "\n")
@@ -2331,7 +2331,7 @@ class smb(connection):
                     "Google Refresh Token",
                 )
             elif isinstance(secret, Cookie):
-                line = f"[{secret.winuser}][{secret.browser.upper()}] {secret.host}{secret.path} - {secret.cookie_name}:{secret.cookie_value}"
+                line = f"[{secret.winuser}][{secret.browser.upper()}] {secret.host}{secret.path} - {secret.cookie_name}:{process_secret(secret.cookie_value)}"
                 self.logger.highlight(line)
                 if self.output_file:
                     self.output_file.write(line + "\n")
@@ -2346,7 +2346,7 @@ class smb(connection):
             tag = "IEX"
             if secret.type == "Internet Explorer":
                 resource = secret.resource + " -" if secret.resource != "" else "-"
-                line = f"[{secret.winuser}][{tag}] {resource} - {secret.username}:{secret.password}"
+                line = f"[{secret.winuser}][{tag}] {resource} - {secret.username}:{process_secret(secret.password)}"
                 self.logger.highlight(line)
                 if self.output_file:
                     self.output_file.write(line + "\n")
@@ -2370,7 +2370,7 @@ class smb(connection):
             tag = "FIREFOX"
             if isinstance(secret, FirefoxData):
                 url = secret.url + " -" if secret.url != "" else "-"
-                line = f"[{secret.winuser}][{tag}] {url} {secret.username}:{secret.password}"
+                line = f"[{secret.winuser}][{tag}] {url} {secret.username}:{process_secret(secret.password)}"
                 self.logger.highlight(line)
                 if self.output_file:
                     self.output_file.write(line + "\n")
@@ -2383,7 +2383,7 @@ class smb(connection):
                     secret.url,
                 )
             elif isinstance(secret, FirefoxCookie):
-                line = f"[{secret.winuser}][{tag}] {secret.host}{secret.path} {secret.cookie_name}:{secret.cookie_value}"
+                line = f"[{secret.winuser}][{tag}] {secret.host}{secret.path} {secret.cookie_name}:{process_secret(secret.cookie_value)}"
                 self.logger.highlight(line)
                 if self.output_file:
                     self.output_file.write(line + "\n")
