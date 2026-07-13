@@ -287,3 +287,43 @@ def test_write_list_empty_entries(tmp_path):
     write_list(str(test_file), [])
     assert test_file.read_text() == ""
 
+
+def test_do_export_keys_empty_guard(db, tmp_path):
+    """R2 regression: do_export('keys all <file>') must NOT truncate the
+    target file when the protocol returns no keys (e.g., SMB). Removing
+    the empty-key guard in do_export would leave all other tests passing
+    while restoring false success and file truncation."""
+    import io
+
+    test_file = tmp_path / "keys_export.txt"
+    test_file.write_text("do not overwrite me")
+    assert test_file.read_text() == "do not overwrite me"
+
+    # Minimal mock — DatabaseNavigator only needs .config and .workspace
+    class MockMainMenu:
+        config = {}
+        workspace = "test"
+
+    from nxc.nxcdb import DatabaseNavigator
+
+    nav = DatabaseNavigator(MockMainMenu(), db, "smb")
+
+    buf = io.StringIO()
+    import sys
+
+    old_stdout = sys.stdout
+    sys.stdout = buf
+    try:
+        nav.do_export(f"keys all {test_file}")
+    finally:
+        sys.stdout = old_stdout
+
+    output = buf.getvalue()
+
+    # File must remain unchanged — the whole point of the guard
+    assert test_file.read_text() == "do not overwrite me"
+    # Failure message must appear
+    assert "[-] No keys found" in output
+    # Success message must NOT appear
+    assert "[+] Keys exported" not in output
+
