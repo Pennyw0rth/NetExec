@@ -315,6 +315,9 @@ class DatabaseNavigator(cmd.Cmd):
                 return
 
             keys = self.db.get_keys() if line[1].lower() == "all" else self.db.get_keys(key_id=int(line[1]))
+            if not keys:
+                print("[-] No keys found in the database for the current protocol")
+                return
             writable_keys = [key[2] for key in keys]
             filename = line[2]
             write_list(filename, writable_keys)

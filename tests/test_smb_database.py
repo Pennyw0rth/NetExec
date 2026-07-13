@@ -256,3 +256,34 @@ def test_get_loggedin_relations():
 
 def test_remove_loggedin_relations():
     pass
+
+
+def test_get_keys_returns_empty_for_smb(db):
+    """Protocols without key support (like SMB) must return an empty list.
+    This also verifies the BaseDB default doesn't raise AttributeError."""
+    keys = db.get_keys()
+    assert keys == []
+    assert isinstance(keys, list)
+
+
+def test_get_keys_all_and_by_id_fallback(db):
+    """Both call variants (all / by id) fall back to empty for unsupported protocols."""
+    assert db.get_keys() == []
+    assert db.get_keys(key_id=1) == []
+
+
+def test_write_list_empty_entries(tmp_path):
+    """write_list with empty entries truncates the file and writes nothing.
+    This is why the keys export must guard against empty keys — see the
+    check in DatabaseNavigator.do_export for the 'keys' command."""
+    from nxc.nxcdb import write_list
+
+    test_file = tmp_path / "test_export.txt"
+    # Pre-populate the file with data
+    test_file.write_text("existing content")
+    assert test_file.read_text() == "existing content"
+
+    # write_list with empty entries opens in "w" mode and writes nothing
+    write_list(str(test_file), [])
+    assert test_file.read_text() == ""
+
