@@ -2185,7 +2185,7 @@ class smb(connection):
         def sccm_callback(secret):
             if isinstance(secret, SCCMCred):
                 tag = "NAA Account"
-                self.logger.highlight(f"[{tag}] {secret.username.decode('latin-1')}:{secret.password.decode('latin-1')}")
+                self.logger.highlight(f"[{tag}] {secret.username.decode('latin-1')}:{process_secret(secret.password.decode('latin-1'))}")
                 self.db.add_dpapi_secrets(
                     target.address,
                     f"SCCM - {tag}",
@@ -2196,7 +2196,7 @@ class smb(connection):
                 )
             elif isinstance(secret, SCCMSecret):
                 tag = "Task sequences secret"
-                self.logger.highlight(f"[{tag}] {secret.secret.decode('latin-1')}")
+                self.logger.highlight(f"[{tag}] {process_secret(secret.secret.decode('latin-1'))}")
                 self.db.add_dpapi_secrets(
                     target.address,
                     f"SCCM - {tag}",
@@ -2207,7 +2207,7 @@ class smb(connection):
                 )
             elif isinstance(secret, SCCMCollection):
                 tag = "Collection Variable"
-                self.logger.highlight(f"[{tag}] {secret.variable.decode('latin-1')}:{secret.value.decode('latin-1')}")
+                self.logger.highlight(f"[{tag}] {secret.variable.decode('latin-1')}:{process_secret(secret.value.decode('latin-1'))}")
                 self.db.add_dpapi_secrets(
                     target.address,
                     f"SCCM - {tag}",
