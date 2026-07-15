@@ -21,7 +21,9 @@ jobs:
           enable-cache: true
       - name: Set up Python
         run: uv python install 3.13
+      - name: Install project with dev group
+        run: uv sync --dev
       - name: Run ruff
         run: |
-          uvx ruff@0.11.0 --version
-          uvx ruff@0.11.0 check . --preview
+          uv run ruff --version
+          uv run ruff check . --preview

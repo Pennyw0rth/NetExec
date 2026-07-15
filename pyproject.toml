@@ -87,7 +87,15 @@ build-backend = "poetry_dynamic_versioning.backend"
 flake8 = "*"
 shiv = "*"
 pytest = "^7.2.2"
-ruff = "*"
+ruff = "==0.11.0"
+
+# uv-native dev group (PEP 735)
+dev = [
+    "flake8",
+    "shiv",
+    "pytest>=7.2.2,<8",
+    "ruff==0.11.0",
+]
 
 # Supply-chain hardening: uv will ignore package artifacts uploaded to indexes
 # within the last day, giving maintainers and scanners time to detect and remove
