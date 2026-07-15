@@ -89,7 +89,7 @@ dev = [
     "flake8",
     "shiv",
     "pytest>=7.2.2,<8",
-    "ruff==0.11.0",
+    "ruff",
 ]
 
 # Supply-chain hardening: uv will ignore package artifacts uploaded to indexes
