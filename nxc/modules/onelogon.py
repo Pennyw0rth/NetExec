@@ -24,7 +24,7 @@ class NXCModule:
 
         found_dacls = []
 
-        policies = connection.conn.listPath("SYSVOL", f"{connection.domain}/Policies/*")
+        policies = connection.conn.listPath("SYSVOL", f"{connection.targetDomain}/Policies/*")
         for policy in policies:
             # Skip "." and ".." directory pointers to avoid path errors
             if policy.get_longname() in [".", ".."]:
@@ -32,7 +32,7 @@ class NXCModule:
 
             try:
                 self.gpo_data = b""
-                connection.conn.getFile("SYSVOL", f"{connection.domain}/Policies/{policy.get_longname()}/MACHINE/Microsoft/Windows NT/SecEdit/GptTmpl.inf", output_callback)
+                connection.conn.getFile("SYSVOL", f"{connection.targetDomain}/Policies/{policy.get_longname()}/MACHINE/Microsoft/Windows NT/SecEdit/GptTmpl.inf", output_callback)
 
                 try:
                     decoded_data = self.gpo_data.decode("utf-8")
