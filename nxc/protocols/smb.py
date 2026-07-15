@@ -188,17 +188,30 @@ class smb(connection):
     def enum_host_info(self):
         self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
 
-        try:
-            self.conn.login("", "")
-            self.null_auth = True
-        except BrokenPipeError:
-            self.logger.fail("Broken Pipe Error while attempting to login")
-        except Exception as e:
-            self.null_auth = False
-            if "STATUS_NOT_SUPPORTED" in str(e):
-                # no ntlm supported
-                self.no_ntlm = True
-                self.logger.debug("NTLM not supported")
+        # If the user doesn't want to perform a null-auth test for OPSEC reasons
+        if not self.args.no_null_auth:
+            try:
+                self.conn.login("", "")
+                self.null_auth = True
+            except BrokenPipeError:
+                self.logger.fail("Broken Pipe Error while attempting to login")
+            except Exception as e:
+                self.null_auth = False
+                if "STATUS_NOT_SUPPORTED" in str(e):
+                    # no ntlm supported
+                    self.no_ntlm = True
+                    self.logger.debug("NTLM not supported")
+        else:
+            try:
+                # Needed to get the OS arch and hostname
+                self.conn.login(gen_random_string(10), gen_random_string(10))
+            except BrokenPipeError:
+                self.logger.fail("Broken Pipe Error while attempting to login")
+            except Exception as e:
+                if "STATUS_NOT_SUPPORTED" in str(e):
+                    # no ntlm supported
+                    self.no_ntlm = True
+                    self.logger.debug("NTLM not supported")
 
         if check_guest_account and not self.no_ntlm:
             try:
