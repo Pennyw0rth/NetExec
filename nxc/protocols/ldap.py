@@ -973,9 +973,9 @@ class ldap(connection):
                     with open(self.args.asreproast, "a+") as hash_asreproast:
                         hash_asreproast.write(f"{hash_TGT}\n")
 
-    def _kerberoast_aes_fallback(self, err, current_tgt):
+    def _kerberoast_aes_fallback(self, e, current_tgt):
         """Obtain (and cache) an AES TGT to retry kerberoasting when an AES-only account rejects the RC4 ticket."""
-        if err.getErrorCode() != constants.ErrorCodes.KDC_ERR_ETYPE_NOSUPP.value:
+        if not isinstance(e, KerberosError) or e.getErrorCode() != constants.ErrorCodes.KDC_ERR_ETYPE_NOSUPP.value:
             return None
 
         cached = getattr(self, "_kerberoast_aes_tgt", None)
@@ -1078,10 +1078,10 @@ class ldap(connection):
                                 TGT["cipher"],
                                 TGT["sessionKey"],
                             )
-                        except KerberosError as ke:
+                        except Exception as e:
                             # RC4 service ticket rejected by an AES-only account (KDC_ERR_ETYPE_NOSUPP).
                             # Retry once with an AES TGT, mirroring the asreproast fallback behavior.
-                            aes_tgt = self._kerberoast_aes_fallback(ke, TGT)
+                            aes_tgt = self._kerberoast_aes_fallback(e, TGT)
                             if aes_tgt is None:
                                 raise
                             TGT = aes_tgt
