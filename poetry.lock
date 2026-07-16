@@ -516,7 +516,7 @@ dev = ["black (>=23.0.0)", "mypy (>=1.0.0)", "pytest (>=7.0.0)", "pytest-cov (>=
 
 [[package]]
 name = "certipy-ad"
-version = "5.0.4"
+version = "5.1.0"
 description = "Active Directory Certificate Services enumeration and abuse"
 optional = false
 python-versions = ">=3.10"
@@ -544,7 +544,7 @@ bloodhound = ["neo4j (>=5.28.1,<5.29.0)"]
 type = "git"
 url = "https://github.com/Pennyw0rth/Certipy"
 reference = "HEAD"
-resolved_reference = "49a4aa6b17d2246491a81f89b0d7d74b732c66d4"
+resolved_reference = "069e03113095aa02772aa3d8debea90654933fe4"
 
 [[package]]
 name = "cffi"

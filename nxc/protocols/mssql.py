@@ -451,7 +451,7 @@ class mssql(connection):
 
             # Query known group to determine raw SID & convert to canon
             raw_domain_sid = self.conn.sql_query(f"SELECT SUSER_SID('{domain}\\Domain Admins')")[0][""]
-            domain_sid = SID(bytes.fromhex(raw_domain_sid.decode())).formatCanonical()[:-4]
+            domain_sid = SID(bytes.fromhex(raw_domain_sid)).formatCanonical()[:-4]
         except Exception as e:
             self.logger.fail(f"Error parsing SID. Not domain joined?: {e}")
             return entries
