@@ -648,7 +648,7 @@ class mssql(connection):
             return
         else:
             self.logger.display("Enumerated logins")
-            self.logger.highlight(f"{'Login Name':<15} {'Hash type':<10} {'Database hash'}")
+            self.logger.highlight(f"{'Login Name':<15} {'Hash type':<10} {'Hash'}")
             self.logger.highlight(f"{'----------':<15} {'----------':<10} {'--------------':}")
             for row in rows:
                 name = row.get("name")
