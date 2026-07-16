@@ -1061,11 +1061,7 @@ class ldap(connection):
                     continue
 
             try:
-                if getattr(self, "_kerberoast_aes_tgt", None) is not None:
-                    # A previous account rejected RC4 (AES-only domain/account); reuse the AES TGT for the rest.
-                    TGT = self._kerberoast_aes_tgt
-                else:
-                    TGT = KerberosAttacks(self).get_tgt_kerberoasting(self.use_kcache)
+                TGT = KerberosAttacks(self).get_tgt_kerberoasting(self.use_kcache)
                 self.logger.debug(f"TGT: {TGT}")
                 if TGT:
                     try:
