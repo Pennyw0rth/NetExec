@@ -123,7 +123,7 @@ class KerberosAttacks:
             fd.write(entry + "\n")
         return entry
 
-    def get_tgt_kerberoasting(self, kcache=None):
+    def get_tgt_kerberoasting(self, kcache=None, force_aes=False):
         if kcache:
             if getenv("KRB5CCNAME"):
                 self.logger.debug("KRB5CCNAME environment variable exists, attempting to use that...")
@@ -152,7 +152,9 @@ class KerberosAttacks:
         # password to ntlm hashes (that will force to use RC4 for the TGT). If that doesn't work, we use the
         # cleartext password.
         # If no clear text password is provided, we just go with the defaults.
-        if self.password != "" and (self.lmhash == "" and self.nthash == ""):
+        # When force_aes is set (AES-only target rejected RC4), we skip the RC4 conversion so the KDC
+        # negotiates an AES TGT from the cleartext password / aesKey instead.
+        if self.password != "" and (self.lmhash == "" and self.nthash == "") and not force_aes:
             try:
                 tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(
                     user_name,
