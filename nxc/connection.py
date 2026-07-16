@@ -139,6 +139,7 @@ class connection:
         self.conn = None
         self.output_file_template = None
         self.output_filename = None
+        self.protocol = args.protocol
 
         # Authentication info
         self.password = ""
@@ -147,6 +148,7 @@ class connection:
                              self.args.use_kcache or
                              self.args.aesKey or
                              (hasattr(self.args, "delegate") and self.args.delegate) or
+                             (hasattr(self.args, "generate_st") and self.args.generate_st) or
                              (hasattr(self.args, "no_preauth_targets") and self.args.no_preauth_targets))
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
@@ -253,14 +255,13 @@ class connection:
             self.output_filename = os.path.join(base_log_dir, filename_pattern)
 
             self.print_host_info()
-            if self.login() or (self.username == "" and self.password == ""):
-                if hasattr(self.args, "module") and self.args.module:
+            if self.login() or (self.username == "" and self.password == "" and self.protocol != "mssql"):
+                self.logger.debug("Calling command arguments")
+                self.call_cmd_args()
+                if self.args.module:
                     self.load_modules()
                     self.logger.debug("Calling modules")
                     self.call_modules()
-                else:
-                    self.logger.debug("Calling command arguments")
-                    self.call_cmd_args()
             self.disconnect()
 
     def call_cmd_args(self):
