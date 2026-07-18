@@ -2554,6 +2554,7 @@ class smb(connection):
             justUser=self.args.userntds if self.args.userntds else None,
             printUserStatus=True,
             trustKeys=self.args.trust_keys,
+            justTrustKeys=self.args.just_trust_keys,
             domainFQDN=self.domain,
             perSecretCallback=lambda secret_type, secret: add_hash(secret_type, secret, host_id),
         )
