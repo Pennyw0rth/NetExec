@@ -2560,14 +2560,20 @@ class smb(connection):
         )
 
         try:
-            self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
+            if self.args.just_trust_keys:
+                self.logger.success("Dumping the trust keys, this could take a while so go grab a redbull...")
+            else:
+                self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
             NTDS.dump()
             ntds_outfile = f"{self.output_filename}.ntds"
-            self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
-            if self.args.kerberos_keys:
-                self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
-            self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
-            self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
+            if self.args.just_trust_keys:
+                self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} trust keys to {ntds_outfile}")
+            else:
+                self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
+                if self.args.kerberos_keys:
+                    self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
+                self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
+                self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
         except Exception as e:
             # if str(e).find('ERROR_DS_DRA_BAD_DN') >= 0:
             # We don't store the resume file if this error happened, since this error is related to lack
