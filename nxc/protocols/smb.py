@@ -9,6 +9,7 @@ from textwrap import dedent
 
 from impacket.smbconnection import SMBConnection, SessionError
 from impacket.smb import SMB_DIALECT
+from impacket.smb3structs import SMB2_DIALECT_30, SMB2_NEGOTIATE_SIGNING_REQUIRED
 from impacket.examples.secretsdump import (
     RemoteOperations,
     SAMHashes,
@@ -30,7 +31,7 @@ from impacket.dcerpc.v5.epm import MSRPC_UUID_PORTMAP
 from impacket.dcerpc.v5.samr import SID_NAME_USE
 from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
 from impacket.krb5.ccache import CCache
-from impacket.krb5.kerberosv5 import SessionKeyDecryptionError, getKerberosTGT
+from impacket.krb5.kerberosv5 import SessionKeyDecryptionError, getKerberosTGT, getKerberosTGS
 from impacket.krb5.types import KerberosException, Principal
 from impacket.krb5 import constants
 from impacket.dcerpc.v5.dtypes import NULL
@@ -146,6 +147,8 @@ class smb(connection):
         self.protocol = "SMB"
         self.is_guest = None
         self.isdc = None
+        self.tgt = None
+        self.tgs = None
 
         connection.__init__(self, args, db, host)
 
@@ -281,7 +284,7 @@ class smb(connection):
         self.logger.extra["hostname"] = self.hostname
 
         try:
-            self.signing = self.conn.isSigningRequired() if self.smbv1 else self.conn._SMBConnection._Connection["RequireSigning"]
+            self.signing = self._is_signing_required()
         except Exception as e:
             self.logger.debug(e)
 
@@ -388,19 +391,28 @@ class smb(connection):
             if self.args.delegate:
                 kerb_pass = ""
                 self.username = self.args.delegate
-                serverName = Principal(self.args.delegate_spn if self.args.delegate_spn else f"cifs/{self.remoteName}", type=constants.PrincipalNameType.NT_SRV_INST.value)
+                serverName = Principal(self.args.spn if self.args.spn else f"cifs/{self.remoteName}", type=constants.PrincipalNameType.NT_SRV_INST.value)
                 tgs, sk = kerberos_login_with_S4U(domain, self.hostname, username, password, nthash, lmhash, aesKey, kdcHost, self.args.delegate, serverName, useCache, no_s4u2proxy=self.args.no_s4u2proxy, u2u=self.args.u2u)
                 self.logger.debug(f"TGS obtained for {self.args.delegate} for {serverName}")
 
                 spn = f"cifs/{self.remoteName}"
-                if self.args.delegate_spn:
+                if self.args.spn:
                     self.logger.debug(f"Swapping SPN to {spn} for TGS")
                     tgs = kerberos_altservice(tgs, spn)
 
                 if self.args.generate_st:
-                    self.save_st(tgs, sk, spn if self.args.delegate_spn else None)
+                    self.save_st(tgs, sk, spn if self.args.spn else None)
 
             self.conn.kerberosLogin(self.username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache=useCache, TGS=tgs)
+
+            if self.args.generate_st:
+                try:
+                    creds = self.conn.getCredentials()
+                    self.tgt, self.tgs = creds[6], creds[7]
+                except Exception as e:
+                    self.logger.fail(f"Could not retrieve credentials for --generate-st: {e}")
+                    return False
+
             if "Unix" not in self.server_os:
                 self.check_if_admin()
 
@@ -415,10 +427,10 @@ class smb(connection):
                 auth_user = username if username else "ccache"
                 used_ccache = f" through S4U{u2u_str} with {auth_user}"
 
-            if self.args.delegate_spn:
+            if self.args.spn:
                 u2u_str = "+U2U" if self.args.u2u else ""
                 auth_user = username if username else "ccache"
-                used_ccache = f" through S4U{u2u_str} with {auth_user} (w/ SPN {self.args.delegate_spn})"
+                used_ccache = f" through S4U{u2u_str} with {auth_user} (w/ SPN {self.args.spn})"
 
             out = f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}"
             self.logger.success(out)
@@ -591,6 +603,25 @@ class smb(connection):
             self.logger.fail("Broken Pipe Error while attempting to login")
             return False
 
+    def _is_signing_required(self):
+        """Determine whether the remote server REQUIRES SMB signing.
+
+        For SMB 3.0+ we read the real negotiated ``ServerSecurityMode`` rather
+        than impacket's ``RequireSigning`` flag. impacket force-sets
+        ``RequireSigning`` to True for any SMB 3.1.1 negotiation regardless of
+        the server's actual policy (the 3.1.1 session setup is always signed).
+        Relying on that flag produced false negatives for relay-target
+        discovery: 3.1.1 hosts that merely *enable* (but do not *require*)
+        signing were reported as ``signing:True`` and silently dropped from
+        ``--gen-relay-list`` output.
+
+        For SMBv1 and SMB 2.0.2/2.1, ``isSigningRequired()`` is accurate: it
+        reads ``RequireSigning``, which impacket only force-sets at 3.1.1.
+        """
+        if not self.smbv1 and self.conn._SMBConnection._Connection["Dialect"] >= SMB2_DIALECT_30:
+            return bool(self.conn._SMBConnection._Connection["ServerSecurityMode"] & SMB2_NEGOTIATE_SIGNING_REQUIRED)
+        return self.conn.isSigningRequired()
+
     def create_smbv1_conn(self, check=False):
         self.logger.info(f"Creating SMBv1 connection to {self.host}")
         try:
@@ -613,12 +644,15 @@ class smb(connection):
                 self.logger.debug(f"Timeout creating SMBv1 connection to {self.host}")
             else:
                 self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
+            self.smbv1 = False
             return False
         except NetBIOSError:
             self.logger.info(f"SMBv1 disabled on {self.host}")
+            self.smbv1 = False
             return False
         except (Exception, NetBIOSTimeout) as e:
             self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
+            self.smbv1 = False
             return False
         return True
 
@@ -639,6 +673,7 @@ class smb(connection):
                 self.logger.debug(f"Timeout creating SMBv3 connection to {self.host}")
             else:
                 self.logger.info(f"Error creating SMBv3 connection to {self.host}: {e}")
+            self.smbv3 = False
             return False
         return True
 
@@ -745,6 +780,68 @@ class smb(connection):
             self.logger.success(f"Run the following command to use the TGT: export KRB5CCNAME={tgt_file}")
         except Exception as e:
             self.logger.fail(f"Failed to get TGT: {e}")
+
+    def generate_st(self):
+        # When --delegate is used, the S4U Service Ticket is already obtained and saved during kerberos_login
+        if self.args.delegate:
+            return
+
+        spn = f"cifs/{self.remoteName}" if not self.args.spn else self.args.spn
+
+        self.logger.info(f"Attempting to get ST for SPN {spn} as {self.username}@{self.domain}")
+
+        try:
+            tgt = cipher = tgt_session_key = None
+
+            if self.tgt is not None:
+                tgt = self.tgt["KDC_REP"]
+                cipher = self.tgt["cipher"]
+                tgt_session_key = self.tgt["sessionKey"]
+                self.logger.debug("Reusing TGT obtained during SMB login")
+            elif self.use_kcache:
+                try:
+                    _, _, cached_tgt, _ = CCache.parseFile(self.domain, self.username)
+                    if cached_tgt is not None:
+                        tgt = cached_tgt["KDC_REP"]
+                        cipher = cached_tgt["cipher"]
+                        tgt_session_key = cached_tgt["sessionKey"]
+                        self.logger.debug("Using TGT from ccache")
+                except Exception as e:
+                    self.logger.debug(f"Could not load TGT from ccache: {e}")
+
+            if tgt is None:
+                user_name = Principal(self.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+                tgt, cipher, _, tgt_session_key = getKerberosTGT(
+                    clientName=user_name,
+                    password=self.password,
+                    domain=self.domain.upper(),
+                    lmhash=binascii.unhexlify(self.lmhash) if self.lmhash else "",
+                    nthash=binascii.unhexlify(self.nthash) if self.nthash else "",
+                    aesKey=self.aesKey,
+                    kdcHost=self.kdcHost,
+                )
+                self.logger.debug(f"TGT obtained for {self.username}@{self.domain}")
+
+            server_name = Principal(spn, type=constants.PrincipalNameType.NT_SRV_INST.value)
+            tgs, _, tgs_session_key, _ = getKerberosTGS(
+                server_name,
+                self.domain.upper(),
+                self.kdcHost,
+                tgt,
+                cipher,
+                tgt_session_key,
+            )
+            self.logger.debug(f"ST successfully obtained for SPN {spn}")
+
+            ccache = CCache()
+            ccache.fromTGS(tgs, tgs_session_key, tgs_session_key)
+            st_file = f"{self.args.generate_st.removesuffix('.ccache')}.ccache"
+            ccache.saveFile(st_file)
+
+            self.logger.success(f"ST saved to: {st_file}")
+            self.logger.success(f"Run the following command to use the ST: export KRB5CCNAME={st_file}")
+        except Exception as e:
+            self.logger.fail(f"Failed to get ST: {e}")
 
     def check_dc_ports(self, timeout=1):
         """Check multiple DC-specific ports in case first check fails"""

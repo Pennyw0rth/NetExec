@@ -191,6 +191,10 @@ class ldap(connection):
                 self.cbt_status = "No TLS cert"
             else:
                 raise
+        except OSError as e:
+            # Should catch TimeoutError ([Errno 110]), ConnectionRefusedError, host/network unreachable, etc.
+            self.logger.debug(f"Connection error while checking LDAPS channel binding on {self.host}: {e!s}")
+            self.cbt_status = "Unknown"
 
     def enum_host_info(self):
         # Enumerate LDAP info
@@ -1010,11 +1014,12 @@ class ldap(connection):
             self.logger.highlight("No entries found!")
             return
 
-        disabled_accounts = [x for x in resp_parsed if int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
+        # Filter disabled and invalid accounts
+        disabled_accounts = [x for x in resp_parsed if int(x.get("userAccountControl", 0)) & UF_ACCOUNTDISABLE]
         for account in disabled_accounts:
             self.logger.display(f"Skipping disabled account: {account['sAMAccountName']}")
 
-        enabled = [x for x in resp_parsed if not int(x["userAccountControl"]) & UF_ACCOUNTDISABLE]
+        enabled = [x for x in resp_parsed if not int(x.get("userAccountControl", 0)) & UF_ACCOUNTDISABLE]
 
         if self.args.targeted_kerberoast:
             self.logger.success(f"Found {len(enabled)} enabled users without SPN.")
