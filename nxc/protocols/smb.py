@@ -2494,11 +2494,18 @@ class smb(connection):
             # trust key lines (e.g. "partner (Incoming):rc4_hmac:hash") also contain spaces
             # but have no status suffix, so only strip the last word when it's actually a status.
             has_status = secret.rsplit(" ", 1)[-1] in ("Enabled", "Disabled")
+            # Trust keys have no enabled/disabled account status to filter on, so they're
+            # shown regardless of --enabled, except previous-password keys which are the
+            # trust equivalent of history and get excluded like --enabled excludes those.
+            is_trust_key = " (Incoming" in secret or " (Outgoing" in secret
+            is_current_trust_key = is_trust_key and ", previous)" not in secret
 
             # Log the secret based on args
             if self.args.enabled:
                 if "Enabled" in secret:
                     secret = " ".join(secret.split(" ")[:-1])
+                    self.logger.highlight(secret)
+                elif is_current_trust_key:
                     self.logger.highlight(secret)
             else:
                 secret = " ".join(secret.split(" ")[:-1]) if has_status else secret
