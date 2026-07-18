@@ -2490,13 +2490,18 @@ class smb(connection):
             else:
                 add_hash.nt_lm_secrets += 1
 
+            # NTDS account lines end with a trailing " Enabled"/" Disabled" status word;
+            # trust key lines (e.g. "partner (Incoming):rc4_hmac:hash") also contain spaces
+            # but have no status suffix, so only strip the last word when it's actually a status.
+            has_status = secret.rsplit(" ", 1)[-1] in ("Enabled", "Disabled")
+
             # Log the secret based on args
             if self.args.enabled:
                 if "Enabled" in secret:
                     secret = " ".join(secret.split(" ")[:-1])
                     self.logger.highlight(secret)
             else:
-                secret = " ".join(secret.split(" ")[:-1]) if " " in secret else secret
+                secret = " ".join(secret.split(" ")[:-1]) if has_status else secret
                 self.logger.highlight(secret)
 
             # Filter out computer accounts, history hashes and kerberos keys for adding to db
@@ -2548,6 +2553,8 @@ class smb(connection):
             outputFileName=self.output_filename,
             justUser=self.args.userntds if self.args.userntds else None,
             printUserStatus=True,
+            trustKeys=self.args.trust_keys,
+            domainFQDN=self.domain,
             perSecretCallback=lambda secret_type, secret: add_hash(secret_type, secret, host_id),
         )
 

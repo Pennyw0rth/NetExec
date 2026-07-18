@@ -42,6 +42,8 @@ def proto_args(parser, parents):
     kerb_keys_arg.make_required = [ntds_arg]
     enabled_arg.make_required = [ntds_arg]
     cred_gathering_group.add_argument("--user", dest="userntds", type=str, help="Dump selected user from DC (NTDS.dit)")
+    trust_keys_arg = cred_gathering_group.add_argument("--trust-keys", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Also dump Trusted Domain Object (TDO) secrets and derive inter-realm Kerberos/RC4 keys (NTDS.dit)")
+    trust_keys_arg.make_required = [ntds_arg]
     cred_gathering_group.add_argument("--dpapi", choices={"cookies", "nosystem"}, nargs="*", help="dump DPAPI secrets from target systems, can dump cookies if you add 'cookies', will not dump SYSTEM dpapi if you add nosystem")
     cred_gathering_group.add_argument("--sccm", choices={"wmi", "disk"}, nargs="?", const="disk", help="dump SCCM secrets from target systems")
     cred_gathering_group.add_argument("--mkfile", action="store", help="DPAPI option. File with masterkeys in form of {GUID}:SHA1")
