@@ -38,7 +38,7 @@ def proto_args(parser, parents):
     # NTDS options
     kerb_keys_arg = cred_gathering_group.add_argument("--kerberos-keys", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Also dump Kerberos AES and DES keys from target DC (NTDS.dit)")
     exclusive = cred_gathering_group.add_mutually_exclusive_group()
-    enabled_arg = exclusive.add_argument("--enabled", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Only dump enabled targets from DC (NTDS.dit)")
+    enabled_arg = exclusive.add_argument("--enabled", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Only dump enabled targets from DC (NTDS.dit), and current trust keys")
     kerb_keys_arg.make_required = [ntds_arg]
     enabled_arg.make_required = [ntds_arg]
     cred_gathering_group.add_argument("--user", dest="userntds", type=str, help="Dump selected user from DC (NTDS.dit)")
