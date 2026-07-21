@@ -421,6 +421,8 @@ class smb(connection):
             elif not self.args.delegate:
                 self.username = username
 
+            self.check_if_dcsync()
+
             used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
             if self.args.delegate:
                 u2u_str = "+U2U" if self.args.u2u else ""
@@ -495,6 +497,7 @@ class smb(connection):
             self.logger.debug(f"{self.is_guest=}")
             if "Unix" not in self.server_os:
                 self.check_if_admin()
+            self.check_if_dcsync()
 
             # Only do database/bloodhound stuff if we don't have guest/null auth
             valid_auth = not self.is_guest and self.username
@@ -563,6 +566,7 @@ class smb(connection):
             self.logger.debug(f"{self.is_guest=}")
             if "Unix" not in self.server_os:
                 self.check_if_admin()
+            self.check_if_dcsync()
 
             # Only do database/bloodhound stuff if we don't have guest
             valid_auth = not self.is_guest and self.username and self.hash
@@ -724,6 +728,51 @@ class smb(connection):
         except Exception as e:
             self.logger.fail(f"Error checking if user is admin on {self.host}: {e}")
             self.admin_privs = False
+
+    def check_if_dcsync(self):
+        # DCSync-capable accounts (e.g. DC machine accounts) aren't local admins, so check_if_admin misses them
+        # A DC's own machine account (HOSTNAME$) always has replication rights - free to flag, no extra traffic
+        if not self.dcsync_privs and self.isdc and self.username and self.hostname:
+            if self.username.rstrip("$").upper() == self.hostname.upper():
+                self.logger.debug(f"{self.username} is the DC machine account, has DCSync rights")
+                self.dcsync_privs = True
+
+        # --dcsync-check confirms replication rights over DRSUAPI (also catches delegated users / other DCs)
+        if not self.dcsync_privs and self.isdc and self.args.dcsync_check:
+            self.probe_dcsync_rights()
+
+    def probe_dcsync_rights(self):
+        # Attempt a single-object GetNCChanges on our own account. Generates the same replication
+        # traffic (event 4662) as a real DCSync, hence it's gated behind --dcsync-check.
+        from impacket.dcerpc.v5 import drsuapi
+        from impacket.dcerpc.v5.rpcrt import DCERPCSessionError
+
+        self.logger.debug("Probing DRSUAPI for DCSync rights")
+        remote_ops = None
+        try:
+            remote_ops = RemoteOperations(self.conn, self.kerberos, self.kdcHost)
+            # resolve our own account to its objectGUID (this also binds DRSUAPI)
+            crack = remote_ops.DRSCrackNames(
+                formatOffered=drsuapi.DS_NAME_FORMAT.DS_NT4_ACCOUNT_NAME,
+                formatDesired=drsuapi.DS_NAME_FORMAT.DS_UNIQUE_ID_NAME,
+                name=f"{self.domain}\\{self.username}",
+            )
+            result = crack["pmsgOut"]["V1"]["pResult"]
+            if result["cItems"] < 1 or result["rItems"][0]["status"] != 0:
+                self.logger.debug("Could not resolve own account GUID over DRSUAPI")
+                return
+            own_guid = result["rItems"][0]["pName"][:-1]  # {GUID} with trailing null
+            remote_ops.DRSGetNCChangesGuid(own_guid)  # raises 0x2105 (access denied) if we can't replicate
+            self.dcsync_privs = True
+            self.logger.debug(f"{self.username} has DCSync rights")
+        except DCERPCSessionError as e:
+            self.logger.debug(f"No DCSync rights: {e}")
+        except Exception as e:
+            self.logger.debug(f"DRSUAPI probe failed: {e}")
+        finally:
+            if remote_ops:
+                with contextlib.suppress(Exception):
+                    remote_ops.finish()
 
     def gen_relay_list(self):
         if self.server_os.lower().find("windows") != -1 and self.signing is False:

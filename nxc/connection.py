@@ -12,7 +12,7 @@ from ipaddress import ip_address
 from dns import resolver, rdatatype
 from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
 
-from nxc.config import pwned_label
+from nxc.config import pwned_label, dcsync_label
 from nxc.helpers.logger import highlight
 from nxc.loaders.moduleloader import ModuleLoader
 from nxc.logger import nxc_logger, NXCAdapter
@@ -153,6 +153,7 @@ class connection:
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
         self.admin_privs = False
+        self.dcsync_privs = False   # has DCSync/replication rights (e.g. DC machine account)
         self.failed_logins = 0
 
         # Network info
@@ -596,7 +597,12 @@ class connection:
                         return True
 
     def mark_pwned(self):
-        return highlight(f"({pwned_label})" if self.admin_privs else "")
+        labels = []
+        if self.admin_privs:
+            labels.append(highlight(f"({pwned_label})"))
+        if self.dcsync_privs:
+            labels.append(highlight(f"({dcsync_label})", color="cyan"))
+        return " ".join(labels)
 
     def load_modules(self):
         self.logger.info(f"Loading modules for target: {self.host}")

@@ -14,3 +14,5 @@ def highlight(text, color="yellow"):
         return f"{colored(text, 'yellow', attrs=['bold'])}"
     elif color == "red":
         return f"{colored(text, 'red', attrs=['bold'])}"
+    else:
+        return f"{colored(text, color, attrs=['bold'])}"

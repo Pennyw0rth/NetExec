@@ -33,6 +33,7 @@ for section in nxc_default_config.sections():
 # THESE OPTIONS HAVE TO EXIST IN THE DEFAULT CONFIG FILE
 nxc_workspace = nxc_config.get("nxc", "workspace", fallback="default")
 pwned_label = nxc_config.get("nxc", "pwn3d_label", fallback="Pwn3d!")
+dcsync_label = nxc_config.get("nxc", "ad_pwn3d_label", fallback="ADPwn3d!")
 audit_mode = nxc_config.get("nxc", "audit_mode", fallback=False)
 reveal_chars_of_pwd = int(nxc_config.get("nxc", "reveal_chars_of_pwd", fallback=0))
 config_log = nxc_config.getboolean("nxc", "log_mode", fallback=False)
