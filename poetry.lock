@@ -1124,7 +1124,7 @@ all = ["flake8 (>=7.1.1)", "mypy (>=1.11.2)", "pytest (>=8.3.2)", "ruff (>=0.6.2
 
 [[package]]
 name = "impacket"
-version = "0.14.0.dev0+20260618.135123.153e8ddb"
+version = "0.14.0.dev0+20260715.13927.137441c1"
 description = "Network protocols Constructors and Dissectors"
 optional = false
 python-versions = "*"
@@ -1148,7 +1148,7 @@ six = "*"
 type = "git"
 url = "https://github.com/fortra/impacket"
 reference = "HEAD"
-resolved_reference = "153e8ddb1ec3cda489443392cabf97c8c631a4e5"
+resolved_reference = "137441c1545798a13fc234b4aa5232b522cb3507"
 
 [[package]]
 name = "iniconfig"
