@@ -12,7 +12,6 @@ class NXCModule:
     name = "ntlm_reflection"
     description = "[REMOVED] This module has been integrated into the enum_cve module."
     supported_protocols = ["smb"]
-    opsec_safe = True
     multiple_hosts = True
     category = CATEGORY.ENUMERATION
 
