@@ -116,7 +116,12 @@ def upgrade_to_dploot_connection(target, context=None, protocol:str="smb"):
                 else:
                     conn.connect()
             case "winrm":
-                from dploot.lib.network.winrm import WINRMTarget
+                from dploot.lib.network.winrm import DPLootWINRMConnection
+                conn = DPLootWINRMConnection(target)
+                if context is not None:
+                    conn.conn = context.conn
+                else:
+                    conn.connect()
             case "mssql":
                 from dploot.lib.network.mssql import MSSQLTarget
     except Exception as e:

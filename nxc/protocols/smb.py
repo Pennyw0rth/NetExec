@@ -2180,7 +2180,7 @@ class smb(connection):
             self.logger.fail("No masterkeys looted")
             return
 
-        self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting SCCM Credentials through {self.args.sccm}")
+        self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting SCCM Credentials")
 
         dpapi_triage = DPAPITriage(self, target, conn)
         dpapi_triage.triage_sccm(masterkeys)

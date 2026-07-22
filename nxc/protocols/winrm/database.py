@@ -1,3 +1,5 @@
+import base64
+
 from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, UniqueConstraint, select, func, delete
 from sqlalchemy.dialects.sqlite import Insert
 from sqlalchemy.orm import declarative_base
@@ -14,6 +16,8 @@ class database(BaseDB):
         self.UsersTable = None
         self.AdminRelationsTable = None
         self.LoggedinRelationsTable = None
+        self.DpapiBackupkeyTable = None
+        self.DpapiSecretsTable = None
 
         super().__init__(db_engine)
 
@@ -69,6 +73,32 @@ class database(BaseDB):
             ForeignKeyConstraint(["hostid"], ["hosts.id"]),
         )
 
+    class DpapiSecret(Base):
+        __tablename__ = "dpapi_secrets"
+        id = Column(Integer)
+        host = Column(String)
+        dpapi_type = Column(String)
+        windows_user = Column(String)
+        username = Column(String)
+        password = Column(String)
+        url = Column(String)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            UniqueConstraint("host", "dpapi_type", "windows_user", "username", "password", "url"),
+        )
+
+    class DpapiBackupKey(Base):
+        __tablename__ = "dpapi_backupkey"
+        id = Column(Integer)
+        domain = Column(String)
+        pvk = Column(String)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            UniqueConstraint("domain"),
+        )
+
     @staticmethod
     def db_schema(db_conn):
         Base.metadata.create_all(db_conn)
@@ -78,6 +108,8 @@ class database(BaseDB):
         self.UsersTable = self.reflect_table(self.User)
         self.AdminRelationsTable = self.reflect_table(self.AdminRelation)
         self.LoggedinRelationsTable = self.reflect_table(self.LoggedInRelation)
+        self.DpapiSecretsTable = self.reflect_table(self.DpapiSecret)
+        self.DpapiBackupkeyTable = self.reflect_table(self.DpapiBackupKey)
 
     def add_host(self, ip, port, hostname, domain, os=None):
         """
@@ -380,3 +412,113 @@ class database(BaseDB):
         elif host_id:
             q = q.filter(self.LoggedinRelationsTable.c.hostid == host_id)
         self.db_execute(q)
+
+    def add_domain_backupkey(self, domain: str, pvk: bytes):
+        """
+        Add domain backupkey
+        :domain is the domain fqdn
+        :pvk is the domain backupkey
+        """
+        q = select(self.DpapiBackupkeyTable).filter(func.lower(self.DpapiBackupkeyTable.c.domain) == func.lower(domain))
+        results = self.db_execute(q).all()
+
+        if not len(results):
+            pvk_encoded = base64.b64encode(pvk)
+            backup_key = {"domain": domain, "pvk": pvk_encoded}
+            try:
+                # TODO: find a way to abstract this away to a single Upsert call
+                q = Insert(self.DpapiBackupkeyTable)  # .returning(self.DpapiBackupkeyTable.c.id)
+
+                self.db_execute(q, [backup_key])  # .scalar()
+                nxc_logger.debug(f"add_domain_backupkey(domain={domain}, pvk={pvk_encoded})")
+            except Exception as e:
+                nxc_logger.debug(f"Issue while inserting DPAPI Backup Key: {e}")
+
+    def get_domain_backupkey(self, domain: str | None = None):
+        """
+        Get domain backupkey
+        :domain is the domain fqdn
+        """
+        q = select(self.DpapiBackupkeyTable)
+        if domain is not None:
+            q = q.filter(func.lower(self.DpapiBackupkeyTable.c.domain) == func.lower(domain))
+        results = self.db_execute(q).all()
+
+        nxc_logger.debug(f"get_domain_backupkey(domain={domain}) => {results}")
+
+        if len(results) > 0:
+            results = [(id_key, domain, base64.b64decode(pvk)) for id_key, domain, pvk in results]
+        return results
+
+    def is_dpapi_secret_valid(self, dpapi_secret_id):
+        """
+        Check if this group ID is valid.
+        :dpapi_secret_id is a primary id
+        """
+        q = select(self.DpapiSecretsTable).filter(func.lower(self.DpapiSecretsTable.c.id) == dpapi_secret_id)
+        results = self.db_execute(q).first()
+        valid = results is not None
+        nxc_logger.debug(f"is_dpapi_secret_valid(groupID={dpapi_secret_id}) => {valid}")
+        return valid
+
+    def add_dpapi_secrets(
+        self,
+        host: str,
+        dpapi_type: str,
+        windows_user: str,
+        username: str,
+        password: str,
+        url: str = "",
+    ):
+        """Add dpapi secrets to nxcdb"""
+        secret = {
+            "host": host,
+            "dpapi_type": dpapi_type,
+            "windows_user": windows_user,
+            "username": username,
+            "password": password,
+            "url": url,
+        }
+        q = Insert(self.DpapiSecretsTable).on_conflict_do_nothing()  # .returning(self.DpapiSecretsTable.c.id)
+
+        self.db_execute(q, [secret])  # .scalar()
+
+        nxc_logger.debug(
+            f"add_dpapi_secrets(host={host}, dpapi_type={dpapi_type}, windows_user={windows_user}, username={username}, password={password}, url={url})")
+
+    def get_dpapi_secrets(
+        self,
+        filter_term=None,
+        host: str | None = None,
+        dpapi_type: str | None = None,
+        windows_user: str | None = None,
+        username: str | None = None,
+        url: str | None = None,
+    ):
+        """Get dpapi secrets from nxcdb"""
+        q = select(self.DpapiSecretsTable)
+
+        if self.is_dpapi_secret_valid(filter_term):
+            q = q.filter(self.DpapiSecretsTable.c.id == filter_term)
+            results = self.db_execute(q).first()
+            # all() returns a list, so we keep the return format the same so consumers don't have to guess
+            return [results]
+        elif host:
+            q = q.filter(self.DpapiSecretsTable.c.host == host)
+            results = self.db_execute(q).first()
+            # all() returns a list, so we keep the return format the same so consumers don't have to guess
+            return [results]
+        elif dpapi_type:
+            q = q.filter(func.lower(self.DpapiSecretsTable.c.dpapi_type) == func.lower(dpapi_type))
+        elif windows_user:
+            like_term = func.lower(f"%{windows_user}%")
+            q = q.filter(func.lower(self.DpapiSecretsTable.c.windows_user).like(like_term))
+        elif username:
+            like_term = func.lower(f"%{username}%")
+            q = q.filter(func.lower(self.DpapiSecretsTable.c.windows_user).like(like_term))
+        elif url:
+            q = q.filter(func.lower(self.DpapiSecretsTable.c.url) == func.lower(url))
+        results = self.db_execute(q).all()
+
+        nxc_logger.debug(f"get_dpapi_secrets(filter_term={filter_term}, host={host}, dpapi_type={dpapi_type}, windows_user={windows_user}, username={username}, url={url}) => {results}")
+        return results
