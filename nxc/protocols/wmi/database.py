@@ -1,6 +1,6 @@
 import base64
 
-from sqlalchemy import Boolean, Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, UniqueConstraint, func, select, delete
+from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, UniqueConstraint, func, select, delete
 from sqlalchemy.dialects.sqlite import Insert  # used for upsert
 from sqlalchemy.orm import declarative_base
 from nxc.database import BaseDB
@@ -126,7 +126,7 @@ class database(BaseDB):
         if updated_ids:
             nxc_logger.debug(f"add_host() - Host IDs Updated: {updated_ids}")
             return updated_ids
-    
+
     def add_credential(self, credtype, domain, username, password, pillaged_from=None):
         """Check if this credential has already been added to the database, if not add it in."""
         credentials = []
@@ -166,7 +166,6 @@ class database(BaseDB):
                     cred_data["username"] = username
                 if password is not None:
                     cred_data["password"] = password
-                    groups.append({"userid": cred_data["id"], "groupid": group_id})
                 if pillaged_from is not None:
                     cred_data["pillaged_from"] = pillaged_from
                 # only add cred to be updated if it has changed
@@ -266,13 +265,13 @@ class database(BaseDB):
 
     def is_dpapi_secret_valid(self, dpapi_secret_id):
         """
-        Check if this group ID is valid.
+        Check if this DPAPI secret ID is valid.
         :dpapi_secret_id is a primary id
         """
         q = select(self.DpapiSecretsTable).filter(func.lower(self.DpapiSecretsTable.c.id) == dpapi_secret_id)
         results = self.db_execute(q).first()
         valid = results is not None
-        nxc_logger.debug(f"is_dpapi_secret_valid(groupID={dpapi_secret_id}) => {valid}")
+        nxc_logger.debug(f"is_dpapi_secret_valid(dpapi_secret_id={dpapi_secret_id}) => {valid}")
         return valid
 
     def add_dpapi_secrets(

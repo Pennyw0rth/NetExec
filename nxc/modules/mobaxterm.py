@@ -1,6 +1,5 @@
 from dploot.triage.mobaxterm import MobaXtermTriage, MobaXtermCredential, MobaXtermPassword
 
-from nxc.helpers.logger import highlight
 from nxc.helpers.misc import CATEGORY
 
 

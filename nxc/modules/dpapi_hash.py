@@ -6,7 +6,7 @@ from nxc.helpers.misc import CATEGORY
 class NXCModule:
     name = "dpapi_hash"
     description = "Remotely dump Dpapi hash based on masterkeys"
-    supported_protocols = ["smb","wmi","winrm","mssql"]
+    supported_protocols = ["smb", "wmi", "winrm", "mssql"]
     category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):

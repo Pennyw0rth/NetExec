@@ -1,9 +1,7 @@
 import re
 import jwt
 from dploot.triage.wam import WamTriage
-from dploot.lib.target import Target
 
-from nxc.helpers.logger import highlight
 from nxc.helpers.misc import CATEGORY
 
 

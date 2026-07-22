@@ -624,11 +624,12 @@ class mssql(connection):
             self.logger.display("Dumping LSA secrets")
             local_operations = LocalOperations(f"{output_filename}.system")
             boot_key = local_operations.getBootKey()
+
             def lsa_secret_callback(_, secret):
                 self.logger.highlight(secret)
                 if "dpapi_machinekey" in secret:
-                    correl_table = {"dpapi_machinekey":"MachineKey","dpapi_userkey":"UserKey"}
-                    self.dpapi_system_key = {correl_table[k] :binascii.unhexlify(v[2:]) for k, v in (elem.split(":") for elem in secret.splitlines())} 
+                    correl_table = {"dpapi_machinekey": "MachineKey", "dpapi_userkey": "UserKey"}
+                    self.dpapi_system_key = {correl_table[k]: binascii.unhexlify(v[2:]) for k, v in (elem.split(":") for elem in secret.splitlines())}
             LSA = LSASecrets(
                 f"{output_filename}.security",
                 boot_key,
@@ -647,7 +648,7 @@ class mssql(connection):
     def dpapi_triage(self) -> DPAPITriage:
         if self._dpapi_triage is not None:
             return self._dpapi_triage
-            
+
         target = Target.create(
             domain=self.domain,
             username=self.username,

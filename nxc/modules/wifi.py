@@ -1,13 +1,12 @@
 from dploot.triage.wifi import WifiTriage
 
-from nxc.helpers.logger import highlight
 from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
     name = "wifi"
     description = "Get key of all wireless interfaces"
-    supported_protocols = ["smb","wmi","winrm","mssql"]
+    supported_protocols = ["smb", "wmi", "winrm", "mssql"]
     category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):

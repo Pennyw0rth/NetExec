@@ -23,7 +23,7 @@ class NXCModule:
 
     name = "mremoteng"
     description = "Dump mRemoteNG Passwords in AppData and in Desktop / Documents folders (digging recursively in them) "
-    supported_protocols = ["smb","wmi","winrm","mssql"]
+    supported_protocols = ["smb", "wmi", "winrm", "mssql"]
     category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self, context=None, module_options=None):
@@ -68,9 +68,9 @@ class NXCModule:
     def on_admin_login(self, context, connection):
         self.context = context
         self.connection = connection
-        self.share = connection.args.share if hasattr(connection.args,"share") else "C$"
+        self.share = connection.args.share if hasattr(connection.args, "share") else "C$"
         self.dploot_conn = connection.dpapi_triage.conn
-        
+
         users = self.dploot_conn.list_users()
 
         # Search for mRemoteNG files

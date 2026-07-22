@@ -1,6 +1,5 @@
 import os
 import base64
-import traceback
 import binascii
 import requests
 import urllib3
@@ -14,19 +13,15 @@ from pypsrp.powershell import PSDataStreams
 from termcolor import colored
 
 from dploot.lib.network.winrm import WINRMTarget as Target
-from impacket.dpapi import MasterKeyFile, MasterKey, CredHist, DomainKey, CredentialFile, deriveKeysFromUser, DPAPI_BLOB, CREDENTIAL_BLOB
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
-from impacket.uuid import bin_to_string
 
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.dpapi import DPAPITriage
-from nxc.helpers.logger import highlight
 from nxc.helpers.misc import gen_random_string
 from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.logger import NXCAdapter
-from nxc.paths import TMP_PATH
 
 urllib3.disable_warnings()
 
@@ -401,12 +396,12 @@ class winrm(connection):
             self.logger.display("Dumping LSA secrets")
             local_operations = LocalOperations(f"{output_filename}.system")
             boot_key = local_operations.getBootKey()
-            
+
             def lsa_secret_callback(_, secret):
                 self.logger.highlight(secret)
                 if "dpapi_machinekey" in secret:
-                    correl_table = {"dpapi_machinekey":"MachineKey","dpapi_userkey":"UserKey"}
-                    self.dpapi_system_key = {correl_table[k] :binascii.unhexlify(v[2:]) for k, v in (elem.split(":") for elem in secret.splitlines())} 
+                    correl_table = {"dpapi_machinekey": "MachineKey", "dpapi_userkey": "UserKey"}
+                    self.dpapi_system_key = {correl_table[k]: binascii.unhexlify(v[2:]) for k, v in (elem.split(":") for elem in secret.splitlines())}
             LSA = LSASecrets(
                 f"{output_filename}.security",
                 boot_key,

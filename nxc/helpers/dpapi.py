@@ -1,18 +1,17 @@
-from typing import List
 
-from dploot.lib.network import DPLootConnection
 from dploot.lib.network.smb import SMBTarget, DPLootSMBConnection
 from dploot.lib.target import Target
 from dploot.triage.backupkey import BackupkeyTriage
 from dploot.triage.browser import BrowserTriage, LoginData, GoogleRefreshToken, Cookie
 from dploot.triage.cng import CngTriage
 from dploot.triage.credentials import CredentialsTriage
-from dploot.triage.masterkeys import MasterkeysTriage, parse_masterkey_file
+from dploot.triage.masterkeys import MasterkeysTriage, parse_masterkey_file, Masterkey
 from dploot.triage.sccm import SCCMTriage, SCCMCred, SCCMSecret, SCCMCollection
 from dploot.triage.vaults import VaultsTriage
 
 from nxc.helpers.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
 from nxc.helpers.logger import highlight
+
 
 def upgrade_to_dploot_connection(target, context=None):
     conn = None
@@ -49,11 +48,12 @@ def upgrade_to_dploot_connection(target, context=None):
     except Exception as e:
         print(e)
         return None
-    
+
     return conn
 
+
 class DPAPITriage:
-    def __init__(self, context, target:Target):
+    def __init__(self, context, target: Target):
         self.context = context
         self.target = target
 
@@ -63,10 +63,10 @@ class DPAPITriage:
         self.pvkbytes = None
 
         if context.args.dpapi is not None:
-            self.dump_cookies="cookies" in context.args.dpapi
+            self.dump_cookies = "cookies" in context.args.dpapi
 
-        self.system_masterkeys_already_dumped=False
-        self.users_masterkeys_already_dumped=False
+        self.system_masterkeys_already_dumped = False
+        self.users_masterkeys_already_dumped = False
 
         self.init_connection()
 
@@ -84,17 +84,16 @@ class DPAPITriage:
             return self.pvkbytes
 
         pvkbytes = None
-        if hasattr(self.context.args,"pvk"):
-            if self.context.args.pvk is not None:
-                try:
-                    pvkbytes = open(self.context.args.pvk, "rb").read()  # noqa: SIM115
-                    self.context.logger.success(f"Loading domain backupkey from {self.context.args.pvk}")
-                except Exception as e:
-                    self.context.logger.fail(str(e))
+        if hasattr(self.context.args, "pvk") and self.context.args.pvk is not None:
+            try:
+                pvkbytes = open(self.context.args.pvk, "rb").read()  # noqa: SIM115
+                self.context.logger.success(f"Loading domain backupkey from {self.context.args.pvk}")
+            except Exception as e:
+                self.context.logger.fail(str(e))
         if pvkbytes is None:
             try:
                 results = self.context.db.get_domain_backupkey(self.context.domain)
-            except Exception as e:
+            except Exception:
                 self.context.logger.fail(
                     "Your version of nxcdb is not up to date, run nxcdb and create a new workspace: \
                     'workspace create dpapi' then re-run the dpapi option"
@@ -131,12 +130,12 @@ class DPAPITriage:
         self.pvkbytes = pvkbytes
         return pvkbytes
 
-    def collect_masterkeys_from_target(self, dump_users:True, dump_system:False):
+    def collect_masterkeys_from_target(self, dump_users: True, dump_system: False):
         masterkeys = []
         plaintexts = {}
         nthashes = {}
 
-        # First, check and handle the mkfile arg 
+        # First, check and handle the mkfile arg
         if self.context.args.mkfile is not None:
             try:
                 masterkeys += parse_masterkey_file(self.context.args.mkfile)
@@ -154,13 +153,15 @@ class DPAPITriage:
                 nthashes[self.context.username.lower()] = self.context.nthash
 
             self.get_domain_backup_key()
-        
+
         # Now prepare the SYSTEM part
-        if dump_system and self.context.dpapi_system_key is None:
+        if (dump_system
+            and self.context.dpapi_system_key is None
+            and hasattr(self.context, "lsa")
+            and callable(self.context.lsa)):
             # We can use the protocol specific LSA dump if not already dumped.
             # But first, just making sure the protocol supports LSA dump :)
-            if hasattr(self.context, 'lsa') and callable(self.context.lsa): 
-                self.context.lsa()
+            self.context.lsa()
 
         # Invoke MasterkeyTriage class
         try:
@@ -192,10 +193,10 @@ class DPAPITriage:
         self.masterkeys += masterkeys
         # If we decrypted new masterkeys, print the message
         if len(masterkeys) > 0:
-            self.context.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. ") 
+            self.context.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. ")
         return self.masterkeys
-        
-    def triage_credentials(self, masterkeys: List[Masterkey]):
+
+    def triage_credentials(self, masterkeys: list[Masterkey]):
         # Collect User and Machine Credentials Manager secrets
         def credential_callback(credential):
             tag = "CREDENTIAL"
@@ -220,7 +221,7 @@ class DPAPITriage:
         except Exception as e:
             self.context.logger.debug(f"Error while looting credentials: {e}")
 
-    def triage_chromium(self, masterkeys: List[Masterkey]):
+    def triage_chromium(self, masterkeys: list[Masterkey]):
         cng_chromekey = None
         try:
             cng_triage = CngTriage(target=self.target, conn=self.conn, masterkeys=masterkeys)
@@ -230,7 +231,7 @@ class DPAPITriage:
                     cng_chromekey = cng_file.decrypted_private_key
         except Exception as e:
             self.context.logger.debug(f"Error while getting CNG ChromeKey1: {e}")
-            
+
         # Collect Chrome Based Browser stored secrets
         def browser_callback(secret):
             if isinstance(secret, LoginData):
@@ -272,7 +273,7 @@ class DPAPITriage:
         except Exception as e:
             self.context.logger.debug(f"Error while looting browsers: {e}")
 
-    def triage_vaults(self, masterkeys: List[Masterkey]):
+    def triage_vaults(self, masterkeys: list[Masterkey]):
         def vault_callback(secret):
             tag = "IEX"
             if secret.type == "Internet Explorer":
@@ -335,7 +336,7 @@ class DPAPITriage:
             self.context.logger.fail("No masterkeys looted")
             return
 
-        self.context.logger.success(f"Looting secrets...")
+        self.context.logger.success("Looting secrets...")
 
         self.triage_credentials(masterkeys)
         self.triage_chromium(masterkeys)

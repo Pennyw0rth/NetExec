@@ -2191,8 +2191,8 @@ class smb(connection):
                     passwd = binascii.hexlify(ntlm_hash.digest()).decode("utf-8")
                     self.logger.highlight(f"GMSA ID: {gmsa_id:<20} NTLM: {passwd}")
                 if "dpapi_machinekey" in secret:
-                    correl_table = {"dpapi_machinekey":"MachineKey","dpapi_userkey":"UserKey"}
-                    self.dpapi_system_key = {correl_table[k] :binascii.unhexlify(v[2:]) for k, v in (elem.split(":") for elem in secret.splitlines())}
+                    correl_table = {"dpapi_machinekey": "MachineKey", "dpapi_userkey": "UserKey"}
+                    self.dpapi_system_key = {correl_table[k]: binascii.unhexlify(v[2:]) for k, v in (elem.split(":") for elem in secret.splitlines())}
 
             add_lsa_secret.secrets = 0
 
