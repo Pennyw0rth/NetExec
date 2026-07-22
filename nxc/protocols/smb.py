@@ -31,7 +31,7 @@ from impacket.dcerpc.v5.epm import MSRPC_UUID_PORTMAP
 from impacket.dcerpc.v5.samr import SID_NAME_USE
 from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
 from impacket.krb5.ccache import CCache
-from impacket.krb5.kerberosv5 import SessionKeyDecryptionError, getKerberosTGT, getKerberosTGS
+from impacket.krb5.kerberosv5 import SessionKeyDecryptionError, getKerberosTGT, getKerberosTGS, KerberosError
 from impacket.krb5.types import KerberosException, Principal
 from impacket.krb5 import constants
 from impacket.dcerpc.v5.dtypes import NULL
@@ -200,13 +200,11 @@ class smb(connection):
                 self.no_ntlm = True
                 self.logger.debug("NTLM not supported")
 
-        if check_guest_account and not self.no_ntlm:
-            try:
-                self.conn.login("Guest", "")
-                self.logger.debug("Guest authentication successful")
-                self.is_guest = True
-            except Exception:
-                self.is_guest = False
+        # The Kerberos/MSRPC DC probes reach out to ports 88/135; only allow them
+        # when the DC answer is actually consumed, so a plain scan (especially
+        # over a pivot) stays on the SMB session it already holds. Tier 1 (SMB)
+        # runs regardless, so DCs are still flagged whenever a null session works.
+        need_dc = bool(self.args.generate_hosts_file or self.args.generate_krb5_file or self.args.generate_tgt)
 
         # self.domain is the attribute we authenticate with
         # self.targetDomain is the attribute which gets displayed as host domain
@@ -222,9 +220,10 @@ class smb(connection):
             self.targetDomain = self.conn.getServerDNSDomainName()
             if not self.targetDomain:   # Not sure if that can even happen but now we are safe
                 self.targetDomain = self.hostname
+            self.is_host_dc(allow_network_probes=need_dc)  # SMB (Tier 1) suffices when NTLM is up
         else:
             try:
-                self.is_host_dc()
+                self.is_host_dc(allow_network_probes=need_dc)  # no NTLM: needs 88/135 if the DC answer is wanted
                 # If we know the host is a DC we can still get the hostname over LDAP if NTLM is not available
                 if self.isdc and detect_if_ip(self.host):
                     self.hostname, self.domain = LDAPResolution(self.host).get_resolution()
@@ -290,6 +289,15 @@ class smb(connection):
 
         self.os_arch = self.get_os_arch()
 
+        # moved at the end because it can cause issues with some DCs if we try to login as guest before checking if dc or not
+        if check_guest_account and not self.no_ntlm:
+            try:
+                self.conn.login("Guest", "")
+                self.logger.debug("Guest authentication successful")
+                self.is_guest = True
+            except Exception:
+                self.is_guest = False
+
         try:
             # DCs seem to want us to logoff first, windows workstations sometimes reset the connection
             self.conn.logoff()
@@ -321,13 +329,12 @@ class smb(connection):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
         smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
         ntlm = colored(f" (NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
-        null_auth = colored(f" (Null Auth:{self.null_auth})", host_info_colors[2], attrs=["bold"]) if self.null_auth else ""
         guest = colored(f" (Guest Auth:{self.is_guest})", host_info_colors[1], attrs=["bold"]) if self.is_guest else ""
-        self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}){ntlm}{null_auth}{guest}")
+        isdc = colored(f" (DC:{self.isdc})", host_info_colors[3], attrs=["bold"]) if self.isdc else ""
+        null_auth = colored(f" (Null Auth:{self.null_auth})", host_info_colors[2], attrs=["bold"]) if self.null_auth and not self.isdc else ""
+        self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}){ntlm}{null_auth}{guest}{isdc}")
 
         if self.args.generate_hosts_file or self.args.generate_krb5_file:
-            if self.isdc is None:
-                self.is_host_dc()
             if self.args.generate_hosts_file:
                 with open(self.args.generate_hosts_file, "a+") as host_file:
                     dc_part = f" {self.targetDomain}" if self.isdc else ""
@@ -843,57 +850,110 @@ class smb(connection):
         except Exception as e:
             self.logger.fail(f"Failed to get ST: {e}")
 
-    def check_dc_ports(self, timeout=1):
-        """Check multiple DC-specific ports in case first check fails"""
-        import socket
-        dc_ports = [88, 389, 636, 3268, 9389]  # Kerberos, LDAP, LDAPS, Global Catalog, ADWS
-        open_ports = 0
-
-        for port in dc_ports:
-            try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(timeout)
-                result = sock.connect_ex((self.host, port))
-                if result == 0:
-                    self.logger.debug(f"Port {port} is open on {self.host}")
-                    open_ports += 1
-                sock.close()
-            except Exception:
-                pass
-        # If 3 or more DC ports are open, likely a DC
-        return open_ports >= 3
-
-    def is_host_dc(self):
+    def is_host_dc(self, allow_network_probes=False):
         if self.isdc is not None:
             return self.isdc
 
+        probes = [self._is_dc_via_smb]
+        if allow_network_probes:
+            probes += [self._is_dc_via_rpc, self._is_dc_via_kerberos]
+
+        for probe in probes:
+            result = probe()
+            if result is not None:
+                self.isdc = result
+                return self.isdc
+        # inconclusive if all probes return None
+        if allow_network_probes:
+            self.isdc = False
+        return self.isdc
+
+    def _is_dc_via_smb(self):
+        """Tier 1: SYSVOL is published only by DCs. One TREE_CONNECT over the
+        session we already hold answers without enumerating every share (unlike
+        listShares). ACCESS_DENIED still proves the share exists, hence a DC.
+
+        Meant to run while the null session is still fresh. When there is no
+        session, the reason is decisive: a DC with NTLM enabled always accepts
+        the null bind, so "NTLM on + no null session" means this is NOT a DC.
+        Only "NTLM disabled" is inconclusive here (a real DC can refuse the null
+        bind then), so we hand that case off to the Kerberos/RPC tiers.
+        """
+        if not self.null_auth:
+            if not self.no_ntlm:
+                self.logger.debug("NTLM enabled but no null session: host is not a DC")
+                return False
+            self.logger.debug("No null session (NTLM disabled): deferring to Kerberos/RPC")
+            return None
+        try:
+            tid = self.conn.connectTree("SYSVOL")
+            self.conn.disconnectTree(tid)
+            self.logger.debug("SYSVOL reachable over SMB: host is a DC")
+            return True
+        except SessionError as e:
+            if "STATUS_ACCESS_DENIED" in str(e):
+                self.logger.debug("SYSVOL exists (access denied): host is a DC")
+                return True
+            if "STATUS_BAD_NETWORK_NAME" in str(e):
+                self.logger.debug("No SYSVOL share: host is not a DC")
+                return False
+            self.logger.debug(f"SMB DC check inconclusive: {e}")
+            return None
+        except Exception as e:
+            self.logger.debug(f"SMB DC check unavailable: {e}")
+            return None
+
+    def _is_dc_via_kerberos(self):
+        """Tier 2: only a KDC answers a Kerberos AS-REQ, and in AD the KDC runs
+        only on DCs. Pre-auth, no credentials - the fallback for NTLM-disabled
+        hosts where no SMB session exists.
+
+        The realm need not be correct: a live KDC answers a wrong realm with
+        KDC_ERR_WRONG_REALM, which proves it is a KDC just as well as
+        PRINCIPAL_UNKNOWN would. So we use the known domain if we happen to have
+        one (a PRINCIPAL_UNKNOWN reply is marginally quieter) and otherwise a
+        placeholder - we never need to actually know the domain.
+        """
+        # targetDomain is not set yet when this runs on the no-NTLM path (it is
+        # produced later by the isdc-dependent LDAP resolution), so read it
+        # defensively and fall back to a placeholder - the realm need not be real.
+        realm = (self.domain or self.args.domain or "NXCPROBE").upper()
+        user = Principal("nxc_dc_probe", type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+        try:
+            # A bogus principal with no pre-auth data cannot obtain a ticket, so
+            # a live KDC always answers with a KRB-ERROR (PRINCIPAL_UNKNOWN /
+            # WRONG_REALM / PREAUTH_REQUIRED) -> KerberosError. That reply is the
+            # proof: a KDC is listening, i.e. this host is a DC. Only a
+            # transport-level failure (connection refused / timeout) means no KDC.
+            getKerberosTGT(user, "", realm, "", "", kdcHost=self.host)
+        except KerberosError as e:
+            self.logger.debug(f"KDC replied with an error ({e}): host is a DC")
+        except Exception as e:
+            self.logger.debug(f"No KDC response (port 88 filtered or not a DC): {e}")
+            return None
+        return True
+
+    def _is_dc_via_rpc(self):
+        """Tier 3: unauthenticated Netlogon endpoint lookup on 135. NTLM-agnostic
+        and needs no session, but heavier and noisier than the SMB/Kerberos
+        probes above, so it only runs when both of those were inconclusive.
+        """
         from impacket.dcerpc.v5 import nrpc, epm
 
-        self.logger.debug("Performing authentication attempts...")
-
-        # First check if port 135 is open
-        if self._is_port_open(135):
-            self.logger.debug("Port 135 is open, attempting MSRPC connection...")
-            try:
-                epm.hept_map(self.host, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
-                self.isdc = True
-                return True
-            except DCERPCException:
-                self.logger.debug("Error while connecting to host: DCERPCException, which means this is probably not a DC!")
-            except TimeoutError:
-                self.logger.debug("Timeout while connecting to host: likely not a DC or host is unreachable.")
-            except Exception as e:
-                self.logger.debug(f"Error while connecting to host: {e}")
-            self.isdc = False
+        if not self._is_port_open(135):
+            self.logger.debug("Port 135 closed and no higher-tier signal: treating as not a DC")
             return False
-        else:
-            self.logger.debug("Port 135 is closed, skipping MSRPC check...")
-            # Fallback to checking DC ports
-            if self.check_dc_ports():
-                self.logger.debug("Host appears to be a DC (multiple DC ports open)")
-                self.isdc = True
-                return True
-        self.isdc = False
+
+        self.logger.debug("Port 135 is open, attempting Netlogon MSRPC lookup...")
+        try:
+            epm.hept_map(self.host, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
+            return True
+        except DCERPCException:
+            self.logger.debug("DCERPCException on Netlogon lookup: probably not a DC")
+        except TimeoutError:
+            self.logger.debug("Timeout on Netlogon lookup: likely not a DC or unreachable")
+        except Exception as e:
+            self.logger.debug(f"Error on Netlogon lookup: {e}")
         return False
 
     def _is_port_open(self, port, timeout=1):
