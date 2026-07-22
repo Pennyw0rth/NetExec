@@ -21,7 +21,7 @@ from impacket.uuid import bin_to_string
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
-from nxc.helpers.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection, DPAPITriage
+from nxc.helpers.dpapi import DPAPITriage
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import gen_random_string
 from nxc.helpers.negotiate_parser import parse_challenge
@@ -44,8 +44,9 @@ class winrm(connection):
         self.targetDomain = None
         self.no_ntlm = False
         self.dpapi_system_key = None
-        self.pvkbytes = None
         self.no_da = None
+
+        self._dpapi_triage = None
 
         connection.__init__(self, args, db, host)
 
@@ -417,19 +418,12 @@ class winrm(connection):
             LSA.dumpSecrets()
 
     def dpapi(self):
-        dump_system = "nosystem" not in self.args.dpapi
-        self.output_file = open(self.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # noqa: SIM115
+        self.dpapi_triage.triage_dpapi()
 
-        if self.args.pvk is not None:
-            try:
-                self.pvkbytes = open(self.args.pvk, "rb").read()  # noqa: SIM115
-                self.logger.success(f"Loading domain backupkey from {self.args.pvk}")
-            except Exception as e:
-                self.logger.fail(str(e))
-
-        if self.pvkbytes is None:
-            self.pvkbytes = get_domain_backup_key(self)
-
+    @property
+    def dpapi_triage(self) -> DPAPITriage:
+        if self._dpapi_triage is not None:
+            return self._dpapi_triage
         target = Target.create(
             domain=self.domain,
             username=self.username,
@@ -441,29 +435,5 @@ class winrm(connection):
             nthash=self.nthash,
         )
 
-        conn = upgrade_to_dploot_connection(context=self, target=target, protocol="winrm")
-        if conn is None:
-            self.logger.debug("Could not upgrade connection")
-            return
-
-        if dump_system and self.dpapi_system_key is None:
-            # Need to get DPAPI SYSTEM keys, prefer to use embedded LSA dump
-            # if not already dumped
-            self.lsa()
-
-        masterkeys = collect_masterkeys_from_target(self, target, conn, dpapi_system_key=self.dpapi_system_key)
-
-        if len(masterkeys) == 0:
-            self.logger.fail("No masterkeys looted")
-            return
-
-        self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting secrets...")
-
-        dpapi_triage = DPAPITriage(self, target, conn, dump_cookies="cookies" in self.args.dpapi)
-        dpapi_triage.triage(masterkeys)
-
-        if self.output_file:
-            self.output_file.close()
-            with open(self.output_file_template.format(output_folder="dpapi")) as f:
-                if sum(1 for _ in f) == 0:
-                    self.logger.fail("No dpapi loot retrieved")
+        self._dpapi_triage = DPAPITriage(self, target)
+        return self._dpapi_triage
