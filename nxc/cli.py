@@ -107,7 +107,6 @@ def gen_cli_args():
     certificate_group.add_argument("--pfx-pass", metavar="PFXPASS", help="Password of the pfx certificate")
     certificate_group.add_argument("--pem-cert", metavar="PEMCERT", help="Use certificate authentication from PEM file")
     certificate_group.add_argument("--pem-key", metavar="PEMKEY", help="Private key for the PEM format")
-    certificate_group.add_argument("--schannel", action="store_true", help="Authenticate with the certificate using Schannel instead of PKINIT (LDAP protocol only)")
 
     p_loader = ProtocolLoader()
     protocols = p_loader.get_protocols()

@@ -249,6 +249,7 @@ class connection:
             # Construct the output file template using os.path.join for OS compatibility
             base_log_dir = os.path.join(NXC_PATH, "logs")
             filename_pattern = f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
+            self.filename_pattern = filename_pattern
             self.output_file_template = os.path.join(base_log_dir, "{output_folder}", filename_pattern)
             # Default output filename for logs
             self.output_filename = os.path.join(base_log_dir, filename_pattern)
@@ -567,10 +568,7 @@ class connection:
             if not self.args.username:
                 self.logger.fail("You must specify a username when using certificate authentication")
                 return False
-            if self.args.schannel:
-                if self.args.protocol != "ldap":
-                    self.logger.fail("Schannel authentication is only supported for the LDAP protocol")
-                    return False
+            if hasattr(self.args, "schannel") and self.args.schannel:
                 with sem:
                     return self.plaintext_login(self.domain, self.args.username[0], "")
             with sem:

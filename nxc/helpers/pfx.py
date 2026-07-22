@@ -559,7 +559,7 @@ def pfx_to_pem_files(self):
         self.logger.fail("You must either specify a PFX file + optional password or a combination of Cert PEM file and Private key PEM file")
         return None, None
 
-    basename = f"{self.hostname}_{self.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}"
+    basename = self.filename_pattern
     cert_path = os.path.normpath(os.path.expanduser(f"{TMP_PATH}/{basename}_cert.pem"))
     key_path = os.path.normpath(os.path.expanduser(f"{TMP_PATH}/{basename}_key.pem"))
 

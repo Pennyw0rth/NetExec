@@ -460,19 +460,20 @@ class ldap(connection):
             self.logger.extra["port"] = "636" if self.port == 636 else "389"
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.target}"
+            authentication_choice = "external" if self.args.schannel else self.auth_choice
+            conn_kwargs = {"url": ldap_url, "baseDN": self.baseDN, "dstIp": self.host, "signing": self.auth_choice != "simple"}
             if self.args.schannel:
-                # Schannel needs TLS: over LDAPS the certificate is sent during the handshake, over LDAP it is sent during StartTLS
-                self.logger.info(f"Connecting to {ldap_url} using Schannel")
-                self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, certfile=cert_file, keyfile=key_file)
-                self.ldap_connection.login(authenticationChoice="external")
+                conn_kwargs["certfile"] = cert_file
+                conn_kwargs["keyfile"] = key_file
 
+            self.logger.info(f"Connecting to {ldap_url} using Schannel" if self.args.schannel else f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3]")
+            self.ldap_connection = ldap_impacket.LDAPConnection(**conn_kwargs)
+            self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=authentication_choice)
+
+            if self.args.schannel:
                 mapped_user = self.get_ldap_username()
                 if mapped_user:
                     self.username = mapped_user
-            else:
-                self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3]")
-                self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=self.auth_choice != "simple")
-                self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=self.auth_choice)
 
             self.check_if_admin()
 
