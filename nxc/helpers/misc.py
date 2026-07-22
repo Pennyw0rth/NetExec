@@ -31,6 +31,19 @@ def validate_ntlm(data):
     return bool(allowed.match(data))
 
 
+def normalize_nthash(nthash):
+    """Normalize a -H hash argument to its 32-char NT portion.
+
+    Accepts the NT hash on its own as well as the ``LM:NT`` and ``:NT`` forms;
+    anything up to and including the last colon (the LM half) is stripped.
+    Returns the NT hash if it is exactly 32 characters, otherwise None.
+    """
+    nthash = nthash.strip()
+    if ":" in nthash:
+        nthash = nthash.rsplit(":", 1)[-1]
+    return nthash if len(nthash) == 32 else None
+
+
 def called_from_cmd_args():
     for stack in inspect.stack():
         if stack[3] == "print_host_info":
