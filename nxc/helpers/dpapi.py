@@ -42,7 +42,10 @@ def upgrade_to_dploot_connection(target, context=None):
                 else:
                     conn.connect()
             case "mssql":
-                from dploot.lib.network.mssql import MSSQLTarget
+                from dploot.lib.network.mssql import DPLootMSSQLConnection
+                conn = DPLootMSSQLConnection(target)
+                if context is not None:
+                    conn.conn = context.conn
     except Exception as e:
         print(e)
         return None
