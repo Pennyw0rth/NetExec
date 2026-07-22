@@ -2490,13 +2490,25 @@ class smb(connection):
             else:
                 add_hash.nt_lm_secrets += 1
 
+            # NTDS account lines end with a trailing " Enabled"/" Disabled" status word;
+            # trust key lines (e.g. "partner (Incoming):rc4_hmac:hash") also contain spaces
+            # but have no status suffix, so only strip the last word when it's actually a status.
+            has_status = secret.rsplit(" ", 1)[-1] in ("Enabled", "Disabled")
+            # Trust keys have no enabled/disabled account status to filter on, so they're
+            # shown regardless of --enabled, except previous-password keys which are the
+            # trust equivalent of history and get excluded like --enabled excludes those.
+            is_trust_key = " (Incoming" in secret or " (Outgoing" in secret
+            is_current_trust_key = is_trust_key and ", previous)" not in secret
+
             # Log the secret based on args
             if self.args.enabled:
                 if "Enabled" in secret:
                     secret = " ".join(secret.split(" ")[:-1])
                     self.logger.highlight(secret)
+                elif is_current_trust_key:
+                    self.logger.highlight(secret)
             else:
-                secret = " ".join(secret.split(" ")[:-1]) if " " in secret else secret
+                secret = " ".join(secret.split(" ")[:-1]) if has_status else secret
                 self.logger.highlight(secret)
 
             # Filter out computer accounts, history hashes and kerberos keys for adding to db
@@ -2548,18 +2560,27 @@ class smb(connection):
             outputFileName=self.output_filename,
             justUser=self.args.userntds if self.args.userntds else None,
             printUserStatus=True,
+            trustKeys=self.args.trust_keys,
+            justTrustKeys=self.args.just_trust_keys,
+            domainFQDN=self.domain,
             perSecretCallback=lambda secret_type, secret: add_hash(secret_type, secret, host_id),
         )
 
         try:
-            self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
+            if self.args.just_trust_keys:
+                self.logger.success("Dumping the trust keys, this could take a while so go grab a redbull...")
+            else:
+                self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
             NTDS.dump()
             ntds_outfile = f"{self.output_filename}.ntds"
-            self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
-            if self.args.kerberos_keys:
-                self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
-            self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
-            self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
+            if self.args.just_trust_keys:
+                self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} trust keys to {ntds_outfile}")
+            else:
+                self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
+                if self.args.kerberos_keys:
+                    self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
+                self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
+                self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
         except Exception as e:
             # if str(e).find('ERROR_DS_DRA_BAD_DN') >= 0:
             # We don't store the resume file if this error happened, since this error is related to lack
