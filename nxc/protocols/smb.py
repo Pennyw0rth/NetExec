@@ -318,16 +318,19 @@ class smb(connection):
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
+        # Resolve DC status up front so the banner can flag it (is_host_dc caches into self.isdc,
+        # so check_if_dcsync later reuses it). Only a promoted DC registers the Netlogon RPC endpoint.
+        if self.isdc is None:
+            self.is_host_dc()
+        dc_prefix = "DC:" if self.isdc else ""
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
         smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
         ntlm = colored(f" (NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
         null_auth = colored(f" (Null Auth:{self.null_auth})", host_info_colors[2], attrs=["bold"]) if self.null_auth else ""
         guest = colored(f" (Guest Auth:{self.is_guest})", host_info_colors[1], attrs=["bold"]) if self.is_guest else ""
-        self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}){ntlm}{null_auth}{guest}")
+        self.logger.display(f"{dc_prefix}{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}){ntlm}{null_auth}{guest}")
 
         if self.args.generate_hosts_file or self.args.generate_krb5_file:
-            if self.isdc is None:
-                self.is_host_dc()
             if self.args.generate_hosts_file:
                 with open(self.args.generate_hosts_file, "a+") as host_file:
                     dc_part = f" {self.targetDomain}" if self.isdc else ""
