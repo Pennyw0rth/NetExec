@@ -758,7 +758,6 @@ class smb(connection):
         # Attempt a single-object GetNCChanges on our own account. Generates the same replication
         # traffic (event 4662) as a real DCSync, hence it's gated behind --dcsync-check.
         from impacket.dcerpc.v5 import drsuapi
-        from impacket.dcerpc.v5.rpcrt import DCERPCSessionError
 
         self.logger.debug("Probing DRSUAPI for DCSync rights")
         remote_ops = None
@@ -778,7 +777,7 @@ class smb(connection):
             remote_ops.DRSGetNCChangesGuid(own_guid)  # raises 0x2105 (access denied) if we can't replicate
             self.dcsync_privs = True
             self.logger.debug(f"{self.username} has DCSync rights")
-        except DCERPCSessionError as e:
+        except drsuapi.DCERPCSessionError as e:
             self.logger.debug(f"No DCSync rights: {e}")
         except Exception as e:
             self.logger.debug(f"DRSUAPI probe failed: {e}")
