@@ -155,17 +155,28 @@ class TSCH_EXEC:
                 self.logger.fail(str(e))
             return
 
-        try:
-            done = False
-            while not done:
-                self.logger.debug(f"Calling SchRpcGetLastRunInfo for \\{self.task_name}")
+        # Win2025+ (build 26100): RegistrationTrigger does not start the task over remote TSCH.
+        if self.__connection.server_os_build and int(self.__connection.server_os_build) >= 26100:
+            try:
+                tsch.hSchRpcRun(dce, f"\\{self.task_name}")
+            except tsch.DCERPCSessionError as e:
+                self.logger.debug(f"hSchRpcRun returned: {e}")
+
+        done = False
+        while not done:
+            self.logger.debug(f"Calling SchRpcGetLastRunInfo for \\{self.task_name}")
+            try:
                 resp = tsch.hSchRpcGetLastRunInfo(dce, f"\\{self.task_name}")
-                if resp["pLastRuntime"]["wYear"] != 0:
-                    done = True
-                else:
+            except tsch.DCERPCSessionError as e:
+                if e.error_code == 0x00041303:
                     sleep(2)
-        except tsch.DCERPCSessionError as e:
-            self.logger.fail(f"Error retrieving task last run info: {e}")
+                    continue
+                self.logger.fail(f"Error retrieving task last run info: {e}")
+                break
+            if resp["pLastRuntime"]["wYear"] != 0:
+                done = True
+            else:
+                sleep(2)
 
         self.logger.info(f"Deleting task \\{self.task_name}")
         tsch.hSchRpcDelete(dce, f"\\{self.task_name}")

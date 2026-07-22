@@ -147,6 +147,8 @@ class nfs(connection):
         except Exception as e:
             self.logger.fail(f"Failed to connect to NFS3 host: {e}")
 
+        self.db.add_host(self.host, self.hostname, self.port, self.nfs_versions, self.root_escape)
+
     def print_host_info(self):
         root_escape_str = colored(f"root escape:{self.root_escape}", host_info_colors[1 if self.root_escape else 0], attrs=["bold"])
         self.logger.display(f"Supported NFS versions: ({', '.join(str(x) for x in self.nfs_versions)}) ({root_escape_str})")
@@ -269,6 +271,7 @@ class nfs(connection):
 
                         read_perm, write_perm, exec_perm = self.get_permissions(file_handle)
                         self.mount.umnt(self.auth)
+                        self.db.add_share(self.host, (read_perm, write_perm, exec_perm), (convert_size(used_space), "/", convert_size(total_space)), share, network)
                         self.logger.highlight(f"{self.auth['uid']:<11}{'r' if read_perm else '-'}{'w' if write_perm else '-'}{('x' if exec_perm else '-'):<7}{convert_size(used_space) + '/' + convert_size(total_space):<16} {share:<30} {', '.join(network) if network else 'No network':<15}")
                 except Exception as e:
                     self.logger.fail(f"Failed to list share: {share} - {e}")
@@ -430,6 +433,10 @@ class nfs(connection):
         if not os.path.isfile(local_file_path):
             self.logger.fail(f"{local_file_path} does not exist.")
             return
+
+        # Do a bit of smart handling for the remote file path
+        if remote_file_path.endswith("/"):
+            file_name = os.path.basename(local_file_path)
 
         self.logger.display(f"Uploading from {local_file_path} to {remote_file_path}")
         try:

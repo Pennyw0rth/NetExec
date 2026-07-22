@@ -8,6 +8,7 @@ def proto_args(parser, parents):
     dgroup.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
     dgroup.add_argument("--simple-bind", action="store_true", help="Use simple bind authentication (no signing/sealing)")
     ldap_parser.add_argument("--port", type=int, default=389, action=DefaultTrackingAction, help="LDAP port")
+    ldap_parser.add_argument("--ldap-timeout", type=int, default=3, help="LDAP connection timeout")
     ldap_parser.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, default=None, help="domain to authenticate to")
     ldap_parser.add_argument("--schannel", action="store_true", help="Authenticate with the certificate using Schannel instead of PKINIT")
 
