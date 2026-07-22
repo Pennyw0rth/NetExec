@@ -764,14 +764,17 @@ class smb(connection):
         try:
             remote_ops = RemoteOperations(self.conn, self.kerberos, self.kdcHost)
             # resolve our own account to its objectGUID (this also binds DRSUAPI)
+            # SANS_DOMAIN takes the bare sAMAccountName, avoiding the NetBIOS-vs-FQDN mismatch
+            # that DS_NT4_ACCOUNT_NAME (DOMAIN\user) hits when self.domain is an FQDN
             crack = remote_ops.DRSCrackNames(
-                formatOffered=drsuapi.DS_NAME_FORMAT.DS_NT4_ACCOUNT_NAME,
+                formatOffered=drsuapi.DS_NT4_ACCOUNT_NAME_SANS_DOMAIN,
                 formatDesired=drsuapi.DS_NAME_FORMAT.DS_UNIQUE_ID_NAME,
-                name=f"{self.domain}\\{self.username}",
+                name=self.username,
             )
             result = crack["pmsgOut"]["V1"]["pResult"]
             if result["cItems"] < 1 or result["rItems"][0]["status"] != 0:
-                self.logger.debug("Could not resolve own account GUID over DRSUAPI")
+                status = result["rItems"][0]["status"] if result["cItems"] else "no items"
+                self.logger.debug(f"Could not resolve own account GUID over DRSUAPI (status={status})")
                 return
             own_guid = result["rItems"][0]["pName"][:-1]  # {GUID} with trailing null
             remote_ops.DRSGetNCChangesGuid(own_guid)  # raises 0x2105 (access denied) if we can't replicate
