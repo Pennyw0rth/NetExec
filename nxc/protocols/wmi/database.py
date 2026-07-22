@@ -1,25 +1,35 @@
-from sqlalchemy import Column, Integer, PrimaryKeyConstraint, String
+import base64
+
+from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, UniqueConstraint, func, select, delete
+from sqlalchemy.dialects.sqlite import Insert  # used for upsert
 from sqlalchemy.orm import declarative_base
 from nxc.database import BaseDB
+from nxc.logger import nxc_logger
 
 Base = declarative_base()
 
 
 class database(BaseDB):
     def __init__(self, db_engine):
-        self.CredentialsTable = None
+        self.UsersTable = None
         self.HostsTable = None
+        self.DpapiBackupkeyTable = None
+        self.DpapiSecretsTable = None
 
         super().__init__(db_engine)
 
-    class Credential(Base):
-        __tablename__ = "credentials"
+    class User(Base):
+        __tablename__ = "users"
         id = Column(Integer)
+        domain = Column(String)
         username = Column(String)
         password = Column(String)
+        credtype = Column(String)
+        pillaged_from_hostid = Column(Integer)
 
         __table_args__ = (
             PrimaryKeyConstraint("id"),
+            ForeignKeyConstraint(["pillaged_from_hostid"], ["hosts.id"]),
         )
 
     class Host(Base):
@@ -33,10 +43,295 @@ class database(BaseDB):
             PrimaryKeyConstraint("id"),
         )
 
+    class DpapiSecret(Base):
+        __tablename__ = "dpapi_secrets"
+        id = Column(Integer)
+        host = Column(String)
+        dpapi_type = Column(String)
+        windows_user = Column(String)
+        username = Column(String)
+        password = Column(String)
+        url = Column(String)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            UniqueConstraint("host", "dpapi_type", "windows_user", "username", "password", "url"),
+        )
+
+    class DpapiBackupKey(Base):
+        __tablename__ = "dpapi_backupkey"
+        id = Column(Integer)
+        domain = Column(String)
+        pvk = Column(String)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            UniqueConstraint("domain"),
+        )
+
     @staticmethod
     def db_schema(db_conn):
         Base.metadata.create_all(db_conn)
 
     def reflect_tables(self):
-        self.CredentialsTable = self.reflect_table(self.Credential)
+        self.UsersTable = self.reflect_table(self.User)
         self.HostsTable = self.reflect_table(self.Host)
+        self.DpapiSecretsTable = self.reflect_table(self.DpapiSecret)
+        self.DpapiBackupkeyTable = self.reflect_table(self.DpapiBackupKey)
+
+    def add_host(
+        self,
+        ip,
+        hostname,
+        port,
+    ):
+        """Check if this host has already been added to the database, if not, add it in."""
+        hosts = []
+        updated_ids = []
+
+        q = select(self.HostsTable).filter(self.HostsTable.c.ip == ip)
+        results = self.db_execute(q).all()
+
+        # create new host
+        if not results:
+            new_host = {
+                "ip": ip,
+                "hostname": hostname,
+                "port": port,
+            }
+            hosts = [new_host]
+        # update existing hosts data
+        else:
+            for host in results:
+                host_data = host._asdict()
+                # only update column if it is being passed in
+                if ip is not None:
+                    host_data["ip"] = ip
+                if hostname is not None:
+                    host_data["hostname"] = hostname
+                if port is not None:
+                    host_data["port"] = port
+                if host_data not in hosts:
+                    hosts.append(host_data)
+                    updated_ids.append(host_data["id"])
+        nxc_logger.debug(f"Update Hosts: {hosts}")
+
+        # TODO: find a way to abstract this away to a single Upsert call
+        q = Insert(self.HostsTable)  # .returning(self.HostsTable.c.id)
+        update_columns = {col.name: col for col in q.excluded if col.name not in "id"}
+        q = q.on_conflict_do_update(index_elements=["ip"], set_=update_columns)
+
+        self.db_execute(q, hosts)  # .scalar()
+        # we only return updated IDs for now - when RETURNING clause is allowed we can return inserted
+        if updated_ids:
+            nxc_logger.debug(f"add_host() - Host IDs Updated: {updated_ids}")
+            return updated_ids
+
+    def add_credential(self, credtype, domain, username, password, pillaged_from=None):
+        """Check if this credential has already been added to the database, if not add it in."""
+        credentials = []
+
+        if pillaged_from and not self.is_host_valid(pillaged_from):
+            nxc_logger.debug("Invalid host")
+            return
+
+        q = select(self.UsersTable).filter(
+            func.lower(self.UsersTable.c.domain) == func.lower(domain),
+            func.lower(self.UsersTable.c.username) == func.lower(username),
+            func.lower(self.UsersTable.c.credtype) == func.lower(credtype),
+        )
+        results = self.db_execute(q).all()
+
+        # add new credential
+        if not results:
+            new_cred = {
+                "credtype": credtype,
+                "domain": domain,
+                "username": username,
+                "password": password,
+                "pillaged_from": pillaged_from,
+            }
+            credentials = [new_cred]
+        # update existing cred data
+        else:
+            for creds in results:
+                # this will include the id, so we don't touch it
+                cred_data = creds._asdict()
+                # only update column if it is being passed in
+                if credtype is not None:
+                    cred_data["credtype"] = credtype
+                if domain is not None:
+                    cred_data["domain"] = domain
+                if username is not None:
+                    cred_data["username"] = username
+                if password is not None:
+                    cred_data["password"] = password
+                if pillaged_from is not None:
+                    cred_data["pillaged_from"] = pillaged_from
+                # only add cred to be updated if it has changed
+                if cred_data not in credentials:
+                    credentials.append(cred_data)
+
+        # TODO: find a way to abstract this away to a single Upsert call
+        q_users = Insert(self.UsersTable)  # .returning(self.UsersTable.c.id)
+        update_columns_users = {col.name: col for col in q_users.excluded if col.name not in "id"}
+        q_users = q_users.on_conflict_do_update(index_elements=self.UsersTable.primary_key, set_=update_columns_users)
+        nxc_logger.debug(f"Adding credentials: {credentials}")
+
+        self.db_execute(q_users, credentials)  # .scalar()
+
+    def remove_credentials(self, creds_id):
+        """Removes a credential ID from the database"""
+        self.db_execute(delete(self.UsersTable).where(self.UsersTable.c.id.in_(creds_id)))
+
+    def is_credential_valid(self, credential_id):
+        """Check if this credential ID is valid."""
+        q = select(self.UsersTable).filter(
+            self.UsersTable.c.id == credential_id,
+            self.UsersTable.c.password is not None,
+        )
+        results = self.db_execute(q).all()
+        return len(results) > 0
+
+    def get_credentials(self, filter_term=None, cred_type=None):
+        """Return credentials from the database."""
+        # if we're returning a single credential by ID
+        if self.is_credential_valid(filter_term):
+            q = select(self.UsersTable).filter(self.UsersTable.c.id == filter_term)
+        elif cred_type:
+            q = select(self.UsersTable).filter(self.UsersTable.c.credtype == cred_type)
+        # if we're filtering by username
+        elif filter_term and filter_term != "":
+            like_term = func.lower(f"%{filter_term}%")
+            q = select(self.UsersTable).filter(func.lower(self.UsersTable.c.username).like(like_term))
+        # otherwise return all credentials
+        else:
+            q = select(self.UsersTable)
+
+        return self.db_execute(q).all()
+
+    def get_credential(self, cred_type, domain, username, password):
+        q = select(self.UsersTable).filter(
+            self.UsersTable.c.domain == domain,
+            self.UsersTable.c.username == username,
+            self.UsersTable.c.password == password,
+            self.UsersTable.c.credtype == cred_type,
+        )
+        results = self.db_execute(q).first()
+        return results.id
+
+    def is_host_valid(self, host_id):
+        """Check if this host ID is valid."""
+        q = select(self.HostsTable).filter(self.HostsTable.c.id == host_id)
+        results = self.db_execute(q).all()
+        return len(results) > 0
+
+    def add_domain_backupkey(self, domain: str, pvk: bytes):
+        """
+        Add domain backupkey
+        :domain is the domain fqdn
+        :pvk is the domain backupkey
+        """
+        q = select(self.DpapiBackupkeyTable).filter(func.lower(self.DpapiBackupkeyTable.c.domain) == func.lower(domain))
+        results = self.db_execute(q).all()
+
+        if not len(results):
+            pvk_encoded = base64.b64encode(pvk)
+            backup_key = {"domain": domain, "pvk": pvk_encoded}
+            try:
+                # TODO: find a way to abstract this away to a single Upsert call
+                q = Insert(self.DpapiBackupkeyTable)  # .returning(self.DpapiBackupkeyTable.c.id)
+
+                self.db_execute(q, [backup_key])  # .scalar()
+                nxc_logger.debug(f"add_domain_backupkey(domain={domain}, pvk={pvk_encoded})")
+            except Exception as e:
+                nxc_logger.debug(f"Issue while inserting DPAPI Backup Key: {e}")
+
+    def get_domain_backupkey(self, domain: str | None = None):
+        """
+        Get domain backupkey
+        :domain is the domain fqdn
+        """
+        q = select(self.DpapiBackupkeyTable)
+        if domain is not None:
+            q = q.filter(func.lower(self.DpapiBackupkeyTable.c.domain) == func.lower(domain))
+        results = self.db_execute(q).all()
+
+        nxc_logger.debug(f"get_domain_backupkey(domain={domain}) => {results}")
+
+        if len(results) > 0:
+            results = [(id_key, domain, base64.b64decode(pvk)) for id_key, domain, pvk in results]
+        return results
+
+    def is_dpapi_secret_valid(self, dpapi_secret_id):
+        """
+        Check if this DPAPI secret ID is valid.
+        :dpapi_secret_id is a primary id
+        """
+        q = select(self.DpapiSecretsTable).filter(func.lower(self.DpapiSecretsTable.c.id) == dpapi_secret_id)
+        results = self.db_execute(q).first()
+        valid = results is not None
+        nxc_logger.debug(f"is_dpapi_secret_valid(dpapi_secret_id={dpapi_secret_id}) => {valid}")
+        return valid
+
+    def add_dpapi_secrets(
+        self,
+        host: str,
+        dpapi_type: str,
+        windows_user: str,
+        username: str,
+        password: str,
+        url: str = "",
+    ):
+        """Add dpapi secrets to nxcdb"""
+        secret = {
+            "host": host,
+            "dpapi_type": dpapi_type,
+            "windows_user": windows_user,
+            "username": username,
+            "password": password,
+            "url": url,
+        }
+        q = Insert(self.DpapiSecretsTable).on_conflict_do_nothing()  # .returning(self.DpapiSecretsTable.c.id)
+
+        self.db_execute(q, [secret])  # .scalar()
+
+        nxc_logger.debug(
+            f"add_dpapi_secrets(host={host}, dpapi_type={dpapi_type}, windows_user={windows_user}, username={username}, password={password}, url={url})")
+
+    def get_dpapi_secrets(
+        self,
+        filter_term=None,
+        host: str | None = None,
+        dpapi_type: str | None = None,
+        windows_user: str | None = None,
+        username: str | None = None,
+        url: str | None = None,
+    ):
+        """Get dpapi secrets from nxcdb"""
+        q = select(self.DpapiSecretsTable)
+
+        if self.is_dpapi_secret_valid(filter_term):
+            q = q.filter(self.DpapiSecretsTable.c.id == filter_term)
+            results = self.db_execute(q).first()
+            # all() returns a list, so we keep the return format the same so consumers don't have to guess
+            return [results]
+        elif host:
+            q = q.filter(self.DpapiSecretsTable.c.host == host)
+            results = self.db_execute(q).first()
+            # all() returns a list, so we keep the return format the same so consumers don't have to guess
+            return [results]
+        elif dpapi_type:
+            q = q.filter(func.lower(self.DpapiSecretsTable.c.dpapi_type) == func.lower(dpapi_type))
+        elif windows_user:
+            like_term = func.lower(f"%{windows_user}%")
+            q = q.filter(func.lower(self.DpapiSecretsTable.c.windows_user).like(like_term))
+        elif username:
+            like_term = func.lower(f"%{username}%")
+            q = q.filter(func.lower(self.DpapiSecretsTable.c.windows_user).like(like_term))
+        elif url:
+            q = q.filter(func.lower(self.DpapiSecretsTable.c.url) == func.lower(url))
+        results = self.db_execute(q).all()
+
+        nxc_logger.debug(f"get_dpapi_secrets(filter_term={filter_term}, host={host}, dpapi_type={dpapi_type}, windows_user={windows_user}, username={username}, url={url}) => {results}")
+        return results

