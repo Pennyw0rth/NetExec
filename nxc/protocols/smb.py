@@ -733,11 +733,12 @@ class smb(connection):
         if self.dcsync_privs or not self.username:
             return
 
-        # DCSync-capable accounts (e.g. DC machine accounts) aren't local admins, so check_if_admin misses them.
-        # A DC's own machine account (HOSTNAME$) always has replication rights - flagged with no replication traffic.
-        # Match the account name first (cheap) so is_host_dc() only fires for a machine-account-looking login.
+        # Two DCSync-capable cases are free to infer on a DC (no replication traffic):
+        #   - the DC's own machine account (HOSTNAME$), which isn't a local admin so check_if_admin misses it
+        #   - any local admin, i.e. BUILTIN\Administrators, which holds Replicating Directory Changes[-All] by default
+        # These signals are cheap; only resolve isdc (one RPC) once a login actually matches one of them.
         name_match = self.hostname and self.username.rstrip("$").upper() == self.hostname.upper()
-        if not (name_match or self.args.dcsync_check):
+        if not (name_match or self.admin_privs or self.args.dcsync_check):
             return
 
         # isdc is resolved lazily - it isn't set in the default login flow (only with --generate-hosts/krb5-file or over LDAP)
@@ -749,8 +750,12 @@ class smb(connection):
         if name_match:
             self.logger.debug(f"{self.username} is the DC machine account, has DCSync rights")
             self.dcsync_privs = True
+        elif self.admin_privs:
+            self.logger.debug(f"{self.username} is a local admin on a DC, has DCSync rights")
+            self.dcsync_privs = True
 
-        # --dcsync-check confirms replication rights over DRSUAPI (also catches delegated users / other DCs)
+        # --dcsync-check confirms replication rights over DRSUAPI for the remaining case:
+        # a non-admin user who's been delegated replication rights (also catches other DCs)
         if not self.dcsync_privs and self.args.dcsync_check:
             self.probe_dcsync_rights()
 
