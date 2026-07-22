@@ -653,10 +653,36 @@ class ldap(connection):
             for item in resp_parsed:
                 if item:
                     self.admin_privs = True
+                    # DCSync is a narrower right than the admin set above (Server/Backup Operators
+                    # are admin-equivalent but can't replicate), so check the capable subset separately
+                    self.check_if_dcsync()
                     return
 
         # If nothing matched we are not admin
         self.admin_privs = False
+
+    def check_if_dcsync(self):
+        # Domain Admins (512), Enterprise Admins (519) and Administrators (S-1-5-32-544) hold
+        # Replicating Directory Changes[-All] on the domain NC by default -> they can DCSync.
+        # Server/Backup Operators are deliberately excluded (admin-equivalent, no replication rights).
+        if not getattr(self, "sid_domain", None):
+            return
+        search_filter = (f"(|(objectSid={self.sid_domain}-512)"
+                         f"(objectSid={self.sid_domain}-519)"
+                         "(objectSid=S-1-5-32-544))")
+        resp = self.search(search_filter, attributes=["distinguishedName"], baseDN=self.baseDN)
+        group_dns = [item["distinguishedName"] for item in parse_result_attributes(resp)]
+        if not group_dns:
+            return
+
+        # nested membership (LDAP_MATCHING_RULE_IN_CHAIN) or primaryGroupID of a capable group
+        answers = [f"(memberOf:1.2.840.113556.1.4.1941:={dn})" for dn in group_dns]
+        answers.extend([f"(primaryGroupID={rid})" for rid in ("512", "519")])
+        search_filter = f"(&(objectCategory=user)(sAMAccountName={self.username})(|{''.join(answers)}))"
+        resp = self.search(search_filter, attributes=[], baseDN=self.baseDN)
+        if any(item for item in parse_result_attributes(resp)):
+            self.dcsync_privs = True
+            self.logger.debug(f"{self.username} is in a DCSync-capable group, has DCSync rights")
 
     def getUnixTime(self, t):
         t -= 116444736000000000
