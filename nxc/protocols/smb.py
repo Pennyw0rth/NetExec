@@ -54,7 +54,7 @@ from impacket.smb3structs import (
 
 from impacket.dcerpc.v5 import tsts as TSTS
 
-from nxc.config import process_secret, host_info_colors, check_guest_account
+from nxc.config import process_secret, process_secret_dump, host_info_colors, check_guest_account
 from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
@@ -2102,7 +2102,7 @@ class smb(connection):
             host_id = self.db.get_hosts(filter_term=self.host)[0][0]
 
             def add_sam_hash(sam_hash, host_id):
-                self.logger.highlight(sam_hash)
+                self.logger.highlight(process_secret_dump(sam_hash))
                 if "_history" in sam_hash:
                     return
                 username, _, lmhash, nthash, _, _, _ = sam_hash.split(":")
@@ -2185,7 +2185,7 @@ class smb(connection):
         def sccm_callback(secret):
             if isinstance(secret, SCCMCred):
                 tag = "NAA Account"
-                self.logger.highlight(f"[{tag}] {secret.username.decode('latin-1')}:{secret.password.decode('latin-1')}")
+                self.logger.highlight(f"[{tag}] {secret.username.decode('latin-1')}:{process_secret(secret.password.decode('latin-1'))}")
                 self.db.add_dpapi_secrets(
                     target.address,
                     f"SCCM - {tag}",
@@ -2196,7 +2196,7 @@ class smb(connection):
                 )
             elif isinstance(secret, SCCMSecret):
                 tag = "Task sequences secret"
-                self.logger.highlight(f"[{tag}] {secret.secret.decode('latin-1')}")
+                self.logger.highlight(f"[{tag}] {process_secret(secret.secret.decode('latin-1'))}")
                 self.db.add_dpapi_secrets(
                     target.address,
                     f"SCCM - {tag}",
@@ -2207,7 +2207,7 @@ class smb(connection):
                 )
             elif isinstance(secret, SCCMCollection):
                 tag = "Collection Variable"
-                self.logger.highlight(f"[{tag}] {secret.variable.decode('latin-1')}:{secret.value.decode('latin-1')}")
+                self.logger.highlight(f"[{tag}] {secret.variable.decode('latin-1')}:{process_secret(secret.value.decode('latin-1'))}")
                 self.db.add_dpapi_secrets(
                     target.address,
                     f"SCCM - {tag}",
@@ -2267,7 +2267,7 @@ class smb(connection):
         # Collect User and Machine Credentials Manager secrets
         def credential_callback(credential):
             tag = "CREDENTIAL"
-            line = f"[{credential.winuser}][{tag}] {credential.target} - {credential.username}:{credential.password}"
+            line = f"[{credential.winuser}][{tag}] {credential.target} - {credential.username}:{process_secret(credential.password)}"
             self.logger.highlight(line)
             if self.output_file:
                 self.output_file.write(line + "\n")
@@ -2305,7 +2305,7 @@ class smb(connection):
         def browser_callback(secret):
             if isinstance(secret, LoginData):
                 secret_url = secret.url + " -" if secret.url != "" else "-"
-                line = f"[{secret.winuser}][{secret.browser.upper()}] {secret_url} {secret.username}:{secret.password}"
+                line = f"[{secret.winuser}][{secret.browser.upper()}] {secret_url} {secret.username}:{process_secret(secret.password)}"
                 self.logger.highlight(line)
                 if self.output_file:
                     self.output_file.write(line + "\n")
@@ -2318,7 +2318,7 @@ class smb(connection):
                     secret.url,
                 )
             elif isinstance(secret, GoogleRefreshToken):
-                line = f"[{secret.winuser}][{secret.browser.upper()}] Google Refresh Token: {secret.service}:{secret.token}"
+                line = f"[{secret.winuser}][{secret.browser.upper()}] Google Refresh Token: {secret.service}:{process_secret(secret.token)}"
                 self.logger.highlight(line)
                 if self.output_file:
                     self.output_file.write(line + "\n")
@@ -2331,7 +2331,7 @@ class smb(connection):
                     "Google Refresh Token",
                 )
             elif isinstance(secret, Cookie):
-                line = f"[{secret.winuser}][{secret.browser.upper()}] {secret.host}{secret.path} - {secret.cookie_name}:{secret.cookie_value}"
+                line = f"[{secret.winuser}][{secret.browser.upper()}] {secret.host}{secret.path} - {secret.cookie_name}:{process_secret(secret.cookie_value)}"
                 self.logger.highlight(line)
                 if self.output_file:
                     self.output_file.write(line + "\n")
@@ -2346,7 +2346,7 @@ class smb(connection):
             tag = "IEX"
             if secret.type == "Internet Explorer":
                 resource = secret.resource + " -" if secret.resource != "" else "-"
-                line = f"[{secret.winuser}][{tag}] {resource} - {secret.username}:{secret.password}"
+                line = f"[{secret.winuser}][{tag}] {resource} - {secret.username}:{process_secret(secret.password)}"
                 self.logger.highlight(line)
                 if self.output_file:
                     self.output_file.write(line + "\n")
@@ -2370,7 +2370,7 @@ class smb(connection):
             tag = "FIREFOX"
             if isinstance(secret, FirefoxData):
                 url = secret.url + " -" if secret.url != "" else "-"
-                line = f"[{secret.winuser}][{tag}] {url} {secret.username}:{secret.password}"
+                line = f"[{secret.winuser}][{tag}] {url} {secret.username}:{process_secret(secret.password)}"
                 self.logger.highlight(line)
                 if self.output_file:
                     self.output_file.write(line + "\n")
@@ -2383,7 +2383,7 @@ class smb(connection):
                     secret.url,
                 )
             elif isinstance(secret, FirefoxCookie):
-                line = f"[{secret.winuser}][{tag}] {secret.host}{secret.path} {secret.cookie_name}:{secret.cookie_value}"
+                line = f"[{secret.winuser}][{tag}] {secret.host}{secret.path} {secret.cookie_name}:{process_secret(secret.cookie_value)}"
                 self.logger.highlight(line)
                 if self.output_file:
                     self.output_file.write(line + "\n")
@@ -2422,7 +2422,7 @@ class smb(connection):
 
             def add_lsa_secret(secret):
                 add_lsa_secret.secrets += 1
-                self.logger.highlight(secret)
+                self.logger.highlight(process_secret_dump(secret))
                 if "_SC_GMSA_{84A78B8C" in secret:
                     gmsa_id = secret.split("_")[4].split(":")[0]
                     data = bytes.fromhex(secret.split("_")[4].split(":")[1])
@@ -2432,7 +2432,7 @@ class smb(connection):
                     ntlm_hash = MD4.new()
                     ntlm_hash.update(currentPassword)
                     passwd = binascii.hexlify(ntlm_hash.digest()).decode("utf-8")
-                    self.logger.highlight(f"GMSA ID: {gmsa_id:<20} NTLM: {passwd}")
+                    self.logger.highlight(process_secret_dump(f"GMSA ID: {gmsa_id:<20} NTLM: {passwd}", sep="NTLM: "))
 
             add_lsa_secret.secrets = 0
 
@@ -2494,10 +2494,10 @@ class smb(connection):
             if self.args.enabled:
                 if "Enabled" in secret:
                     secret = " ".join(secret.split(" ")[:-1])
-                    self.logger.highlight(secret)
+                    self.logger.highlight(process_secret_dump(secret, keep=2))
             else:
                 secret = " ".join(secret.split(" ")[:-1]) if " " in secret else secret
-                self.logger.highlight(secret)
+                self.logger.highlight(process_secret_dump(secret, keep=2))
 
             # Filter out computer accounts, history hashes and kerberos keys for adding to db
             if secret.find("$") == -1 and secret_type == NTDSHashes.SECRET_TYPE.NTDS and "_history" not in secret:
