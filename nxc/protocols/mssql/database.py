@@ -1,4 +1,5 @@
 import warnings
+import base64
 
 from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, UniqueConstraint, String, func, select, insert, delete, Boolean
 from sqlalchemy.dialects.sqlite import Insert  # used for upsert
