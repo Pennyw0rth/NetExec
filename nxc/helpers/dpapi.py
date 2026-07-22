@@ -86,7 +86,8 @@ class DPAPITriage:
         pvkbytes = None
         if hasattr(self.context.args, "pvk") and self.context.args.pvk is not None:
             try:
-                pvkbytes = open(self.context.args.pvk, "rb").read()  # noqa: SIM115
+                with open(self.context.args.pvk, "rb") as fd:
+                    pvkbytes = fd.read()  # noqa: SIM115
                 self.context.logger.success(f"Loading domain backupkey from {self.context.args.pvk}")
             except Exception as e:
                 self.context.logger.fail(str(e))
