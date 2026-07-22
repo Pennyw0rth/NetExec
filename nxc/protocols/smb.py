@@ -732,10 +732,9 @@ class smb(connection):
     def check_if_dcsync(self):
         # DCSync-capable accounts (e.g. DC machine accounts) aren't local admins, so check_if_admin misses them
         # A DC's own machine account (HOSTNAME$) always has replication rights - free to flag, no extra traffic
-        if not self.dcsync_privs and self.isdc and self.username and self.hostname:
-            if self.username.rstrip("$").upper() == self.hostname.upper():
-                self.logger.debug(f"{self.username} is the DC machine account, has DCSync rights")
-                self.dcsync_privs = True
+        if not self.dcsync_privs and self.isdc and self.username and self.hostname and self.username.rstrip("$").upper() == self.hostname.upper():
+            self.logger.debug(f"{self.username} is the DC machine account, has DCSync rights")
+            self.dcsync_privs = True
 
         # --dcsync-check confirms replication rights over DRSUAPI (also catches delegated users / other DCs)
         if not self.dcsync_privs and self.isdc and self.args.dcsync_check:
