@@ -622,67 +622,69 @@ class ldap(connection):
         resp = self.search(search_filter, attributes, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
 
-        if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "" or self.use_kcache) and self.username != "":
-            for item in resp_parsed:
-                self.sid_domain = "-".join(item["objectSid"].split("-")[:-1])
+        if not (resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "" or self.use_kcache) and self.username != ""):
+            self.admin_privs = False
+            return
 
-            # 2. get all group cn name
-            search_filter = (f"(|(objectSid={self.sid_domain}-512)"
-                             f"(objectSid={self.sid_domain}-519)"
-                             f"(objectSid={self.sid_domain}-544)"
-                             "(objectSid=S-1-5-32-544)"
-                             "(objectSid=S-1-5-32-549)"
-                             "(objectSid=S-1-5-32-551))")
-            attributes = ["distinguishedName"]
-            resp = self.search(search_filter, attributes, baseDN=self.baseDN)
-            resp_parsed = parse_result_attributes(resp)
-            answers = [f"(memberOf:1.2.840.113556.1.4.1941:={item['distinguishedName']})" for item in resp_parsed]
-            if len(answers) == 0:
-                self.logger.debug("No groups with default privileged RID were found. Assuming user is not a Domain Administrator.")
-                return
+        for item in resp_parsed:
+            self.sid_domain = "-".join(item["objectSid"].split("-")[:-1])
 
-            # 3. Build a filter to query if the primaryGroupID is one of these groups
-            group_ids = ["512", "519", "544", "549", "551"]
-            primaryGroupID_filters = [f"(primaryGroupID={group_id})" for group_id in group_ids]
-            answers.extend(primaryGroupID_filters)
+        # DCSync capability is independent of local admin (a DC machine account can replicate but
+        # isn't a local admin), so evaluate it regardless of the admin result below.
+        self.check_if_dcsync()
 
-            # 4. Check if the user is member of one of these groups OR has one of these primaryGroupID
-            search_filter = f"(&(objectCategory=user)(sAMAccountName={self.username})(|{''.join(answers)}))"
-            resp = self.search(search_filter, attributes=[], baseDN=self.baseDN)
-            resp_parsed = parse_result_attributes(resp)
-            for item in resp_parsed:
-                if item:
-                    self.admin_privs = True
-                    # DCSync is a narrower right than the admin set above (Server/Backup Operators
-                    # are admin-equivalent but can't replicate), so check the capable subset separately
-                    self.check_if_dcsync()
-                    return
+        # 2. get all group cn name
+        search_filter = (f"(|(objectSid={self.sid_domain}-512)"
+                         f"(objectSid={self.sid_domain}-519)"
+                         f"(objectSid={self.sid_domain}-544)"
+                         "(objectSid=S-1-5-32-544)"
+                         "(objectSid=S-1-5-32-549)"
+                         "(objectSid=S-1-5-32-551))")
+        attributes = ["distinguishedName"]
+        resp = self.search(search_filter, attributes, baseDN=self.baseDN)
+        resp_parsed = parse_result_attributes(resp)
+        answers = [f"(memberOf:1.2.840.113556.1.4.1941:={item['distinguishedName']})" for item in resp_parsed]
+        if len(answers) == 0:
+            self.logger.debug("No groups with default privileged RID were found. Assuming user is not a Domain Administrator.")
+            self.admin_privs = False
+            return
 
-        # If nothing matched we are not admin
-        self.admin_privs = False
+        # 3. Build a filter to query if the primaryGroupID is one of these groups
+        group_ids = ["512", "519", "544", "549", "551"]
+        primaryGroupID_filters = [f"(primaryGroupID={group_id})" for group_id in group_ids]
+        answers.extend(primaryGroupID_filters)
+
+        # 4. Check if the user is member of one of these groups OR has one of these primaryGroupID
+        search_filter = f"(&(objectCategory=user)(sAMAccountName={self.username})(|{''.join(answers)}))"
+        resp = self.search(search_filter, attributes=[], baseDN=self.baseDN)
+        self.admin_privs = any(item for item in parse_result_attributes(resp))
 
     def check_if_dcsync(self):
-        # Domain Admins (512), Enterprise Admins (519) and Administrators (S-1-5-32-544) hold
-        # Replicating Directory Changes[-All] on the domain NC by default -> they can DCSync.
-        # Server/Backup Operators are deliberately excluded (admin-equivalent, no replication rights).
+        # Principals that hold Replicating Directory Changes[-All] on the domain NC by default:
+        # Domain Admins (512), Enterprise Admins (519), Administrators (S-1-5-32-544), and
+        # Domain Controllers (516) - the latter covers DC machine accounts, which have
+        # primaryGroupID 516 and aren't local admins. Server/Backup Operators are deliberately
+        # excluded (admin-equivalent, but no replication rights).
         if not getattr(self, "sid_domain", None):
             return
         search_filter = (f"(|(objectSid={self.sid_domain}-512)"
                          f"(objectSid={self.sid_domain}-519)"
+                         f"(objectSid={self.sid_domain}-516)"
                          "(objectSid=S-1-5-32-544))")
         resp = self.search(search_filter, attributes=["distinguishedName"], baseDN=self.baseDN)
         group_dns = [item["distinguishedName"] for item in parse_result_attributes(resp)]
         if not group_dns:
             return
 
-        # nested membership (LDAP_MATCHING_RULE_IN_CHAIN) or primaryGroupID of a capable group
+        # nested membership (LDAP_MATCHING_RULE_IN_CHAIN) or primaryGroupID of a capable group.
+        # No objectCategory filter, so DC computer/machine accounts (primaryGroupID 516) match too.
         answers = [f"(memberOf:1.2.840.113556.1.4.1941:={dn})" for dn in group_dns]
-        answers.extend([f"(primaryGroupID={rid})" for rid in ("512", "519")])
-        search_filter = f"(&(objectCategory=user)(sAMAccountName={self.username})(|{''.join(answers)}))"
+        answers.extend([f"(primaryGroupID={rid})" for rid in ("512", "519", "516")])
+        search_filter = f"(&(sAMAccountName={self.username})(|{''.join(answers)}))"
         resp = self.search(search_filter, attributes=[], baseDN=self.baseDN)
         if any(item for item in parse_result_attributes(resp)):
             self.dcsync_privs = True
-            self.logger.debug(f"{self.username} is in a DCSync-capable group, has DCSync rights")
+            self.logger.debug(f"{self.username} can DCSync (replication-capable principal)")
 
     def getUnixTime(self, t):
         t -= 116444736000000000
