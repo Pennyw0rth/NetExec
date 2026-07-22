@@ -601,7 +601,7 @@ class connection:
         if self.admin_privs:
             labels.append(highlight(f"({pwned_label})"))
         if self.dcsync_privs:
-            labels.append(highlight(f"({dcsync_label})", color="cyan"))
+            labels.append(highlight(f"({dcsync_label})"))
         return " ".join(labels)
 
     def load_modules(self):
