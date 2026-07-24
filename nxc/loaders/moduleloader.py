@@ -4,7 +4,7 @@ import traceback
 import sys
 
 from os import listdir
-from os.path import dirname
+from os.path import basename, dirname
 from os.path import join as path_join
 
 from nxc.context import Context
@@ -46,11 +46,29 @@ class ModuleLoader:
 
         return not module_error
 
+    module_cache = {}
+
+    @classmethod
+    def load_module_file(cls, module_path):
+        """Load a module file and return the raw module object with isolated namespace.
+
+        Each module gets a unique name to avoid sys.modules collisions that
+        caused NXCModule class references to be overwritten when loading
+        multiple modules. Results are cached so each file is only parsed
+        and executed once regardless of how many targets are scanned.
+        """
+        if module_path not in cls.module_cache:
+            module_name = f"nxc_module_{basename(module_path)[:-3]}"
+            spec = importlib.util.spec_from_file_location(module_name, module_path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            cls.module_cache[module_path] = module
+        return cls.module_cache[module_path]
+
     def load_module(self, module_path):
         """Load a module, initializing it and checking that it has the proper attributes"""
         try:
-            spec = importlib.util.spec_from_file_location("NXCModule", module_path)
-            module = spec.loader.load_module().NXCModule()
+            module = self.load_module_file(module_path).NXCModule()
 
             if self.module_is_sane(module, module_path):
                 return module
@@ -87,8 +105,7 @@ class ModuleLoader:
     def get_module_info(self, module_path):
         """Get the path, description, and options from a module"""
         try:
-            spec = importlib.util.spec_from_file_location("NXCModule", module_path)
-            module_spec = spec.loader.load_module().NXCModule
+            module_spec = self.load_module_file(module_path).NXCModule
 
             module = {
                 f"{module_spec.name}": {
