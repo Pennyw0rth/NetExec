@@ -229,12 +229,12 @@ def main():
             if args.og_path is not None:
                 opengraph.bh_mapping(args.og_path)
             elif args.og_ldap:
-                opengraph.ldap_mapping()
+                opengraph.ldap_mapping(args)
             else:
-                nxc_logger.warning("No method was given to resolve OIDs!")
+                nxc_logger.warning("No method was given to resolve OIDs, nodes will be matched by name")
         asyncio.run(start_run(protocol_object, args, db, targets))
     finally:
-        if args.opengraph is not None:
+        if args.opengraph:
             nxc_logger.debug(opengraph.to_json())
             nxc_logger.debug(opengraph.name2oid)
             opengraph.save()

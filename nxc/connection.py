@@ -250,10 +250,6 @@ class connection:
             self.logger.debug("Created connection object")
             self.enum_host_info()
 
-            # adding host info to opengraph file
-            if self.args.opengraph is not None:
-                self.opengraph_host_info()
-
             # Construct the output file template using os.path.join for OS compatibility
             base_log_dir = os.path.join(NXC_PATH, "logs")
             filename_pattern = f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
@@ -263,6 +259,9 @@ class connection:
 
             self.print_host_info()
             if self.login() or (self.username == "" and self.password == "" and self.protocol != "mssql"):
+                # Collect host info for opengraph
+                if self.args.opengraph:
+                    self.opengraph_host_info()
                 self.logger.debug("Calling command arguments")
                 self.call_cmd_args()
                 if self.args.module:

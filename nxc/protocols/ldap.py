@@ -288,7 +288,9 @@ class ldap(connection):
         if detect_if_ip(self.host):
             opengraph.add_tag(self.hostname, ["Computer"], "IP_Address", self.host)
         opengraph.add_tag(self.hostname, ["Computer"], "ldapsigning", self.signing_required)
-        opengraph.add_tag(self.hostname, ["Computer"], "ldaps_channel_binding", self.signing_required)
+        opengraph.add_tag(self.hostname, ["Computer"], "ldaps_channel_binding", self.cbt_status)
+        if self.admin_privs and self.username:
+            opengraph.add_local_group_membership(self.username, self.hostname, 544)
 
     def print_host_info(self):
         self.logger.debug("Printing host info for LDAP")

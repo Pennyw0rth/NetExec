@@ -6,6 +6,7 @@ from impacket.dcerpc.v5.rpcrt import DCERPCException
 import sys
 from nxc.helpers.misc import CATEGORY
 from nxc.helpers.rpc import NXCRPCConnection
+from nxc.helpers.opengraph import opengraph
 from nxc.logger import nxc_logger
 
 # Give up brute-forcing after this many attempts. If vulnerable, 256 attempts are expected to be necessary on average.
@@ -30,6 +31,7 @@ class NXCModule:
         if self.perform_attack(connection, "\\\\" + connection.hostname, connection.host, connection.hostname, connection.host):
             self.context.log.highlight("VULNERABLE")
             self.context.log.highlight("Next step: https://github.com/dirkjanm/CVE-2020-1472")
+            opengraph.add_tag(connection.hostname, ["Computer"], "zerologon", True)
             try:
                 host = self.context.db.get_hosts(connection.host)[0]
                 self.context.db.add_host(

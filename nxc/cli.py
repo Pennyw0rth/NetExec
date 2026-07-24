@@ -53,7 +53,7 @@ def gen_cli_args():
     opengraph_group.add_argument("-og", "--opengraph", action="store_true", help="Enable OpenGraph, takes path to bloudhound computer json file as arguments")
     og_exclusive = opengraph_group.add_mutually_exclusive_group()
     og_exclusive.add_argument("--og-path", metavar="og_path", help="Path to BloodHound directory or ZIP file for resolving OIDs.")
-    og_exclusive.add_argument("--og-ldap", action="store_true", help="Resolve OIDs via LDAP instead of using BloodHound data.")
+    og_exclusive.add_argument("--og-ldap", metavar="og_ldap_host", help="IP/hostname of an LDAP server to resolve OIDs against (uses the same credentials).")
 
     parser = argparse.ArgumentParser(
         description=rf"""

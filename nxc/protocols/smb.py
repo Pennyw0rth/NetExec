@@ -322,6 +322,8 @@ class smb(connection):
         if detect_if_ip(self.host):
             opengraph.add_tag(self.hostname, ["Computer"], "IP_Address", self.host)
         opengraph.add_tag(self.hostname, ["Computer"], "smbsigning", self.signing)
+        if self.admin_privs and self.username:
+            opengraph.add_local_group_membership(self.username, self.hostname, 544)
 
     def print_host_info(self):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
