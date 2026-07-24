@@ -478,14 +478,21 @@ def pfx_auth(self):
     self.logger.info("Loading certificate and key from file")
 
     # Load the certificate and key from file
-    if self.args.pfx_cert or self.args.pfx_base64:
-        pfx = self.args.pfx_cert if self.args.pfx_cert else self.args.pfx_base64
-        ini = myPKINIT.from_pfx(pfx, self.args.pfx_pass, dhparams, bool(self.args.pfx_base64))
-    elif self.args.pem_cert and self.args.pem_key:
-        ini = myPKINIT.from_pem(self.args.pem_cert, self.args.pem_key, dhparams)
-    else:
-        self.logger.fail("You must either specify a PFX file + optional password or a combination of Cert PEM file and Private key PEM file")
-        return None
+    try:
+        if self.args.pfx_cert or self.args.pfx_base64:
+            pfx = self.args.pfx_cert if self.args.pfx_cert else self.args.pfx_base64
+            ini = myPKINIT.from_pfx(pfx, self.args.pfx_pass, dhparams, bool(self.args.pfx_base64))
+        elif self.args.pem_cert and self.args.pem_key:
+            ini = myPKINIT.from_pem(self.args.pem_cert, self.args.pem_key, dhparams)
+        else:
+            self.logger.fail("You must either specify a PFX file + optional password or a combination of Cert PEM file and Private key PEM file")
+            return None
+    except FileNotFoundError as e:
+        self.logger.fail(f"Certificate or key file not found: {e.filename}")
+        return False
+    except Exception as e:
+        self.logger.fail(f"Failed to load certificate/key: {e}")
+        return False
 
     username = self.args.username[0]
     basename = f"{self.hostname}_{self.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}-{username}.ccache"
@@ -494,6 +501,10 @@ def pfx_auth(self):
     # Request a TGT with the cert data
     req = ini.build_asreq(self.domain, username)
     self.logger.info("Requesting TGT")
+
+    if not self.kdcHost:
+        self.logger.fail(f"Could not resolve KDC host for domain {self.domain}. Use --kdcHost to specify the domain controller IP")
+        return False
 
     sock = KerberosClientSocket(KerberosTarget(self.kdcHost))
     try:

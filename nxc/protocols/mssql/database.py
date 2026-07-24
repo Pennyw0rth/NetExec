@@ -1,6 +1,6 @@
 import warnings
 
-from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, func, select, insert, update, delete
+from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, func, select, insert, delete, Boolean
 from sqlalchemy.dialects.sqlite import Insert  # used for upsert
 from sqlalchemy.exc import SAWarning
 from sqlalchemy.orm import declarative_base
@@ -29,7 +29,9 @@ class database(BaseDB):
         hostname = Column(String)
         domain = Column(String)
         os = Column(String)
+        mssqlversion = Column(String)
         instances = Column(Integer)
+        encryptionReq = Column(Boolean)
 
         __table_args__ = (
             PrimaryKeyConstraint("id"),
@@ -83,12 +85,12 @@ class database(BaseDB):
         self.AdminRelationsTable = self.reflect_table(self.AdminRelation)
         self.LoggedinRelationsTable = self.reflect_table(self.LoggedInRelation)
 
-    def add_host(self, ip, hostname, domain, os, instances):
+    def add_host(self, ip, hostname, domain, os, mssqlversion, instances, encryptionReq):
         """
         Check if this host has already been added to the database, if not, add it in.
         TODO: return inserted or updated row ids as a list
         """
-        nxc_logger.debug(f"{domain} {ip} {os} {instances}")
+        nxc_logger.debug(f"{domain} {ip} {os} {mssqlversion} {instances} {encryptionReq}")
         if not domain:
             domain = ""
         hosts = []
@@ -102,7 +104,9 @@ class database(BaseDB):
             "hostname": hostname,
             "domain": domain,
             "os": os,
+            "mssqlversion": mssqlversion,
             "instances": instances,
+            "encryptionReq": encryptionReq
         }
 
         if not results:
@@ -118,8 +122,12 @@ class database(BaseDB):
                     host_data["domain"] = domain
                 if os is not None:
                     host_data["os"] = os
+                if mssqlversion is not None:
+                    host_data["mssqlversion"] = mssqlversion
                 if instances is not None:
                     host_data["instances"] = instances
+                if encryptionReq is not None:
+                    host_data["encryptionReq"] = encryptionReq
                 if host_data not in hosts:
                     hosts.append(host_data)
 
@@ -164,10 +172,22 @@ class database(BaseDB):
             self.db_execute(q)  # .first()
         else:
             for user in results:
-                # might be able to just remove this if check, but leaving it in for now
-                if not user[3] and not user[4] and not user[5]:
-                    q = update(self.UsersTable).values(credential_data)  # .returning(self.UsersTable.c.id)
-                    results = self.db_execute(q)  # .first()
+                cred_data = user._asdict()
+                if credtype is not None:
+                    cred_data["credtype"] = credtype
+                if domain is not None:
+                    cred_data["domain"] = domain
+                if username is not None:
+                    cred_data["username"] = username
+                if password is not None:
+                    cred_data["password"] = password
+                if pillaged_from is not None:
+                    cred_data["pillaged_from_hostid"] = pillaged_from
+
+                q = Insert(self.UsersTable)
+                update_columns = {col.name: col for col in q.excluded if col.name not in "id"}
+                q = q.on_conflict_do_update(index_elements=self.UsersTable.primary_key, set_=update_columns)
+                self.db_execute(q, [cred_data])
 
         nxc_logger.debug(f"add_credential(credtype={credtype}, domain={domain}, username={username}, password={password}, pillaged_from={pillaged_from})")
 

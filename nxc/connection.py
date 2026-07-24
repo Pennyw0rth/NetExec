@@ -5,7 +5,7 @@ import sys
 import contextlib
 
 from os.path import isfile
-from threading import BoundedSemaphore
+from threading import BoundedSemaphore, Lock
 from functools import wraps
 from time import sleep
 from ipaddress import ip_address
@@ -22,8 +22,10 @@ from nxc.protocols.ldap.laps import laps_search
 from nxc.helpers.pfx import pfx_auth
 
 from impacket.dcerpc.v5 import transport
+from impacket.krb5.ccache import CCache
 
 sem = BoundedSemaphore(1)
+fail_lock = Lock()
 global_failed_logins = 0
 user_failed_logins = {}
 
@@ -137,6 +139,7 @@ class connection:
         self.conn = None
         self.output_file_template = None
         self.output_filename = None
+        self.protocol = args.protocol
 
         # Authentication info
         self.password = ""
@@ -145,6 +148,7 @@ class connection:
                              self.args.use_kcache or
                              self.args.aesKey or
                              (hasattr(self.args, "delegate") and self.args.delegate) or
+                             (hasattr(self.args, "generate_st") and self.args.generate_st) or
                              (hasattr(self.args, "no_preauth_targets") and self.args.no_preauth_targets))
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
@@ -251,14 +255,13 @@ class connection:
             self.output_filename = os.path.join(base_log_dir, filename_pattern)
 
             self.print_host_info()
-            if self.login() or (self.username == "" and self.password == ""):
-                if hasattr(self.args, "module") and self.args.module:
+            if self.login() or (self.username == "" and self.password == "" and self.protocol != "mssql"):
+                self.logger.debug("Calling command arguments")
+                self.call_cmd_args()
+                if self.args.module:
                     self.load_modules()
                     self.logger.debug("Calling modules")
                     self.call_modules()
-                else:
-                    self.logger.debug("Calling command arguments")
-                    self.call_cmd_args()
             self.disconnect()
 
     def call_cmd_args(self):
@@ -314,26 +317,28 @@ class connection:
     def inc_failed_login(self, username):
         global global_failed_logins, user_failed_logins
 
-        if username not in user_failed_logins:
-            user_failed_logins[username] = 0
+        with fail_lock:
+            if username not in user_failed_logins:
+                user_failed_logins[username] = 0
 
-        user_failed_logins[username] += 1
-        global_failed_logins += 1
-        self.failed_logins += 1
+            user_failed_logins[username] += 1
+            global_failed_logins += 1
+            self.failed_logins += 1
 
     def over_fail_limit(self, username):
         global global_failed_logins, user_failed_logins
 
-        if global_failed_logins == self.args.gfail_limit:
-            return True
+        with fail_lock:
+            if global_failed_logins == self.args.gfail_limit:
+                return True
 
-        if self.failed_logins == self.args.fail_limit:
-            return True
+            if self.failed_logins == self.args.fail_limit:
+                return True
 
-        if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:  # noqa: SIM103
-            return True
+            if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:  # noqa: SIM103
+                return True
 
-        return False
+            return False
 
     def query_db_creds(self):
         """Queries the database for credentials to be used for authentication.
@@ -480,8 +485,6 @@ class connection:
             - NTLM-hash (/kerberos)
             - AES-key
         """
-        if self.over_fail_limit(username):
-            return False
         if self.args.continue_on_success and owned:
             return False
 
@@ -497,6 +500,8 @@ class connection:
             sleep(value)
 
         with sem:
+            if self.over_fail_limit(username):
+                return False
             if cred_type == "plaintext":
                 if self.kerberos:
                     self.logger.debug("Trying to authenticate using Kerberos")
@@ -552,7 +557,7 @@ class connection:
         if self.args.use_kcache:
             self.logger.debug("Trying to authenticate using Kerberos cache")
             with sem:
-                username = self.args.username[0] if len(self.args.username) else ""
+                username = self.args.username[0] if len(self.args.username) else CCache.parseFile()[1]
                 password = self.args.password[0] if len(self.args.password) else ""
                 self.kerberos_login(self.domain, username, password, "", "", self.kdcHost, True)
                 self.logger.info("Successfully authenticated using Kerberos cache")

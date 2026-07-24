@@ -208,3 +208,7 @@ class BaseDB:
         res = self.sess.execute(*args)
         self.lock.release()
         return res
+
+    def get_keys(self, key_id=None, cred_id=None):
+        """Return an empty list by default. Protocols that support keys (e.g. SSH) override this."""
+        return []

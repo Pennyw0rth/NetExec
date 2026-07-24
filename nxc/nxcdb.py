@@ -8,7 +8,7 @@ from os.path import exists
 from os.path import join as path_join
 from textwrap import dedent
 from requests import get, post, ConnectionError
-from terminaltables import AsciiTable
+from terminaltables3 import AsciiTable
 from termcolor import colored
 
 from nxc.loaders.protocolloader import ProtocolLoader
@@ -310,10 +310,18 @@ class DatabaseNavigator(cmd.Cmd):
                 return
             print("[+] DPAPI secrets exported")
         elif command == "keys":
+            if len(line) < 3:
+                print("[-] invalid arguments, export keys <all|id> <filename>")
+                return
+
             keys = self.db.get_keys() if line[1].lower() == "all" else self.db.get_keys(key_id=int(line[1]))
+            if not keys:
+                print("[-] No keys found in the database for the current protocol")
+                return
             writable_keys = [key[2] for key in keys]
             filename = line[2]
             write_list(filename, writable_keys)
+            print("[+] Keys exported")
         elif command == "wcc":
             if len(line) < 3:
                 print("[-] invalid arguments, export wcc <simple|detailed> <filename>")
