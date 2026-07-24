@@ -435,6 +435,25 @@ class smb(connection):
             out = f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}"
             self.logger.success(out)
 
+            # Persist the credential we authenticated with (skip ccache and S4U-as-someone-else)
+            valid_auth = bool(self.username) and not useCache and not self.args.delegate
+            if valid_auth:
+                cred_type = cred_value = None
+                if password:
+                    cred_type, cred_value = "plaintext", password
+                elif nthash:
+                    cred_type = "hash"
+                    cred_value = f"{lmhash}:{nthash}" if lmhash else nthash
+                # aesKey: no matching credtype in DB schema, intentionally skipped
+                if cred_value:
+                    self.logger.debug(f"Adding credential: {domain}/{self.username}:{process_secret(cred_value)}")
+                    self.db.add_credential(cred_type, domain, self.username, cred_value)
+                    user_id = self.db.get_credential(cred_type, domain, self.username, cred_value)
+                    host_id = self.db.get_hosts(self.host)[0].id
+                    self.db.add_loggedin_relation(user_id, host_id)
+                    if self.admin_privs:
+                        self.db.add_admin_user(cred_type, domain, self.username, cred_value, self.host, user_id=user_id)
+
             if not self.args.local_auth and self.username != "" and not self.args.delegate:
                 add_user_bh(self.username, domain, self.logger, self.config)
             if self.admin_privs:

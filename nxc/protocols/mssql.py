@@ -211,6 +211,20 @@ class mssql(connection):
                 raise
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}")
+
+            cred_type = cred_value = None
+            if password:
+                cred_type, cred_value = "plaintext", password
+            elif self.nthash:
+                cred_type, cred_value = "hash", self.nthash
+            if cred_value and self.username and not useCache:
+                self.db.add_credential(cred_type, self.domain, self.username, cred_value)
+                user_id = self.db.get_credential(cred_type, self.domain, self.username, cred_value)
+                host_id = self.db.get_hosts(self.host)[0].id
+                self.db.add_loggedin_relation(user_id, host_id)
+                if self.admin_privs:
+                    self.db.add_admin_user(cred_type, self.domain, self.username, cred_value, self.host, user_id=user_id)
+
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             if self.admin_privs:
