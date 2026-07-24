@@ -7,6 +7,7 @@ from impacket.dcerpc.v5.ndr import NDRCALL, NDRPOINTER, NDRSTRUCT, NDRUNION, NUL
 from impacket.dcerpc.v5.dtypes import DWORD, LPWSTR, ULONG, WSTR
 from impacket.dcerpc.v5.rprn import checkNullString, STRING_HANDLE, PBYTE_ARRAY
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.opengraph import opengraph
 
 
 class NXCModule:
@@ -67,6 +68,7 @@ class NXCModule:
                 return False
             # If vulnerable, 'ERROR_INVALID_PARAMETER' will be returned
             if e.error_code == system_errors.ERROR_INVALID_PARAMETER:
+                opengraph.add_tag(connection.hostname, ["Computer"], "printnightmare", True)
                 context.log.highlight("Vulnerable, next step https://github.com/ly4k/PrintNightmare")
                 return True
             context.log.fail(f"Unexpected error: {e}")
@@ -75,6 +77,7 @@ class NXCModule:
                 context.log.info("Not vulnerable :'(")
                 return False
             context.log.fail(f"Unexpected error: {e}")
+        opengraph.add_tag(connection.hostname, ["Computer"], "printnightmare", True)
         context.log.highlight("Vulnerable, next step https://github.com/ly4k/PrintNightmare")
         return True
 

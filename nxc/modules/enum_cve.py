@@ -3,6 +3,7 @@ from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.smbconnection import SessionError
 from nxc.helpers.misc import CATEGORY
 from nxc.helpers.rpc import NXCRPCConnection
+from nxc.helpers.opengraph import opengraph
 from impacket.nmb import NetBIOSError
 
 
@@ -89,6 +90,7 @@ class NXCModule:
                     context.log.info(f"Skipping {self.CVE_PATCHES[cve]['alias']} - only applicable to Domain Controllers")
                     continue
                 if self.is_vulnerable(connection.server_os_major, connection.server_os_minor, connection.server_os_build, ubr, self.CVE_PATCHES[cve]["patches"]):
+                    opengraph.add_tag(connection.hostname, ["Computer"], self.CVE_PATCHES[cve]["alias"], True)
                     if connection.conn.isSigningRequired() and "signing_message" in self.CVE_PATCHES[cve]:  # Special conditional message for some CVEs
                         context.log.highlight(f"{cve.upper()} - {self.CVE_PATCHES[cve]['alias']} - {self.CVE_PATCHES[cve]['signing_message']}")
                     else:
