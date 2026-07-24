@@ -83,11 +83,20 @@ format = "{base}+{distance}.{commit}"
 requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
 build-backend = "poetry_dynamic_versioning.backend"
 
-[tool.poetry.group.dev.dependencies]
-flake8 = "*"
-shiv = "*"
-pytest = "^7.2.2"
-ruff = "*"
+# uv and poetry native dev group (PEP 735)
+[dependency-groups]
+dev = [
+    "flake8",
+    "shiv",
+    "pytest>=7.2.2,<8",
+    "ruff",
+]
+
+# Supply-chain hardening: uv will ignore package artifacts uploaded to indexes
+# within the last day, giving maintainers and scanners time to detect and remove
+# malicious or compromised releases before they are selected during resolution.
+[tool.uv]
+exclude-newer = "1 day"
 
 [tool.ruff]
 target-version = "py310"
