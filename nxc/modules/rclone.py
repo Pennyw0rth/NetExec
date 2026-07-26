@@ -4,10 +4,12 @@ from io import BytesIO
 
 SECRET_KEY = b"\x9c\x93\x5b\x48\x73\x0a\x55\x4d\x6b\xfd\x7c\x63\xc8\x86\xa9\x2b\xd3\x90\x19\x8e\xb8\x12\x8a\xfb\xf4\xde\x16\x2b\x8b\x95\xf6\x38"
 
+
 def base64_urlsafedecode(string):
     padding = 4 - (len(string) % 4)
     string += "=" * padding
     return base64.urlsafe_b64decode(string)
+
 
 def deobscure(obscured):
     encrypted_password = base64_urlsafedecode(obscured)
@@ -16,13 +18,11 @@ def deobscure(obscured):
     crypter = AES.new(key=SECRET_KEY, mode=AES.MODE_CTR, initial_value=iv, nonce=b"")
     return crypter.decrypt(buf).decode("utf-8")
 
+
 class NXCModule:
     name = "rclone"
     description = "Searches for rclone.conf and deobscures credentials"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
-    privilege = True
 
     def options(self, context, module_options):
         """No module options."""
@@ -71,7 +71,7 @@ class NXCModule:
                 line = line.strip()
                 if not line:
                     continue
-                
+
                 if "=" not in line:
                     context.log.highlight(line.strip())
                     continue
