@@ -2247,6 +2247,7 @@ class smb(connection):
             nthash=self.nthash,
             do_kerberos=self.kerberos,
             kdcHost=self.kdcHost,
+            dc_ip=self.kdcHost,
             aesKey=self.aesKey,
             no_pass=True,
             use_kcache=self.use_kcache,
