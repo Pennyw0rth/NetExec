@@ -590,6 +590,7 @@ Add-Type -AssemblyName System.Windows.Forms
             await self.connect_rdp()
         except Exception as e:
             self.logger.debug(f"Error connecting to RDP: {e!s}")
+            await self.terminate_conn()
             return None
 
         try:
