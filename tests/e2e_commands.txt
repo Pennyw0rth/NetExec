@@ -311,6 +311,10 @@ netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --nla-scree
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --screenshot
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x ipconfig
+netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x "echo nxc-rdp-exec"
+netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x "echo alpha^&beta"
+netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X "Write-Output 'nxc-rdp-exec'"
+netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x "echo nxc-rdp-no-output" --no-output
 ##### SSH - Default test passwords and random key; switch these out if you want correct authentication
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
 netexec ssh TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce
