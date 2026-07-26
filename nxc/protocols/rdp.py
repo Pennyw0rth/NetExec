@@ -472,11 +472,12 @@ try {{
 $exitCode = if ($null -ne $nativeExitCode) {{ [int]$nativeExitCode }} elseif (-not $succeeded) {{ 1 }} else {{ 0 }}
 $outputText = ($output | Out-String -Width 4096).TrimEnd()
 $result = @('{start_marker}', [string]$exitCode, $outputText, '{end_marker}') -join [Environment]::NewLine
-Set-Clipboard -Value $result
+Add-Type -AssemblyName System.Windows.Forms
+[System.Windows.Forms.Clipboard]::SetText($result)
 """
 
         encoded_script = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
-        return f"powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand {encoded_script}"
+        return f"powershell.exe -NoLogo -NoProfile -NonInteractive -STA -WindowStyle Hidden -EncodedCommand {encoded_script}"
 
     @staticmethod
     def _parse_execution_result(clipboard_text, marker):
@@ -544,7 +545,12 @@ Set-Clipboard -Value $result
             raise RuntimeError(
                 "Remote session rejected the clipboard command data"
             )
-        await self._send_keystrokes('powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -Command "Invoke-Expression (Get-Clipboard -Raw)"')
+        await self._send_keystrokes(
+            "powershell.exe -NoLogo -NoProfile -NonInteractive -STA "
+            '-WindowStyle Hidden -Command "Add-Type -AssemblyName '
+            "System.Windows.Forms; Invoke-Expression "
+            '([System.Windows.Forms.Clipboard]::GetText())"'
+        )
         await self._send_enter()
 
     async def _submit_typed_run_command(self, command):
