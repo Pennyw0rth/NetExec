@@ -120,6 +120,9 @@ class rdp(connection):
     def _create_rdp_connection(self, credentials):
         iosettings = self.iosettings.clone_for_connection()
         if credentials is not None:
+            # clear the protocol override left by the NLA probe so aardwolf
+            # picks the right X224 flags for this credential type (e.g.
+            # RESTRICTED_ADMIN for hashes, HYBRID_EX for passwords)
             iosettings.supported_protocols = None
         return RDPConnection(
             iosettings=iosettings,
