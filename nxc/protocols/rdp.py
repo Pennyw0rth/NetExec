@@ -117,13 +117,12 @@ class rdp(connection):
             except Exception as e:
                 self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
 
-    def _create_rdp_connection(self, credentials):
+    def _create_rdp_connection(self, credentials, supported_protocols=None):
         iosettings = self.iosettings.clone_for_connection()
-        if credentials is not None:
-            # clear the protocol override left by the NLA probe so aardwolf
-            # picks the right X224 flags for this credential type (e.g.
-            # RESTRICTED_ADMIN for hashes, HYBRID_EX for passwords)
-            iosettings.supported_protocols = None
+        # Explicit protocols are used by discovery and screenshot fallbacks.
+        # Authenticated connections leave this unset so aardwolf selects the
+        # X224 flags appropriate for the credential type.
+        iosettings.supported_protocols = supported_protocols
         return RDPConnection(
             iosettings=iosettings,
             target=copy.deepcopy(self.target),
@@ -138,8 +137,9 @@ class rdp(connection):
 
         for proto in reversed(self.protoflags):
             try:
-                self.iosettings.supported_protocols = proto
-                self.conn = self._create_rdp_connection(self.auth)
+                self.conn = self._create_rdp_connection(
+                    self.auth, supported_protocols=proto
+                )
                 asyncio.run(self.connect_rdp_with_cleanup())
             except OSError as e:
                 if "Errno 104" not in str(e):
@@ -185,8 +185,9 @@ class rdp(connection):
     async def check_nla(self):
         self.logger.debug(f"Checking NLA for {self.host}")
         try:
-            self.iosettings.supported_protocols = SUPP_PROTOCOLS.SSL
-            self.conn = self._create_rdp_connection(None)
+            self.conn = self._create_rdp_connection(
+                None, supported_protocols=SUPP_PROTOCOLS.SSL
+            )
             packetizer = TPKTPacketizer()
             client = UniClient(self.target, packetizer)
             self.conn._connection = await asyncio.wait_for(client.connect(), timeout=self.args.rdp_timeout)
@@ -240,8 +241,6 @@ class rdp(connection):
             if nthash:
                 self.nthash = nthash
 
-            kerb_pass = next(s for s in [nthash, password, aesKey] if s) if not all(s == "" for s in [nthash, password, aesKey]) else ""
-
             self.hostname + "." + self.domain
             password = password if password else nthash
 
@@ -261,6 +260,8 @@ class rdp(connection):
             else:
                 stype = asyauthSecret.PASS if not nthash else asyauthSecret.NT
                 password = password if password else nthash
+
+            kerb_pass = password
 
             kerberos_target = UniTarget(
                 self.kdcHost,
@@ -693,8 +694,9 @@ Add-Type -AssemblyName System.Windows.Forms
 
         for proto in self.protoflags_nla:
             try:
-                self.iosettings.supported_protocols = proto
-                self.conn = self._create_rdp_connection(self.auth)
+                self.conn = self._create_rdp_connection(
+                    self.auth, supported_protocols=proto
+                )
                 await self.connect_rdp()
             except Exception as e:
                 self.logger.debug(f"Failed to connect for nla_screenshot with {proto} {e}")
