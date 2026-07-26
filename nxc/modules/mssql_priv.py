@@ -1,6 +1,7 @@
 # Author:
 #  Romain de Reydellet (@pentest_soka)
 from nxc.helpers.logger import highlight
+from nxc.helpers.misc import CATEGORY
 
 
 class User:
@@ -23,8 +24,7 @@ class NXCModule:
     name = "mssql_priv"
     description = "Enumerate and exploit MSSQL privileges"
     supported_protocols = ["mssql"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self):
         self.admin_privs = None
@@ -300,9 +300,7 @@ class NXCModule:
             WHERE rp.name = 'db_owner' AND mp.name = SYSTEM_USER
         """
         res = self.query_and_get_output(exec_as + query)
-        if res and "database_role" in res[0] and res[0]["database_role"] == "db_owner":
-            return True
-        return False
+        return bool(res and "database_role" in res[0] and res[0]["database_role"] == "db_owner")
 
     def find_dbowner_priv(self, databases, exec_as="") -> list:
         """
@@ -448,7 +446,7 @@ class NXCModule:
         res = self.query_and_get_output(f"SELECT IS_SRVROLEMEMBER('sysadmin', '{username}')")
         is_admin = res[0][""]
         try:
-            if is_admin != "NULL" and int(is_admin):
+            if is_admin is not None and int(is_admin):
                 self.admin_privs = True
                 self.context.log.debug(f"Updated: {username} is admin!")
                 return True

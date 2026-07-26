@@ -1,138 +1,34 @@
 # Stolen from https://github.com/Wh1t3Fox/polenum
 
-from impacket.dcerpc.v5.rpcrt import DCERPC_v5
-from impacket.dcerpc.v5 import transport, samr
-from time import strftime, gmtime
+from impacket.dcerpc.v5 import samr
 from nxc.logger import nxc_logger
-
-
-def d2b(a):
-    tbin = []
-    while a:
-        tbin.append(a % 2)
-        a //= 2
-
-    t2bin = tbin[::-1]
-    if len(t2bin) != 8:
-        for _x in range(6 - len(t2bin)):
-            t2bin.insert(0, 0)
-    return "".join([str(g) for g in t2bin])
-
-
-def convert(low, high, lockout=False):
-    time = ""
-    tmp = 0
-
-    if low == 0 and high == -0x8000_0000 or low == 0 and high == -0x8000_0000_0000_0000:
-        return "Not Set"
-    if low == 0 and high == 0:
-        return "None"
-
-    if not lockout:
-        if low != 0:
-            high = abs(high + 1)
-        else:
-            high = abs(high)
-            low = abs(low)
-
-        tmp = low + (high << 32)  # convert to 64bit int
-        tmp *= 1e-7  # convert to seconds
-    else:
-        tmp = abs(high) * (1e-7)
-
-    try:
-        minutes = int(strftime("%M", gmtime(tmp)))
-        hours = int(strftime("%H", gmtime(tmp)))
-        days = int(strftime("%j", gmtime(tmp))) - 1
-    except ValueError:
-        return "[-] Invalid TIME"
-
-    if days > 1:
-        time += f"{days} days "
-    elif days == 1:
-        time += f"{days} day "
-    if hours > 1:
-        time += f"{hours} hours "
-    elif hours == 1:
-        time += f"{hours} hour "
-    if minutes > 1:
-        time += f"{minutes} minutes "
-    elif minutes == 1:
-        time += f"{minutes} minute "
-    return time
+from nxc.helpers.misc import convert, d2b
+from nxc.helpers.rpc import NXCRPCConnection
 
 
 class PassPolDump:
-    KNOWN_PROTOCOLS = {
-        "139/SMB": (r"ncacn_np:%s[\pipe\samr]", 139),
-        "445/SMB": (r"ncacn_np:%s[\pipe\samr]", 445),
-    }
-
     def __init__(self, connection):
         self.logger = connection.logger
-        self.addr = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
-        self.protocol = connection.args.port
-        self.username = connection.username
-        self.password = connection.password
-        self.domain = connection.domain
-        self.hash = connection.hash
-        self.lmhash = ""
-        self.nthash = ""
-        self.aesKey = connection.aesKey
-        self.doKerberos = connection.kerberos
-        self.host = connection.host
-        self.kdcHost = connection.kdcHost
-        self.protocols = PassPolDump.KNOWN_PROTOCOLS.keys()
+        self.connection = connection
         self.pass_pol = {}
 
-        if self.hash is not None:
-            if self.hash.find(":") != -1:
-                self.lmhash, self.nthash = self.hash.split(":")
-            else:
-                self.nthash = self.hash
-
-        if self.password is None:
-            self.password = ""
-
     def dump(self):
-        # Try all requested protocols until one works.
-        for protocol in self.protocols:
-            try:
-                protodef = PassPolDump.KNOWN_PROTOCOLS[protocol]
-                port = protodef[1]
-            except KeyError:
-                nxc_logger.debug(f"Invalid Protocol '{protocol}'")
-            nxc_logger.debug(f"Trying protocol {protocol}")
-            rpctransport = transport.SMBTransport(
-                self.addr,
-                port,
-                r"\samr",
-                self.username,
-                self.password,
-                self.domain,
-                self.lmhash,
-                self.nthash,
-                self.aesKey,
-                doKerberos=self.doKerberos,
-                kdcHost=self.kdcHost,
-                remote_host=self.host,
-            )
-            try:
-                self.fetchList(rpctransport)
-            except Exception as e:
-                nxc_logger.debug(f"Protocol failed: {e}")
-            else:
-                # Got a response. No need for further iterations.
-                self.pretty_print()
-                break
+        try:
+            dce = NXCRPCConnection(self.connection).connect(r"\samr", samr.MSRPC_UUID_SAMR)
+        except Exception as e:
+            nxc_logger.debug(f"Failed to connect to SAMR: {e}")
+            return self.pass_pol
+
+        try:
+            self.fetchList(dce)
+        except Exception as e:
+            nxc_logger.debug(f"Protocol failed: {e}")
+        else:
+            self.pretty_print()
 
         return self.pass_pol
 
-    def fetchList(self, rpctransport):
-        dce = DCERPC_v5(rpctransport)
-        dce.connect()
-        dce.bind(samr.MSRPC_UUID_SAMR)
-
+    def fetchList(self, dce):
         # Setup Connection
         resp = samr.hSamrConnect2(dce)
         if resp["ErrorCode"] != 0:
@@ -233,7 +129,6 @@ class PassPolDump:
             nxc_logger.debug(f"{domain['Name']}")
 
         self.logger.success(f"Dumping password info for domain: {self.__domains[0]['Name']}")
-
         self.logger.highlight(f"Minimum password length: {self.__min_pass_len}")
         self.logger.highlight(f"Password history length: {self.__pass_hist_len}")
         self.logger.highlight(f"Maximum password age: {self.__max_pass_age}")

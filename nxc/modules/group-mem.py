@@ -1,5 +1,6 @@
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 import sys
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -13,8 +14,8 @@ class NXCModule:
     name = "group-mem"
     description = "[REMOVED] Retrieves all the members within a Group"
     supported_protocols = ["ldap"]
-    opsec_safe = True
-    multiple_hosts = False
+    category = CATEGORY.ENUMERATION
+
     primaryGroupID = ""
     answers = []
 
@@ -36,7 +37,7 @@ class NXCModule:
             sys.exit(1)
 
     def on_login(self, context, connection):
-        self.logger.fail("[REMOVED] Use the ldap flag '--groups \"Administrators\"' instead of the module group-mem.")
+        context.log.fail("[REMOVED] Use the ldap flag '--groups \"Administrators\"' instead of the module group-mem.")
         return None
 
         # First look up the SID of the group passed in

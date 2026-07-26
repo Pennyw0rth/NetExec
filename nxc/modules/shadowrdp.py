@@ -1,5 +1,7 @@
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
+from nxc.helpers.misc import CATEGORY
+
 
 # Module by @Defte_
 # Enables or disables shadow RDP
@@ -7,8 +9,7 @@ class NXCModule:
     name = "shadowrdp"
     description = "Enables or disables shadow RDP"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -16,7 +17,7 @@ class NXCModule:
         self.action = None
 
     def options(self, context, module_options):
-    
+
         if "ACTION" not in module_options:
             context.log.fail("ACTION option not specified!")
             exit(1)
@@ -36,7 +37,7 @@ class NXCModule:
 
                 keyHandle = rrp.hBaseRegOpenKey(
                     remoteOps._RemoteOperations__rrp,
-                    regHandle, 
+                    regHandle,
                     "Software\\Policies\\Microsoft\\Windows NT\\Terminal Services\\"
                 )["phkResult"]
 
@@ -65,7 +66,7 @@ class NXCModule:
                         0
                     )
                     context.log.highlight("Shadow RDP disabled")
-                
+
                 # Enable remote UAC
                 if self.action == "enable":
                     rrp.hBaseRegSetValue(

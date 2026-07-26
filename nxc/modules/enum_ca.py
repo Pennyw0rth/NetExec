@@ -6,6 +6,9 @@ from impacket.dcerpc.v5.rpch import RPC_PROXY_INVALID_RPC_PORT_ERR, \
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket import uuid
 import requests
+from nxc.helpers.misc import CATEGORY
+from nxc.helpers.rpc import NXCRPCConnection
+import contextlib
 
 
 class NXCModule:
@@ -23,16 +26,15 @@ class NXCModule:
 
     name = "enum_ca"
     description = "Anonymously uses RPC endpoints to hunt for ADCS CAs"
-    supported_protocols = ["smb"]  # Example: ['smb', 'mssql']
-    opsec_safe = True  # Does the module touch disk?
-    multiple_hosts = True  # Does it make sense to run this module on multiple hosts at a time?
+    supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options
 
     def options(self, context, module_options):
-        pass
+        """No options available"""
 
     def on_login(self, context, connection):
         self.__username = connection.username
@@ -61,15 +63,25 @@ class NXCModule:
             rpctransport.set_credentials(self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash)
             rpctransport.setRemoteHost(connection.host)
             rpctransport.set_dport(self.__port)
-        elif self.__port in [443]:
+        elif self.__port == 443:
             # Setting credentials only for RPC Proxy, but not for the MSRPC level
             rpctransport.set_credentials(self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash)
             rpctransport.set_auth_type(AUTH_NTLM)
         else:
             rpctransport.setRemoteHost(connection.host)
 
+        dce = None
         try:
-            entries = self.__fetchList(connection.kerberos, rpctransport)
+            if int(self.__port) == 135:
+                rpc = NXCRPCConnection(connection, force_tcp=True)
+                rpc.rpc_transport = rpc.create_tcp_transport(target_ip=connection.host)
+                dce = rpc.rpc_transport.get_dce_rpc()
+                if connection.kerberos:
+                    dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
+                dce.connect()
+                entries = list(epm.hept_lookup(None, dce=dce))
+            else:
+                entries = self.__fetchList(connection.kerberos, rpctransport)
         except Exception as e:
             error_text = f"Protocol failed: {e}"
             context.log.fail(error_text)
@@ -80,13 +92,17 @@ class NXCModule:
                RPC_PROXY_CONN_A1_0X6BA_ERR in error_text:
                 context.log.fail("This usually means the target does not allow "
                                  "to connect to its epmapper using RpcProxy.")
-                return
+            return
+        finally:
+            with contextlib.suppress(Exception):
+                dce.disconnect()
+
         for entry in entries:
             tmpUUID = str(entry["tower"]["Floors"][0])
 
             if uuid.uuidtup_to_bin(uuid.string_to_uuidtup(tmpUUID))[:18] in epm.KNOWN_UUIDS:
                 exename = epm.KNOWN_UUIDS[uuid.uuidtup_to_bin(uuid.string_to_uuidtup(tmpUUID))[:18]]
-                context.log.debug("EXEs %s" % exename)
+                context.log.debug(f"EXEs {exename}")
                 if exename == "certsrv.exe":
                     context.log.highlight("Active Directory Certificate Services Found.")
                     url = f"http://{connection.host}/certsrv/certfnsh.asp"

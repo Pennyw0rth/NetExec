@@ -5,6 +5,7 @@ from nxc.helpers.logger import highlight
 from nxc.logger import NXCAdapter
 from ftplib import FTP, error_perm
 
+
 class ftp(connection):
     def __init__(self, args, db, host):
         self.protocol = "FTP"
@@ -21,17 +22,6 @@ class ftp(connection):
                 "hostname": self.hostname,
             }
         )
-
-    def proto_flow(self):
-        self.proto_logger()
-        if self.create_conn_obj() and self.login():
-            if hasattr(self.args, "module") and self.args.module:
-                self.load_modules()
-                self.logger.debug("Calling modules")
-                self.call_modules()
-            else:
-                self.logger.debug("Calling command arguments")
-                self.call_cmd_args()
 
     def enum_host_info(self):
         welcome = self.conn.getwelcome()
@@ -120,7 +110,7 @@ class ftp(connection):
         # ftplib's "dir" prints directly to stdout, and "nlst" only returns the folder name, not full details
         files = []
         try:
-            self.conn.retrlines("LIST", callback=files.append)
+            self.conn.retrlines("LIST -a", callback=files.append)
         except error_perm as error_message:
             self.logger.fail(f"Failed to list directory. Response: ({error_message})")
             self.conn.close()
@@ -135,7 +125,7 @@ class ftp(connection):
             if self.conn.encoding == "utf-8":
                 # Switch the connection to binary
                 self.conn.sendcmd("TYPE I")
-            # Check if the file exists 
+            # Check if the file exists
             self.conn.size(filename)
             # Attempt to download the file
             self.conn.retrbinary(f"RETR {filename}", open(downloaded_file, "wb").write)  # noqa: SIM115
@@ -164,7 +154,7 @@ class ftp(connection):
             self.logger.fail(f"Failed to upload file. {local_file} does not exist locally.")
             return False
         # Check if the file was uploaded
-        if self.conn.size(remote_file) > 0:
+        if self.conn.size(remote_file) is not None:
             self.logger.success(f"Uploaded: {local_file} to {remote_file}")
         else:
             self.logger.fail(f"Failed to upload: {local_file} to {remote_file}")

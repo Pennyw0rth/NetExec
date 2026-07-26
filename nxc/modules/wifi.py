@@ -2,6 +2,7 @@ from dploot.lib.target import Target
 from dploot.triage.wifi import WifiTriage
 
 from nxc.helpers.logger import highlight
+from nxc.helpers.misc import CATEGORY
 from nxc.protocols.smb.dpapi import collect_masterkeys_from_target, upgrade_to_dploot_connection
 
 
@@ -9,11 +10,10 @@ class NXCModule:
     name = "wifi"
     description = "Get key of all wireless interfaces"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
-        """ """
+        """No options available"""
 
     def on_admin_login(self, context, connection):
         username = connection.username

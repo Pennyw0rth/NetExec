@@ -1,6 +1,7 @@
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 from impacket.dcerpc.v5.rrp import DCERPCSessionError
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -13,8 +14,7 @@ class NXCModule:
     name = "ntlmv1"
     description = "Detect if lmcompatibilitylevel on the target is set to lower than 3 (which means ntlmv1 is enabled)"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         self.output = "NTLMv1 allowed on: {} - LmCompatibilityLevel = {}"

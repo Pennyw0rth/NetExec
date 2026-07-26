@@ -45,6 +45,7 @@ def get_domain_backup_key(context):
             context.logger.fail(f"Could not get domain backupkey: {e}")
     return pvkbytes
 
+
 def collect_masterkeys_from_target(context, target, dploot_connection, user=True, system=True):
     masterkeys = []
     plaintexts = {}
@@ -57,10 +58,11 @@ def collect_masterkeys_from_target(context, target, dploot_connection, user=True
     if user:
         plaintexts = {username: password for _, _, username, password, _, _ in context.db.get_credentials(cred_type="plaintext")}
         nthashes = {username: nt.split(":")[1] if ":" in nt else nt for _, _, username, nt, _, _ in context.db.get_credentials(cred_type="hash")}
+        # dploot matches user.lower()
         if context.password != "":
-            plaintexts[context.username] = context.password
+            plaintexts[context.username.lower()] = context.password
         if context.nthash != "":
-            nthashes[context.username] = context.nthash
+            nthashes[context.username.lower()] = context.nthash
 
     # Collect User and Machine masterkeys
     try:
@@ -84,6 +86,7 @@ def collect_masterkeys_from_target(context, target, dploot_connection, user=True
         context.logger.debug(f"Could not get masterkeys: {e}")
 
     return masterkeys
+
 
 def upgrade_to_dploot_connection(target, connection=None):
     conn = None

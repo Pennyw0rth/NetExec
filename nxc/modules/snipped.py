@@ -1,6 +1,8 @@
 import ntpath
 import os
 from os.path import join, getsize, exists
+from pathlib import PurePosixPath
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 
 
@@ -9,8 +11,7 @@ class NXCModule:
     name = "snipped"
     description = "Downloads screenshots taken by the (new) Snipping Tool."
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self):
         self.context = None
@@ -21,8 +22,6 @@ class NXCModule:
         """USERS: Download only specified user(s); format: -o USERS=user1,user2,user3"""
         self.context = context
         self.users = [user.lower() for user in module_options["USERS"].split(",")] if "USERS" in module_options else None
-
-
 
     def on_admin_login(self, context, connection):
         self.context = context
@@ -86,9 +85,12 @@ class NXCModule:
                                 continue
 
                             remote_file_path = ntpath.join(screenshot_path, remote_file_name)
-                            sanitized_path = screenshot_path.replace("\\", "_").replace("/", "_")
-                            local_file_name = f"{folder_name}_{sanitized_path}_{remote_file_name}"
-                            local_file_path = join(user_output_dir, local_file_name)
+                            # replace \\ with underscores and ignore absolute path or path traversal attempts
+                            clean_screenshot_path = "_".join(p for p in PurePosixPath(screenshot_path.replace("\\", "/")).parts if p not in ("..", ".", "/"))
+                            clean_file = "_".join(p for p in PurePosixPath(remote_file_name.replace("\\", "/")).parts if p not in ("..", ".", "/"))
+
+                            local_file_path = join(user_output_dir, f"{clean_screenshot_path}_{clean_file}")
+                            context.log.debug(f"{local_file_path=}")
 
                             try:
                                 with open(local_file_path, "wb") as local_file:
@@ -109,8 +111,7 @@ class NXCModule:
                                 context.log.debug(f"Failed to download '{remote_file_path}' for user {folder_name}: {e}")
 
         if total_files_downloaded > 0 and host_output_path:
-            context.log.success(f"{total_files_downloaded} file(s) downloaded from host {connection.host} to {host_output_path}.")
-                            
+            context.log.success(f"{total_files_downloaded} file(s) downloaded from host {connection.host} to {host_output_path}/")
 
     def find_screenshots_folders(self, user_folder_name):
         """

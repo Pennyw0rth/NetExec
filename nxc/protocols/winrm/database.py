@@ -1,13 +1,11 @@
-import sys
-from sqlalchemy import Table, select, func, delete
+from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, UniqueConstraint, select, func, delete
 from sqlalchemy.dialects.sqlite import Insert
-from sqlalchemy.exc import (
-    NoInspectionAvailable,
-    NoSuchTableError,
-)
+from sqlalchemy.orm import declarative_base
 
 from nxc.database import BaseDB, format_host_query
 from nxc.logger import nxc_logger
+
+Base = declarative_base()
 
 
 class database(BaseDB):
@@ -19,71 +17,73 @@ class database(BaseDB):
 
         super().__init__(db_engine)
 
-    @staticmethod
-    def db_schema(db_conn):
-        db_conn.execute(
-            """CREATE TABLE "hosts" (
-            "id" integer PRIMARY KEY,
-            "ip" text,
-            "port" integer,
-            "hostname" text,
-            "domain" text,
-            "os" text
-            )"""
-        )
-        db_conn.execute(
-            """CREATE TABLE "users" (
-            "id" integer PRIMARY KEY,
-            "domain" text,
-            "username" text,
-            "password" text,
-            "credtype" text,
-            "pillaged_from_hostid" integer,
-            FOREIGN KEY(pillaged_from_hostid) REFERENCES hosts(id)
-            )"""
-        )
-        db_conn.execute(
-            """CREATE TABLE "admin_relations" (
-            "id" integer PRIMARY KEY,
-            "userid" integer,
-            "hostid" integer,
-            FOREIGN KEY(userid) REFERENCES users(id),
-            FOREIGN KEY(hostid) REFERENCES hosts(id)
-        )"""
-        )
-        db_conn.execute(
-            """CREATE TABLE "loggedin_relations" (
-            "id" integer PRIMARY KEY,
-            "userid" integer,
-            "hostid" integer,
-            FOREIGN KEY(userid) REFERENCES users(id),
-            FOREIGN KEY(hostid) REFERENCES hosts(id)
-        )"""
+    class Host(Base):
+        __tablename__ = "hosts"
+        id = Column(Integer)
+        ip = Column(String)
+        port = Column(Integer)
+        hostname = Column(String)
+        domain = Column(String)
+        os = Column(String)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            UniqueConstraint("ip"),
         )
 
+    class User(Base):
+        __tablename__ = "users"
+        id = Column(Integer)
+        domain = Column(String)
+        username = Column(String)
+        password = Column(String)
+        credtype = Column(String)
+        pillaged_from_hostid = Column(Integer)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            ForeignKeyConstraint(["pillaged_from_hostid"], ["hosts.id"]),
+        )
+
+    class AdminRelation(Base):
+        __tablename__ = "admin_relations"
+        id = Column(Integer)
+        userid = Column(Integer)
+        hostid = Column(Integer)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            ForeignKeyConstraint(["userid"], ["users.id"]),
+            ForeignKeyConstraint(["hostid"], ["hosts.id"]),
+        )
+
+    class LoggedInRelation(Base):
+        __tablename__ = "loggedin_relations"
+        id = Column(Integer)
+        userid = Column(Integer)
+        hostid = Column(Integer)
+
+        __table_args__ = (
+            PrimaryKeyConstraint("id"),
+            ForeignKeyConstraint(["userid"], ["users.id"]),
+            ForeignKeyConstraint(["hostid"], ["hosts.id"]),
+        )
+
+    @staticmethod
+    def db_schema(db_conn):
+        Base.metadata.create_all(db_conn)
+
     def reflect_tables(self):
-        with self.db_engine.connect():
-            try:
-                self.HostsTable = Table("hosts", self.metadata, autoload_with=self.db_engine)
-                self.UsersTable = Table("users", self.metadata, autoload_with=self.db_engine)
-                self.AdminRelationsTable = Table("admin_relations", self.metadata, autoload_with=self.db_engine)
-                self.LoggedinRelationsTable = Table("loggedin_relations", self.metadata, autoload_with=self.db_engine)
-            except (NoInspectionAvailable, NoSuchTableError):
-                print(
-                    f"""
-                    [-] Error reflecting tables for the {self.protocol} protocol - this means there is a DB schema mismatch
-                    [-] This is probably because a newer version of nxc is being run on an old DB schema
-                    [-] Optionally save the old DB data (`cp {self.db_path} ~/nxc_{self.protocol.lower()}.bak`)
-                    [-] Then remove the {self.protocol} DB (`rm -f {self.db_path}`) and run nxc to initialize the new DB"""
-                )
-                sys.exit()
+        self.HostsTable = self.reflect_table(self.Host)
+        self.UsersTable = self.reflect_table(self.User)
+        self.AdminRelationsTable = self.reflect_table(self.AdminRelation)
+        self.LoggedinRelationsTable = self.reflect_table(self.LoggedInRelation)
 
     def add_host(self, ip, port, hostname, domain, os=None):
         """
         Check if this host has already been added to the database, if not, add it in.
         TODO: return inserted or updated row ids as a list
         """
-        domain = domain.split(".")[0].upper()
         hosts = []
 
         q = select(self.HostsTable).filter(self.HostsTable.c.ip == ip)
@@ -123,12 +123,11 @@ class database(BaseDB):
         # TODO: find a way to abstract this away to a single Upsert call
         q = Insert(self.HostsTable)
         update_columns = {col.name: col for col in q.excluded if col.name not in "id"}
-        q = q.on_conflict_do_update(index_elements=self.HostsTable.primary_key, set_=update_columns)
+        q = q.on_conflict_do_update(index_elements=["ip"], set_=update_columns)
         self.db_execute(q, hosts)
 
     def add_credential(self, credtype, domain, username, password, pillaged_from=None):
         """Check if this credential has already been added to the database, if not add it in."""
-        domain = domain.split(".")[0].upper()
         credentials = []
 
         credential_data = {}
@@ -199,7 +198,7 @@ class database(BaseDB):
         add_links = []
 
         creds_q = select(self.UsersTable)
-        if user_id:  # noqa: SIM108
+        if user_id:
             creds_q = creds_q.filter(self.UsersTable.c.id == user_id)
         else:
             creds_q = creds_q.filter(
@@ -274,6 +273,16 @@ class database(BaseDB):
             q = select(self.UsersTable)
 
         return self.db_execute(q).all()
+
+    def get_credential(self, cred_type, domain, username, password):
+        q = select(self.UsersTable).filter(
+            self.UsersTable.c.domain == domain,
+            self.UsersTable.c.username == username,
+            self.UsersTable.c.password == password,
+            self.UsersTable.c.credtype == cred_type,
+        )
+        results = self.db_execute(q).first()
+        return results.id
 
     def is_credential_local(self, credential_id):
         q = select(self.UsersTable.c.domain).filter(self.UsersTable.c.id == credential_id)

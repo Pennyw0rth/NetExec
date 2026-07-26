@@ -1,3 +1,6 @@
+from nxc.helpers.misc import CATEGORY
+
+
 class NXCModule:
     """
     Checks for credentials in IIS Application Pool configuration files using appcmd.exe.
@@ -8,14 +11,10 @@ class NXCModule:
     name = "iis"
     description = "Checks for credentials in IIS Application Pool configuration files using appcmd.exe"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
-
-    def __init__(self):
-        pass
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
-        pass
+        """No options available"""
 
     def on_admin_login(self, context, connection):
         self.check_appcmd(context, connection)

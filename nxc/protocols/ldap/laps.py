@@ -95,13 +95,13 @@ class LDAPConnect:
                 except ldap_impacket.LDAPSessionError as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
-                        f"{domain}\\{username}:{password if password else ntlm_hash} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                        f"{domain}\\{username}:{password if password else ntlm_hash} {ldap_error_status.get(error_code, '')}",
                         color="magenta" if error_code in ldap_error_status else "red",
                     )
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{domain}\\{username}:{password if password else ntlm_hash} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                    f"{domain}\\{username}:{password if password else ntlm_hash} {ldap_error_status.get(error_code, '')}",
                     color="magenta" if error_code in ldap_error_status else "red",
                 )
             return False
@@ -152,13 +152,13 @@ class LDAPConnect:
                 except ldap_impacket.LDAPSessionError as e:
                     error_code = str(e).split()[-2][:-1]
                     self.logger.fail(
-                        f"{domain}\\{username}:{password if password else ntlm_hash} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                        f"{domain}\\{username}:{password if password else ntlm_hash} {ldap_error_status.get(error_code, '')}",
                         color="magenta" if error_code in ldap_error_status else "red",
                     )
             else:
                 error_code = str(e).split()[-2][:-1]
                 self.logger.fail(
-                    f"{domain}\\{username}:{password if password else ntlm_hash} {ldap_error_status[error_code] if error_code in ldap_error_status else ''}",
+                    f"{domain}\\{username}:{password if password else ntlm_hash} {ldap_error_status.get(error_code, '')}",
                     color="magenta" if error_code in ldap_error_status else "red",
                 )
             return False

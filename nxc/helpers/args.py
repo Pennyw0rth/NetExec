@@ -1,6 +1,7 @@
 from argparse import ArgumentDefaultsHelpFormatter, SUPPRESS, OPTIONAL, ZERO_OR_MORE
 from argparse import Action
 
+
 class DisplayDefaultsNotNone(ArgumentDefaultsHelpFormatter):
     def _get_help_string(self, action):
         help_string = action.help
@@ -23,3 +24,18 @@ class DefaultTrackingAction(Action):
         # Set an attribute to track whether the value was explicitly set
         setattr(namespace, self.dest, values)
         setattr(namespace, f"{self.dest}_explicitly_set", True)
+
+
+def get_conditional_action(baseAction):
+    class ConditionalAction(baseAction):
+        def __init__(self, option_strings, dest, **kwargs):
+            x = kwargs.pop("make_required", [])
+            super().__init__(option_strings, dest, **kwargs)
+            self.make_required = x
+
+        def __call__(self, parser, namespace, values, option_string=None):
+            for x in self.make_required:
+                x.required = True
+            super().__call__(parser, namespace, values, option_string)
+
+    return ConditionalAction

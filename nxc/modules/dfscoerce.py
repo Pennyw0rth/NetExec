@@ -1,9 +1,11 @@
+from nxc.helpers.misc import CATEGORY
+
+
 class NXCModule:
     name = "dfscoerce"
     description = "[REMOVED] Module to check if the DC is vulnerable to DFSCoerce, credit to @filip_dragovic/@Wh04m1001 and @topotam"
     supported_protocols = ["smb"]
-    opsec_safe = True
-    multiple_hosts = True
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

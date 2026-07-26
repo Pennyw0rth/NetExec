@@ -8,6 +8,7 @@ from os.path import dirname
 from os.path import join as path_join
 
 from nxc.context import Context
+from nxc.helpers.misc import CATEGORY
 from nxc.logger import NXCAdapter
 from nxc.paths import NXC_PATH
 
@@ -30,14 +31,11 @@ class ModuleLoader:
         elif not hasattr(module, "description"):
             self.logger.fail(f"{module_path} missing the description variable")
             module_error = True
+        elif not hasattr(module, "category") or module.category not in [CATEGORY.ENUMERATION, CATEGORY.CREDENTIAL_DUMPING, CATEGORY.PRIVILEGE_ESCALATION]:
+            self.logger.fail(f"{module_path} missing the category variable or invalid category")
+            module_error = True
         elif not hasattr(module, "supported_protocols"):
             self.logger.fail(f"{module_path} missing the supported_protocols variable")
-            module_error = True
-        elif not hasattr(module, "opsec_safe"):
-            self.logger.fail(f"{module_path} missing the opsec_safe variable")
-            module_error = True
-        elif not hasattr(module, "multiple_hosts"):
-            self.logger.fail(f"{module_path} missing the multiple_hosts variable")
             module_error = True
         elif not hasattr(module, "options"):
             self.logger.fail(f"{module_path} missing the options function")
@@ -46,9 +44,7 @@ class ModuleLoader:
             self.logger.fail(f"{module_path} missing the on_login/on_admin_login function(s)")
             module_error = True
 
-        if module_error:
-            return False
-        return True
+        return not module_error
 
     def load_module(self, module_path):
         """Load a module, initializing it and checking that it has the proper attributes"""
@@ -100,8 +96,7 @@ class ModuleLoader:
                     "description": module_spec.description,
                     "options": module_spec.options.__doc__,
                     "supported_protocols": module_spec.supported_protocols,
-                    "opsec_safe": module_spec.opsec_safe,
-                    "multiple_hosts": module_spec.multiple_hosts,
+                    "category": module_spec.category,
                     "requires_admin": bool(hasattr(module_spec, "on_admin_login") and callable(module_spec.on_admin_login)),
                 }
             }
