@@ -538,6 +538,7 @@ Add-Type -AssemblyName System.Windows.Forms
     async def _submit_run_command(self, command):
         await self._send_win_r()
         await self.conn.set_current_clipboard_text(command)
+        # server must acknowledge our clipboard data before we trigger the read
         response = await self._wait_for_event(
             {"CLIPBOARD_FORMAT_LIST_RESPONSE"}, self.args.clipboard_delay
         )
@@ -545,6 +546,8 @@ Add-Type -AssemblyName System.Windows.Forms
             raise RuntimeError(
                 "Remote session rejected the clipboard command data"
             )
+        # type a one-liner that reads and executes the clipboard we just set
+        # uses .NET WinForms API instead of Get-Clipboard (which requires PS5+)
         await self._send_keystrokes(
             "powershell.exe -NoLogo -NoProfile -NonInteractive -STA "
             '-WindowStyle Hidden -Command "Add-Type -AssemblyName '
