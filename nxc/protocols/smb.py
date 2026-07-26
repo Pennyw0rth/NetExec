@@ -2562,7 +2562,7 @@ class smb(connection):
             printUserStatus=True,
             trustKeys=self.args.trust_keys,
             justTrustKeys=self.args.just_trust_keys,
-            domainFQDN=self.domain,
+            domainFQDN=self.targetDomain,
             perSecretCallback=lambda secret_type, secret: add_hash(secret_type, secret, host_id),
         )
 
