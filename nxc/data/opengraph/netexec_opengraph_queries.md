@@ -1,109 +1,95 @@
 # NetExec OpenGraph - BloodHound-CE custom queries
 
-Copy/paste these Cypher queries into BloodHound-CE (Explore → Cypher, or save them as
-Custom Queries). They filter on the **tags** NetExec adds via OpenGraph.
+Copy/paste these Cypher queries into BloodHound-CE (Explore → Cypher, or save as Custom
+Queries). They combine the **tags** NetExec adds via OpenGraph with BloodHound's native
+graph so you can prioritize targets and find attack paths.
 
-> Tag keys from `enum_cve` contain spaces/slashes, so they are wrapped in backticks
-> (e.g. `` c.`NTLM reflection` ``).
 
-## Vulnerabilities
+---
 
-**All computers with any NetExec vulnerability tag**
+## 1. Servers with specific roles vulnerable
+
+**All DCs vulnerable**
 ```cypher
-MATCH (c:Computer) WHERE c.zerologon = true OR c.nopac = true OR c.ms17_010 = true OR c.smbghost = true OR c.cve_2019_1040 = true OR c.printnightmare = true OR c.webclientrunning = true OR c.ntlm_reflection = true OR c.`NTLM reflection` = true OR c.`Ghost SPN` = true OR c.`NTLM MIC Bypass` = true OR c.`BadSuccessor` = true OR c.`ESC15 / EKUwu` = true RETURN c
+MATCH (c:Computer)-[:MemberOf*1..]->(dc:Group)
+WHERE dc.objectid ENDS WITH '-516' AND (c.zerologon = true OR c.nopac = true OR c.`NTLM MIC Bypass` = true OR c.`BadSuccessor`)
+RETURN c
 ```
 
-**Zerologon vulnerable (CVE-2020-1472)**
-```cypher
-MATCH (c:Computer) WHERE c.zerologon = true RETURN c
+**All CAs vulnerable**
+```
+MATCH (c:Computer)-[:HostsCAService]->(:EnterpriseCA)
+WHERE c.`ESC15 / EKUwu`=true OR c.Certighost=true
+RETURN c
 ```
 
-**noPac vulnerable (CVE-2021-42278/42287)**
+---
+
+## 2. All vulnerable hosts → Domain Admins 
+
+
+**All hosts with any NetExec vulnerability tag**
 ```cypher
-MATCH (c:Computer) WHERE c.nopac = true RETURN c
+MATCH (c:Computer)
+WHERE c.ms17_010 = true OR c.smbghost = true OR c.cve_2019_1040 = true OR c.printnightmare = true OR c.webclientrunning = true OR c.`NTLM reflection` = true OR c.`Ghost SPN` = true
+RETURN c
 ```
 
-**MS17-010 / EternalBlue vulnerable**
+**Vulnerable hosts where a Domain Admin has a session**
 ```cypher
-MATCH (c:Computer) WHERE c.ms17_010 = true RETURN c
+MATCH p = (c:Computer)-[:HasSession]->(u)-[:MemberOf*1..]->(g:Group)
+WHERE (c.ms17_010 = true OR c.smbghost = true OR c.cve_2019_1040 = true OR c.printnightmare = true OR c.webclientrunning = true OR c.`NTLM reflection` = true OR c.`Ghost SPN` = true)
+  AND g.objectid ENDS WITH '-512'
+RETURN p
 ```
 
-**SMBGhost vulnerable (CVE-2020-0796)**
+**Shortest path from any vulnerable host to Domain Admins**
 ```cypher
-MATCH (c:Computer) WHERE c.smbghost = true RETURN c
+MATCH (c:Computer)
+WHERE cc.ms17_010 = true OR c.smbghost = true OR c.cve_2019_1040 = true OR c.printnightmare = true OR c.webclientrunning = true OR c.`NTLM reflection` = true OR c.`Ghost SPN` = true
+MATCH p = shortestPath((c)-[:Owns|GenericAll|GenericWrite|WriteOwner|WriteDacl|MemberOf|ForceChangePassword|AllExtendedRights|AddMember|HasSession|GPLink|AllowedToDelegate|CoerceToTGT|AllowedToAct|AdminTo|CanPSRemote|CanRDP|ExecuteDCOM|HasSIDHistory|AddSelf|DCSync|ReadLAPSPassword|ReadGMSAPassword|DumpSMSAPassword|SQLAdmin|AddAllowedToAct|WriteSPN|AddKeyCredentialLink|SyncLAPSPassword|WriteAccountRestrictions|WriteGPLink|GoldenCert|ADCSESC1|ADCSESC3|ADCSESC4|ADCSESC6a|ADCSESC6b|ADCSESC9a|ADCSESC9b|ADCSESC10a|ADCSESC10b|ADCSESC13|HasTrustKeys|ManageCA|ManageCertificates|Contains|SameForestTrust|SpoofSIDHistory|AbuseTGTDelegation*1..]->(g:Group))
+WHERE g.objectid ENDS WITH '-512'
+RETURN p
 ```
 
-**Drop-the-MIC vulnerable (CVE-2019-1040)**
+---
+
+## 3. Coercion / NTLM-relay quick lists
+
+
+**SMB signing NOT required — shortest path to Domain Admins**
 ```cypher
-MATCH (c:Computer) WHERE c.cve_2019_1040 = true RETURN c
+MATCH (c:Computer)
+WHERE c.smbsigning = false
+MATCH p = shortestPath((c)-[:Owns|GenericAll|GenericWrite|WriteOwner|WriteDacl|MemberOf|ForceChangePassword|AllExtendedRights|AddMember|HasSession|GPLink|AllowedToDelegate|CoerceToTGT|AllowedToAct|AdminTo|CanPSRemote|CanRDP|ExecuteDCOM|HasSIDHistory|AddSelf|DCSync|ReadLAPSPassword|ReadGMSAPassword|DumpSMSAPassword|SQLAdmin|AddAllowedToAct|WriteSPN|AddKeyCredentialLink|SyncLAPSPassword|WriteAccountRestrictions|WriteGPLink|GoldenCert|ADCSESC1|ADCSESC3|ADCSESC4|ADCSESC6a|ADCSESC6b|ADCSESC9a|ADCSESC9b|ADCSESC10a|ADCSESC10b|ADCSESC13|HasTrustKeys|ManageCA|ManageCertificates|Contains|SameForestTrust|SpoofSIDHistory|AbuseTGTDelegation*1..]->(g:Group))
+WHERE g.objectid ENDS WITH '-512'
+RETURN p
 ```
 
-**PrintNightmare vulnerable (CVE-2021-34527)**
+**LDAP signing not required / LDAPS channel binding not enforced**
 ```cypher
-MATCH (c:Computer) WHERE c.printnightmare = true RETURN c
+MATCH (c:Computer) WHERE c.ldapsigning = false OR (c.ldaps_channel_binding IS NOT NULL AND c.ldaps_channel_binding <> 'Always') RETURN c
 ```
 
-**WebClient / WebDAV running (relay to ADCS/LDAP)**
-```cypher
-MATCH (c:Computer) WHERE c.webclientrunning = true RETURN c
-```
+---
 
-**NTLM reflection vulnerable (CVE-2025-33073)**
-```cypher
-MATCH (c:Computer) WHERE c.ntlm_reflection = true OR c.`NTLM reflection` = true RETURN c
-```
-
-**Ghost SPN vulnerable (CVE-2025-58726)**
-```cypher
-MATCH (c:Computer) WHERE c.`Ghost SPN` = true RETURN c
-```
-
-**NTLM MIC Bypass vulnerable (CVE-2025-54918)**
-```cypher
-MATCH (c:Computer) WHERE c.`NTLM MIC Bypass` = true RETURN c
-```
-
-**BadSuccessor vulnerable (CVE-2025-53779)**
-```cypher
-MATCH (c:Computer) WHERE c.`BadSuccessor` = true RETURN c
-```
-
-**ESC15 / EKUwu vulnerable (CVE-2024-49019)**
-```cypher
-MATCH (c:Computer) WHERE c.`ESC15 / EKUwu` = true RETURN c
-```
-
-## Host configuration
-
-**SMB signing NOT required (relay targets)**
-```cypher
-MATCH (c:Computer) WHERE c.smbsigning = false RETURN c
-```
-
-**LDAP signing NOT required**
-```cypher
-MATCH (c:Computer) WHERE c.ldapsigning = false RETURN c
-```
-
-**LDAPS channel binding NOT enforced**
-```cypher
-MATCH (c:Computer) WHERE c.ldaps_channel_binding IS NOT NULL AND c.ldaps_channel_binding <> 'Always' RETURN c
-```
-
-**RDP NLA disabled**
-```cypher
-MATCH (c:Computer) WHERE c.rdp_nla = false RETURN c
-```
-
-
-## MSSQL
+## 4. MSSQL
 
 **MSSQL servers**
 ```cypher
 MATCH (c:Computer) WHERE c.mssql_present = true RETURN c
 ```
 
-**MSSQL servers with encryption disabled**
+**MSSQL servers with encryption disabled (sniff/relay TDS)**
 ```cypher
 MATCH (c:Computer) WHERE c.mssql_present = true AND c.mssql_encryption = false RETURN c
+```
+
+**Shortest path from an MSSQL server to Domain Admins (prioritize SQL footholds)**
+```cypher
+MATCH (c:Computer)
+WHERE c.mssql_present = true
+MATCH p = shortestPath((c)-[:Owns|GenericAll|GenericWrite|WriteOwner|WriteDacl|MemberOf|AddMember|HasSession|AllowedToDelegate|AllowedToAct|AdminTo|CanPSRemote|CanRDP|ExecuteDCOM|DCSync|ReadLAPSPassword|ReadGMSAPassword|SQLAdmin|AddKeyCredentialLink|Contains*1..]->(g:Group))
+WHERE g.objectid ENDS WITH '-512'
+RETURN p
 ```
