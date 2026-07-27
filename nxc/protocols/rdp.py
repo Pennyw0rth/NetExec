@@ -608,7 +608,7 @@ Add-Type -AssemblyName System.Windows.Forms
                     await self._wait_for_event({"CLIPBOARD_READY"}, self.args.clipboard_delay)
                 except asyncio.TimeoutError:
                     self.logger.fail("Clipboard cannot be initialized, no output can be retrieved")
-                    return ""
+                    return None
 
             await self._wait_for_desktop()
             if get_output:
