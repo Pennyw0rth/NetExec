@@ -200,15 +200,14 @@ class rdp(connection):
         except Exception:
             pass
 
-    async def connect_rdp(self):
+    async def connect_rdp(self, auth_only=False):
         """Connect to the RDP server. Does NOT clean up on exit.
 
-        Use this when the caller needs the connection alive after connecting
-        (screen, nla_screen, execute_shell). For sync callers that only need to
-        know whether authentication succeeded and want guaranteed cleanup, use
-        connect_rdp_with_cleanup() instead.
+        When auth_only is True, performs only CredSSP/NLA authentication
+        without establishing a full RDP session. This verifies credentials
+        without creating a disconnected session on single-session hosts.
         """
-        _, err = await asyncio.wait_for(self.conn.connect(), timeout=self.args.rdp_timeout)
+        _, err = await asyncio.wait_for(self.conn.connect(auth_only=auth_only), timeout=self.args.rdp_timeout)
         if err is not None:
             raise err
 
@@ -218,10 +217,10 @@ class rdp(connection):
             with contextlib.suppress(Exception):
                 await asyncio.wait_for(self.conn.terminate(), timeout=self.args.rdp_timeout)
 
-    async def connect_rdp_with_cleanup(self):
+    async def connect_rdp_with_cleanup(self, auth_only=False):
         """Connect to the RDP server and always terminate the connection on exit"""
         try:
-            await self.connect_rdp()
+            await self.connect_rdp(auth_only=auth_only)
         finally:
             await self.terminate_conn()
 
@@ -282,7 +281,7 @@ class rdp(connection):
                 stype=stype,
             )
             self.conn = self._create_rdp_connection(self.auth)
-            asyncio.run(self.connect_rdp_with_cleanup())
+            asyncio.run(self.connect_rdp_with_cleanup(auth_only=self._execution_pending()))
 
             self.admin_privs = True
             self.logger.success(
@@ -329,6 +328,10 @@ class rdp(connection):
                 )
             return False
 
+    def _execution_pending(self):
+        """Check if command execution will follow authentication."""
+        return bool(self.args.execute or self.args.ps_execute)
+
     def plaintext_login(self, domain, username, password):
         try:
             self.auth = NTLMCredential(
@@ -338,7 +341,9 @@ class rdp(connection):
                 stype=asyauthSecret.PASS,
             )
             self.conn = self._create_rdp_connection(self.auth)
-            asyncio.run(self.connect_rdp_with_cleanup())
+            # When execution follows, use auth_only to verify credentials
+            # without creating a full session (avoids Win11 clipboard issues).
+            asyncio.run(self.connect_rdp_with_cleanup(auth_only=self._execution_pending()))
 
             self.admin_privs = True
             self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
@@ -372,7 +377,7 @@ class rdp(connection):
                 stype=asyauthSecret.NT,
             )
             self.conn = self._create_rdp_connection(self.auth)
-            asyncio.run(self.connect_rdp_with_cleanup())
+            asyncio.run(self.connect_rdp_with_cleanup(auth_only=self._execution_pending()))
 
             self.admin_privs = True
             self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
@@ -591,6 +596,8 @@ Add-Type -AssemblyName System.Windows.Forms
             await self.connect_rdp()
         except Exception as e:
             self.logger.debug(f"Error connecting to RDP: {e!s}")
+            if "CredSSP" in str(e) or "STATUS_LOGON" in str(e):
+                self.logger.fail(f"Authentication failed: {e!s}")
             await self.terminate_conn()
             return None
 
