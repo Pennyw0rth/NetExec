@@ -611,6 +611,17 @@ Add-Type -AssemblyName System.Windows.Forms
                     return None
 
             await self._wait_for_desktop()
+
+            # Prime the .NET/PowerShell runtime on Windows 10/11 single-session
+            # hosts where first execution after logon can take 30-60s due to
+            # JIT compilation of System.Windows.Forms. This hidden warmup command
+            # loads the assembly without producing any visible output.
+            await self._submit_typed_run_command(
+                "powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden "
+                '-Command "Add-Type -AssemblyName System.Windows.Forms"'
+            )
+            await asyncio.sleep(3)
+
             if get_output:
                 try:
                     await self._submit_run_command(command)
