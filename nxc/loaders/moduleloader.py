@@ -40,7 +40,7 @@ class ModuleLoader:
         elif not hasattr(module, "options"):
             self.logger.fail(f"{module_path} missing the options function")
             module_error = True
-        elif not hasattr(module, "on_login") and not (module, "on_admin_login"):
+        elif not hasattr(module, "on_login") and not hasattr(module, "on_admin_login"):
             self.logger.fail(f"{module_path} missing the on_login/on_admin_login function(s)")
             module_error = True
 
@@ -78,7 +78,6 @@ class ModuleLoader:
 
     def init_module(self, module_path):
         """Initialize a module for execution"""
-        module = None
         module = self.load_module(module_path)
 
         if module:
