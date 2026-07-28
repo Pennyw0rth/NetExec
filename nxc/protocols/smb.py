@@ -54,7 +54,7 @@ from impacket.smb3structs import (
 
 from impacket.dcerpc.v5 import tsts as TSTS
 
-from nxc.config import process_secret, host_info_colors, check_guest_account
+from nxc.config import process_secret, host_info_colors, check_guest_account, display_dc
 from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
@@ -330,8 +330,8 @@ class smb(connection):
         smbv1 = colored(f"SMBv1:{self.smbv1}", host_info_colors[2], attrs=["bold"]) if self.smbv1 else colored(f"SMBv1:{self.smbv1}", host_info_colors[3], attrs=["bold"])
         ntlm = colored(f" (NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
         guest = colored(f" (Guest Auth:{self.is_guest})", host_info_colors[1], attrs=["bold"]) if self.is_guest else ""
-        isdc = colored(f" (DC:{self.isdc})", host_info_colors[3], attrs=["bold"]) if self.isdc else ""
-        null_auth = colored(f" (Null Auth:{self.null_auth})", host_info_colors[2], attrs=["bold"]) if self.null_auth and not self.isdc else ""
+        isdc = colored(f" (DC:{self.isdc})", host_info_colors[3], attrs=["bold"]) if self.isdc and display_dc else ""
+        null_auth = colored(f" (Null Auth:{self.null_auth})", host_info_colors[2], attrs=["bold"]) if self.null_auth else ""
         self.logger.display(f"{self.server_os}{f' x{self.os_arch}' if self.os_arch else ''} (name:{self.hostname}) (domain:{self.targetDomain}) ({signing}) ({smbv1}){ntlm}{null_auth}{guest}{isdc}")
 
         if self.args.generate_hosts_file or self.args.generate_krb5_file:
