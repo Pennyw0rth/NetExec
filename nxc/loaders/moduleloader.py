@@ -61,6 +61,11 @@ class ModuleLoader:
             module_name = f"nxc_module_{basename(module_path)[:-3]}"
             spec = importlib.util.spec_from_file_location(module_name, module_path)
             module = importlib.util.module_from_spec(spec)
+            # Register before executing. Modules that define their own impacket
+            # NDRCALL requests rely on impacket resolving the matching Response
+            # class via sys.modules[request.__module__] (rpcrt.py), which the
+            # previous load_module() satisfied implicitly.
+            sys.modules[module_name] = module
             spec.loader.exec_module(module)
             cls.module_cache[module_path] = module
         return cls.module_cache[module_path]
