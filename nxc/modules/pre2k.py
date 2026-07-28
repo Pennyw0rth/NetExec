@@ -53,8 +53,13 @@ class NXCModule:
                 computers[computer["sAMAccountName"]] = computer["userAccountControl"]
                 context.log.debug(f"Added computer: {computer['sAMAccountName']}")
 
-            # Save computers to file
-            domain_dir = os.path.join(f"{NXC_PATH}/modules/pre2k", connection.domain)
+            import re
+            
+            # Sanitize domain to prevent directory traversal (Issue #1261)
+            safe_domain = re.sub(r'[^a-zA-Z0-9.-]', '_', connection.domain)
+            safe_domain = safe_domain.replace('..', '_')
+            
+            domain_dir = os.path.join(f"{NXC_PATH}/modules/pre2k", safe_domain)
             output_file_pre2k = os.path.join(domain_dir, "precreated_computers.txt")
             output_file_non_pre2k = os.path.join(domain_dir, "non_precreated_computers.txt")
 
@@ -63,6 +68,12 @@ class NXCModule:
 
             with open(output_file_pre2k, "w") as pre2k_file, open(output_file_non_pre2k, "w") as non_pre2k_file:
                 for computer, uac in computers.items():
+                    # Validate sAMAccountName to prevent arbitrary file writes (Issue #1261)
+                    invalid_chars = '"[]:;|=+*?<>/\\\\,'
+                    if any(c in computer for c in invalid_chars):
+                        context.log.debug(f"Skipping invalid sAMAccountName: {computer}")
+                        continue
+                        
                     if int(uac) == 4128:
                         pre2k_file.write(f"{computer}\n")
                     else:
