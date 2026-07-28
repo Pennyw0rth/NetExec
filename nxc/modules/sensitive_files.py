@@ -1,6 +1,3 @@
-# nxc/modules/sensitive_files.py
-# Author: Char0n1507
-# Description: Crawl SMB shares and flag files with sensitive extensions
 
 import os
 from nxc.helpers.misc import CATEGORY
