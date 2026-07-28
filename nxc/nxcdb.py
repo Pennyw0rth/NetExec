@@ -101,7 +101,6 @@ class DatabaseNavigator(cmd.Cmd):
     def do_proto(self, line):
         if not line:
             self.main_menu.help_proto()
-            return
 
         self.db.shutdown_db()
         self.main_menu.do_proto(line)
