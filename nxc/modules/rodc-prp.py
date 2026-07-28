@@ -22,6 +22,7 @@ rodc_attributes = [
     "msDS-RevealedList",
 ]
 principal_attributes = ["sAMAccountName", "distinguishedName"]
+all_principals_filter = "(&(objectClass=user)(sAMAccountName=*))"
 cacheability_attribute = "msDS-IsUserCachableAtRodc"
 cacheability_attributes = ["distinguishedName", cacheability_attribute]
 dn_input_control_oid = "1.2.840.113556.1.4.2026"
@@ -49,6 +50,10 @@ def _normalize_dn(value):
 def _rdn_value(value):
     rdn = str(value).split(",", 1)[0]
     return rdn.split("=", 1)[1] if "=" in rdn else rdn
+
+
+def _is_cacheable(value):
+    return str(value) == "1"
 
 
 def _revealed_principals(values):
@@ -80,7 +85,7 @@ class NXCModule:
     def options(self, context, module_options):
         """
         RODC    Filter by RODC account name, short hostname, or FQDN
-        TARGET  Check one exact sAMAccountName, or use ALL to check cached accounts
+        TARGET  Check sAMAccountName, or use ALL to check every domain account
 
         Use --verbose flag to show policy and cached-account DNs.
         """
@@ -112,24 +117,44 @@ class NXCModule:
             context.log.fail(f"No RODCs found{qualifier}")
             return
 
-        targets = []
-        cacheability = {}
-        if self.target and not self.all_targets:
+        cached_accounts = None
+        if self.all_targets:
+            targets = self._resolve_all_targets(connection)
+        elif self.target:
             target = self._resolve_target(context, connection)
             if target is None:
                 return
             targets = [target]
-            cacheability = self._query_cacheability(connection, targets)
-
-        cached_principals = self._cached_principals(rodcs)
-        cached_accounts = self._resolve_cached_accounts(connection, cached_principals.values())
-        if self.all_targets:
+        else:
+            cached_principals = self._cached_principals(rodcs)
+            cached_accounts = self._resolve_cached_accounts(
+                connection, cached_principals.values()
+            )
             targets = self._cached_targets(cached_principals, cached_accounts)
-            cacheability = self._query_cacheability(connection, targets)
+
+        if self.all_targets and len(rodcs) == 1:
+            self._stream_all_targets(
+                context,
+                connection,
+                rodcs[0],
+                targets,
+            )
+            return
+
+        cacheability = self._query_cacheability(connection, targets)
 
         for rodc in rodcs:
-            show_identity = len(rodcs) > 1 or not self._matches_rodc(rodc, connection.hostname)
-            self._report_rodc(context, rodc, targets, cacheability, cached_accounts, show_identity)
+            show_identity = len(rodcs) > 1 or not self._matches_rodc(
+                rodc, connection.hostname
+            )
+            self._report_rodc(
+                context,
+                rodc,
+                targets,
+                cacheability,
+                cached_accounts,
+                show_identity,
+            )
 
     def _resolve_target(self, context, connection):
         search_filter = f"(&(objectClass=user)(sAMAccountName={escape_filter_chars(self.target)}))"
@@ -144,23 +169,37 @@ class NXCModule:
         return targets[0]
 
     @staticmethod
-    def _query_cacheability(connection, targets):
+    def _resolve_all_targets(connection):
+        response = connection.search(
+            searchFilter=all_principals_filter,
+            attributes=principal_attributes,
+        )
+        return [
+            entry
+            for entry in parse_result_attributes(response or [])
+            if entry.get("sAMAccountName") and entry.get("distinguishedName")
+        ]
+
+    def _query_cacheability(self, connection, targets):
         results = {}
         for target in targets:
-            target_dn = target["distinguishedName"]
-            control = _dn_input_control(target_dn)
-            response = connection.search(
-                searchFilter=rodc_filter,
-                attributes=cacheability_attributes,
-                searchControls=[control],
-            )
-            entries = parse_result_attributes(response or [])
-            for entry in entries:
-                rodc_dn = entry.get("distinguishedName")
-                if rodc_dn:
-                    results[_normalize_dn(target_dn), _normalize_dn(rodc_dn)] = entry.get(
-                        cacheability_attribute
-                    )
+            results.update(self._query_target_cacheability(connection, target))
+        return results
+
+    @staticmethod
+    def _query_target_cacheability(connection, target):
+        target_dn = target["distinguishedName"]
+        response = connection.search(
+            searchFilter=rodc_filter,
+            attributes=cacheability_attributes,
+            searchControls=[_dn_input_control(target_dn)],
+        )
+        results = {}
+        for entry in parse_result_attributes(response or []):
+            rodc_dn = entry.get("distinguishedName")
+            if rodc_dn:
+                key = (_normalize_dn(target_dn), _normalize_dn(rodc_dn))
+                results[key] = entry.get(cacheability_attribute)
         return results
 
     @staticmethod
@@ -219,17 +258,58 @@ class NXCModule:
         ]
 
     def _report_rodc(self, context, rodc, targets, cacheability, cached_accounts, show_identity):
+        principals = self._report_rodc_overview(
+            context,
+            rodc,
+            cached_accounts,
+            show_identity,
+        )
+        if principals is None:
+            return
+
+        if self.all_targets:
+            self._report_all_targets(context, rodc, targets, cacheability, principals)
+        elif self.target:
+            target = targets[0]
+            cached_dns = {_normalize_dn(principal) for principal in principals}
+            cache_state = _normalize_dn(target["distinguishedName"]) in cached_dns
+            result = self._cacheability_result(cacheability, target, rodc)
+            self._report_target(context, target, result, cache_state)
+        else:
+            self._report_cacheable_accounts(context, rodc, targets, cacheability)
+
+    def _stream_all_targets(self, context, connection, rodc, targets):
+        show_identity = not self._matches_rodc(rodc, connection.hostname)
+        principals = self._report_rodc_overview(context, rodc, None, show_identity)
+        if principals is None:
+            return
+
+        cached_dns = {_normalize_dn(principal) for principal in principals}
+        unavailable = 0
+        for target in targets:
+            target_cacheability = self._query_target_cacheability(connection, target)
+            if not self._report_all_target(
+                context,
+                rodc,
+                target,
+                target_cacheability,
+                cached_dns,
+            ):
+                unavailable += 1
+        self._report_unavailable(context, len(targets), unavailable, "account")
+
+    def _report_rodc_overview(self, context, rodc, cached_accounts, show_identity):
         account_name = rodc.get("sAMAccountName")
         hostname = rodc.get("dNSHostName")
         distinguished_name = rodc.get("distinguishedName")
         identity = account_name or hostname or distinguished_name
         if not identity:
             context.log.fail("RODC result did not include an identity")
-            return
+            return None
 
         if show_identity:
             label = f"{account_name} ({hostname})" if account_name and hostname else identity
-            context.log.display(f"RODC: {label}")
+            context.log.highlight(f"RODC: {label}")
         if distinguished_name:
             context.log.info(f"RODC DN: {distinguished_name}")
 
@@ -238,16 +318,41 @@ class NXCModule:
             self._report_attribute(context, rodc, attribute, summary_label, detail_label)
         metadata = _as_list(rodc.get("msDS-RevealedList"))
         principals = _revealed_principals(metadata)
-        self._report_cached_accounts(context, principals, cached_accounts)
+        if cached_accounts is not None:
+            self._report_cached_accounts(context, principals, cached_accounts)
+        return principals
+
+    def _report_all_targets(self, context, rodc, targets, cacheability, principals):
         cached_dns = {_normalize_dn(principal) for principal in principals}
-        if self.all_targets:
-            for target in targets:
-                if _normalize_dn(target["distinguishedName"]) in cached_dns:
-                    self._report_target(context, rodc, target, cacheability, True)
-        elif targets:
-            target_dn = targets[0]["distinguishedName"]
-            cache_state = _normalize_dn(target_dn) in cached_dns
-            self._report_target(context, rodc, targets[0], cacheability, cache_state)
+        unavailable = 0
+        for target in targets:
+            if not self._report_all_target(
+                context,
+                rodc,
+                target,
+                cacheability,
+                cached_dns,
+            ):
+                unavailable += 1
+
+        self._report_unavailable(context, len(targets), unavailable, "account")
+
+    def _report_all_target(
+        self,
+        context,
+        rodc,
+        target,
+        cacheability,
+        cached_dns,
+    ):
+        result = self._cacheability_result(cacheability, target, rodc)
+        if result is None:
+            return False
+
+        cache_state = _normalize_dn(target["distinguishedName"]) in cached_dns
+        if _is_cacheable(result) or cache_state:
+            self._report_target(context, target, result, cache_state)
+        return True
 
     @staticmethod
     def _report_krbtgt(context, rodc):
@@ -279,22 +384,65 @@ class NXCModule:
             context.log.highlight(f"  {label}")
             context.log.info(f"Cached account DN ({label}): {principal}")
 
+    def _report_cacheable_accounts(self, context, rodc, targets, cacheability):
+        cacheable = []
+        unavailable = 0
+        for target in targets:
+            result = self._cacheability_result(cacheability, target, rodc)
+            if result is None:
+                unavailable += 1
+            elif _is_cacheable(result):
+                cacheable.append(target)
+
+        if self._report_unavailable(
+            context, len(targets), unavailable, "cached account"
+        ):
+            return
+        if not cacheable:
+            context.log.highlight("Cacheable accounts: none")
+            return
+
+        context.log.highlight("Cacheable accounts:")
+        for target in cacheable:
+            label = target.get("sAMAccountName", "<unknown>")
+            context.log.highlight(f"  {label}")
+            target_dn = target.get("distinguishedName")
+            if target_dn:
+                context.log.info(f"Cacheable account DN ({label}): {target_dn}")
+
     @staticmethod
-    def _report_target(context, rodc, target, cacheability, cache_state):
-        target_name = target.get("sAMAccountName", "<unknown>")
+    def _cacheability_result(cacheability, target, rodc):
         target_dn = target.get("distinguishedName")
         rodc_dn = rodc.get("distinguishedName")
-        result = None
-        if target_dn and rodc_dn:
-            result = cacheability.get((_normalize_dn(target_dn), _normalize_dn(rodc_dn)))
+        if not target_dn or not rodc_dn:
+            return None
+        return cacheability.get((_normalize_dn(target_dn), _normalize_dn(rodc_dn)))
+
+    @staticmethod
+    def _report_unavailable(context, target_count, unavailable, subject):
+        if target_count and unavailable == target_count:
+            context.log.fail("PRP status unavailable")
+            context.log.fail("Query the RODC directly or check permissions")
+            return True
+
+        if unavailable:
+            subject_label = subject if unavailable == 1 else f"{subject}s"
+            context.log.info(
+                f"PRP status unavailable for {unavailable} {subject_label}; "
+                "query the RODC directly or check permissions"
+            )
+        return False
+
+    @staticmethod
+    def _report_target(context, target, result, cache_state):
+        target_name = target.get("sAMAccountName", "<unknown>")
         if result is None:
-            prefix = "cached; " if cache_state else ""
-            context.log.fail(f"{target_name}: {prefix}cacheability unavailable")
-            context.log.fail("Query the RODC directly or check directory permissions")
-        elif str(result) == "1":
+            context.log.fail(f"{target_name}: PRP status unavailable")
+            context.log.fail("Query the RODC directly or check permissions")
+        elif _is_cacheable(result):
             state = "cached" if cache_state else "cacheable"
             context.log.success(f"{target_name}: {state}")
         elif cache_state:
-            context.log.success(f"{target_name}: cached (PRP mismatch)")
+            context.log.fail(f"{target_name}: cached (PRP mismatch)")
         else:
             context.log.fail(f"{target_name}: not cacheable")
