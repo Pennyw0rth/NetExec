@@ -2,41 +2,20 @@
 # Which in turn stole from Impacket :)
 # Code refactored and added to by @mjhallenbeck (Marshall-Hallenbeck on GitHub)
 
-from impacket.dcerpc.v5 import transport, lsat, lsad, samr
+from impacket.dcerpc.v5 import lsat, lsad, samr
 from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.nmb import NetBIOSError
 from impacket.smbconnection import SessionError
+from nxc.helpers.rpc import NXCRPCConnection
 
 
 class SamrFunc:
     def __init__(self, connection):
         self.logger = connection.logger
-        self.addr = connection.host
-        self.remote_name = connection.remoteName
-        self.protocol = connection.args.port
-        self.username = connection.username
-        self.password = connection.password
-        self.domain = connection.domain
-        self.hash = connection.hash
-        self.lmhash = connection.lmhash
-        self.nthash = connection.nthash
-        self.aesKey = connection.aesKey
-        self.doKerberos = connection.kerberos
-        self.kdcHost = connection.kdcHost
-        self.host = connection.host
+        self.connection = connection
 
-        if self.hash is not None:
-            if self.hash.find(":") != -1:
-                self.lmhash, self.nthash = self.hash.split(":")
-            else:
-                self.nthash = self.hash
-
-        if self.password is None:
-            self.password = ""
-
-        self.samr_query = SAMRQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.remote_name, remote_host=self.host, lmhash=self.lmhash, nthash=self.nthash, kerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, logger=self.logger)
-        self.lsa_query = LSAQuery(username=self.username, password=self.password, domain=self.domain, remote_name=self.remote_name, remote_host=self.host, lmhash=self.lmhash, nthash=self.nthash, kdcHost=self.kdcHost, kerberos=self.doKerberos, aesKey=self.aesKey, logger=self.logger)
+        self.samr_query = SAMRQuery(connection=connection, logger=self.logger)
+        self.lsa_query = LSAQuery(connection=connection, logger=self.logger)
 
     def get_builtin_groups(self, group):
         domains = self.samr_query.get_domains()
@@ -85,54 +64,21 @@ class SamrFunc:
 
 
 class SAMRQuery:
-    def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", lmhash="", nthash="", kerberos=None, kdcHost="", aesKey="", logger=None):
-        self.__username = username
-        self.__password = password
-        self.__domain = domain
-        self.__lmhash = lmhash
-        self.__nthash = nthash
-        self.__aesKey = aesKey
-        self.__port = port
-        self.__remote_name = remote_name
-        self.__remote_host = remote_host
-        self.__kerberos = kerberos
-        self.__kdcHost = kdcHost
+    def __init__(self, connection=None, logger=None):
+        self.connection = connection
         self.logger = logger
         self.dce = self.get_dce()
         self.server_handle = self.get_server_handle()
 
-    def get_transport(self):
-        string_binding = rf"ncacn_np:{self.__port}[\pipe\samr]"
-        self.logger.debug(f"Binding to {string_binding}")
-        # using a direct SMBTransport instead of DCERPCTransportFactory since we need the filename to be '\samr'
-        return transport.SMBTransport(
-            self.__remote_name,
-            self.__port,
-            r"\samr",
-            self.__username,
-            self.__password,
-            self.__domain,
-            self.__lmhash,
-            self.__nthash,
-            self.__aesKey,
-            doKerberos=self.__kerberos,
-            kdcHost=self.__kdcHost,
-        )
-
     def get_dce(self):
-        rpc_transport = self.get_transport()
-        rpc_transport.setRemoteHost(self.__remote_host)
         try:
-            dce = rpc_transport.get_dce_rpc()
-            dce.connect()
-            dce.bind(samr.MSRPC_UUID_SAMR)
+            return NXCRPCConnection(self.connection).connect(r"\samr", samr.MSRPC_UUID_SAMR)
         except NetBIOSError as e:
             self.logger.error(f"NetBIOSError on Connection: {e}")
             return None
         except SessionError as e:
             self.logger.error(f"SessionError on Connection: {e}")
             return None
-        return dce
 
     def get_server_handle(self):
         if self.dce:
@@ -178,53 +124,18 @@ class SAMRQuery:
 
 
 class LSAQuery:
-    def __init__(self, username="", password="", domain="", port=445, remote_name="", remote_host="", lmhash="", nthash="", kdcHost="", aesKey="", kerberos=None, logger=None):
-        self.__username = username
-        self.__password = password
-        self.__domain = domain
-        self.__lmhash = lmhash
-        self.__nthash = nthash
-        self.__aesKey = aesKey
-        self.__port = port
-        self.__remote_name = remote_name
-        self.__remote_host = remote_host
-        self.__kdcHost = kdcHost
-        self.__kerberos = kerberos
+    def __init__(self, connection=None, logger=None):
+        self.connection = connection
+        self.logger = logger
         self.dce = self.get_dce()
         self.policy_handle = self.get_policy_handle()
-        self.logger = logger
-
-    def get_transport(self):
-        string_binding = f"ncacn_np:{self.__remote_name}[\\pipe\\lsarpc]"
-        rpc_transport = transport.DCERPCTransportFactory(string_binding)
-        rpc_transport.set_dport(self.__port)
-        rpc_transport.setRemoteHost(self.__remote_host)
-        if self.__kerberos:
-            rpc_transport.set_kerberos(self.__kerberos, self.__kdcHost)
-        if hasattr(rpc_transport, "set_credentials"):
-            # This method exists only for selected protocol sequences.
-            rpc_transport.set_credentials(
-                self.__username,
-                self.__password,
-                self.__domain,
-                self.__lmhash,
-                self.__nthash,
-                self.__aesKey,
-            )
-        return rpc_transport
 
     def get_dce(self):
-        rpc_transport = self.get_transport()
         try:
-            dce = rpc_transport.get_dce_rpc()
-            if self.__kerberos:
-                dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-            dce.connect()
-            dce.bind(lsat.MSRPC_UUID_LSAT)
+            return NXCRPCConnection(self.connection).connect(r"\lsarpc", lsat.MSRPC_UUID_LSAT)
         except NetBIOSError as e:
             self.logger.fail(f"NetBIOSError on Connection: {e}")
             return None
-        return dce
 
     def get_policy_handle(self):
         resp = lsad.hLsarOpenPolicy2(self.dce, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES)
