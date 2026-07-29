@@ -323,6 +323,7 @@ class NXCModule:
             results = self._query_target_cacheability(connection, target, rodcs)
             prp_available = any(result is not None for result in results.values())
             # One valid principal is enough to verify access before scanning all accounts.
+            # That or I'm lazy.
             if self.all_targets and target_index == 0 and not prp_available:
                 return None
 
