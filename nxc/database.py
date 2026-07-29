@@ -206,6 +206,7 @@ class BaseDB:
     def db_execute(self, *args):
         with self.lock:
             res = self.sess.execute(*args)
+            # freeze() buffers rows into memory before the lock is released, preventing other threads from invalidating the cursor mid-iteration
             return res.freeze()() if res.returns_rows else res
 
     def get_keys(self, key_id=None, cred_id=None):
