@@ -1,6 +1,7 @@
 import re
 from io import BytesIO
 from impacket.ldap import ldap as ldap_impacket
+from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
 
@@ -130,12 +131,19 @@ class NXCModule:
             privileges = self.extract_privileges(content)
             if privileges:
                 ldap_connection = None
+                base_dn = None
                 if not self.no_ldap:
                     ldap_connection = self.initialize_ldap_connection(connection)
+                    root = ldap_connection.search(
+                        scope=ldapasn1_impacket.Scope("baseObject"),
+                        attributes=["defaultNamingContext"],
+                        sizeLimit=0,
+                    )
+                    base_dn = parse_result_attributes(root)[0]["defaultNamingContext"]
 
                 self.context.log.success(f"Privileges extracted from {path}:")
                 for privilege, sids in privileges.items():
-                    resolved_sids = [self.resolve_sid(sid, ldap_connection) for sid in sids]
+                    resolved_sids = [self.resolve_sid(sid, ldap_connection, base_dn) for sid in sids]
                     self.context.log.highlight(f"{privilege}: {', '.join(resolved_sids)}")
 
                 if ldap_connection:
@@ -193,7 +201,7 @@ class NXCModule:
             return None
         return ldap_connection
 
-    def resolve_sid(self, sid, ldap_connection):
+    def resolve_sid(self, sid, ldap_connection, base_dn):
         """Resolves a SID to a human-readable name using well-known mappings or LDAP queries."""
         if sid in self.WELL_KNOWN_SIDS:
             return self.WELL_KNOWN_SIDS[sid]
@@ -201,11 +209,11 @@ class NXCModule:
         if ldap_connection:
             try:
                 resp = ldap_connection.search(
+                    searchBase=base_dn,
                     searchFilter=f"(objectSid={sid})",
                     attributes=["sAMAccountName"],
                 )
                 parsed_result = parse_result_attributes(resp)
-
                 if parsed_result and "sAMAccountName" in parsed_result[0]:
                     return f"{parsed_result[0]['sAMAccountName']}"
                 else:
