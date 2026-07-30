@@ -6,10 +6,6 @@ from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
 
 from impacket.smbconnection import SMBConnection
-from impacket.dcerpc.v5 import lsat, lsad
-from impacket.dcerpc.v5.rpcrt import DCERPCException, RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_AUTHN_GSS_NEGOTIATE
-from impacket.dcerpc.v5.transport import DCERPCTransportFactory
-from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
 
 
 class NXCModule:
@@ -29,6 +25,14 @@ class NXCModule:
     description = "Retrieves the MachineAccountQuota domain-level attribute and check SeMachineAccountPrivilege (GPO/SYSVOL)"
     supported_protocols = ["ldap"]
     category = CATEGORY.ENUMERATION
+
+    WELL_KNOWN_SIDS = {
+        "S-1-1-0": "Everyone",
+        "S-1-5-11": "Authenticated Users",
+        "S-1-5-18": "Local System",
+        "S-1-5-32-544": "Administrators",
+        "S-1-5-32-545": "Users",
+    }
 
     def options(self, context, module_options):
         """No options available"""
@@ -139,46 +143,20 @@ class NXCModule:
                 continue
 
             if sids != []:
-                sessions = {}
                 for sid in sids:
-                    sessions.setdefault(sid, {"Username": ""})
+                    if sid in self.WELL_KNOWN_SIDS:
+                        context.log.highlight(f'\t\t - "{self.WELL_KNOWN_SIDS[sid]}" ({sid})')
+                        continue
 
-                try:
-                    # Handle RPC connection
-                    string_binding = rf"ncacn_np:{connection.host}[\pipe\lsarpc]"
-                    rpctransport = DCERPCTransportFactory(string_binding)
-                    rpctransport.set_credentials(connection.username, connection.password, connection.domain, connection.lmhash, connection.nthash,)
-                    rpctransport.set_connect_timeout(15)
-                    dce = rpctransport.get_dce_rpc()
-                    if connection.kerberos:
-                        dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-                    dce.connect()
-                    dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
-                    dce.bind(lsat.MSRPC_UUID_LSAT)
-                except Exception as e:
-                    context.log.debug(f"Error connecting to {string_binding}: {e!s}")
-
-                try:
-                    # Getting the LSA policy
-                    policy_handle = lsad.hLsarOpenPolicy2(dce, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES)["PolicyHandle"]
-                except Exception as e:
-                    context.log.debug(f"Unable to get policy handle: {e!s}")
-                    return
-
-                try:
-                    # Sid translation (lookup sid)
-                    resp = lsat.hLsarLookupSids(dce, policy_handle, sessions.keys(), lsat.LSAP_LOOKUP_LEVEL.LsapLookupWksta)
-                except DCERPCException as e:
-                    if str(e).find("STATUS_SOME_NOT_MAPPED") >= 0:
-                        resp = e.get_packet()
-                        context.log.debug(f"Could not resolve some SIDs: {e}")
+                    resp = connection.search(
+                        searchFilter=f"(objectSid={sid})",
+                        attributes=["sAMAccountName"]
+                    )
+                    entries = parse_result_attributes(resp)
+                    if entries and entries[0].get("sAMAccountName"):
+                        context.log.highlight(f'\t\t - "{entries[0]["sAMAccountName"]}" ({sid})')
                     else:
-                        resp = None
-                        context.log.debug(f"Could not resolve SID(s): {e}")
-                if resp:
-                    for sid, item in zip(sessions.keys(), resp["TranslatedNames"]["Names"], strict=False):
-                        if item["DomainIndex"] >= 0:
-                            context.log.highlight(f'\t\t - "{item["Name"]}" ({sid})')
+                        context.log.debug(f"Could not resolve SID: {sid}")
 
             else:
                 context.log.fail("No SID(s) found in SeMachineAccountPrivilege")
