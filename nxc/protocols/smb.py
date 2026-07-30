@@ -200,11 +200,8 @@ class smb(connection):
                 self.no_ntlm = True
                 self.logger.debug("NTLM not supported")
 
-        # The Kerberos/MSRPC DC probes reach out to ports 88/135; only allow them
-        # when the DC answer is actually consumed, so a plain scan (especially
-        # over a pivot) stays on the SMB session it already holds. Tier 1 (SMB)
-        # runs regardless, so DCs are still flagged whenever a null session works.
-        need_dc = bool(self.args.generate_hosts_file or self.args.generate_krb5_file or self.args.generate_tgt)
+        aggressive_check = bool(self.args.generate_hosts_file or self.args.generate_krb5_file)
+        self.is_host_dc(aggressive_check=aggressive_check)
 
         # self.domain is the attribute we authenticate with
         # self.targetDomain is the attribute which gets displayed as host domain
@@ -220,10 +217,8 @@ class smb(connection):
             self.targetDomain = self.conn.getServerDNSDomainName()
             if not self.targetDomain:   # Not sure if that can even happen but now we are safe
                 self.targetDomain = self.hostname
-            self.is_host_dc(allow_network_probes=need_dc)  # SMB (Tier 1) suffices when NTLM is up
         else:
             try:
-                self.is_host_dc(allow_network_probes=need_dc)  # no NTLM: needs 88/135 if the DC answer is wanted
                 # If we know the host is a DC we can still get the hostname over LDAP if NTLM is not available
                 if self.isdc and detect_if_ip(self.host):
                     self.hostname, self.domain = LDAPResolution(self.host).get_resolution()
@@ -850,12 +845,12 @@ class smb(connection):
         except Exception as e:
             self.logger.fail(f"Failed to get ST: {e}")
 
-    def is_host_dc(self, allow_network_probes=False):
+    def is_host_dc(self, aggressive_check=False):
         if self.isdc is not None:
             return self.isdc
 
         probes = [self._is_dc_via_smb]
-        if allow_network_probes:
+        if aggressive_check:
             probes += [self._is_dc_via_rpc, self._is_dc_via_kerberos]
 
         for probe in probes:
@@ -864,7 +859,7 @@ class smb(connection):
                 self.isdc = result
                 return self.isdc
         # inconclusive if all probes return None
-        if allow_network_probes:
+        if aggressive_check:
             self.isdc = False
         return self.isdc
 
