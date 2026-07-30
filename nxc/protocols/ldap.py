@@ -465,14 +465,9 @@ class ldap(connection):
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.target}"
             authentication_choice = "external" if self.args.schannel else self.auth_choice
-            self.logger.info(f"Connecting to {ldap_url} using Schannel" if self.args.schannel else f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3]")
+            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} using Schannel" if self.args.schannel else f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3]")
             self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=self.auth_choice != "simple", timeout=self.args.ldap_timeout, certfile=cert_file, keyfile=key_file)
             self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=authentication_choice)
-
-            if self.args.schannel:
-                mapped_user = self.get_ldap_username()
-                if mapped_user:
-                    self.username = mapped_user
 
             self.check_if_admin()
 
