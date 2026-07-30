@@ -82,6 +82,16 @@ def proto_args(parser, parents):
     spidering_group.add_argument("--content", action="store_true", help="enable file content searching")
     spidering_group.add_argument("--exclude-dirs", type=str, metavar="DIR_LIST", default="", help="directories to exclude from spidering")
     spidering_group.add_argument("--depth", type=int, help="max spider recursion depth")
+    spidering_group.add_argument(
+        "--spider-sensitive",
+        action="store_true",
+        default=False,
+        dest="spider_sensitive",
+        help=(
+            "When spidering, flag files matching sensitive extensions: "
+            ".kdbx .pfx .p12 .pem .key .ppk .ovpn .rdp .config .conf .cfg .env .xml .ini .id_rsa .vnc"
+        ),
+    )
     spidering_group.add_argument("--only-files", action="store_true", help="only spider files")
     spidering_group.add_argument("--silent", action="store_true", help="Do not print found files/directories", default=False)
     segroup = spidering_group.add_mutually_exclusive_group()

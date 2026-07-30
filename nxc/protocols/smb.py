@@ -1942,6 +1942,12 @@ class smb(connection):
             dcom.disconnect()
         return records
 
+    SENSITIVE_EXTENSIONS = [
+        ".kdbx", ".pfx", ".p12", ".pem", ".key", ".ppk",
+        ".ovpn", ".rdp", ".config", ".conf", ".cfg",
+        ".env", ".xml", ".ini", ".id_rsa", ".vnc",
+    ]
+
     def spider(
         self,
         share=None,
@@ -1961,6 +1967,15 @@ class smb(connection):
         if pattern is None:
             pattern = []
         spider = SMBSpider(self.conn, self.logger)
+
+        if self.args.spider_sensitive:
+            import re as _re
+            ext_regex = r"(?i)(" + "|".join(_re.escape(e) for e in self.SENSITIVE_EXTENSIONS) + r")$"
+            self.args.regex = (self.args.regex or []) + [ext_regex]
+            self.logger.display(
+                "spider-sensitive active — extensions: "
+                + ", ".join(self.SENSITIVE_EXTENSIONS)
+            )
         if not silent:
             self.logger.display("Started spidering")
         start_time = time()
@@ -2230,7 +2245,7 @@ class smb(connection):
 
         if self.args.pvk is not None:
             try:
-                self.pvkbytes = open(self.args.pvk, "rb").read()  # noqa: SIM115
+                self.pvkbytes = open(self.args.pvk, "rb").read()  # ruff: ignore[open-file-with-context-handler]
                 self.logger.success(f"Loading domain backupkey from {self.args.pvk}")
             except Exception as e:
                 self.logger.fail(str(e))
@@ -2253,7 +2268,7 @@ class smb(connection):
             use_kcache=self.use_kcache,
         )
 
-        self.output_file = open(self.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # noqa: SIM115
+        self.output_file = open(self.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # ruff: ignore[open-file-with-context-handler]
 
         conn = upgrade_to_dploot_connection(connection=self.conn, target=target)
         if conn is None:
