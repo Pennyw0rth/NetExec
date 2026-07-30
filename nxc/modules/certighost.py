@@ -958,7 +958,8 @@ class NXCModule:
         if not comp:
             return
 
-        self.context.log.highlight(f"CA: {ca['cn']} ({ca['ip']}) | DC target: {dc_info.sam} ({dc_info.dns})")
+        target_label = "Target" if self.target else "DC target"
+        self.context.log.highlight(f"CA: {ca['cn']} ({ca['ip']}) | {target_label}: {dc_info.sam} ({dc_info.dns})")
         for name in ("impacket", "impacket.smbserver", "impacket.dcerpc"):
             logging.getLogger(name).setLevel(logging.CRITICAL)
 
