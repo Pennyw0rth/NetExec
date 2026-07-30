@@ -5,7 +5,9 @@ from io import BytesIO
 from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
 
-from impacket.smbconnection import SMBConnection
+from impacket.smbconnection import SMBConnection, SessionError
+from impacket.nmb import NetBIOSError, NetBIOSTimeout
+from impacket.krb5.kerberosv5 import KerberosError
 
 
 class NXCModule:
@@ -62,6 +64,7 @@ class NXCModule:
                 remoteName=connection.hostname,
                 remoteHost=connection.host,
                 sess_port=445,
+                timeout=connection.args.timeout or 3,
         )
 
         if connection.kerberos:
@@ -111,7 +114,13 @@ class NXCModule:
         guids = re.findall(r"(?i)cn=\{([0-9a-f\-]{36})\}", gplink)
         context.log.debug(f"GUID founds: {guids}")
 
-        smb = self.connect_smb(connection)
+        try:
+            smb = self.connect_smb(connection)
+        except (OSError, SessionError, NetBIOSError, NetBIOSTimeout, KerberosError) as e:
+            context.log.debug(f"Unable to connect to SYSVOL through SMB: {e}")
+            return
+
+        context.log.display("Getting SeMachineAccountPrivilege")
 
         for guid in guids:
             # Accessing the GPO in the SYSVOL share to parse GptTmpl.inf
@@ -176,7 +185,5 @@ class NXCModule:
             return
 
         context.log.highlight(f"MachineAccountQuota: {entries[0]['ms-DS-MachineAccountQuota']}")
-
-        context.log.display("Getting SeMachineAccountPrivilege")
 
         self.get_SeMachineAccountPrivilege(context, connection)
