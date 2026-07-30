@@ -141,8 +141,10 @@ class NXCModule:
                         attributes=["sAMAccountName"]
                     )
                     entries = parse_result_attributes(resp)
-                    if entries:
+                    if entries and entries[0].get("sAMAccountName"):
                         context.log.highlight(f'\t\t - "{entries[0]["sAMAccountName"]}" ({sid})')
+                    else:
+                        context.log.debug(f"Could not resolve SID: {sid}")
 
             else:
                 context.log.fail("No SID(s) found in SeMachineAccountPrivilege")
