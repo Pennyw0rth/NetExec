@@ -359,6 +359,17 @@ class smb(connection):
 
         return self.host, self.hostname, self.targetDomain
 
+    @contextlib.contextmanager
+    def auth_timeout(self):
+        self.conn.setTimeout(self.args.smb_timeout + 1)
+        self.logger.debug(f"Increased timeout to {self.args.smb_timeout + 1} seconds")
+        try:
+            yield
+        finally:
+            with contextlib.suppress(Exception):
+                self.conn.setTimeout(self.args.smb_timeout)
+                self.logger.debug(f"Decreased timeout to {self.args.smb_timeout} seconds")
+
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.logger.debug(f"KDC set to: {kdcHost}")
         # Re-connect since we logged off
@@ -403,7 +414,8 @@ class smb(connection):
                 if self.args.generate_st:
                     self.save_st(tgs, sk, spn if self.args.spn else None)
 
-            self.conn.kerberosLogin(self.username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache=useCache, TGS=tgs)
+            with self.auth_timeout():
+                self.conn.kerberosLogin(self.username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache=useCache, TGS=tgs)
 
             if self.args.generate_st:
                 try:
@@ -489,14 +501,8 @@ class smb(connection):
             self.username = username
             self.domain = domain
 
-            self.conn.setTimeout(self.args.smb_timeout + 1)
-            self.logger.debug(f"Increased timeout to {self.args.smb_timeout + 1} seconds")
-
-            self.conn.login(self.username, self.password, domain)
-
-            self.conn.setTimeout(self.args.smb_timeout)
-            self.logger.debug(f"Decreased timeout to {self.args.smb_timeout} seconds")
-
+            with self.auth_timeout():
+                self.conn.login(self.username, self.password, domain)
             self.logger.debug(f"Logged in with password to SMB with {domain}/{self.username}")
             self.is_guest = bool(self.conn.isGuestSession())
             self.logger.debug(f"{self.is_guest=}")
@@ -564,14 +570,8 @@ class smb(connection):
             if nthash:
                 self.nthash = nthash
 
-            self.conn.setTimeout(self.args.smb_timeout + 1)
-            self.logger.debug(f"Increased timeout to {self.args.smb_timeout + 1} seconds")
-
-            self.conn.login(self.username, "", domain, lmhash, nthash)
-
-            self.conn.setTimeout(self.args.smb_timeout)
-            self.logger.debug(f"Decreased timeout to {self.args.smb_timeout} seconds")
-
+            with self.auth_timeout():
+                self.conn.login(self.username, "", domain, lmhash, nthash)
             self.logger.debug(f"Logged in with hash to SMB with {domain}/{self.username}")
             self.is_guest = bool(self.conn.isGuestSession())
             self.logger.debug(f"{self.is_guest=}")
