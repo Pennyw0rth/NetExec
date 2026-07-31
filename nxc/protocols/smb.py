@@ -503,7 +503,7 @@ class smb(connection):
 
             with self.auth_timeout():
                 self.conn.login(self.username, self.password, domain)
-            self.logger.debug(f"Logged in with password to SMB with {domain}/{self.username}")
+                self.logger.debug(f"Logged in with password to SMB with {domain}/{self.username}")
             self.is_guest = bool(self.conn.isGuestSession())
             self.logger.debug(f"{self.is_guest=}")
             if "Unix" not in self.server_os:
@@ -572,7 +572,7 @@ class smb(connection):
 
             with self.auth_timeout():
                 self.conn.login(self.username, "", domain, lmhash, nthash)
-            self.logger.debug(f"Logged in with hash to SMB with {domain}/{self.username}")
+                self.logger.debug(f"Logged in with hash to SMB with {domain}/{self.username}")
             self.is_guest = bool(self.conn.isGuestSession())
             self.logger.debug(f"{self.is_guest=}")
             if "Unix" not in self.server_os:
