@@ -361,7 +361,15 @@ class smb(connection):
 
     # check https://github.com/Pennyw0rth/NetExec/issues/1077
     @contextlib.contextmanager
-    def auth_timeout(self):
+    def increase_auth_timeout(self):
+        """
+        Windows Server 2025 and later implemented a rate limiter for NTLM authentication attempts:
+        https://learn.microsoft.com/en-us/windows-server/storage/file-server/configure-smb-authentication-rate-limiter
+
+        Therefore, we increase the timeout for the authentication process by 1 in order to overcome the 2 seconds rate limit
+        that would otherwise result in a NetBIOSTimeout exception for invalid credentials.
+        Also see: https://github.com/Pennyw0rth/NetExec/issues/1077
+        """
         self.conn.setTimeout(self.args.smb_timeout + 1)
         self.logger.debug(f"Increased timeout to {self.args.smb_timeout + 1} seconds")
         try:
@@ -501,7 +509,7 @@ class smb(connection):
             self.username = username
             self.domain = domain
 
-            with self.auth_timeout():
+            with self.increase_auth_timeout():
                 self.conn.login(self.username, self.password, domain)
                 self.logger.debug(f"Logged in with password to SMB with {domain}/{self.username}")
             self.is_guest = bool(self.conn.isGuestSession())
@@ -570,7 +578,7 @@ class smb(connection):
             if nthash:
                 self.nthash = nthash
 
-            with self.auth_timeout():
+            with self.increase_auth_timeout():
                 self.conn.login(self.username, "", domain, lmhash, nthash)
                 self.logger.debug(f"Logged in with hash to SMB with {domain}/{self.username}")
             self.is_guest = bool(self.conn.isGuestSession())
