@@ -361,7 +361,6 @@ class smb(connection):
 
         return self.host, self.hostname, self.targetDomain
 
-    # check https://github.com/Pennyw0rth/NetExec/issues/1077
     @contextlib.contextmanager
     def increase_auth_timeout(self):
         """
