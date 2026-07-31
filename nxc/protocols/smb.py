@@ -489,7 +489,14 @@ class smb(connection):
             self.username = username
             self.domain = domain
 
+            self.conn.setTimeout(self.args.smb_timeout + 1)
+            self.logger.debug(f"Increased timeout to {self.args.smb_timeout + 1} seconds")
+
             self.conn.login(self.username, self.password, domain)
+
+            self.conn.setTimeout(self.args.smb_timeout)
+            self.logger.debug(f"Decreased timeout to {self.args.smb_timeout} seconds")
+
             self.logger.debug(f"Logged in with password to SMB with {domain}/{self.username}")
             self.is_guest = bool(self.conn.isGuestSession())
             self.logger.debug(f"{self.is_guest=}")
@@ -557,7 +564,14 @@ class smb(connection):
             if nthash:
                 self.nthash = nthash
 
+            self.conn.setTimeout(self.args.smb_timeout + 1)
+            self.logger.debug(f"Increased timeout to {self.args.smb_timeout + 1} seconds")
+
             self.conn.login(self.username, "", domain, lmhash, nthash)
+
+            self.conn.setTimeout(self.args.smb_timeout)
+            self.logger.debug(f"Decreased timeout to {self.args.smb_timeout} seconds")
+
             self.logger.debug(f"Logged in with hash to SMB with {domain}/{self.username}")
             self.is_guest = bool(self.conn.isGuestSession())
             self.logger.debug(f"{self.is_guest=}")
