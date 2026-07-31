@@ -359,6 +359,26 @@ class smb(connection):
 
         return self.host, self.hostname, self.targetDomain
 
+    # check https://github.com/Pennyw0rth/NetExec/issues/1077
+    @contextlib.contextmanager
+    def increase_auth_timeout(self):
+        """
+        Windows Server 2025 and later implemented a rate limiter for NTLM authentication attempts:
+        https://learn.microsoft.com/en-us/windows-server/storage/file-server/configure-smb-authentication-rate-limiter
+
+        Therefore, we increase the timeout for the authentication process by 1 in order to overcome the 2 seconds rate limit
+        that would otherwise result in a NetBIOSTimeout exception for invalid credentials.
+        Also see: https://github.com/Pennyw0rth/NetExec/issues/1077
+        """
+        self.conn.setTimeout(self.args.smb_timeout + 1)
+        self.logger.debug(f"Increased timeout to {self.args.smb_timeout + 1} seconds")
+        try:
+            yield
+        finally:
+            with contextlib.suppress(Exception):
+                self.conn.setTimeout(self.args.smb_timeout)
+                self.logger.debug(f"Decreased timeout to {self.args.smb_timeout} seconds")
+
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.logger.debug(f"KDC set to: {kdcHost}")
         # Re-connect since we logged off
@@ -489,8 +509,9 @@ class smb(connection):
             self.username = username
             self.domain = domain
 
-            self.conn.login(self.username, self.password, domain)
-            self.logger.debug(f"Logged in with password to SMB with {domain}/{self.username}")
+            with self.increase_auth_timeout():
+                self.conn.login(self.username, self.password, domain)
+                self.logger.debug(f"Logged in with password to SMB with {domain}/{self.username}")
             self.is_guest = bool(self.conn.isGuestSession())
             self.logger.debug(f"{self.is_guest=}")
             if "Unix" not in self.server_os:
@@ -557,8 +578,9 @@ class smb(connection):
             if nthash:
                 self.nthash = nthash
 
-            self.conn.login(self.username, "", domain, lmhash, nthash)
-            self.logger.debug(f"Logged in with hash to SMB with {domain}/{self.username}")
+            with self.increase_auth_timeout():
+                self.conn.login(self.username, "", domain, lmhash, nthash)
+                self.logger.debug(f"Logged in with hash to SMB with {domain}/{self.username}")
             self.is_guest = bool(self.conn.isGuestSession())
             self.logger.debug(f"{self.is_guest=}")
             if "Unix" not in self.server_os:
