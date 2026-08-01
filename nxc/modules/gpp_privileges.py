@@ -134,12 +134,7 @@ class NXCModule:
                 base_dn = None
                 if not self.no_ldap:
                     ldap_connection = self.initialize_ldap_connection(connection)
-                    root = ldap_connection.search(
-                        scope=ldapasn1_impacket.Scope("baseObject"),
-                        attributes=["defaultNamingContext"],
-                        sizeLimit=0,
-                    )
-                    base_dn = parse_result_attributes(root)[0]["defaultNamingContext"]
+                    base_dn = self.get_basedn(ldap_connection)
 
                 self.context.log.success(f"Privileges extracted from {path}:")
                 for privilege, sids in privileges.items():
@@ -148,6 +143,14 @@ class NXCModule:
 
                 if ldap_connection:
                     ldap_connection.close()
+
+    def get_basedn(self, ldap_connection):
+        root = ldap_connection.search(
+                        scope=ldapasn1_impacket.Scope("baseObject"),
+                        attributes=["defaultNamingContext"],
+                        sizeLimit=0,
+                    )
+        return parse_result_attributes(root)[0]["defaultNamingContext"]
 
     def extract_privileges(self, content):
         """Parses the content of GptTmpl.inf to extract privilege rights."""
