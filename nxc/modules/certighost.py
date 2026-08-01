@@ -754,11 +754,7 @@ class NXCModule:
     def enumerate_certificate_authorities(self):
         search_base = f"CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,{self.connection.baseDN}"
         try:
-            resp = self.connection.search(
-                searchFilter="(objectClass=pKIEnrollmentService)",
-                attributes=["cn", "dNSHostName"],
-                baseDN=search_base,
-            )
+            resp = self.connection.search(searchFilter="(objectClass=pKIEnrollmentService)", attributes=["cn", "dNSHostName"], baseDN=search_base)
         except Exception as e:
             self.context.log.debug(f"LDAP CA search failed: {e}")
             return []
