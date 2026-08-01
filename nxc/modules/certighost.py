@@ -784,11 +784,8 @@ class NXCModule:
             err_msg = "No Domain Controller found via LDAP"
 
         try:
-            resp = self.connection.search(
-                searchFilter=search_filter,
-                attributes=["dNSHostName", "sAMAccountName", "objectSid"],
-                sizeLimit=1,
-            )
+            # No sizeLimit: multi-DC domains hit sizeLimitExceeded and the core drops results
+            resp = self.connection.search(searchFilter=search_filter, attributes=["dNSHostName", "sAMAccountName", "objectSid"],)
         except Exception as e:
             self.context.log.fail(f"LDAP search failed: {e}")
             return None
@@ -915,6 +912,12 @@ class NXCModule:
     def run_exploit(self, cas):
         ca = self.select_target_ca(cas)
         if not ca:
+            return
+
+        # cdc-chase fails if the CA is on a DC: chased auth uses a machine account that NetrLogonSamLogon rejects
+        ca_on_dc = self.connection.search(searchFilter=f"(&(objectCategory=computer)(dNSHostName={ca['dNSHostName']})(userAccountControl:1.2.840.113556.1.4.803:=8192))", attributes=["dNSHostName"])
+        if parse_result_attributes(ca_on_dc):
+            self.context.log.fail(f"CA '{ca['cn']}' runs on a DC ({ca['dNSHostName']}), cdc-chase requires a CA on a member server")
             return
 
         dc_info = self.get_target_dc()
