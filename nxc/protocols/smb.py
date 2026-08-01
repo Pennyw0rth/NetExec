@@ -2255,7 +2255,13 @@ class smb(connection):
 
             def add_lsa_secret(secret):
                 add_lsa_secret.secrets += 1
-                self.logger.highlight(secret)
+                if "dpapi_machinekey" not in secret:
+                    self.logger.highlight(secret)
+                else:
+                    correl_table = {"dpapi_machinekey": "MachineKey", "dpapi_userkey": "UserKey"}
+                    self.dpapi_system_key = {correl_table[k]: binascii.unhexlify(v[2:]) for k, v in (elem.split(":") for elem in secret.splitlines())}
+                    self.logger.highlight(f"dpapi_machinekey:{self.dpapi_system_key['MachineKey'].hex()}")
+                    self.logger.highlight(f"dpapi_userkey:{self.dpapi_system_key['UserKey'].hex()}")
                 if "_SC_GMSA_{84A78B8C" in secret:
                     gmsa_id = secret.split("_")[4].split(":")[0]
                     data = bytes.fromhex(secret.split("_")[4].split(":")[1])
@@ -2266,9 +2272,6 @@ class smb(connection):
                     ntlm_hash.update(currentPassword)
                     passwd = binascii.hexlify(ntlm_hash.digest()).decode("utf-8")
                     self.logger.highlight(f"GMSA ID: {gmsa_id:<20} NTLM: {passwd}")
-                if "dpapi_machinekey" in secret:
-                    correl_table = {"dpapi_machinekey": "MachineKey", "dpapi_userkey": "UserKey"}
-                    self.dpapi_system_key = {correl_table[k]: binascii.unhexlify(v[2:]) for k, v in (elem.split(":") for elem in secret.splitlines())}
 
             add_lsa_secret.secrets = 0
 

@@ -398,10 +398,13 @@ class winrm(connection):
             boot_key = local_operations.getBootKey()
 
             def lsa_secret_callback(_, secret):
-                self.logger.highlight(secret)
-                if "dpapi_machinekey" in secret:
+                if "dpapi_machinekey" not in secret:
+                    self.logger.highlight(secret)
+                else:
                     correl_table = {"dpapi_machinekey": "MachineKey", "dpapi_userkey": "UserKey"}
                     self.dpapi_system_key = {correl_table[k]: binascii.unhexlify(v[2:]) for k, v in (elem.split(":") for elem in secret.splitlines())}
+                    self.logger.highlight(f"dpapi_machinekey:{self.dpapi_system_key['MachineKey'].hex()}")
+                    self.logger.highlight(f"dpapi_userkey:{self.dpapi_system_key['UserKey'].hex()}")
             LSA = LSASecrets(
                 f"{output_filename}.security",
                 boot_key,
