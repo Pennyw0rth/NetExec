@@ -35,6 +35,4 @@ class NXCModule:
                     context.log.highlight(mkhash)
 
         except Exception as e:
-            import traceback
-            traceback.print_exc()
             context.log.debug(f"Could not get masterkeys: {e}")

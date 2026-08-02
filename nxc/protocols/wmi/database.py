@@ -79,12 +79,7 @@ class database(BaseDB):
         self.DpapiSecretsTable = self.reflect_table(self.DpapiSecret)
         self.DpapiBackupkeyTable = self.reflect_table(self.DpapiBackupKey)
 
-    def add_host(
-        self,
-        ip,
-        hostname,
-        port,
-    ):
+    def add_host(self, ip, hostname, port):
         """Check if this host has already been added to the database, if not, add it in."""
         hosts = []
         updated_ids = []
