@@ -1,4 +1,5 @@
 # PYTHON_ARGCOMPLETE_OK
+import contextlib
 import sys
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import identify_target_file, display_modules
@@ -17,6 +18,7 @@ from nxc.database import create_db_engine
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
 from nxc.helpers import powershell
+import signal
 import shutil
 import os
 from os.path import exists
@@ -67,7 +69,19 @@ async def start_run(protocol_obj, args, db, targets):  # noqa: RUF029
             nxc_logger.exception(f"Exception for target {targets[futures.index(future)]}: {future.exception()}")
 
 
+def ctrl_c(sig, frame):
+    nxc_logger.debug("Got keyboard interrupt")
+    with contextlib.suppress(Exception):
+        if hasattr(nxc_console, "_live_stack") and nxc_console._live_stack:
+            for live in nxc_console._live_stack:
+                live.stop()
+        nxc_console.show_cursor(True)
+    nxc_logger.highlight("[!] Interrupted, exiting.")
+    os._exit(0)
+
+
 def main():
+    signal.signal(signal.SIGINT, ctrl_c)
     first_run_setup(nxc_logger)
     args, version_info = gen_cli_args()
 
@@ -209,8 +223,6 @@ def main():
 
     try:
         asyncio.run(start_run(protocol_object, args, db, targets))
-    except KeyboardInterrupt:
-        nxc_logger.debug("Got keyboard interrupt")
     finally:
         db_engine.dispose()
 
