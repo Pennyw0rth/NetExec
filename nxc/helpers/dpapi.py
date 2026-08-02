@@ -77,7 +77,7 @@ class DPAPITriage:
         if context.args.dpapi is not None:
             self.dump_cookies = "cookies" in context.args.dpapi
 
-        # Variables to know what materkey types have already been dumped 
+        # Variables to know what materkey types have already been dumped
         self.system_masterkeys_already_dumped = False
         self.users_masterkeys_already_dumped = False
 
@@ -170,6 +170,7 @@ class DPAPITriage:
     def triage_credentials(self, masterkeys: list[Masterkey]):
         credential_counter = 0
         # Collect User and Machine Credentials Manager secrets
+
         def credential_callback(credential):
             credential_counter += 1
             tag = "CREDENTIAL"
@@ -249,11 +250,12 @@ class DPAPITriage:
             browser_triage.triage_browsers(gather_cookies=self.dump_cookies, cng_chromekey=cng_chromekey)
         except Exception as e:
             self.context.logger.debug(f"Error while looting browsers: {e}")
-        
+
         return credential_counter
 
     def triage_vaults(self, masterkeys: list[Masterkey]):
         credential_counter = 0
+
         def vault_callback(secret):
             credential_counter += 1
             tag = "IEX"
@@ -283,6 +285,7 @@ class DPAPITriage:
 
     def triage_firefox(self):
         credential_counter = 0
+
         def firefox_callback(secret):
             credential_counter += 1
             tag = "FIREFOX"
@@ -312,14 +315,14 @@ class DPAPITriage:
             firefox_triage.run(gather_cookies=self.dump_cookies)
         except Exception as e:
             self.logger.debug(f"Error while looting firefox: {e}")
-        
+
         return credential_counter
 
     # The dpapi function for every protocol
     def triage_dpapi(self):
         # Get the handle of the output file, this will be use by every triage functions to write looted secrets in there
         self.output_file = open(self.context.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # noqa: SIM115
-        
+
         # Load masterkeys
         masterkeys = self.collect_masterkeys_from_target(dump_users=True, dump_system="nosystem" not in self.context.args.dpapi)
         if len(masterkeys) == 0:
@@ -410,7 +413,7 @@ class DPAPITriage:
             return self._pvkbytes
 
         pvkbytes = None
-        
+
         # First check the pvk argument and handle it
         if hasattr(self.context.args, "pvk") and self.context.args.pvk is not None:
             try:
@@ -457,6 +460,6 @@ class DPAPITriage:
                     self.context.no_da = False
             except Exception as e:
                 self.context.logger.fail(f"Could not get domain backupkey: {e}")
-                
+
         self._pvkbytes = pvkbytes
         return self._pvkbytes
