@@ -35,15 +35,18 @@ import base64
 
 from binascii import unhexlify, hexlify
 
-from oscrypto.keys import parse_pkcs12, parse_certificate, parse_private
-from oscrypto.asymmetric import rsa_pkcs1v15_sign, load_private_key
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.hazmat.primitives.serialization import pkcs12
 
 from asn1crypto import cms
 from asn1crypto import algos
 from asn1crypto import core
 from asn1crypto import keys
+from asn1crypto import pem
+from asn1crypto import x509
 
-from minikerberos.pkinit import PKINIT, DirtyDH
+from minikerberos.protocol.dirtydh import DirtyDH
 from minikerberos.protocol.constants import NAME_TYPE, PaDataType
 from minikerberos.protocol.encryption import Enctype, _enctype_table, Key
 from minikerberos.protocol.asn1_structs import KDC_REQ_BODY, PrincipalName, KDCOptions, EncASRepPart, AS_REQ, PADATA_TYPE, PA_PAC_REQUEST
@@ -71,11 +74,36 @@ from nxc.paths import NXC_PATH
 from nxc.logger import nxc_logger
 
 
-class myPKINIT(PKINIT):
+def _load_asn1_certificate(data):
+    """Load a certificate as an asn1crypto object, accepting both PEM and DER input"""
+    if pem.detect(data):
+        _, _, data = pem.unarmor(data)
+    return x509.Certificate.load(data)
+
+
+def _check_rsa_privkey(privkey):
+    """PKINIT signing here is RSA PKCS#1 v1.5 only, so reject anything else early"""
+    if not isinstance(privkey, rsa.RSAPrivateKey):
+        raise Exception(f"PKINIT requires an RSA private key, got {type(privkey).__name__}")
+    return privkey
+
+
+class myPKINIT:
     """
     Copy of minikerberos PKINIT
     With some changes where it differs from PKINIT used in NegoEx
     """
+
+    def __init__(self):
+        self.privkeyinfo = None
+        self.privkey = None
+        self.certificate = None
+        self.extra_certs = None
+        self.user_sid = None
+        self.user_name = None
+        self.issuer = None
+        self.cname = None
+        self.diffie = None
 
     @staticmethod
     def from_pfx(pfxfile, pfxpass, dh_params=None, b64=False):
@@ -90,26 +118,15 @@ class myPKINIT(PKINIT):
     @staticmethod
     def from_pfx_data(pfxdata, pfxpass, dh_params=None):
         pkinit = myPKINIT()
-        # oscrypto does not seem to support pfx without password, so convert it to PEM using cryptography instead
-        if not pfxpass:
-            from cryptography.hazmat.primitives.serialization import pkcs12
-            from cryptography.hazmat.primitives import serialization
-            privkey, cert, extra_certs = pkcs12.load_key_and_certificates(pfxdata, None)
-            pem_key = privkey.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.TraditionalOpenSSL,
-                encryption_algorithm=serialization.NoEncryption(),
-            )
-            pkinit.privkey = load_private_key(parse_private(pem_key))
-            pem_cert = cert.public_bytes(
-                encoding=serialization.Encoding.PEM
-            )
-            pkinit.certificate = parse_certificate(pem_cert)
-        else:
-            if isinstance(pfxpass, str):
-                pfxpass = pfxpass.encode()
-            pkinit.privkeyinfo, pkinit.certificate, pkinit.extra_certs = parse_pkcs12(pfxdata, password=pfxpass)
-            pkinit.privkey = load_private_key(pkinit.privkeyinfo)
+        if isinstance(pfxpass, str):
+            pfxpass = pfxpass.encode()
+        # cryptography requires None (not an empty password) for a pfx without password
+        privkey, cert, extra_certs = pkcs12.load_key_and_certificates(pfxdata, pfxpass if pfxpass else None)
+        if cert is None:
+            raise Exception("No certificate found in the PFX file")
+        pkinit.privkey = _check_rsa_privkey(privkey)
+        pkinit.certificate = x509.Certificate.load(cert.public_bytes(serialization.Encoding.DER))
+        pkinit.extra_certs = [x509.Certificate.load(extra.public_bytes(serialization.Encoding.DER)) for extra in extra_certs or []]
         pkinit.setup(dh_params=dh_params)
         return pkinit
 
@@ -117,9 +134,16 @@ class myPKINIT(PKINIT):
     def from_pem(certfile, privkeyfile, dh_params=None):
         pkinit = myPKINIT()
         with open(certfile, "rb") as f:
-            pkinit.certificate = parse_certificate(f.read())
+            pkinit.certificate = _load_asn1_certificate(f.read())
         with open(privkeyfile, "rb") as f:
-            pkinit.privkey = load_private_key(parse_private(f.read()))
+            keydata = f.read()
+        try:
+            privkey = serialization.load_pem_private_key(keydata, password=None)
+        except TypeError as e:
+            raise Exception(f"Private key {privkeyfile} is password protected, which is not supported. Decrypt it first with: openssl rsa -in {privkeyfile} -out decrypted.pem") from e
+        except ValueError:
+            privkey = serialization.load_der_private_key(keydata, password=None)
+        pkinit.privkey = _check_rsa_privkey(privkey)
         pkinit.setup(dh_params=dh_params)
         return pkinit
 
@@ -237,7 +261,7 @@ class myPKINIT(PKINIT):
             cms.CMSAttribute({"type": "message_digest", "values": [hashlib.sha1(data).digest()]}),  # hash of the data, the data itself will not be signed, but this block of data will be.
         ]
         si["signature_algorithm"] = algos.SignedDigestAlgorithm({"algorithm": "1.2.840.113549.1.1.1"})
-        si["signature"] = rsa_pkcs1v15_sign(self.privkey, cms.CMSAttributes(si["signed_attrs"]).dump(), "sha1")
+        si["signature"] = self.privkey.sign(cms.CMSAttributes(si["signed_attrs"]).dump(), padding.PKCS1v15(), hashes.SHA1())
 
         ec = {}
         ec["content_type"] = "1.3.6.1.5.2.3.1"
