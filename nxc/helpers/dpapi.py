@@ -168,11 +168,9 @@ class DPAPITriage:
         return self.masterkeys
 
     def triage_credentials(self, masterkeys: list[Masterkey]):
-        credential_counter = 0
         # Collect User and Machine Credentials Manager secrets
 
         def credential_callback(credential):
-            credential_counter += 1
             tag = "CREDENTIAL"
             line = f"[{credential.winuser}][{tag}] {credential.target} - {credential.username}:{credential.password}"
             self.context.logger.highlight(line)
@@ -190,14 +188,13 @@ class DPAPITriage:
         try:
             credentials_triage = CredentialsTriage(target=self.target, conn=self.conn, masterkeys=masterkeys, per_credential_callback=credential_callback)
             self.context.logger.debug(f"Credentials Triage Object: {credentials_triage}")
-            credentials_triage.triage_credentials()
-            credentials_triage.triage_system_credentials()
+            secrets = credentials_triage.triage_credentials()
+            secrets += credentials_triage.triage_system_credentials()
         except Exception as e:
             self.context.logger.debug(f"Error while looting credentials: {e}")
-        return credential_counter
+        return len(secrets)
 
     def triage_chromium(self, masterkeys: list[Masterkey]):
-        credential_counter = 0
         cng_chromekey = None
         # We need the CNG triage to recover Chrome passwords since Chrome v137
         try:
@@ -211,7 +208,6 @@ class DPAPITriage:
 
         # Collect Chrome Based Browser stored secrets
         def browser_callback(secret):
-            credential_counter += 1
             if isinstance(secret, LoginData):
                 secret_url = secret.url + " -" if secret.url != "" else "-"
                 line = f"[{secret.winuser}][{secret.browser.upper()}] {secret_url} {secret.username}:{secret.password}"
@@ -247,17 +243,14 @@ class DPAPITriage:
 
         try:
             browser_triage = BrowserTriage(target=self.target, conn=self.conn, masterkeys=masterkeys, per_secret_callback=browser_callback)
-            browser_triage.triage_browsers(gather_cookies=self.dump_cookies, cng_chromekey=cng_chromekey)
+            secrets = browser_triage.triage_browsers(gather_cookies=self.dump_cookies, cng_chromekey=cng_chromekey)
         except Exception as e:
             self.context.logger.debug(f"Error while looting browsers: {e}")
 
-        return credential_counter
+        return len(secrets[0])
 
     def triage_vaults(self, masterkeys: list[Masterkey]):
-        credential_counter = 0
-
         def vault_callback(secret):
-            credential_counter += 1
             tag = "IEX"
             if secret.type == "Internet Explorer":
                 resource = secret.resource + " -" if secret.resource != "" else "-"
@@ -277,17 +270,14 @@ class DPAPITriage:
         try:
             # Collect User Internet Explorer stored secrets
             vaults_triage = VaultsTriage(target=self.target, conn=self.conn, masterkeys=masterkeys, per_vault_callback=vault_callback)
-            vaults_triage.triage_vaults()
+            secrets = vaults_triage.triage_vaults()
         except Exception as e:
             self.context.logger.debug(f"Error while looting vaults: {e}")
 
-        return credential_counter
+        return len(secrets)
 
     def triage_firefox(self):
-        credential_counter = 0
-
         def firefox_callback(secret):
-            credential_counter += 1
             tag = "FIREFOX"
             if isinstance(secret, FirefoxData):
                 url = secret.url + " -" if secret.url != "" else "-"
@@ -312,11 +302,11 @@ class DPAPITriage:
         try:
             # Collect Firefox stored secrets
             firefox_triage = FirefoxTriage(target=self.target, logger=self.context.logger, conn=self.conn, per_secret_callback=firefox_callback)
-            firefox_triage.run(gather_cookies=self.dump_cookies)
+            secrets = firefox_triage.run(gather_cookies=self.dump_cookies)
         except Exception as e:
             self.logger.debug(f"Error while looting firefox: {e}")
 
-        return credential_counter
+        return len(secrets)
 
     # The dpapi function for every protocol
     def triage_dpapi(self):
