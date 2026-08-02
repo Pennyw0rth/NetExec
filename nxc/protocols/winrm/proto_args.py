@@ -17,7 +17,9 @@ def proto_args(parser, parents):
     cgroup.add_argument("--dump-method", action="store", default="cmd", choices={"cmd", "powershell"}, help="Select shell type in hashes dump for sam or lsa")
     cgroup.add_argument("--sam", action="store_true", help="dump SAM hashes from target systems")
     cgroup.add_argument("--lsa", action="store_true", help="dump LSA secrets from target systems")
-    cgroup.add_argument("--dpapi", action="store_true", help="dump user's Credential Manager secrets from target systems")
+    cgroup.add_argument("--dpapi", choices={"cookies", "nosystem"}, nargs="*", help="dump DPAPI secrets from target systems, can dump cookies if you add 'cookies', will not dump SYSTEM dpapi if you add nosystem")
+    cgroup.add_argument("--mkfile", action="store", help="DPAPI option. File with masterkeys in form of {GUID}:SHA1")
+    cgroup.add_argument("--pvk", action="store", help="DPAPI option. File with domain backupkey")
 
     mapping_enum_group = winrm_parser.add_argument_group("Mapping/Enumeration")
     mapping_enum_group.add_argument("--dir", nargs="?", type=str, const="", help="List the content of a path (default path: '%(const)s')")

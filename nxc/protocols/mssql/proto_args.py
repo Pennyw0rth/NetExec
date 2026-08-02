@@ -16,6 +16,9 @@ def proto_args(parser, parents):
     cgroup = mssql_parser.add_argument_group("Credential Gathering")
     cgroup.add_argument("--sam", action="store_true", help="dump SAM hashes from target systems")
     cgroup.add_argument("--lsa", action="store_true", help="dump LSA secrets from target systems")
+    cgroup.add_argument("--dpapi", choices={"cookies", "nosystem"}, nargs="*", help="dump DPAPI secrets from target systems, can dump cookies if you add 'cookies', will not dump SYSTEM dpapi if you add nosystem")
+    cgroup.add_argument("--mkfile", action="store", help="DPAPI option. File with masterkeys in form of {GUID}:SHA1")
+    cgroup.add_argument("--pvk", action="store", help="DPAPI option. File with domain backupkey")
 
     cgroup = mssql_parser.add_argument_group("Command Execution")
     cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")

