@@ -1,6 +1,6 @@
-import sys
-
 from impacket.dcerpc.v5 import samr, epm
+from impacket.dcerpc.v5.rpcrt import DCERPCException
+from impacket.smbconnection import SessionError
 from impacket.ldap.ldap import LDAPSessionError, MODIFY_ADD, MODIFY_DELETE, MODIFY_REPLACE
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.misc import CATEGORY
@@ -24,6 +24,17 @@ class NXCModule:
         "STATUS_PASSWORD_EXPIRED",
         "STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT",
     )
+
+    def __init__(self):
+        self.context = None
+        self.connection = None
+        self.newpass = None
+        self.newhash = None
+        self.target_user = None
+        self.target_username = None
+        self.target_domain = None
+        self.is_self_change = False
+        self.new_nthash = ""
 
     def options(self, context, module_options):
         """
@@ -52,7 +63,7 @@ class NXCModule:
 
         if not self.newpass and not self.newhash:
             context.log.fail("Either NEWPASS or NEWNTHASH is required!")
-            sys.exit(1)
+            return False
 
     def on_login(self, context, connection):
         self.context = context
@@ -75,9 +86,9 @@ class NXCModule:
             self.do_ldap()
 
     def db_remove_credential(self):
+        db = self.context.db
         try:
-            db = self.context.db
-            rows = db.get_user(self.target_domain, self.target_username) if hasattr(db, "get_user") else db.get_credentials(filter_term=self.target_username)
+            rows = db.get_user(self.target_domain, self.target_username) if self.connection.args.protocol == "smb" else db.get_credentials(filter_term=self.target_username)
             db.remove_credentials([row[0] for row in rows])
         except Exception as e:
             self.context.log.debug(f"Could not remove credentials from DB: {e}")
@@ -103,7 +114,7 @@ class NXCModule:
             rpc.connect(r"\samr", samr.MSRPC_UUID_SAMR)
             self.context.log.info(f"Connecting as {self.connection.domain}\\{self.connection.username} (kerberos={self.connection.kerberos})")
             return rpc
-        except Exception as e:
+        except (SessionError, DCERPCException) as e:
             err = str(e)
 
             if "STATUS_LOGON_FAILURE" in err:
@@ -118,7 +129,7 @@ class NXCModule:
             self.context.log.warning("Password must be changed. Falling back to null session over ncacn_ip_tcp.")
             try:
                 return self.samr_bind_anonymous()
-            except Exception as e2:
+            except (DCERPCException, OSError) as e2:
                 self.context.log.fail(f"Failed to bind to SAMR with null session: {e2}")
                 return None
 
@@ -150,7 +161,7 @@ class NXCModule:
 
             self.db_remove_credential()
             self.db_add_credential()
-        except Exception as e:
+        except samr.DCERPCSessionError as e:
             err = str(e)
             if "STATUS_ACCESS_DENIED" in err:
                 action = "change" if self.is_self_change else "reset"
@@ -199,7 +210,7 @@ class NXCModule:
                 self.context.log.fail(f"User '{username}' not found in LDAP")
                 return None
             return parsed[0]["distinguishedName"]
-        except Exception as e:
+        except LDAPSessionError as e:
             self.context.log.fail(f"LDAP search failed for '{username}': {e}")
             return None
 
