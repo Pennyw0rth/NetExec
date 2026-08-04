@@ -44,6 +44,7 @@ dependencies = [
     "termcolor>=2.4.0",
     "terminaltables3>=4.0.0",
     "xmltodict>=0.13.0",
+    "pywhisker>=0.1.2",
     # Git Dependencies
     "certipy-ad @ git+https://github.com/Pennyw0rth/Certipy",
     "impacket @ git+https://github.com/fortra/impacket",
