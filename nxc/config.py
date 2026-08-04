@@ -40,6 +40,9 @@ host_info_colors = literal_eval(nxc_config.get("nxc", "host_info_colors", fallba
 check_guest_account = nxc_config.getboolean("nxc", "check_guest_account", fallback=False)
 display_dc = nxc_config.getboolean("nxc", "display_dc", fallback=True)
 
+# MSSQL required options
+discover_sql_browser = nxc_config.getboolean("MSSQL", "discover_sql_browser", fallback=True)
+
 if len(host_info_colors) != 4:
     nxc_logger.error("Config option host_info_colors must have 4 values! Using default values.")
     host_info_colors = nxc_default_config.get("nxc", "host_info_colors")
