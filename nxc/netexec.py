@@ -208,6 +208,8 @@ def main():
 
             nxc_logger.debug(f"Loading module for sanity check {m} at path {modules[m]['path']}")
             module = loader.init_module(modules[m]["path"])
+            if module is None:
+                exit(1)
 
             # Add modules paths to the protocol object so it can load them itself
             proto_module_paths.append(modules[m]["path"])
