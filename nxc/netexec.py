@@ -29,6 +29,9 @@ import platform
 if sys.stdout.encoding == "cp1252":
     sys.stdout.reconfigure(encoding="utf-8")
 
+
+from nxc.helpers.opengraph import opengraph
+
 # Increase file_limit to prevent error "Too many open files"
 if platform.system() != "Windows":
     import resource
@@ -222,8 +225,19 @@ def main():
         nxc_logger.highlight(highlight("[!] Jitter is only throttling authentications per target!", "red"))
 
     try:
+        if args.opengraph:
+            if args.og_path is not None:
+                opengraph.bh_mapping(args.og_path)
+            elif args.og_ldap:
+                opengraph.ldap_mapping(args)
+            else:
+                nxc_logger.warning("No method was given to resolve OIDs, nodes will be matched by name")
         asyncio.run(start_run(protocol_object, args, db, targets))
     finally:
+        if args.opengraph:
+            nxc_logger.debug(opengraph.to_json())
+            nxc_logger.debug(opengraph.name2oid)
+            opengraph.save()
         db_engine.dispose()
 
 

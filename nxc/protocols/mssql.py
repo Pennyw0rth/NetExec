@@ -6,7 +6,8 @@ from termcolor import colored
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.connection import requires_admin
-from nxc.helpers.misc import gen_random_string
+from nxc.helpers.misc import gen_random_string, detect_if_ip
+from nxc.helpers.opengraph import opengraph
 from nxc.logger import NXCAdapter
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.negotiate_parser import parse_challenge, login7_integrated_auth_error_message
@@ -167,6 +168,17 @@ class mssql(connection):
             result = self.resolver(self.domain)
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
+
+    def opengraph_host_info(self):
+        if detect_if_ip(self.host):
+            opengraph.add_tag(self.hostname, ["Computer"], "IP_Address", self.host)
+        opengraph.add_tag(self.hostname, ["Computer"], "mssql_present", True)
+        opengraph.add_tag(self.hostname, ["Computer"], "mssql_version", self.version)
+        opengraph.add_tag(self.hostname, ["Computer"], "mssql_edition", self.edition)
+        opengraph.add_tag(self.hostname, ["Computer"], "mssql_encryption", self.encryption)
+        opengraph.add_tag(self.hostname, ["Computer"], "mssql_instances", len(self.mssql_instances))
+        if self.admin_privs and self.username:
+            opengraph.add_edge("SQLAdmin", self.username, f"{self.hostname}$")
 
     def print_host_info(self):
         encryption = colored(f"EncryptionReq:{self.encryption}", host_info_colors[0 if self.encryption else 1], attrs=["bold"])
