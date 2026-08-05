@@ -40,7 +40,7 @@ class NXCModule:
             output_lines = []
             for row in result:
                 output_value = row.get("output")
-                if output_value and output_value != "NULL":
+                if output_value:
                     output_lines.append(str(output_value))
 
             if output_lines:
