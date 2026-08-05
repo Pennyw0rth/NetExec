@@ -904,7 +904,8 @@ class smb(connection):
                 self.logger.debug("NTLM enabled but no null session: host is not a DC")
                 return False
             self.logger.debug("No null session (NTLM disabled): deferring to Kerberos/RPC")
-            self.no_ntlm = True
+            if self.ntlm_probe_failed:
+                self.no_ntlm = True
             return None
         try:
             tid = self.conn.connectTree("SYSVOL")
