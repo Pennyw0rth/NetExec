@@ -144,6 +144,7 @@ class smb(connection):
         self.no_da = None
         self.no_ntlm = False
         self.null_auth = False
+        self.ntlm_probe_failed = False
         self.protocol = "SMB"
         self.is_guest = None
         self.isdc = None
@@ -193,6 +194,9 @@ class smb(connection):
             self.null_auth = True
         except BrokenPipeError:
             self.logger.fail("Broken Pipe Error while attempting to login")
+        except (NetBIOSTimeout, NetBIOSError, OSError) as e:
+            self.logger.debug(f"Null Auth Probe failed : {e!s}")
+            self.ntlm_probe_failed = True
         except Exception as e:
             self.null_auth = False
             if "STATUS_NOT_SUPPORTED" in str(e):
@@ -200,7 +204,7 @@ class smb(connection):
                 self.no_ntlm = True
                 self.logger.debug("NTLM not supported")
 
-        aggressive_check = bool(self.args.generate_hosts_file or self.args.generate_krb5_file)
+        aggressive_check = bool(self.args.generate_hosts_file or self.args.generate_krb5_file or self.kerberos)
         self.is_host_dc(aggressive_check=aggressive_check)
 
         # self.domain is the attribute we authenticate with
@@ -896,10 +900,11 @@ class smb(connection):
         bind then), so we hand that case off to the Kerberos/RPC tiers.
         """
         if not self.null_auth:
-            if not self.no_ntlm:
+            if not self.no_ntlm and not self.ntlm_probe_failed:
                 self.logger.debug("NTLM enabled but no null session: host is not a DC")
                 return False
             self.logger.debug("No null session (NTLM disabled): deferring to Kerberos/RPC")
+            self.no_ntlm = True
             return None
         try:
             tid = self.conn.connectTree("SYSVOL")
