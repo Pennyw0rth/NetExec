@@ -230,18 +230,7 @@ class NXCModule:
         context.log.success("Retrieved security information")
 
         try:
-            lsa_query = LSAQuery(
-                connection.username,
-                connection.password,
-                connection.domain,
-                connection.port,
-                connection.host,
-                connection.host,
-                connection.kdcHost,
-                connection.aesKey,
-                connection.kerberos,
-                logger=context.log,
-            )
+            lsa_query = LSAQuery(connection=connection, logger=context.log)
         except Exception as lsa_error:
             context.log.debug(f"Error creating LSAQuery: {lsa_error}")
             return
