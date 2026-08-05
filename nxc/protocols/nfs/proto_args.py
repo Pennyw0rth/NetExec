@@ -10,5 +10,6 @@ def proto_args(parser, parents):
     dgroup.add_argument("--ls", const="/", nargs="?", metavar="PATH", help="List files in the specified NFS share. Example: --ls /")
     dgroup.add_argument("--get-file", nargs=2, metavar="FILE", help="Download remote NFS file. Example: --get-file remote_file local_file")
     dgroup.add_argument("--put-file", nargs=2, metavar="FILE", help="Upload remote NFS file with chmod 777 permissions to the specified folder. Example: --put-file local_file remote_file")
+    dgroup.add_argument("--chmod", nargs=2, metavar=("PERMISSIONS", "FILE"), help="Change permissions of remote NFS file. Example: --chmod 777 /path/to/file")
 
     return parser

@@ -21,12 +21,13 @@ The NetExec project has strict rules for AI usage:
   code for platforms or environments you don't have access to manually
   test on.
 
-- **Issues and discussions can use AI assistance but must have a full
-  human-in-the-loop.** This means that any content generated with AI
-  must have been reviewed _and edited_ by a human before submission.
-  AI is very good at being overly verbose and including noise that
-  distracts from the main point. Humans must do their research and
-  trim this down.
+- **Issues and pull requests should be written by humans.**
+  Communication should remain human, not AI, and should be clear and concise.
+  AI is very good at being overly verbose and including noise that distracts
+  from the main point. While it is fine to cite AI or include AI-generated
+  content, the main content of your issue or pull request should be written
+  by a human. Issues or pull requests that look like they are just the
+  result of an AI prompt will likely be rejected and closed.
 
 - **No AI-generated media is allowed (art, images, videos, audio, etc.).**
   Text and code are the only acceptable AI-generated content, per the
