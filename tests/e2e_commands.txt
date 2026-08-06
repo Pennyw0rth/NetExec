@@ -283,6 +283,16 @@ netexec ftp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --get test_file.txt
 netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce
 netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce --continue-on-success
 netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE
+##### MySQL
+netexec mysql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
+netexec mysql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --databases
+netexec mysql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --tables mysql
+netexec mysql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --dump-database mysql
+netexec mysql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --server-capabilities
+netexec mysql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -q "SELECT VERSION()"
+netexec mysql TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce
+netexec mysql TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce --continue-on-success
+netexec mysql TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE
 ##### NFS
 netexec nfs TARGET_HOST -u "" -p "" --shares
 netexec nfs TARGET_HOST -u "" -p "" --enum-shares

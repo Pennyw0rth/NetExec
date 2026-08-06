@@ -11,7 +11,6 @@ class mysql(connection):
     def __init__(self, args, db, host):
         self.protocol = "MySQL"
         self.remote_version = None
-        self.server_capabilities = {}
         self._pinged = False
         super().__init__(args, db, host)
 
@@ -88,12 +87,10 @@ class mysql(connection):
             self.logger.display(f"MySQL Version: {self.remote_version}")
 
     def plaintext_login(self, username, password):
-        """Authenticate with MySQL server using username/password via pymysql connect
-        This is where we actually do the full connection as well
-        """
+        """Authenticate with MySQL server using username/password via pymysql connect."""
         self.password = password
         self.username = username
-        self.create_conn_obj()  # create connection object with username and password
+        self.create_conn_obj()
 
         try:
             self.logger.debug(f"Attempting login with {username}:{process_secret(password)}")
@@ -104,22 +101,6 @@ class mysql(connection):
             cred_id = self.db.add_credential(username, password)
             host_id = self.db.get_hosts(self.host)[0].id
             self.db.add_loggedin_relation(cred_id, host_id)
-
-            if self.args.query:
-                self.execute_query(self.args.query)
-            if self.args.databases:
-                self.list_databases()
-            if self.args.tables:
-                self.list_tables(self.args.tables)
-            if self.args.dump_database:
-                self.dump_database(self.args.dump_database)
-            if self.args.server_capabilities:
-                self.get_server_capabilities()
-
-            if not self.args.continue_on_success:
-                with contextlib.suppress(Exception):
-                    self.conn.close()
-                return True
             return True
         except Exception as e:
             self.logger.fail(f"{username}:{process_secret(password)} (Response:{e})")
@@ -128,12 +109,13 @@ class mysql(connection):
                     self.conn.close()
             return False
 
-    def execute_query(self, query):
-        """Execute a custom SQL query"""
+    def query(self):
+        """Execute a custom SQL query."""
+        sql = self.args.query
         try:
             cursor = self.conn.cursor()
-            self.logger.display(f"Executing query: {query}")
-            cursor.execute(query)
+            self.logger.display(f"Executing query: {sql}")
+            cursor.execute(sql)
 
             if cursor.description:
                 results = cursor.fetchall()
@@ -151,8 +133,8 @@ class mysql(connection):
         except Exception as e:
             self.logger.fail(f"Error executing query: {e}")
 
-    def list_databases(self):
-        """List all databases"""
+    def databases(self):
+        """List all databases."""
         try:
             cursor = self.conn.cursor()
             try:
@@ -172,8 +154,9 @@ class mysql(connection):
         except Exception as e:
             self.logger.fail(f"Error listing databases: {e}")
 
-    def list_tables(self, database):
-        """List tables in specified database"""
+    def tables(self):
+        """List tables in specified database."""
+        database = self.args.tables
         try:
             cursor = self.conn.cursor()
             cursor.execute(f"USE `{database}`")
@@ -181,11 +164,11 @@ class mysql(connection):
                 cursor.execute("SHOW TABLES")
             except Exception:
                 cursor.execute(f"SHOW TABLES FROM `{database}`")
-            tables = cursor.fetchall()
+            results = cursor.fetchall()
 
-            if tables:
-                self.logger.display(f"Tables in {database} ({len(tables)}):")
-                for table in tables:
+            if results:
+                self.logger.display(f"Tables in {database} ({len(results)}):")
+                for table in results:
                     self.logger.highlight(table[0])
             else:
                 self.logger.display(f"No tables found in database '{database}' or access denied.")
@@ -194,8 +177,9 @@ class mysql(connection):
         except Exception as e:
             self.logger.fail(f"Error listing tables: {e}")
 
-    def dump_database(self, database):
-        """Dump database to stdout"""
+    def dump_database(self):
+        """Dump database structure and sample data."""
+        database = self.args.dump_database
         try:
             cursor = self.conn.cursor()
             cursor.execute(f"USE `{database}`")
@@ -256,8 +240,8 @@ class mysql(connection):
         except Exception as e:
             self.logger.fail(f"Error dumping database: {e}")
 
-    def get_server_capabilities(self):
-        """Get MySQL server capabilities"""
+    def server_capabilities(self):
+        """Display MySQL server capabilities."""
         try:
             cursor = self.conn.cursor()
             capabilities = {}
@@ -282,7 +266,6 @@ class mysql(connection):
                 capabilities["sql_mode"] = "Unknown"
             cursor.close()
 
-            self.server_capabilities = capabilities
             self.logger.display("Server capabilities:")
             self.logger.display(f"    SSL: {capabilities['ssl']}")
             self.logger.display(f"    Auth plugins: {capabilities['auth_plugins']}")

@@ -72,7 +72,7 @@ class navigator(DatabaseNavigator):
                     login_links = self.db.get_loggedin_relations(host_id=host_id)
 
                     for link in login_links:
-                        link_id, cred_id, host_id = link
+                        _, cred_id, host_id = link
                         creds = self.db.get_credentials(filter_term=cred_id)
                         for cred in creds:
                             cred_data = [cred[0], cred[1], cred[2]]
@@ -86,7 +86,7 @@ class navigator(DatabaseNavigator):
                     )
 
     @staticmethod
-    def help_hosts(self):
+    def help_hosts():
         help_string = """
         hosts [filter_term]
         By default prints all hosts
@@ -142,7 +142,7 @@ class navigator(DatabaseNavigator):
                     logins = self.db.get_loggedin_relations(cred_id=cred_id)
 
                     for link in logins:
-                        link_id, cred_id, host_id = link
+                        _, cred_id, host_id = link
                         hosts = self.db.get_hosts(host_id)
                         access_data += [[h[0], h[1], h[2], h[3]] for h in hosts]
 
@@ -172,7 +172,7 @@ class navigator(DatabaseNavigator):
             self.db.clear_database()
 
     @staticmethod
-    def help_clear_database(self):
+    def help_clear_database():
         help_string = """
         clear_database
         THIS COMPLETELY DESTROYS ALL DATA IN THE CURRENTLY CONNECTED DATABASE
