@@ -955,12 +955,6 @@ class smb(connection):
         """
         Unauthenticated Netlogon endpoint-mapper lookup on 135. NTLM-agnostic
         and needs no session;
-        Only a positive result (Netlogon registered -> True) or a definitive
-        negative from the endpoint mapper (it answered but Netlogon is absent, so
-        a live RPC host that is not a DC -> False) are conclusive. Anything that
-        just means "couldn't reach/finish the lookup" (135 filtered, timeout,
-        transport error) returns None so the Kerberos tier still gets a turn -
-        a DC can be reachable on 88 even when 135 is not.
         """
         from impacket.dcerpc.v5 import nrpc, epm
 
