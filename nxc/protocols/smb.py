@@ -870,16 +870,11 @@ class smb(connection):
         if self.isdc is not None:
             return self.isdc
 
-        # Tier 1 (SMB) always runs. Tier 2 (Kerberos) is added whenever the SMB
-        # tier cannot decide on its own (NTLM disabled), so the default path can
-        # still identify a DC without the flags. Tier 3 (RPC) is noisier (port
-        # 135) and stays behind the aggressive flags. Kerberos must precede RPC:
-        # RPC never returns None, so ordering it first would shadow Kerberos.
         probes = [self._is_dc_via_smb]
-        if self.no_ntlm or aggressive_check:
-            probes.append(self._is_dc_via_kerberos)
         if aggressive_check:
             probes.append(self._is_dc_via_rpc)
+        if self.no_ntlm or aggressive_check:
+            probes.append(self._is_dc_via_kerberos)
 
         for probe in probes:
             result = probe()
@@ -927,10 +922,7 @@ class smb(connection):
             return None
 
     def _is_dc_via_kerberos(self):
-        """Tier 2: only a KDC answers a Kerberos AS-REQ, and in AD the KDC runs
-        only on DCs. Pre-auth, no credentials - the fallback for NTLM-disabled
-        hosts where no SMB session exists.
-
+        """
         The realm need not be correct: a live KDC answers a wrong realm with
         KDC_ERR_WRONG_REALM, which proves it is a KDC just as well as
         PRINCIPAL_UNKNOWN would. So we use the known domain if we happen to have
@@ -960,27 +952,36 @@ class smb(connection):
         return True
 
     def _is_dc_via_rpc(self):
-        """Tier 3: unauthenticated Netlogon endpoint lookup on 135. NTLM-agnostic
-        and needs no session, but heavier and noisier than the SMB/Kerberos
-        probes above, so it only runs when both of those were inconclusive.
+        """
+        Unauthenticated Netlogon endpoint-mapper lookup on 135. NTLM-agnostic
+        and needs no session;
+        Only a positive result (Netlogon registered -> True) or a definitive
+        negative from the endpoint mapper (it answered but Netlogon is absent, so
+        a live RPC host that is not a DC -> False) are conclusive. Anything that
+        just means "couldn't reach/finish the lookup" (135 filtered, timeout,
+        transport error) returns None so the Kerberos tier still gets a turn -
+        a DC can be reachable on 88 even when 135 is not.
         """
         from impacket.dcerpc.v5 import nrpc, epm
 
         if not self._is_port_open(135):
-            self.logger.debug("Port 135 closed and no higher-tier signal: treating as not a DC")
-            return False
+            self.logger.debug("Port 135 closed/filtered: RPC inconclusive, deferring to Kerberos")
+            return None
 
         self.logger.debug("Port 135 is open, attempting Netlogon MSRPC lookup...")
         try:
             epm.hept_map(self.host, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
+            self.logger.debug("Netlogon endpoint registered: host is a DC")
             return True
         except DCERPCException:
-            self.logger.debug("DCERPCException on Netlogon lookup: probably not a DC")
+            self.logger.debug("Endpoint mapper answered but Netlogon not registered: host is not a DC")
+            return False
         except TimeoutError:
-            self.logger.debug("Timeout on Netlogon lookup: likely not a DC or unreachable")
+            self.logger.debug("Timeout on Netlogon lookup: inconclusive, deferring to Kerberos")
+            return None
         except Exception as e:
-            self.logger.debug(f"Error on Netlogon lookup: {e}")
-        return False
+            self.logger.debug(f"Error on Netlogon lookup ({e}): inconclusive, deferring to Kerberos")
+            return None
 
     def _is_port_open(self, port, timeout=1):
         """Check if a specific port is open on the target host."""
