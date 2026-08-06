@@ -870,17 +870,24 @@ class smb(connection):
         if self.isdc is not None:
             return self.isdc
 
+        # Tier 1 (SMB) always runs. Tier 2 (Kerberos) is added whenever the SMB
+        # tier cannot decide on its own (NTLM disabled), so the default path can
+        # still identify a DC without the flags. Tier 3 (RPC) is noisier (port
+        # 135) and stays behind the aggressive flags. Kerberos must precede RPC:
+        # RPC never returns None, so ordering it first would shadow Kerberos.
         probes = [self._is_dc_via_smb]
+        if self.no_ntlm or aggressive_check:
+            probes.append(self._is_dc_via_kerberos)
         if aggressive_check:
-            probes += [self._is_dc_via_rpc, self._is_dc_via_kerberos]
+            probes.append(self._is_dc_via_rpc)
 
         for probe in probes:
             result = probe()
             if result is not None:
                 self.isdc = result
                 return self.isdc
-        # inconclusive if all probes return None
-        if aggressive_check:
+
+        if self.no_ntlm or aggressive_check:
             self.isdc = False
         return self.isdc
 
@@ -893,13 +900,13 @@ class smb(connection):
         session, the reason is decisive: a DC with NTLM enabled always accepts
         the null bind, so "NTLM on + no null session" means this is NOT a DC.
         Only "NTLM disabled" is inconclusive here (a real DC can refuse the null
-        bind then), so we hand that case off to the Kerberos/RPC tiers.
+        bind then), so we hand that case off to the Kerberos tier.
         """
         if not self.null_auth:
             if not self.no_ntlm:
                 self.logger.debug("NTLM enabled but no null session: host is not a DC")
                 return False
-            self.logger.debug("No null session (NTLM disabled): deferring to Kerberos/RPC")
+            self.logger.debug("No null session (NTLM disabled): deferring to Kerberos")
             return None
         try:
             tid = self.conn.connectTree("SYSVOL")
@@ -930,6 +937,9 @@ class smb(connection):
         one (a PRINCIPAL_UNKNOWN reply is marginally quieter) and otherwise a
         placeholder - we never need to actually know the domain.
         """
+        if not self._is_port_open(88):
+            self.logger.debug("Port 88 closed/filtered: no KDC reachable, deferring")
+            return None
         # targetDomain is not set yet when this runs on the no-NTLM path (it is
         # produced later by the isdc-dependent LDAP resolution), so read it
         # defensively and fall back to a placeholder - the realm need not be real.
