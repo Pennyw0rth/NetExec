@@ -922,7 +922,10 @@ class smb(connection):
             return None
 
     def _is_dc_via_kerberos(self):
-        """
+        """Tier 2: only a KDC answers a Kerberos AS-REQ, and in AD the KDC runs
+        only on DCs. Pre-auth, no credentials - the fallback for NTLM-disabled
+        hosts where no SMB session exists.
+
         The realm need not be correct: a live KDC answers a wrong realm with
         KDC_ERR_WRONG_REALM, which proves it is a KDC just as well as
         PRINCIPAL_UNKNOWN would. So we use the known domain if we happen to have
