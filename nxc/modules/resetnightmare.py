@@ -86,7 +86,7 @@ class NXCModule:
         kdc = self.connection.kdcHost or self.connection.host
         try:
             tgt, cipher, _, session_key = getKerberosTGT(client, self.upn_password, self.connection.domain, "", "", "", kdcHost=kdc, serverName=KRB5_KPASSWD_TGT_SPN)
-        except KerberosError as e:
+        except (KerberosError, OSError) as e:
             self.context.log.fail(f"Failed to request change-password TGT: {e}")
             return None
         self.context.log.success(f"Obtained NT-ENTERPRISE TGT for '{self.target}' targeting {KRB5_KPASSWD_TGT_SPN}")
@@ -96,7 +96,7 @@ class NXCModule:
         kdc = self.connection.kdcHost or self.connection.host
         try:
             changePassword(self.target, self.connection.domain, self.new_password, TGT=tgt, kdcHost=kdc, kpasswdHost=kdc)
-        except KPasswdError as e:
+        except (KPasswdError, KerberosError, OSError) as e:
             self.context.log.fail(f"Password change failed: {' '.join(str(e).split())}")
             return False
         return True
