@@ -499,10 +499,6 @@ class connection:
         if self.over_fail_limit(username):
             return False
 
-        if self.args.delay:
-            self.logger.debug(f"Fixed auth delay: sleeping {self.args.delay} second(s)")
-            sleep(self.args.delay)
-
         if self.args.jitter:
             jitter = self.args.jitter
             if "-" in jitter:

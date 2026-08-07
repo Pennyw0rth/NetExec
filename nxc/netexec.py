@@ -221,7 +221,7 @@ def main():
     if args.jitter and len(targets) > 1:
         nxc_logger.highlight(highlight("[!] Jitter is only throttling authentications per target!", "red"))
 
-    if (getattr(args, "spray_window", 0) or getattr(args, "delay", 0)) and len(targets) > 1:
+    if getattr(args, "spray_window", 0) and len(targets) > 1:
         nxc_logger.highlight(highlight("[!] Lockout-safe spray timing is applied PER TARGET. Spraying multiple DCs of the same domain in parallel can still lock accounts - use a single target or --threads 1.", "red"))
 
     try:
