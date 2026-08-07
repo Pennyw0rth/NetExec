@@ -38,12 +38,12 @@ from binascii import unhexlify, hexlify
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.serialization import pkcs12
+from cryptography.x509 import load_pem_x509_certificate, load_der_x509_certificate
 
 from asn1crypto import cms
 from asn1crypto import algos
 from asn1crypto import core
 from asn1crypto import keys
-from asn1crypto import pem
 from asn1crypto import x509
 
 from minikerberos.protocol.dirtydh import DirtyDH
@@ -75,10 +75,18 @@ from nxc.logger import nxc_logger
 
 
 def _load_asn1_certificate(data):
-    """Load a certificate as an asn1crypto object, accepting both PEM and DER input"""
-    if pem.detect(data):
-        _, _, data = pem.unarmor(data)
-    return x509.Certificate.load(data)
+    """Load a certificate as an asn1crypto object, accepting both PEM and DER input
+
+    The certificate is parsed by cryptography and re-encoded, so that malformed input is
+    rejected here instead of failing later inside asn1crypto, which parses lazily
+    """
+    cert = load_pem_x509_certificate(data) if b"-----BEGIN" in data else load_der_x509_certificate(data)
+    return _to_asn1_certificate(cert)
+
+
+def _to_asn1_certificate(cert):
+    """Convert a cryptography certificate to the asn1crypto object the CMS structures need"""
+    return x509.Certificate.load(cert.public_bytes(serialization.Encoding.DER))
 
 
 def _check_rsa_privkey(privkey):
@@ -92,15 +100,14 @@ class myPKINIT:
     """
     Copy of minikerberos PKINIT
     With some changes where it differs from PKINIT used in NegoEx
+
+    This does not subclass minikerberos.pkinit.PKINIT on purpose: that module imports oscrypto,
+    which fails at import time on any OpenSSL whose version has a two digit component
     """
 
     def __init__(self):
-        self.privkeyinfo = None
         self.privkey = None
         self.certificate = None
-        self.extra_certs = None
-        self.user_sid = None
-        self.user_name = None
         self.issuer = None
         self.cname = None
         self.diffie = None
@@ -121,12 +128,14 @@ class myPKINIT:
         if isinstance(pfxpass, str):
             pfxpass = pfxpass.encode()
         # cryptography requires None (not an empty password) for a pfx without password
-        privkey, cert, extra_certs = pkcs12.load_key_and_certificates(pfxdata, pfxpass if pfxpass else None)
+        privkey, cert, _ = pkcs12.load_key_and_certificates(pfxdata, pfxpass if pfxpass else None)
+        # a pfx holding only a certificate parses fine, so check the key before the certificate
+        if privkey is None:
+            raise Exception("No private key found in the PFX file")
         if cert is None:
             raise Exception("No certificate found in the PFX file")
         pkinit.privkey = _check_rsa_privkey(privkey)
-        pkinit.certificate = x509.Certificate.load(cert.public_bytes(serialization.Encoding.DER))
-        pkinit.extra_certs = [x509.Certificate.load(extra.public_bytes(serialization.Encoding.DER)) for extra in extra_certs or []]
+        pkinit.certificate = _to_asn1_certificate(cert)
         pkinit.setup(dh_params=dh_params)
         return pkinit
 
@@ -138,11 +147,13 @@ class myPKINIT:
         with open(privkeyfile, "rb") as f:
             keydata = f.read()
         try:
-            privkey = serialization.load_pem_private_key(keydata, password=None)
+            try:
+                privkey = serialization.load_pem_private_key(keydata, password=None)
+            except ValueError:
+                privkey = serialization.load_der_private_key(keydata, password=None)
         except TypeError as e:
+            # raised by both loaders when the key is encrypted and no password was given
             raise Exception(f"Private key {privkeyfile} is password protected, which is not supported. Decrypt it first with: openssl rsa -in {privkeyfile} -out decrypted.pem") from e
-        except ValueError:
-            privkey = serialization.load_der_private_key(keydata, password=None)
         pkinit.privkey = _check_rsa_privkey(privkey)
         pkinit.setup(dh_params=dh_params)
         return pkinit
