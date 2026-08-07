@@ -100,7 +100,8 @@ class ModuleLoader:
                     key, value = option.split("=", 1)
                     module_options[str(key).upper()] = value
 
-                module.options(context, module_options)
+                if module.options(context, module_options) is False:
+                    return None
                 return module
             else:
                 self.logger.fail(f"Module {module.name.upper()} is not supported for protocol {self.args.protocol}")
