@@ -375,6 +375,11 @@ class ldap(connection):
                 f"{self.domain}\\{self.username}{used_ccache} {error!s}",
                 color="magenta" if error in ldap_error_status else "red",
             )
+            if error == "KDC_ERR_CLIENT_REVOKED":
+                self.inc_failed_login(self.username)
+                self.register_lockout(self.username)
+            elif error not in ldap_error_status:
+                self.inc_failed_login(self.username)
             return False
         except (KeyError, KerberosException, OSError) as e:
             self.logger.fail(
@@ -422,6 +427,11 @@ class ldap(connection):
                         f"{self.domain}\\{self.username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {error!s}",
                         color="magenta" if error in ldap_error_status else "red",
                     )
+                    if error == "KDC_ERR_CLIENT_REVOKED":
+                        self.inc_failed_login(self.username)
+                        self.register_lockout(self.username)
+                    elif error not in ldap_error_status:
+                        self.inc_failed_login(self.username)
                     return False
                 except Exception as e:
                     error_code = str(e).split()[-2][:-1]
@@ -429,6 +439,11 @@ class ldap(connection):
                         f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status.get(error_code, '')}",
                         color="magenta" if error_code in ldap_error_status else "red",
                     )
+                    if error_code in ("775", "KDC_ERR_CLIENT_REVOKED"):
+                        self.inc_failed_login(self.username)
+                        self.register_lockout(self.username)
+                    elif error_code not in ldap_error_status:
+                        self.inc_failed_login(self.username)
                     return False
             else:
                 error_code = str(e).split()[-2][:-1]
@@ -436,6 +451,9 @@ class ldap(connection):
                     f"{self.domain}\\{self.username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} {error_code!s}",
                     color="magenta" if error_code in ldap_error_status else "red",
                 )
+                self.inc_failed_login(self.username)
+                if error_code in ("775", "KDC_ERR_CLIENT_REVOKED"):
+                    self.register_lockout(self.username)
                 return False
 
     def plaintext_login(self, domain, username, password):
@@ -513,6 +531,9 @@ class ldap(connection):
                     f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status.get(error_code, '')}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
+            self.inc_failed_login(self.username)
+            if error_code in ("775", "KDC_ERR_CLIENT_REVOKED"):
+                self.register_lockout(self.username)
             return False
         except OSError as e:
             self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {'Error connecting to the domain, are you sure LDAP service is running on the target?'} \nError: {e}")
@@ -607,6 +628,9 @@ class ldap(connection):
                     f"{self.domain}\\{self.username}:{process_secret(nthash)} {ldap_error_status.get(error_code, '')}",
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
+            self.inc_failed_login(self.username)
+            if error_code in ("775", "KDC_ERR_CLIENT_REVOKED"):
+                self.register_lockout(self.username)
             return False
         except OSError as e:
             self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {'Error connecting to the domain, are you sure LDAP service is running on the target?'} \nError: {e}")
