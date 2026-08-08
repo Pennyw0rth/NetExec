@@ -154,6 +154,7 @@ class connection:
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
         self.admin_privs = False
         self.failed_logins = 0
+        self.spray_aborted = False
 
         # Network info
         self.domain = None
@@ -340,6 +341,10 @@ class connection:
 
             return False
 
+    def register_lockout(self, username):
+        if self.args.abort_on_lockout:
+            self.spray_aborted = True
+
     def query_db_creds(self):
         """Queries the database for credentials to be used for authentication.
 
@@ -488,6 +493,12 @@ class connection:
         if self.args.continue_on_success and owned:
             return False
 
+        if self.spray_aborted:
+            return False
+
+        if self.over_fail_limit(username):
+            return False
+
         if self.args.jitter:
             jitter = self.args.jitter
             if "-" in jitter:
@@ -580,20 +591,40 @@ class connection:
 
         if not self.args.no_bruteforce:
             for secr_index, secr in enumerate(secret):
+                if self.spray_aborted:
+                    return False
                 for user_index, user in enumerate(username):
+                    if self.spray_aborted:
+                        return False
                     if self.try_credentials(domain[user_index], user, owned[user_index], secr, cred_type[secr_index], data[secr_index]):
                         owned[user_index] = True
                         if not self.args.continue_on_success:
                             return True
+                spray_attempts = max(1, self.args.spray_attempts)
+                if self.args.spray_window and not self.spray_aborted and secr_index < len(secret) - 1 and (secr_index + 1) % spray_attempts == 0:
+                    self.logger.info(
+                        f"Completed {secr_index + 1} password round(s); sleeping {self.args.spray_window} "
+                        f"second(s) so the lockout counter resets before the next round"
+                    )
+                    sleep(self.args.spray_window)
         else:
             if len(username) != len(secret):
                 self.logger.error("Number provided of usernames and passwords/hashes do not match!")
                 return False
+            spray_attempts = max(1, self.args.spray_attempts)
             for user_index, user in enumerate(username):
+                if self.spray_aborted:
+                    return False
                 if self.try_credentials(domain[user_index], user, owned[user_index], secret[user_index], cred_type[user_index], data[user_index]) and not self.args.continue_on_success:
                     owned[user_index] = True
                     if not self.args.continue_on_success:
                         return True
+                if self.args.spray_window and not self.spray_aborted and user_index < len(username) - 1 and (user_index + 1) % spray_attempts == 0:
+                    self.logger.info(
+                        f"Completed {user_index + 1} attempt(s); sleeping {self.args.spray_window} "
+                        f"second(s) so the lockout counter resets before the next attempt"
+                    )
+                    sleep(self.args.spray_window)
 
     def mark_pwned(self):
         return highlight(f"({pwned_label})" if self.admin_privs else "")
