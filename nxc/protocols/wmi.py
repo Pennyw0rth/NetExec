@@ -2,6 +2,7 @@ import os
 from io import StringIO
 
 from nxc.helpers.negotiate_parser import parse_challenge
+from nxc.helpers.misc import sanitize_hostname
 from nxc.config import process_secret
 from nxc.connection import connection, dcom_FirewallChecker, requires_admin
 from nxc.logger import NXCAdapter
@@ -130,7 +131,7 @@ class wmi(connection):
             bindResp = MSRPCBindAck(response.getData())
             ntlm_info = parse_challenge(bindResp["auth_data"])
             self.targetDomain = self.domain = ntlm_info["domain"]
-            self.hostname = ntlm_info["hostname"]
+            self.hostname = sanitize_hostname(ntlm_info["hostname"], self.logger)
             self.server_os = ntlm_info["os_version"]
             self.logger.extra["hostname"] = self.hostname
         else:
