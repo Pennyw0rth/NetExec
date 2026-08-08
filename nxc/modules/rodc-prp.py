@@ -229,7 +229,7 @@ class NXCModule:
             if not target_name:
                 continue
             self._report_target(context, target, result)
-            if result is not None and not _is_cacheable(result):
+            if not _is_cacheable(result):
                 continue
             principal = Principal(
                 target_name, type=constants.PrincipalNameType.NT_PRINCIPAL.value
@@ -319,13 +319,8 @@ class NXCModule:
         unavailable = [0 for _ in rodcs]
         report_uncacheable = self.target is not None and not self.all_targets
 
-        for target_index, target in enumerate(targets):
+        for target in targets:
             results = self._query_target_cacheability(connection, target, rodcs)
-            prp_available = any(result is not None for result in results.values())
-            # One valid principal is enough to verify access before scanning all accounts.
-            # That or I'm lazy.
-            if self.all_targets and target_index == 0 and not prp_available:
-                return None
 
             for index, rodc in enumerate(rodcs):
                 rodc_dn = rodc.get("distinguishedName")
