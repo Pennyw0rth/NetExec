@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.10, <4.0"
 
 [options]
-exclude-newer = "2026-07-14T14:10:39.438350905Z"
+exclude-newer = "2026-08-01T20:50:46.878646981Z"
 exclude-newer-span = "P1D"
 
 [[package]]
@@ -856,8 +856,8 @@ wheels = [
 
 [[package]]
 name = "impacket"
-version = "0.14.0.dev0+20260317.95020.1049826e"
-source = { git = "https://github.com/Pennyw0rth/impacket#1049826efbc556221cca17f94e9fd0b944b8c600" }
+version = "0.14.0.dev0+20260731.125001.141be7ac"
+source = { git = "https://github.com/fortra/impacket#141be7ac577d5165adf2a70b677091ed3557eb36" }
 dependencies = [
     { name = "charset-normalizer" },
     { name = "flask" },
@@ -1289,6 +1289,7 @@ dependencies = [
     { name = "bloodhound-ce" },
     { name = "certihound" },
     { name = "certipy-ad" },
+    { name = "cryptography" },
     { name = "dploot" },
     { name = "dsinternals" },
     { name = "impacket" },
@@ -1297,7 +1298,6 @@ dependencies = [
     { name = "masky" },
     { name = "minikerberos" },
     { name = "neo4j" },
-    { name = "oscrypto" },
     { name = "paramiko" },
     { name = "pefile" },
     { name = "pyasn1-modules" },
@@ -1332,15 +1332,15 @@ requires-dist = [
     { name = "bloodhound-ce", specifier = ">=1.8.0" },
     { name = "certihound", specifier = ">=0.1.1" },
     { name = "certipy-ad", git = "https://github.com/Pennyw0rth/Certipy" },
+    { name = "cryptography", specifier = ">=42.0.8" },
     { name = "dploot", specifier = ">=3.2.2" },
     { name = "dsinternals", specifier = ">=1.2.4" },
-    { name = "impacket", git = "https://github.com/Pennyw0rth/impacket" },
+    { name = "impacket", git = "https://github.com/fortra/impacket" },
     { name = "jwt", specifier = ">=1.3.1" },
     { name = "lsassy", specifier = ">=3.1.11" },
     { name = "masky", specifier = ">=0.2.1" },
     { name = "minikerberos", specifier = ">=0.4.1" },
     { name = "neo4j", specifier = ">=5.0.0" },
-    { name = "oscrypto", git = "https://github.com/wbond/oscrypto?rev=1547f535001ba568b239b8797465536759c742a3" },
     { name = "paramiko", specifier = ">=3.3.1" },
     { name = "pefile", specifier = ">=2024.8.26,<2025.0.0" },
     { name = "pyasn1-modules", specifier = ">=0.3.0" },
@@ -1362,16 +1362,20 @@ requires-dist = [
 dev = [
     { name = "flake8" },
     { name = "pytest", specifier = ">=7.2.2,<8" },
-    { name = "ruff", specifier = "==0.11.0" },
+    { name = "ruff" },
     { name = "shiv" },
 ]
 
 [[package]]
 name = "oscrypto"
 version = "1.3.0"
-source = { git = "https://github.com/wbond/oscrypto?rev=1547f535001ba568b239b8797465536759c742a3#1547f535001ba568b239b8797465536759c742a3" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "asn1crypto" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/06/81/a7654e654a4b30eda06ef9ad8c1b45d1534bfd10b5c045d0c0f6b16fecd2/oscrypto-1.3.0.tar.gz", hash = "sha256:6f5fef59cb5b3708321db7cca56aed8ad7e662853351e7991fcf60ec606d47a4", size = 184590, upload-time = "2022-03-18T01:53:26.889Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/01/7c/fa07d3da2b6253eb8474be16eab2eadf670460e364ccc895ca7ff388ee30/oscrypto-1.3.0-py2.py3-none-any.whl", hash = "sha256:2b2f1d2d42ec152ca90ccb5682f3e051fb55986e1b170ebde472b133713e7085", size = 194553, upload-time = "2022-03-18T01:53:24.559Z" },
 ]
 
 [[package]]
