@@ -68,24 +68,56 @@ from minikerberos.network.clientsocket import KerberosClientSocket
 from minikerberos.common.target import KerberosTarget
 from minikerberos.common.ccache import CCACHE
 
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.serialization import pkcs12
-from cryptography.x509 import load_pem_x509_certificate
-
 from impacket.krb5.ccache import CCache as impacket_CCache
 
 from nxc.paths import NXC_PATH, TMP_PATH
 from nxc.logger import nxc_logger
 
 
-def _load_asn1_certificate(data):
-    """Load a certificate as an asn1crypto object, accepting both PEM and DER input
+def load_pfx_data(pfxdata, pfxpass):
+    """Load the certificate and private key of a PFX as cryptography objects"""
+    if isinstance(pfxpass, str):
+        pfxpass = pfxpass.encode()
+    # cryptography requires None (not an empty password) for a pfx without password
+    privkey, cert, _ = pkcs12.load_key_and_certificates(pfxdata, pfxpass if pfxpass else None)
+    # a pfx holding only a certificate parses fine, so check the key before the certificate
+    if privkey is None:
+        raise Exception("No private key found in the PFX file")
+    if cert is None:
+        raise Exception("No certificate found in the PFX file")
+    return cert, privkey
 
-    The certificate is parsed by cryptography and re-encoded, so that malformed input is
-    rejected here instead of failing later inside asn1crypto, which parses lazily
-    """
-    cert = load_pem_x509_certificate(data) if b"-----BEGIN" in data else load_der_x509_certificate(data)
-    return _to_asn1_certificate(cert)
+
+def load_pem_files(certfile, privkeyfile):
+    """Load a certificate and a private key from separate files as cryptography objects, accepting both PEM and DER input"""
+    with open(certfile, "rb") as f:
+        certdata = f.read()
+    cert = load_pem_x509_certificate(certdata) if b"-----BEGIN" in certdata else load_der_x509_certificate(certdata)
+
+    with open(privkeyfile, "rb") as f:
+        keydata = f.read()
+    try:
+        try:
+            privkey = serialization.load_pem_private_key(keydata, password=None)
+        except ValueError:
+            privkey = serialization.load_der_private_key(keydata, password=None)
+    except TypeError as e:
+        # raised by both loaders when the key is encrypted and no password was given
+        raise Exception(f"Private key {privkeyfile} is password protected, which is not supported. Decrypt it first with: openssl rsa -in {privkeyfile} -out decrypted.pem") from e
+    return cert, privkey
+
+
+def load_cert_and_key(args):
+    """Load the certificate material given on the command line (PFX, base64 encoded PFX or cert + key files)"""
+    if args.pfx_cert or args.pfx_base64:
+        with open(args.pfx_cert or args.pfx_base64, "rb") as f:
+            pfxdata = f.read()
+        if args.pfx_base64:
+            pfxdata = base64.b64decode(pfxdata)
+        return load_pfx_data(pfxdata, args.pfx_pass)
+    if args.pem_cert and args.pem_key:
+        return load_pem_files(args.pem_cert, args.pem_key)
+    raise Exception("You must either specify a PFX file + optional password or a combination of Cert PEM file and Private key PEM file")
 
 
 def _to_asn1_certificate(cert):
@@ -117,48 +149,10 @@ class myPKINIT:
         self.diffie = None
 
     @staticmethod
-    def from_pfx(pfxfile, pfxpass, dh_params=None, b64=False):
-        with open(pfxfile, "rb") as f:
-            pfxdata = f.read()
-
-        if b64:
-            pfxdata = base64.b64decode(pfxdata)
-
-        return myPKINIT.from_pfx_data(pfxdata, pfxpass, dh_params)
-
-    @staticmethod
-    def from_pfx_data(pfxdata, pfxpass, dh_params=None):
+    def from_cert_and_key(cert, privkey, dh_params=None):
         pkinit = myPKINIT()
-        if isinstance(pfxpass, str):
-            pfxpass = pfxpass.encode()
-        # cryptography requires None (not an empty password) for a pfx without password
-        privkey, cert, _ = pkcs12.load_key_and_certificates(pfxdata, pfxpass if pfxpass else None)
-        # a pfx holding only a certificate parses fine, so check the key before the certificate
-        if privkey is None:
-            raise Exception("No private key found in the PFX file")
-        if cert is None:
-            raise Exception("No certificate found in the PFX file")
         pkinit.privkey = _check_rsa_privkey(privkey)
         pkinit.certificate = _to_asn1_certificate(cert)
-        pkinit.setup(dh_params=dh_params)
-        return pkinit
-
-    @staticmethod
-    def from_pem(certfile, privkeyfile, dh_params=None):
-        pkinit = myPKINIT()
-        with open(certfile, "rb") as f:
-            pkinit.certificate = _load_asn1_certificate(f.read())
-        with open(privkeyfile, "rb") as f:
-            keydata = f.read()
-        try:
-            try:
-                privkey = serialization.load_pem_private_key(keydata, password=None)
-            except ValueError:
-                privkey = serialization.load_der_private_key(keydata, password=None)
-        except TypeError as e:
-            # raised by both loaders when the key is encrypted and no password was given
-            raise Exception(f"Private key {privkeyfile} is password protected, which is not supported. Decrypt it first with: openssl rsa -in {privkeyfile} -out decrypted.pem") from e
-        pkinit.privkey = _check_rsa_privkey(privkey)
         pkinit.setup(dh_params=dh_params)
         return pkinit
 
@@ -518,14 +512,7 @@ def pfx_auth(self):
 
     # Load the certificate and key from file
     try:
-        if self.args.pfx_cert or self.args.pfx_base64:
-            pfx = self.args.pfx_cert if self.args.pfx_cert else self.args.pfx_base64
-            ini = myPKINIT.from_pfx(pfx, self.args.pfx_pass, dhparams, bool(self.args.pfx_base64))
-        elif self.args.pem_cert and self.args.pem_key:
-            ini = myPKINIT.from_pem(self.args.pem_cert, self.args.pem_key, dhparams)
-        else:
-            self.logger.fail("You must either specify a PFX file + optional password or a combination of Cert PEM file and Private key PEM file")
-            return None
+        ini = myPKINIT.from_cert_and_key(*load_cert_and_key(self.args), dhparams)
     except FileNotFoundError as e:
         self.logger.fail(f"Certificate or key file not found: {e.filename}")
         return False
@@ -576,22 +563,13 @@ def pfx_auth(self):
 
 def pfx_to_pem_files(self):
     """Convert the provided certificate material (PFX or PEM) into PEM cert and key files in TMP_PATH."""
-    if self.args.pfx_cert or self.args.pfx_base64:
-        if self.args.pfx_base64:
-            with open(self.args.pfx_base64, "rb") as f:
-                pfx_data = base64.b64decode(f.read())
-        else:
-            with open(self.args.pfx_cert, "rb") as f:
-                pfx_data = f.read()
-        pfx_pass = self.args.pfx_pass.encode() if self.args.pfx_pass else None
-        key, cert, _ = pkcs12.load_key_and_certificates(pfx_data, pfx_pass)
-    elif self.args.pem_cert and self.args.pem_key:
-        with open(self.args.pem_cert, "rb") as f:
-            cert = load_pem_x509_certificate(f.read())
-        with open(self.args.pem_key, "rb") as f:
-            key = serialization.load_pem_private_key(f.read(), password=None)
-    else:
-        self.logger.fail("You must either specify a PFX file + optional password or a combination of Cert PEM file and Private key PEM file")
+    try:
+        cert, key = load_cert_and_key(self.args)
+    except FileNotFoundError as e:
+        self.logger.fail(f"Certificate or key file not found: {e.filename}")
+        return None, None
+    except Exception as e:
+        self.logger.fail(f"Failed to load certificate/key: {e}")
         return None, None
 
     basename = self.filename_pattern
