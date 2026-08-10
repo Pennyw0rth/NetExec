@@ -793,14 +793,12 @@ class ldap(connection):
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
 
     def ous(self):
-        # Building the search filter
         if self.args.ous:
             # Find the OU's distinguished name first
             self.logger.debug(f"Dumping users from OU: {self.args.ous}")
             ou_resp = self.search(
                 f"(&(objectCategory=organizationalUnit)(ou={self.args.ous}))",
                 ["distinguishedName"],
-                0,
             )
             ou_parsed = parse_result_attributes(ou_resp)
 
@@ -815,7 +813,6 @@ class ldap(connection):
             resp = self.search(
                 "(&(objectCategory=person)(objectClass=user))",
                 ["sAMAccountName", "cn"],
-                0,
                 baseDN=ou_dn,
             )
             resp_parsed = parse_result_attributes(resp)
