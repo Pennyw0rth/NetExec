@@ -1,68 +1,35 @@
 # Stolen from Impacket
 
-from impacket.dcerpc.v5 import transport, samr
-from impacket.dcerpc.v5.rpcrt import DCERPCException
-from impacket.dcerpc.v5.rpcrt import DCERPC_v5
-from impacket.nt_errors import STATUS_MORE_ENTRIES
 from datetime import datetime, timedelta
+
+from impacket.dcerpc.v5 import samr
+from impacket.dcerpc.v5.rpcrt import DCERPCException
+from impacket.nt_errors import STATUS_MORE_ENTRIES
+
+from nxc.helpers.rpc import NXCRPCConnection
 
 
 class UserSamrDump:
-    KNOWN_PROTOCOLS = {
-        "139/SMB": (r"ncacn_np:%s[\pipe\samr]", 139),
-        "445/SMB": (r"ncacn_np:%s[\pipe\samr]", 445),
-    }
-
     def __init__(self, connection):
         self.logger = connection.logger
-        self.addr = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
-        self.protocol = connection.args.port
-        self.username = connection.username
-        self.password = connection.password
-        self.domain = connection.domain
-        self.hash = connection.hash
-        self.lmhash = ""
-        self.nthash = ""
-        self.aesKey = connection.aesKey
-        self.doKerberos = connection.kerberos
-        self.host = connection.host
-        self.kdcHost = connection.kdcHost
-        self.protocols = UserSamrDump.KNOWN_PROTOCOLS.keys()
+        self.connection = connection
         self.users = []
-        self.rpc_transport = None
         self.dce = None
 
-        if self.hash is not None:
-            if self.hash.find(":") != -1:
-                self.lmhash, self.nthash = self.hash.split(":")
-            else:
-                self.nthash = self.hash
-
-        if self.password is None:
-            self.password = ""
-
     def dump(self, requested_users=None, dump_path=None):
-        # Try all requested protocols until one works.
-        for protocol in self.protocols:
-            try:
-                protodef = UserSamrDump.KNOWN_PROTOCOLS[protocol]
-                port = protodef[1]
-            except KeyError:
-                self.logger.debug(f"Invalid Protocol: {protocol}")
+        try:
+            self.dce = NXCRPCConnection(self.connection).connect(r"\samr", samr.MSRPC_UUID_SAMR)
+        except Exception as e:
+            self.logger.debug(f"Failed to connect to SAMR: {e}")
+            return self.users
 
-            self.logger.debug(f"Trying protocol {protocol}")
-            self.rpc_transport = transport.SMBTransport(self.addr, port, r"\samr", self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey, doKerberos=self.doKerberos, kdcHost=self.kdcHost, remote_host=self.host)
-            try:
-                self.fetch_users(requested_users, dump_path)
-                break
-            except Exception as e:
-                self.logger.debug(f"Connection with protocol {protocol} failed: {e}")
+        try:
+            self.fetch_users(requested_users, dump_path)
+        except Exception as e:
+            self.logger.debug(f"Connection failed: {e}")
         return self.users
 
     def fetch_users(self, requested_users, dump_path):
-        self.dce = DCERPC_v5(self.rpc_transport)
-        self.dce.connect()
-        self.dce.bind(samr.MSRPC_UUID_SAMR)
         users = []
 
         # Setup Connection
