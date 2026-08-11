@@ -822,8 +822,9 @@ class ldap(connection):
                 self.logger.fail(f"OU '{self.args.ous}' has no users")
                 return
 
+            self.logger.highlight(f"{'-sAMAccountName-':<30} -cn-")
             for user in resp_parsed:
-                self.logger.highlight(user.get("sAMAccountName", user.get("cn", "Unknown")))
+                self.logger.highlight(f"{user.get('sAMAccountName'):<30} {user.get('cn', '')}")
         else:
             # List all OUs
             self.logger.debug("Dumping all organizational units")
