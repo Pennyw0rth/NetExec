@@ -450,10 +450,10 @@ class rdp(connection):
         except Exception as e:
             err_msg = str(e)
             if "Authentication failed! (early user auth)" in err_msg:
-                  self.logger.error("Authentication failed! (early user auth)")
-                  self.logger.error("Verify RDP user privileges, NLA settings, or credential format.")
+                self.logger.error("Authentication failed! (early user auth)")
+                self.logger.error("Verify RDP user privileges, NLA settings, or credential format.")
             else:
-                  self.logger.debug(f"Error connecting to RDP: {err_msg}")
+                self.logger.debug(f"Error connecting to RDP: {err_msg}")
             return None
 
         try:
