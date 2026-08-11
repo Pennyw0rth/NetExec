@@ -833,11 +833,9 @@ class ldap(connection):
             self.logger.debug(f"Total of records returned: {len(resp_parsed)}")
 
             self.logger.highlight(f"{'-OU-':<40} -Distinguished Name-")
-            for item in resp_parsed:
+            for ou in resp_parsed:
                 try:
-                    ou_name = item["ou"]
-                    dn = item["distinguishedName"]
-                    self.logger.highlight(f"{ou_name:<40} {dn}")
+                    self.logger.highlight(f"{ou['ou']:<40} {ou['distinguishedName']}")
                 except Exception as e:
                     self.logger.debug(f"Exception: {e}", exc_info=True)
 
