@@ -448,7 +448,12 @@ class rdp(connection):
             self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
             await self.connect_rdp()
         except Exception as e:
-            self.logger.debug(f"Error connecting to RDP: {e!s}")
+            err_msg = str(e)
+            if "Authentication failed! (early user auth)" in err_msg:
+                  self.logger.error("Authentication failed! (early user auth)")
+                  self.logger.error("Verify RDP user privileges, NLA settings, or credential format.")
+            else:
+                  self.logger.debug(f"Error connecting to RDP: {err_msg}")
             return None
 
         try:
