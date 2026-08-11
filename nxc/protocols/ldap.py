@@ -828,19 +828,18 @@ class ldap(connection):
         else:
             # List all OUs
             self.logger.debug("Dumping all organizational units")
-            resp = self.search("(objectCategory=organizationalUnit)", ["ou", "distinguishedName"], 0)
+            resp = self.search("(objectCategory=organizationalUnit)", ["ou", "distinguishedName"])
             resp_parsed = parse_result_attributes(resp)
             self.logger.debug(f"Total of records returned: {len(resp_parsed)}")
 
-            self.logger.highlight(f"{'-OU-':<40} {'-Distinguished Name-'}")
+            self.logger.highlight(f"{'-OU-':<40} -Distinguished Name-")
             for item in resp_parsed:
                 try:
                     ou_name = item["ou"]
                     dn = item["distinguishedName"]
                     self.logger.highlight(f"{ou_name:<40} {dn}")
                 except Exception as e:
-                    self.logger.debug("Exception:", exc_info=True)
-                    self.logger.debug(f"Skipping item, cannot process due to error: {e}")
+                    self.logger.debug(f"Exception: {e}", exc_info=True)
 
     def computers(self):
         resp = self.search(f"(sAMAccountType={SAM_MACHINE_ACCOUNT})", ["sAMAccountName"])
