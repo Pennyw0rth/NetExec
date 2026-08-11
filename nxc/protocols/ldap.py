@@ -806,14 +806,13 @@ class ldap(connection):
                 self.logger.fail(f"OU '{self.args.ous}' not found")
                 return
 
-            ou_dn = ou_parsed[0]["distinguishedName"]
-            self.logger.debug(f"Found OU DN: {ou_dn}")
+            self.logger.debug(f"Found OU DN: {ou_parsed[0]['distinguishedName']}")
 
             # Search for users scoped to that OU
             resp = self.search(
                 "(&(objectCategory=person)(objectClass=user))",
                 ["sAMAccountName", "cn"],
-                baseDN=ou_dn,
+                baseDN=ou_parsed[0]["distinguishedName"],
             )
             resp_parsed = parse_result_attributes(resp)
             self.logger.debug(f"Total of records returned: {len(resp_parsed)}")
