@@ -96,7 +96,6 @@ def gen_cli_args():
     credential_group.add_argument("--fail-limit", metavar="LIMIT", type=int, help="max number of failed login attempts per host")
     credential_group.add_argument("--spray-window", metavar="SECONDS", dest="spray_window", type=float, default=0, action=DefaultTrackingAction, help="seconds to wait between password rounds so the domain badPwdCount resets; set to at least the lockout Observation Window")
     credential_group.add_argument("--spray-attempts", metavar="N", dest="spray_attempts", type=int, default=1, action=DefaultTrackingAction, help="passwords to try per user before waiting --spray-window (MUST stay below the lockout threshold; default 1 = wait after every password)")
-    credential_group.add_argument("--abort-on-lockout", action="store_true", help="abort the spray for a target as soon as an account lockout is detected (default: only warn and keep going)")
 
     kerberos_group = std_parser.add_argument_group("Kerberos Authentication")
     kerberos_group.add_argument("-k", "--kerberos", action="store_true", help="Use Kerberos authentication")

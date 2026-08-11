@@ -12,7 +12,7 @@ from ipaddress import ip_address
 from dns import resolver, rdatatype
 from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
 
-from nxc.config import pwned_label
+from nxc.config import pwned_label, abort_on_lockout
 from nxc.helpers.logger import highlight
 from nxc.loaders.moduleloader import ModuleLoader
 from nxc.logger import nxc_logger, NXCAdapter
@@ -342,7 +342,7 @@ class connection:
             return False
 
     def register_lockout(self, username):
-        if self.args.abort_on_lockout:
+        if abort_on_lockout:
             self.spray_aborted = True
 
     def query_db_creds(self):
