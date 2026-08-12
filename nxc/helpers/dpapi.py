@@ -59,11 +59,26 @@ def upgrade_to_dploot_connection(target, context=None):
 
 class DPAPITriage:
     """
-    This class is the DPAPI engine in NetExec. Each protocol supporting DPAPI needs to implement this class.
+    DPAPI engine in NetExec. Each protocol supporting DPAPI needs to implement this class.
     Since multiple NXC functionalities now implements DPAPI related secret recovery, this class aims to centralize
     it in order to ease implemented and maintaining DPAPI functionalities is NXC protocols, but also
     to avoid dumping masterkeys X times from the same target, loading the domain backup keys X times, etc.
-  
+
+    To implement this class in a protocol, use a @property decorator on dpapi_triage like so:
+
+    ```
+    @property
+    def dpapi_triage(self) -> DPAPITriage:
+        if self._dpapi_triage is not None:
+            return self._dpapi_triage
+        target = <dploot target creation>
+
+        self._dpapi_triage = DPAPITriage(self, target)
+        return self._dpapi_triage
+    ```
+
+    This way, every DPAPI related module will automaticaly work with the protocol
+
     """
     def __init__(self, context, target: Target):
         self.context = context
@@ -392,7 +407,7 @@ class DPAPITriage:
     @property
     def pvkbytes(self):
         """
-        This function will return pvkbytes and tries to set it if it as not already been
+        The pvkbytes. If not already initialized, tries to set it
         The precedence order is the following :
         - Check the pvk argument
         - Checks in the DB
