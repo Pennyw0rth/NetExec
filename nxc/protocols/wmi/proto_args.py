@@ -11,6 +11,8 @@ def proto_args(parser, parents):
 
     cred_gathering_group = wmi_parser.add_argument_group("Credential Gathering")
     cred_gathering_group.add_argument("--list-snapshots", nargs="?", dest="list_snapshots", const="ADMIN$", help="Lists the VSS snapshots (default: %(const)s)")
+    cred_gathering_group.add_argument("--sam", action="store_true", help="dump SAM hashes from target systems")
+    cred_gathering_group.add_argument("--lsa", action="store_true", help="dump LSA secrets from target systems")
 
     egroup = wmi_parser.add_argument_group("Mapping/Enumeration")
     egroup.add_argument("--wmi-query", metavar="QUERY", dest="wmi_query", type=str, help="Issues the specified WMI query")
