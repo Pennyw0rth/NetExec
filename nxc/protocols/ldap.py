@@ -748,8 +748,9 @@ class ldap(connection):
         if self.args.groups:
             self.logger.debug(f"Dumping group: {self.args.groups}")
 
-            # Resolve group DN and primaryGroupID (objectSid)
-            group_resp = self.search(f"(&(cn={self.args.groups})(objectClass=group))", ["distinguishedName", "objectSid"])
+            # Resolve group DN and primaryGroupID (objectSid) and member attribute
+            # This to include users which do not have a populated memberOf backlink
+            group_resp = self.search(f"(&(cn={self.args.groups})(objectClass=group))", ["distinguishedName", "objectSid", "member"])
             group_parsed = parse_result_attributes(group_resp)
 
             if not group_parsed:
@@ -771,6 +772,39 @@ class ldap(connection):
         self.logger.debug(f"Total of records returned {len(resp_parsed)}")
 
         if self.args.groups:
+            # Fall back to the group's member attribute for any DN the
+            # memberOf/primaryGroupID search above didn't already return
+            group_members = group.get("member", [])
+            if not isinstance(group_members, list):
+                group_members = [group_members]
+
+            member_attributes = ["sAMAccountName", "distinguishedName", "cn", "objectClass"]
+
+            if group_members:
+                original_scope = self.scope
+                try:
+                    self.scope = ldapasn1_impacket.Scope("baseObject")
+                    for member_dn in group_members:
+                        try:
+                            member_resp = self.search("(objectClass=*)", member_attributes, baseDN=member_dn)
+                        except Exception as e:
+                            self.logger.debug(f"Failed to resolve member DN '{member_dn}': {e}")
+                            member_resp = []
+
+                        member_parsed = parse_result_attributes(member_resp)
+                        if member_parsed:
+                            resp_parsed.append(member_parsed[0])
+                        else:
+                            self.logger.debug(f"Could not resolve group member DN: {member_dn}")
+                finally:
+                    self.scope = original_scope
+
+                deduped = {}
+                for item in resp_parsed:
+                    key = item.get("distinguishedName", item.get("cn", "")).lower()
+                    deduped.setdefault(key, item)
+                resp_parsed = list(deduped.values())
+
             # Display group members
             if not resp_parsed:
                 self.logger.fail(f"Group '{self.args.groups}' has no members")
