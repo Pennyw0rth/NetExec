@@ -739,6 +739,18 @@ wheels = [
 ]
 
 [[package]]
+name = "freezegun"
+version = "1.5.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/95/dd/23e2f4e357f8fd3bdff613c1fe4466d21bfb00a6177f238079b17f7b1c84/freezegun-1.5.5.tar.gz", hash = "sha256:ac7742a6cc6c25a2c35e9292dfd554b897b517d2dec26891a2e8debf205cb94a", size = 35914, upload-time = "2025-08-09T10:39:08.338Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5e/2e/b41d8a1a917d6581fc27a35d05561037b048e47df50f27f8ac9c7e27a710/freezegun-1.5.5-py3-none-any.whl", hash = "sha256:cd557f4a75cf074e84bc374249b9dd491eaeacd61376b9eb3c423282211619d2", size = 19266, upload-time = "2025-08-09T10:39:06.636Z" },
+]
+
+[[package]]
 name = "greenlet"
 version = "3.5.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1292,6 +1304,7 @@ dependencies = [
     { name = "cryptography" },
     { name = "dploot" },
     { name = "dsinternals" },
+    { name = "freezegun" },
     { name = "impacket" },
     { name = "jwt" },
     { name = "lsassy" },
@@ -1335,6 +1348,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=42.0.8" },
     { name = "dploot", specifier = ">=3.2.2" },
     { name = "dsinternals", specifier = ">=1.2.4" },
+    { name = "freezegun", specifier = ">=1.5.5" },
     { name = "impacket", git = "https://github.com/fortra/impacket" },
     { name = "jwt", specifier = ">=1.3.1" },
     { name = "lsassy", specifier = ">=3.1.11" },

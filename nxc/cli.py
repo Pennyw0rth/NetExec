@@ -100,6 +100,7 @@ def gen_cli_args():
     kerberos_group.add_argument("--use-kcache", action="store_true", help="Use Kerberos authentication from ccache file (KRB5CCNAME)")
     kerberos_group.add_argument("--aesKey", metavar="AESKEY", nargs="+", help="AES key to use for Kerberos Authentication (128 or 256 bits)")
     kerberos_group.add_argument("--kdcHost", metavar="KDCHOST", help="FQDN of the domain controller. If omitted it will use the domain part (FQDN) specified in the target parameter")
+    kerberos_group.add_argument("--ntp-server", type=str, help="NTP server to sync the internal clock to")
 
     certificate_group = std_parser.add_argument_group("Certificate Authentication")
     certificate_group.add_argument("--pfx-cert", metavar="PFXCERT", help="Use certificate authentication from pfx file .pfx")

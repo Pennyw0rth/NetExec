@@ -3,6 +3,7 @@ import contextlib
 import sys
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import identify_target_file, display_modules
+from nxc.helpers.sync_time import sync_and_spoof
 from nxc.parsers.ip import parse_targets
 from nxc.parsers.nmap import parse_nmap_xml
 from nxc.parsers.nessus import parse_nessus_file
@@ -220,6 +221,10 @@ def main():
 
     if args.jitter and len(targets) > 1:
         nxc_logger.highlight(highlight("[!] Jitter is only throttling authentications per target!", "red"))
+
+    if args.ntp_server:
+        nxc_logger.info(f"Will attempt to sync and spoof time from {args.ntp_server}")
+        sync_and_spoof(args.ntp_server)
 
     try:
         asyncio.run(start_run(protocol_object, args, db, targets))
