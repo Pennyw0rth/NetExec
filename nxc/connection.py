@@ -16,6 +16,7 @@ from nxc.config import pwned_label, abort_on_lockout
 from nxc.helpers.logger import highlight
 from nxc.loaders.moduleloader import ModuleLoader
 from nxc.logger import nxc_logger, NXCAdapter
+from nxc.console import nxc_console
 from nxc.context import Context
 from nxc.paths import NXC_PATH
 from nxc.protocols.ldap.laps import laps_search
@@ -28,6 +29,9 @@ sem = BoundedSemaphore(1)
 fail_lock = Lock()
 global_failed_logins = 0
 user_failed_logins = {}
+lockout_lock = Lock()
+global_lockouts = 0
+spray_abort_all = False
 
 
 def get_host_addr_info(target, force_ipv6, dns_server, dns_tcp, dns_timeout):
@@ -342,8 +346,26 @@ class connection:
             return False
 
     def register_lockout(self, username):
-        if abort_on_lockout:
-            self.spray_aborted = True
+        global global_lockouts, spray_abort_all
+
+        if not abort_on_lockout:
+            return
+
+        with lockout_lock:
+            if spray_abort_all:
+                self.spray_aborted = True
+                return
+
+            global_lockouts += 1
+            if global_lockouts < abort_on_lockout:
+                return
+
+            answer = nxc_console.input(f"[bold yellow]\\[!] {global_lockouts} lockout responses detected, would you like to quit? \\[Y/n] [/]")
+            if answer.strip().lower() in ("y", "yes", ""):
+                spray_abort_all = True
+                self.spray_aborted = True
+            else:
+                global_lockouts = 0
 
     def query_db_creds(self):
         """Queries the database for credentials to be used for authentication.
@@ -493,7 +515,7 @@ class connection:
         if self.args.continue_on_success and owned:
             return False
 
-        if self.spray_aborted:
+        if self.spray_aborted or spray_abort_all:
             return False
 
         if self.over_fail_limit(username):
@@ -591,17 +613,17 @@ class connection:
 
         if not self.args.no_bruteforce:
             for secr_index, secr in enumerate(secret):
-                if self.spray_aborted:
+                if self.spray_aborted or spray_abort_all:
                     return False
                 for user_index, user in enumerate(username):
-                    if self.spray_aborted:
+                    if self.spray_aborted or spray_abort_all:
                         return False
                     if self.try_credentials(domain[user_index], user, owned[user_index], secr, cred_type[secr_index], data[secr_index]):
                         owned[user_index] = True
                         if not self.args.continue_on_success:
                             return True
                 spray_attempts = max(1, self.args.spray_attempts)
-                if self.args.spray_window and not self.spray_aborted and secr_index < len(secret) - 1 and (secr_index + 1) % spray_attempts == 0:
+                if self.args.spray_window and not (self.spray_aborted or spray_abort_all) and secr_index < len(secret) - 1 and (secr_index + 1) % spray_attempts == 0:
                     self.logger.info(
                         f"Completed {secr_index + 1} password round(s); sleeping {self.args.spray_window} "
                         f"second(s) so the lockout counter resets before the next round"
@@ -613,13 +635,13 @@ class connection:
                 return False
             spray_attempts = max(1, self.args.spray_attempts)
             for user_index, user in enumerate(username):
-                if self.spray_aborted:
+                if self.spray_aborted or spray_abort_all:
                     return False
                 if self.try_credentials(domain[user_index], user, owned[user_index], secret[user_index], cred_type[user_index], data[user_index]) and not self.args.continue_on_success:
                     owned[user_index] = True
                     if not self.args.continue_on_success:
                         return True
-                if self.args.spray_window and not self.spray_aborted and user_index < len(username) - 1 and (user_index + 1) % spray_attempts == 0:
+                if self.args.spray_window and not (self.spray_aborted or spray_abort_all) and user_index < len(username) - 1 and (user_index + 1) % spray_attempts == 0:
                     self.logger.info(
                         f"Completed {user_index + 1} attempt(s); sleeping {self.args.spray_window} "
                         f"second(s) so the lockout counter resets before the next attempt"

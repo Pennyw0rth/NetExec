@@ -39,7 +39,16 @@ config_log = nxc_config.getboolean("nxc", "log_mode", fallback=False)
 host_info_colors = literal_eval(nxc_config.get("nxc", "host_info_colors", fallback=["green", "red", "yellow", "cyan"]))
 check_guest_account = nxc_config.getboolean("nxc", "check_guest_account", fallback=False)
 display_dc = nxc_config.getboolean("nxc", "display_dc", fallback=True)
-abort_on_lockout = nxc_config.getboolean("nxc", "abort_on_lockout", fallback=True)
+_abort_raw = nxc_config.get("nxc", "abort_on_lockout", fallback="3").strip().lower()
+if _abort_raw in ("true", "yes"):
+    abort_on_lockout = 3
+elif _abort_raw in ("false", "no", ""):
+    abort_on_lockout = 0
+else:
+    try:
+        abort_on_lockout = max(0, int(_abort_raw))
+    except ValueError:
+        abort_on_lockout = 3
 
 if len(host_info_colors) != 4:
     nxc_logger.error("Config option host_info_colors must have 4 values! Using default values.")
