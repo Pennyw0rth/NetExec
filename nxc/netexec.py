@@ -8,7 +8,7 @@ from nxc.parsers.nmap import parse_nmap_xml
 from nxc.parsers.nessus import parse_nessus_file
 from nxc.cli import gen_cli_args
 from nxc.loaders.protocolloader import ProtocolLoader
-from nxc.loaders.moduleloader import ModuleLoader
+from nxc.loaders.moduleloader import ModuleLoader, ModuleOptionsError
 from nxc.first_run import first_run_setup
 from nxc.paths import NXC_PATH, WORKSPACE_DIR
 from nxc.console import nxc_console
@@ -207,8 +207,10 @@ def main():
                 exit(1)
 
             nxc_logger.debug(f"Loading module for sanity check {m} at path {modules[m]['path']}")
-            module = loader.init_module(modules[m]["path"])
-            if module is None:
+            try:
+                loader.init_module(modules[m]["path"])
+            except ModuleOptionsError as e:
+                nxc_logger.debug(f"Aborting run: {e}")
                 exit(1)
 
             # Add modules paths to the protocol object so it can load them itself

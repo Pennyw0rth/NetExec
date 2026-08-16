@@ -13,6 +13,10 @@ from nxc.logger import NXCAdapter
 from nxc.paths import NXC_PATH
 
 
+class ModuleOptionsError(Exception):
+    """Raised when a module aborts the run from options() (returned False)."""
+
+
 class ModuleLoader:
     def __init__(self, args, db, logger):
         self.args = args
@@ -101,7 +105,7 @@ class ModuleLoader:
                     module_options[str(key).upper()] = value
 
                 if module.options(context, module_options) is False:
-                    return None
+                    raise ModuleOptionsError(f"Module {module.name} aborted the run from options()")
                 return module
             else:
                 self.logger.fail(f"Module {module.name.upper()} is not supported for protocol {self.args.protocol}")
