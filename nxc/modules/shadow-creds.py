@@ -202,18 +202,10 @@ class NXCModule:
         self.context.log.success(f"Removed KeyCredential {self.device_id} from {self.target}")
 
     def backup(self, raw_values):
-        key_credentials = []
-        for raw_value in raw_values:
-            try:
-                key_credentials.append(KeyCredential.fromDNWithBinary(DNWithBinary.fromRawDNWithBinary(raw_value.encode())).toDict())
-            except Exception as e:
-                self.context.log.fail(f"Could not serialize an existing KeyCredential, preserving its raw value: {e}")
-                key_credentials.append(raw_value)
-
         output_path = Path(self.jsonfile) if self.jsonfile else Path(NXC_PATH) / "modules" / "shadow-creds" / f"{self.target.rstrip('$')}.json"
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json.dumps({"keyCredentials": key_credentials}, indent=4), encoding="utf-8")
-        self.context.log.success(f"Backed up {len(key_credentials)} KeyCredential(s) from {self.target} to {output_path}")
+        output_path.write_text(json.dumps({"keyCredentials": raw_values}, indent=4), encoding="utf-8")
+        self.context.log.success(f"Backed up {len(raw_values)} KeyCredential(s) from {self.target} to {output_path}")
 
     def revert(self, target_dn):
         try:
