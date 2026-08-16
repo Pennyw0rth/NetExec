@@ -245,8 +245,11 @@ netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M whoami
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dump-computers
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M raisechild
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M get-scriptpath
-# Shadow Credentials needs a writable, disposable computer object. Run these manually with a real target and use the device ID printed by ACTION=add.
-#netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M shadow-creds -o TARGET=SHADOW_CREDS_TARGET$ ACTION=list
+# Backup followed by revert restores the same Shadow Credentials state on the disposable test computer.
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M shadow-creds -o TARGET=CASTELBLACK$ ACTION=list
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M shadow-creds -o TARGET=CASTELBLACK$ ACTION=backup JSONFILE=nxc-shadow-creds-castelblack.json
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M shadow-creds -o TARGET=CASTELBLACK$ ACTION=revert JSONFILE=nxc-shadow-creds-castelblack.json
+# These actions require the generated device ID for an automated round trip.
 #netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M shadow-creds -o TARGET=SHADOW_CREDS_TARGET$ ACTION=add
 #netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M shadow-creds -o TARGET=SHADOW_CREDS_TARGET$ ACTION=info DEVICE_ID=SHADOW_CREDS_DEVICE_ID
 #netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M shadow-creds -o TARGET=SHADOW_CREDS_TARGET$ ACTION=remove DEVICE_ID=SHADOW_CREDS_DEVICE_ID

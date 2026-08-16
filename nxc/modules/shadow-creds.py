@@ -212,13 +212,13 @@ class NXCModule:
 
         output_path = Path(self.jsonfile) if self.jsonfile else Path(NXC_PATH) / "modules" / "shadow-creds" / f"{self.target.rstrip('$')}.json"
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json.dumps({"keyCredentials": key_credentials}, indent=4))
+        output_path.write_text(json.dumps({"keyCredentials": key_credentials}, indent=4), encoding="utf-8")
         self.context.log.success(f"Backed up {len(key_credentials)} KeyCredential(s) from {self.target} to {output_path}")
 
     def revert(self, target_dn):
         try:
             key_credentials = []
-            for key_credential in json.loads(Path(self.jsonfile).read_text())["keyCredentials"]:
+            for key_credential in json.loads(Path(self.jsonfile).read_text(encoding="utf-8"))["keyCredentials"]:
                 if not isinstance(key_credential, (dict, str)):
                     raise ValueError("keyCredentials entries must be objects or strings")
                 key_credentials.append(KeyCredential.fromDict(key_credential).toDNWithBinary().toString() if isinstance(key_credential, dict) else key_credential)
