@@ -126,8 +126,8 @@ class NXCModule:
             except Exception as e:
                 context.log.fail(f"[OPSEC] Error deleting lsass.dmp file on share {self.share}: {e}")
 
-            h_in = open(self.dir_result + machine_name, "rb")  # noqa: SIM115
-            h_out = open(self.dir_result + machine_name + ".decode", "wb")  # noqa: SIM115
+            h_in = open(self.dir_result + machine_name, "rb")  # ruff: ignore[open-file-with-context-handler]
+            h_out = open(self.dir_result + machine_name + ".decode", "wb")  # ruff: ignore[open-file-with-context-handler]
 
             bytes_in = bytearray(h_in.read())
             bytes_in_len = len(bytes_in)
